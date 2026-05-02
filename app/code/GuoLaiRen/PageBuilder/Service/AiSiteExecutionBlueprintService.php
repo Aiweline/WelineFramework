@@ -65,6 +65,7 @@ final class AiSiteExecutionBlueprintService
             'default_locale' => \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? '')),
             'plan_locale' => \trim((string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? '')),
             'page_types' => \array_values(\array_map('strval', \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [])),
+            'reference_images' => $this->buildReferenceImagePromptList($scope),
             'conversation' => $userConversation,
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
@@ -2285,6 +2286,7 @@ final class AiSiteExecutionBlueprintService
             '【站点摘要】: ' . ($siteSummary !== '' ? $siteSummary : '-'),
             '【选定页面类型】: ' . $pageTypeText,
             '【输出语言】: ' . $outputLanguage,
+            'Reference images for visual style (if any): ' . (($referenceImageJson = \json_encode($this->buildReferenceImagePromptList($scope), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)) && $referenceImageJson !== '[]' ? $referenceImageJson : '-'),
             '',
             'CONCRETENESS CONTRACT (must satisfy ALL):',
             '1) Every block has REAL on-page strings: nav labels, page titles, headings, subtitles, body sentences, CTA labels, link targets, form fields, trust points.',
@@ -2442,9 +2444,39 @@ final class AiSiteExecutionBlueprintService
             'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
             'instruction' => $instruction,
             'target_scope' => $targetScope,
+            'reference_images' => $this->buildReferenceImagePromptList($scope),
         ];
 
         return (string)(\json_encode($profile, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<array{name:string,url:string,mime_type:string}>
+     */
+    private function buildReferenceImagePromptList(array $scope): array
+    {
+        $images = \is_array($scope['reference_images'] ?? null) ? $scope['reference_images'] : [];
+        $out = [];
+        foreach ($images as $image) {
+            if (!\is_array($image)) {
+                continue;
+            }
+            $url = \trim((string)($image['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $out[] = [
+                'name' => \trim((string)($image['name'] ?? 'reference image')),
+                'url' => $url,
+                'mime_type' => \trim((string)($image['mime_type'] ?? '')),
+            ];
+            if (\count($out) >= 6) {
+                break;
+            }
+        }
+
+        return $out;
     }
 
     /**

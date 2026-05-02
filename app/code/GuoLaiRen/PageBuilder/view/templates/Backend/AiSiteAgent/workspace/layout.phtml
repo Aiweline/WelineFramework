@@ -70,7 +70,7 @@
     .pb-ai-plan-preview-page-card {
         position: relative;
     }
-    /* 计划/任务预览块：跟随后台主题色（卡片背景与边框），避免 Bootstrap bg-white 锁死浅色 */
+    /* 璁″垝/浠诲姟棰勮鍧楋細璺熼殢鍚庡彴涓婚鑹诧紙鍗＄墖鑳屾櫙涓庤竟妗嗭級锛岄伩鍏?Bootstrap bg-white 閿佹娴呰壊 */
     .pb-ai-plan-preview-block.border.rounded {
         background: var(--backend-color-card-bg, var(--backend-color-bg-primary, #ffffff));
         border-color: var(--backend-color-card-border, var(--backend-color-border-default, #dbe3ee)) !important;
@@ -182,7 +182,7 @@
         0%, 100% { opacity: 1; }
         50% { opacity: .2; }
     }
-    /* Phase1 内联面板：预览区主题底色 + 在面板内占满剩余高度并内部滚动 */
+    /* Phase1 鍐呰仈闈㈡澘锛氶瑙堝尯涓婚搴曡壊 + 鍦ㄩ潰鏉垮唴鍗犳弧鍓╀綑楂樺害骞跺唴閮ㄦ粴鍔?*/
     #pb-ai-plan-inline-panel {
         display: flex;
         flex-direction: column;
@@ -261,7 +261,7 @@
     .pb-ai-expert-preview-col iframe#pb-ai-visual-preview-frame {
         min-height: clamp(30rem, 58vh, 48rem) !important;
     }
-    /* 阶段一：预览与“方案模式”同列顶部 Tab 切换，宽屏不再左右分栏以免与操作习惯冲突 */
+    /* 闃舵涓€锛氶瑙堜笌鈥滄柟妗堟ā寮忊€濆悓鍒楅《閮?Tab 鍒囨崲锛屽灞忎笉鍐嶅乏鍙冲垎鏍忎互鍏嶄笌鎿嶄綔涔犳儻鍐茬獊 */
     @media (min-width: 1760px) {
         .pb-ai-expert-stage-panel-wrap #pb-ai-plan-inline-panel .pb-ai-plan-inline-panel-main {
             display: grid;
@@ -284,11 +284,11 @@
             grid-area: progress;
             margin-bottom: 0 !important;
         }
-        .pb-ai-expert-stage-panel-wrap #pb-ai-plan-inline-panel #pb-ai-plan-status {
+        .pb-ai-expert-stage-panel-wrap #pb-ai-plan-inline-panel .pb-ai-plan-action-summary {
             grid-area: status;
             margin-bottom: 0 !important;
         }
-        .pb-ai-expert-stage-panel-wrap #pb-ai-plan-inline-panel .d-flex.flex-wrap.align-items-center.justify-content-between.gap-2.border-top.pt-3 {
+        .pb-ai-expert-stage-panel-wrap #pb-ai-plan-inline-panel .pb-ai-plan-footer-actions {
             grid-area: footer;
         }
         .pb-ai-expert-stage-panel-wrap #pb-ai-task-plan-accordion .accordion-body > .p-4 {
@@ -330,7 +330,7 @@
             grid-area: footer;
         }
     }
-    /* 闃舵涓€鏂规棰勮：点击全屏层 */
+    /* 闂冭埖顔屾稉鈧弬瑙勵攳妫板嫯顫嶏細鐐瑰嚮鍏ㄥ睆灞?*/
     body.pb-ai-plan-preview-fullscreen-open {
         overflow: hidden;
     }
@@ -477,7 +477,7 @@
     .pb-ai-visual-preview-shell:has(#pb-ai-visual-preview-frame) {
         cursor: default;
     }
-    /* 阶段二手风琴内：任务方案预览区主题背景与高度 */
+    /* 闃舵浜屾墜椋庣惔鍐咃細浠诲姟鏂规棰勮鍖轰富棰樿儗鏅笌楂樺害 */
     .pb-ai-task-plan-preview-outer {
         min-height: 12rem;
         max-height: min(560px, 55vh);
@@ -516,20 +516,20 @@
 <input type="hidden" id="site-builder-api-check-domain" value="<?= htmlspecialchars($checkDomainUrl, ENT_QUOTES, 'UTF-8') ?>">
 
 <div class="pb-guided">
-    <?php /* 顶栏 */ ?>
+    <?php /* 椤舵爮 */ ?>
     <div class="pb-guided-header">
         <div style="flex:1;min-width:0;">
-            <h4 class="mb-1"><i class="mdi mdi-robot-outline me-1"></i><?= htmlspecialchars((string)__('AI 快速建站'), ENT_QUOTES, 'UTF-8') ?></h4>
+            <h4 class="mb-1"><i class="mdi mdi-robot-outline me-1"></i><?= htmlspecialchars((string)__('AI Workspace'), ENT_QUOTES, 'UTF-8') ?></h4>
             <p class="text-muted mb-0" style="font-size:.9rem;"><?= htmlspecialchars((string)($guidedSteps[$activeStepIndex]['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
             <a class="btn btn-soft-secondary btn-sm" href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8') ?>">
-                <i class="mdi mdi-arrow-left me-1"></i><?= htmlspecialchars((string)__('返回'), ENT_QUOTES, 'UTF-8') ?>
+                <i class="mdi mdi-arrow-left me-1"></i><?= htmlspecialchars((string)__('杩斿洖'), ENT_QUOTES, 'UTF-8') ?>
             </a>
         </div>
     </div>
 
-    <?php /* 妯悜姝ラ鏉?*/ ?>
+    <?php /* 濡亜鎮滃銉╊€冮弶?*/ ?>
     <div class="pb-guided-steps" role="list">
         <?php foreach ($guidedSteps as $i => $step):
             $isActive = ($i === $activeStepIndex);
@@ -546,7 +546,7 @@
                  data-step-completed="<?= $isDone ? '1' : '0' ?>"
                  data-step-state="<?= htmlspecialchars($stepState, ENT_QUOTES, 'UTF-8') ?>"
                  <?= $isActive ? 'aria-current="step"' : '' ?>
-                 title="<?= htmlspecialchars((string)__('切换到“%{step}”', ['step' => $stepLabel]), ENT_QUOTES, 'UTF-8') ?>"
+                 title="<?= htmlspecialchars((string)__('Switch to %{1}', [$stepLabel]), ENT_QUOTES, 'UTF-8') ?>"
                  >
                 <span class="step-state" aria-hidden="true">
                     <i class="mdi <?= htmlspecialchars($stepStateIcon, ENT_QUOTES, 'UTF-8') ?> step-state-icon"></i>
@@ -560,23 +560,23 @@
         <div class="card-body py-3 px-3">
             <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                 <span class="small fw-semibold text-primary"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></span>
-                <span class="badge bg-secondary"><?= htmlspecialchars($workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS ? (string)__('当前：HTML 区块轨道') : (string)__(''), ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="badge bg-secondary"><?= htmlspecialchars($workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS ? (string)__('褰撳墠锛欻TML 鍖哄潡杞ㄩ亾') : (string)__(''), ENT_QUOTES, 'UTF-8') ?></span>
                 <?php if ($siteReadyFlag !== 1): ?>
                     <span class="badge bg-warning text-dark"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></span>
                 <?php else: ?>
-                    <span class="badge bg-success"><?= htmlspecialchars((string)__('域名就绪'), ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="badge bg-success"><?= htmlspecialchars((string)__('鍩熷悕灏辩华'), ENT_QUOTES, 'UTF-8') ?></span>
                 <?php endif; ?>
             </div>
             <p class="small text-muted mb-2"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></p>
             <div class="d-flex flex-wrap gap-2 align-items-center">
                 <button type="button" class="btn btn-sm btn-outline-primary pb-ai-workspace-track-btn" data-track="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME, ENT_QUOTES, 'UTF-8') ?>">
-                    <?= htmlspecialchars((string)__('虚拟主题轨道'), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars((string)__('铏氭嫙涓婚杞ㄩ亾'), ENT_QUOTES, 'UTF-8') ?>
                 </button>
                 <button type="button" class="btn btn-sm btn-primary pb-ai-workspace-track-btn" data-track="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS, ENT_QUOTES, 'UTF-8') ?>">
-                    <?= htmlspecialchars((string)__('HTML 区块轨道'), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars((string)__('HTML 鍖哄潡杞ㄩ亾'), ENT_QUOTES, 'UTF-8') ?>
                 </button>
-                <button type="button" class="btn btn-sm btn-soft-secondary" id="pb-ai-site-ready-dev" title="<?= htmlspecialchars((string)__('本地/联调专用：将 handoff scope 的 site_ready 置为 1'), ENT_QUOTES, 'UTF-8') ?>">
-                    <?= htmlspecialchars((string)__('标记站点就绪'), ENT_QUOTES, 'UTF-8') ?>
+                <button type="button" class="btn btn-sm btn-soft-secondary" id="pb-ai-site-ready-dev" title="<?= htmlspecialchars((string)__('Local debug helper: set handoff scope site_ready to 1'), ENT_QUOTES, 'UTF-8') ?>">
+                    <?= htmlspecialchars((string)__('鏍囪绔欑偣灏辩华'), ENT_QUOTES, 'UTF-8') ?>
                 </button>
             </div>
         </div>
@@ -604,34 +604,41 @@
                         <p class="text-muted small mb-3"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></p>
                         <div class="row g-3">
                         <div class="col-md-8">
-                            <label class="form-label" for="pb-ai-site-title"><?= htmlspecialchars((string)__('站点名称'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <label class="form-label" for="pb-ai-site-title"><?= htmlspecialchars((string)__('绔欑偣鍚嶇О'), ENT_QUOTES, 'UTF-8') ?></label>
                             <input class="form-control" id="pb-ai-site-title" type="text"
                                    value="<?= htmlspecialchars($guidedWorkspaceSiteTitle, ENT_QUOTES, 'UTF-8') ?>"
-                                   placeholder="@lang{渚嬪：时尚精品店}">
+                                   placeholder="@lang{娓氬顩э細鏃跺皻绮惧搧搴梷">
                         </div>
                         <div class="col-md-4">
                             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
                                 <div class="d-flex align-items-center gap-1 min-w-0">
-                                    <label class="form-label mb-0" for="pb-ai-target-domain"><?= htmlspecialchars((string)__('目标域名（必填）'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    <label class="form-label mb-0" for="pb-ai-target-domain"><?= htmlspecialchars((string)__('鐩爣鍩熷悕锛堝繀濉級'), ENT_QUOTES, 'UTF-8') ?></label>
                                     <button type="button" class="btn btn-link p-0 text-muted lh-1 align-middle border-0 shadow-none" style="min-width:auto;" id="pb-ai-target-domain-help" title="<?= htmlspecialchars($pbAiTargetDomainHelpTitle, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($pbAiTargetDomainHelpTitle, ENT_QUOTES, 'UTF-8') ?>">
                                         <i class="mdi mdi-help-circle-outline" style="font-size:1.15rem;" aria-hidden="true"></i>
                                     </button>
                                 </div>
-                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 text-nowrap" id="pb-ai-target-domain-ai-refresh" title="<?= htmlspecialchars((string)__('根据站点名称与描述推荐域名并填入'), ENT_QUOTES, 'UTF-8') ?>">
-                                    <i class="mdi mdi-refresh-auto me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('AI 推荐'), ENT_QUOTES, 'UTF-8') ?>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 text-nowrap" id="pb-ai-target-domain-ai-refresh" title="<?= htmlspecialchars((string)__('鏍规嵁绔欑偣鍚嶇О涓庢弿杩版帹鑽愬煙鍚嶅苟濉叆'), ENT_QUOTES, 'UTF-8') ?>">
+                                    <i class="mdi mdi-refresh-auto me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('AI 鎺ㄨ崘'), ENT_QUOTES, 'UTF-8') ?>
                                 </button>
                             </div>
                             <input class="form-control pb-ai-target-domain-sync" id="pb-ai-target-domain" type="text" list="pb-ai-target-domain-options"
                                    value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                   placeholder="@lang{请填写要绑定的目标域名}">
+                                   placeholder="@lang{璇峰～鍐欒缁戝畾鐨勭洰鏍囧煙鍚峿">
                             <datalist id="pb-ai-target-domain-options">
                                 <?php foreach ($recommendedDomainList as $recommendedDomain): ?>
                                     <option value="<?= htmlspecialchars((string)$recommendedDomain, ENT_QUOTES, 'UTF-8') ?>"></option>
                                 <?php endforeach; ?>
                             </datalist>
                         </div>
+                        <div class="col-12">
+                            <label class="form-label" for="pb-ai-site-tagline"><?= htmlspecialchars((string)__('Tagline'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <input class="form-control" id="pb-ai-site-tagline" type="text"
+                                   value="<?= htmlspecialchars((string)($websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                   placeholder="High-conversion brand site with clear trust and action">
+                            <div class="form-text"><?= htmlspecialchars((string)__('Use one short line to clarify positioning, audience, and value.'), ENT_QUOTES, 'UTF-8') ?></div>
+                        </div>
                         <div class="col-md-6">
-                            <label class="form-label" for="pb-ai-default-locale"><lang>主语言</lang></label>
+                            <label class="form-label" for="pb-ai-default-locale"><lang>涓昏瑷€</lang></label>
                             <w:i18n:language:select
                                 id="pb-ai-default-locale"
                                 name="pb-ai-default-locale"
@@ -643,7 +650,7 @@
                             />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label" for="pb-ai-plan-locale"><lang>方案语言（可选）</lang></label>
+                            <label class="form-label" for="pb-ai-plan-locale"><lang>鏂规璇█锛堝彲閫夛級</lang></label>
                             <w:i18n:language:select
                                 id="pb-ai-plan-locale"
                                 name="pb-ai-plan-locale"
@@ -653,56 +660,66 @@
                                 inline-dropdown="true"
                                 autocomplete="off"
                             />
-                            <div class="form-text"><?= htmlspecialchars((string)__('默认已选中当前框架语言，可按需切换'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="form-text"><?= htmlspecialchars((string)__('榛樿宸查€変腑褰撳墠妗嗘灦璇█锛屽彲鎸夐渶鍒囨崲'), ENT_QUOTES, 'UTF-8') ?></div>
                         </div>
                         <div class="col-12">
-                            <label class="form-label" for="pb-ai-brief-description"><?= htmlspecialchars((string)__('一句话描述你的网站'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <label class="form-label" for="pb-ai-brief-description"><?= htmlspecialchars((string)__('涓€鍙ヨ瘽鎻忚堪浣犵殑缃戠珯'), ENT_QUOTES, 'UTF-8') ?></label>
                             <textarea class="form-control" id="pb-ai-brief-description" rows="3"
-                                      placeholder="@lang{描述网站的主题、风格和主要功能，越详细 AI 生成效果越好}"><?= htmlspecialchars($guidedWorkspaceBrief, ENT_QUOTES, 'UTF-8') ?></textarea>
+                                      placeholder="@lang{鎻忚堪缃戠珯鐨勪富棰樸€侀鏍煎拰涓昏鍔熻兘锛岃秺璇︾粏 AI 鐢熸垚鏁堟灉瓒婂ソ}"><?= htmlspecialchars($guidedWorkspaceBrief, ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded p-3 bg-light-subtle" id="pb-ai-reference-image-panel">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                    <label class="form-label mb-0" for="pb-ai-reference-image-input"><?= htmlspecialchars((string)__('Reference Images'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    <span class="small text-muted" id="pb-ai-reference-image-status"><?= htmlspecialchars((string)__('Upload visual references for the AI site design.'), ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                                <input type="file" class="form-control form-control-sm" id="pb-ai-reference-image-input" accept="image/png,image/jpeg,image/webp,image/gif">
+                                <div class="d-flex flex-wrap gap-2 mt-3" id="pb-ai-reference-image-list" aria-live="polite"></div>
+                            </div>
                         </div>
                         <div class="col-12">
                             <div class="border rounded p-3 bg-light-subtle" id="pb-ai-skill-select-panel">
                                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                    <label class="form-label mb-0"><?= htmlspecialchars((string)__('可选技能'), ENT_QUOTES, 'UTF-8') ?></label>
-                                    <span class="small text-muted" id="pb-ai-skill-select-status"><?= htmlspecialchars((string)__('未配置技能列表时将使用默认技能'), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <label class="form-label mb-0"><?= htmlspecialchars((string)__('Skills'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    <span class="small text-muted" id="pb-ai-skill-select-status"><?= htmlspecialchars((string)__('Default skills apply when no custom selection is active.'), ENT_QUOTES, 'UTF-8') ?></span>
                                 </div>
                                 <div class="d-flex flex-wrap gap-2 mb-2" id="pb-ai-skill-chip-list" aria-live="polite"></div>
                                 <div class="d-flex flex-wrap gap-2" id="pb-ai-skill-option-list"></div>
                                 <div class="mt-3">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-skill-create-toggle"><?= htmlspecialchars((string)__('新增技能'), ENT_QUOTES, 'UTF-8') ?></button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-skill-create-toggle"><?= htmlspecialchars((string)__('New Skill'), ENT_QUOTES, 'UTF-8') ?></button>
                                 </div>
                                 <div class="border-top mt-3 pt-3 d-none" id="pb-ai-skill-manager-panel">
                                     <div class="row g-2">
                                         <div class="col-md-4">
-                                            <label class="form-label small" for="pb-ai-skill-code"><?= htmlspecialchars((string)__('技能编码'), ENT_QUOTES, 'UTF-8') ?></label>
+                                            <label class="form-label small" for="pb-ai-skill-code"><?= htmlspecialchars((string)__('Skill Code'), ENT_QUOTES, 'UTF-8') ?></label>
                                             <input type="text" class="form-control form-control-sm" id="pb-ai-skill-code" placeholder="brand-copy">
                                         </div>
                                         <div class="col-md-8">
-                                            <label class="form-label small" for="pb-ai-skill-name"><?= htmlspecialchars((string)__('技能名称'), ENT_QUOTES, 'UTF-8') ?></label>
-                                            <input type="text" class="form-control form-control-sm" id="pb-ai-skill-name" placeholder="<?= htmlspecialchars((string)__('例如：品牌文案风格'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <label class="form-label small" for="pb-ai-skill-name"><?= htmlspecialchars((string)__('Skill Name'), ENT_QUOTES, 'UTF-8') ?></label>
+                                            <input type="text" class="form-control form-control-sm" id="pb-ai-skill-name" placeholder="<?= htmlspecialchars((string)__('For example: Brand Copy Style'), ENT_QUOTES, 'UTF-8') ?>">
                                         </div>
                                         <div class="col-12">
-                                            <label class="form-label small" for="pb-ai-skill-description"><?= htmlspecialchars((string)__('简短说明'), ENT_QUOTES, 'UTF-8') ?></label>
-                                            <input type="text" class="form-control form-control-sm" id="pb-ai-skill-description" placeholder="<?= htmlspecialchars((string)__('这个技能会约束 AI 如何理解需求和输出内容'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <label class="form-label small" for="pb-ai-skill-description"><?= htmlspecialchars((string)__('Short Description'), ENT_QUOTES, 'UTF-8') ?></label>
+                                            <input type="text" class="form-control form-control-sm" id="pb-ai-skill-description" placeholder="<?= htmlspecialchars((string)__('Explain how this skill constrains AI behavior and output.'), ENT_QUOTES, 'UTF-8') ?>">
                                         </div>
                                         <div class="col-12">
-                                            <label class="form-label small" for="pb-ai-skill-body"><?= htmlspecialchars((string)__('技能规则'), ENT_QUOTES, 'UTF-8') ?></label>
-                                            <textarea class="form-control form-control-sm" id="pb-ai-skill-body" rows="4" placeholder="<?= htmlspecialchars((string)__('写清楚适用场景、必须遵守的规则、禁止输出的内容。'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+                                            <label class="form-label small" for="pb-ai-skill-body"><?= htmlspecialchars((string)__('Skill Rules'), ENT_QUOTES, 'UTF-8') ?></label>
+                                            <textarea class="form-control form-control-sm" id="pb-ai-skill-body" rows="4" placeholder="<?= htmlspecialchars((string)__('Describe the scenario, required rules, and forbidden output.'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
                                         </div>
                                         <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
-                                            <button type="button" class="btn btn-primary btn-sm" id="pb-ai-skill-save-btn"><?= htmlspecialchars((string)__('保存并选择'), ENT_QUOTES, 'UTF-8') ?></button>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" id="pb-ai-skill-cancel-btn"><?= htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') ?></button>
+                                            <button type="button" class="btn btn-primary btn-sm" id="pb-ai-skill-save-btn"><?= htmlspecialchars((string)__('Save and Select'), ENT_QUOTES, 'UTF-8') ?></button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" id="pb-ai-skill-cancel-btn"><?= htmlspecialchars((string)__('Cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                                             <span class="small text-muted" id="pb-ai-skill-manager-status"></span>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="form-text"><?= htmlspecialchars((string)__('留空表示沿用默认技能；选择后会随需求一起保存并进入生成请求。'), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="form-text"><?= htmlspecialchars((string)__('Leave empty to keep default behavior. Selected skills are saved with the requirements and sent into generation.'), ENT_QUOTES, 'UTF-8') ?></div>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                <label class="form-label mb-0"><?= htmlspecialchars((string)__('需要的页面'), ENT_QUOTES, 'UTF-8') ?></label>
-                                <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap pb-ai-clear-page-type-selection"><?= htmlspecialchars((string)__('取消选择'), ENT_QUOTES, 'UTF-8') ?></button>
+                                <label class="form-label mb-0"><?= htmlspecialchars((string)__('闇€瑕佺殑椤甸潰'), ENT_QUOTES, 'UTF-8') ?></label>
+                                <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap pb-ai-clear-page-type-selection"><?= htmlspecialchars((string)__('鍙栨秷閫夋嫨'), ENT_QUOTES, 'UTF-8') ?></button>
                             </div>
                             <div class="d-flex flex-wrap gap-2 mb-2">
                                 <?php foreach ($commonPageTypes as $pt => $label): ?>
@@ -743,12 +760,12 @@
 
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4">
                         <div class="small">
-                            <div class="text-muted pb-ai-primary-action-hint"><?= htmlspecialchars((string)__('表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="text-muted" data-pb-skill-summary-stage="plan"><?= htmlspecialchars((string)__('本次第一阶段生成将使用：默认技能'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="text-muted" data-pb-queue-state-detail="plan"><?= htmlspecialchars((string)__('第一阶段方案：空闲'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted pb-ai-primary-action-hint"><?= htmlspecialchars((string)__('The form autosaves. Stage 1 runs through the backend queue and this panel keeps showing live status.'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted" data-pb-skill-summary-stage="plan"><?= htmlspecialchars((string)__('Stage 1 uses default skills unless you select custom ones.'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted" data-pb-queue-state-detail="plan"><?= htmlspecialchars((string)__('Stage 1 plan: idle'), ENT_QUOTES, 'UTF-8') ?></div>
                         </div>
                         <button type="button" class="btn btn-primary btn-lg pb-ai-run-virtual-theme">
-                            <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('确认&更新方案'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('Confirm and Generate Plan'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                     </div>
 
@@ -772,7 +789,7 @@
                         </span>
                         <span class="small text-warning pb-ai-phase-one-missing-hint<?= $pbAiPhaseOnePlanPresent ? ' d-none' : '' ?>">
                             <?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?>
-                            <button type="button" class="btn btn-link btn-sm p-0 align-baseline pb-ai-set-stage" data-stage="plan"><?= htmlspecialchars((string)__('返回第一阶段生成建站方案再试'), ENT_QUOTES, 'UTF-8') ?></button>
+                            <button type="button" class="btn btn-link btn-sm p-0 align-baseline pb-ai-set-stage" data-stage="plan"><?= htmlspecialchars((string)__('杩斿洖绗竴闃舵鐢熸垚寤虹珯鏂规鍐嶈瘯'), ENT_QUOTES, 'UTF-8') ?></button>
                         </span>
                     </div>
                     <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/task-plan-accordion-panel.phtml', \get_defined_vars()) ?>
@@ -784,23 +801,23 @@
         <div class="pb-guided-main">
             <div class="card">
                 <div class="card-body p-4">
-                    <h5 class="mb-3"><i class="mdi mdi-check-circle-outline text-success me-1"></i><?= htmlspecialchars((string)__('看起来不错！'), ENT_QUOTES, 'UTF-8') ?></h5>
-                    <p class="text-muted mb-3"><?= htmlspecialchars((string)__('站点已经生成，可以先预览并运行发布前检查，确认无误后再发布。'), ENT_QUOTES, 'UTF-8') ?></p>
+                    <h5 class="mb-3"><i class="mdi mdi-check-circle-outline text-success me-1"></i><?= htmlspecialchars((string)__('Preview and Publish'), ENT_QUOTES, 'UTF-8') ?></h5>
+                    <p class="text-muted mb-3"><?= htmlspecialchars((string)__('The site is generated. Preview it, run checks, and publish after the result looks correct.'), ENT_QUOTES, 'UTF-8') ?></p>
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
                         <button type="button" class="btn btn-outline-primary" id="pb-ai-open-publish-preview">
-                            <i class="mdi mdi-eye-outline me-1"></i><?= htmlspecialchars((string)__('预览站点'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-eye-outline me-1"></i><?= htmlspecialchars((string)__('Preview Site'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
-                        <span class="small text-muted"><?= htmlspecialchars((string)__('发布前建议先检查首页、关于页和联系页。'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="small text-muted"><?= htmlspecialchars((string)__('Check the homepage, about page, and contact page before publishing.'), ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
                     <div class="alert alert-success d-none py-2 px-3 mb-3" id="pb-ai-published-site-access" role="status">
-                        <div class="small mb-1" id="pb-ai-site-access-label"><?= htmlspecialchars((string)__('当前可访问地址'), ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="small mb-1" id="pb-ai-site-access-label"><?= htmlspecialchars((string)__('Current Site URL'), ENT_QUOTES, 'UTF-8') ?></div>
                         <a href="#" class="fw-semibold text-decoration-underline" id="pb-ai-published-site-link" target="_blank" rel="noopener"></a>
                     </div>
                     <button type="button" class="btn btn-primary btn-lg mb-3" id="pb-ai-run-publish-check">
-                        <i class="mdi mdi-clipboard-check-outline me-1"></i><?= htmlspecialchars((string)__('运行发布检查'), ENT_QUOTES, 'UTF-8') ?>
+                        <i class="mdi mdi-clipboard-check-outline me-1"></i><?= htmlspecialchars((string)__('Run Publish Checklist'), ENT_QUOTES, 'UTF-8') ?>
                     </button>
                     <button type="button" class="btn btn-success btn-lg mb-3 ms-2" id="pb-ai-start-publish"<?= !$pbAiPublishDisabled ? '' : ' disabled aria-disabled="true"' ?>>
-                        <i class="mdi mdi-rocket-launch-outline me-1"></i><?= htmlspecialchars((string)__('立即发布'), ENT_QUOTES, 'UTF-8') ?>
+                        <i class="mdi mdi-rocket-launch-outline me-1"></i><?= htmlspecialchars((string)__('Publish Now'), ENT_QUOTES, 'UTF-8') ?>
                     </button>
                     <pre class="bg-light rounded p-3 small" id="pb-ai-publish-check-output" style="display:none;max-height:240px;overflow:auto;"></pre>
                 </div>
@@ -820,14 +837,14 @@
                     <div id="pb-ai-build-task-progress-panel"<?= $pbAiShowBuildTaskProgress ? '' : ' class="d-none"' ?>>
                     <h6 class="fw-semibold mb-3 d-flex align-items-center gap-2 flex-wrap">
                         <i class="mdi mdi-format-list-checks text-primary" aria-hidden="true"></i>
-                        <span id="pb-ai-task-progress-heading" class="me-auto"><?= htmlspecialchars((string)__('任务进度'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span id="pb-ai-task-progress-heading" class="me-auto"><?= htmlspecialchars((string)__('浠诲姟杩涘害'), ENT_QUOTES, 'UTF-8') ?></span>
                         <span
                             id="pb-ai-task-running-indicator"
                             class="badge text-bg-warning pb-ai-task-ai-indicator<?= ((int)($buildTaskSummary['running'] ?? 0) + (int)($buildTaskSummary['queued'] ?? 0)) > 0 ? ' pb-ai-task-ai-indicator--active' : ' d-none' ?>"
                             aria-live="polite"
                             aria-busy="<?= ((int)($buildTaskSummary['running'] ?? 0) + (int)($buildTaskSummary['queued'] ?? 0)) > 0 ? 'true' : 'false' ?>">
                             <span class="pb-ai-task-ai-dot" aria-hidden="true"></span>
-                            <span data-ai-indicator-text><?= htmlspecialchars((string)__('AI 生成中'), ENT_QUOTES, 'UTF-8') ?></span>
+                            <span data-ai-indicator-text><?= htmlspecialchars((string)__('AI generating'), ENT_QUOTES, 'UTF-8') ?></span>
                         </span>
                     </h6>
                     <div class="small text-muted mb-2">
@@ -881,25 +898,25 @@
                                 $groupFailed = (int)($group['failed'] ?? 0);
                                 $groupStale = (int)($group['stale'] ?? 0);
                                 $groupCancelled = (int)($group['cancelled'] ?? 0);
-                                $groupSummaryLabel = (string)__('待处理');
+                                $groupSummaryLabel = (string)__('Pending');
                                 $groupSummaryCount = $groupPending;
                                 if ($groupTotal > 0 && $groupDone >= $groupTotal) {
-                                    $groupSummaryLabel = (string)__('已完成');
+                                    $groupSummaryLabel = (string)__('Done');
                                     $groupSummaryCount = $groupDone;
                                 } elseif ($groupFailed > 0) {
-                                    $groupSummaryLabel = (string)__('失败');
+                                    $groupSummaryLabel = (string)__('Failed');
                                     $groupSummaryCount = $groupFailed;
                                 } elseif ($groupRunning > 0) {
-                                    $groupSummaryLabel = (string)__('进行中');
+                                    $groupSummaryLabel = (string)__('Running');
                                     $groupSummaryCount = $groupRunning;
                                 } elseif ($groupQueued > 0) {
-                                    $groupSummaryLabel = (string)__('排队中');
+                                    $groupSummaryLabel = (string)__('Queued');
                                     $groupSummaryCount = $groupQueued;
                                 } elseif ($groupStale > 0) {
-                                    $groupSummaryLabel = (string)__('需刷新');
+                                    $groupSummaryLabel = (string)__('Refresh Required');
                                     $groupSummaryCount = $groupStale;
                                 } elseif ($groupCancelled > 0) {
-                                    $groupSummaryLabel = (string)__('已取消');
+                                    $groupSummaryLabel = (string)__('Cancelled');
                                     $groupSummaryCount = $groupCancelled;
                                 } elseif ($groupDone > 0) {
                                     $groupSummaryLabel = (string)__('已完成');
@@ -924,13 +941,13 @@
                     ?>
                     <div class="pb-ai-phase2-queue-embed mt-3" id="pb-ai-phase2-queue-embed">
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                            <strong class="small mb-0"><?= htmlspecialchars((string)__('第二阶段队列'), ENT_QUOTES, 'UTF-8') ?></strong>
-                            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" id="pb-ai-phase2-queue-info-refresh"><?= htmlspecialchars((string)__('刷新'), ENT_QUOTES, 'UTF-8') ?></button>
+                            <strong class="small mb-0"><?= htmlspecialchars((string)__('绗簩闃舵闃熷垪'), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" id="pb-ai-phase2-queue-info-refresh"><?= htmlspecialchars((string)__('鍒锋柊'), ENT_QUOTES, 'UTF-8') ?></button>
                         </div>
                         <p class="small text-muted mb-2"><?= htmlspecialchars((string)__('任务方案与生成主题使用独立队列；当前执行中的队列会自动展开并同步进度。'), ENT_QUOTES, 'UTF-8') ?></p>
                         <details class="border rounded p-2 mb-2" id="pb-ai-task-plan-queue-info-panel" data-phase2-queue-panel="task_plan"<?= $pbAiTaskPlanQueueOpen ? ' open' : '' ?>>
                             <summary class="d-flex align-items-center justify-content-between gap-2 small fw-semibold" style="cursor:pointer;list-style:none;">
-                                <span><i class="mdi mdi-file-chart-outline me-1"></i><?= htmlspecialchars((string)__('任务方案队列'), ENT_QUOTES, 'UTF-8') ?></span>
+                                <span><i class="mdi mdi-file-chart-outline me-1"></i><?= htmlspecialchars((string)__('浠诲姟鏂规闃熷垪'), ENT_QUOTES, 'UTF-8') ?></span>
                                 <span class="text-muted fw-normal" data-phase2-queue-status="task_plan"></span>
                             </summary>
                             <div class="pt-2">
@@ -940,14 +957,14 @@
                                     <div id="pb-ai-task-plan-queue-info-process" class="border rounded p-2 bg-light small font-monospace text-break"></div>
                                 </div>
                                 <div>
-                                    <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('队列日志（result，末尾截断）'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('闃熷垪鏃ュ織锛坮esult锛屾湯灏炬埅鏂級'), ENT_QUOTES, 'UTF-8') ?></div>
                                     <pre id="pb-ai-task-plan-queue-info-result" class="border rounded p-2 mb-0 small bg-body-secondary text-break" style="max-height:min(32vh,15rem);overflow:auto;white-space:pre-wrap;word-break:break-word;"></pre>
                                 </div>
                             </div>
                         </details>
                         <details class="border rounded p-2" id="pb-ai-build-queue-info-panel" data-phase2-queue-panel="build"<?= $pbAiBuildQueueOpen ? ' open' : '' ?>>
                             <summary class="d-flex align-items-center justify-content-between gap-2 small fw-semibold" style="cursor:pointer;list-style:none;">
-                                <span><i class="mdi mdi-palette-outline me-1"></i><?= htmlspecialchars((string)__('生成主题队列'), ENT_QUOTES, 'UTF-8') ?></span>
+                                <span><i class="mdi mdi-palette-outline me-1"></i><?= htmlspecialchars((string)__('鐢熸垚涓婚闃熷垪'), ENT_QUOTES, 'UTF-8') ?></span>
                                 <span class="text-muted fw-normal" data-phase2-queue-status="build"></span>
                             </summary>
                             <div class="pt-2">
@@ -957,7 +974,7 @@
                                     <div id="pb-ai-build-queue-info-process" class="border rounded p-2 bg-light small font-monospace text-break"></div>
                                 </div>
                                 <div>
-                                    <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('队列日志（result，末尾截断）'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('闃熷垪鏃ュ織锛坮esult锛屾湯灏炬埅鏂級'), ENT_QUOTES, 'UTF-8') ?></div>
                                     <pre id="pb-ai-build-queue-info-result" class="border rounded p-2 mb-0 small bg-body-secondary text-break" style="max-height:min(32vh,15rem);overflow:auto;white-space:pre-wrap;word-break:break-word;"></pre>
                                 </div>
                             </div>
@@ -968,13 +985,40 @@
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                         <strong class="small mb-0">
                             <i class="mdi mdi-image-multiple-outline text-primary me-1" aria-hidden="true"></i>
-                            <?= htmlspecialchars((string)__('资产面板'), ENT_QUOTES, 'UTF-8') ?>
+                            <?= htmlspecialchars((string)__('璧勪骇闈㈡澘'), ENT_QUOTES, 'UTF-8') ?>
                         </strong>
                         <span class="badge text-bg-light border" id="pb-ai-asset-panel-count">0</span>
                     </div>
-                    <p class="small text-muted mb-2"><?= htmlspecialchars((string)__('展示 asset_manifest slots，生成动作只进入后台队列。'), ENT_QUOTES, 'UTF-8') ?></p>
+                        <p class="small text-muted mb-2"><?= htmlspecialchars((string)__('展示 asset_manifest slots，生成动作只进入后台队列。'), ENT_QUOTES, 'UTF-8') ?></p>
                     <div class="alert alert-light border py-2 px-3 small mb-2 d-none" id="pb-ai-asset-panel-empty">
                         <?= htmlspecialchars((string)__('暂无资产槽位。'), ENT_QUOTES, 'UTF-8') ?>
+                    </div>
+                    <div class="border rounded p-2 mb-2 bg-body" id="pb-ai-image-tool-panel">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                            <strong class="small mb-0"><?= htmlspecialchars((string)__('AI Image Tool'), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <span class="small text-muted" id="pb-ai-image-tool-status"></span>
+                        </div>
+                        <textarea class="form-control form-control-sm mb-2" id="pb-ai-image-tool-prompt" rows="3" placeholder="<?= htmlspecialchars((string)__('Describe the exact website image the agent needs.'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label small mb-1" for="pb-ai-image-tool-type"><?= htmlspecialchars((string)__('Image Type'), ENT_QUOTES, 'UTF-8') ?></label>
+                                <select class="form-select form-select-sm" id="pb-ai-image-tool-type">
+                                    <option value="section_image"><?= htmlspecialchars((string)__('Section Image'), ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="hero_image"><?= htmlspecialchars((string)__('Hero Image'), ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="trust_brand_image"><?= htmlspecialchars((string)__('Trust / Brand Image'), ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="logo_icon"><?= htmlspecialchars((string)__('Logo / Icon'), ENT_QUOTES, 'UTF-8') ?></option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1" for="pb-ai-image-tool-page"><?= htmlspecialchars((string)__('Page'), ENT_QUOTES, 'UTF-8') ?></label>
+                                <input type="text" class="form-control form-control-sm" id="pb-ai-image-tool-page" placeholder="home">
+                            </div>
+                            <div class="col-md-3 d-grid">
+                                <button type="button" class="btn btn-sm btn-primary" id="pb-ai-image-tool-generate">
+                                    <i class="mdi mdi-image-plus-outline me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('Generate'), ENT_QUOTES, 'UTF-8') ?>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <div class="d-grid gap-2" id="pb-ai-asset-slot-list"></div>
                 </div>
@@ -987,26 +1031,26 @@
                     ?>
                     <div class="pb-ai-phase1-queue-embed" id="pb-ai-phase1-queue-embed">
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-ai-primary-action-row">
-                            <span class="text-muted small pb-ai-primary-action-hint"><?= htmlspecialchars((string)__('表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="text-muted small pb-ai-primary-action-hint"><?= htmlspecialchars((string)__('表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。'), ENT_QUOTES, 'UTF-8') ?></span>
                         </div>
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                            <strong class="small mb-0"><?= htmlspecialchars((string)__('第一阶段队列'), ENT_QUOTES, 'UTF-8') ?></strong>
-                            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" id="pb-ai-plan-queue-info-refresh"><?= htmlspecialchars((string)__('刷新'), ENT_QUOTES, 'UTF-8') ?></button>
+                            <strong class="small mb-0"><?= htmlspecialchars((string)__('绗竴闃舵闃熷垪'), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" id="pb-ai-plan-queue-info-refresh"><?= htmlspecialchars((string)__('鍒锋柊'), ENT_QUOTES, 'UTF-8') ?></button>
                         </div>
-                        <p class="small text-muted mb-2"><?= htmlspecialchars((string)__('当前执行中的队列会自动展开，并实时同步执行状态与日志。'), ENT_QUOTES, 'UTF-8') ?></p>
+                    <p class="small text-muted mb-2"><?= htmlspecialchars((string)__('当前执行中的队列会自动展开，并实时同步执行状态与日志。'), ENT_QUOTES, 'UTF-8') ?></p>
                         <details class="border rounded p-2" id="pb-ai-plan-queue-info-panel" data-phase1-queue-panel="plan"<?= $pbAiPlanQueueOpen ? ' open' : '' ?>>
                             <summary class="d-flex align-items-center justify-content-between gap-2 small fw-semibold" style="cursor:pointer;list-style:none;">
-                                <span><i class="mdi mdi-file-chart-outline me-1"></i><?= htmlspecialchars((string)__('任务方案队列'), ENT_QUOTES, 'UTF-8') ?></span>
+                                <span><i class="mdi mdi-file-chart-outline me-1"></i><?= htmlspecialchars((string)__('浠诲姟鏂规闃熷垪'), ENT_QUOTES, 'UTF-8') ?></span>
                                 <span class="text-muted fw-normal" data-phase1-queue-status="plan"></span>
                             </summary>
                             <div class="pt-2">
                                 <div id="pb-ai-plan-queue-info-meta" class="small mb-2"></div>
                                 <div class="mb-2">
-                                    <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('当前进程状态'), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('当前进程状态'), ENT_QUOTES, 'UTF-8') ?></div>
                                     <div id="pb-ai-plan-queue-info-process" class="border rounded p-2 bg-light small font-monospace text-break"></div>
                                 </div>
                                 <div>
-                                    <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('队列日志（result，末尾截断）'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('闃熷垪鏃ュ織锛坮esult锛屾湯灏炬埅鏂級'), ENT_QUOTES, 'UTF-8') ?></div>
                                     <pre id="pb-ai-plan-queue-info-result" class="border rounded p-2 mb-0 small bg-body-secondary text-break" style="max-height:min(32vh,15rem);overflow:auto;white-space:pre-wrap;word-break:break-word;"></pre>
                                 </div>
                             </div>
@@ -1024,7 +1068,7 @@
                 <div class="d-grid gap-2 small" id="pb-ai-stage-status-summary">
                     <div class="border rounded p-2">
                         <div class="d-flex align-items-center justify-content-between gap-2">
-                            <strong><?= htmlspecialchars((string)__('阶段一方案'), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <strong><?= htmlspecialchars((string)__('闃舵涓€鏂规'), ENT_QUOTES, 'UTF-8') ?></strong>
                             <span class="badge text-bg-secondary" id="pb-ai-stage-status-plan-badge"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></span>
                         </div>
                         <div class="text-muted mt-1" id="pb-ai-stage-status-plan-message"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
@@ -1038,7 +1082,7 @@
                     </div>
                     <div class="border rounded p-2">
                         <div class="d-flex align-items-center justify-content-between gap-2">
-                            <strong><?= htmlspecialchars((string)__('站点构建'), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <strong><?= htmlspecialchars((string)__('绔欑偣鏋勫缓'), ENT_QUOTES, 'UTF-8') ?></strong>
                             <span class="badge text-bg-secondary" id="pb-ai-stage-status-build-badge"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></span>
                         </div>
                         <div class="text-muted mt-1" id="pb-ai-stage-status-build-message"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
@@ -1051,7 +1095,7 @@
             <div class="card-body p-3">
                 <h6 class="fw-semibold mb-3 d-flex align-items-center gap-2">
                     <i class="mdi mdi-earth text-primary"></i>
-                    <?= htmlspecialchars((string)__('域名与注册商'), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars((string)__('鍩熷悕涓庢敞鍐屽晢'), ENT_QUOTES, 'UTF-8') ?>
                 </h6>
                 <div class="mb-3">
                     <label class="form-label" for="pb-ai-registrar-account_trigger"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></label>
@@ -1061,26 +1105,26 @@
                         value="preferredRegistrarAccountId"
                         display="recommendedRegistrarLabel"
                         options="registrarSelectOptionsJson"
-                        empty-label="@lang(由 AI 自动选择)"
-                        placeholder="@lang(搜索服务商账号...)"
+                        empty-label="@lang(鐢?AI 鑷姩閫夋嫨)"
+                        placeholder="@lang(鎼滅储鏈嶅姟鍟嗚处鍙?..)"
                         class="w-100"
                     />
                     <div class="form-text" id="pb-ai-registrar-help">
-                        <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('AI 推荐: {label}', ['label' => $recommendedRegistrarLabel]) : (string)__(''), ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('AI 鎺ㄨ崘: {label}', ['label' => $recommendedRegistrarLabel]) : (string)__(''), ENT_QUOTES, 'UTF-8') ?>
                     </div>
                 </div>
                 <div class="border rounded p-3 bg-light">
                     <div class="mb-2">
                         <span class="badge <?= htmlspecialchars($domainStatusBadgeClass, ENT_QUOTES, 'UTF-8') ?>" id="site-builder-domain-status-badge"><?= htmlspecialchars((string)($domainPurchaseState['status_label'] ?? __('Pending')), ENT_QUOTES, 'UTF-8') ?></span>
-                        <div class="fw-semibold mt-2 small"><?= htmlspecialchars((string)__('购买域名'), ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="fw-semibold mt-2 small"><?= htmlspecialchars((string)__('璐拱鍩熷悕'), ENT_QUOTES, 'UTF-8') ?></div>
                         <div class="text-muted small" id="site-builder-domain-message"><?= htmlspecialchars((string)($domainPurchaseState['message'] ?? __('')), ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
                     <div class="d-flex flex-wrap gap-2 pb-guided-domain-actions">
                         <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-recommend-domain-btn">
-                            <i class="mdi mdi-auto-fix me-1"></i><?= htmlspecialchars((string)__('推荐域名'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-auto-fix me-1"></i><?= htmlspecialchars((string)__('鎺ㄨ崘鍩熷悕'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="pb-ai-purchase-domain-btn" disabled>
-                            <i class="mdi mdi-cart me-1"></i><?= htmlspecialchars((string)__('购买域名'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-cart me-1"></i><?= htmlspecialchars((string)__('璐拱鍩熷悕'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                     </div>
                 </div>
@@ -1091,7 +1135,7 @@
             <div class="card-body p-4">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                     <div>
-                        <h6 class="mb-1"><?= htmlspecialchars((string)__('当前会话信息'), ENT_QUOTES, 'UTF-8') ?></h6>
+                        <h6 class="mb-1"><?= htmlspecialchars((string)__('褰撳墠浼氳瘽淇℃伅'), ENT_QUOTES, 'UTF-8') ?></h6>
                         <p class="text-muted small mb-0"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></p>
                     </div>
                     <?php
@@ -1103,29 +1147,29 @@
                 </div>
                 <div class="summary-grid">
                     <div class="summary-item">
-                        <span class="summary-label"><?= htmlspecialchars((string)__('站点名称'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="summary-label"><?= htmlspecialchars((string)__('绔欑偣鍚嶇О'), ENT_QUOTES, 'UTF-8') ?></span>
                         <div class="summary-value<?= $guidedSessionSummary['site_title'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['site_title'] !== '' ? $guidedSessionSummary['site_title'] : (string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
                     <div class="summary-item">
-                        <span class="summary-label"><?= htmlspecialchars((string)__('一句话定位'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="summary-label"><?= htmlspecialchars((string)__('涓€鍙ヨ瘽瀹氫綅'), ENT_QUOTES, 'UTF-8') ?></span>
                         <div class="summary-value<?= $guidedSessionSummary['site_tagline'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['site_tagline'] !== '' ? $guidedSessionSummary['site_tagline'] : (string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
                     <div class="summary-item">
-                        <span class="summary-label"><?= htmlspecialchars((string)__('目标域名'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="summary-label"><?= htmlspecialchars((string)__('鐩爣鍩熷悕'), ENT_QUOTES, 'UTF-8') ?></span>
                         <div class="summary-value<?= $guidedSessionSummary['target_domain'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['target_domain'] !== '' ? $guidedSessionSummary['target_domain'] : (string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
                     <div class="summary-item">
-                        <span class="summary-label"><?= htmlspecialchars((string)__('主语言'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="summary-label"><?= htmlspecialchars((string)__('涓昏瑷€'), ENT_QUOTES, 'UTF-8') ?></span>
                         <?php $summaryLocale = (string)($guidedSessionSummary['default_locale'] ?? ''); ?>
                         <div class="summary-value<?= $summaryLocale === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($summaryLocale !== '' ? $summaryLocale : (string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
                     <div class="summary-item">
-                        <span class="summary-label"><?= htmlspecialchars((string)__('方案语言'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="summary-label"><?= htmlspecialchars((string)__('鏂规璇█'), ENT_QUOTES, 'UTF-8') ?></span>
                         <?php $summaryPlanLocale = (string)($guidedSessionSummary['plan_locale'] ?? ''); ?>
-                        <div class="summary-value<?= $summaryPlanLocale === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($summaryPlanLocale !== '' ? $summaryPlanLocale : (string)__('跟随框架当前语言'), ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="summary-value<?= $summaryPlanLocale === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($summaryPlanLocale !== '' ? $summaryPlanLocale : (string)__('璺熼殢妗嗘灦褰撳墠璇█'), ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
                     <div class="summary-item">
-                        <span class="summary-label"><?= htmlspecialchars((string)__('页面类型'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="summary-label"><?= htmlspecialchars((string)__('椤甸潰绫诲瀷'), ENT_QUOTES, 'UTF-8') ?></span>
                         <?php if ($guidedSessionSummary['page_types'] !== []): ?>
                             <div class="summary-tags">
                                 <?php foreach ($guidedSessionSummary['page_types'] as $summaryPageType): ?>
@@ -1139,7 +1183,7 @@
                 </div>
                 <div class="summary-brief"><?= htmlspecialchars($guidedSessionSummary['brief_description'] !== '' ? $guidedSessionSummary['brief_description'] : (string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
                 <?php
-                // T36: 鍘嗗彶纭鏂规棰勮鍏ュ彛
+                // T36: 閸樺棗褰剁涵顔款吇閺傝顢嶆０鍕潔閸忋儱褰?
                 $hasConfirmedPlan = !empty($guidedSessionSummary['plan_confirmed_at']);
                 $hasConfirmedTaskPlan = !empty($guidedSessionSummary['task_plan_confirmed_at']);
                 ?>
@@ -1149,7 +1193,7 @@
                     <?php if ($hasConfirmedPlan): ?>
                     <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2 pb-ai-view-confirmed-plan" data-plan-type="stage1">
                         <i class="mdi mdi-file-document-outline me-1"></i>
-                        <?= htmlspecialchars((string)__('查看阶段一方案'), ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars((string)__('鏌ョ湅闃舵涓€鏂规'), ENT_QUOTES, 'UTF-8') ?>
                         <span class="badge bg-success ms-1"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></span>
                     </button>
                     <?php endif; ?>
@@ -1168,7 +1212,6 @@
     </aside>
     </div>
 </div>
-
 <?php endif; return; ?>
 <?php /* ============================================================
    Legacy workspace branch (hidden). Guided quick mode is the only active UI.
@@ -1188,7 +1231,7 @@
             <div class="d-flex gap-2 flex-wrap mt-3 mt-sm-0">
                 <?php if ($embeddedVisualUrl !== ''): ?>
                     <button type="button" class="btn btn-primary btn-sm pb-ai-focus-embedded-editor" id="pb-ai-open-visual-editor">
-                        <i class="mdi mdi-open-in-new me-1"></i><?= htmlspecialchars((string)__('打开可视化编辑器'), ENT_QUOTES, 'UTF-8') ?>
+                        <i class="mdi mdi-open-in-new me-1"></i><?= htmlspecialchars((string)__('鎵撳紑鍙鍖栫紪杈戝櫒'), ENT_QUOTES, 'UTF-8') ?>
                     </button>
                 <?php endif; ?>
                 <?php if ($guidedUrl !== ''): ?>
@@ -1197,7 +1240,7 @@
                     </a>
                 <?php endif; ?>
                 <a class="btn btn-soft-secondary btn-sm" href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8') ?>">
-                    <i class="mdi mdi-arrow-left me-1"></i><?= htmlspecialchars((string)__('返回 Websites 入口'), ENT_QUOTES, 'UTF-8') ?>
+                    <i class="mdi mdi-arrow-left me-1"></i><?= htmlspecialchars((string)__('杩斿洖 Websites 鍏ュ彛'), ENT_QUOTES, 'UTF-8') ?>
                 </a>
             </div>
         </div>
@@ -1208,7 +1251,7 @@
     <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
-                <span class="badge bg-soft-primary text-primary mb-3"><?= htmlspecialchars((string)__('鑽夌站点'), ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="badge bg-soft-primary text-primary mb-3"><?= htmlspecialchars((string)__('快速建站'), ENT_QUOTES, 'UTF-8') ?></span>
                 <div class="fs-4 fw-semibold" id="pb-ai-draft-website-id"><?= $draftWebsiteId ?></div>
                 <div class="text-muted small"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
             </div>
@@ -1217,7 +1260,7 @@
     <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
-                <span class="badge bg-soft-success text-success mb-3"><?= htmlspecialchars((string)__('铏氭嫙涓婚'), ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="badge bg-soft-success text-success mb-3"><?= htmlspecialchars((string)__('閾忔碍瀚欐稉濠氼暯'), ENT_QUOTES, 'UTF-8') ?></span>
                 <div class="fs-4 fw-semibold" id="pb-ai-virtual-theme-id"><?= $virtualThemeId ?></div>
                 <div class="text-muted small"><?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
             </div>
@@ -1226,7 +1269,7 @@
     <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
-                <span class="badge bg-soft-warning text-warning mb-3"><?= htmlspecialchars((string)__('当前阶段'), ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="badge bg-soft-warning text-warning mb-3"><?= htmlspecialchars((string)__('褰撳墠闃舵'), ENT_QUOTES, 'UTF-8') ?></span>
                 <div class="fs-4 fw-semibold" id="pb-ai-current-stage"><?= htmlspecialchars((string)($state['stage_label'] ?? $currentStage), ENT_QUOTES, 'UTF-8') ?></div>
                 <div class="text-muted small">Public ID: <code><?= htmlspecialchars($publicId, ENT_QUOTES, 'UTF-8') ?></code></div>
             </div>
@@ -1254,11 +1297,11 @@
 
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-header bg-transparent border-0 pt-4 pb-0">
-        <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('工作区日志'), ENT_QUOTES, 'UTF-8') ?></h5>
-        <p class="text-muted mb-0"><?= htmlspecialchars((string)__('用于观察队列调度、SSE 事件和阶段状态。'), ENT_QUOTES, 'UTF-8') ?></p>
+                        <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('工作区日志'), ENT_QUOTES, 'UTF-8') ?></h5>
+                        <p class="text-muted mb-0"><?= htmlspecialchars((string)__('用于观察队列调度、SSE 事件和阶段状态。'), ENT_QUOTES, 'UTF-8') ?></p>
     </div>
     <div class="card-body p-4 pt-3">
-        <w:theme:sse-terminal id="pagebuilder-workspace-terminal" title="@lang{工作区日志}" height="420px" events="start,snapshot,log,total,done,error,warning,info" show-start-toggle="false" />
+        <w:theme:sse-terminal id="pagebuilder-workspace-terminal" title="@lang{宸ヤ綔鍖烘棩蹇梷" height="420px" events="start,snapshot,log,total,done,error,warning,info" show-start-toggle="false" />
     </div>
 </div>
 
@@ -1277,10 +1320,10 @@
         <?php endif; ?>
 
         <details class="card border-0 shadow-sm mt-3">
-            <summary class="card-body fw-semibold" style="cursor:pointer;list-style:none;"><?= htmlspecialchars((string)__('寮€发：直接编辑 Scope JSON'), ENT_QUOTES, 'UTF-8') ?></summary>
+            <summary class="card-body fw-semibold" style="cursor:pointer;list-style:none;"><?= htmlspecialchars((string)__('瀵偓鍙戯細鐩存帴缂栬緫 Scope JSON'), ENT_QUOTES, 'UTF-8') ?></summary>
             <div class="card-body pt-0">
                 <div class="mb-3">
-                    <label class="form-label" for="pb-ai-scope-full"><?= htmlspecialchars((string)__('瀹屾暣 Scope'), ENT_QUOTES, 'UTF-8') ?></label>
+                    <label class="form-label" for="pb-ai-scope-full"><?= htmlspecialchars((string)__('Current Scope'), ENT_QUOTES, 'UTF-8') ?></label>
                     <textarea class="form-control font-monospace" id="pb-ai-scope-full" rows="10"><?= htmlspecialchars($scopePreview, ENT_QUOTES, 'UTF-8') ?></textarea>
                 </div>
                 <div class="mb-3">
@@ -1288,8 +1331,8 @@
                     <textarea class="form-control font-monospace" id="pb-ai-scope-patch" rows="6">{}</textarea>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                    <button type="button" class="btn btn-outline-primary" id="pb-ai-merge-scope"><?= htmlspecialchars((string)__('合并 Patch'), ENT_QUOTES, 'UTF-8') ?></button>
-                    <button type="button" class="btn btn-outline-danger" id="pb-ai-replace-scope"><?= htmlspecialchars((string)__('鏇挎崲瀹屾暣 Scope'), ENT_QUOTES, 'UTF-8') ?></button>
+                    <button type="button" class="btn btn-outline-primary" id="pb-ai-merge-scope"><?= htmlspecialchars((string)__('鍚堝苟 Patch'), ENT_QUOTES, 'UTF-8') ?></button>
+                    <button type="button" class="btn btn-outline-danger" id="pb-ai-replace-scope"><?= htmlspecialchars((string)__('Replace Scope'), ENT_QUOTES, 'UTF-8') ?></button>
                 </div>
             </div>
         </details>
@@ -1302,7 +1345,7 @@
                 <p class="text-muted mb-0">
                     <?= htmlspecialchars((string)__(''), ENT_QUOTES, 'UTF-8') ?>
                     <?php if ($previewPageType !== ''): ?>
-                        <span class="ms-2">页面类型：<code><?= htmlspecialchars($previewPageType, ENT_QUOTES, 'UTF-8') ?></code></span>
+                        <span class="ms-2">椤甸潰绫诲瀷锛?code><?= htmlspecialchars($previewPageType, ENT_QUOTES, 'UTF-8') ?></code></span>
                     <?php endif; ?>
                 </p>
             </div>
@@ -1323,7 +1366,7 @@
 
         <div class="card border-0 shadow-sm mt-3 pb-ai-expert-event-card">
             <div class="card-header bg-transparent border-0 pt-4 pb-0">
-                <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('事件记录'), ENT_QUOTES, 'UTF-8') ?></h5>
+                <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('浜嬩欢璁板綍'), ENT_QUOTES, 'UTF-8') ?></h5>
             </div>
             <div class="card-body p-4">
                 <?php $workspaceEventPreviewList = \array_slice(\is_array($events) ? $events : [], -24); ?>

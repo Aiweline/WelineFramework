@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeLayout;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractMetaBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractQaReportBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
@@ -13,6 +14,7 @@ use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceContractHelper;
 use GuoLaiRen\PageBuilder\Service\AI\QA\RenderDataQualityLinter;
+use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteBuildTaskService
 {
@@ -2225,8 +2227,68 @@ class AiSiteBuildTaskService
     {
         $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
+        if ($tasks === []) {
+            $tasks = $this->extractBlueprintTasksFromBuildSummary($scope);
+        }
 
         return \array_values(\array_filter($tasks, static fn($task): bool => \is_array($task)));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function extractBlueprintTasksFromBuildSummary(array $scope): array
+    {
+        $summary = \is_array($scope['build_summary']['task_summary'] ?? null)
+            ? $scope['build_summary']['task_summary']
+            : [];
+        $groups = \is_array($summary['groups'] ?? null) ? $summary['groups'] : [];
+        $tasks = [];
+        foreach ($groups as $groupKey => $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            $pageType = \trim((string)($group['page_type'] ?? ''));
+            foreach (\is_array($group['tasks'] ?? null) ? $group['tasks'] : [] as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $tasks[] = \array_replace([
+                    'task_key' => $taskKey,
+                    'task_type' => $this->inferTaskTypeFromTaskKey($taskKey),
+                    'group_key' => \is_string($groupKey) ? $groupKey : ($pageType !== '' ? $pageType : 'shared'),
+                    'page_type' => $pageType,
+                    'section_code' => '',
+                    'region' => '',
+                    'label' => $taskKey,
+                    'sort_order' => \count($tasks) * 10,
+                ], $task, [
+                    'task_key' => $taskKey,
+                    'group_key' => (string)($task['group_key'] ?? (\is_string($groupKey) ? $groupKey : ($pageType !== '' ? $pageType : 'shared'))),
+                    'page_type' => (string)($task['page_type'] ?? $pageType),
+                    'task_type' => (string)($task['task_type'] ?? $this->inferTaskTypeFromTaskKey($taskKey)),
+                ]);
+            }
+        }
+
+        return $tasks;
+    }
+
+    private function inferTaskTypeFromTaskKey(string $taskKey): string
+    {
+        if (\str_starts_with($taskKey, 'shared:')) {
+            return 'shared_component';
+        }
+        if (\str_starts_with($taskKey, 'page:')) {
+            return 'page_section';
+        }
+
+        return '';
     }
 
     /**
@@ -2420,6 +2482,9 @@ class AiSiteBuildTaskService
         if ($this->layoutContainsSectionCode($layout, $sectionCode)) {
             return true;
         }
+        if ($this->persistedVirtualThemeLayoutContainsSectionCode($scope, $pageType, $sectionCode)) {
+            return true;
+        }
 
         $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
@@ -2461,6 +2526,33 @@ class AiSiteBuildTaskService
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function persistedVirtualThemeLayoutContainsSectionCode(array $scope, string $pageType, string $sectionCode): bool
+    {
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId <= 0 || $pageType === '' || $sectionCode === '') {
+            return false;
+        }
+
+        try {
+            /** @var VirtualThemeLayout $layout */
+            $layout = clone ObjectManager::getInstance(VirtualThemeLayout::class);
+            $layout->clearData()->clearQuery();
+            $layout->where(VirtualThemeLayout::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+                ->where(VirtualThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(VirtualThemeLayout::schema_fields_AREA, 'frontend')
+                ->order(VirtualThemeLayout::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+
+            return $layout->getId() > 0 && $this->layoutContainsSectionCode($layout->getConfig(), $sectionCode);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

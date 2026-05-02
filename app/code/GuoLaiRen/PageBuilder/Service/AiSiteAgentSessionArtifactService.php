@@ -123,6 +123,7 @@ class AiSiteAgentSessionArtifactService
         }
 
         $scope = $this->removeSnapshotBackupsFromScope($scope);
+        $scope = $this->compactStageTwoArtifactsForStorage($scope);
         $refs = \is_array($scope[self::REF_KEY] ?? null) ? $scope[self::REF_KEY] : [];
         $touchedMap = \array_fill_keys($touchedArtifactKeys, true);
         $artifacts = [];
@@ -134,6 +135,7 @@ class AiSiteAgentSessionArtifactService
             $existingRef = \is_array($refs[$stageCode][$artifactKey] ?? null) ? $refs[$stageCode][$artifactKey] : [];
 
             if ($hasValue) {
+                $value = $this->compactArtifactPayloadForStorage($artifactKey, $value);
                 $json = $this->encodeValueDocument($value);
                 $hash = \sha1($json);
                 $bytes = \strlen($json);
@@ -221,6 +223,178 @@ class AiSiteAgentSessionArtifactService
         }
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function compactStageTwoArtifactsForStorage(array $scope): array
+    {
+        if (\is_array($scope['task_plan_structured'] ?? null)) {
+            $scope['task_plan_structured'] = $this->compactStageTwoTaskPlanPayloadForStorage(
+                $scope['task_plan_structured']
+            );
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        foreach (['draft', 'confirmed'] as $key) {
+            if (\is_array($virtualThemePlan[$key] ?? null)) {
+                $virtualThemePlan[$key] = $this->compactStageTwoTaskPlanPayloadForStorage($virtualThemePlan[$key]);
+            }
+        }
+
+        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
+        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        $structured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+
+        if ($draft !== [] && $structured !== [] && $this->stageTwoTaskPlanPayloadsEquivalent($structured, $draft)) {
+            $scope['task_plan_structured'] = [];
+            $structured = [];
+        }
+
+        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1 && $confirmed !== []) {
+            if ($structured !== [] && $this->stageTwoTaskPlanPayloadsEquivalent($structured, $confirmed)) {
+                $scope['task_plan_structured'] = [];
+            }
+            if ($draft !== [] && $this->stageTwoTaskPlanPayloadsEquivalent($draft, $confirmed)) {
+                $virtualThemePlan['draft'] = [];
+            }
+        }
+
+        if ($virtualThemePlan !== []) {
+            $scope['virtual_theme_plan'] = $virtualThemePlan;
+        }
+
+        return $scope;
+    }
+
+    private function compactArtifactPayloadForStorage(string $artifactKey, mixed $value): mixed
+    {
+        if (!\is_array($value)) {
+            return $value;
+        }
+
+        if (\in_array($artifactKey, ['task_plan_structured', 'task_plan_draft', 'task_plan_confirmed'], true)) {
+            return $this->compactStageTwoTaskPlanPayloadForStorage($value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Stage-2 snapshots carry the same contract set in three places:
+     * task_plan_workbench.contracts, task_plan_workbench.confirmed.contracts,
+     * and stage2_contracts. Keep stage2_contracts as the canonical contract
+     * payload and store lightweight refs in the workbench mirrors.
+     *
+     * @param array<string, mixed> $snapshot
+     * @return array<string, mixed>
+     */
+    private function compactStageTwoTaskPlanPayloadForStorage(array $snapshot): array
+    {
+        $snapshot = $this->stripSnapshotBackupsFromTree($snapshot);
+        $contracts = \is_array($snapshot['stage2_contracts'] ?? null) ? $snapshot['stage2_contracts'] : [];
+        if ($contracts === []) {
+            return $snapshot;
+        }
+
+        $contractRefs = $this->buildContractRefs($contracts);
+        $workbench = \is_array($snapshot['task_plan_workbench'] ?? null) ? $snapshot['task_plan_workbench'] : [];
+        if ($workbench === []) {
+            return $snapshot;
+        }
+
+        if (\is_array($workbench['contracts'] ?? null)) {
+            unset($workbench['contracts']);
+            $workbench['contract_refs'] = $contractRefs;
+        }
+
+        if (\is_array($workbench['confirmed'] ?? null)) {
+            if (\is_array($workbench['confirmed']['contracts'] ?? null)) {
+                unset($workbench['confirmed']['contracts']);
+                $workbench['confirmed']['contract_refs'] = $contractRefs;
+            }
+            if ($workbench['confirmed'] === []) {
+                unset($workbench['confirmed']);
+            }
+        }
+
+        $snapshot['task_plan_workbench'] = $workbench;
+
+        return $snapshot;
+    }
+
+    /**
+     * @param array<int|string, mixed> $contracts
+     * @return array<string, array{id:string,type:string,version:string,status:string,payload_hash:string}>
+     */
+    private function buildContractRefs(array $contracts): array
+    {
+        $refs = [];
+        foreach ($contracts as $key => $contract) {
+            if (!\is_array($contract) || $contract === []) {
+                continue;
+            }
+            $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+            $type = \trim((string)($meta['type'] ?? $contract['type'] ?? (\is_string($key) ? $key : '')));
+            if ($type === '') {
+                continue;
+            }
+            $payload = \is_array($contract['payload'] ?? null) ? $contract['payload'] : [];
+            $id = \trim((string)($meta['id'] ?? $meta['contract_id'] ?? $contract['id'] ?? $contract['contract_id'] ?? ''));
+            if ($id === '') {
+                $id = 'contract_' . \substr(\sha1((string)\json_encode($contract, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)), 0, 16);
+            }
+            $refs[$type] = [
+                'id' => $id,
+                'type' => $type,
+                'version' => \trim((string)($meta['version'] ?? $contract['version'] ?? 'v1')),
+                'status' => \trim((string)($meta['status'] ?? $contract['status'] ?? '')),
+                'payload_hash' => \sha1((string)\json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
+            ];
+        }
+
+        return $refs;
+    }
+
+    /**
+     * @param array<string, mixed> $left
+     * @param array<string, mixed> $right
+     */
+    private function stageTwoTaskPlanPayloadsEquivalent(array $left, array $right): bool
+    {
+        $leftCore = $this->stageTwoTaskPlanEquivalenceCore($left);
+        $rightCore = $this->stageTwoTaskPlanEquivalenceCore($right);
+
+        return $leftCore !== [] && $leftCore == $rightCore;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function stageTwoTaskPlanEquivalenceCore(array $payload): array
+    {
+        $core = [];
+        foreach ([
+            'plan_signature',
+            'content_locale',
+            'plan_locale',
+            'shared_tasks',
+            'page_tasks',
+            'task_tree',
+            'execution_blueprint',
+            'execution_order',
+            'block_task_schema',
+            'stage2_contracts',
+        ] as $key) {
+            if (\array_key_exists($key, $payload)) {
+                $core[$key] = $payload[$key];
+            }
+        }
+
+        return $core;
     }
 
     /**

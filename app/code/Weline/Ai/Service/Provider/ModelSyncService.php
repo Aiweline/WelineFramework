@@ -335,8 +335,9 @@ class ModelSyncService
             'token_price_input' => $modelMeta['input_price'] ?? 0,
             'token_price_output' => $modelMeta['output_price'] ?? 0,
             'max_tokens' => $modelMeta['max_tokens'] ?? ($defaults['max_tokens'] ?? 4096),
-            'is_active' => 0,
-            'is_default' => 0,
+            'primary_modality' => $modelMeta['primary_modality'] ?? ($defaults['primary_modality'] ?? 'text2text'),
+            'is_active' => (int)($modelMeta['is_active'] ?? 0) === 1 ? 1 : 0,
+            'is_default' => (int)($modelMeta['is_default'] ?? 0) === 1 ? 1 : 0,
             'capabilities' => $modelMeta['capabilities'] ?? ($defaults['capabilities'] ?? ['chat']),
             'config' => $config,
             'proxy_info' => [
