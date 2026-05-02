@@ -64,7 +64,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('blockRefreshState.blockId = refineComponentState.componentCode;', $submitBody);
         self::assertStringContainsString('renderBlockStreamingState(messages.refineQueued);', $submitBody);
         self::assertStringContainsString('postForm(startPatchBlockUrl, {', $submitBody);
-        self::assertStringContainsString('block_id: refineComponentState.componentCode,', $submitBody);
+        self::assertStringContainsString('block_id: refineComponentState.blockId,', $submitBody);
         self::assertStringContainsString('component_code: refineComponentState.componentCode,', $submitBody);
         self::assertStringContainsString('window.PbAiOperationRunner.startFromResponse(data)', $submitBody);
 
@@ -138,15 +138,18 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
     public function testVisualPreviewEmitsComponentActionPayloadWithBlockIdentity(): void
     {
-        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
-        self::assertIsString($source);
+        $script = $this->workspaceScript();
+        $bridgeBody = $this->extractFunctionBody($script, 'bindEmbeddedPreviewFrameBridge');
+        $payloadBody = $this->extractFunctionBody($script, 'buildEmbeddedPreviewPayload');
 
-        self::assertStringContainsString('type: "pb-component-action"', $source);
-        self::assertStringContainsString('action: this.getAttribute("data-pb-action") || ""', $source);
-        self::assertStringContainsString('component: wrapper.dataset.component || ""', $source);
-        self::assertStringContainsString('region: wrapper.dataset.region || ""', $source);
-        self::assertStringContainsString('index: wrapper.dataset.index || ""', $source);
-        self::assertStringContainsString('page_type: wrapper.dataset.pageType || document.body.getAttribute("data-page-type") || ""', $source);
+        self::assertStringContainsString('var payload = buildEmbeddedPreviewPayload(wrapper, button);', $bridgeBody);
+        self::assertStringContainsString('var blockId = resolvePayloadBlockId(wrapper, sourceEl);', $payloadBody);
+        self::assertStringContainsString('var componentCode = resolvePayloadComponentCode(wrapper, sourceEl);', $payloadBody);
+        self::assertStringContainsString('component: componentCode || blockId,', $payloadBody);
+        self::assertStringContainsString('component_code: componentCode || blockId,', $payloadBody);
+        self::assertStringContainsString('block_id: blockId || componentCode,', $payloadBody);
+        self::assertStringContainsString("page_type: String(", $payloadBody);
+        self::assertStringContainsString("|| getActivePreviewPageType()", $payloadBody);
     }
 
     public function testVisualPreviewFrameUsesFixedDeviceViewportHeightInsteadOfDocumentScrollHeight(): void
@@ -192,16 +195,15 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
         self::assertIsString($source);
 
-        $virtualRenderCall = '$virtualThemeHtml = $this->renderVirtualThemeComponentHtml($code, $config, $page, $styleSettings, $mode);';
+        $virtualRenderCall = '$componentPath = $modelResolution[\'path\'];';
         $componentConfigAssign = '$this->assign(\'component_config\', $config);';
         self::assertStringContainsString($virtualRenderCall, $source);
         self::assertStringContainsString($componentConfigAssign, $source);
-        self::assertStringContainsString('$componentFile = null;', $source);
         self::assertStringContainsString('$componentPath = null;', $source);
         self::assertLessThan(
             \strpos($source, $componentConfigAssign),
             \strpos($source, $virtualRenderCall),
-            'Virtual theme component HTML must be selected before the component template is fetched.'
+            'Resolved component path selection must happen after component config assignment and before template fetch.'
         );
     }
 

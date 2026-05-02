@@ -3,8 +3,8 @@
 ## 路由
 
 - 控制器：`Weline\Cron\Controller\Backend\Cron`（`system/backend/cron/...`）。
-- 列表：`system/backend/cron/listing`；帮助：`GET …/run-help`；手动执行 SSE：`POST …/post-run-stream`。
-- 调度日志（系统 cron 跑的输出）：`GET …/run-log-list?execute_name=`、`GET …/run-log-content?execute_name=&file=`、`POST …/post-run-log-stream`（实时尾随当前 `var/cron/{execute_name}.log`）。历史在 `var/cron/history/{execute_name}/`（每任务最多保留约 200 个文件）。
+- 列表：`system/backend/cron/listing`；帮助：`GET …/run-help`；手动执行 SSE：`GET …/run-stream`。
+- 调度日志（系统 cron 跑的输出）：`GET …/run-log-list?execute_name=`、`GET …/run-log-content?execute_name=&file=`、`GET …/run-log-stream`（实时尾随当前 `var/cron/{execute_name}.log`）。历史在 `var/cron/history/{execute_name}/`（每任务最多保留约 200 个文件）。
 
 ## 行为
 
@@ -21,4 +21,5 @@
 
 ## 安全
 
-- POST SSE 需 CSRF；执行名白名单。
+- EventSource/`theme:sse-terminal` 订阅实际是 GET；若前端通过 `terminal.start(url, { method: 'POST', body })` 传参，当前实现会把 body 序列化进 query 再发起 GET，因此 SSE 路由必须提供 GET 入口，并继续校验 CSRF。
+- 执行名需通过白名单校验。

@@ -50,6 +50,7 @@ final class AiSiteQualityGateService
      */
     public function inspectScope(array $scope, array $renderedHtmlByPageType = []): array
     {
+        $isFakeMode = (int)($scope['fake_mode'] ?? 0) === 1;
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pagesByType = $this->resolvePagesByType($scope);
         $renderVirtualThemeId = $this->resolveRenderVirtualThemeId($scope);
@@ -142,9 +143,11 @@ final class AiSiteQualityGateService
             $this->buildItem('visual_depth', '页面块具备视觉层次与美术分层', $allVisualDepth, $this->extractPageValues($pageReports, 'visual_depth_signals')),
         ], $pageReports);
 
+        $items = $this->finalizeQualityItems($items, $scope);
+
         $passed = true;
         foreach ($items as $item) {
-            if (empty($item['ok'])) {
+            if (!empty($item['blocking']) && empty($item['ok'])) {
                 $passed = false;
                 break;
             }
@@ -711,6 +714,8 @@ final class AiSiteQualityGateService
             'key' => $key,
             'label' => $label,
             'ok' => $ok,
+            'blocking' => true,
+            'level' => $ok ? 'pass' : 'error',
             'value' => $value,
         ];
     }
@@ -765,6 +770,8 @@ final class AiSiteQualityGateService
                 'key' => $key,
                 'label' => $spec['label'],
                 'ok' => (bool)($item['ok'] ?? false),
+                'blocking' => true,
+                'level' => (bool)($item['ok'] ?? false) ? 'pass' : 'error',
                 'value' => $value,
             ];
         }
@@ -794,5 +801,40 @@ final class AiSiteQualityGateService
         }
 
         return '';
+    }
+
+    /**
+     * @param list<array<string,mixed>> $items
+     * @param array<string,mixed> $scope
+     * @return list<array<string,mixed>>
+     */
+    private function finalizeQualityItems(array $items, array $scope): array
+    {
+        $isFakeMode = (int)($scope['fake_mode'] ?? 0) === 1;
+        $nonBlockingInFakeMode = [
+            'stage1_content_visible' => true,
+            'visual_assets_safe' => true,
+        ];
+
+        foreach ($items as &$item) {
+            $key = \trim((string)($item['key'] ?? ''));
+            $ok = !empty($item['ok']);
+            $blocking = true;
+            $level = $ok ? 'pass' : 'error';
+
+            if ($isFakeMode && isset($nonBlockingInFakeMode[$key])) {
+                $blocking = false;
+                $level = $ok ? 'pass' : 'warning';
+            }
+
+            $item['blocking'] = $blocking;
+            $item['level'] = $level;
+            if (!$blocking && !$ok) {
+                $item['message'] = 'Recorded as non-blocking in fake mode.';
+            }
+        }
+        unset($item);
+
+        return $items;
     }
 }

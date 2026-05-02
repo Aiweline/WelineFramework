@@ -121,6 +121,11 @@ class AccountService
             
             // 创建临时模型用于测试
             /** @var AiModel $testModel */
+            $probeError = $this->probeProviderAccountError($providerCode, $baseUrl, $apiKeyPlain, $account->getProxyConfig());
+            if ($probeError !== '') {
+                throw new Exception($probeError);
+            }
+
             $testModel = $this->objectManager->make(AiModel::class);
             $testModel->setData([
                 AiModel::schema_fields_SUPPLIER => $providerCode,
@@ -148,7 +153,8 @@ class AccountService
             $result = $provider->generate($testModel, '请回复"OK"表示连接成功', [
                 'max_tokens' => 10,
                 'temperature' => 0,
-                'test_mode' => true
+                'test_mode' => true,
+                'timeout' => 12
             ]);
             
             if (!empty($result['content'])) {
@@ -225,6 +231,128 @@ class AccountService
      * @param array $context
      * @return UsageRecord
      */
+    /**
+     * @param array<string,mixed> $proxyConfig
+     */
+    private function probeProviderAccountError(string $providerCode, string $baseUrl, string $apiKey, array $proxyConfig = []): string
+    {
+        if ($apiKey === '' || $baseUrl === '') {
+            return '';
+        }
+        $providerCode = strtolower(trim($providerCode));
+        if (!in_array($providerCode, ['openai', 'deepseek'], true)) {
+            return '';
+        }
+
+        $url = rtrim($baseUrl, '/') . '/models';
+        $streamError = $this->probeProviderAccountErrorWithStream($url, $apiKey);
+        if ($streamError !== '__WELINE_AI_PROVIDER_PROBE_OK__') {
+            return $streamError;
+        }
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return '';
+        }
+
+        $options = [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => false,
+            CURLOPT_TIMEOUT => 12,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_USERAGENT => 'Weline-Ai-Provider-Test/1.0',
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $apiKey,
+                'Accept: application/json',
+            ],
+        ];
+        if (!empty($proxyConfig['enabled']) && !empty($proxyConfig['host'])) {
+            $proxy = (string)$proxyConfig['host'];
+            if (!empty($proxyConfig['port'])) {
+                $proxy .= ':' . (string)$proxyConfig['port'];
+            }
+            $options[CURLOPT_PROXY] = $proxy;
+            if (!empty($proxyConfig['username'])) {
+                $options[CURLOPT_PROXYUSERPWD] = (string)$proxyConfig['username'] . ':' . (string)($proxyConfig['password'] ?? '');
+            }
+        }
+
+        curl_setopt_array($ch, $options);
+        $body = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($body === false || $curlError !== '') {
+            return 'Provider probe failed: ' . ($curlError !== '' ? $curlError : 'empty response');
+        }
+        if ($httpCode >= 200 && $httpCode < 300) {
+            return '';
+        }
+
+        $rawBody = trim((string)$body);
+        $decoded = json_decode($rawBody, true);
+        if (is_array($decoded)) {
+            $code = trim((string)($decoded['code'] ?? $decoded['error']['code'] ?? ''));
+            $message = trim((string)($decoded['message'] ?? $decoded['error']['message'] ?? ''));
+            if ($code !== '' || $message !== '') {
+                return trim(($code !== '' ? $code . ': ' : '') . ($message !== '' ? $message : ('HTTP ' . $httpCode)));
+            }
+        }
+
+        return 'Provider probe failed: HTTP ' . $httpCode . ($rawBody !== '' ? ' ' . substr($rawBody, 0, 300) : '');
+    }
+
+    private function probeProviderAccountErrorWithStream(string $url, string $apiKey): string
+    {
+        $headers = [
+            'Authorization: Bearer ' . $apiKey,
+            'Accept: application/json',
+            'User-Agent: Weline-Ai-Provider-Test/1.0',
+        ];
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'timeout' => 12,
+                'ignore_errors' => true,
+                'header' => implode("\r\n", $headers) . "\r\n",
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ]);
+        $body = @file_get_contents($url, false, $context);
+        $statusCode = 0;
+        foreach (($http_response_header ?? []) as $header) {
+            if (preg_match('/^HTTP\/\S+\s+(\d+)/', (string)$header, $matches)) {
+                $statusCode = (int)$matches[1];
+                break;
+            }
+        }
+        if ($body === false) {
+            return 'Provider probe failed: ' . (string)(error_get_last()['message'] ?? 'empty response');
+        }
+        if ($statusCode >= 200 && $statusCode < 300) {
+            return '__WELINE_AI_PROVIDER_PROBE_OK__';
+        }
+
+        $rawBody = trim((string)$body);
+        $decoded = json_decode($rawBody, true);
+        if (is_array($decoded)) {
+            $code = trim((string)($decoded['code'] ?? $decoded['error']['code'] ?? ''));
+            $message = trim((string)($decoded['message'] ?? $decoded['error']['message'] ?? ''));
+            if ($code !== '' || $message !== '') {
+                return trim(($code !== '' ? $code . ': ' : '') . ($message !== '' ? $message : ('HTTP ' . $statusCode)));
+            }
+        }
+
+        return 'Provider probe failed: HTTP ' . $statusCode . ($rawBody !== '' ? ' ' . substr($rawBody, 0, 300) : '');
+    }
+
     public function recordUsage(Account $account, AiModel $model, array $usage, array $context = []): UsageRecord
     {
         /** @var UsageRecord $record */
@@ -374,6 +502,51 @@ class AccountService
      * @param string $providerCode
      * @return array
      */
+    public function supportsModel(string $providerCode, string $modelCode): bool
+    {
+        $providerCode = trim($providerCode);
+        $modelCode = trim($modelCode);
+
+        if ($providerCode === '' || $modelCode === '') {
+            return false;
+        }
+
+        if (!VendorConfigManager::isProviderSupported($providerCode)) {
+            return false;
+        }
+
+        $models = $this->getProviderModels($providerCode);
+        foreach ($models as $model) {
+            if (is_string($model) && trim($model) === $modelCode) {
+                return true;
+            }
+
+            if (!is_array($model)) {
+                continue;
+            }
+
+            $candidates = [
+                $model['code'] ?? null,
+                $model['id'] ?? null,
+                $model['model'] ?? null,
+                $model['name'] ?? null,
+            ];
+
+            foreach ($candidates as $candidate) {
+                if (is_string($candidate) && trim($candidate) === $modelCode) {
+                    return true;
+                }
+            }
+        }
+
+        $testModel = VendorConfigManager::getTestModel($providerCode);
+        if (is_string($testModel) && trim($testModel) === $modelCode) {
+            return true;
+        }
+
+        return VendorConfigManager::isModelFromProvider($modelCode, $providerCode);
+    }
+
     public function getProviderModels(string $providerCode): array
     {
         return VendorConfigManager::getProviderModels($providerCode);
