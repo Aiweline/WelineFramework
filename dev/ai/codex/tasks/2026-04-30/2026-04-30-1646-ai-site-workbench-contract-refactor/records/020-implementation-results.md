@@ -12,7 +12,7 @@ Date: 2026-04-30
 - F01-F07: needs form state helper, autosave consolidation slice, skill multi-select UI, minimal custom skill create/save UI, shared queue state display, generation button UX, and Stage2 skill override UX.
 - P01-P03: Stage1 `plan_workbench` now emits contract context plus Site Brief, Design Manifest, Page Contract, and Block Plan contract envelopes.
 - P04 partial: added positive contract-shape regression coverage; prompt-like invalid-output sanitation remains a follow-up atom.
-- F08 partial: real browser verification completed for skill list, custom skill creation, selection persistence, and console errors. Playwright e2e spec was not edited because it is already dirty/unowned.
+- F08 initial partial: real browser verification completed for skill list, custom skill creation, selection persistence, and console errors. This was superseded by the later F08 Playwright coverage below.
 
 ## Main Verification
 
@@ -142,7 +142,7 @@ Observed:
 - Full target suite passed: 206 tests, 2477 assertions.
 - `git diff --check` passed for the changed frontend templates, with only CRLF normalization warnings.
 - Browser `iab` verification loaded the current workbench URL after restarting the stale WLS default instance. Result: not redirected to login, title `GuoLaiRen_PageBuilder`, workspace marker present, plan queue summaries present (`planQueueCount=2`), plan skill summaries present (`planSkillSummaryCount=2`), run button present, and console error count `0`.
-- The current `public_id` only rendered the Stage1 workspace surface, so the Stage2 skill override panel and task-plan queue summary had no DOM to interact with in this browser pass. F08 remains partial until a confirmed-plan Stage2 fixture/session is used.
+- The current `public_id` only rendered the Stage1 workspace surface, so the Stage2 skill override panel and task-plan queue summary had no DOM to interact with in this browser pass. This gap was superseded by the later confirmed-plan Stage2 E2E coverage below.
 - WLS state before browser verification was stale: `server:status` reported default metadata but HTTPS port 443 rejected connections. `php bin/w server:start default -r -f` restored Master/Worker/Dispatcher readiness before the browser check.
 
 ## Unowned Working Tree Changes
@@ -254,6 +254,8 @@ Implemented:
 - Added Playwright coverage for the AI site workbench skill manager.
 - The new case mocks skill list/save/start-plan endpoints, creates a custom skill, verifies it is selected in the requirement panel, and asserts `selected_skill_codes` is included in the plan-start request.
 - The case also tracks direct AI execution endpoint patterns and asserts the frontend only starts queued plan generation.
+- Fixed Stage2-only workspace entry so the skill list still loads when the Stage1 requirements form is not rendered; this keeps the Stage2 override panel usable after Stage1 confirmation.
+- Added confirmed-plan Stage2 coverage for skill inheritance/override: inherited mode sends no `selected_skill_codes`, override mode sends only the explicit Stage2 skill codes.
 - Preserved the pre-existing unowned edit in the same spec that allows asset queue status `preparing`.
 
 Verification:
@@ -262,6 +264,7 @@ Verification:
 node --check tests\e2e\specs\backend\pagebuilder-ai-site-workbench.spec.js
 php bin\w server:start default -r -f
 $env:PLAYWRIGHT_TEST_FILES='["tests/e2e/specs/backend/pagebuilder-ai-site-workbench.spec.js"]'; .\node_modules\.bin\playwright.cmd test -g "skill manager selection" --config playwright.config.js
+$env:PLAYWRIGHT_TEST_FILES='["tests/e2e/specs/backend/pagebuilder-ai-site-workbench.spec.js"]'; .\node_modules\.bin\playwright.cmd test -g "stage two skill override" --config playwright.config.js
 ```
 
 Observed:
@@ -269,6 +272,7 @@ Observed:
 - JS syntax check passed.
 - First browser run exposed stale WLS compiled factory state for `VirtualThemeLayout`; restarting default WLS regenerated runtime state.
 - Browser e2e passed: 1 test, skill manager selection propagation, no direct AI execution endpoint calls.
+- Browser e2e passed: 1 test, confirmed Stage2 skill override inheritance/payload propagation. The first run exposed the Stage2-only skill-list loading gap; the frontend now loads skills even without the requirements form DOM.
 
 ## Final Integration Record
 
@@ -284,6 +288,7 @@ Final verification:
 php vendor\bin\phpunit --no-coverage app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AiSiteExecutionBlueprintServiceTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AI\Contract\ContractCoreServiceTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AI\Contract\LegacyContractAdapterTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AI\QA\RenderDataQualityLinterTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AI\Repair\ContractRepairPlannerExecutorTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AI\AiSiteSkillRegistryTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AI\CustomSkillRepositoryTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AI\SkillNormalizerTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AiSiteContractAdapterSelectorTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AiSiteScopeCompatibilityServiceTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AiSiteVirtualThemePlanServiceTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AiSitePageComponentGenerationServiceTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AiSitePageComponentGenerationServiceWQueryTest.php app\code\GuoLaiRen\PageBuilder\test\Unit\Service\AiSiteBuildTaskServiceTest.php
 node --check tests\e2e\specs\backend\pagebuilder-ai-site-workbench.spec.js
 $env:PLAYWRIGHT_TEST_FILES='["tests/e2e/specs/backend/pagebuilder-ai-site-workbench.spec.js"]'; .\node_modules\.bin\playwright.cmd test -g "skill manager selection" --config playwright.config.js
+$env:PLAYWRIGHT_TEST_FILES='["tests/e2e/specs/backend/pagebuilder-ai-site-workbench.spec.js"]'; .\node_modules\.bin\playwright.cmd test -g "stage two skill override" --config playwright.config.js
 git diff --check -- app\code\GuoLaiRen\PageBuilder tests\e2e\specs\backend\pagebuilder-ai-site-workbench.spec.js dev\ai\codex\tasks\2026-04-30\2026-04-30-1646-ai-site-workbench-contract-refactor
 ```
 
@@ -291,6 +296,37 @@ Observed:
 
 - Final PageBuilder target unit suite passed: 213 tests, 2516 assertions.
 - JS syntax check passed.
-- Browser e2e passed: 1 test.
+- Browser e2e passed: skill manager selection propagation and confirmed Stage2 skill override propagation.
 - `git diff --check` passed with CRLF normalization warnings only.
 - Running Playwright with all collected specs hit unrelated module-resolution failure in another module-local e2e file (`app/code/Weline/Ai/Test/e2e/backend/ai-model-sync.spec.js` cannot resolve `@playwright/test` from that path). The final browser command therefore pins `PLAYWRIGHT_TEST_FILES` to the PageBuilder workbench spec.
+
+## 2026-05-01 Progress Refresh
+
+Re-verified against the contract refactor plan and current codebase:
+
+- REL02 contract-target unit suite still passes unchanged: `213 tests, 2516 assertions`.
+- `node --check tests\e2e\specs\backend\pagebuilder-ai-site-workbench.spec.js` passes after additional queue/expert/workspace E2E helper updates.
+- Contract-related browser cases remain green for the plan scope:
+  - `PB-WORKBENCH-GUIDED-001`
+  - `PB-WORKBENCH-SKILL-001`
+  - `PB-WORKBENCH-SKILL-002`
+  - `PB-WORKBENCH-ASSET-010`
+  - `PB-WORKBENCH-PLAN-005`
+  - `PB-WORKBENCH-PLAN-REFINE-007`
+  - `PB-WORKBENCH-TASKPLAN-REFINE-008`
+
+Additional implementation completed during this refresh:
+
+- Build-task reconciliation now accepts persisted virtual-theme layout evidence when compacted scope data omits the last generated section. This unblocks the `custom_page:cta` false-running state that previously blocked publish.
+- PageBuilder E2E helpers now prefer same-origin workspace URLs, force `expert=1` where required, and tolerate queue-observer/task-plan scheduler states introduced by the contract/queue model.
+- Workspace helper selectors were partially updated to current DOM behavior (`default_locale` hidden input model, preview-tab ordering, removed direct editable tagline field).
+
+Current non-plan blockers still open:
+
+- Several legacy/full-browser workbench flows still fail outside the strict REL02 contract target because local WLS/HTTPS browser sessions intermittently reset/refuse connections during long Playwright runs (`ECONNRESET`, `ERR_CONNECTION_REFUSED`, `socket hang up`).
+- Some old UI-oriented regression cases (`PB-WORKBENCH-LEGACY-001`, `PB-WORKBENCH-EDITOR-002`, `PB-WORKBENCH-LANG-003`, `PB-WORKBENCH-ROUTE-004`) still need dedicated stabilization or expectation updates. These are now tracked as post-contract compatibility/frontend hardening work, not proof that the contract refactor itself regressed.
+
+Interpretation:
+
+- The strong-contract refactor acceptance remains satisfied by the plan's own REL02 target set.
+- The remaining work is now concentrated in environment stability and historical workbench compatibility E2E, which should be treated as follow-up hardening rather than core contract refactor incompleteness.

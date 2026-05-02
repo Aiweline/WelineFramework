@@ -38,6 +38,7 @@ Done on 2026-04-30:
 - Added an explicit override switch with warning copy that override only affects the Stage 2 task contract.
 - Override choices reuse the existing skill registry options and validation.
 - `selected_skill_codes` is sent to `postStartTaskPlan` only when the override switch is enabled; otherwise Stage 2 preserves backend inheritance.
+- Follow-up verification fixed Stage2-only entry: skill options now load even when the Stage1 requirements form is not rendered, so the override panel remains usable after Stage1 confirmation.
 
 ## Rollback
 
