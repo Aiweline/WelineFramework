@@ -51,3 +51,29 @@
 - `[ROLE_SKILL_BINDING.md](ROLE_SKILL_BINDING.md)`：角色与原技能映射
 - `[TEAM_WORKFLOW.md](TEAM_WORKFLOW.md)`：团队协作流程
 - `[MIGRATION_REPORT.md](MIGRATION_REPORT.md)`：迁移说明与缺失源记录
+
+## ClawHub Publish
+
+发布脚本位置：
+
+- `tools/publish-multica-skills.mjs`
+
+本地半自动发布：
+
+1. `npx clawhub login`
+2. `node tools/publish-multica-skills.mjs --dry-run`
+3. `node tools/publish-multica-skills.mjs`
+
+CI 全自动发布：
+
+- 配置 `CLAWHUB_TOKEN`
+- 可选配置 `CLAWHUB_OWNER`
+- GitHub Actions 工作流：`.github/workflows/publish-multica-skills.yml`
+
+脚本默认目录就是 `dev/ai/skills`，只有在你明确要发布别的目录时，才需要额外传目录参数。
+
+运行脚本时如果缺少登录态或 token，脚本会直接输出下一步操作指南。
+
+ClawHub 对新 skill 有发布频率限制。当前限制为每小时最多 5 个新 skill。脚本会逐个发布本仓库的技能目录；如果触发限制，等待 ClawHub 重置窗口后再次运行 `node tools/publish-multica-skills.mjs` 即可继续。
+
+发布脚本生成的 manifest 文件位于 `tools/clawhub-skill-manifest.json`。
