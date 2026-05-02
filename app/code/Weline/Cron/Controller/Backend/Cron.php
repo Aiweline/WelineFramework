@@ -170,6 +170,31 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         ];
     }
 
+    private function resolveCronTaskByIdentifier(string $identifier): ?CronTask
+    {
+        $identifier = \trim($identifier);
+        if ($identifier === '') {
+            return null;
+        }
+
+        /** @var CronTask $task */
+        $task = ObjectManager::make(CronTask::class)->reset()
+            ->where(CronTask::schema_fields_EXECUTE_NAME, $identifier)
+            ->find()
+            ->fetch();
+        if ($task->getId()) {
+            return $task;
+        }
+
+        /** @var CronTask $byName */
+        $byName = ObjectManager::make(CronTask::class)->reset()
+            ->where(CronTask::schema_fields_NAME, $identifier)
+            ->find()
+            ->fetch();
+
+        return $byName->getId() ? $byName : null;
+    }
+
     #[Acl('Weline_Cron::cron_lock', '锁定计划任务', 'mdi mdi-lock', '锁定定时任务')]
     public function lock(): string
     {
@@ -214,21 +239,18 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
     public function getRunHelp(): string
     {
         $this->layoutType = null;
-        $executeName = \trim((string) $this->request->getGet('execute_name', ''));
-        if ($executeName === '' || !\preg_match('/^[a-zA-Z0-9_-]+$/', $executeName)) {
+        $taskIdentifier = \trim((string) $this->request->getGet('execute_name', ''));
+        if ($taskIdentifier === '') {
             $this->request->getResponse()->setHttpResponseCode(400);
 
             return (string) \json_encode([
                 'success' => false,
-                'message' => (string) __('参数 execute_name 无效'),
+                'message' => (string) __('参数 execute_name 不能为空'),
             ], JSON_UNESCAPED_UNICODE);
         }
 
-        $task = ObjectManager::make(CronTask::class)->reset()
-            ->where(CronTask::schema_fields_EXECUTE_NAME, $executeName)
-            ->find()
-            ->fetch();
-        if (!$task->getId()) {
+        $task = $this->resolveCronTaskByIdentifier($taskIdentifier);
+        if (!$task) {
             $this->request->getResponse()->setHttpResponseCode(404);
 
             return (string) \json_encode([
@@ -236,6 +258,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
                 'message' => (string) __('任务不存在'),
             ], JSON_UNESCAPED_UNICODE);
         }
+        $executeName = (string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? '');
 
         $tip = (string) ($task->getData(CronTask::schema_fields_TIP) ?? '');
         $row = CronTestDiscovery::findById($executeName);
@@ -308,7 +331,18 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
     }
 
     #[Acl('Weline_Cron::cron_run_stream', '手动运行SSE', 'mdi mdi-play-network', '计划任务真实执行 SSE 流')]
+    public function getRunStream(): void
+    {
+        $this->streamManualRun();
+    }
+
+    #[Acl('Weline_Cron::cron_run_stream', '手动运行SSE', 'mdi mdi-play-network', '计划任务真实执行 SSE 流')]
     public function postRunStream(): void
+    {
+        $this->streamManualRun();
+    }
+
+    private function streamManualRun(): void
     {
         $this->layoutType = null;
         $csrfPost = (string) $this->request->getPost('csrf', (string) $this->request->getGet('csrf', ''));
@@ -322,21 +356,18 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
             return;
         }
 
-        $executeName = \trim((string) $this->request->getPost('execute_name', (string) $this->request->getGet('execute_name', '')));
-        if ($executeName === '' || !\preg_match('/^[a-zA-Z0-9_-]+$/', $executeName)) {
+        $taskIdentifier = \trim((string) $this->request->getPost('execute_name', (string) $this->request->getGet('execute_name', '')));
+        if ($taskIdentifier === '') {
             $sse = new SseWriter();
             $sse->start();
-            $sse->sendError((string) __('执行名无效'));
+            $sse->sendError((string) __('执行名不能为空'));
             $sse->complete(['exit_code' => -1]);
 
             return;
         }
 
-        $task = ObjectManager::make(CronTask::class)->reset()
-            ->where(CronTask::schema_fields_EXECUTE_NAME, $executeName)
-            ->find()
-            ->fetch();
-        if (!$task->getId()) {
+        $task = $this->resolveCronTaskByIdentifier($taskIdentifier);
+        if (!$task) {
             $sse = new SseWriter();
             $sse->start();
             $sse->sendError((string) __('任务不存在'));
@@ -344,6 +375,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
 
             return;
         }
+        $executeName = (string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? '');
 
         $suffix = (string) $this->request->getPost('suffix', (string) $this->request->getGet('suffix', ''));
         /** @var CronManualRunStreamer $streamer */
@@ -355,7 +387,25 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
     public function runLogList(): string
     {
         $this->layoutType = null;
-        $executeName = \trim((string) $this->request->getGet('execute_name', ''));
+        $taskIdentifier = \trim((string) $this->request->getGet('execute_name', ''));
+        if ($taskIdentifier === '') {
+            $this->request->getResponse()->setHttpResponseCode(400);
+
+            return (string) \json_encode([
+                'success' => false,
+                'message' => (string) __('参数 execute_name 不能为空'),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        $task = $this->resolveCronTaskByIdentifier($taskIdentifier);
+        if (!$task) {
+            $this->request->getResponse()->setHttpResponseCode(404);
+
+            return (string) \json_encode([
+                'success' => false,
+                'message' => (string) __('任务不存在'),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        $executeName = (string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? '');
         /** @var CronRunLogService $svc */
         $svc = ObjectManager::getInstance(CronRunLogService::class);
         $data = $svc->listForExecuteName($executeName);
@@ -382,8 +432,26 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
     public function runLogContent(): string
     {
         $this->layoutType = null;
-        $executeName = \trim((string) $this->request->getGet('execute_name', ''));
+        $taskIdentifier = \trim((string) $this->request->getGet('execute_name', ''));
         $file = \trim((string) $this->request->getGet('file', ''));
+        if ($taskIdentifier === '') {
+            $this->request->getResponse()->setHttpResponseCode(400);
+
+            return (string) \json_encode([
+                'success' => false,
+                'message' => (string) __('参数 execute_name 不能为空'),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        $task = $this->resolveCronTaskByIdentifier($taskIdentifier);
+        if (!$task) {
+            $this->request->getResponse()->setHttpResponseCode(404);
+
+            return (string) \json_encode([
+                'success' => false,
+                'message' => (string) __('任务不存在'),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        $executeName = (string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? '');
         /** @var CronRunLogService $svc */
         $svc = ObjectManager::getInstance(CronRunLogService::class);
         $data = $svc->readHistoryFile($executeName, $file);
@@ -406,7 +474,18 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
     }
 
     #[Acl('Weline_Cron::cron_run_log', '运行日志SSE', 'mdi mdi-access-point', '当前调度日志实时尾随（SSE）', 'Weline_Cron::cron_pc_root')]
+    public function getRunLogStream(): void
+    {
+        $this->streamRunLog();
+    }
+
+    #[Acl('Weline_Cron::cron_run_log', '运行日志SSE', 'mdi mdi-access-point', '当前调度日志实时尾随（SSE）', 'Weline_Cron::cron_pc_root')]
     public function postRunLogStream(): void
+    {
+        $this->streamRunLog();
+    }
+
+    private function streamRunLog(): void
     {
         $this->layoutType = null;
         $csrfPost = (string) $this->request->getPost('csrf', (string) $this->request->getGet('csrf', ''));
@@ -419,15 +498,25 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
 
             return;
         }
-        $executeName = \trim((string) $this->request->getPost('execute_name', (string) $this->request->getGet('execute_name', '')));
-        if ($executeName === '' || !\preg_match('/^[a-zA-Z0-9_-]+$/', $executeName)) {
+        $taskIdentifier = \trim((string) $this->request->getPost('execute_name', (string) $this->request->getGet('execute_name', '')));
+        if ($taskIdentifier === '') {
             $sse = new SseWriter();
             $sse->start();
-            $sse->sendError((string) \__('执行名无效'));
+            $sse->sendError((string) \__('执行名不能为空'));
             $sse->complete(['exit_code' => -1]);
 
             return;
         }
+        $task = $this->resolveCronTaskByIdentifier($taskIdentifier);
+        if (!$task) {
+            $sse = new SseWriter();
+            $sse->start();
+            $sse->sendError((string) \__('任务不存在'));
+            $sse->complete(['exit_code' => -1]);
+
+            return;
+        }
+        $executeName = (string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? '');
         /** @var CronRunLogService $svc */
         $svc = ObjectManager::getInstance(CronRunLogService::class);
         $svc->streamLiveLogTail($executeName, new SseWriter());

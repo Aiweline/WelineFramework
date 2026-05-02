@@ -155,6 +155,15 @@ final class ThemeStaticNamespaceService
             return '';
         }
 
+        if (\preg_match('#^([^/:]+)_([^/:]+)::(.+)$#', $themePath, $matches)) {
+            $moduleRelativePath = \trim(\str_replace('\\', '/', (string)$matches[3]), '/');
+            if ($moduleRelativePath === '') {
+                return '';
+            }
+
+            return $matches[1] . '/' . $matches[2] . '/' . $moduleRelativePath;
+        }
+
         $designRoot = \rtrim(\str_replace('\\', '/', Env::path_THEME_DESIGN_DIR), '/');
         if ($this->isPathUnderRoot($themePath, $designRoot)) {
             return \trim(\substr($themePath, \strlen($designRoot)), '/');

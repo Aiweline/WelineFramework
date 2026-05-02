@@ -99,6 +99,9 @@ class ConfigResolver
         if (!empty($modelProviderConfig)) {
             $overrides = $modelProviderConfig;
             unset($overrides['account_id']);
+            if ($account && $account->getId()) {
+                unset($overrides['api_key'], $overrides['base_url'], $overrides['api_url'], $overrides['image_api_url'], $overrides['proxy']);
+            }
             $config = array_merge($config, $this->filterEmptyValues($overrides));
         }
         
@@ -140,6 +143,9 @@ class ConfigResolver
         if (!empty($modelProviderConfig)) {
             $overrides = $modelProviderConfig;
             unset($overrides['account_id']);
+            if ($account && $account->getId()) {
+                unset($overrides['api_key'], $overrides['base_url'], $overrides['api_url'], $overrides['image_api_url'], $overrides['proxy']);
+            }
             $config = array_merge($config, $this->filterEmptyValues($overrides));
         }
         
