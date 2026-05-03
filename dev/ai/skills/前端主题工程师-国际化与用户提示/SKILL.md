@@ -1,6 +1,7 @@
 ---
 name: 前端主题工程师-国际化与用户提示
 description: Frontend theme engineer skill for i18n-compliant user text, translation files, and framework-safe user notification patterns.
+version: 1.0.0
 ---
 
 # Role

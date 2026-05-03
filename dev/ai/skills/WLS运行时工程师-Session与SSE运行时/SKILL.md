@@ -1,6 +1,7 @@
 ---
 name: WLS运行时工程师-Session与SSE运行时
 description: WLS runtime engineer skill for session isolation, Session Server behavior, and cooperative SSE runtime implementation.
+version: 1.0.0
 ---
 
 # Role

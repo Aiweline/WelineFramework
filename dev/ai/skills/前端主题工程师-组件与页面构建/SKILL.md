@@ -1,6 +1,7 @@
 ---
 name: 前端主题工程师-组件与页面构建
 description: Frontend theme engineer skill for blocks, taglibs, widgets, PageBuilder structures, and page assembly patterns.
+version: 1.0.0
 ---
 
 # Role

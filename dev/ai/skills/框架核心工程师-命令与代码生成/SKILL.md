@@ -1,6 +1,7 @@
 ---
 name: 框架核心工程师-命令与代码生成
 description: Framework core engineer skill for CLI commands, code generation standards, PHP 8.4 compatibility, and framework-safe scaffolding.
+version: 1.0.0
 ---
 
 # Role

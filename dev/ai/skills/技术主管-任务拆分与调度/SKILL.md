@@ -1,6 +1,7 @@
 ---
 name: 技术主管-任务拆分与调度
 description: Technical Lead skill for task decomposition, routing, sequencing, and specialist assignment in WelineFramework work.
+version: 1.0.0
 ---
 
 # Role

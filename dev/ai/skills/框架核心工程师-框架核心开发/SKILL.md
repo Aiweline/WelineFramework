@@ -1,6 +1,7 @@
 ---
 name: 框架核心工程师-框架核心开发
 description: Framework core engineer skill for low-level WelineFramework implementation and architectural guardrail compliance.
+version: 1.0.0
 ---
 
 # Role

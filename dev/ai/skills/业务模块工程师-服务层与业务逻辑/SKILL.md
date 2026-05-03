@@ -1,6 +1,7 @@
 ---
 name: 业务模块工程师-服务层与业务逻辑
 description: Business module engineer skill for service-layer design, business logic extraction, and module-safe orchestration.
+version: 1.0.0
 ---
 
 # Role
