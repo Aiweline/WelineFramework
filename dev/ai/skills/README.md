@@ -68,9 +68,11 @@
 本地发布到 Skills.sh：
 
 1. 安装 GitHub CLI：`gh`
-2. `gh auth login`
+2. `gh auth login --web`
 3. `node tools/publish-skills-sh.mjs --dry-run`
 4. `node tools/publish-skills-sh.mjs`
+
+如果本地已安装 `gh` 但还没有登录，`tools/publish-skills-sh.mjs` 会自动启动 `gh auth login --web` 的浏览器认证流程。
 
 CI 全自动发布到 ClawHub：
 
