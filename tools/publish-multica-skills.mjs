@@ -20,6 +20,34 @@ const changelog = version
   ? `Publish_WelineFramework_Multica_role_skills_${version}`
   : "Publish_WelineFramework_Multica_role_skills";
 const publishVersion = "1.0.0";
+const skillSlugMap = new Map([
+  ["CI发布工程师-CI与发布门禁", "ci-release-gate"],
+  ["CI发布工程师-环境兼容与命令安全", "ci-env-command-safety"],
+  ["E2E自动化工程师-端到端流程测试", "e2e-flow-test"],
+  ["E2E自动化工程师-路由与UI冒烟验证", "e2e-route-ui-smoke"],
+  ["QA测试主管-测试策略治理", "qa-test-strategy"],
+  ["QA测试主管-质量门禁验收", "qa-quality-gate"],
+  ["WLS运行时工程师-Session与SSE运行时", "wls-session-sse"],
+  ["WLS运行时工程师-WLS进程稳定", "wls-process-stability"],
+  ["业务模块工程师-服务层与业务逻辑", "business-service-logic"],
+  ["业务模块工程师-模块开发", "business-module-development"],
+  ["业务模块工程师-配置缓存与后台权限", "business-config-cache-acl"],
+  ["前端主题工程师-主题模板开发", "frontend-theme-template"],
+  ["前端主题工程师-国际化与用户提示", "frontend-i18n-notification"],
+  ["前端主题工程师-组件与页面构建", "frontend-component-pagebuilder"],
+  ["单元测试工程师-单元测试覆盖", "unit-test-coverage"],
+  ["单元测试工程师-测试数据与回归", "unit-test-data-regression"],
+  ["安全权限工程师-ACL与后台安全", "security-acl-admin"],
+  ["安全权限工程师-会话配置与数据保护", "security-session-data"],
+  ["技术主管-一级验收与进度追踪", "tech-lead-acceptance-progress"],
+  ["技术主管-任务拆分与调度", "tech-lead-task-scheduling"],
+  ["文档知识库工程师-技能索引与知识库", "docs-skill-index"],
+  ["文档知识库工程师-文档规范与变更记录", "docs-change-records"],
+  ["框架核心工程师-ORM与数据模型", "core-orm-model"],
+  ["框架核心工程师-命令与代码生成", "core-command-codegen"],
+  ["框架核心工程师-框架核心开发", "core-development"],
+  ["框架核心工程师-路由事件与扩展", "core-routing-extension"],
+]);
 
 function printDivider() {
   console.log("=".repeat(72));
@@ -260,9 +288,14 @@ function ensureSkillFrontmatterVersion(skillPath) {
 }
 
 function slugify(name) {
+  const mappedSlug = skillSlugMap.get(name);
+  if (mappedSlug) {
+    return mappedSlug;
+  }
+
   return name
     .normalize("NFKD")
-    .replace(/[^\w\u4e00-\u9fa5-]+/g, "-")
+    .replace(/[^\w-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
 }
@@ -368,6 +401,8 @@ for (const dir of skillDirs) {
     "skill",
     "publish",
     dir,
+    "--slug",
+    slugify(skillName),
     "--version",
     publishVersion,
     "--changelog",
