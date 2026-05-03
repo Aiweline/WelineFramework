@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  publish-skills:
+  publish-clawhub:
     runs-on: ubuntu-latest
     if: github.repository == 'Aiweline/WelineFramework'
     permissions:
@@ -49,3 +49,19 @@ jobs:
           name: clawhub-skill-manifest
           path: tools/clawhub-skill-manifest.json
           if-no-files-found: ignore
+
+  publish-skills-sh:
+    runs-on: ubuntu-latest
+    if: github.repository == 'Aiweline/WelineFramework'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish to Skills.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SKILLS_SH_TAG: v1.0.${{ github.run_number }}
+        run: node tools/publish-skills-sh.mjs

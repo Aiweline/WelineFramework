@@ -57,18 +57,32 @@
 发布脚本位置：
 
 - `tools/publish-multica-skills.mjs`
+- `tools/publish-skills-sh.mjs`
 
-本地半自动发布：
+本地半自动发布到 ClawHub：
 
 1. `npx clawhub login`
 2. `node tools/publish-multica-skills.mjs --dry-run`
 3. `node tools/publish-multica-skills.mjs`
 
-CI 全自动发布：
+本地发布到 Skills.sh：
+
+1. 安装 GitHub CLI：`gh`
+2. `gh auth login`
+3. `node tools/publish-skills-sh.mjs --dry-run`
+4. `node tools/publish-skills-sh.mjs`
+
+CI 全自动发布到 ClawHub：
 
 - 配置 `CLAWHUB_TOKEN`
 - 可选配置 `CLAWHUB_OWNER`
 - GitHub Actions 工作流：`.github/workflows/publish-multica-skills.yml`
+
+CI 发布到 Skills.sh：
+
+- 使用 GitHub Actions 内置 `GH_TOKEN`
+- 默认发布 tag：`v1.0.${{ github.run_number }}`
+- 可通过 `SKILLS_SH_TAG` 覆盖发布 tag
 
 脚本默认目录就是 `dev/ai/skills`，只有在你明确要发布别的目录时，才需要额外传目录参数。
 
