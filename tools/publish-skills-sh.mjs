@@ -131,6 +131,45 @@ function runCaptured(cmd, args) {
   });
 }
 
+function appendPathEntry(pathEntry) {
+  if (!pathEntry || !existsSync(pathEntry)) {
+    return;
+  }
+
+  const delimiter = process.platform === "win32" ? ";" : ":";
+  const currentEntries = (process.env.PATH || "")
+    .split(delimiter)
+    .filter(Boolean)
+    .map((entry) => entry.toLowerCase());
+
+  if (!currentEntries.includes(pathEntry.toLowerCase())) {
+    process.env.PATH = `${process.env.PATH || ""}${delimiter}${pathEntry}`;
+  }
+}
+
+function refreshWindowsPath() {
+  if (process.platform !== "win32") {
+    return;
+  }
+
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile",
+    "-Command",
+    "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')",
+  ], {
+    stdio: "pipe",
+    encoding: "utf8",
+    shell: false,
+  });
+
+  if (result.status === 0 && result.stdout.trim()) {
+    process.env.PATH = result.stdout.trim();
+  }
+
+  appendPathEntry("C:\\Program Files\\GitHub CLI");
+  appendPathEntry("C:\\Program Files (x86)\\GitHub CLI");
+}
+
 function runStreaming(cmd, args) {
   const { command, commandArgs } = buildCommandInvocation(cmd, args);
 
@@ -174,6 +213,10 @@ function runStreaming(cmd, args) {
 }
 
 function hasCommand(cmd, args = ["--version"]) {
+  if (process.platform === "win32" && cmd === "gh") {
+    refreshWindowsPath();
+  }
+
   const result = runCaptured(cmd, args);
   return !result.error && result.status === 0;
 }
@@ -209,16 +252,20 @@ async function tryInstallGhCli() {
   try {
     await runStreaming("winget", ["install", "--id", "GitHub.cli", "-e", "--source", "winget"]);
   } catch (error) {
-    fail("GitHub CLI installation failed.", [
-      "You can install it manually from https://cli.github.com/ and rerun this script.",
-      error.commandOutput ? `CLI output: ${error.commandOutput}` : "The winget install command exited with a non-zero status.",
-    ]);
+    if (!hasCommand("gh", ["--version"])) {
+      fail("GitHub CLI installation failed.", [
+        "Winget may report this when GitHub CLI is already installed but not visible in the current PATH.",
+        "Close and reopen PowerShell, or install it manually from https://cli.github.com/ and rerun this script.",
+        error.commandOutput ? `CLI output: ${error.commandOutput}` : "The winget install command exited with a non-zero status.",
+      ]);
+    }
   }
 
   return hasCommand("gh", ["--version"]);
 }
 
 async function verifyGhCli() {
+  refreshWindowsPath();
   const result = runCaptured("gh", ["--version"]);
 
   if (result.error || result.status !== 0) {
