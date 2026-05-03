@@ -73,6 +73,7 @@
 4. `node tools/publish-skills-sh.mjs`
 
 如果本地已安装 `gh` 但还没有登录，`tools/publish-skills-sh.mjs` 会自动启动 `gh auth login --web` 的浏览器认证流程。
+该脚本的命令执行、错误着色、URL 着色和交互式登录行为与 ClawHub 发布脚本保持一致。
 
 CI 全自动发布到 ClawHub：
 
@@ -82,7 +83,7 @@ CI 全自动发布到 ClawHub：
 
 CI 发布到 Skills.sh：
 
-- 使用 GitHub Actions 内置 `GH_TOKEN`
+- 使用 GitHub Actions 内置 `GH_TOKEN`，也支持 `GITHUB_TOKEN`
 - 默认发布 tag：`v1.0.${{ github.run_number }}`
 - 可通过 `SKILLS_SH_TAG` 覆盖发布 tag
 
