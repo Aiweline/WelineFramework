@@ -1,6 +1,7 @@
 ---
 name: WLS运行时工程师-WLS进程稳定
 description: WLS runtime engineer skill for worker lifecycle, reload versus restart decisions, process cleanup, and runtime stability.
+version: 1.0.0
 ---
 
 # Role

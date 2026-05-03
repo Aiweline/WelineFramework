@@ -45,6 +45,10 @@ function red(text) {
   return color(text, "31");
 }
 
+function yellow(text) {
+  return color(text, "33");
+}
+
 function colorUrls(text) {
   return text.replace(/https?:\/\/[^\s)]+/giu, (url) => blue(url));
 }
@@ -208,6 +212,10 @@ function isRateLimitError(output = "") {
   return /rate limit|max 5 new skills per hour|please wait before publishing more/iu.test(output);
 }
 
+function isVersionExistsError(output = "") {
+  return /version already exists/iu.test(output);
+}
+
 function failWithRateLimit(publishedCount, failedSkillName, output = "") {
   console.error("");
   console.error(errorText("ERROR: ClawHub new-skill rate limit reached."));
@@ -350,43 +358,59 @@ if (clawhubToken) {
 console.log("Publishing skills...");
 console.log("Using per-skill publish. ClawHub sync is not used.");
 let publishedCount = 0;
+let skippedExistingCount = 0;
 
-try {
-  for (const dir of skillDirs) {
-    const skillPath = join(dir, "SKILL.md");
-    const skillName = manifest.find((item) => item.path === dir)?.name || dir;
-    const args = [
-      "clawhub",
-      "skill",
-      "publish",
-      dir,
-      "--version",
-      publishVersion,
-      "--changelog",
-      changelog,
-      "--tags",
-      "latest",
-    ];
+for (const dir of skillDirs) {
+  const skillPath = join(dir, "SKILL.md");
+  const skillName = manifest.find((item) => item.path === dir)?.name || dir;
+  const args = [
+    "clawhub",
+    "skill",
+    "publish",
+    dir,
+    "--version",
+    publishVersion,
+    "--changelog",
+    changelog,
+    "--tags",
+    "latest",
+  ];
 
+  try {
     ensureSkillFrontmatterVersion(skillPath);
     console.log(`Publishing ${skillName}...`);
-    run(getNpxCommand(), args, { captureOutput: true, echoOutput: true });
+    const result = run(getNpxCommand(), args, { captureOutput: true });
+    if (typeof result.stdout === "string" && result.stdout.length > 0) {
+      process.stdout.write(result.stdout);
+    }
+    if (typeof result.stderr === "string" && result.stderr.length > 0) {
+      process.stderr.write(errorText(result.stderr));
+    }
     publishedCount += 1;
-  }
-} catch (error) {
-  if (isRateLimitError(error.commandOutput || "")) {
-    const currentSkill = manifest[publishedCount]?.name || "unknown";
-    failWithRateLimit(publishedCount, currentSkill, error.commandOutput || "");
-  }
+  } catch (error) {
+    const output = error.commandOutput || "";
 
-  failWithGuide("ClawHub publish failed.", [
-    "Check whether the ClawHub CLI is reachable through `npx clawhub --help`.",
-    "Check whether your login session is still valid or whether `CLAWHUB_TOKEN` is configured.",
-    "If you are on Windows, this usually indicates an argument-passing issue or a CLI option mismatch, not a login failure.",
-    "Check whether the target skills directory contains valid `SKILL.md` files.",
-    error.commandOutput ? `CLI output: ${error.commandOutput}` : "The publish command exited with a non-zero status.",
-  ]);
+    if (isVersionExistsError(output)) {
+      skippedExistingCount += 1;
+      console.log(yellow(`Skipped ${skillName}: version ${publishVersion} already exists on ClawHub.`));
+      continue;
+    }
+
+    if (isRateLimitError(output)) {
+      failWithRateLimit(publishedCount, skillName, output);
+    }
+
+    failWithGuide("ClawHub publish failed.", [
+      `Stopped at skill: ${skillName}`,
+      "Check whether the ClawHub CLI is reachable through `npx clawhub --help`.",
+      "Check whether your login session is still valid or whether `CLAWHUB_TOKEN` is configured.",
+      "If you are on Windows, this usually indicates an argument-passing issue or a CLI option mismatch, not a login failure.",
+      "Check whether the target skills directory contains valid `SKILL.md` files.",
+      output ? `CLI output: ${output}` : "The publish command exited with a non-zero status.",
+    ]);
+  }
 }
 
 console.log("Done.");
+console.log(`Published: ${publishedCount}; skipped existing versions: ${skippedExistingCount}.`);
 console.log(`Check ${manifestPath} for expected URLs.`);

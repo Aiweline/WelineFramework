@@ -1,6 +1,7 @@
 ---
 name: 单元测试工程师-单元测试覆盖
 description: Unit test engineer skill for PHPUnit or Pest coverage, service-level assertions, and focused regression protection.
+version: 1.0.0
 ---
 
 # Role

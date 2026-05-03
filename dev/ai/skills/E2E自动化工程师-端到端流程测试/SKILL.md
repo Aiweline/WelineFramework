@@ -1,6 +1,7 @@
 ---
 name: E2E自动化工程师-端到端流程测试
 description: E2E automation engineer skill for Playwright-driven flow validation, browser interaction coverage, and end-to-end regression checks.
+version: 1.0.0
 ---
 
 # Role

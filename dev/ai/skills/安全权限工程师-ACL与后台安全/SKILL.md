@@ -1,6 +1,7 @@
 ---
 name: 安全权限工程师-ACL与后台安全
 description: Security engineer skill for backend ACL structure, menu visibility control, and administrative access safety.
+version: 1.0.0
 ---
 
 # Role

@@ -1,6 +1,7 @@
 ---
 name: 前端主题工程师-主题模板开发
 description: Frontend theme engineer skill for theme structure, source-template editing, layout-safe styling, and Weline view-layer conventions.
+version: 1.0.0
 ---
 
 # Role
