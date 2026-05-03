@@ -10,6 +10,7 @@ const inputDir = positionalArgs[0] || "dev/ai/skills";
 const skillsDir = resolve(process.cwd(), inputDir);
 const dryRun = cliArgs.includes("--dry-run");
 const tag = process.env.SKILLS_SH_TAG || "weline-skills-v1.0.0";
+const githubToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
 
 function shouldUseColor() {
   return process.env.NO_COLOR !== "1" && (process.stdout.isTTY || process.env.FORCE_COLOR);
@@ -43,6 +44,28 @@ function isInteractiveTerminal() {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
+function quoteForCmd(arg) {
+  if (arg === "") {
+    return '""';
+  }
+
+  if (!/[\s"]/u.test(arg)) {
+    return arg;
+  }
+
+  return `"${arg.replace(/"/g, '\\"')}"`;
+}
+
+function buildCommandInvocation(cmd, args) {
+  const isWindowsCmdShim = process.platform === "win32" && /\.cmd$/iu.test(cmd);
+  const command = isWindowsCmdShim ? (process.env.ComSpec || "cmd.exe") : cmd;
+  const commandArgs = isWindowsCmdShim
+    ? ["/d", "/s", "/c", [cmd, ...args].map(quoteForCmd).join(" ")]
+    : args;
+
+  return { command, commandArgs };
+}
+
 function printGuide() {
   console.log("=".repeat(72));
   console.log("Skills.sh publish setup guide");
@@ -57,8 +80,9 @@ function printGuide() {
   console.log("  4. Publish: node tools/publish-skills-sh.mjs");
   console.log("");
   console.log("CI prerequisites:");
-  console.log("  1. The workflow must have contents: write permission.");
-  console.log("  2. Optionally set SKILLS_SH_TAG to override the release tag.");
+  console.log("  1. Provide GH_TOKEN or GITHUB_TOKEN.");
+  console.log("  2. The workflow must have contents: write permission.");
+  console.log("  3. Optionally set SKILLS_SH_TAG to override the release tag.");
   console.log("=".repeat(72));
 }
 
@@ -74,9 +98,10 @@ function fail(message, details = []) {
 }
 
 function run(cmd, args) {
-  const result = spawnSync(cmd, args, {
+  const { command, commandArgs } = buildCommandInvocation(cmd, args);
+  const result = spawnSync(command, commandArgs, {
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: false,
   });
 
   if (result.error) {
@@ -95,18 +120,21 @@ function run(cmd, args) {
 }
 
 function runCaptured(cmd, args) {
-  return spawnSync(cmd, args, {
+  const { command, commandArgs } = buildCommandInvocation(cmd, args);
+  return spawnSync(command, commandArgs, {
     stdio: "pipe",
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: false,
   });
 }
 
 function runStreaming(cmd, args) {
+  const { command, commandArgs } = buildCommandInvocation(cmd, args);
+
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(cmd, args, {
+    const child = spawn(command, commandArgs, {
       stdio: ["inherit", "pipe", "pipe"],
-      shell: process.platform === "win32",
+      shell: false,
     });
 
     let output = "";
@@ -154,6 +182,11 @@ function verifyGhCli() {
 }
 
 async function ensureGhAuth() {
+  if (githubToken) {
+    console.log(green("Using GH_TOKEN/GITHUB_TOKEN for non-interactive GitHub authentication."));
+    return;
+  }
+
   const result = runCaptured("gh", ["auth", "status", "--hostname", "github.com"]);
 
   if (result.status === 0) {
