@@ -3,6 +3,8 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 
 const cliArgs = process.argv.slice(2);
 const positionalArgs = cliArgs.filter((arg) => !arg.startsWith("--"));
@@ -75,6 +77,7 @@ function printGuide() {
   console.log("");
   console.log("Local prerequisites:");
   console.log("  1. Install GitHub CLI: https://cli.github.com/");
+  console.log("     Windows quick install: winget install --id GitHub.cli -e --source winget");
   console.log("  2. Authenticate: gh auth login --web");
   console.log("  3. Validate only: node tools/publish-skills-sh.mjs --dry-run");
   console.log("  4. Publish: node tools/publish-skills-sh.mjs");
@@ -170,12 +173,63 @@ function runStreaming(cmd, args) {
   });
 }
 
-function verifyGhCli() {
+function hasCommand(cmd, args = ["--version"]) {
+  const result = runCaptured(cmd, args);
+  return !result.error && result.status === 0;
+}
+
+async function promptYesNo(question, defaultYes = true) {
+  const suffix = defaultYes ? " [Y/n] " : " [y/N] ";
+  const rl = createInterface({ input, output });
+  const answer = (await rl.question(green(`${question}${suffix}`))).trim().toLowerCase();
+  rl.close();
+
+  if (!answer) {
+    return defaultYes;
+  }
+
+  return answer === "y" || answer === "yes";
+}
+
+async function tryInstallGhCli() {
+  if (process.platform !== "win32" || !isInteractiveTerminal()) {
+    return false;
+  }
+
+  if (!hasCommand("winget")) {
+    return false;
+  }
+
+  const shouldInstall = await promptYesNo("GitHub CLI is missing. Install it now with winget?");
+  if (!shouldInstall) {
+    return false;
+  }
+
+  console.log(green("Installing GitHub CLI with winget..."));
+  try {
+    await runStreaming("winget", ["install", "--id", "GitHub.cli", "-e", "--source", "winget"]);
+  } catch (error) {
+    fail("GitHub CLI installation failed.", [
+      "You can install it manually from https://cli.github.com/ and rerun this script.",
+      error.commandOutput ? `CLI output: ${error.commandOutput}` : "The winget install command exited with a non-zero status.",
+    ]);
+  }
+
+  return hasCommand("gh", ["--version"]);
+}
+
+async function verifyGhCli() {
   const result = runCaptured("gh", ["--version"]);
 
   if (result.error || result.status !== 0) {
+    if (await tryInstallGhCli()) {
+      console.log(green("GitHub CLI installed. Continuing..."));
+      return;
+    }
+
     fail("GitHub CLI is not available.", [
       "Install GitHub CLI before publishing to Skills.sh locally.",
+      "Windows quick install: winget install --id GitHub.cli -e --source winget",
       "On GitHub Actions, the hosted runner should provide gh automatically.",
     ]);
   }
@@ -237,7 +291,7 @@ if (dryRun) {
 
 console.log(green(`Publishing Skills.sh source directory: ${skillsDir}`));
 console.log(green(dryRun ? "Mode: dry-run validation only." : `Mode: publish with tag ${tag}.`));
-verifyGhCli();
+await verifyGhCli();
 await ensureGhAuth();
 run("gh", args);
 console.log(green("Skills.sh publish command completed."));
