@@ -1,6 +1,7 @@
 ---
 name: 单元测试工程师-测试数据与回归
 description: Unit test engineer skill for stable fixtures, edge-case data design, and regression-oriented test inputs in WelineFramework.
+version: 1.0.0
 ---
 
 # Role

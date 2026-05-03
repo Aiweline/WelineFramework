@@ -1,6 +1,7 @@
 ---
 name: 业务模块工程师-模块开发
 description: Business module engineer skill for module structure, controllers, menus, setup flows, and bounded feature delivery.
+version: 1.0.0
 ---
 
 # Role

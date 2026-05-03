@@ -1,6 +1,7 @@
 ---
 name: 文档知识库工程师-文档规范与变更记录
 description: Documentation engineer skill for module docs, README updates, architecture notes, API change records, and repository-safe documentation placement.
+version: 1.0.0
 ---
 
 # Role

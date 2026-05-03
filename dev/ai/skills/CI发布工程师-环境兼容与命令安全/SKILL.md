@@ -1,6 +1,7 @@
 ---
 name: CI发布工程师-环境兼容与命令安全
 description: CI release engineer skill for environment compatibility, Windows-safe command composition, and automation-stable execution paths.
+version: 1.0.0
 ---
 
 # Role

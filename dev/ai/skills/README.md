@@ -76,4 +76,6 @@ CI 全自动发布：
 
 ClawHub 对新 skill 有发布频率限制。当前限制为每小时最多 5 个新 skill。脚本会逐个发布本仓库的技能目录；如果触发限制，等待 ClawHub 重置窗口后再次运行 `node tools/publish-multica-skills.mjs` 即可继续。
 
+如果 ClawHub 返回 `Version already exists`，脚本会跳过该 skill 并继续发布后续 skill。这表示对应版本已经发布过，不是登录错误。
+
 发布脚本生成的 manifest 文件位于 `tools/clawhub-skill-manifest.json`。
