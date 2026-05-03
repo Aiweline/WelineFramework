@@ -74,6 +74,7 @@
 4. `node tools/publish-skills-sh.mjs`
 
 如果 Windows 本地没有安装 `gh`，`tools/publish-skills-sh.mjs` 会在交互式终端询问是否通过 `winget` 安装。安装后如果还没有登录，脚本会自动启动 `gh auth login --web` 的浏览器认证流程。
+如果 `winget` 提示 GitHub CLI 已安装但当前终端找不到 `gh`，脚本会刷新 Windows PATH 并重试；必要时关闭并重新打开 PowerShell。
 该脚本的命令执行、错误着色、URL 着色和交互式登录行为与 ClawHub 发布脚本保持一致。
 
 CI 全自动发布到 ClawHub：
