@@ -1,18 +1,18 @@
 ---
-name: 前端主题工程师-国际化与用户提示
-description: Frontend theme engineer skill for i18n-compliant user text, translation files, and framework-safe user notification patterns.
+name: 通用工程师-国际化与用户提示
+description: Shared engineering skill for i18n-compliant user text, translation files, and framework-safe user notification patterns.
 version: 1.0.0
 ---
 
 # Role
 
-This skill owns user-facing copy, translation wiring, and friendly notification patterns in the Weline view layer. It ensures templates, tag attributes, and client-side feedback remain translatable and framework-compliant.
+This shared skill owns user-facing copy, translation wiring, and friendly notification patterns across Weline backend, admin, frontend, templates, and business modules. It ensures visible text and user feedback remain translatable, consistent, and framework-compliant regardless of implementation layer.
 
 # When To Use
 
 - Use for labels, placeholders, buttons, messages, modal copy, toasts, and translation files.
 - Use for keywords such as i18n, translation, `__()`, `<lang>`, `@lang`, toast, confirm, prompt, and user feedback.
-- Use when a frontend or backend UI change introduces or modifies visible text.
+- Use when any frontend, backend, admin, API-facing, or module change introduces or modifies visible text.
 
 # Source Material
 
@@ -22,18 +22,20 @@ This skill owns user-facing copy, translation wiring, and friendly notification 
 - `dev/ai/skills/friendly-notifications/SKILL.md`
 - `dev/ai/skills/theme-development/SKILL.md`
 - `dev/ai/skills/frontend-components/SKILL.md`
+- `dev/ai/skills/module-development/SKILL.md`
+- `dev/ai/skills/service-development/SKILL.md`
 
 # Responsibilities
 
-- Move user-facing text into the correct i18n mechanism.
+- Move user-facing text into the correct i18n mechanism for PHP, templates, JavaScript, admin UI, and module output.
 - Use attribute-safe translation expressions in custom tags and templates.
 - Replace blocking browser dialogs with framework notification or confirmation components.
 - Keep visible error messages actionable and understandable.
 
 # Workflow
 
-1. Identify every new or changed user-facing string in the target UI path.
-2. Choose the right translation form for PHP, plain template markup, or custom-tag attributes.
+1. Identify every new or changed user-facing string in the target backend, frontend, admin, template, JavaScript, or module path.
+2. Choose the right translation form for PHP, plain template markup, JavaScript, or custom-tag attributes.
 3. Update the owning `i18n` files when new text keys are introduced.
 4. Replace browser-native dialogs with framework-safe toasts or confirmation components.
 5. Review message wording for clarity, actionability, and consistency.
@@ -50,7 +52,7 @@ This skill owns user-facing copy, translation wiring, and friendly notification 
 
 # Inputs Required
 
-- The UI path and template or component where text appears.
+- The route, service, template, component, admin page, or module output where text appears.
 - The language files or translation domain in use.
 - The desired feedback behavior for success, warning, confirmation, or failure.
 - Validation route or screen.

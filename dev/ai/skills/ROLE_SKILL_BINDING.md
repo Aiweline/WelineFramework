@@ -36,8 +36,11 @@
 - `pagebuilder-style-templates` -> `前端主题工程师-组件与页面构建`
 - `website-to-template` -> `前端主题工程师-组件与页面构建`
 - `visitor-pixel` -> `前端主题工程师-组件与页面构建`
-- `i18n-internationalization` -> `前端主题工程师-国际化与用户提示`
-- `friendly-notifications` -> `前端主题工程师-国际化与用户提示`
+
+## 通用工程师
+
+- `i18n-internationalization` -> `通用工程师-国际化与用户提示`
+- `friendly-notifications` -> `通用工程师-国际化与用户提示`
 
 ## WLS运行时工程师
 
