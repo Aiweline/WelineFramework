@@ -1,18 +1,50 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { fileURLToPath } from "node:url";
 
+const scriptDir = dirname(fileURLToPath(import.meta.url));
 const cliArgs = process.argv.slice(2);
 const positionalArgs = cliArgs.filter((arg) => !arg.startsWith("--"));
 const inputDir = positionalArgs[0] || "dev/ai/skills";
-const skillsDir = resolve(process.cwd(), inputDir);
+const sourceSkillsDir = resolve(process.cwd(), inputDir);
+const stagingRoot = join(scriptDir, ".skills-sh-publish");
+const stagingSkillsDir = join(stagingRoot, "skills");
 const dryRun = cliArgs.includes("--dry-run");
 const tag = process.env.SKILLS_SH_TAG || "weline-skills-v1.0.0";
 const githubToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
+const skillSlugMap = new Map([
+  ["CI发布工程师-CI与发布门禁", "ci-release-gate"],
+  ["CI发布工程师-环境兼容与命令安全", "ci-env-command-safety"],
+  ["E2E自动化工程师-端到端流程测试", "e2e-flow-test"],
+  ["E2E自动化工程师-路由与UI冒烟验证", "e2e-route-ui-smoke"],
+  ["QA测试主管-测试策略治理", "qa-test-strategy"],
+  ["QA测试主管-质量门禁验收", "qa-quality-gate"],
+  ["WLS运行时工程师-Session与SSE运行时", "wls-session-sse"],
+  ["WLS运行时工程师-WLS进程稳定", "wls-process-stability"],
+  ["业务模块工程师-服务层与业务逻辑", "business-service-logic"],
+  ["业务模块工程师-模块开发", "business-module-development"],
+  ["业务模块工程师-配置缓存与后台权限", "business-config-cache-acl"],
+  ["前端主题工程师-主题模板开发", "frontend-theme-template"],
+  ["通用工程师-国际化与用户提示", "common-i18n-notification"],
+  ["前端主题工程师-组件与页面构建", "frontend-component-pagebuilder"],
+  ["单元测试工程师-单元测试覆盖", "unit-test-coverage"],
+  ["单元测试工程师-测试数据与回归", "unit-test-data-regression"],
+  ["安全权限工程师-ACL与后台安全", "security-acl-admin"],
+  ["安全权限工程师-会话配置与数据保护", "security-session-data"],
+  ["技术主管-一级验收与进度追踪", "tech-lead-acceptance-progress"],
+  ["技术主管-任务拆分与调度", "tech-lead-task-scheduling"],
+  ["文档知识库工程师-技能索引与知识库", "docs-skill-index"],
+  ["文档知识库工程师-文档规范与变更记录", "docs-change-records"],
+  ["框架核心工程师-ORM与数据模型", "core-orm-model"],
+  ["框架核心工程师-命令与代码生成", "core-command-codegen"],
+  ["框架核心工程师-框架核心开发", "core-development"],
+  ["框架核心工程师-路由事件与扩展", "core-routing-extension"],
+]);
 
 function shouldUseColor() {
   return process.env.NO_COLOR !== "1" && (process.stdout.isTTY || process.env.FORCE_COLOR);
@@ -73,7 +105,7 @@ function printGuide() {
   console.log("Skills.sh publish setup guide");
   console.log("=".repeat(72));
   console.log("Skills.sh publishing uses GitHub's skill publisher:");
-  console.log(`  gh skill publish dev/ai/skills --tag ${tag}`);
+  console.log(`  gh skill publish tools/.skills-sh-publish --tag ${tag}`);
   console.log("");
   console.log("Local prerequisites:");
   console.log("  1. Install GitHub CLI: https://cli.github.com/");
@@ -87,6 +119,90 @@ function printGuide() {
   console.log("  2. The workflow must have contents: write permission.");
   console.log("  3. Optionally set SKILLS_SH_TAG to override the release tag.");
   console.log("=".repeat(72));
+}
+
+function slugify(name) {
+  const mappedSlug = skillSlugMap.get(name);
+  if (mappedSlug) {
+    return mappedSlug;
+  }
+
+  return name
+    .normalize("NFKD")
+    .replace(/[^\w-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
+function readSkillContent(skillPath) {
+  return readFileSync(skillPath, "utf8");
+}
+
+function getSkillName(content) {
+  const nameMatch = content.match(/^name:\s*(.+)$/m);
+  return nameMatch?.[1]?.trim() || "";
+}
+
+function createSkillsShSkillContent(content, slug) {
+  if (!content.startsWith("---")) {
+    fail("Missing YAML frontmatter.", [
+      "Every Skills.sh staging skill must start with YAML frontmatter.",
+    ]);
+  }
+
+  const end = content.indexOf("---", 3);
+  if (end === -1) {
+    fail("Invalid YAML frontmatter.", [
+      "Could not find the closing --- marker.",
+    ]);
+  }
+
+  const frontmatter = content.slice(3, end);
+  let nextFrontmatter = /^name:\s*.+$/m.test(frontmatter)
+    ? frontmatter.replace(/^name:\s*.+$/m, `name: ${slug}`)
+    : `\nname: ${slug}${frontmatter}`;
+
+  if (!/^license:\s*.+$/m.test(nextFrontmatter)) {
+    nextFrontmatter = `${nextFrontmatter.replace(/\s*$/u, "")}\nlicense: MIT-0\n`;
+  }
+
+  return `---${nextFrontmatter}${content.slice(end)}`;
+}
+
+function prepareStagingRoot() {
+  if (!existsSync(sourceSkillsDir)) {
+    fail("Skills source directory not found.", [
+      `Checked path: ${sourceSkillsDir}`,
+      "Run from the repository root, or pass the shared skills directory path.",
+    ]);
+  }
+
+  rmSync(stagingRoot, { recursive: true, force: true });
+  mkdirSync(stagingSkillsDir, { recursive: true });
+
+  const skillPaths = readdirSync(sourceSkillsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(sourceSkillsDir, entry.name, "SKILL.md"))
+    .filter((skillPath) => existsSync(skillPath));
+
+  if (skillPaths.length === 0) {
+    fail("No SKILL.md files found.", [
+      `Checked path: ${sourceSkillsDir}`,
+      "Expected shared skills under dev/ai/skills/{skill}/SKILL.md.",
+    ]);
+  }
+
+  for (const skillPath of skillPaths) {
+    const content = readSkillContent(skillPath);
+    const skillName = getSkillName(content);
+    const slug = slugify(skillName || "skill");
+    const targetDir = join(stagingSkillsDir, slug);
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(join(targetDir, "SKILL.md"), createSkillsShSkillContent(content, slug), "utf8");
+  }
+
+  console.log(green(`Prepared Skills.sh staging root: ${stagingRoot}`));
+  console.log(green(`Staged skills: ${skillPaths.length}`));
 }
 
 function fail(message, details = []) {
@@ -321,14 +437,9 @@ async function ensureGhAuth() {
   }
 }
 
-if (!existsSync(skillsDir)) {
-  fail("Skills directory not found.", [
-    `Checked path: ${skillsDir}`,
-    "Run from the repository root, or pass a valid skills directory path.",
-  ]);
-}
+prepareStagingRoot();
 
-const args = ["skill", "publish", skillsDir];
+const args = ["skill", "publish", stagingRoot];
 
 if (dryRun) {
   args.push("--dry-run");
@@ -336,7 +447,7 @@ if (dryRun) {
   args.push("--tag", tag);
 }
 
-console.log(green(`Publishing Skills.sh source directory: ${skillsDir}`));
+console.log(green(`Publishing Skills.sh root directory: ${stagingRoot}`));
 console.log(green(dryRun ? "Mode: dry-run validation only." : `Mode: publish with tag ${tag}.`));
 await verifyGhCli();
 await ensureGhAuth();
