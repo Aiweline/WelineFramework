@@ -33,7 +33,7 @@ const skillSlugMap = new Map([
   ["业务模块工程师-模块开发", "business-module-development"],
   ["业务模块工程师-配置缓存与后台权限", "business-config-cache-acl"],
   ["前端主题工程师-主题模板开发", "frontend-theme-template"],
-  ["前端主题工程师-国际化与用户提示", "frontend-i18n-notification"],
+  ["通用工程师-国际化与用户提示", "common-i18n-notification"],
   ["前端主题工程师-组件与页面构建", "frontend-component-pagebuilder"],
   ["单元测试工程师-单元测试覆盖", "unit-test-coverage"],
   ["单元测试工程师-测试数据与回归", "unit-test-data-regression"],
