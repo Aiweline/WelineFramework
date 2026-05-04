@@ -39,6 +39,12 @@
 
 ## 通用工程师
 
+- `code-generation-standards` -> `通用工程师-开发规范与代码质量`
+- `documentation-standards` -> `通用工程师-开发规范与代码质量`
+- `debug-logging` -> `通用工程师-开发规范与代码质量`
+- `windows-command-quoting` -> `通用工程师-开发规范与代码质量`
+- `php84-performance` -> `通用工程师-开发规范与代码质量`
+- `testing` -> `通用工程师-开发规范与代码质量`
 - `i18n-internationalization` -> `通用工程师-国际化与用户提示`
 - `friendly-notifications` -> `通用工程师-国际化与用户提示`
 
