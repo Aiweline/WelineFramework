@@ -41,6 +41,7 @@ const skillSlugMap = new Map([
   ["安全权限工程师-会话配置与数据保护", "security-session-data"],
   ["技术主管-一级验收与进度追踪", "tech-lead-acceptance-progress"],
   ["技术主管-任务拆分与调度", "tech-lead-task-scheduling"],
+  ["通用工程师-开发规范与代码质量", "common-development-standards"],
   ["文档知识库工程师-技能索引与知识库", "docs-skill-index"],
   ["文档知识库工程师-文档规范与变更记录", "docs-change-records"],
   ["框架核心工程师-ORM与数据模型", "core-orm-model"],
