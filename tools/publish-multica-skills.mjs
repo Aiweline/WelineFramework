@@ -16,6 +16,7 @@ const version = process.env.SKILL_VERSION || "";
 const clawhubToken = process.env.CLAWHUB_TOKEN || "";
 const dryRun = cliArgs.includes("--dry-run");
 const manifestPath = join(scriptDir, "clawhub-skill-manifest.json");
+const publishConcurrency = Number.parseInt(process.env.CLAWHUB_CONCURRENCY || "4", 10);
 const changelog = version
   ? `Publish_WelineFramework_Multica_role_skills_${version}`
   : "Publish_WelineFramework_Multica_role_skills";
@@ -237,6 +238,47 @@ function runStreaming(cmd, args, options = {}) {
   });
 }
 
+function runCapturedAsync(cmd, args, options = {}) {
+  const { command, commandArgs } = buildCommandInvocation(cmd, args);
+
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(command, commandArgs, {
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...options,
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (spawnError) => {
+      const error = new Error(`Command failed to start: ${cmd} ${args.join(" ")}`);
+      error.commandOutput = spawnError.message || "";
+      rejectRun(error);
+    });
+
+    child.on("close", (status) => {
+      if (status !== 0) {
+        const output = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
+        const error = new Error(`Command failed: ${cmd} ${args.join(" ")}`);
+        error.commandOutput = output;
+        rejectRun(error);
+        return;
+      }
+
+      resolveRun({ status, stdout, stderr });
+    });
+  });
+}
+
 function isRateLimitError(output = "") {
   return /rate limit|max 5 new skills per hour|please wait before publishing more/iu.test(output);
 }
@@ -299,6 +341,48 @@ function slugify(name) {
     .replace(/[^\w-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
+}
+
+function normalizeConcurrency(value) {
+  if (!Number.isFinite(value) || value < 1) {
+    return 1;
+  }
+
+  return Math.min(Math.floor(value), 8);
+}
+
+async function runPublishBatch(tasks, concurrency) {
+  const results = [];
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < tasks.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      const task = tasks[currentIndex];
+
+      try {
+        const result = await runCapturedAsync(getNpxCommand(), task.args);
+        results[currentIndex] = { ...task, status: "published", output: [result.stdout, result.stderr].filter(Boolean).join("\n") };
+      } catch (error) {
+        const output = error.commandOutput || "";
+        if (isVersionExistsError(output)) {
+          results[currentIndex] = { ...task, status: "skipped-existing", output };
+          continue;
+        }
+
+        if (isRateLimitError(output)) {
+          results[currentIndex] = { ...task, status: "rate-limit", output };
+          continue;
+        }
+
+        results[currentIndex] = { ...task, status: "failed", output };
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  return results;
 }
 
 if (!existsSync(skillsDir)) {
@@ -390,9 +474,8 @@ if (clawhubToken) {
 }
 
 console.log("Publishing skills...");
-console.log("Using per-skill publish. ClawHub sync is not used.");
-let publishedCount = 0;
-let skippedExistingCount = 0;
+console.log("Using concurrent per-skill publish. ClawHub sync is not used because it also scans shared OpenClaw skills.");
+const publishTasks = [];
 
 for (const dir of skillDirs) {
   const skillPath = join(dir, "SKILL.md");
@@ -412,41 +495,50 @@ for (const dir of skillDirs) {
     "latest",
   ];
 
-  try {
-    ensureSkillFrontmatterVersion(skillPath);
-    console.log(`Publishing ${skillName}...`);
-    const result = run(getNpxCommand(), args, { captureOutput: true });
-    if (typeof result.stdout === "string" && result.stdout.length > 0) {
-      process.stdout.write(result.stdout);
-    }
-    if (typeof result.stderr === "string" && result.stderr.length > 0) {
-      process.stderr.write(errorText(result.stderr));
-    }
-    publishedCount += 1;
-  } catch (error) {
-    const output = error.commandOutput || "";
+  ensureSkillFrontmatterVersion(skillPath);
+  publishTasks.push({ skillName, dir, args });
+}
 
-    if (isVersionExistsError(output)) {
-      skippedExistingCount += 1;
-      console.log(yellow(`Skipped ${skillName}: version ${publishVersion} already exists on ClawHub.`));
-      continue;
-    }
+const concurrency = normalizeConcurrency(publishConcurrency);
+console.log(`Checking/publishing ${publishTasks.length} skills with concurrency ${concurrency}...`);
+const publishResults = await runPublishBatch(publishTasks, concurrency);
+const publishedResults = publishResults.filter((result) => result.status === "published");
+const skippedExistingResults = publishResults.filter((result) => result.status === "skipped-existing");
+const rateLimitResults = publishResults.filter((result) => result.status === "rate-limit");
+const failedResults = publishResults.filter((result) => result.status === "failed");
 
-    if (isRateLimitError(output)) {
-      failWithRateLimit(publishedCount, skillName, output);
-    }
-
-    failWithGuide("ClawHub publish failed.", [
-      `Stopped at skill: ${skillName}`,
-      "Check whether the ClawHub CLI is reachable through `npx clawhub --help`.",
-      "Check whether your login session is still valid or whether `CLAWHUB_TOKEN` is configured.",
-      "If you are on Windows, this usually indicates an argument-passing issue or a CLI option mismatch, not a login failure.",
-      "Check whether the target skills directory contains valid `SKILL.md` files.",
-      output ? `CLI output: ${output}` : "The publish command exited with a non-zero status.",
-    ]);
+for (const result of publishedResults) {
+  console.log(green(`Published ${result.skillName}.`));
+  if (result.output) {
+    process.stdout.write(colorUrls(result.output.endsWith("\n") ? result.output : `${result.output}\n`));
   }
 }
 
+if (skippedExistingResults.length > 0) {
+  console.log(yellow(`Skipped existing versions: ${skippedExistingResults.length}`));
+  for (const result of skippedExistingResults) {
+    console.log(yellow(`- ${result.skillName}`));
+  }
+}
+
+if (rateLimitResults.length > 0) {
+  const firstRateLimit = rateLimitResults[0];
+  failWithRateLimit(publishedResults.length, firstRateLimit.skillName, firstRateLimit.output || "");
+}
+
+if (failedResults.length > 0) {
+  const firstFailure = failedResults[0];
+  failWithGuide("ClawHub publish failed.", [
+    `Failed skills: ${failedResults.length}`,
+    `First failed skill: ${firstFailure.skillName}`,
+    "Check whether the ClawHub CLI is reachable through `npx clawhub --help`.",
+    "Check whether your login session is still valid or whether `CLAWHUB_TOKEN` is configured.",
+    "If you are on Windows, this usually indicates an argument-passing issue or a CLI option mismatch, not a login failure.",
+    "Check whether the target skills directory contains valid `SKILL.md` files.",
+    firstFailure.output ? `CLI output: ${firstFailure.output}` : "The publish command exited with a non-zero status.",
+  ]);
+}
+
 console.log("Done.");
-console.log(`Published: ${publishedCount}; skipped existing versions: ${skippedExistingCount}.`);
+console.log(`Published: ${publishedResults.length}; skipped existing versions: ${skippedExistingResults.length}.`);
 console.log(`Check ${manifestPath} for expected URLs.`);
