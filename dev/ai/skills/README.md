@@ -73,6 +73,8 @@
 3. `node tools/publish-skills-sh.mjs --dry-run`
 4. `node tools/publish-skills-sh.mjs`
 
+Skills.sh 发布脚本默认源目录仍是 `dev/ai/skills`。运行时会自动生成 `tools/.skills-sh-publish/skills/{english-slug}/SKILL.md` 临时目录，再调用 GitHub skill publisher，因为该 publisher 对中文目录名和直接传 `dev/ai/skills` 的兼容性不好。ClawHub 发布脚本仍直接发布 `dev/ai/skills`。
+
 如果 Windows 本地没有安装 `gh`，`tools/publish-skills-sh.mjs` 会在交互式终端询问是否通过 `winget` 安装。安装后如果还没有登录，脚本会自动启动 `gh auth login --web` 的浏览器认证流程。
 如果 `winget` 提示 GitHub CLI 已安装但当前终端找不到 `gh`，脚本会刷新 Windows PATH 并重试；必要时关闭并重新打开 PowerShell。
 该脚本的命令执行、错误着色、URL 着色和交互式登录行为与 ClawHub 发布脚本保持一致。
