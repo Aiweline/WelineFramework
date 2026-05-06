@@ -108,7 +108,7 @@ class ResourceCompiler implements ObserverInterface
             // 获取翻译并更新模块映射中的 i18n 数据
             if (!empty($allJsWords)) {
                 // 获取当前语言的翻译
-                $locale = $_SERVER['WELINE_USER_LANG'] ?? $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
+                $locale = \Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_LANGUAGE', 'zh_Hans_CN'));
                 $translations = $this->getTranslations($allJsWords, $locale);
                 
                 // 更新每个区域的模块映射中的 i18n 数据
@@ -135,7 +135,7 @@ class ResourceCompiler implements ObserverInterface
             
             // 获取当前语言的翻译（如果上面没有获取，这里再获取一次）
             if (!isset($translations)) {
-                $locale = $_SERVER['WELINE_USER_LANG'] ?? $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
+                $locale = \Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_LANGUAGE', 'zh_Hans_CN'));
                 $translations = $this->getTranslations($allJsWords, $locale);
             }
             

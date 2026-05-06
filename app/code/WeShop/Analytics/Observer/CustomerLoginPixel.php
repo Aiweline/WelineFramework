@@ -37,7 +37,7 @@ class CustomerLoginPixel implements ObserverInterface
             'user_id' => $customer->getId(),
             'module' => 'WeShop_Customer',
             'name' => 'customer_login',
-            'url' => $_SERVER['REQUEST_URI'] ?? '',
+            'url' => \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', ''),
             'currency' => $customer->getCurrency() ?? 'CNY',
             'lang' => $customer->getLocale() ?? 'zh_CN',
         ]);

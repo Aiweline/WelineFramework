@@ -187,8 +187,8 @@ HTML;
 
     private function generateClientId(): string
     {
-        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
-        $userAgent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? 'cli');
+        $ip = (string) (\Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', '127.0.0.1'));
+        $userAgent = (string) (\Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', 'cli'));
 
         return md5($ip . '|' . $userAgent);
     }

@@ -480,7 +480,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             return $area === 'backend' || $area === 'rest_backend';
         }
 
-        $uri = (string)($context?->get('input.uri', $request->getServer('REQUEST_URI') ?? ($_SERVER['REQUEST_URI'] ?? '')) ?? '');
+        $uri = (string)($context?->get('input.uri', $request->getServer('REQUEST_URI') ?? \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '')) ?? '');
         if ($uri !== '') {
             try {
                 $backendPrefix = (string)\Weline\Framework\App\Env::getAreaRoutePrefix('backend');
