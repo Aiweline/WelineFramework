@@ -107,9 +107,9 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             'action' => 'index',
         ]);
         // 直接使用 $_SERVER 获取请求 URI
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        $uri = \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
         $parse = UrlParser::parse($uri);
-        $_SERVER = $parse['server'];
+        \Weline\Framework\Env\WelineEnv::replaceServer($parse['server']);
         $pure_uri = $parse['uri'];
         // 检查是否在白名单中
         if ($this->isWhitelisted($pure_uri)) {
@@ -500,15 +500,15 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         $lang = $this->getCurrentLang();
         
         // 检查是否是 API 请求
-        $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        $acceptHeader = \Weline\Framework\Env\WelineEnv::server('HTTP_ACCEPT', '');
+        $uri = \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
         $isApiRequest = str_contains($acceptHeader, 'application/json') 
                      || str_contains($uri, '/api/') 
                      || str_contains($uri, '/rest/');
         
         // 开发环境下：通过查询参数 ?api=1 可以测试 API 维护模式响应
         if (!$isApiRequest && defined('DEV') && DEV) {
-            $queryString = $_SERVER['QUERY_STRING'] ?? '';
+            $queryString = \Weline\Framework\Env\WelineEnv::server('QUERY_STRING', '');
             parse_str($queryString, $queryParams);
             if (isset($queryParams['api']) && ($queryParams['api'] === '1' || $queryParams['api'] === 'true')) {
                 $isApiRequest = true;
