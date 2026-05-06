@@ -1727,6 +1727,37 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * Queue watchdog repair path: when a scheduler-owned build queue has already
+     * reached a terminal queue status but build tasks are still not all done, put
+     * every unfinished task back to pending and let the scheduler retry the queue.
+     *
+     * Cancelled tasks stay cancelled so an explicit operator stop is respected.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function resetUnfinishedTasksForQueueRetry(array $scope, string $message): array
+    {
+        $taskState = $this->extractTaskState($scope);
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            $status = $this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING));
+            if ($status === self::TASK_STATUS_DONE || $status === self::TASK_STATUS_CANCELLED) {
+                continue;
+            }
+
+            $scope = $this->markTaskPendingForFreshRepair($scope, $taskKey, $message);
+            $taskState = $this->extractTaskState($scope);
+        }
+
+        return $this->clearRetryableAiFailures($scope, 'build');
+    }
+
+    /**
      * Reconcile mutable task state with generated artifacts already persisted by the builder.
      *
      * @param array<string, mixed> $scope

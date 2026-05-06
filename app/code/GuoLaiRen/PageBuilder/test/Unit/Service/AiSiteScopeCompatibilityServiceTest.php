@@ -302,6 +302,41 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(['claude-design', 'custom-skill'], $scope['selected_skill_codes']);
     }
 
+    public function testNormalizeScopeKeepsAiBlockLookupIdentifiers(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizeScope([
+            'page_types' => [Page::TYPE_HOME],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'blocks' => [
+                        [
+                            'block_id' => 'home-page-hero',
+                            'type' => 'ai_generated_section',
+                            'component_code' => 'content/home-page-hero',
+                            'section_code' => 'home:content/home-page-hero',
+                            'component' => 'content/home-page-hero',
+                            'code' => 'content/home-page-hero',
+                            'block_key' => 'home-page-hero',
+                            'task_key' => 'home:content/home-page-hero',
+                            'html' => '<section>Hero</section>',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $block = $scope['virtual_pages_by_type'][Page::TYPE_HOME]['blocks'][0] ?? [];
+        $this->assertSame('content/home-page-hero', $block['component_code'] ?? null);
+        $this->assertSame('home:content/home-page-hero', $block['section_code'] ?? null);
+        $this->assertSame('content/home-page-hero', $block['component'] ?? null);
+        $this->assertSame('content/home-page-hero', $block['code'] ?? null);
+        $this->assertSame('home-page-hero', $block['block_key'] ?? null);
+        $this->assertSame('home:content/home-page-hero', $block['task_key'] ?? null);
+    }
+
     public function testSessionScopeWhitelistKeepsSelectedSkillCodes(): void
     {
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteAgentSessionService.php');
