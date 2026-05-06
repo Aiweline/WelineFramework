@@ -1016,6 +1016,15 @@ class AiSiteScopeCompatibilityService
                 'config' => \is_array($b['config'] ?? null) ? $b['config'] : [],
                 'field_schema' => \is_array($b['field_schema'] ?? null) ? $b['field_schema'] : [],
             ];
+            foreach (['component_code', 'section_code', 'component', 'code', 'block_code', 'block_key', 'task_key'] as $lookupKey) {
+                if (!isset($b[$lookupKey]) || (!\is_scalar($b[$lookupKey]) && !(\is_object($b[$lookupKey]) && \method_exists($b[$lookupKey], '__toString')))) {
+                    continue;
+                }
+                $lookupValue = \trim((string)$b[$lookupKey]);
+                if ($lookupValue !== '') {
+                    $normalized[$lookupKey] = $lookupValue;
+                }
+            }
             foreach ($b as $key => $value) {
                 if (!\is_string($key) || !\str_starts_with($key, '_pb_server_')) {
                     continue;
