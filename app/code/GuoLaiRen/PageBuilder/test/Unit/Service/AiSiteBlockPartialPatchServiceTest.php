@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBlockPartialPatchService;
+use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
 
@@ -62,6 +63,19 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertSame([['home']], $scopeService->requestedPageTypes);
     }
 
+    public function testReadCurrentBlockAcceptsComponentCodeAfterScopeNormalization(): void
+    {
+        $scopeService = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+        $service = new AiSiteBlockPartialPatchService(scopeCompatibilityService: $scopeService);
+        $scope = $this->scope();
+
+        $result = $service->readCurrentBlockFromScope($scope, 'home', 'content/hero');
+
+        self::assertTrue($result['success']);
+        self::assertSame('hero', $result['block_id']);
+        self::assertSame('content/hero', $result['component_code']);
+    }
+
     public function testReplaceCurrentBlockOnlyChangesTargetAndKeepsHistory(): void
     {
         $service = new AiSiteBlockPartialPatchService();
@@ -81,6 +95,19 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertSame('New Headline', $blocks[0]['config']['headline']);
         self::assertSame('Features', $blocks[1]['config']['headline']);
         self::assertSame('Updated headline.', $result['scope']['block_patch_history']['home']['hero'][0]['change_summary']);
+    }
+
+    public function testReplaceCurrentBlockAcceptsSectionCodeAlias(): void
+    {
+        $service = new AiSiteBlockPartialPatchService();
+        $scope = $this->scope();
+        $scope['virtual_pages_by_type']['home']['blocks'][0]['section_code'] = 'home:content/hero';
+        $replacement = $this->block('hero', 'Alias Headline', '<section>Alias Headline</section>', 'content/hero');
+
+        $result = $service->applyReplacementBlockToScope($scope, 'home', 'home:content/hero', $replacement);
+
+        self::assertTrue($result['success']);
+        self::assertSame('Alias Headline', $result['scope']['virtual_pages_by_type']['home']['blocks'][0]['config']['headline']);
     }
 
     public function testReplaceCurrentBlockPreservesOtherPagesWithoutHydratingThem(): void
