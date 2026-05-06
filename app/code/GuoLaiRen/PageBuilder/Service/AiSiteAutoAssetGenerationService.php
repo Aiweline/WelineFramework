@@ -44,6 +44,15 @@ class AiSiteAutoAssetGenerationService
                 }
 
                 $manifest = $this->manifestService->markGenerating($manifest, $slotId);
+                if (!$this->shouldUseRealImageGeneration($scope)) {
+                    [$finalUrl, $variant] = $this->writePlaceholderAsset($scope, $session, $slotId, $slot, $prompt);
+                    $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
+                    $scope['asset_manifest'] = $manifest;
+                    $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+                    $generatedSlots[] = $slotId;
+                    continue;
+                }
+
                 $result = \w_query('ai', 'generateImage', [
                     'prompt' => $prompt,
                     'scenario_code' => 'pagebuilder_ai_site_assets',
@@ -105,6 +114,78 @@ class AiSiteAutoAssetGenerationService
             'generated_slots' => $generatedSlots,
             'failed_slots' => $failedSlots,
         ];
+    }
+
+    /**
+     * Text-to-image is not enabled by default in the workbench yet. Keep build
+     * resumable by writing local placeholders, and opt into real generation only
+     * when the scope explicitly asks for it.
+     *
+     * @param array<string,mixed> $scope
+     */
+    private function shouldUseRealImageGeneration(array $scope): bool
+    {
+        return (int)($scope['enable_real_ai_image_generation'] ?? 0) === 1;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $slot
+     * @return array{0:string,1:array<string,mixed>}
+     */
+    private function writePlaceholderAsset(array $scope, AiSiteAgentSession $session, string $slotId, array $slot, string $prompt): array
+    {
+        $relativePath = $this->buildPlaceholderTargetPath($scope, $session, $slotId);
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
+        $directory = \dirname($absolutePath);
+        if (!\is_dir($directory) && !\mkdir($directory, 0755, true) && !\is_dir($directory)) {
+            throw new \RuntimeException('Failed to create placeholder image asset directory: ' . $directory);
+        }
+        $label = \trim((string)($slot['label'] ?? $slot['slot_type'] ?? $slotId));
+        $brief = \trim((string)($slot['brief'] ?? $slot['prompt_brief'] ?? $prompt));
+        $svg = $this->buildPlaceholderSvg($label !== '' ? $label : $slotId, $brief);
+        if (\file_put_contents($absolutePath, $svg) === false) {
+            throw new \RuntimeException('Failed to write placeholder image asset file: ' . $absolutePath);
+        }
+
+        $finalUrl = '/' . \str_replace('\\', '/', $relativePath);
+        return [$finalUrl, [
+            'url' => $finalUrl,
+            'mime_type' => 'image/svg+xml',
+            'path' => $relativePath,
+            'mode' => 'placeholder',
+            'model' => 'placeholder',
+            'revised_prompt' => $prompt,
+            'placeholder' => 1,
+        ]];
+    }
+
+    private function buildPlaceholderSvg(string $label, string $brief): string
+    {
+        $label = \htmlspecialchars($this->excerpt($label, 48), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $brief = \htmlspecialchars($this->excerpt($brief, 110), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">'
+            . '<defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#12233f"/><stop offset="1" stop-color="#22c7a9"/></linearGradient></defs>'
+            . '<rect width="1200" height="800" fill="url(#g)"/>'
+            . '<circle cx="1020" cy="120" r="180" fill="#ffffff" opacity=".13"/>'
+            . '<circle cx="180" cy="700" r="240" fill="#000000" opacity=".16"/>'
+            . '<rect x="96" y="104" width="1008" height="592" rx="48" fill="#ffffff" opacity=".10" stroke="#ffffff" stroke-opacity=".32"/>'
+            . '<text x="140" y="310" fill="#ffffff" font-family="Arial, sans-serif" font-size="56" font-weight="700">Image Placeholder</text>'
+            . '<text x="140" y="390" fill="#dffaf5" font-family="Arial, sans-serif" font-size="40" font-weight="600">' . $label . '</text>'
+            . '<text x="140" y="466" fill="#ffffff" fill-opacity=".82" font-family="Arial, sans-serif" font-size="28">' . $brief . '</text>'
+            . '<text x="140" y="612" fill="#ffffff" fill-opacity=".62" font-family="Arial, sans-serif" font-size="24">Text-to-image is not connected yet. This placeholder keeps site build resumable.</text>'
+            . '</svg>';
+    }
+
+    private function excerpt(string $value, int $limit): string
+    {
+        $value = \trim(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        if (\mb_strlen($value, 'UTF-8') <= $limit) {
+            return $value;
+        }
+
+        return \mb_substr($value, 0, \max(0, $limit - 3), 'UTF-8') . '...';
     }
 
     /**
@@ -232,6 +313,18 @@ class AiSiteAutoAssetGenerationService
         $hash = \substr(\sha1($slotId . ':' . $session->getPublicId()), 0, 12);
 
         return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlot . '-' . $hash . '.webp';
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function buildPlaceholderTargetPath(array $scope, AiSiteAgentSession $session, string $slotId): string
+    {
+        $handle = $this->resolveTargetHandle($scope, $session);
+        $safeSlot = $this->sanitizePathSegment($slotId);
+        $hash = \substr(\sha1('placeholder:' . $slotId . ':' . $session->getPublicId()), 0, 12);
+
+        return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlot . '-' . $hash . '.svg';
     }
 
     /**

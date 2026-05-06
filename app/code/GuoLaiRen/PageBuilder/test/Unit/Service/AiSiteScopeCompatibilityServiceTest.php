@@ -121,6 +121,33 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(11, $scope['preview_page_options'][0]['page_id']);
     }
 
+    public function testNormalizeScopeUnwrapsNestedMaterializedPageResult(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizeScope([
+            'page_types' => [Page::TYPE_HOME],
+            'pagebuilder_pages_by_type' => [
+                'home_page_id' => 44,
+                'preview_page_id' => 44,
+                'preview_page_type' => Page::TYPE_HOME,
+                'pagebuilder_pages_by_type' => [
+                    Page::TYPE_HOME => [
+                        'page_id' => 44,
+                        'website_id' => 7,
+                        'type' => Page::TYPE_HOME,
+                        'title' => 'AI Home',
+                        'handle' => 'ai-home',
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertSame(44, $scope['preview_page_id']);
+        $this->assertSame(Page::TYPE_HOME, $scope['preview_page_type']);
+        $this->assertSame(44, $scope['pagebuilder_pages_by_type'][Page::TYPE_HOME]['page_id'] ?? 0);
+    }
+
     public function testNormalizeConfirmedPlanFlagRestoresStaleFlagFromConfirmedBlueprint(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
@@ -168,6 +195,67 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertFalse($service->hasConfirmedStageOnePlanForTaskPlan($normalized));
         self::assertSame(0, (int)($normalized['plan_confirmed'] ?? 0));
+    }
+
+    public function testPersistedStageOnePlanRequiresUsableStrongContractPlanJson(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        self::assertFalse($service->hasPersistedStageOnePlan([
+            'plan_json' => [
+                'pages' => [
+                    Page::TYPE_HOME => ['title' => 'Home'],
+                ],
+                'theme_design' => [
+                    'tone' => 'Practical',
+                    'typography' => 'Readable sans',
+                ],
+            ],
+            'plan_structured' => [
+                'pages' => [
+                    Page::TYPE_HOME => ['title' => 'Home'],
+                ],
+            ],
+            'plan_markdown' => '# Legacy seeded test plan',
+            'plan_generated_at' => '2026-05-04 18:00:00',
+        ]));
+
+        self::assertTrue($service->hasPersistedStageOnePlan([
+            'plan_json' => [
+                'requirement_expansion' => [
+                    'original_brief' => 'Build a SaaS website',
+                    'expanded_brief' => 'Build a SaaS website for B2B buyers.',
+                    'planning_summary' => 'Create a clear conversion path.',
+                    'site_goal' => 'Book demos.',
+                    'page_strategy' => [
+                        ['page_type' => Page::TYPE_HOME, 'intent' => 'Explain value'],
+                    ],
+                ],
+                'theme_design' => [
+                    'theme_purpose' => 'Build trust and guide demos.',
+                    'selection_reason' => 'The SaaS website brief needs a trust-first system.',
+                    'color_scheme' => [
+                        'primary' => '#123456',
+                        'accent' => '#abcdef',
+                    ],
+                    'typography_spacing_radius' => [
+                        'font_family' => 'Aptos',
+                        'spacing_scale' => '8px grid',
+                    ],
+                    'visual_keywords' => ['trust', 'clarity'],
+                ],
+                'shared_components' => [
+                    'header' => [
+                        'goal' => 'Guide visitors.',
+                        'implementation_detail' => 'Logo, nav, CTA.',
+                    ],
+                    'footer' => [
+                        'goal' => 'Close with trust.',
+                        'implementation_detail' => 'Links and contact.',
+                    ],
+                ],
+            ],
+        ]));
     }
 
     public function testNormalizeScopeResolvesPreviewTypeFromVirtualPagesWhenMaterializedPageIsMissing(): void

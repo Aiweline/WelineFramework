@@ -141,9 +141,15 @@ QUEUETIP;
             if ($queuePid > 0) {
                 Processer::removePidFile($processName);
                 $output = $this->getManagedProcessOutput($processName, $queuePid);
+                $freshQueue = clone $this->queue;
+                $freshQueue->clear()->load((int)$queue->getId());
+                if ($freshQueue->getId()) {
+                    $queue = $freshQueue;
+                }
                 $queue->setEndAt(date('Y-m-d H:i:s'))
                     ->setPid(0);
-                if ($queue->isFinished()) {
+                if ($queue->isFinished() || $queue->getStatus() === $queue::status_done || $this->hasQueueDoneMarker($output, $queue)) {
+                    $queue->setFinished(true);
                     $queue->setResult(PHP_EOL . $output . __('队列结束...') . $queue->getResult())
                         ->setStatus($queue::status_done)
                         ->save();
@@ -218,6 +224,13 @@ QUEUETIP;
         }
 
         return '';
+    }
+
+    private function hasQueueDoneMarker(string $output, \Weline\Queue\Model\Queue $queue): bool
+    {
+        $haystack = $output . PHP_EOL . (string)$queue->getResult() . PHP_EOL . (string)$queue->getProcess();
+
+        return str_contains($haystack, 'QUEUE_DONE');
     }
 
     /**

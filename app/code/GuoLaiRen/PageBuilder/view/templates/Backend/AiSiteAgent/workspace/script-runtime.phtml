@@ -54,6 +54,16 @@
     function isRuntimePublishBlockingAiOperation(operation) {
         return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
     }
+    function resolveRuntimeQueueInfoKey(operation) {
+        var op = String(operation || '').trim().toLowerCase();
+        if (op === 'task_plan') {
+            return 'task_plan_queue_info';
+        }
+        if (isRuntimePublishBlockingAiOperation(op)) {
+            return 'build_queue_info';
+        }
+        return 'plan_queue_info';
+    }
     var compactPageDisplayLabel = typeof previewBridge.compactPageDisplayLabel === 'function'
         ? previewBridge.compactPageDisplayLabel
         : function (pageLabel, pageType) {
@@ -191,10 +201,7 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return '';
         }
-        var op = String(operation || '').trim().toLowerCase();
-        var key = op === 'task_plan'
-            ? 'task_plan_queue_info'
-            : (op === 'build' ? 'build_queue_info' : 'plan_queue_info');
+        var key = resolveRuntimeQueueInfoKey(operation);
         var queueInfo = workspaceState[key] && typeof workspaceState[key] === 'object'
             ? workspaceState[key]
             : null;
@@ -212,10 +219,7 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return '';
         }
-        var op = String(operation || '').trim().toLowerCase();
-        var key = op === 'task_plan'
-            ? 'task_plan_queue_info'
-            : (op === 'build' ? 'build_queue_info' : 'plan_queue_info');
+        var key = resolveRuntimeQueueInfoKey(operation);
         var queueInfo = workspaceState[key] && typeof workspaceState[key] === 'object'
             ? workspaceState[key]
             : null;
@@ -235,7 +239,7 @@
             : {};
         var activeOperationName = String(active.operation || op || '').trim().toLowerCase();
         var activeStatus = normalizeTerminalOperationStatus(active.status || '');
-        if (activeStatus && (activeOperationName === 'build' || activeOperationName === 'visual_edit' || activeOperationName === 'task_plan' || activeOperationName === 'plan')) {
+        if (activeStatus && (activeOperationName === 'task_plan' || activeOperationName === 'plan' || isRuntimePublishBlockingAiOperation(activeOperationName))) {
             return Object.assign({}, active, {
                 operation: activeOperationName,
                 status: activeStatus,
@@ -273,12 +277,14 @@
         }, status === 'error' ? 'error' : status, message || (status === 'done' ? '队列执行完成' : '队列执行已停止'));
 
         if (status === 'error' || status === 'stop') {
-            rememberOperationFailurePayload(op, {
+            var failurePayload = {
                 operation: op,
                 state: workspaceState,
                 active_operation: terminalActive,
                 message: message
-            }, message);
+            };
+            rememberOperationFailurePayload(op, failurePayload, message);
+            markBuildOperationTerminalForRuntimeUi(op, 'error', message);
             resetOperationUiOnFailure(op);
             if (typeof enableNavigationAfterOperation === 'function') {
                 enableNavigationAfterOperation();
@@ -286,6 +292,7 @@
             if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                 previewBridge.resumeWorkspaceStream();
             }
+            offerRetryForFailedOperation(op, failurePayload);
             return;
         }
         if (op === 'build' || op === 'visual_edit') {
@@ -427,12 +434,9 @@
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
         var queueInfo = null;
-        if (op === 'plan') {
-            queueInfo = state.plan_queue_info && typeof state.plan_queue_info === 'object' ? state.plan_queue_info : null;
-        } else if (op === 'task_plan') {
-            queueInfo = state.task_plan_queue_info && typeof state.task_plan_queue_info === 'object' ? state.task_plan_queue_info : null;
-        } else if (op === 'build') {
-            queueInfo = state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : null;
+        var stateQueueInfoKey = resolveRuntimeQueueInfoKey(op);
+        if (stateQueueInfoKey && state[stateQueueInfoKey] && typeof state[stateQueueInfoKey] === 'object') {
+            queueInfo = state[stateQueueInfoKey];
         }
         if (!queueInfo && payload && payload.queue_info && typeof payload.queue_info === 'object') {
             queueInfo = payload.queue_info;
@@ -1063,9 +1067,7 @@
             }
         }
         var state = payload.state && typeof payload.state === 'object' ? payload.state : {};
-        var key = String(operation || '').toLowerCase() === 'task_plan'
-            ? 'task_plan_queue_info'
-            : (String(operation || '').toLowerCase() === 'build' ? 'build_queue_info' : 'plan_queue_info');
+        var key = resolveRuntimeQueueInfoKey(operation || payload.operation || '');
         var queueInfo = state[key] && typeof state[key] === 'object' ? state[key] : {};
         snapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : null;
         return String(
@@ -1698,8 +1700,13 @@
         return null;
     }
 
+    var BUILD_TASK_PROGRESS_CORE_OPERATIONS = ['build', 'regenerate_page', 'block_regenerate'];
+    var BUILD_TASK_PROGRESS_EXTENSION_OPERATIONS = ['block_refine'];
+
     function isBuildTaskProgressOperation(operation) {
-        return ['build', 'regenerate_page', 'block_regenerate', 'block_refine'].indexOf(String(operation || '').trim()) !== -1;
+        return BUILD_TASK_PROGRESS_CORE_OPERATIONS
+            .concat(BUILD_TASK_PROGRESS_EXTENSION_OPERATIONS)
+            .indexOf(String(operation || '').trim()) !== -1;
     }
 
     function shouldConsumeBuildTaskProgressSummary(source) {
@@ -2569,6 +2576,7 @@
 
         var settled = false;
         var lastServerError = '';
+        var transportErrorSnapshotProbeStarted = false;
         var source = null;
 
         runningSourceStartTimer = window.setTimeout(function () {
@@ -2646,12 +2654,17 @@
                 if (settled) {
                     return;
                 }
+                settled = true;
+                closeOperationSource(source);
+                markBuildOperationTerminalForRuntimeUi(operation, 'error', lastServerError);
+                resetOperationUiOnFailure(operation);
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
                 if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                     previewBridge.resumeWorkspaceStream();
                 }
+                offerRetryForFailedOperation(operation, payload);
             });
 
             source.addEventListener('warning', function (event) {
@@ -3170,6 +3183,7 @@
             }
             if (lastServerError) {
                 settled = true;
+                closeOperationSource(source);
                 var failurePayload = lastFailurePayloadByOperation[String(operation || '').trim().toLowerCase()];
                 if (!failurePayload || typeof failurePayload !== 'object') {
                     failurePayload = {
@@ -3191,7 +3205,39 @@
                     previewBridge.resumeWorkspaceStream();
                 }
                 offerRetryForFailedOperation(operation, failurePayload);
+                return;
             }
+            if (transportErrorSnapshotProbeStarted) {
+                return;
+            }
+            transportErrorSnapshotProbeStarted = true;
+            settled = true;
+            closeOperationSource(source);
+            var fallbackMessage = 'Operation stream disconnected; syncing queue state from workspace snapshot.';
+            logOperationToWorkspaceTerminal('transport_error_snapshot_fallback', {
+                operation: operation,
+                message: fallbackMessage
+            }, 'warning', fallbackMessage);
+            fetchWorkspaceSnapshotState().then(function (workspaceState) {
+                if (workspaceState && typeof workspaceState === 'object' && syncDeferredQueueWorkspaceState(operation, workspaceState)) {
+                    return;
+                }
+                startDeferredQueueStatePoll(operation);
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+            }).catch(function () {
+                startDeferredQueueStatePoll(operation);
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+            });
         };
 
         }, PB_SSE_CONNECT_DELAY_MS);
