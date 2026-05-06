@@ -33,9 +33,7 @@ class AiSiteHtmlBlocksBuildService
         $generationService = $this->pageComponentGenerationService ?? ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
         $pageSections = $generationService->generatePageSections($pageType, $websiteProfile, $scope);
 
-        $blocks = [
-            $this->buildHeaderBlock($pageType, $websiteProfile, $scope),
-        ];
+        $blocks = [];
         $sectionCount = 0;
 
         foreach (($pageSections['sections'] ?? []) as $section) {
@@ -63,8 +61,6 @@ class AiSiteHtmlBlocksBuildService
         if ($sectionCount === 0) {
             throw new \RuntimeException((string)__('AI 未生成任何可用页面区块：%{1}', [$pageType]));
         }
-
-        $blocks[] = $this->buildFooterBlock($pageType, $websiteProfile, $scope);
 
         return $blocks;
     }
@@ -488,23 +484,71 @@ class AiSiteHtmlBlocksBuildService
             return $region;
         }
 
-        $type = \trim((string)($block['type'] ?? ''));
-        if (\str_contains($type, 'header')) {
+        $type = \strtolower(\trim((string)($block['type'] ?? '')));
+        if (\in_array($type, ['ai_generated_shared_header', 'site_header'], true)) {
             return 'header';
         }
-        if (\str_contains($type, 'footer')) {
+        if (\in_array($type, ['ai_generated_shared_footer', 'site_footer'], true)) {
             return 'footer';
         }
 
-        $blockId = \trim((string)($block['block_id'] ?? ''));
-        if (\str_contains($blockId, 'header')) {
+        $componentCode = self::normalizeSharedBlockToken((string)($block[self::META_COMPONENT_CODE] ?? $block['component'] ?? $block['code'] ?? ''));
+        if ($componentCode === 'header-ai-site-header') {
             return 'header';
         }
-        if (\str_contains($blockId, 'footer')) {
+        if ($componentCode === 'footer-ai-site-footer') {
+            return 'footer';
+        }
+
+        $blockId = self::normalizeSharedBlockToken((string)($block['block_id'] ?? ''));
+        if ($blockId === 'header-ai-site-header') {
+            return 'header';
+        }
+        if ($blockId === 'footer-ai-site-footer') {
             return 'footer';
         }
 
         return '';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    public static function isSharedLayoutBlock(array $block): bool
+    {
+        $type = \strtolower(\trim((string)($block['type'] ?? '')));
+        if (\in_array($type, ['ai_generated_shared_header', 'ai_generated_shared_footer', 'site_header', 'site_footer'], true)) {
+            return true;
+        }
+
+        $region = \trim((string)($block[self::META_REGION] ?? $block['config']['region'] ?? ''));
+        $componentCode = self::normalizeSharedBlockToken((string)($block[self::META_COMPONENT_CODE] ?? $block['component'] ?? $block['code'] ?? ''));
+        $blockId = self::normalizeSharedBlockToken((string)($block['block_id'] ?? ''));
+        if (\in_array($componentCode, ['header-ai-site-header', 'footer-ai-site-footer'], true)) {
+            return true;
+        }
+        if (\in_array($blockId, ['header-ai-site-header', 'footer-ai-site-footer'], true)) {
+            return true;
+        }
+
+        if ($region === 'header') {
+            return $componentCode === 'header-ai-site-header' || $type === 'site_header' || $blockId === 'site-header' || \str_ends_with($blockId, '-site-header');
+        }
+        if ($region === 'footer') {
+            return $componentCode === 'footer-ai-site-footer' || $type === 'site_footer' || $blockId === 'site-footer' || \str_ends_with($blockId, '-site-footer');
+        }
+
+        return false;
+    }
+
+    private static function normalizeSharedBlockToken(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        if ($value === '') {
+            return '';
+        }
+
+        return \str_replace(['/', '_'], '-', $value);
     }
 
     /**
@@ -1136,7 +1180,7 @@ class AiSiteHtmlBlocksBuildService
             . '</div>'
             . '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px 24px;">' . \implode('', $groupHtml) . '</div>'
             . '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;color:#64748b;font-size:12px;">'
-            . '<span>漏 2026 ' . $siteTitle . '</span>'
+            . '<span>&copy; 2026 ' . $siteTitle . '</span>'
             . ($domain !== '' ? '<span>' . $domain . '</span>' : '<span>Always improving the visitor experience</span>')
             . '</div></footer>';
     }

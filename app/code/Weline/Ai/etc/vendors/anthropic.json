@@ -10,6 +10,46 @@
     "description": "Anthropic Claude API服务",
     "website": "https://www.anthropic.com",
     "documentation": "https://docs.anthropic.com",
+    "account_setup_guide": {
+        "title": "Anthropic Claude API 接入指南",
+        "summary": "用于 Claude 文本推理、代码和视觉理解模型。需要在 Anthropic Console 创建 API Key，并确保 Workbench/Console 账户有可用额度。",
+        "links": [
+            {
+                "label": "Anthropic Console",
+                "url": "https://console.anthropic.com"
+            },
+            {
+                "label": "Anthropic API Keys",
+                "url": "https://console.anthropic.com/settings/keys"
+            },
+            {
+                "label": "Anthropic API 文档",
+                "url": "https://docs.anthropic.com"
+            }
+        ],
+        "steps": [
+            "打开 Anthropic Console 并登录账号。",
+            "进入 API Keys 页面创建 API Key，并复制完整密钥。",
+            "确认 Console 账户已配置账单或有可用额度。",
+            "回到 Weline 后台 AI > 供应商账户，供应商选择 Anthropic。",
+            "账户名称建议填写 Anthropic Claude。",
+            "API密钥粘贴 Anthropic Console 生成的 API Key。",
+            "API基础URL可留空；如需显式填写，使用 https://api.anthropic.com/v1。",
+            "保存后点击连接测试；测试通过后启用账户，并按需要设为默认账户。"
+        ],
+        "field_hints": {
+            "provider_code": "Anthropic",
+            "account_name": "Anthropic Claude",
+            "api_key": "粘贴 Anthropic Console API Keys 页面生成的 API Key",
+            "base_url": "留空使用默认值，或填写 https://api.anthropic.com/v1",
+            "balance": "可填预计可用额度，仅用于后台排序/展示；不了解可先填 1",
+            "currency": "USD"
+        },
+        "notes": [
+            "Anthropic 当前配置用于文本/视觉理解模型，不用于 AI 建站文生图。",
+            "图片生成场景应绑定支持 text2image 的模型。"
+        ]
+    },
     "supported_features": {
         "chat": true,
         "completion": true,

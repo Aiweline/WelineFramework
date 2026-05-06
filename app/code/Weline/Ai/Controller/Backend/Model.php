@@ -16,6 +16,7 @@ namespace Weline\Ai\Controller\Backend;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\ModelCollector;
 use Weline\Ai\Service\Provider\AccountService;
+use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
 use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Ai\Service\Provider\ModelSyncService;
 use Weline\Ai\Model\Provider\Account;
@@ -1000,7 +1001,7 @@ class Model extends BackendController
                     try {
                         // 调用账户服务测试连接（这会更新账户的连接状态）
                         $startTime = microtime(true);
-                        $testResult = $accountService->testConnection($testAccount);
+                        $testResult = $accountService->testConnection($testAccount, $modelCode);
                         $duration = round((microtime(true) - $startTime) * 1000, 2);
                         
                         if ($testResult['success']) {
@@ -1149,6 +1150,30 @@ class Model extends BackendController
     private function testImageModelSelfConfig(AiModel $model): array
     {
         $started = microtime(true);
+        $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+        $accountService = ObjectManager::getInstance(AccountService::class);
+        if ($providerCode === '') {
+            $providerCode = $accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
+        }
+        $provider = $accountService->getProviderInstance($providerCode);
+        if ($provider instanceof ImageGenerationProviderInterface) {
+            $modelCode = (string)$model->getData(AiModel::schema_fields_MODEL_CODE);
+            $result = $provider->generateImage($model, 'Create a simple 1:1 test image with the word OK on a clean background.', [
+                'test_mode' => true,
+                'timeout' => 30,
+                'response_modalities' => ['TEXT', 'IMAGE'],
+            ]);
+            $images = is_array($result['images'] ?? null) ? $result['images'] : [];
+            if (empty($images)) {
+                throw new \Exception(__('文生图模型测试未返回图片'));
+            }
+            return [
+                'success' => true,
+                'response' => 'image generated: ' . $modelCode,
+                'duration' => round((microtime(true) - $started) * 1000, 2),
+            ];
+        }
+
         $providerConfig = $model->getProviderConfig();
         $config = array_replace($model->getConfig(), $providerConfig);
         $apiKey = trim((string)($config['api_key'] ?? ''));
@@ -1665,6 +1690,17 @@ class Model extends BackendController
             // 处理提供商配置JSON
             $providerConfig = $this->buildIncomingProviderConfigData($data, $providerModelCode, $config);
             $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $this->encodeJsonConfig($providerConfig));
+
+            $boundAccountId = isset($providerConfig['account_id']) ? (int)$providerConfig['account_id'] : 0;
+            $hasSelfConfig = $this->hasApiCredential($providerConfig) || $this->hasApiCredential($config);
+            if ($boundAccountId <= 0 && !$hasSelfConfig) {
+                $msg = __('模型必须选择一个供应商账户，或者在自配置模式填写 API Key / api_key_env。');
+                if ($isAjax) {
+                    return $this->jsonResponse(['success' => false, 'message' => $msg]);
+                }
+                $this->getMessageManager()->addError($msg);
+                return $this->redirect('*/backend/model/edit', ['id' => $id]);
+            }
 
             // 保存前校验：供应商必须支持映射后的供应商模型 code
             $supplierCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);

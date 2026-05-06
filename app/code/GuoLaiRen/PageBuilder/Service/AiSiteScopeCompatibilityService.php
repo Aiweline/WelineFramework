@@ -122,18 +122,70 @@ class AiSiteScopeCompatibilityService
     public function hasPersistedStageOnePlan(array $scope): bool
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
         $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $generatedAt = \trim((string)($scope['plan_generated_at'] ?? ''));
-        $markdown = \trim((string)($scope['plan_markdown'] ?? ''));
 
-        return $planJson !== []
-            || $planStructured !== []
+        return $this->isUsableStageOnePlanJson($planJson)
             || $executionBlueprintDraft !== []
-            || $executionBlueprint !== []
-            || $generatedAt !== ''
-            || $markdown !== '';
+            || $executionBlueprint !== [];
+    }
+
+    /**
+     * A markdown note or legacy/test artifact is not enough to skip stage-one
+     * generation. The queue may only treat a persisted plan as reusable when
+     * the strong-contract sections needed by downstream page planning exist.
+     *
+     * @param array<string, mixed> $planJson
+     */
+    public function isUsableStageOnePlanJson(array $planJson): bool
+    {
+        if ($planJson === []) {
+            return false;
+        }
+
+        $expansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [];
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+        $sharedComponents = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
+
+        foreach (['original_brief', 'expanded_brief', 'planning_summary', 'site_goal'] as $field) {
+            if (\trim((string)($expansion[$field] ?? '')) === '') {
+                return false;
+            }
+        }
+        if (!\is_array($expansion['page_strategy'] ?? null) || $expansion['page_strategy'] === []) {
+            return false;
+        }
+        foreach (['theme_purpose', 'selection_reason'] as $field) {
+            if (\trim((string)($themeDesign[$field] ?? '')) === '') {
+                return false;
+            }
+        }
+        foreach (['primary', 'accent'] as $field) {
+            if (\trim((string)($colorScheme[$field] ?? '')) === '') {
+                return false;
+            }
+        }
+        foreach (['font_family', 'spacing_scale'] as $field) {
+            if (\trim((string)($typography[$field] ?? '')) === '') {
+                return false;
+            }
+        }
+        if (!\is_array($themeDesign['visual_keywords'] ?? null) || $themeDesign['visual_keywords'] === []) {
+            return false;
+        }
+        foreach (['header', 'footer'] as $component) {
+            $componentPlan = \is_array($sharedComponents[$component] ?? null) ? $sharedComponents[$component] : [];
+            if (
+                \trim((string)($componentPlan['goal'] ?? '')) === ''
+                || \trim((string)($componentPlan['implementation_detail'] ?? $componentPlan['implementation_note'] ?? '')) === ''
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -403,6 +455,9 @@ class AiSiteScopeCompatibilityService
     {
         if (!\is_array($raw)) {
             return [];
+        }
+        if (\is_array($raw['pagebuilder_pages_by_type'] ?? null)) {
+            $raw = $raw['pagebuilder_pages_by_type'];
         }
 
         $pages = [];
@@ -945,6 +1000,9 @@ class AiSiteScopeCompatibilityService
         $out = [];
         foreach ($raw as $b) {
             if (!\is_array($b)) {
+                continue;
+            }
+            if (AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($b)) {
                 continue;
             }
             $bid = \trim((string)($b['block_id'] ?? ''));

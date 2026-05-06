@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 
@@ -130,6 +131,40 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
             if (\is_file($instanceFile)) {
                 @\unlink($instanceFile);
+            }
+        }
+    }
+
+    public function testGetMasterInfoFallsBackToCurrentSnapshotControlMetadata(): void
+    {
+        $instanceName = 'ut-master-info-' . \bin2hex(\random_bytes(4));
+        $manager = new ServerInstanceManager();
+        $instanceFile = $manager->getInstanceFile($instanceName);
+
+        try {
+            ServerInstanceManager::atomicWriteJsonStatic($instanceFile, [
+                'lifecycle_state' => 'running',
+                'startup_phase' => 'running',
+                'current_snapshot' => [
+                    'master_pid' => 60284,
+                    'control_port' => 26895,
+                    'lifecycle_state' => 'running',
+                    'startup_phase' => 'running',
+                ],
+            ], 5);
+
+            $info = MasterProcess::getMasterInfo($instanceName);
+
+            self::assertIsArray($info);
+            self::assertTrue((bool)($info['master_enabled'] ?? false));
+            self::assertSame(60284, $info['master_pid'] ?? null);
+            self::assertSame(26895, $info['control_port'] ?? null);
+        } finally {
+            if (\is_file($instanceFile)) {
+                @\unlink($instanceFile);
+            }
+            if (\is_file($instanceFile . '.lock')) {
+                @\unlink($instanceFile . '.lock');
             }
         }
     }

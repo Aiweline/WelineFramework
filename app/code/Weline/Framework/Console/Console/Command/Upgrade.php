@@ -14,6 +14,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Console\Command;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandInterface;
+use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\System\File\Data\File;
 use Weline\Framework\System\File\Scan;
 use Weline\Framework\Manager\ObjectManager;
@@ -30,6 +31,7 @@ class Upgrade extends CommandAbstract
      * @var Scan
      */
     private Scan $scan;
+    private ModuleScanService $moduleScanService;
 
     /**
      * @var Command
@@ -40,13 +42,47 @@ class Upgrade extends CommandAbstract
         Printing $printer,
         Command  $command,
         Scan     $scan,
-        System   $system
+        System   $system,
+        $moduleScanService = null
     )
     {
         $this->printer = $printer;
         $this->system = $system;
         $this->scan = $scan;
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService($scan);
         $this->command = $command;
+    }
+
+    private function scanConsoleFiles(string $basePath, array &$files, string $removePath, string $replacePath = ''): void
+    {
+        $consoleDir = $this->moduleScanService->resolveDirectory($basePath, 'Console');
+        if ($consoleDir === null) {
+            return;
+        }
+
+        $this->scan->globFile(
+            $consoleDir . DS . '*',
+            $files,
+            '.php',
+            $removePath,
+            $replacePath,
+            true,
+            true
+        );
+    }
+
+    private function scanChildConsoleFiles(string $rootPath, array &$files, string $removePath, string $replacePath): void
+    {
+        $rootDir = $this->moduleScanService->resolveDirectory($rootPath, '');
+        if ($rootDir === null) {
+            return;
+        }
+
+        foreach (glob($rootDir . '*', GLOB_ONLYDIR) ?: [] as $childDir) {
+            $this->scanConsoleFiles($childDir, $files, $removePath, $replacePath);
+        }
     }
 
     /**
@@ -225,9 +261,8 @@ class Upgrade extends CommandAbstract
         }
         unset($active_modules['Weline_Framework']);
         foreach ($active_modules as $module_name => $module) {
-            $pattern = $module['base_path'] . 'Console' . DS . '*';
             $files = [];
-            $this->scan->globFile($pattern, $files, '.php', $module['base_path'], '', true, true);
+            $this->scanConsoleFiles($module['base_path'], $files, $module['base_path']);
             foreach ($files as $file) {
                 $class = $module['namespace_path'] . '\\' . $file;
                 $filePath = $module['base_path'] . str_replace('\\', DS, $file) . '.php';
@@ -336,24 +371,8 @@ class Upgrade extends CommandAbstract
         }
         # 框架命令
         $framework_files = [];
-        $this->scan->globFile(
-            Env::framework_path . '*' . DS . 'Console' . DS . '*',
-            $framework_files,
-            '.php',
-            Env::framework_path,
-            Env::framework_name . '\\Framework\\',
-            true,
-            true
-        );
-        $this->scan->globFile(
-            Env::framework_code_path . '*' . DS . 'Console' . DS . '*',
-            $framework_files,
-            '.php',
-            Env::framework_code_path,
-            'Weline\\Framework\\',
-            true,
-            true
-        );
+        $this->scanChildConsoleFiles(Env::framework_path, $framework_files, Env::framework_path, Env::framework_name . '\\Framework\\');
+        $this->scanChildConsoleFiles(Env::framework_code_path, $framework_files, Env::framework_code_path, 'Weline\\Framework\\');
         foreach ($framework_files as $class) {
             // 排除非框架系统命令类
             // 框架类以类名去重即可
@@ -520,9 +539,8 @@ class Upgrade extends CommandAbstract
                 continue;
             }
             
-            $pattern = $module['base_path'] . 'Console' . DS . '*';
             $files = [];
-            $this->scan->globFile($pattern, $files, '.php', $module['base_path'], '', true, true);
+            $this->scanConsoleFiles($module['base_path'], $files, $module['base_path']);
             
             foreach ($files as $file) {
                 $class = $module['namespace_path'] . '\\' . $file;
@@ -641,24 +659,8 @@ class Upgrade extends CommandAbstract
         $commands = [];
         $framework_files = [];
         
-        $this->scan->globFile(
-            Env::framework_path . '*' . DS . 'Console' . DS . '*',
-            $framework_files,
-            '.php',
-            Env::framework_path,
-            Env::framework_name . '\\Framework\\',
-            true,
-            true
-        );
-        $this->scan->globFile(
-            Env::framework_code_path . '*' . DS . 'Console' . DS . '*',
-            $framework_files,
-            '.php',
-            Env::framework_code_path,
-            'Weline\\Framework\\',
-            true,
-            true
-        );
+        $this->scanChildConsoleFiles(Env::framework_path, $framework_files, Env::framework_path, Env::framework_name . '\\Framework\\');
+        $this->scanChildConsoleFiles(Env::framework_code_path, $framework_files, Env::framework_code_path, 'Weline\\Framework\\');
         
         foreach ($framework_files as $class) {
             if (isset($processedClasses[$class])) {

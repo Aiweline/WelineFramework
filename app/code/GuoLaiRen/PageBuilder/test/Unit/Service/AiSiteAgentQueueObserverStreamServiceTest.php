@@ -342,6 +342,48 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame(['', 0, 'running', 12345], $result);
     }
 
+    public function testForwardObservedQueueSignalsEmitsErrorEventWhenQueueEntersTerminalFailure(): void
+    {
+        $sse = new SpySseWriterForQueueObserverStream(true);
+
+        $queueRow = [
+            'queue_id' => 88,
+            'status' => 'error',
+            'pid' => 0,
+            'process' => 'Build task failed hard',
+            'result' => '',
+        ];
+
+        $result = $this->service()->forwardObservedQueueSignals(
+            $sse,
+            $queueRow,
+            'build',
+            'Build task failed hard',
+            0,
+            'running',
+            0
+        );
+
+        $errorEvents = \array_values(\array_filter(
+            $sse->calls,
+            static fn (array $call): bool => $call['event'] === 'error'
+        ));
+
+        self::assertCount(1, $errorEvents);
+        $data = $errorEvents[0]['data'];
+        self::assertIsArray($data);
+        self::assertSame('Build task failed hard', $data['message']);
+        self::assertSame('build', $data['operation']);
+        self::assertSame(88, $data['queue_id']);
+        self::assertSame('error', $data['queue_status']);
+        self::assertSame('Build task failed hard', $data['queue_process']);
+        self::assertSame('queue_info', $data['progress_kind']);
+        self::assertTrue($data['observer_detail']);
+        self::assertTrue($data['queue_panel_update']);
+        self::assertSame(409, $data['http_code']);
+        self::assertSame(['Build task failed hard', 0, 'error', 0], $result);
+    }
+
     public function testForwardObservedQueueSignalsEmitsProgressEventWhenProcessChangesAndNotSuppressed(): void
     {
         $sse = new SpySseWriterForQueueObserverStream(true);

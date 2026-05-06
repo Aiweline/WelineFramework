@@ -12,6 +12,9 @@ declare(strict_types=1);
 namespace Weline\Hook;
 
 use Weline\Framework\Hook\HookInterface;
+use Weline\Framework\Module\Service\ModuleScanService;
+use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\System\File\Scan;
 
 /**
  * Hook 注册表管理
@@ -25,6 +28,7 @@ class HookRegistry
     private ?array $cachedRegistry = null;
     private ?int $cachedFileMtime = null;
     private HookScanner $scanner;
+    private ModuleScanService $moduleScanService;
     
     /**
      * 已注册的 hook 列表（从 HookInterface 常量中获取）
@@ -41,9 +45,13 @@ class HookRegistry
     private bool $initialized = false;
 
     public function __construct(
-        HookScanner $scanner
+        HookScanner $scanner,
+        $moduleScanService = null
     ) {
         $this->scanner = $scanner;
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService(new Scan());
     }
 
     /**
@@ -140,19 +148,27 @@ class HookRegistry
     public function refresh(bool $allowSoloConflict = false): bool
     {
         // 扫描所有 Hook 规约（使用 extends 方式）
+        RegistryProgress::log('Hook scan: hook.php specs started');
         $scannedData = $this->scanner->scanAllHooks();
+        RegistryProgress::count('Hook spec scan', count($scannedData), 'modules with hook specs');
         
         // 扫描所有 Hook 实现文件
+        RegistryProgress::log('Hook implementation scan started');
         $hookFiles = $this->scanAllHookFiles();
+        RegistryProgress::count('Hook implementation scan', count($hookFiles), 'hooks with implementation files');
 
         // 组织数据结构，按 Hook 名索引（如果发现冲突会抛出异常）
+        RegistryProgress::log('Hook organize registry data');
         $registry = $this->organizeRegistryData($scannedData, $hookFiles, $allowSoloConflict);
+        RegistryProgress::count('Hook registry', count($registry['hooks'] ?? []), 'hooks organized');
 
         // 检查文档（无论是否允许solo冲突，都要检查文档）
+        RegistryProgress::log('Hook documentation validation started');
         $this->validateDocumentation($registry);
 
         // 检查Hook实现文件是否存在但没有规约的情况（始终检查，不只在开发环境）
         // 在系统升级和hook:rebuild时，必须确保所有Hook实现都有规约
+        RegistryProgress::log('Hook specification validation started');
         $this->validateHookSpecifications($registry);
 
         // 保存注册表
@@ -171,6 +187,7 @@ class HookRegistry
     public function refreshForModules(array $moduleNames, bool $allowSoloConflict = false): bool
     {
         // 1. 加载现有注册表
+        RegistryProgress::log('Hook incremental: loading current registry');
         $registry = $this->getRegistry(true);
         
         // 确保注册表结构完整
@@ -185,22 +202,31 @@ class HookRegistry
         $this->purgeInactiveModulesFromRegistry($registry);
         
         // 2. 清除目标模块的旧数据
+        RegistryProgress::log('Hook incremental: clearing modules ' . implode(', ', $moduleNames));
         $this->clearModuleHooks($registry, $moduleNames);
         
         // 3. 扫描目标模块的新数据
+        RegistryProgress::log('Hook incremental: scanning target hook specs');
         $scannedData = $this->scanner->scanModulesHooks($moduleNames);
+        RegistryProgress::count('Hook incremental spec scan', count($scannedData), 'modules with hook specs');
+        RegistryProgress::log('Hook incremental: scanning target implementation files');
         $hookFiles = $this->scanModuleHookFiles($moduleNames);
+        RegistryProgress::count('Hook incremental implementation scan', count($hookFiles), 'hooks with implementation files');
         
         // 4. 组织新数据
+        RegistryProgress::log('Hook incremental: organizing new data');
         $newRegistry = $this->organizeRegistryData($scannedData, $hookFiles, $allowSoloConflict);
         
         // 5. 合并到现有注册表
+        RegistryProgress::log('Hook incremental: merging into current registry');
         $this->mergeHookRegistry($registry, $newRegistry);
         
         // 6. 验证文档（仅对新增的 Hooks）
+        RegistryProgress::log('Hook incremental: documentation validation');
         $this->validateDocumentation($registry);
         
         // 7. 验证规约
+        RegistryProgress::log('Hook incremental: specification validation');
         $this->validateHookSpecifications($registry);
         
         // 8. 保存注册表
@@ -269,21 +295,28 @@ class HookRegistry
         $result = [];
         $env = \Weline\Framework\App\Env::getInstance();
         $modules = $env->getModuleList();
+        $totalModules = count($moduleNames);
+        $moduleIndex = 0;
 
         foreach ($moduleNames as $moduleName) {
+            $moduleIndex++;
             if (!isset($modules[$moduleName])) {
+                RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip missing');
                 continue;
             }
             
             $moduleInfo = $modules[$moduleName];
             $basePath = $moduleInfo['base_path'] ?? '';
             if (empty($basePath) || !($moduleInfo['status'] ?? false)) {
+                RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip inactive');
                 continue;
             }
+            RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'check view/hooks');
 
             // 扫描 view/hooks/ 目录
-            $hooksDir = $basePath . DS . 'view' . DS . 'hooks';
-            if (!is_dir($hooksDir)) {
+            $hooksDir = $this->moduleScanService->resolveDirectory($basePath, 'view/hooks');
+            if ($hooksDir === null) {
+                RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip missing view/hooks');
                 continue;
             }
 
@@ -293,6 +326,7 @@ class HookRegistry
                 \RecursiveIteratorIterator::LEAVES_ONLY
             );
 
+            $fileCount = 0;
             foreach ($iterator as $file) {
                 /** @var \SplFileInfo $file */
                 if ($file->isFile() && $file->getExtension() === 'phtml') {
@@ -318,8 +352,10 @@ class HookRegistry
                         $result[$hookName] = [];
                     }
                     $result[$hookName][] = $fileIdentifier;
+                    $fileCount++;
                 }
             }
+            RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'done phtml_files=' . $fileCount);
         }
 
         return $result;
@@ -720,16 +756,27 @@ class HookRegistry
         $result = [];
         $env = \Weline\Framework\App\Env::getInstance();
         $modules = $env->getModuleList();
+        $totalModules = 0;
+        foreach ($modules as $moduleInfo) {
+            $basePath = $moduleInfo['base_path'] ?? '';
+            if (!empty($basePath) && ($moduleInfo['status'] ?? false)) {
+                $totalModules++;
+            }
+        }
+        $moduleIndex = 0;
 
         foreach ($modules as $moduleName => $moduleInfo) {
             $basePath = $moduleInfo['base_path'] ?? '';
             if (empty($basePath) || !($moduleInfo['status'] ?? false)) {
                 continue;
             }
+            $moduleIndex++;
+            RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'check view/hooks');
 
             // 扫描 view/hooks/ 目录
-            $hooksDir = $basePath . DS . 'view' . DS . 'hooks';
-            if (!is_dir($hooksDir)) {
+            $hooksDir = $this->moduleScanService->resolveDirectory($basePath, 'view/hooks');
+            if ($hooksDir === null) {
+                RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip missing view/hooks');
                 continue;
             }
 
@@ -739,6 +786,7 @@ class HookRegistry
                 \RecursiveIteratorIterator::LEAVES_ONLY
             );
 
+            $fileCount = 0;
             foreach ($iterator as $file) {
                 /** @var \SplFileInfo $file */
                 if ($file->isFile() && $file->getExtension() === 'phtml') {
@@ -777,8 +825,10 @@ class HookRegistry
                         $result[$hookName] = [];
                     }
                     $result[$hookName][] = $fileIdentifier;
+                    $fileCount++;
                 }
             }
+            RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'done phtml_files=' . $fileCount);
         }
 
         return $result;
@@ -949,6 +999,7 @@ class HookRegistry
      */
     public function saveRegistry(array $registry): bool
     {
+        RegistryProgress::log('Hook save registry: generated/hooks.php');
         $content = "<?php return " . var_export($registry, true) . ";\n";
 
         // 确保目录存在
@@ -962,9 +1013,11 @@ class HookRegistry
         if ($result !== false) {
             $this->cachedRegistry = $registry;
             $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            RegistryProgress::log('Hook save registry finished');
             return true;
         }
 
+        RegistryProgress::log('Hook save registry failed');
         return false;
     }
 

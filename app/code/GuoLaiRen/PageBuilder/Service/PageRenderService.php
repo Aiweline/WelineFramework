@@ -18,11 +18,13 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Service\Component\ComponentResolver;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\View\Template;
 
 class PageRenderService
@@ -120,10 +122,14 @@ class PageRenderService
         Page $page,
         string $mode = self::MODE_LIVE,
         ?string $locale = null,
-        ?string $tempStyleCode = null
+        ?string $tempStyleCode = null,
+        ?int $virtualThemeId = null
     ): string {
         // 重置模板变量
         $this->templateVars = [];
+        if ($virtualThemeId !== null && $virtualThemeId > 0) {
+            $page->setData('virtual_theme_id', $virtualThemeId);
+        }
         
         // 获取样式代码
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
@@ -260,7 +266,7 @@ class PageRenderService
         $footerHtml = $this->injectFooterCustomCode($footerHtml, $page);
         
         // 根据模式处理输出
-        return $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode);
+        return $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode, $virtualThemeId);
     }
     
     /**
@@ -937,6 +943,24 @@ class PageRenderService
                     $html .= "<!-- Component {$code} resolved via Component model -->\n";
                 }
             }
+
+            if (!$componentFile && !$componentPath) {
+                $virtualThemeHtml = $this->renderVirtualThemeComponent(
+                    $code,
+                    $page,
+                    \is_array($config) ? $config : [],
+                    $styleSettings,
+                    $region,
+                    $componentIndex,
+                    $isVisualEditor,
+                    $mode
+                );
+                if ($virtualThemeHtml !== null) {
+                    $html .= $virtualThemeHtml;
+                    $componentIndex++;
+                    continue;
+                }
+            }
             
             if (!$componentFile && !$componentPath) {
                 $html .= "<!-- Component not found: {$code} (tried file-based and Component model) -->\n";
@@ -987,6 +1011,109 @@ class PageRenderService
      * 
      * 使用 ComponentResolver 获取组件映射
      */
+    private function renderVirtualThemeComponent(
+        string $code,
+        Page $page,
+        array $config,
+        array $styleSettings,
+        string $region,
+        int $componentIndex,
+        bool $isVisualEditor,
+        string $mode
+    ): ?string {
+        $virtualThemeId = (int)$page->getData('virtual_theme_id');
+        if ($virtualThemeId <= 0) {
+            $virtualThemeId = $this->resolveActiveAiVirtualThemeId((int)$page->getData(Page::schema_fields_WEBSITE_ID));
+        }
+        if ($virtualThemeId <= 0) {
+            return null;
+        }
+
+        /** @var VirtualThemeComponent $component */
+        $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+        $component->clearData()->clearQuery()
+            ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+            ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $code)
+            ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
+            ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+            ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
+
+        if ((int)$component->getId() <= 0) {
+            return null;
+        }
+
+        $templateContent = $component->getTemplateContent();
+        if (\trim($templateContent) === '') {
+            return "<!-- Component {$code} resolved via Weline_Theme virtual theme but template is empty -->\n";
+        }
+
+        $componentConfig = \array_replace($component->getDefaultConfig(), $config);
+        $vars = \array_replace($this->templateVars, $componentConfig, [
+            'page' => $page,
+            'style' => $styleSettings,
+            'style_settings' => $styleSettings,
+            'component_config' => $componentConfig,
+            'block' => $this->getTemplate(),
+            'render_mode' => $mode,
+            'virtual_theme_id' => $virtualThemeId,
+        ]);
+
+        try {
+            $componentHtml = $this->renderPhtmlString($templateContent, $vars);
+        } catch (\Throwable $throwable) {
+            return '<!-- Error rendering virtual theme component ' . \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+                . ': ' . \htmlspecialchars($throwable->getMessage(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . " -->\n";
+        }
+
+        $marker = "<!-- Component {$code} resolved via Weline_Theme virtual theme -->\n";
+        if ($isVisualEditor) {
+            $escapedCode = \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+            $escapedRegion = \htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+            $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"virtual-theme\">{$componentHtml}</div>";
+        }
+
+        return $marker . $componentHtml . "\n<!-- Component {$code} rendered successfully -->\n";
+    }
+
+    /**
+     * @param array<string,mixed> $vars
+     */
+    private function renderPhtmlString(string $templateContent, array $vars): string
+    {
+        $initialObLevel = \ob_get_level();
+        FiberOutputBuffer::beginCapture();
+        try {
+            $template = $this->getTemplate();
+            $renderer = \Closure::bind(
+                function () use ($templateContent, $vars): void {
+                    if ($vars !== []) {
+                        $this->addData($vars);
+                    }
+                    $block = $this;
+                    $this->setData('block', $this);
+                    if ($this->getData()) {
+                        \extract($this->getData(), \EXTR_SKIP);
+                    }
+                    eval('?>' . $templateContent);
+                },
+                $template,
+                $template::class
+            );
+            $renderer();
+        } catch (\Throwable $throwable) {
+            if (\Weline\Framework\Runtime\Runtime::isPersistent()) {
+                FiberOutputBuffer::discardCapture();
+            } elseif (\ob_get_level() > $initialObLevel) {
+                \ob_end_clean();
+            }
+            throw $throwable;
+        }
+
+        return FiberOutputBuffer::endCapture();
+    }
+
     private function getComponentFilesMap(string $styleCode): array
     {
         return $this->componentResolver->getComponentFilesMap($styleCode);
@@ -1128,7 +1255,8 @@ class PageRenderService
         string $debugInfo,
         Page $page,
         string $styleCode,
-        string $mode
+        string $mode,
+        ?int $virtualThemeId = null
     ): string {
         // 预览标记脚本（preview 和 visual 模式都需要）
         $previewBoot = '';
@@ -1145,6 +1273,17 @@ class PageRenderService
             })();</script>';
         }
         
+        if ($page->isAiHtmlRenderMode()) {
+            $aiHtml = $this->renderAiHtmlBlocks($page, $mode !== self::MODE_LIVE, $mode === self::MODE_VISUAL);
+            if ($aiHtml !== '') {
+                if ($mode === self::MODE_VISUAL) {
+                    return $this->renderVisualMode($headerHtml, $aiHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
+                }
+
+                return $this->renderAiHtmlDocument($headerHtml, $aiHtml, $footerHtml, $previewBoot, $page, $virtualThemeId);
+            }
+        }
+
         if ($mode === self::MODE_VISUAL) {
             // 可视化编辑器模式：添加插槽容器和拖拽支持
             return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
@@ -1153,6 +1292,124 @@ class PageRenderService
         // preview 和 live 模式：纯净输出
         return $previewBoot . $headerHtml . $contentHtml . $footerHtml;
     }
+
+    private function renderAiHtmlDocument(
+        string $headerHtml,
+        string $aiHtml,
+        string $footerHtml,
+        string $previewBoot,
+        Page $page,
+        ?int $virtualThemeId = null
+    ): string
+    {
+        $pageTitle = (string)($page->getData('title') ?: $page->getData('name') ?: 'Preview');
+        $effectiveVirtualThemeId = (int)($virtualThemeId ?? 0);
+        if ($effectiveVirtualThemeId <= 0) {
+            $effectiveVirtualThemeId = (int)$page->getData('virtual_theme_id');
+        }
+        if ($effectiveVirtualThemeId <= 0) {
+            $effectiveVirtualThemeId = $this->resolveActiveAiVirtualThemeId((int)$page->getData(Page::schema_fields_WEBSITE_ID));
+        }
+        $themeMarker = $effectiveVirtualThemeId > 0
+            ? '<!-- theme_id=' . $effectiveVirtualThemeId . ' -->'
+            : '';
+
+        return '<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' . \htmlspecialchars($pageTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</title>
+</head>
+<body>
+    ' . $themeMarker . '
+    ' . $previewBoot . '
+    ' . $headerHtml . '
+    ' . $aiHtml . '
+    ' . $footerHtml . '
+</body>
+</html>';
+    }
+
+    private function resolveActiveAiVirtualThemeId(int $websiteId): int
+    {
+        if ($websiteId <= 0) {
+            return 0;
+        }
+        try {
+            /** @var \GuoLaiRen\PageBuilder\Model\VirtualTheme $theme */
+            $theme = ObjectManager::make(\GuoLaiRen\PageBuilder\Model\VirtualTheme::class);
+            $theme->clearData()->clearQuery()
+                ->where(\GuoLaiRen\PageBuilder\Model\VirtualTheme::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(\GuoLaiRen\PageBuilder\Model\VirtualTheme::schema_fields_SOURCE, \GuoLaiRen\PageBuilder\Model\VirtualTheme::SOURCE_PAGEBUILDER_AI)
+                ->where(\GuoLaiRen\PageBuilder\Model\VirtualTheme::schema_fields_IS_ACTIVE, 1)
+                ->order(\GuoLaiRen\PageBuilder\Model\VirtualTheme::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+
+            return (int)$theme->getId();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    private function renderAiHtmlBlocks(Page $page, bool $useDraftInsteadOfSnapshot = false, bool $visualEditor = false): string
+    {
+        $layout = $page->resolveAiLayoutForFrontend($useDraftInsteadOfSnapshot);
+        $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+        if ($blocks === []) {
+            return '';
+        }
+
+        $html = '';
+        foreach ($blocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            if (AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block)) {
+                continue;
+            }
+            $blockHtml = \trim((string)($block['html'] ?? $block['config']['html_content'] ?? ''));
+            if ($blockHtml === '') {
+                continue;
+            }
+            $blockHtml = $this->sanitizeAiHtmlBlockFragment($blockHtml);
+            if ($blockHtml === '') {
+                continue;
+            }
+            $blockId = \trim((string)($block['block_id'] ?? ''));
+            $blockType = \trim((string)($block['type'] ?? 'ai_html_block'));
+            $html .= '<section class="pb-ai-html-block"';
+            if ($blockId !== '') {
+                $html .= ' data-block-id="' . \htmlspecialchars($blockId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
+            }
+            if ($blockType !== '') {
+                $html .= ' data-block-type="' . \htmlspecialchars($blockType, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
+            }
+            $html .= '>';
+            if ($visualEditor) {
+                $region = 'content';
+                $componentKey = $blockId !== '' ? $blockId : $blockType;
+                $html .= '<div class="pb-component-wrapper tpmst-component-wrapper"'
+                    . ' data-component="' . \htmlspecialchars($componentKey, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                    . ' data-region="' . \htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                    . ' data-index="0"'
+                    . ' data-ai-block-id="' . \htmlspecialchars($blockId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">'
+                    . '<div class="component-actions" aria-label="Component actions">'
+                    . '<button type="button" data-pb-action="refine">Refine</button>'
+                    . '<button type="button" data-pb-action="move-up">Move up</button>'
+                    . '<button type="button" data-pb-action="move-down">Move down</button>'
+                    . '</div>'
+                    . $blockHtml
+                    . '</div>';
+            } else {
+                $html .= $blockHtml;
+            }
+            $html .= '</section>';
+        }
+
+        return $html;
+    }
     
     /**
      * 渲染可视化编辑器模式
@@ -1160,6 +1417,78 @@ class PageRenderService
      * 统一使用组件化模式：始终构建完整 HTML 结构
      * header/content/footer 组件只是 HTML 片段，不包含完整的 HTML 文档结构
      */
+    private function sanitizeAiHtmlBlockFragment(string $html): string
+    {
+        if (!$this->containsAiInstructionLeak($html)) {
+            return $html;
+        }
+
+        $html = \preg_replace_callback(
+            '/<div\b[^>]*class=(["\'])(?=[^"\']*header)[^"\']*\1[^>]*>.*?<\/div>\s*/is',
+            function (array $matches): string {
+                return $this->containsAiInstructionLeak((string)($matches[0] ?? '')) ? '' : (string)($matches[0] ?? '');
+            },
+            $html
+        ) ?? $html;
+
+        $html = \preg_replace_callback(
+            '/<span\b[^>]*class=(["\'])(?=[^"\']*ai-site-fallback-kicker)[^"\']*\1[^>]*>.*?<\/span>\s*/is',
+            function (array $matches): string {
+                return $this->containsAiInstructionLeak((string)($matches[0] ?? '')) ? '' : (string)($matches[0] ?? '');
+            },
+            $html
+        ) ?? $html;
+
+        $html = \preg_replace_callback(
+            '/<(h[1-6]|p)\b[^>]*>.*?<\/\1>/is',
+            function (array $matches): string {
+                return $this->containsAiInstructionLeak((string)($matches[0] ?? '')) ? '' : (string)($matches[0] ?? '');
+            },
+            $html
+        ) ?? $html;
+
+        return \trim($html);
+    }
+
+    private function containsAiInstructionLeak(string $html): bool
+    {
+        $html = \preg_replace('/<(style|script)\b[^>]*>.*?<\/\1>/is', '', $html) ?? $html;
+        $text = \html_entity_decode(\strip_tags($html), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $text = \trim(\preg_replace('/\s+/u', ' ', $text) ?? $text);
+        if ($text === '') {
+            return false;
+        }
+        $normalized = \mb_strtolower($text);
+
+        foreach ([
+            '优先沿用第一阶段',
+            '输出必须是访客可见内容',
+            '不能写方向型提示语',
+            '直接产出可上屏',
+            '字段样例',
+            'content_fill_rule',
+            'field_content_requirements',
+            'Generated website section',
+            'visitor-visible copy',
+            'prompt text',
+            'stage-2 planned text',
+            'Visitors see',
+            'Visitors can review',
+            'Built from plan',
+            'generated from plan',
+            'content_fill_rule',
+            'field_content_requirements',
+            'task_script',
+            'stage3_directive',
+        ] as $marker) {
+            if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
+                return true;
+            }
+        }
+
+        return \preg_match('/^(?:present|provide|showcase|explain|build|create|highlight|include|display|structure|design|render|add)\b.{0,180}\b(?:cta|card|cards|accordion|accordions|section|block|layout|grid|module|page|signals?|content|policy|terms?|download)\b/iu', $text) === 1;
+    }
+
     private function renderVisualMode(
         string $headerHtml,
         string $contentHtml,

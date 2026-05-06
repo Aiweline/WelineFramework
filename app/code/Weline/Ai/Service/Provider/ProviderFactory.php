@@ -40,9 +40,9 @@ class ProviderFactory
      */
     private array $providerClasses = [
         AnthropicProvider::class,
+        GeminiProvider::class,
+        VectorEngineProvider::class,
         OpenAiProvider::class,
-        // 可以添加更多提供者：
-        // GeminiProvider::class,
     ];
 
     /**
@@ -55,7 +55,7 @@ class ProviderFactory
     public function getProvider(AiModel $model): ProviderInterface
     {
         $modelCode = $model->getModelCode();
-        $vendor = $model->getVendor();
+        $vendor = strtolower(trim($model->getVendor()));
 
         // 尝试从缓存获取
         $cacheKey = $vendor . '_' . $modelCode;
@@ -64,6 +64,17 @@ class ProviderFactory
         }
 
         // 查找支持该模型的提供者
+        if ($vendor !== '') {
+            foreach ($this->providerClasses as $providerClass) {
+                /** @var ProviderInterface $provider */
+                $provider = ObjectManager::getInstance($providerClass);
+                if ($provider->getProviderCode() === $vendor) {
+                    $this->providers[$cacheKey] = $provider;
+                    return $provider;
+                }
+            }
+        }
+
         foreach ($this->providerClasses as $providerClass) {
             /** @var ProviderInterface $provider */
             $provider = ObjectManager::getInstance($providerClass);

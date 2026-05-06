@@ -165,11 +165,11 @@ public function getTypeId(): int
     }
     public function setContent(string $content): static
     {
-        return $this->setData(self::schema_fields_content, $content);
+        return $this->setData(self::schema_fields_content, $this->normalizeUtf8StorageText($content));
     }
     public function setProcess(string $process): static
     {
-        return $this->setData(self::schema_fields_process, $process);
+        return $this->setData(self::schema_fields_process, $this->normalizeUtf8StorageText($process));
     }
     public function getProcess(bool $format = false, bool $isHtml = false)
     {
@@ -203,7 +203,27 @@ public function getTypeId(): int
     }
     public function setResult(string $result_msg): static
     {
-        return $this->setData(self::schema_fields_result, $result_msg);
+        return $this->setData(self::schema_fields_result, $this->normalizeUtf8StorageText($result_msg));
+    }
+
+    private function normalizeUtf8StorageText(string $text): string
+    {
+        if ($text === '' || \preg_match('//u', $text)) {
+            return $text;
+        }
+
+        $converted = \function_exists('iconv') ? @\iconv('UTF-8', 'UTF-8//IGNORE', $text) : false;
+        if (\is_string($converted) && \preg_match('//u', $converted)) {
+            return $converted;
+        }
+        if (\function_exists('mb_convert_encoding')) {
+            $converted = @\mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+            if (\is_string($converted) && \preg_match('//u', $converted)) {
+                return $converted;
+            }
+        }
+
+        return (string)\preg_replace('/[^\x09\x0A\x0D\x20-\x7E]/', '', $text);
     }
     public function setFinished(bool $finished): static
     {

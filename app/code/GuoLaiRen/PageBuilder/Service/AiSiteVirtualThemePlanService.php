@@ -92,13 +92,13 @@ final class AiSiteVirtualThemePlanService
             $fanoutBatches[] = ['batch' => $batch, 'batch_index' => $batchIndex];
         }
 
-        if ($fanoutBatches !== []) {
+        foreach ($this->groupTaskPlanFanoutBatches($fanoutBatches) as $fanoutBatchGroup) {
             $decodedByBatchId = $this->requestTaskPlanFanoutBatchesConcurrently(
                 $scope,
                 $buildBlueprint,
                 $assembledStructured,
                 $assembledVirtualThemePlan,
-                $fanoutBatches,
+                $fanoutBatchGroup,
                 $mode,
                 $instruction,
                 $targetScope,
@@ -110,12 +110,34 @@ final class AiSiteVirtualThemePlanService
                 $retryableBatchFailures
             );
 
-            foreach ($fanoutBatches as $fanoutBatch) {
+            foreach ($fanoutBatchGroup as $fanoutBatch) {
                 $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
                 $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
                 $batchId = $this->buildTaskPlanBatchId($batch);
                 $decoded = \is_array($decodedByBatchId[$batchId] ?? null) ? $decodedByBatchId[$batchId] : [];
                 if ($decoded === [] && isset($retryableBatchFailures[$batchId])) {
+                    $riskNotes[] = 'Stage-2 batch "' . $batchId . '" used plan-derived deterministic baseline because AI generation failed: '
+                        . $this->excerptText((string)($retryableBatchFailures[$batchId]['message'] ?? ''), 260);
+                    $completedBatches++;
+                    $checkpointCompletedBatchIds[] = $batchId;
+                    if ($onCheckpoint !== null) {
+                        try {
+                            $onCheckpoint([
+                                'updated_at' => \date('Y-m-d H:i:s'),
+                                'plan_signature' => (string)($assembledStructured['plan_signature'] ?? ''),
+                                'completed_batch_ids' => $checkpointCompletedBatchIds,
+                                'failed_batch_ids' => \array_values(\array_keys($retryableBatchFailures)),
+                                'retryable_ai_failures' => \array_values($retryableBatchFailures),
+                                'task_plan_structured' => $assembledStructured,
+                                'virtual_theme_plan' => $assembledVirtualThemePlan,
+                            ]);
+                        } catch (\Throwable) {
+                        }
+                    }
+                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_baseline', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                        'recovered' => true,
+                        'error_message' => (string)($retryableBatchFailures[$batchId]['message'] ?? ''),
+                    ]);
                     continue;
                 }
                 ['structured' => $assembledStructured, 'virtual_theme_plan' => $assembledVirtualThemePlan, 'risk_notes' => $riskNotes] =
@@ -228,6 +250,25 @@ final class AiSiteVirtualThemePlanService
             'retryable_ai_failures' => \array_values($retryableBatchFailures),
             'partial_retry_required' => $retryableBatchFailures !== [] ? 1 : 0,
         ];
+    }
+
+    /**
+     * @param list<array{batch:array<string,mixed>,batch_index:int}> $fanoutBatches
+     * @return list<list<array{batch:array<string,mixed>,batch_index:int}>>
+     */
+    private function groupTaskPlanFanoutBatches(array $fanoutBatches): array
+    {
+        if ($fanoutBatches === []) {
+            return [];
+        }
+
+        $concurrency = \max(1, \count($fanoutBatches));
+        $ai = $this->getAiService();
+        if ($concurrency > 1 && $ai instanceof AiService && $ai->supportsCooperativeConcurrency($concurrency)) {
+            return [$fanoutBatches];
+        }
+
+        return \array_map(static fn(array $fanoutBatch): array => [$fanoutBatch], $fanoutBatches);
     }
 
     /**
@@ -425,23 +466,6 @@ final class AiSiteVirtualThemePlanService
             'message' => $this->excerptText($reason, 800),
             'failed_at' => \date('Y-m-d H:i:s'),
         ];
-    }
-
-    /**
-     * @param array<string, mixed> $batch
-     */
-    private function throwTaskPlanBatchAiFailure(array $batch, string $reason): void
-    {
-        $batchId = $this->buildTaskPlanBatchId($batch);
-        $batchType = \trim((string)($batch['type'] ?? ''));
-        $batchKey = \trim((string)($batch['key'] ?? ''));
-        $message = 'AI stage-two task batch failed and deterministic fallback is forbidden.'
-            . ' batch_id=' . $batchId
-            . ($batchType !== '' ? ' batch_type=' . $batchType : '')
-            . ($batchKey !== '' ? ' batch_key=' . $batchKey : '')
-            . ' reason=' . $this->excerptText($reason, 500);
-
-        throw new \RuntimeException($message);
     }
 
     /**
@@ -1488,9 +1512,9 @@ final class AiSiteVirtualThemePlanService
             'allow_zero_balance_provider' => true,
             'temperature' => 0.2,
             'max_tokens' => \min(8192, \max(512, $maxTokens)),
-            'timeout' => 0,
-            'disable_ai_timeout' => true,
-            'disable_cli_timeout' => true,
+            'timeout' => 120,
+            'disable_ai_timeout' => false,
+            'disable_cli_timeout' => false,
             'session_id' => $publicId,
             'disable_conversation_history' => true,
             'disable_conversation_persist' => true,
@@ -1532,7 +1556,7 @@ final class AiSiteVirtualThemePlanService
         };
 
         $streamRequestParams = \array_merge($jsonRequestParams, [
-            'enforce_timeout_in_stream' => false,
+            'enforce_timeout_in_stream' => true,
         ]);
         if ($heartbeatCallback !== null) {
             $streamRequestParams['on_heartbeat'] = $heartbeatCallback;
@@ -3018,12 +3042,22 @@ final class AiSiteVirtualThemePlanService
         $resumeCompletedBatchIds = \array_values(\array_filter(\array_map('strval', \is_array($resumeState['completed_batch_ids'] ?? null) ? $resumeState['completed_batch_ids'] : [])));
         $resumePendingBatchIds = \array_values(\array_filter(\array_map('strval', \is_array($resumeState['pending_batch_ids'] ?? null) ? $resumeState['pending_batch_ids'] : [])));
 
-        if ((int)($scope['fake_mode'] ?? 0) === 1) {
+        $retryableTaskPlanItems = \is_array($scope['retryable_ai_failures']['task_plan']['items'] ?? null)
+            ? $scope['retryable_ai_failures']['task_plan']['items']
+            : [];
+        $forcePlanDerivedBaseline = (int)($scope['_stage2_deterministic_placeholder_mode'] ?? 0) === 1
+            || $retryableTaskPlanItems !== [];
+        if ((int)($scope['fake_mode'] ?? 0) === 1 || $forcePlanDerivedBaseline) {
             $deterministic = $this->buildDeterministicTaskPlanStructured($structured);
             $deterministic = $this->applyReadableDeterministicTaskPlanContent($deterministic);
             $deterministic = $this->applyBlockTaskSchemaToStructured($deterministic);
             $deterministic = $this->ensureTaskDirectoryHierarchy($deterministic);
             $deterministic = $this->syncStageTwoRuntimeContexts($deterministic);
+            if ($forcePlanDerivedBaseline) {
+                $notes = \is_array($deterministic['risk_notes'] ?? null) ? $deterministic['risk_notes'] : [];
+                $notes[] = 'Stage-2 AI task planning has retryable failed batches; a plan-derived deterministic baseline is used so build can continue and failed items can be repaired later.';
+                $deterministic['risk_notes'] = \array_values(\array_unique(\array_filter(\array_map('strval', $notes))));
+            }
             $markdown = $this->buildStageTwoMarkdown(
                 $pageTypes,
                 \is_array($deterministic['shared_tasks'] ?? null) ? $deterministic['shared_tasks'] : [],
@@ -3040,7 +3074,7 @@ final class AiSiteVirtualThemePlanService
                 'markdown' => $markdown,
                 'structured' => $deterministic,
                 'virtual_theme_plan' => $virtualThemePlan,
-                'generation_source' => 'deterministic',
+                'generation_source' => $forcePlanDerivedBaseline ? 'ai' : 'deterministic',
             ];
         }
 
@@ -4200,6 +4234,9 @@ final class AiSiteVirtualThemePlanService
             '围绕 hero', '围绕 header', '围绕 footer',
             'block direction', 'direction only', 'blueprint direction', 'stage one only gives direction', 'list 2-4', 'specify heading font',
             'write the title around', 'title around core value', 'write around', 'explain the core value', 'describe what should be written',
+            '优先沿用第一阶段', '输出必须', '不能写', '字段样例', '直接产出可上屏', '可直接上屏',
+            'built from plan', 'generated from plan', 'content_fill_rule', 'field_content_requirements', 'task_script', 'stage3_directive',
+            'must be visitor-visible', 'visitor-visible copy', 'must render visitor-visible', 'do not write prompt',
             '待补充', '待撰写', '详见后文', '突出卖点', '完善导航', '优化体验',
             '需要进一步', '建议后续', '应当突出', '旨在说明', '重点在于说明',
         ] as $marker) {
@@ -7726,6 +7763,7 @@ final class AiSiteVirtualThemePlanService
             '- shared:footer content floor: include at least 3 information groups (or 2 groups + 1 trust/support block), at least 3 policy/compliance links with exact labels, and at least 1 direct support/contact path label (e.g. Email/WhatsApp/Live Chat) with href/page_type.',
             '- Each page-type block task must include order, block goal, design rationale, content fields, variable meta, CTA direction, internal links, SEO keywords, and anchors; task_script.story_goal MUST describe a visible on-page outcome (what the visitor reads/sees), not a method like "撰写文案说明...".',
             '- task_script.content_fill_rule MUST enumerate fields to populate, allowed tone, and at least one concrete example sentence or value range per critical field.',
+            '- Contract cleanliness hard rule: task_script.story_goal, task_script.content_fill_rule, field samples, block_task.task_goal, and content_plan values must contain only reusable content facts or direct visible copy examples. They must never contain meta-constraints such as "output must be visitor-visible", "do not write prompt", "Built from plan", "content_fill_rule", "field_content_requirements", or similar prompt/contract wording.',
             '- field_content_requirements[].sample MUST be final or "[假设]" plus realistic copy (Chinese >=6 chars or English >=3 words); forbid "待补充", "突出卖点", "详见后文".',
             '- execution_order must follow: shared:header, shared:footer, home page tasks, then other page types in blueprint order.',
             '- If dependencies block ordering, explain why in risk_notes.',

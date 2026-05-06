@@ -9,10 +9,13 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Model\AiModel;
+use Weline\Ai\Service\ModelCollector;
 use Weline\Ai\Service\Provider\ProviderInterface;
 use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Ai\Service\Provider\OpenAiProvider;
 use Weline\Ai\Service\Provider\AnthropicProvider;
+use Weline\Ai\Service\Provider\GeminiProvider;
+use Weline\Ai\Service\Provider\VectorEngineProvider;
 use Weline\Framework\App\Env;
 
 /**
@@ -24,6 +27,8 @@ use Weline\Framework\App\Env;
  */
 class AccountService
 {
+    private string $lastProviderInstanceError = '';
+
     /**
      * @var ObjectManager
      */
@@ -102,19 +107,26 @@ class AccountService
      * @param Account $account
      * @return array ['success' => bool, 'message' => string, 'model_code' => string]
      */
-    public function testConnection(Account $account): array
+    public function testConnection(Account $account, ?string $overrideModelCode = null): array
     {
         try {
-            $providerCode = $account->getData(Account::schema_fields_PROVIDER_CODE);
+            $providerCode = strtolower(trim((string)$account->getData(Account::schema_fields_PROVIDER_CODE)));
             $providerInfo = VendorConfigManager::getProviderConfig($providerCode);
             if (!$providerInfo) {
                 throw new Exception(__('不支持的供应商: %{provider}', ['provider' => $providerCode]));
             }
             
-            $testModelCode = $providerInfo['test_model'];
+            $testModelCode = trim((string)($overrideModelCode ?: ($providerInfo['test_model'] ?? '')));
+            if ($testModelCode === '') {
+                throw new Exception(__('供应商未配置测试模型'));
+            }
+            $this->ensureProviderTestModel((string)$providerCode, (string)$testModelCode, $providerInfo);
             $apiKeyPlain = $account->getDecryptedApiKey();
             $apiKeyTail = $apiKeyPlain ? substr($apiKeyPlain, -4) : '';
-            $baseUrl = $account->getData(Account::schema_fields_BASE_URL) ?: ($providerInfo['base_url'] ?? '');
+            $baseUrl = $this->normalizeProviderBaseUrl(
+                $providerCode,
+                (string)($account->getData(Account::schema_fields_BASE_URL) ?: ($providerInfo['base_url'] ?? ''))
+            );
             Env::log('ai_provider_test.log', sprintf('[testConnection] account_id=%s provider=%s model=%s base_url=%s api_key_tail=%s',
                 (string)$account->getId(), $providerCode, $testModelCode, $baseUrl, $apiKeyTail
             ));
@@ -127,15 +139,20 @@ class AccountService
             }
 
             $testModel = $this->objectManager->make(AiModel::class);
+            $modelMeta = $this->findProviderModelMeta($providerInfo, $testModelCode);
             $testModel->setData([
                 AiModel::schema_fields_SUPPLIER => $providerCode,
                 AiModel::schema_fields_MODEL_CODE => $testModelCode,
+                AiModel::schema_fields_PRIMARY_MODALITY => AiModel::normalizePrimaryModality((string)($modelMeta['primary_modality'] ?? '')),
                 AiModel::schema_fields_CONFIG => json_encode([
                     'api_key' => $apiKeyPlain,
                     'base_url' => $baseUrl,
                     'model' => $testModelCode  // 使用model字段而不是model_id
                 ])
             ]);
+            if ($account->getId() && (string)$account->getData(Account::schema_fields_BASE_URL) !== $baseUrl) {
+                $account->setData(Account::schema_fields_BASE_URL, $baseUrl);
+            }
             
             // 设置代理配置
             $proxyConfig = $account->getProxyConfig();
@@ -146,12 +163,13 @@ class AccountService
             // 获取对应的Provider
             $provider = $this->getProviderInstance($account->getData(Account::schema_fields_PROVIDER_CODE));
             if (!$provider) {
-                throw new Exception(__('无法创建供应商实例'));
+                $detail = $this->lastProviderInstanceError !== '' ? ('：' . $this->lastProviderInstanceError) : '';
+                throw new Exception(__('无法创建供应商实例') . $detail);
             }
             
             // 执行测试请求
             $result = $provider->generate($testModel, '请回复"OK"表示连接成功', [
-                'max_tokens' => 10,
+                'max_tokens' => 64,
                 'temperature' => 0,
                 'test_mode' => true,
                 'timeout' => 12
@@ -191,6 +209,7 @@ class AccountService
                     'account_id' => $account->getId(),
                     'provider' => $providerCode,
                     'base_url' => $baseUrl,
+                    'request_url' => (string)($result['request_url'] ?? ''),
                     'api_key_tail' => $apiKeyTail,
                     'connection_status' => Account::STATUS_SUCCESS,
                     'connection_test_time' => time(),
@@ -216,10 +235,46 @@ class AccountService
                 'model_code' => $testModelCode ?? 'unknown',
                 'account_id' => $account->getId(),
                 'provider' => $account->getData(Account::schema_fields_PROVIDER_CODE),
-                'base_url' => $account->getData(Account::schema_fields_BASE_URL) ?: ($providerInfo['base_url'] ?? ''),
+                'base_url' => $this->normalizeProviderBaseUrl(
+                    (string)$account->getData(Account::schema_fields_PROVIDER_CODE),
+                    (string)($account->getData(Account::schema_fields_BASE_URL) ?: ($providerInfo['base_url'] ?? ''))
+                ),
+                'request_url' => $this->extractRequestUrlFromMessage($e->getMessage()),
                 'api_key_tail' => $apiKeyTail ?? ''
             ];
         }
+    }
+
+    private function extractRequestUrlFromMessage(string $message): string
+    {
+        if (preg_match('/URL:\s*([^\s\)]+)/', $message, $matches)) {
+            return trim((string)$matches[1]);
+        }
+        if (preg_match('/\bhttps?:\/\/\S+/', $message, $matches)) {
+            return rtrim((string)$matches[0], ')，,。');
+        }
+        return '';
+    }
+
+    private function normalizeProviderBaseUrl(string $providerCode, string $baseUrl): string
+    {
+        $providerCode = strtolower(trim($providerCode));
+        $baseUrl = rtrim(trim($baseUrl), '/');
+        if ($baseUrl === '') {
+            return '';
+        }
+        if ($providerCode === 'vectorengine') {
+            foreach (['/chat/completions', '/completions', '/embeddings', '/images/generations', '/models'] as $suffix) {
+                if (str_ends_with($baseUrl, $suffix)) {
+                    $baseUrl = substr($baseUrl, 0, -strlen($suffix));
+                    break;
+                }
+            }
+            if (!preg_match('#/v\d+(?:beta)?$#', $baseUrl)) {
+                $baseUrl .= '/v1';
+            }
+        }
+        return $baseUrl;
     }
 
     /**
@@ -402,21 +457,27 @@ class AccountService
      */
     public function getProviderInstance(string $providerCode): ?ProviderInterface
     {
+        $providerCode = strtolower(trim($providerCode));
+        $this->lastProviderInstanceError = '';
         try {
             // 根据供应商代码返回对应的Provider实例
             $providerClass = match ($providerCode) {
                 'anthropic' => AnthropicProvider::class,
+                'google' => GeminiProvider::class,
+                'vectorengine' => VectorEngineProvider::class,
                 'openai', 'deepseek' => OpenAiProvider::class,
                 default => OpenAiProvider::class, // 默认使用OpenAI兼容的Provider
             };
             
             $provider = $this->objectManager->make($providerClass);
             if (!$provider instanceof ProviderInterface) {
+                $this->lastProviderInstanceError = '返回的对象不是ProviderInterface实例';
                 Env::log('ai_provider_test.log', sprintf('[getProviderInstance][error] provider=%s error=返回的对象不是ProviderInterface实例', $providerCode));
                 return null;
             }
             return $provider;
         } catch (\Exception $e) {
+            $this->lastProviderInstanceError = $e->getMessage();
             Env::log('ai_provider_test.log', sprintf('[getProviderInstance][error] provider=%s error=%s trace=%s', 
                 $providerCode, 
                 $e->getMessage(), 
@@ -424,6 +485,7 @@ class AccountService
             ));
             return null;
         } catch (\Throwable $e) {
+            $this->lastProviderInstanceError = $e->getMessage();
             Env::log('ai_provider_test.log', sprintf('[getProviderInstance][fatal] provider=%s error=%s trace=%s', 
                 $providerCode, 
                 $e->getMessage(), 
@@ -431,6 +493,88 @@ class AccountService
             ));
             return null;
         }
+    }
+
+    /**
+     * Ensure provider account tests do not depend on a manual model sync first.
+     */
+    private function ensureProviderTestModel(string $providerCode, string $testModelCode, array $providerInfo): void
+    {
+        if ($providerCode === '' || $testModelCode === '') {
+            return;
+        }
+
+        /** @var AiModel $existing */
+        $existing = $this->objectManager->make(AiModel::class)
+            ->reset()
+            ->where(AiModel::schema_fields_MODEL_CODE, $testModelCode)
+            ->find()
+            ->fetch();
+        if ($existing && $existing->getId()) {
+            return;
+        }
+
+        $modelMeta = $this->findProviderModelMeta($providerInfo, $testModelCode);
+        $defaults = is_array($providerInfo['model_config_defaults'] ?? null) ? $providerInfo['model_config_defaults'] : [];
+        $modelField = (string)($providerInfo['model_field'] ?? 'model');
+        $baseUrl = (string)($providerInfo['base_url'] ?? '');
+        $config = array_merge([
+            'api_key' => '',
+            'base_url' => $baseUrl,
+            'max_tokens' => $modelMeta['max_tokens'] ?? ($defaults['max_tokens'] ?? 4096),
+            'temperature' => $defaults['temperature'] ?? 0.7,
+            'top_p' => $defaults['top_p'] ?? 1.0,
+            'stream' => $defaults['stream'] ?? true,
+            'timeout' => $defaults['timeout'] ?? 180,
+            'max_retries' => $defaults['max_retries'] ?? 3,
+        ], is_array($defaults['extra'] ?? null) ? $defaults['extra'] : []);
+        $config[$modelField] = $testModelCode;
+        $config['model'] = $config['model'] ?? $testModelCode;
+        $config['model_id'] = $config['model_id'] ?? $testModelCode;
+
+        /** @var ModelCollector $collector */
+        $collector = $this->objectManager->make(ModelCollector::class);
+        $result = $collector->registerModelFromArray([
+            'vendor' => $providerCode,
+            'model_code' => $testModelCode,
+            'model_name' => (string)($modelMeta['name'] ?? $testModelCode),
+            'model_version' => (string)($modelMeta['version'] ?? '1.0'),
+            'token_price_input' => (float)($modelMeta['input_price'] ?? 0),
+            'token_price_output' => (float)($modelMeta['output_price'] ?? 0),
+            'max_tokens' => (int)($modelMeta['max_tokens'] ?? ($defaults['max_tokens'] ?? 4096)),
+            'primary_modality' => (string)($modelMeta['primary_modality'] ?? AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT),
+            'is_active' => 1,
+            'is_default' => (int)($modelMeta['is_default'] ?? 0) === 1 ? 1 : 0,
+            'capabilities' => is_array($modelMeta['capabilities'] ?? null) ? $modelMeta['capabilities'] : ($defaults['capabilities'] ?? ['chat']),
+            'config' => $config,
+        ]);
+
+        if (empty($result['model'])) {
+            throw new Exception(__('无法自动创建供应商测试模型：%{1}', [$testModelCode]));
+        }
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function findProviderModelMeta(array $providerInfo, string $modelCode): array
+    {
+        foreach (($providerInfo['models'] ?? []) as $modelMeta) {
+            if (!is_array($modelMeta)) {
+                continue;
+            }
+            if ((string)($modelMeta['code'] ?? $modelMeta['id'] ?? '') === $modelCode) {
+                return $modelMeta;
+            }
+        }
+
+        return [
+            'code' => $modelCode,
+            'name' => $modelCode,
+            'primary_modality' => AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT,
+            'capabilities' => ['chat'],
+            'max_tokens' => 4096,
+        ];
     }
 
     /**
@@ -504,7 +648,7 @@ class AccountService
      */
     public function supportsModel(string $providerCode, string $modelCode): bool
     {
-        $providerCode = trim($providerCode);
+        $providerCode = strtolower(trim($providerCode));
         $modelCode = trim($modelCode);
 
         if ($providerCode === '' || $modelCode === '') {
