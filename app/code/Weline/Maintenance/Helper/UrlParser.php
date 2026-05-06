@@ -33,7 +33,7 @@ class UrlParser
     public static function parse(string $uri): array
     {
         // 初始化 server 数组（参照 Url::parser() 的逻辑）
-        $server = $_SERVER;
+        $server = \Weline\Framework\Env\WelineEnv::serverAll();
         $server['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
         
         // 获取 REST API 前缀，用于URL匹配和生成（使用新的 area_routes 配置）

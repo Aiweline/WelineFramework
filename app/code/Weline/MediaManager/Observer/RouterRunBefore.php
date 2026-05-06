@@ -28,7 +28,7 @@ class RouterRunBefore implements ObserverInterface
 
     private function handleStaticPaths(): void
     {
-        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        $request_uri = \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
         # 移除查询字符串
         $path_original = parse_url($request_uri, PHP_URL_PATH);
         $path = $path_original !== false ? strtolower($path_original) : '';
@@ -133,13 +133,13 @@ class RouterRunBefore implements ObserverInterface
         // 跳过解析 
         // 图片
         if (str_starts_with($path, '/media/image/')) {
-            $_SERVER['WELINE_PARSER_URL'] = false;
-            $_SERVER['WELINE_IS_MEDIA'] = true;
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_PARSER_URL', false, 'MediaManager router before');
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_IS_MEDIA', true, 'MediaManager router before');
         }
         // 文件
         if (str_starts_with($path, '/media/file/')) {
-            $_SERVER['WELINE_PARSER_URL'] = false;
-            $_SERVER['WELINE_IS_MEDIA'] = true;
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_PARSER_URL', false, 'MediaManager router before');
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_IS_MEDIA', true, 'MediaManager router before');
         }
     }
 
