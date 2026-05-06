@@ -39,7 +39,7 @@ class Router implements RouterInterface
         // 3. 处理空路径：域名根直接显示当前站点首页，或预览时用 query 的 handle
         $trimmedPath = trim($path, '/');
         if (empty($trimmedPath)) {
-            $websiteId = self::getCurrentWebsiteId();
+            $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? self::getCurrentWebsiteId();
             // 无站点时按请求 host 解析站点，便于直接用域名访问首页
             if ($websiteId <= 0) {
                 $host = $_SERVER['HTTP_HOST'] ?? '';
@@ -92,7 +92,7 @@ class Router implements RouterInterface
         }
         
         // 5. 检查当前站点下 handle 是否存在；同站可省略前缀，如 /about 匹配 handle about 或 home-about
-        $websiteId = self::getCurrentWebsiteId();
+        $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? self::getCurrentWebsiteId();
         $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
         if (!self::handleExists($handle, $websiteId, $isPreview)) {
             // 同站短路径：先试 path 作为 handle，再试「首页handle- path」
@@ -280,13 +280,46 @@ class Router implements RouterInterface
      * 按请求 host 解析站点 ID（用于域名根访问首页时无站点上下文的情况）
      * host 可能带端口，匹配时去掉端口以便与站点 url 对齐
      */
+    private static function resolveWebsiteIdFromCurrentHost(): ?int
+    {
+        $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? '');
+        if ($host === '') {
+            return null;
+        }
+
+        $websiteId = self::findWebsiteIdByHost((string)$host);
+        if ($websiteId !== null && $websiteId > 0) {
+            $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
+            if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
+            }
+            return $websiteId;
+        }
+
+        return null;
+    }
+
     private static function findWebsiteIdByHost(string $host): ?int
     {
         if ($host === '') {
             return null;
         }
-        $hostNoPort = preg_replace('/:\d+$/', '', $host);
+        $hostNoPort = \strtolower(\trim((string)(preg_replace('/:\d+$/', '', $host) ?? $host)));
+        if ($hostNoPort === '') {
+            return null;
+        }
         try {
+            $domainModel = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteDomain::class);
+            $domain = clone $domainModel;
+            $domain->clearData()->clearQuery()->loadByDomain($hostNoPort);
+            if ((int)$domain->getData(\Weline\Websites\Model\WebsiteDomain::schema_fields_ID) > 0
+                && (string)$domain->getData(\Weline\Websites\Model\WebsiteDomain::schema_fields_STATUS) === \Weline\Websites\Model\WebsiteDomain::STATUS_ACTIVE) {
+                $websiteId = (int)$domain->getData(\Weline\Websites\Model\WebsiteDomain::schema_fields_WEBSITE_ID);
+                if ($websiteId > 0) {
+                    return $websiteId;
+                }
+            }
+
             $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
             $website = clone $websiteModel;
             $website->clear()

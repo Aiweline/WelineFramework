@@ -158,7 +158,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         })->call($service);
     }
 
-    public function testProductionFallbackComponentGenerationIsForbidden(): void
+    public function testProductionFallbackComponentGenerationBuildsPlanDerivedBaseline(): void
     {
         $service = new AiSitePageComponentGenerationService(
             frameworkBuilder: new FrameworkBuilder(),
@@ -166,10 +166,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
             codeValidator: new CodeValidator(),
         );
 
-        self::expectException(\RuntimeException::class);
-        self::expectExceptionMessage('Local component fallback is forbidden');
-
-        (function (): array {
+        $artifact = (function (): array {
             return $this->buildFallbackComponent(
                 'content/home-page-featured-plugins-grid',
                 'Featured plugin grid',
@@ -182,6 +179,14 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
                 ['_content_locale' => 'en_US']
             );
         })->call($service);
+
+        self::assertSame('content/home-page-featured-plugins-grid', $artifact['code']);
+        self::assertSame('content', $artifact['region']);
+        self::assertNotSame('', trim((string)$artifact['phtml']));
+        self::assertNotSame('', trim((string)$artifact['html']));
+        self::assertStringContainsString('AI Plugin Hub', $artifact['html']);
+        self::assertStringContainsString('Featured', $artifact['html']);
+        self::assertStringNotContainsString('Built from plan', $artifact['html']);
     }
 
     public function testRetryPromptPreservesVisualQualityFloor(): void
@@ -375,7 +380,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         })->call($service);
     }
 
-    public function testGenerateComponentRetriesRecoverableErrorsTwiceBeforeFailing(): void
+    public function testGenerateComponentRetriesRecoverableErrorsThenUsesPlanDerivedBaseline(): void
     {
         $aiService = $this->createMock(AiService::class);
         $aiService->expects(self::exactly(2))
@@ -391,11 +396,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
             aiService: $aiService,
         );
 
-        self::expectException(\RuntimeException::class);
-        self::expectExceptionMessage('AI component generation failed after 2 real-AI attempts');
-        self::expectExceptionMessage('website content locale');
-
-        (function (): array {
+        $artifact = (function (): array {
             return $this->generateComponent(
                 'content/home-page-featured-plugins-grid',
                 'Featured plugin grid',
@@ -405,6 +406,13 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
                 ['_content_locale' => 'en_US']
             );
         })->call($service);
+
+        self::assertSame('content/home-page-featured-plugins-grid', $artifact['code']);
+        self::assertSame('content', $artifact['region']);
+        self::assertNotSame('', trim((string)$artifact['phtml']));
+        self::assertNotSame('', trim((string)$artifact['html']));
+        self::assertStringContainsString('Featured', $artifact['html']);
+        self::assertStringNotContainsString('Built from plan', $artifact['html']);
     }
 
     public function testGenerateComponentStillFailsForApiKeyConfigurationErrors(): void
@@ -514,6 +522,74 @@ PHP,
         })->call($service, 'not-json', 'header');
 
         self::assertNull($decoded);
+    }
+
+    public function testContentPayloadPromotesHtmlExtraToRequiredHtmlContent(): void
+    {
+        $parser = $this->createMock(AiResponseJsonParser::class);
+        $parser->expects(self::once())
+            ->method('extractAndDecode')
+            ->willReturn([
+                'extra_fields' => '',
+                'php_variables' => '',
+                'css_extra' => '#componentId .pb-ai-real-section { padding:32px; }',
+                'html_extra' => '<section class="pb-ai-real-section"><h2>Real AI Section</h2><p>Generated visitor copy.</p></section>',
+                'js_content' => '',
+            ]);
+
+        $service = new AiSitePageComponentGenerationService(
+            responseJsonParser: $parser,
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $decoded = (function (string $content, string $region): array {
+            return $this->decodeAndNormalizeComponentContent($content, $region, 'invalid');
+        })->call($service, '{}', 'content');
+        $validated = (function (array $payload): array {
+            return $this->ensureAiPayloadValid($payload, 'content', 'content/real-section');
+        })->call($service, $decoded);
+
+        self::assertSame(
+            '<section class="pb-ai-real-section"><h2>Real AI Section</h2><p>Generated visitor copy.</p></section>',
+            $validated['html_content'] ?? null
+        );
+    }
+
+    public function testContentPayloadBuildsHtmlFromStructuredAiCopy(): void
+    {
+        $parser = $this->createMock(AiResponseJsonParser::class);
+        $parser->expects(self::once())
+            ->method('extractAndDecode')
+            ->willReturn([
+                'extra_fields' => '',
+                'php_variables' => '',
+                'css_extra' => '#componentId .pb-ai-structured-section { display:grid; gap:18px; padding:28px; border-radius:24px; background:linear-gradient(135deg,#111827,#f59e0b); }',
+                'title' => 'Teenipiya Safe APK Games',
+                'intro' => 'Players get clear download guidance, fair-play notes, and fast support before installing.',
+                'cards' => [
+                    ['title' => 'Verified APK path', 'body' => 'Explain safe installation steps without sending visitors to placeholder domains.'],
+                    ['title' => 'Real support channels', 'body' => 'Show WhatsApp, Telegram, and help desk options in visitor-facing copy.'],
+                ],
+                'js_content' => '',
+            ]);
+
+        $service = new AiSitePageComponentGenerationService(
+            responseJsonParser: $parser,
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $decoded = (function (string $content, string $region): array {
+            return $this->decodeAndNormalizeComponentContent($content, $region, 'invalid');
+        })->call($service, '{}', 'content');
+        $validated = (function (array $payload): array {
+            return $this->ensureAiPayloadValid($payload, 'content', 'content/structured-section');
+        })->call($service, $decoded);
+
+        self::assertStringContainsString('Teenipiya Safe APK Games', (string)($validated['html_content'] ?? ''));
+        self::assertStringContainsString('pb-ai-structured-section', (string)($validated['html_content'] ?? ''));
+        self::assertStringNotContainsString('默认页面模板', (string)($validated['html_content'] ?? ''));
     }
 
     public function testAttemptSyntaxFixRepairsMalformedPhpEchoTagInRequiredHtmlContent(): void
@@ -1497,6 +1573,67 @@ HTML,
         self::assertSame('', $sanitize->call($service, '访客看到三张精致卡片，从而产生下载兴趣。'));
         self::assertSame('', $sanitize->call($service, '信任感增强，并知道如何立即下载 Teen Patti Royal APK。'));
         self::assertSame('Trusted APK rewards', $sanitize->call($service, 'Trusted APK rewards'));
+    }
+
+    public function testSanitizeVisibleCopyDropsStageTaskInstructionCopy(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $sanitize = function (string $value): string {
+            return $this->sanitizeVisibleCopy($value);
+        };
+        $sanitizeConfig = function (array $config): array {
+            return $this->sanitizeDefaultConfigVisibleCopy($config);
+        };
+
+        self::assertSame('', $sanitize->call($service, '优先沿用第一阶段确认的标题、正文和字段样例；例如：18+ only, no cheating；输出必须是访客可见内容。'));
+        self::assertSame('', $sanitize->call($service, 'Present key terms in accordion cards and provide download CTA with checkout links.'));
+        self::assertSame('', $sanitize->call($service, 'Showcase two most popular Indian card games with responsive cards.'));
+        self::assertSame('', $sanitize->call($service, 'Built from plan: Welcome to Teenipiya'));
+        self::assertSame('Welcome to Teenipiya – India\'s Royal Card Game Hub', $sanitize->call($service, '印度 / 棋牌 / 下载 / APK - Welcome to Teenipiya – India\'s Royal Card Game Hub'));
+
+        $config = $sanitizeConfig->call($service, [
+            'content.title' => 'Present key terms in accordion cards and provide download CTA with checkout links.',
+            'content.description' => '优先沿用第一阶段确认的标题、正文和字段样例；例如：18+ only, no cheating；输出必须是访客可见内容。',
+            'contract.stage1_samples' => \json_encode([
+                'Terms You Should Know',
+                '18+ only, no cheating, non-refundable coins',
+                'Download APK - Join the Royal Court',
+            ], \JSON_UNESCAPED_UNICODE),
+        ]);
+
+        self::assertSame('Terms You Should Know', $config['content.title'] ?? null);
+        self::assertSame('18+ only, no cheating, non-refundable coins', $config['content.description'] ?? null);
+    }
+
+    public function testGeneratedComponentDefaultConfigStripsInternalContractBeforePersistence(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $sanitize = function (array $config): array {
+            return $this->sanitizeGeneratedComponentDefaultConfig($config);
+        };
+
+        $config = $sanitize->call($service, [
+            'content.title' => 'Teenipiya Royal APK',
+            'content.description' => 'Download, play, and claim trusted rewards.',
+            'contract.stage1_samples' => '["Built from plan: internal"]',
+            'contract.theme_tokens' => '#ffcc00 #111111',
+            'runtime.stage2_context_snapshot' => ['prompt' => 'internal'],
+            'task_script.stage3_directive' => 'Generate the frontend block.',
+        ]);
+
+        self::assertSame('Teenipiya Royal APK', $config['content.title'] ?? null);
+        self::assertSame('Download, play, and claim trusted rewards.', $config['content.description'] ?? null);
+        self::assertArrayNotHasKey('contract.stage1_samples', $config);
+        self::assertArrayNotHasKey('contract.theme_tokens', $config);
+        self::assertArrayNotHasKey('runtime.stage2_context_snapshot', $config);
+        self::assertArrayNotHasKey('task_script.stage3_directive', $config);
+        self::assertStringNotContainsString('Built from plan', \json_encode($config, \JSON_UNESCAPED_UNICODE));
     }
 
     public function testCleanAiHtmlFragmentRepairsUnclosedHtmlTags(): void

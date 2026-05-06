@@ -11,6 +11,8 @@ namespace Weline\Framework\Event\Config;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Module\Service\ModuleScanService;
+use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\Xml\Parser;
 
@@ -20,6 +22,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
      * @var CachePoolInterface
      */
     private CachePoolInterface $eventCache;
+    private ModuleScanService $moduleScanService;
     
     /**
      * 静态变量：记录已经输出过的错误信息，避免重复输出
@@ -32,11 +35,15 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
     public function __construct(
         Scanner    $scanner,
         Parser     $parser,
-                   $path = 'etc' . DS . 'event.xml'
+                   $path = 'etc' . DS . 'event.xml',
+        $moduleScanService = null
     )
     {
         parent::__construct($scanner, $parser, $path);
         $this->eventCache = w_cache('event');
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService($scanner);
     }
 
     /**
@@ -51,15 +58,22 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         $modules = Env::getInstance()->getActiveModules();
         $order = ['app' => 0, 'framework' => 1, 'system' => 2, 'composer' => 3];
         uasort($modules, static fn($a, $b) => ($order[$a['position'] ?? 'composer'] ?? 4) <=> ($order[$b['position'] ?? 'composer'] ?? 4));
+        $totalModules = count($modules);
+        $moduleIndex = 0;
         foreach ($modules as $module) {
+            $moduleIndex++;
             $name = $module['name'] ?? '';
             $basePath = rtrim($module['base_path'] ?? '', '/\\');
             if ($name === '' || $basePath === '') {
                 continue;
             }
-            $filePath = $basePath . DIRECTORY_SEPARATOR . self::RELATIVE_PATH;
-            if (is_file($filePath)) {
+            RegistryProgress::module('Event XML locate module', $moduleIndex, $totalModules, (string)$name, 'check etc/event.xml');
+            $filePath = $this->moduleScanService->resolveFile($basePath, self::RELATIVE_PATH);
+            if ($filePath !== null) {
                 $result[$name] = $filePath;
+                RegistryProgress::module('Event XML locate module', $moduleIndex, $totalModules, (string)$name, 'found');
+            } else {
+                RegistryProgress::module('Event XML locate module', $moduleIndex, $totalModules, (string)$name, 'missing');
             }
         }
         return $callback ? $callback($result) : $result;
@@ -73,7 +87,12 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         $event_observers_list = [];
         $fileList = $this->getFileList();
         $parser = $this->parser;
+        RegistryProgress::count('Event XML parse', count($fileList), 'event.xml files');
+        $fileIndex = 0;
+        $totalFiles = count($fileList);
         foreach ($fileList as $moduleName => $filePath) {
+            $fileIndex++;
+            RegistryProgress::module('Event XML parse module', $fileIndex, $totalFiles, (string)$moduleName, 'start');
             try {
                 $config = $parser->load($filePath)->xmlToArray();
             } catch (\Throwable $e) {
@@ -85,6 +104,13 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             if ($module_event_observers !== null) {
                 $event_observers_list[$module_and_file] = $module_event_observers;
             }
+            RegistryProgress::module(
+                'Event XML parse module',
+                $fileIndex,
+                $totalFiles,
+                (string)$moduleName,
+                'done events=' . count($module_event_observers ?? [])
+            );
         }
         $this->eventCache->set('event', $event_observers_list);
         return $event_observers_list;
@@ -201,8 +227,8 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 return [];
             }
             
-            $eventFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'event.php';
-            if (!file_exists($eventFile)) {
+            $eventFile = $this->moduleScanService->resolveFile($basePath, 'event.php');
+            if ($eventFile === null) {
                 return [];
             }
             

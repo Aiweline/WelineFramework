@@ -92,13 +92,14 @@ class AiSiteTaskPlanQueue implements QueueInterface
             }
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
             $hasQueuedTaskPlanMutation = $this->hasQueuedTaskPlanMutationRequest($content);
+            $hasQueuedTaskPlanResume = $this->hasQueuedTaskPlanResumeRequest($content);
             $guard = $this->guardTaskPlanQueueExecution(
                 $sessionService,
                 $scopeService,
                 $session,
                 $adminId,
                 $forceRebuild,
-                $hasQueuedTaskPlanMutation,
+                $hasQueuedTaskPlanMutation || $hasQueuedTaskPlanResume,
                 $effectiveExecutionToken
             );
             if (!($guard['ok'] ?? false)) {
@@ -252,6 +253,15 @@ class AiSiteTaskPlanQueue implements QueueInterface
             $active['message'] = $message;
             $active['updated_at'] = \date('Y-m-d H:i:s');
             $scope['active_operation'] = $active;
+            $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+            $taskPlanOperation = \is_array($activeOperations['task_plan'] ?? null) ? $activeOperations['task_plan'] : [];
+            if ($taskPlanOperation !== [] && (string)($taskPlanOperation['execution_token'] ?? '') === $executionToken) {
+                $taskPlanOperation['status'] = 'error';
+                $taskPlanOperation['message'] = $message;
+                $taskPlanOperation['updated_at'] = $active['updated_at'];
+                $activeOperations['task_plan'] = $taskPlanOperation;
+                $scope['active_operations'] = $activeOperations;
+            }
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
             $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
         } catch (\Throwable) {
@@ -442,6 +452,23 @@ class AiSiteTaskPlanQueue implements QueueInterface
             || $mutation !== []
             || $mutations !== []
             || ($targetScope !== '' && $targetScope !== 'task_plan' && $targetScope !== 'full_task_plan');
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function hasQueuedTaskPlanResumeRequest(array $content): bool
+    {
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
+        $request = \array_replace(
+            \is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : [],
+            \is_array($content['_task_plan_sse_request'] ?? null) ? $content['_task_plan_sse_request'] : [],
+            \is_array($details['_task_plan_sse_request'] ?? null) ? $details['_task_plan_sse_request'] : []
+        );
+        $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
+
+        return $promptMode === 'resume_task_plan';
     }
 
     /**

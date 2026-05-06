@@ -1560,6 +1560,13 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'header_footer|start',
             'page_fanout|start',
             'plan_assemble|start',
+            'plan_assemble|normalize_input',
+            'plan_assemble|local_repair_scan',
+            'plan_assemble|local_repair_done',
+            'plan_assemble|build_shared_index',
+            'plan_assemble|validate_contract',
+            'plan_assemble|build_queue_envelope',
+            'plan_assemble|build_workbench',
             'plan_assemble|done',
         ];
         $positions = [];
@@ -1705,7 +1712,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame(0, (int)($calls[0]['params']['timeout'] ?? -1));
         self::assertTrue((bool)($calls[0]['params']['disable_ai_timeout'] ?? false));
         self::assertTrue((bool)($calls[0]['params']['disable_cli_timeout'] ?? false));
-        self::assertLessThanOrEqual(4096, (int)($calls[2]['params']['max_tokens'] ?? 0));
+        self::assertLessThanOrEqual(6144, (int)($calls[2]['params']['max_tokens'] ?? 0));
+        self::assertGreaterThan(4096, (int)($calls[2]['params']['max_tokens'] ?? 0));
         self::assertNotEmpty($artifacts['plan_json']['requirement_expansion']['expanded_brief'] ?? '');
         self::assertNotEmpty($artifacts['plan_json']['pages'][Page::TYPE_HOME]['display_blocks'] ?? []);
 
@@ -1774,6 +1782,226 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame($firstArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? [], $resumedArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []);
         self::assertSame($firstArtifacts['plan_json']['theme_design']['theme_purpose'] ?? '', $resumedArtifacts['plan_json']['theme_design']['theme_purpose'] ?? '');
         self::assertSame('ai_staged', (string)($resumedArtifacts['generation_source'] ?? ''));
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRegeneratesCheckpointPageWithEmptyBlocks(): void
+    {
+        $checkpoints = [];
+        $aiService = $this->createAiServiceStreamMock();
+        $aiService->expects(self::exactly(4))
+            ->method('generateStream')
+            ->willReturnCallback(function (string $prompt, callable $callback): void {
+                static $streamCall = 0;
+                $streamCall++;
+                $callback(match ($streamCall) {
+                    1 => $this->buildStageOneRequirementExpansionAiResponse(),
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    4 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
+                    default => $this->buildValidAiPlanResponse(),
+                });
+            });
+
+        $scope = [
+            'site_title' => 'Checkpoint Repair Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ];
+        $websiteProfile = [
+            'site_title' => 'Checkpoint Repair Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ];
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService);
+        $firstArtifacts = $service->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
+            'on_stage1_checkpoint' => static function (array $checkpoint) use (&$checkpoints): void {
+                $checkpoints[] = $checkpoint;
+            },
+        ]);
+        $checkpoint = \end($checkpoints);
+        self::assertIsArray($checkpoint);
+        $checkpoint['plan_json']['pages'][Page::TYPE_HOME]['blocks'] = [];
+
+        $resumeCalls = [];
+        $repairAiService = $this->createAiServiceStreamMock();
+        $repairAiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(function (string $prompt, callable $callback) use (&$resumeCalls): void {
+                $resumeCalls[] = $prompt;
+                $callback($this->buildStagedPageAiResponse(Page::TYPE_HOME));
+            });
+
+        $resumeService = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $repairAiService);
+        $resumedArtifacts = $resumeService->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
+            'stage1_checkpoint' => $checkpoint,
+        ]);
+
+        self::assertNotEmpty($resumedArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []);
+        self::assertSame(
+            $firstArtifacts['plan_json']['pages'][Page::TYPE_ABOUT]['blocks'] ?? [],
+            $resumedArtifacts['plan_json']['pages'][Page::TYPE_ABOUT]['blocks'] ?? []
+        );
+        self::assertNotEmpty($resumeCalls, 'only the invalid checkpoint page should be regenerated');
+    }
+
+    public function testBuildPlanArtifactsByAiStreamFallsBackToNonStreamWhenProviderReturnsEmptyStream(): void
+    {
+        $aiService = $this->createAiServiceStreamMock();
+        $streamCalls = [];
+        $aiService->expects(self::exactly(2))
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$streamCalls): void {
+                $streamCalls[] = ['prompt' => $prompt, 'params' => $params];
+                if (\count($streamCalls) === 1) {
+                    throw new \Exception('AI流式生成失败: AI 流式生成完成但未返回任何内容，请检查模型配置');
+                }
+                $callback('not a complete json response');
+            });
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->willReturn($this->buildStageOneRequirementExpansionAiResponse());
+
+        $scope = [
+            'site_title' => 'Stream Recovery Test',
+            'brief_description' => 'Need a conversion-focused home page.',
+            'page_types' => ['home_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ];
+        $websiteProfile = [
+            'site_title' => 'Stream Recovery Test',
+            'brief_description' => 'Need a conversion-focused home page.',
+        ];
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService);
+
+        $method = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'generateStageOneJsonByAi');
+        $method->setAccessible(true);
+        $decoded = $method->invoke(
+            $service,
+            'Return requirement expansion JSON.',
+            'pagebuilder_plan_generation',
+            2048,
+            150,
+            null,
+            []
+        );
+
+        self::assertIsArray($decoded);
+        self::assertNotEmpty($decoded['requirement_expansion']['site_goal'] ?? '');
+        self::assertCount(2, $streamCalls);
+        self::assertGreaterThan(
+            (int)($streamCalls[0]['params']['max_tokens'] ?? 0),
+            (int)($streamCalls[1]['params']['max_tokens'] ?? 0)
+        );
+    }
+
+    public function testBuildPlanArtifactsByAiStreamFallsBackToNonStreamWhenStreamReturnsTruncatedJson(): void
+    {
+        $aiService = $this->createAiServiceStreamMock();
+        $streamCalls = [];
+        $aiService->expects(self::exactly(2))
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$streamCalls): void {
+                $streamCalls[] = ['prompt' => $prompt, 'params' => $params];
+                $callback('not a json response');
+            });
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->willReturn($this->buildStagedPageAiResponse(Page::TYPE_HOME));
+
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService);
+
+        $method = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'generateStageOneJsonByAi');
+        $method->setAccessible(true);
+        $decoded = $method->invoke(
+            $service,
+            'Return home_page page plan JSON.',
+            'pagebuilder_plan_generation',
+            4096,
+            150,
+            null,
+            []
+        );
+
+        self::assertIsArray($decoded);
+        self::assertNotEmpty($decoded['page']['blocks'] ?? []);
+        self::assertCount(2, $streamCalls);
+        self::assertGreaterThan(
+            (int)($streamCalls[0]['params']['max_tokens'] ?? 0),
+            (int)($streamCalls[1]['params']['max_tokens'] ?? 0)
+        );
+    }
+
+    public function testStageOneLocalRepairInvalidAiJsonFallsBackWithoutFailingWholePlan(): void
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        self::assertIsArray($decoded);
+        $planJson = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : [];
+        $planJson['pages'][Page::TYPE_HOME]['blocks'][0]['content'] = 'section title';
+
+        $progressEvents = [];
+        $aiService = $this->createAiServiceStreamMock();
+        $aiService->expects(self::exactly(2))
+            ->method('generateStream')
+            ->willReturnCallback(function (string $prompt, callable $callback): void {
+                $callback('{ "page": { "page_goal": "Clearly communicate the refund policy", "theme_alignm');
+            });
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->willReturn('{ "page": { "page_goal": "Clearly communicate the refund policy", "theme_alignm');
+
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService);
+        $method = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'repairAiStageOneProblemBlocksByAi');
+        $method->setAccessible(true);
+        $result = $method->invoke(
+            $service,
+            [
+                'site_title' => 'Local Repair Test',
+                'brief_description' => 'Need home and about pages with strong CTA.',
+                'page_types' => [Page::TYPE_HOME],
+                'plan_locale' => 'en_US',
+            ],
+            [
+                'site_title' => 'Local Repair Test',
+                'brief_description' => 'Need home and about pages with strong CTA.',
+            ],
+            $planJson,
+            [Page::TYPE_HOME],
+            'en_US',
+            'en_US',
+            'Fix invalid blocks.',
+            'stage1_local_repair',
+            'Need home and about pages with strong CTA.',
+            static function (array $progress) use (&$progressEvents): void {
+                $progressEvents[] = $progress;
+            }
+        );
+
+        self::assertIsArray($result);
+        self::assertIsArray($result[0] ?? null);
+        self::assertIsArray($result[1] ?? null);
+        self::assertNotSame('section title', (string)($result[0]['pages'][Page::TYPE_HOME]['blocks'][0]['content'] ?? ''));
+        self::assertSame(1, (int)($result[1]['final_issue_count'] ?? 0));
+        self::assertContains(
+            'local_repair_error',
+            \array_map(static fn(array $row): string => (string)($row['stage1_phase'] ?? ''), $progressEvents)
+        );
     }
 
     public function testBuildPlanArtifactsByAiStreamUsesFallbackRequirementWhenBriefIsEmpty(): void
@@ -2335,7 +2563,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     {
         return $this->getMockBuilder(AiService::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['generateStream'])
+            ->onlyMethods(['generateStream', 'generate'])
             ->getMock();
     }
 

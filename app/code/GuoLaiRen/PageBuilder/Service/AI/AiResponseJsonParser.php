@@ -85,6 +85,9 @@ class AiResponseJsonParser
             if ($extracted !== null) {
                 return $extracted;
             }
+            if ($firstBrace === 0) {
+                return $response;
+            }
         }
 
         $lines = preg_split('/\r?\n/', $response);
@@ -277,7 +280,7 @@ class AiResponseJsonParser
         if (!str_starts_with($trimmed, '{')) {
             return null;
         }
-        if (str_ends_with($trimmed, '}')) {
+        if (str_ends_with($trimmed, '}') && json_decode($trimmed, true) !== null && json_last_error() === JSON_ERROR_NONE) {
             return null;
         }
 

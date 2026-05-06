@@ -113,7 +113,7 @@ class AiSitePublishVerificationService
             'html_length' => \strlen($html),
             'virtual_theme_marker' => $this->hasVirtualThemeMarker($html),
             'ai_site_marker' => $this->hasAiSiteMarker($html),
-            'brand_visible' => $this->hasBrandSignal($html, $websiteProfile),
+            'brand_visible' => $this->hasBrandSignal($html, $websiteProfile, $page),
             'default_template_marker' => $this->hasDefaultTemplateMarker($html),
             'internal_planning_copy_marker' => $this->hasInternalPlanningCopyMarker($html),
             'ai_html_mode' => $page->isAiHtmlRenderMode(),
@@ -201,12 +201,14 @@ class AiSitePublishVerificationService
     /**
      * @param array<string, mixed> $websiteProfile
      */
-    private function hasBrandSignal(string $html, array $websiteProfile): bool
+    private function hasBrandSignal(string $html, array $websiteProfile, Page $page): bool
     {
         $candidates = [
             (string)($websiteProfile['site_title'] ?? ''),
             (string)($websiteProfile['brand_name'] ?? ''),
             (string)($websiteProfile['name'] ?? ''),
+            (string)$page->getData(Page::schema_fields_TITLE),
+            (string)$page->getData(Page::schema_fields_NAME),
         ];
 
         foreach ($candidates as $candidate) {
@@ -214,8 +216,43 @@ class AiSitePublishVerificationService
             if ($candidate !== '' && \mb_stripos($html, $candidate) !== false) {
                 return true;
             }
+            $core = $this->extractStableBrandCore($candidate);
+            if ($core !== '' && \mb_stripos($html, $core) !== false) {
+                return true;
+            }
         }
 
         return \trim(\implode('', $candidates)) === '';
+    }
+
+    private function extractStableBrandCore(string $candidate): string
+    {
+        $candidate = \trim(\preg_replace('/\s+/u', ' ', $candidate) ?? $candidate);
+        if ($candidate === '') {
+            return '';
+        }
+        $head = \trim((string)\preg_split('/\s[-|–—]\s/u', $candidate)[0]);
+        if ($head !== '' && \mb_strlen($head) >= 4 && !\preg_match('/^[0-9a-f-]{8,}$/i', $head)) {
+            $candidate = $head;
+        }
+
+        if (\preg_match_all('/[\p{L}\p{N}]+/u', $candidate, $matches) < 1) {
+            return \mb_strlen($candidate) >= 4 ? $candidate : '';
+        }
+
+        $tokens = [];
+        foreach ($matches[0] as $token) {
+            $token = \trim((string)$token);
+            if ($token === '' || \preg_match('/^[0-9a-f]{8,}$/i', $token) === 1 || \preg_match('/^\d{8,}$/', $token) === 1) {
+                continue;
+            }
+            $tokens[] = $token;
+            if (\count($tokens) >= 3) {
+                break;
+            }
+        }
+        $core = \trim(\implode(' ', $tokens));
+
+        return \mb_strlen($core) >= 4 ? $core : '';
     }
 }

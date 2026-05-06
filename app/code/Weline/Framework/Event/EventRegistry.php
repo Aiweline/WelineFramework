@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Event;
 
+use Weline\Framework\Registry\Service\RegistryProgress;
+
 /**
  * 事件注册表管理
  * 管理 generated/events.php 文件的读取和写入
@@ -102,15 +104,22 @@ class EventRegistry implements EventRegistryInterface
     public function refresh(): bool
     {
         // 扫描所有事件规约
+        RegistryProgress::log('Event scan: event.php specs started');
         $scannedData = $this->scanner->scanAllEvents();
+        RegistryProgress::count('Event spec scan', count($scannedData), 'modules with event specs');
 
         // 收集所有观察者信息
+        RegistryProgress::log('Event observer collection started');
         $observersData = $this->collectObservers();
+        RegistryProgress::count('Event observer collection', count($observersData), 'events with observers');
 
         // 组织数据结构，按事件名索引（如果发现冲突会抛出异常）
+        RegistryProgress::log('Event organize registry data');
         $registry = $this->organizeRegistryData($scannedData, $observersData);
+        RegistryProgress::count('Event registry', count($registry['events'] ?? []), 'events organized');
 
         // 扫描所有观察者并合并到事件信息中
+        RegistryProgress::log('Event merge observers into registry');
         $this->mergeObserversIntoRegistry($registry);
 
         // 保存注册表
@@ -128,6 +137,7 @@ class EventRegistry implements EventRegistryInterface
     public function refreshForModules(array $moduleNames): bool
     {
         // 1. 加载现有注册表
+        RegistryProgress::log('Event incremental: loading current registry');
         $registry = $this->getRegistry(true);
         
         // 确保注册表结构完整
@@ -145,13 +155,19 @@ class EventRegistry implements EventRegistryInterface
         $this->purgeInactiveModulesFromRegistry($registry);
         
         // 2. 清除目标模块的旧数据
+        RegistryProgress::log('Event incremental: clearing modules ' . implode(', ', $moduleNames));
         $this->clearModuleData($registry, $moduleNames);
         
         // 3. 扫描目标模块的新数据
+        RegistryProgress::log('Event incremental: scanning target event specs');
         $newScannedData = $this->scanner->scanModules($moduleNames);
+        RegistryProgress::count('Event incremental spec scan', count($newScannedData), 'modules with event specs');
+        RegistryProgress::log('Event incremental: collecting target observers');
         $newObserversData = $this->collectObserversForModules($moduleNames);
+        RegistryProgress::count('Event incremental observer collection', count($newObserversData), 'events with observers');
         
         // 4. 合并新数据到注册表
+        RegistryProgress::log('Event incremental: merging scanned data');
         $this->mergeScannedDataIntoRegistry($registry, $newScannedData, $newObserversData);
         
         // 5. 重新排序所有观察者
@@ -263,10 +279,15 @@ class EventRegistry implements EventRegistryInterface
         $observersData = [];
         
         try {
+            RegistryProgress::log('Event observer XML read started');
             $eventObserversList = $this->xmlReader->read();
+            RegistryProgress::count('Event observer XML read', count($eventObserversList), 'config files');
             $env = \Weline\Framework\App\Env::getInstance();
+            $configIndex = 0;
+            $totalConfigs = count($eventObserversList);
             
             foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
+                $configIndex++;
                 $moduleName = explode('::', $module_and_file)[0] ?? '';
                 
                 // 只处理目标模块
@@ -276,8 +297,10 @@ class EventRegistry implements EventRegistryInterface
                 
                 // 检查模块状态
                 if (!$env->getModuleStatus($moduleName)) {
+                    RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'skip inactive');
                     continue;
                 }
+                RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'collect');
                 
                 foreach ($moduleEventObservers as $eventName => $eventObservers) {
                     if (!isset($observersData[$eventName])) {
@@ -434,25 +457,32 @@ class EventRegistry implements EventRegistryInterface
         try {
             /** @var \Weline\Framework\Event\Config\XmlReader $xmlReader */
             $xmlReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\Config\XmlReader::class);
+            RegistryProgress::log('Event observer XML read started');
             $eventObserversList = $xmlReader->read();
+            RegistryProgress::count('Event observer XML read', count($eventObserversList), 'config files');
             
             $env = \Weline\Framework\App\Env::getInstance();
             $moduleList = $env->getModuleList();
             // 首次安装时 modules.php 可能尚未生成，moduleList 为空，此时不过滤观察者，否则 register_installer 等观察者会全部被跳过，导致 Theme/I18n Handle 不存在
             $skipByStatus = !empty($moduleList);
+            $configIndex = 0;
+            $totalConfigs = count($eventObserversList);
             
             // 合并所有模块的观察者
             foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
+                $configIndex++;
                 // 提取模块名并检查模块状态
                 $moduleName = explode('::', $module_and_file)[0] ?? '';
                 if (empty($moduleName)) {
                     continue;
                 }
                 if ($skipByStatus && !$env->getModuleStatus($moduleName)) {
+                    RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'skip inactive');
                     // 模块列表已存在时，跳过禁用的模块
                     continue;
                 }
                 
+                RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'collect');
                 foreach ($moduleEventObservers as $eventName => $eventObservers) {
                     if (!isset($observersData[$eventName])) {
                         $observersData[$eventName] = [];
@@ -730,6 +760,7 @@ class EventRegistry implements EventRegistryInterface
      */
     public function saveRegistry(array $registry): bool
     {
+        RegistryProgress::log('Event save registry: generated/events.php');
         $content = "<?php return " . var_export($registry, true) . ";\n";
 
         // 确保目录存在
@@ -747,10 +778,12 @@ class EventRegistry implements EventRegistryInterface
             
             // 清除 EventData 的静态缓存，确保其他使用 EventData 的代码能立即看到新生成的文件
             EventData::clearCache();
+            RegistryProgress::log('Event save registry finished');
             
             return true;
         }
 
+        RegistryProgress::log('Event save registry failed');
         return false;
     }
 

@@ -90,7 +90,11 @@ class QuickBuildAggregator
         if (!empty($filter['domain'])) {
             $params['domain'] = $filter['domain'];
         }
-        $result = $this->queryService->execute('saas', 'getOrders', $params);
+        try {
+            $result = $this->queryService->execute('saas', 'getOrders', $params);
+        } catch (\Throwable) {
+            return [];
+        }
         return is_array($result['items'] ?? null) ? $result['items'] : [];
     }
 

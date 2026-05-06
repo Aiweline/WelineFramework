@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
 
 class AiSiteDraftWebsiteService
@@ -12,6 +15,8 @@ class AiSiteDraftWebsiteService
     public function __construct(
         private readonly Website $websiteModel,
         private readonly WebsiteLanguage $websiteLanguage,
+        private readonly ?WebsiteDomain $websiteDomainModel = null,
+        private readonly ?DomainPool $domainPoolModel = null,
     ) {
     }
 
@@ -41,6 +46,11 @@ class AiSiteDraftWebsiteService
 
         $targetDomain = \strtolower(\trim((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? '')));
         if ($targetDomain !== '') {
+            $existing = $this->loadByDomainBinding($targetDomain);
+            if ($existing !== null) {
+                return $this->persistWebsite($existing, $websiteProfile, false);
+            }
+
             $existing = $this->loadByUrl($targetDomain);
             if ($existing !== null) {
                 return $this->persistWebsite($existing, $websiteProfile, false);
@@ -92,6 +102,7 @@ class AiSiteDraftWebsiteService
             $language = clone $this->websiteLanguage;
             $language->setWebsiteLanguages($websiteId, $locales);
         }
+        $this->ensureWebsiteDomainBinding($websiteId, $targetDomain);
 
         return [
             'website_id' => $websiteId,
@@ -106,6 +117,23 @@ class AiSiteDraftWebsiteService
         $website->clearData()->clearQuery()->load($websiteId);
 
         return $website->getWebsiteId() > 0 ? $website : null;
+    }
+
+    private function loadByDomainBinding(string $targetDomain): ?Website
+    {
+        $targetDomain = \strtolower(\trim($targetDomain));
+        if ($targetDomain === '') {
+            return null;
+        }
+
+        $domain = clone $this->websiteDomainModel();
+        $domain->clearData()->clearQuery()->loadByDomain($targetDomain);
+        $websiteId = (int)$domain->getWebsiteId();
+        if ($domain->getDomainId() <= 0 || $websiteId <= 0) {
+            return null;
+        }
+
+        return $this->loadById($websiteId);
     }
 
     private function loadByUrl(string $targetDomain): ?Website
@@ -132,6 +160,53 @@ class AiSiteDraftWebsiteService
         }
 
         return null;
+    }
+
+    private function ensureWebsiteDomainBinding(int $websiteId, string $targetDomain): void
+    {
+        $targetDomain = \strtolower(\trim($targetDomain));
+        if ($websiteId <= 0 || $targetDomain === '') {
+            return;
+        }
+
+        $domain = clone $this->websiteDomainModel();
+        $domain->clearData()->clearQuery()->loadByDomain($targetDomain);
+        if ($domain->getDomainId() > 0) {
+            $changed = false;
+            if ((int)$domain->getWebsiteId() !== $websiteId) {
+                $domain->setWebsiteId($websiteId);
+                $changed = true;
+            }
+            if ($domain->getStatus() !== WebsiteDomain::STATUS_ACTIVE) {
+                $domain->setStatus(WebsiteDomain::STATUS_ACTIVE);
+                $changed = true;
+            }
+            if (!$domain->isPrimary()) {
+                $domain->setIsPrimary(true);
+                $changed = true;
+            }
+            if ($changed) {
+                $domain->save(true);
+            }
+            return;
+        }
+
+        $domain = clone $this->websiteDomainModel();
+        $domain->clearData()->clearQuery();
+        $domain->setWebsiteId($websiteId)
+            ->setDomain($targetDomain)
+            ->setSubPath('')
+            ->setIsPrimary(true)
+            ->setStatus(WebsiteDomain::STATUS_ACTIVE);
+
+        $pool = clone $this->domainPoolModel();
+        $pool->clearData()->clearQuery()->loadByDomain($targetDomain);
+        if ((int)$pool->getPoolId() > 0) {
+            $domain->setPoolId((int)$pool->getPoolId());
+            $domain->syncFromPool();
+        }
+
+        $domain->save(true);
     }
 
     private function buildWebsiteUrl(string $targetDomain): string
@@ -205,5 +280,15 @@ class AiSiteDraftWebsiteService
         $value = \trim($value, '-');
 
         return $value !== '' ? $value : 'draft';
+    }
+
+    private function websiteDomainModel(): WebsiteDomain
+    {
+        return $this->websiteDomainModel ?? ObjectManager::getInstance(WebsiteDomain::class);
+    }
+
+    private function domainPoolModel(): DomainPool
+    {
+        return $this->domainPoolModel ?? ObjectManager::getInstance(DomainPool::class);
     }
 }

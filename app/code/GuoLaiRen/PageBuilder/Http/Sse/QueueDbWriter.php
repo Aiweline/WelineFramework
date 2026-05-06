@@ -888,11 +888,14 @@ class QueueDbWriter extends SseWriter
     {
         $patch = [];
         if ($process !== '') {
-            $patch['process'] = $process;
+            $patch['process'] = $this->normalizeUtf8QueueText($process);
         }
         if ($line !== '') {
             $this->ensureQueueResultCacheLoaded();
-            $this->queueResultCache = $this->appendLineToQueueResultCache($this->queueResultCache, $line);
+            $this->queueResultCache = $this->appendLineToQueueResultCache(
+                $this->queueResultCache,
+                $this->normalizeUtf8QueueText($line)
+            );
             $patch['result'] = $this->queueResultCache;
         }
 
@@ -923,6 +926,7 @@ class QueueDbWriter extends SseWriter
 
     private function trimQueueResultCache(string $result): string
     {
+        $result = $this->normalizeUtf8QueueText($result);
         if (\strlen($result) <= self::QUEUE_RESULT_MAX_BYTES) {
             return $result;
         }
@@ -930,16 +934,56 @@ class QueueDbWriter extends SseWriter
         $marker = self::QUEUE_RESULT_TRUNCATION_MARKER;
         $tailBudget = self::QUEUE_RESULT_MAX_BYTES - \strlen($marker) - \strlen(\PHP_EOL);
         if ($tailBudget <= 0) {
-            return \substr($result, -self::QUEUE_RESULT_MAX_BYTES);
+            return $this->strcutQueueTail($result, self::QUEUE_RESULT_MAX_BYTES);
         }
 
-        $tail = (string)\substr($result, -$tailBudget);
+        $tail = $this->strcutQueueTail($result, $tailBudget);
         $newlinePos = \strpos($tail, \PHP_EOL);
         if ($newlinePos !== false && ($newlinePos + \strlen(\PHP_EOL)) < \strlen($tail)) {
             $tail = (string)\substr($tail, $newlinePos + \strlen(\PHP_EOL));
         }
 
-        return $marker . \PHP_EOL . $tail;
+        return $marker . \PHP_EOL . $this->normalizeUtf8QueueText($tail);
+    }
+
+    private function strcutQueueTail(string $text, int $maxBytes): string
+    {
+        if ($maxBytes <= 0) {
+            return '';
+        }
+        if (\strlen($text) <= $maxBytes) {
+            return $this->normalizeUtf8QueueText($text);
+        }
+        if (\function_exists('mb_strcut')) {
+            return $this->normalizeUtf8QueueText((string)\mb_strcut($text, -$maxBytes, null, 'UTF-8'));
+        }
+
+        $tail = (string)\substr($text, -$maxBytes);
+        while ($tail !== '' && !\preg_match('//u', $tail)) {
+            $tail = (string)\substr($tail, 1);
+        }
+
+        return $this->normalizeUtf8QueueText($tail);
+    }
+
+    private function normalizeUtf8QueueText(string $text): string
+    {
+        if ($text === '' || \preg_match('//u', $text)) {
+            return $text;
+        }
+
+        $converted = \function_exists('iconv') ? @\iconv('UTF-8', 'UTF-8//IGNORE', $text) : false;
+        if (\is_string($converted) && \preg_match('//u', $converted)) {
+            return $converted;
+        }
+        if (\function_exists('mb_convert_encoding')) {
+            $converted = @\mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+            if (\is_string($converted) && \preg_match('//u', $converted)) {
+                return $converted;
+            }
+        }
+
+        return (string)\preg_replace('/[^\x09\x0A\x0D\x20-\x7E]/', '', $text);
     }
 
     /**
