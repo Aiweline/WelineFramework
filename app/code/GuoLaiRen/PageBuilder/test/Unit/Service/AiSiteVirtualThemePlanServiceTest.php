@@ -149,6 +149,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('content_locale/default_locale is the website language for both final copy and planned content', $prompt);
         self::assertStringContainsString('plan_locale is only an internal planning hint', $prompt);
         self::assertStringContainsString('Planned-content language lock', $prompt);
+        self::assertStringContainsString('Contract cleanliness hard rule', $prompt);
+        self::assertStringContainsString('Built from plan', $prompt);
         self::assertStringContainsString('markdown task-plan descriptions, task_script.story_goal, task_script.content_fill_rule', $prompt);
         self::assertStringContainsString('translate/adapt it before writing the task plan', $prompt);
         self::assertStringContainsString('visual_identity, composition, background_texture', $prompt);
@@ -1221,8 +1223,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
         self::assertGreaterThanOrEqual(2, \count($capturedStreamParams));
         foreach ($capturedStreamParams as $params) {
-            self::assertFalse((bool)($params['enforce_timeout_in_stream'] ?? true));
-            self::assertSame(0, (int)($params['timeout'] ?? -1));
+            self::assertTrue((bool)($params['enforce_timeout_in_stream'] ?? false));
+            self::assertSame(120, (int)($params['timeout'] ?? -1));
             self::assertLessThanOrEqual(8192, (int)($params['max_tokens'] ?? 0));
             self::assertSame(['type' => 'json_object'], $params['response_format'] ?? null);
             self::assertTrue((bool)($params['disable_conversation_history'] ?? false));
@@ -2235,14 +2237,16 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         ];
     }
 
-    public function testStageTwoBatchFailuresAreFatalInsteadOfDeterministicFallback(): void
+    public function testStageTwoBatchFailuresUsePlanDerivedBaselineAndStayRetryable(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/AiSiteVirtualThemePlanService.php');
 
         self::assertStringNotContainsString('buildRecoverableTaskPlanBatchPayload', $source);
         self::assertStringNotContainsString('AI batch output was not usable JSON; deterministic stage-2 task baseline was used', $source);
         self::assertStringContainsString("'batch_failed'", $source);
-        self::assertStringContainsString('deterministic fallback is forbidden', $source);
+        self::assertStringContainsString("'batch_baseline'", $source);
+        self::assertStringContainsString('plan-derived deterministic baseline', $source);
+        self::assertStringNotContainsString('deterministic fallback is forbidden', $source);
     }
 
     /**

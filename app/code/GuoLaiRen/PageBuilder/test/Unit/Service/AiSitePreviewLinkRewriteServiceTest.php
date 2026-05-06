@@ -64,6 +64,34 @@ final class AiSitePreviewLinkRewriteServiceTest extends TestCase
         );
     }
 
+    public function testRewriteVirtualPreviewLinksUsesVisualWorkspaceUrlsInEditorMode(): void
+    {
+        $service = new AiSitePreviewLinkRewriteService(new AiSiteVisualUrlService($this->createUrlMock()));
+
+        $html = $service->rewriteVirtualPreviewLinks(
+            '<html><body>'
+            . '<header><a href="/about">About</a></header>'
+            . '<footer><a href="https://frontend.test/contact">Contact</a></footer>'
+            . '</body></html>',
+            'pub_abc',
+            [
+                Page::TYPE_ABOUT => ['handle' => 'about'],
+                Page::TYPE_CONTACT => ['handle' => 'contact'],
+            ],
+            169,
+            true
+        );
+
+        self::assertStringContainsString(
+            'href="https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&amp;page_type=about_page&amp;visual_editor=1&amp;virtual_theme_id=169"',
+            $html
+        );
+        self::assertStringContainsString(
+            'href="https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&amp;page_type=contact_page&amp;visual_editor=1&amp;virtual_theme_id=169"',
+            $html
+        );
+    }
+
     private function createUrlMock(): Url
     {
         $url = $this->createMock(Url::class);

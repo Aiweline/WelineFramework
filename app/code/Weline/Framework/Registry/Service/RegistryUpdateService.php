@@ -40,26 +40,31 @@ class RegistryUpdateService
     public function updateAllRegistries(bool $silent = false, ?bool $autoCompile = null, bool $skipCommandUpdate = false): bool
     {
         $allSuccess = true;
+        RegistryProgress::section('Registry update: all modules');
         
         try {
             // 1. 更新 Extends 注册表
             if (!$silent) {
                 w_log_info(__('正在更新 Extends 注册表...'), [], 'registry_update.log');
             }
+            RegistryProgress::section('Extends registry');
             /** @var ExtendsRegistry $extendsRegistry */
             $extendsRegistry = ObjectManager::getInstance(ExtendsRegistry::class);
             $ok = $extendsRegistry->refresh();
             if ($ok) {
                 $extendsRegistry->getRegistry(true); // 强制重新加载
+                RegistryProgress::log('Extends registry reloaded from generated/extends.php');
                 if (!$silent) {
                     w_log_info(__('✓ Extends 注册表已更新完成。'), [], 'registry_update.log');
                 }
             } else {
                 $allSuccess = false;
+                RegistryProgress::log('Extends registry update failed');
                 w_log_warning(__('Extends 注册表更新失败，但将继续执行。'), [], 'registry_update.log');
             }
         } catch (\Exception $e) {
             $allSuccess = false;
+            RegistryProgress::log('Extends registry update exception: ' . $e->getMessage());
             w_log_warning(__('Extends 注册表更新失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
         }
         
@@ -68,11 +73,13 @@ class RegistryUpdateService
             if (!$silent) {
                 w_log_info(__('正在更新插件注册表...'), [], 'registry_update.log');
             }
+            RegistryProgress::section('Plugin registry');
             /** @var PluginRegistry $pluginRegistry */
             $pluginRegistry = ObjectManager::getInstance(PluginRegistry::class);
             $ok = $pluginRegistry->refresh();
             if ($ok) {
                 $pluginRegistry->getRegistry(true); // 强制重新加载
+                RegistryProgress::log('Plugin registry reloaded');
                 if (!$silent) {
                     w_log_info(__('✓ 插件注册表已更新完成。'), [], 'registry_update.log');
                 }
@@ -86,16 +93,19 @@ class RegistryUpdateService
                 
                 if ($shouldCompile) {
                     try {
+                        RegistryProgress::log('Plugin DI compile started');
                         if (!$silent) {
                             w_log_info(__('正在编译插件/DI以识别新注册的插件...'), [], 'registry_update.log');
                         }
                         /** @var \Weline\Framework\Plugin\Console\Plugin\Di\Compile $diCompile */
                         $diCompile = ObjectManager::getInstance(\Weline\Framework\Plugin\Console\Plugin\Di\Compile::class);
                         $diCompile->execute();
+                        RegistryProgress::log('Plugin DI compile finished');
                         if (!$silent) {
                             w_log_info(__('✓ 插件/DI编译完成，新插件已识别。'), [], 'registry_update.log');
                         }
                     } catch (\Exception $compileException) {
+                        RegistryProgress::log('Plugin DI compile exception: ' . $compileException->getMessage());
                         w_log_warning(__('插件/DI编译失败：%{1}，但将继续执行。', [$compileException->getMessage()]), [], 'registry_update.log');
                     }
                 }
@@ -113,6 +123,7 @@ class RegistryUpdateService
             if (!$silent) {
                 w_log_info(__('正在更新事件注册表...'), [], 'registry_update.log');
             }
+            RegistryProgress::section('Event registry');
             /** @var EventRegistry $eventRegistry */
             $eventRegistry = ObjectManager::getInstance(EventRegistry::class);
             $ok = $eventRegistry->refresh();
@@ -121,6 +132,7 @@ class RegistryUpdateService
                 /** @var \Weline\Framework\Event\EventsManager $eventsManager */
                 $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
                 $eventsManager->clearObserverCache(); // 事件注册表已刷新，清空观察者缓存以便从新注册表读取
+                RegistryProgress::log('Event registry reloaded and observer cache cleared');
                 if (!$silent) {
                     w_log_info(__('✓ 事件注册表已更新完成。'), [], 'registry_update.log');
                 }
@@ -138,6 +150,7 @@ class RegistryUpdateService
             if (!$silent) {
                 w_log_info(__('正在更新 Hook 注册表...'), [], 'registry_update.log');
             }
+            RegistryProgress::section('Hook registry');
             /** @var HookRegistry $hookRegistry */
             $hookRegistry = ObjectManager::getInstance(HookRegistry::class);
             // 系统升级时，允许solo hook冲突，只记录警告，不阻止保存
@@ -145,6 +158,7 @@ class RegistryUpdateService
             $ok = $hookRegistry->refresh(true);
             if ($ok) {
                 $hookRegistry->getRegistry(true); // 强制重新加载
+                RegistryProgress::log('Hook registry reloaded from generated/hooks.php');
                 if (!$silent) {
                     w_log_info(__('✓ Hook 注册表已更新完成。'), [], 'registry_update.log');
                 }
@@ -215,17 +229,20 @@ class RegistryUpdateService
         }
         
         $allSuccess = true;
+        RegistryProgress::section('Registry update: modules ' . implode(', ', $moduleNames));
         
         // 1. 更新 Extends 注册表
         try {
             if (!$silent) {
                 w_log_info(__('正在增量更新 Extends 注册表（模块：%{1}）...', [implode(', ', $moduleNames)]), [], 'registry_update.log');
             }
+            RegistryProgress::section('Extends registry incremental');
             /** @var ExtendsRegistry $extendsRegistry */
             $extendsRegistry = ObjectManager::getInstance(ExtendsRegistry::class);
             $ok = $extendsRegistry->refreshForModules($moduleNames);
             if ($ok) {
                 $extendsRegistry->getRegistry(true);
+                RegistryProgress::log('Extends registry incremental reload finished');
                 if (!$silent) {
                     w_log_info(__('✓ Extends 注册表增量更新完成。'), [], 'registry_update.log');
                 }
@@ -243,11 +260,13 @@ class RegistryUpdateService
             if (!$silent) {
                 w_log_info(__('正在增量更新插件注册表（模块：%{1}）...', [implode(', ', $moduleNames)]), [], 'registry_update.log');
             }
+            RegistryProgress::section('Plugin registry incremental');
             /** @var PluginRegistry $pluginRegistry */
             $pluginRegistry = ObjectManager::getInstance(PluginRegistry::class);
             $ok = $pluginRegistry->refreshForModules($moduleNames);
             if ($ok) {
                 $pluginRegistry->getRegistry(true);
+                RegistryProgress::log('Plugin registry incremental reload finished');
                 if (!$silent) {
                     w_log_info(__('✓ 插件注册表增量更新完成。'), [], 'registry_update.log');
                 }
@@ -255,16 +274,19 @@ class RegistryUpdateService
                 // 编译指定模块的插件
                 if (!$this->isUpgradeLockExists()) {
                     try {
+                        RegistryProgress::log('Module plugin DI compile started');
                         if (!$silent) {
                             w_log_info(__('正在编译模块插件/DI...'), [], 'registry_update.log');
                         }
                         /** @var \Weline\Framework\Plugin\PluginsManager $pluginsManager */
                         $pluginsManager = ObjectManager::getInstance(\Weline\Framework\Plugin\PluginsManager::class);
                         $pluginsManager->compileForModules($moduleNames);
+                        RegistryProgress::log('Module plugin DI compile finished');
                         if (!$silent) {
                             w_log_info(__('✓ 模块插件/DI编译完成。'), [], 'registry_update.log');
                         }
                     } catch (\Exception $compileException) {
+                        RegistryProgress::log('Module plugin DI compile exception: ' . $compileException->getMessage());
                         w_log_warning(__('模块插件/DI编译失败：%{1}，但将继续执行。', [$compileException->getMessage()]), [], 'registry_update.log');
                     }
                 }
@@ -282,6 +304,7 @@ class RegistryUpdateService
             if (!$silent) {
                 w_log_info(__('正在增量更新事件注册表（模块：%{1}）...', [implode(', ', $moduleNames)]), [], 'registry_update.log');
             }
+            RegistryProgress::section('Event registry incremental');
             /** @var EventRegistry $eventRegistry */
             $eventRegistry = ObjectManager::getInstance(EventRegistry::class);
             $ok = $eventRegistry->refreshForModules($moduleNames);
@@ -290,6 +313,7 @@ class RegistryUpdateService
                 /** @var \Weline\Framework\Event\EventsManager $eventsManager */
                 $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
                 $eventsManager->clearObserverCache();
+                RegistryProgress::log('Event registry incremental reload finished');
                 if (!$silent) {
                     w_log_info(__('✓ 事件注册表增量更新完成。'), [], 'registry_update.log');
                 }
@@ -307,11 +331,13 @@ class RegistryUpdateService
             if (!$silent) {
                 w_log_info(__('正在增量更新 Hook 注册表（模块：%{1}）...', [implode(', ', $moduleNames)]), [], 'registry_update.log');
             }
+            RegistryProgress::section('Hook registry incremental');
             /** @var HookRegistry $hookRegistry */
             $hookRegistry = ObjectManager::getInstance(HookRegistry::class);
             $ok = $hookRegistry->refreshForModules($moduleNames, true);
             if ($ok) {
                 $hookRegistry->getRegistry(true);
+                RegistryProgress::log('Hook registry incremental reload finished');
                 if (!$silent) {
                     w_log_info(__('✓ Hook 注册表增量更新完成。'), [], 'registry_update.log');
                 }

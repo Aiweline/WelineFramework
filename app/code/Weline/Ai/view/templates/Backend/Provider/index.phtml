@@ -353,6 +353,7 @@ $this->assign('providerAdd', $providerAdd);
     var currentPage = 1;
     var currentSearch = '';
     var currentProvider = '';
+    var currentAccounts = [];
 
     // 页面加载完成后初始化
     document.addEventListener('DOMContentLoaded', function() {
@@ -396,6 +397,7 @@ $this->assign('providerAdd', $providerAdd);
         req.then(function(res) {
             var data = (res && res.data) || res;
             if (data && data.success) {
+                    currentAccounts = Array.isArray(data.data) ? data.data : [];
                     displayAccounts(data.data);
                     displayPagination(data.total, data.page, data.limit);
                 } else {
@@ -851,52 +853,137 @@ $this->assign('providerAdd', $providerAdd);
         });
     };
 
+    function getAccountById(id) {
+        id = String(id || '');
+        for (var i = 0; i < currentAccounts.length; i++) {
+            if (String(currentAccounts[i].id || '') === id) return currentAccounts[i];
+        }
+        return null;
+    }
+
+    function chooseProviderTestModel(account) {
+        if (!account || !account.provider_code || typeof Swal === 'undefined') {
+            return Promise.resolve('');
+        }
+        var providerCode = String(account.provider_code || '').trim().toLowerCase();
+        var params = new URLSearchParams({
+            provider_code: providerCode,
+            account_id: account.id || '',
+            require_remote: '1'
+        });
+        var url = '<?= $this->getBackendUrl('*/backend/provider/getRemoteModelsForSelect') ?>?' + params.toString();
+        return fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function(response) {
+            return response.text().then(function(text) {
+                var json;
+                try {
+                    json = text ? JSON.parse(text) : {};
+                } catch (e) {
+                    throw new Error('models endpoint returned non-JSON response');
+                }
+                if (!response.ok) {
+                    throw new Error(json.message || ('models endpoint HTTP ' + response.status));
+                }
+                return json;
+            });
+        }).then(function(data) {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) || 'models endpoint request failed');
+            }
+            if (!Array.isArray(data.data) || !data.data.length) {
+                throw new Error('models endpoint returned empty list');
+            }
+            var options = {};
+            data.data.forEach(function(model) {
+                var code = model.code || model.value || '';
+                if (code) options[code] = model.label || model.name || code;
+            });
+            var subtitle = data.source === 'preset'
+                ? '远程 models 暂不可用，已使用供应商预置模型。' + (data.warning ? '\n原因: ' + data.warning : '')
+                : '';
+            return Swal.fire({
+                title: '选择测试模型',
+                text: subtitle,
+                input: 'select',
+                inputOptions: options,
+                inputPlaceholder: '请选择模型',
+                showCancelButton: true,
+                confirmButtonText: '开始测试',
+                cancelButtonText: '取消',
+                inputValidator: function(value) {
+                    if (!value) return '请选择一个模型';
+                }
+            }).then(function(result) {
+                return result.isConfirmed ? (result.value || '') : null;
+            });
+        }).catch(function(error) {
+            return Swal.fire({
+                icon: 'warning',
+                title: '无法拉取模型列表',
+                text: error.message || '该供应商不支持 models 接口。',
+                confirmButtonText: '确定'
+            }).then(function(result) {
+                return null;
+            });
+        });
+    }
+
+    function runProviderConnectionTest(id, btn, originalHtml, modelCode) {
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+        btn.disabled = true;
+
+        var testModal = createTestModal();
+        document.body.appendChild(testModal);
+
+        var tcUrl2 = '<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>';
+        var payload = { id: id };
+        if (modelCode) payload.model_code = modelCode;
+        var tcOpts2 = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
+        var req2 = window.Weline.Api.request(tcUrl2, tcOpts2);
+        req2.then(function(res) {
+            var data = (res && res.data) || res;
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            document.body.removeChild(testModal);
+
+            if (data.success) {
+                var message = data.model_code ?
+                    data.message + '\n\n使用的测试模型: ' + data.model_code :
+                    data.message;
+                if (data.request_url) message += '\n\n请求地址: ' + data.request_url;
+                showResultModal('success', '连接测试成功', message);
+                loadAccounts(currentPage);
+            } else {
+                var message = data.model_code ?
+                    '测试失败: ' + data.message + '\n\n尝试使用的模型: ' + data.model_code :
+                    '测试失败: ' + data.message;
+                if (data.request_url) message += '\n\n请求地址: ' + data.request_url;
+                if (data.base_url) message += '\n\n基础 URL: ' + data.base_url;
+                showResultModal('error', '连接测试失败', message);
+            }
+        }).catch(function(error) {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            document.body.removeChild(testModal);
+            console.error('Error:', error);
+            showResultModal('error', '连接测试失败', '测试失败: 网络错误');
+        });
+    }
+
     // 测试连接
     window.testConnection = function(id) {
         var btn = event.target.closest('button');
         var originalHtml = btn.innerHTML;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
         btn.disabled = true;
-        
-        // 显示不可关闭的测试中弹窗
-        var testModal = createTestModal();
-        document.body.appendChild(testModal);
-        
-        var tcUrl2 = '<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>';
-        var tcOpts2 = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) };
-        var req2 = window.Weline.Api.request(tcUrl2, tcOpts2);
-        req2.then(function(res) {
-            var data = (res && res.data) || res;
+        chooseProviderTestModel(getAccountById(id)).then(function(modelCode) {
             btn.innerHTML = originalHtml;
             btn.disabled = false;
-            
-            // 移除测试弹窗
-            document.body.removeChild(testModal);
-            
-            if (data.success) {
-                // 显示成功消息，包含模型代码
-                var message = data.model_code ? 
-                    data.message + '\n\n使用的测试模型: ' + data.model_code : 
-                    data.message;
-                showResultModal('success', '连接测试成功', message);
-                loadAccounts(currentPage);
-            } else {
-                // 显示失败消息，包含模型代码
-                var message = data.model_code ? 
-                    '测试失败: ' + data.message + '\n\n尝试使用的模型: ' + data.model_code : 
-                    '测试失败: ' + data.message;
-                showResultModal('error', '连接测试失败', message);
-            }
-        })
-        .catch(function(error) {
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
-            
-            // 移除测试弹窗
-            document.body.removeChild(testModal);
-            
-            console.error('Error:', error);
-            showResultModal('error', '连接测试失败', '测试失败: 网络错误');
+            if (modelCode === null) return;
+            runProviderConnectionTest(id, btn, originalHtml, modelCode || '');
         });
     };
 

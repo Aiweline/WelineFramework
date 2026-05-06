@@ -355,10 +355,10 @@ class AiSiteVirtualThemeService
             $layout['footer'] = \is_array($layout['footer'] ?? null) ? $layout['footer'] : ['component' => '', 'config' => []];
             $layout['content'] = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
 
-            if (\trim((string)($layout['header']['component'] ?? '')) === '') {
+            if (!$this->isGeneratedVirtualThemeComponentCode((string)($layout['header']['component'] ?? ''))) {
                 $layout['header'] = ['component' => $headerCode, 'config' => []];
             }
-            if (\trim((string)($layout['footer']['component'] ?? '')) === '') {
+            if (!$this->isGeneratedVirtualThemeComponentCode((string)($layout['footer']['component'] ?? ''))) {
                 $layout['footer'] = ['component' => $footerCode, 'config' => []];
             }
 
@@ -1148,6 +1148,7 @@ PHTML;
             return true;
         }
 
+        $hasGeneratedComponent = false;
         foreach ($content as $component) {
             if (!\is_array($component)) {
                 continue;
@@ -1156,12 +1157,25 @@ PHTML;
             if ($code === '') {
                 continue;
             }
-            if (!\in_array($code, ['content/ai-generated-section', 'ai-generated-section', 'content-ai-generated-section'], true)) {
-                return false;
+            if ($this->isGeneratedVirtualThemeComponentCode($code)) {
+                $hasGeneratedComponent = true;
+                break;
             }
         }
 
-        return true;
+        return !$hasGeneratedComponent;
+    }
+
+    private function isGeneratedVirtualThemeComponentCode(string $code): bool
+    {
+        $code = \trim($code);
+        if ($code === '') {
+            return false;
+        }
+
+        return \str_contains($code, '/')
+            || \str_contains($code, 'ai-site')
+            || \str_starts_with($code, 'content-');
     }
 
     private function buildHeaderTemplate(): string

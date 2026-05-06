@@ -408,6 +408,31 @@ class Page extends BackendController
         return $this->fetch('form');
     }
 
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit', 'AI虚拟页面编辑', 'mdi mdi-pencil', '编辑 AI 建站工作台虚拟页面', 'GuoLaiRen_PageBuilder::page_builder')]
+    public function getVirtualEdit(): string
+    {
+        $publicId = \trim((string)$this->request->getGet('public_id', ''));
+        $pageType = \trim((string)$this->request->getGet('page_type', ''));
+        if ($publicId === '' || $pageType === '') {
+            return '<!DOCTYPE html><html><body><div style="padding:20px;color:red;">AI建站工作台虚拟编辑参数缺失</div></body></html>';
+        }
+
+        /** @var \GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspacePreviewService $workspacePreviewService */
+        $workspacePreviewService = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspacePreviewService::class);
+        $context = $workspacePreviewService->buildPreviewContext(
+            (int)$this->getLoginUserId(),
+            $publicId,
+            $pageType,
+            \trim((string)$this->request->getGet('style_code', '')),
+            \trim((string)$this->request->getGet('locale', ''))
+        );
+        if ($context === null) {
+            return '<!DOCTYPE html><html><body><div style="padding:20px;color:red;">AI建站工作台虚拟编辑上下文不存在或无权限访问</div></body></html>';
+        }
+
+        return $workspacePreviewService->renderPreviewHtml($context, true);
+    }
+
     /**
      * 构建单个页面的 Google SEO WebPage 结构化数据
      */

@@ -8,10 +8,13 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspacePreviewService;
+use GuoLaiRen\PageBuilder\Service\AiSitePreviewLinkRewriteService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Http\Url;
 
 final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
 {
@@ -54,24 +57,31 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
 
     public function testInjectWorkspacePreviewNavLinksAppendsVisualEditorMessageBridge(): void
     {
+        $visualUrlService = new AiSiteVisualUrlService($this->createUrlMock());
         $service = new AiSiteAgentWorkspacePreviewService(
             $this->createStub(AiSiteAgentSessionService::class),
             $this->createStub(AiSiteScopeCompatibilityService::class),
             $this->createStub(AiSiteVirtualLayoutService::class),
             $this->createStub(PageRenderService::class),
+            new AiSitePreviewLinkRewriteService($visualUrlService),
+            $visualUrlService,
         );
 
         $html = $service->injectWorkspacePreviewNavLinks(
-            '<html><body><a href="/about">About</a></body></html>',
+            '<html><body><header><a href="/about">About</a></header></body></html>',
             [
-                'home' => ['handle' => ''],
-                'about' => ['handle' => 'about'],
-            ]
+                Page::TYPE_HOME => ['handle' => ''],
+                Page::TYPE_ABOUT => ['handle' => 'about'],
+            ],
+            'demo-public',
+            22
         );
 
         self::assertStringContainsString('PageBuilderVisualEditor', $html);
-        self::assertStringContainsString('"page_type":"home"', $html);
-        self::assertStringContainsString('"page_type":"about"', $html);
+        self::assertStringContainsString('"page_type":"home_page"', $html);
+        self::assertStringContainsString('"page_type":"about_page"', $html);
+        self::assertStringContainsString('"preview_url":"https:\/\/backend.test\/pagebuilder\/backend\/ai-site-agent\/workspace-preview?public_id=demo-public&page_type=about_page&visual_editor=1&virtual_theme_id=22"', $html);
+        self::assertStringContainsString('link.setAttribute(\'href\', String(page.preview_url));', $html);
         self::assertMatchesRegularExpression('/<\/script>\n<\/body>/u', $html);
     }
 
@@ -137,5 +147,38 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
         self::assertIsArray($context);
         self::assertSame(22, $context['virtual_theme_id']);
         self::assertSame(Page::TYPE_HOME, $context['page']->getData(Page::schema_fields_TYPE));
+    }
+
+    public function testBuildPreviewContextFallsBackToMaterializedAiHtmlBlocksWhenSessionBlocksAreCompacted(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteAgentWorkspacePreviewService.php');
+        self::assertIsString($source);
+
+        self::assertStringContainsString('$materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);', $source);
+        self::assertStringContainsString('$virtualPage[\'blocks\'] = $virtualBlocks;', $source);
+        self::assertStringContainsString('Page::RENDER_MODE_AI_HTML', $source);
+        self::assertStringContainsString('loadMaterializedAiHtmlPreviewPageRow', $source);
+    }
+
+    public function testAiHtmlPreviewKeepsSharedHeaderAndFooter(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
+        self::assertIsString($source);
+
+        self::assertStringContainsString('renderVisualMode($headerHtml, $aiHtml, $footerHtml', $source);
+        self::assertStringContainsString('renderAiHtmlDocument($headerHtml, $aiHtml, $footerHtml', $source);
+    }
+
+    private function createUrlMock(): Url
+    {
+        $url = $this->createMock(Url::class);
+        $url->method('getBackendUrl')->willReturnCallback(
+            static function (string $path, array $params = []): string {
+                $query = $params === [] ? '' : ('?' . \http_build_query($params));
+                return 'https://backend.test/' . \ltrim($path, '/') . $query;
+            }
+        );
+
+        return $url;
     }
 }

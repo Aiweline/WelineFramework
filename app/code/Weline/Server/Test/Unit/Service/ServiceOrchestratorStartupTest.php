@@ -119,6 +119,69 @@ class ServiceOrchestratorStartupTest extends TestCase
         ]], $orchestrator->startupReadyMarks);
     }
 
+    public function testMarkStartupPhaseRunningRestoresControlMetadataWhenInstanceFileIsPartial(): void
+    {
+        $instanceName = 'ut-ready-metadata-' . \bin2hex(\random_bytes(4));
+        $manager = new ServerInstanceManager();
+        $instanceFile = $manager->getInstanceFile($instanceName);
+        $context = new ServiceContext(
+            instanceName: $instanceName,
+            epoch: 1,
+            controlPort: 26895,
+            masterPid: 60284,
+            host: '127.0.0.1',
+            mainPort: 443,
+            sslEnabled: true,
+            sslCert: 'cert.pem',
+            sslKey: 'key.pem',
+            mode: 'legacy',
+            daemon: false,
+            debug: false,
+            frontend: true,
+            envConfig: [],
+            httpRedirectPort: 80,
+            dispatcherEnabled: true,
+            workerCount: 4,
+            workerBasePort: 16894,
+            workerPort: 16895,
+            publicHost: 'p11005ce4.weline.test',
+        );
+        $orchestrator = new class extends ServiceOrchestrator {
+            public function markReady(ServiceContext $context, int $totalServices): void
+            {
+                $this->markStartupPhaseRunning($context, $totalServices);
+            }
+        };
+
+        try {
+            ServerInstanceManager::atomicWriteJsonStatic($instanceFile, [
+                'lifecycle_state' => 'starting',
+                'current_snapshot' => [
+                    'lifecycle_state' => 'starting',
+                ],
+            ], 5);
+
+            $orchestrator->markReady($context, 10);
+            $data = \json_decode((string)\file_get_contents($instanceFile), true);
+
+            self::assertIsArray($data);
+            self::assertSame(60284, $data['master_pid'] ?? null);
+            self::assertSame(26895, $data['control_port'] ?? null);
+            self::assertTrue((bool)($data['master_enabled'] ?? false));
+            self::assertSame('running', $data['startup_phase'] ?? null);
+            self::assertSame(10, $data['server_ready_service_count'] ?? null);
+            self::assertSame(26895, $data['current_snapshot']['control_port'] ?? null);
+            self::assertSame('running', $data['current_snapshot']['startup_phase'] ?? null);
+        } finally {
+            if (\is_file($instanceFile)) {
+                @\unlink($instanceFile);
+            }
+            if (\is_file($instanceFile . '.lock')) {
+                @\unlink($instanceFile . '.lock');
+            }
+        }
+    }
+
     public function testCheckAndNotifyServerReadyKeepsFrontendReadyBoxWidthStableWithWideChineseLabels(): void
     {
         $orchestrator = new ServiceOrchestrator();

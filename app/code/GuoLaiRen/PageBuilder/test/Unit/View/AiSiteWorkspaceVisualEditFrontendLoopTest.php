@@ -4,10 +4,42 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\View;
 
+use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\LayoutOwnerResolver;
 use PHPUnit\Framework\TestCase;
 
 final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 {
+    public function testVirtualWorkspacePreviewUsesInjectedAiThemeLayoutBeforeStyleDefault(): void
+    {
+        $page = new Page();
+        $page->setData([
+            Page::schema_fields_ID => 0,
+            Page::schema_fields_TYPE => Page::TYPE_HOME,
+            Page::schema_fields_STYLE => 'default',
+            Page::schema_fields_LAYOUT_CONFIG => \json_encode([
+                'header' => ['component' => 'header/ai-site-header', 'config' => []],
+                'content' => [
+                    ['code' => 'content/teenipiya-home-hero', 'enabled' => true, 'config' => []],
+                ],
+                'footer' => ['component' => 'footer/ai-site-footer', 'config' => []],
+            ], \JSON_UNESCAPED_UNICODE),
+        ]);
+        $page->setData('virtual_layout_config', [
+            'header' => ['component' => 'header/ai-site-header', 'config' => []],
+            'content' => [
+                ['code' => 'content/teenipiya-home-hero', 'enabled' => true, 'config' => []],
+            ],
+            'footer' => ['component' => 'footer/ai-site-footer', 'config' => []],
+        ]);
+
+        $layout = (new LayoutOwnerResolver())->getFullLayoutConfig($page, true, 'default');
+
+        self::assertSame('header/ai-site-header', $layout['header']['component'] ?? '');
+        self::assertSame('content/teenipiya-home-hero', $layout['content'][0]['code'] ?? '');
+        self::assertSame('footer/ai-site-footer', $layout['footer']['component'] ?? '');
+    }
+
     public function testWorkspaceEditModalLoadsVirtualMetadataSavesConfigAndRefreshesPreview(): void
     {
         $script = $this->workspaceScript();
@@ -207,6 +239,24 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         );
     }
 
+    public function testAiHtmlRenderModePrecedesVisualThemeRendering(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
+        self::assertIsString($source);
+        $finalizeBody = $this->extractFunctionBody($source, 'finalizeOutput');
+
+        $aiHtmlBranch = \strpos($finalizeBody, 'if ($page->isAiHtmlRenderMode())');
+        $visualBranch = \strpos($finalizeBody, 'if ($mode === self::MODE_VISUAL)');
+
+        self::assertIsInt($aiHtmlBranch);
+        self::assertIsInt($visualBranch);
+        self::assertLessThan(
+            $visualBranch,
+            $aiHtmlBranch,
+            'AI HTML pages must render generated blocks before visual mode can fall back to theme components.'
+        );
+    }
+
     public function testPublishCompletionStaysInWorkspaceInsteadOfRedirectingToPageIndex(): void
     {
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
@@ -272,7 +322,12 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $bindRetryBody = $this->extractFunctionBody($script, 'bindRetryableAiFailureButtons');
         self::assertStringContainsString('api.retryPhaseOnePlanGeneration({ forceRebuild: false });', $bindRetryBody);
         self::assertStringContainsString('api.retryPhaseTwoTaskPlanGeneration({ forceRebuild: false });', $bindRetryBody);
-        self::assertStringContainsString('startPublishStageQualityRepair(buildRetryBtn);', $bindRetryBody);
+        self::assertStringContainsString('startOrObserveBuildFromVisualEditEntry();', $bindRetryBody);
+        self::assertStringNotContainsString('startPublishStageQualityRepair(buildRetryBtn);', $bindRetryBody);
+
+        $retryDispatchBody = $this->extractFunctionBody($script, 'triggerRetryableAiFailureResumeOperation');
+        self::assertStringContainsString("if (normalized === 'build')", $retryDispatchBody);
+        self::assertStringContainsString('startOrObserveBuildFromVisualEditEntry();', $retryDispatchBody);
 
         $countBody = $this->extractFunctionBody($script, 'getRetryableAiFailureCount');
         self::assertStringContainsString("if (normalizedOperation === 'build') {", $countBody);
@@ -331,10 +386,15 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('function resolveLivePreviewBridge()', $runtime);
         self::assertStringContainsString('function syncTerminalActiveOperationForRuntimeUi(active)', $runtime);
         self::assertStringContainsString('var workspaceSnapshotUrl =', $runtime);
+        self::assertStringContainsString('function resolveRuntimeQueueInfoKey(operation)', $runtime);
         self::assertStringContainsString('function startDeferredQueueStatePoll(operation)', $runtime);
         self::assertStringContainsString('submitWorkspaceForm(workspaceSnapshotUrl, { public_id: publicId })', $runtime);
         self::assertStringContainsString('startDeferredQueueStatePoll(operation);', $runtime);
         self::assertStringContainsString('stopDeferredQueueStatePoll();', $runtime);
+        self::assertStringContainsString('offerRetryForFailedOperation(op, failurePayload);', $runtime);
+        self::assertStringContainsString('var transportErrorSnapshotProbeStarted = false;', $runtime);
+        self::assertStringContainsString('fetchWorkspaceSnapshotState().then(function (workspaceState)', $runtime);
+        self::assertStringContainsString('syncDeferredQueueWorkspaceState(operation, workspaceState)', $runtime);
         self::assertStringContainsString('function normalizeTerminalOperationStatus(status)', $runtime);
         self::assertStringContainsString("return 'error';", $runtime);
         self::assertStringContainsString('syncTerminalActiveOperationForRuntimeUi(data.active_operation);', $runtime);

@@ -1,15 +1,58 @@
 {
     "name": "Google",
     "code": "google",
-    "base_url": "https://generativelanguage.googleapis.com/v1",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta",
     "models_prefix": ["gemini-", "bard-"],
-    "test_model": "gemini-pro",
+    "test_model": "gemini-flash-latest",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
-    "description": "Google Gemini API服务",
+    "description": "Google Gemini API service",
     "website": "https://ai.google.dev",
-    "documentation": "https://ai.google.dev/docs",
+    "documentation": "https://ai.google.dev/gemini-api/docs",
+    "account_setup_guide": {
+        "title": "Google Gemini / Nano Banana 接入指南",
+        "summary": "用于 AI 建站工作台文生图。Google Gemini API 需要在 Google AI Studio 创建 API Key；生产额度和更高限额需要绑定 Google Cloud 账单。",
+        "links": [
+            {
+                "label": "创建或查看 Gemini API Key",
+                "url": "https://aistudio.google.com/app/apikey"
+            },
+            {
+                "label": "Gemini API Key 官方说明",
+                "url": "https://ai.google.dev/gemini-api/docs/api-key"
+            },
+            {
+                "label": "Gemini API 价格与付费层级",
+                "url": "https://ai.google.dev/gemini-api/docs/pricing"
+            }
+        ],
+        "steps": [
+            "打开 Google AI Studio 的 API Keys 页面，登录 Google 账号。",
+            "选择已有 Google Cloud 项目，或按页面提示创建/导入项目。",
+            "点击 Create API key 生成 Gemini API Key，并复制完整密钥。",
+            "如果免费额度不够或要生产使用，在该 Google Cloud 项目绑定 Billing 账号并启用付费层级。",
+            "回到 Weline 后台 AI > 供应商账户，供应商选择 Google。",
+            "账户名称建议填写 Google Gemini / Nano Banana。",
+            "API密钥粘贴从 Google AI Studio 复制的 Gemini API Key。",
+            "API基础URL建议留空，系统会使用默认 Gemini REST 地址；如需显式填写，可填 https://generativelanguage.googleapis.com 或 https://generativelanguage.googleapis.com/v1beta。",
+            "保存后点击连接测试；测试通过后启用账户，并设为默认账户。",
+            "到 AI 模型同步 Google 模型，然后把 pagebuilder_ai_site_assets 适配器绑定到 gemini-2.5-flash-image。"
+        ],
+        "field_hints": {
+            "provider_code": "Google",
+            "account_name": "Google Gemini / Nano Banana",
+            "api_key": "粘贴 Google AI Studio API Keys 页面生成的 Gemini API Key",
+            "base_url": "建议留空；也支持 https://generativelanguage.googleapis.com 或 https://generativelanguage.googleapis.com/v1beta",
+            "balance": "可填预计可用额度，仅用于后台排序/展示；不了解可先填 1",
+            "currency": "USD"
+        },
+        "notes": [
+            "ChatGPT/Codex 订阅不包含 OpenAI API 额度；Google Gemini API 额度也需要单独的 Google API Key/账单。",
+            "Nano Banana 文生图模型使用 gemini-2.5-flash-image，Nano Banana Pro 使用 gemini-3-pro-image-preview。",
+            "API Key 属于敏感凭证，只应保存在服务端后台，不要放到前端代码或公开仓库。"
+        ]
+    },
     "supported_features": {
         "chat": true,
         "completion": true,
@@ -44,44 +87,80 @@
     },
     "models": [
         {
-            "code": "gemini-2.0-flash-exp",
-            "name": "Gemini 2.0 Flash",
-            "description": "Gemini 2.0 实验版，支持多模态",
+            "code": "gemini-flash-latest",
+            "name": "Gemini Flash Latest",
+            "description": "Google Gemini Flash latest alias for provider connection testing and fast text generation.",
             "max_tokens": 8192,
             "context_window": 1048576,
             "input_price": 0.00,
             "output_price": 0.00,
-            "capabilities": ["chat", "vision", "code"]
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "code"],
+            "is_active": 1
+        },
+        {
+            "code": "gemini-2.5-flash-image",
+            "name": "Gemini 2.5 Flash Image (Nano Banana)",
+            "description": "Google Nano Banana text-to-image model for fast image generation and editing.",
+            "max_tokens": 0,
+            "context_window": 0,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2image",
+            "capabilities": ["image_generation", "image_output"],
+            "is_active": 1,
+            "is_default": 1,
+            "config": {
+                "response_modalities": ["TEXT", "IMAGE"]
+            }
+        },
+        {
+            "code": "gemini-3-pro-image-preview",
+            "name": "Gemini 3 Pro Image Preview (Nano Banana Pro)",
+            "description": "Google Nano Banana Pro text-to-image model for high-fidelity visual asset production.",
+            "max_tokens": 0,
+            "context_window": 0,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2image",
+            "capabilities": ["image_generation", "image_output"],
+            "config": {
+                "response_modalities": ["TEXT", "IMAGE"]
+            }
+        },
+        {
+            "code": "gemini-2.5-flash",
+            "name": "Gemini 2.5 Flash",
+            "description": "Fast Gemini text and multimodal reasoning model.",
+            "max_tokens": 8192,
+            "context_window": 1048576,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "code"],
+            "is_active": 1
         },
         {
             "code": "gemini-1.5-pro",
             "name": "Gemini 1.5 Pro",
-            "description": "强大的多模态模型，支持长上下文",
+            "description": "Gemini multimodal model with long context support.",
             "max_tokens": 8192,
             "context_window": 2097152,
             "input_price": 1.25,
             "output_price": 5.00,
+            "primary_modality": "text2text",
             "capabilities": ["chat", "vision", "code"]
         },
         {
             "code": "gemini-1.5-flash",
             "name": "Gemini 1.5 Flash",
-            "description": "快速响应的多模态模型",
+            "description": "Fast Gemini multimodal model.",
             "max_tokens": 8192,
             "context_window": 1048576,
             "input_price": 0.075,
             "output_price": 0.30,
+            "primary_modality": "text2text",
             "capabilities": ["chat", "vision", "code"]
-        },
-        {
-            "code": "gemini-pro",
-            "name": "Gemini Pro",
-            "description": "Gemini Pro 通用模型",
-            "max_tokens": 8192,
-            "context_window": 32768,
-            "input_price": 0.50,
-            "output_price": 1.50,
-            "capabilities": ["chat", "code"]
         }
     ]
 }

@@ -958,6 +958,34 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertTrue($service->hasPendingTasks($scope));
     }
 
+    public function testBuildResumeResetPreservesDoneTasksAndRetriesOnlyFailedOrInterruptedTasks(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $pageTaskKey = 'page:home_page:content/home-page-hero';
+        $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
+        $scope = $service->markTaskRunning($scope, 'shared:footer');
+        $scope = $service->markTaskFailed($scope, $pageTaskKey, 'AI generation failed.');
+        $scope = $service->resetFailedTasksForFreshRepair($scope, 'Resume build after previous task failure');
+        $scope = $service->resetRunningTasksForInterruptedBuild($scope, 'Resume build after interrupted task execution');
+        $pendingKeys = \array_column($service->listPendingTasks($scope), 'task_key');
+
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks']['shared:header']['status'] ?? null);
+        $this->assertSame(['region' => 'header'], $scope['build_tasks']['shared:header']['result_ref'] ?? null);
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['shared:footer']['status'] ?? null);
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks'][$pageTaskKey]['status'] ?? null);
+        $this->assertNotContains('shared:header', $pendingKeys);
+        $this->assertContains('shared:footer', $pendingKeys);
+        $this->assertContains($pageTaskKey, $pendingKeys);
+    }
+
     public function testReconcileGeneratedArtifactsMarksPersistedPendingTasksDoneBeforeDispatch(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
