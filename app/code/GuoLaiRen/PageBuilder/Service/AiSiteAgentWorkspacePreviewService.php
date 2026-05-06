@@ -17,6 +17,7 @@ final class AiSiteAgentWorkspacePreviewService
         private readonly AiSiteVirtualLayoutService $virtualLayoutService,
         private readonly PageRenderService $pageRenderService,
         private readonly ?AiSitePreviewLinkRewriteService $previewLinkRewriteService = null,
+        private readonly ?AiSiteVisualUrlService $visualUrlService = null,
     ) {
     }
 
@@ -66,6 +67,17 @@ final class AiSiteAgentWorkspacePreviewService
         $locale = $locale !== '' ? $locale : State::getLang();
         $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
         $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);
+        $materializedBlocks = \is_array($materializedPreview['blocks'] ?? null) ? $materializedPreview['blocks'] : [];
+        if ($materializedBlocks !== []) {
+            $virtualBlocks = $materializedBlocks;
+            $virtualPage = \array_replace(
+                $virtualPage,
+                \is_array($materializedPreview['page'] ?? null) ? $materializedPreview['page'] : []
+            );
+            $virtualPage['blocks'] = $virtualBlocks;
+            $virtualPages[$pageType] = $virtualPage;
+        }
         $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
 
         /** @var Page $page */
@@ -108,6 +120,94 @@ final class AiSiteAgentWorkspacePreviewService
             'virtual_theme_id' => $virtualThemeId,
             'virtual_pages' => $virtualPages,
         ];
+    }
+
+    /**
+     * @return array{blocks?:list<array<string,mixed>>,page?:array<string,mixed>}
+     */
+    private function resolveMaterializedAiHtmlPreviewData(array $scope, string $pageType): array
+    {
+        $pagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType(
+            $scope['pagebuilder_pages_by_type'] ?? []
+        );
+        $pageId = (int)($scope['virtual_pages_by_type'][$pageType]['materialized_page_id'] ?? 0);
+        if ($pageId <= 0) {
+            $pageId = (int)($pagesByType[$pageType]['page_id'] ?? 0);
+        }
+
+        $row = $this->loadMaterializedAiHtmlPreviewPageRow(
+            $pageId,
+            $pageType,
+            (int)($scope['draft_website_id'] ?? $scope['website_id'] ?? 0)
+        );
+        if ($row === []) {
+            return [];
+        }
+        if (\trim((string)($row[Page::schema_fields_RENDER_MODE] ?? '')) !== Page::RENDER_MODE_AI_HTML) {
+            return [];
+        }
+
+        $layout = \json_decode((string)($row[Page::schema_fields_AI_LAYOUT] ?? ''), true);
+        $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+        $blocks = \array_values(\array_filter($blocks, static function (mixed $block): bool {
+            return \is_array($block)
+                && !AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block)
+                && \trim((string)($block['html'] ?? $block['config']['html_content'] ?? '')) !== '';
+        }));
+        if ($blocks === []) {
+            return [];
+        }
+
+        return [
+            'blocks' => $blocks,
+            'page' => [
+                'page_type' => (string)($row[Page::schema_fields_TYPE] ?? $pageType),
+                'title' => (string)($row[Page::schema_fields_TITLE] ?? $row[Page::schema_fields_NAME] ?? ''),
+                'handle' => (string)($row[Page::schema_fields_HANDLE] ?? ''),
+                'locale' => (string)($row[Page::schema_fields_DEFAULT_LOCALE] ?? ''),
+                'meta_title' => (string)($row[Page::schema_fields_META_TITLE] ?? ''),
+                'meta_description' => (string)($row[Page::schema_fields_META_DESCRIPTION] ?? ''),
+                'meta_keywords' => (string)($row[Page::schema_fields_META_KEYWORDS] ?? ''),
+                'ai_description' => (string)($row[Page::schema_fields_AI_DESCRIPTION] ?? ''),
+                'materialized_page_id' => (int)($row[Page::schema_fields_ID] ?? 0),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function loadMaterializedAiHtmlPreviewPageRow(int $pageId, string $pageType, int $websiteId): array
+    {
+        /** @var Page $pageModel */
+        $pageModel = ObjectManager::make(Page::class);
+        if ($pageId > 0) {
+            $rows = (clone $pageModel)
+                ->clearData()
+                ->clearQuery()
+                ->where(Page::schema_fields_ID, $pageId)
+                ->pagination(1, 1)
+                ->select()
+                ->fetchArray();
+            if (\is_array($rows[0] ?? null)) {
+                return $rows[0];
+            }
+        }
+
+        if ($websiteId <= 0 || $pageType === '') {
+            return [];
+        }
+
+        $rows = (clone $pageModel)
+            ->clearData()
+            ->clearQuery()
+            ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(Page::schema_fields_TYPE, $pageType)
+            ->pagination(1, 1)
+            ->select()
+            ->fetchArray();
+
+        return \is_array($rows[0] ?? null) ? $rows[0] : [];
     }
 
     /**
@@ -164,7 +264,20 @@ final class AiSiteAgentWorkspacePreviewService
         );
 
         if ($visualEditor) {
-            return $this->injectWorkspacePreviewNavLinks($html, $context['virtual_pages']);
+            $html = $this->getPreviewLinkRewriteService()->rewriteVirtualPreviewLinks(
+                $html,
+                (string)$context['page']->getData('virtual_public_id'),
+                $context['virtual_pages'],
+                $context['virtual_theme_id'],
+                true
+            );
+
+            return $this->injectWorkspacePreviewNavLinks(
+                $html,
+                $context['virtual_pages'],
+                (string)$context['page']->getData('virtual_public_id'),
+                $context['virtual_theme_id']
+            );
         }
 
         return $this->getPreviewLinkRewriteService()->rewriteVirtualPreviewLinks(
@@ -178,22 +291,36 @@ final class AiSiteAgentWorkspacePreviewService
     /**
      * @param array<string, array<string, mixed>> $virtualPages
      */
-    public function injectWorkspacePreviewNavLinks(string $html, array $virtualPages): string
+    public function injectWorkspacePreviewNavLinks(
+        string $html,
+        array $virtualPages,
+        string $publicId = '',
+        int $virtualThemeId = 0
+    ): string
     {
         if ($virtualPages === []) {
             return $html;
         }
 
+        $publicId = \trim($publicId);
         $pages = [];
+        $previewRewriteService = $this->getPreviewLinkRewriteService();
         foreach ($virtualPages as $pageType => $pageData) {
             if (!\is_string($pageType) || !\is_array($pageData)) {
                 continue;
             }
             $handle = \trim((string)($pageData['handle'] ?? ''));
             $url = ($pageType === Page::TYPE_HOME || $handle === '') ? '/' : '/' . $handle;
+            $previewUrl = '';
+            if ($publicId !== '') {
+                $resolvedUrls = $this->getVisualUrlService()->resolveVirtualUrls($publicId, $pageType, $virtualThemeId);
+                $previewUrl = \trim((string)($resolvedUrls['visual_preview_url'] ?? $resolvedUrls['preview_full_url'] ?? ''));
+            }
             $pages[] = [
                 'page_type' => $pageType,
                 'url' => $url,
+                'paths' => $previewRewriteService->resolveVirtualPagePaths($pageType, $pageData),
+                'preview_url' => $previewUrl,
             ];
         }
         if ($pages === []) {
@@ -207,25 +334,39 @@ final class AiSiteAgentWorkspacePreviewService
   var pages = {$pagesJson};
   function findPageByHref(href) {
     if (!href || href.charAt(0) === '#') return null;
-    var path = href.replace(/^https?:\\/\\/[^/]*/, '').replace(/\\?.*$/, '').split('#')[0] || '/';
+    var pageType = '';
+    var path = '';
+    try {
+      var parsed = new URL(href, window.location.href);
+      pageType = parsed.searchParams.get('page_type') || '';
+      path = parsed.pathname || '/';
+    } catch (e) {
+      path = href.replace(/^https?:\\/\\/[^/]*/, '').replace(/\\?.*$/, '').split('#')[0] || '/';
+    }
     if (path === '') path = '/';
     for (var i = 0; i < pages.length; i++) {
-      if (pages[i].url === path) return pages[i];
+      if (pageType && String(pages[i].page_type) === pageType) return pages[i];
+      var paths = Array.isArray(pages[i].paths) ? pages[i].paths : [pages[i].url];
+      for (var p = 0; p < paths.length; p++) {
+        if (paths[p] === path) return pages[i];
+      }
     }
     return null;
   }
-  var selector = 'header a[href^="/"], footer a[href^="/"], [data-region="header"] a[href^="/"], [data-region="footer"] a[href^="/"], nav a[href^="/"]';
+  var selector = 'header a[href], footer a[href], [data-region="header"] a[href], [data-region="footer"] a[href], nav a[href]';
   var links = document.querySelectorAll(selector);
   for (var j = 0; j < links.length; j++) {
     var link = links[j];
     var page = findPageByHref(link.getAttribute('href'));
     if (!page || !page.page_type) continue;
-    link.setAttribute('href', '#');
+    if (page.preview_url) {
+      link.setAttribute('href', String(page.preview_url));
+    }
     link.setAttribute('data-ve-page-type', String(page.page_type));
     link.addEventListener('click', function(e) {
-      e.preventDefault();
       var pageType = this.getAttribute('data-ve-page-type');
       if (pageType && window.parent !== window) {
+        e.preventDefault();
         window.parent.postMessage({ type: 'PageBuilderVisualEditor', action: 'navigate', page_type: pageType }, '*');
       }
     });
@@ -246,5 +387,11 @@ SCRIPT;
     {
         return $this->previewLinkRewriteService
             ?? ObjectManager::getInstance(AiSitePreviewLinkRewriteService::class);
+    }
+
+    private function getVisualUrlService(): AiSiteVisualUrlService
+    {
+        return $this->visualUrlService
+            ?? ObjectManager::getInstance(AiSiteVisualUrlService::class);
     }
 }

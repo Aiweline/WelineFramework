@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspacePreviewService;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\BackendController;
@@ -32,18 +33,22 @@ class Preview extends BackendController
     private Style $styleModel;
     private LayoutAssembler $layoutAssembler;
     private PageRenderService $pageRenderService;
+    private AiSiteAgentWorkspacePreviewService $workspacePreviewService;
 
     public function __construct(
         Page $pageModel,
         LocalDescription $localDescriptionModel,
         Style $styleModel,
-        PageRenderService $pageRenderService
+        PageRenderService $pageRenderService,
+        ?AiSiteAgentWorkspacePreviewService $workspacePreviewService = null
     ) {
         $this->pageModel = $pageModel;
         $this->localDescriptionModel = $localDescriptionModel;
         $this->styleModel = $styleModel;
         $this->layoutAssembler = ObjectManager::getInstance(LayoutAssembler::class);
         $this->pageRenderService = $pageRenderService;
+        $this->workspacePreviewService = $workspacePreviewService
+            ?? ObjectManager::getInstance(AiSiteAgentWorkspacePreviewService::class);
     }
 
     /**
@@ -328,6 +333,38 @@ class Preview extends BackendController
 
         $pageId = (int)$this->request->getGet('page_id');
         $locale = $this->request->getGet('locale');
+        if (!$pageId) {
+            $publicId = \trim((string)$this->request->getGet('public_id', ''));
+            $requestedPageType = \trim((string)$this->request->getGet('page_type', ''));
+            if ($publicId !== '' && $requestedPageType !== '') {
+                $context = $this->workspacePreviewService->buildPreviewContext(
+                    (int)$this->getLoginUserId(),
+                    $publicId,
+                    $requestedPageType,
+                    \trim((string)($this->request->getGet('style_code') ?: '')),
+                    \trim((string)($locale ?: ''))
+                );
+                if ($context === null) {
+                    throw new ResponseTerminateException(
+                        404,
+                        '<!DOCTYPE html><html><body><div style="padding: 20px; color: red;">AI建站工作台预览上下文不存在或无权限访问</div></body></html>',
+                        ['Content-Type' => 'text/html; charset=UTF-8']
+                    );
+                }
+
+                $html = $this->workspacePreviewService->renderPreviewHtml(
+                    $context,
+                    $this->request->getGet('visual_editor') === '1'
+                );
+                throw new ResponseTerminateException(200, $html, [
+                    'Content-Type' => 'text/html; charset=UTF-8',
+                    'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0',
+                    'Pragma' => 'no-cache',
+                    'Expires' => '0',
+                    'X-Accel-Expires' => '0',
+                ]);
+            }
+        }
         $tempStyleCode = $this->request->getGet('style_code'); // 临时样式代码（用于预览）
         
         if (!$pageId) {

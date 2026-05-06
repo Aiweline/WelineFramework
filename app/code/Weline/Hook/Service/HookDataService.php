@@ -14,6 +14,7 @@ namespace Weline\Hook\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\System\File\Scanner;
 use Weline\Hook\HookRegistry;
 
@@ -28,6 +29,7 @@ class HookDataService
     private ?HookRegistry $hookRegistry = null;
     private ?HookReader $hookReader = null;
     private ?Scanner $scanner = null;
+    private ?ModuleScanService $moduleScanService = null;
     private ?array $cachedHooks = null;
     private int $cachedHooksRegistryMtime = -1;
 
@@ -64,6 +66,14 @@ class HookDataService
             $this->scanner = ObjectManager::getInstance(Scanner::class);
         }
         return $this->scanner;
+    }
+
+    private function getModuleScanService(): ModuleScanService
+    {
+        if ($this->moduleScanService === null) {
+            $this->moduleScanService = new ModuleScanService($this->getScanner());
+        }
+        return $this->moduleScanService;
     }
 
     /**
@@ -424,8 +434,8 @@ class HookDataService
             }
 
             // 扫描 view/hooks/ 目录
-            $hooksDir = $basePath . DS . 'view' . DS . 'hooks';
-            if (!is_dir($hooksDir)) {
+            $hooksDir = $this->getModuleScanService()->resolveDirectory($basePath, 'view/hooks');
+            if ($hooksDir === null) {
                 continue;
             }
 

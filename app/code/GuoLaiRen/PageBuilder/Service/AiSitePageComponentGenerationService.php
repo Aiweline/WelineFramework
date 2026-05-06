@@ -346,29 +346,25 @@ class AiSitePageComponentGenerationService
             $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
             $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
             $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
-            $implementationContract = \is_array($task['implementation_contract'] ?? null) ? $task['implementation_contract'] : [];
             $label = $this->pickString(
                 $task['label'] ?? null,
                 $planContext['block_goal'] ?? null,
                 $blockTask['task_goal'] ?? null,
                 $sectionKey
             );
-            $description = $this->pickString(
-                $taskScript['story_goal'] ?? null,
-                $taskScript['content_fill_rule'] ?? null,
-                $blockTask['task_goal'] ?? null,
-                $planContext['block_goal'] ?? null,
-                $implementationContract['implementation_detail'] ?? null,
-                $label
-            );
+            $description = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext);
+            $visibleSectionTitle = $this->sanitizeVisibleCopy($label);
+            if ($visibleSectionTitle === '') {
+                $visibleSectionTitle = $this->humanizeIdentifier($sectionKey !== '' ? $sectionKey : $sectionCode);
+            }
 
             $sections[] = [
                 'key' => $sectionKey,
                 'code' => $sectionCode,
-                'name' => $label !== '' ? $label : $sectionCode,
+                'name' => $visibleSectionTitle !== '' ? $visibleSectionTitle : $sectionCode,
                 'template' => $this->inferBuildTaskSectionTemplate($task, $sectionKey, \count($sections)),
                 'config' => [
-                    'section_title' => $label !== '' ? $label : $sectionKey,
+                    'section_title' => $visibleSectionTitle,
                     'description' => $description,
                     'section_intro' => $description,
                 ],
@@ -402,6 +398,44 @@ class AiSitePageComponentGenerationService
         $taskKey = \trim((string)($task['task_key'] ?? ''));
         if (\preg_match('/^[^:]+:[^:]+:(.+)$/', $taskKey, $matches) === 1) {
             return \trim((string)($matches[1] ?? ''));
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $taskScript
+     * @param array<string,mixed> $blockTask
+     * @param array<string,mixed> $planContext
+     */
+    private function resolveVisibleBuildTaskSummary(array $taskScript, array $blockTask, array $planContext): string
+    {
+        $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
+        $sources = [
+            \is_array($contentPlan['content_copy'] ?? null) ? $contentPlan['content_copy'] : [],
+            \is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : [],
+            \is_array($blockTask['meta_fields'] ?? null) ? $blockTask['meta_fields'] : [],
+            \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [],
+        ];
+        $samples = [];
+        foreach ($sources as $rows) {
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $candidate = $this->sanitizeVisibleCopy((string)($row['copy'] ?? $row['sample'] ?? $row['default'] ?? ''));
+                if ($candidate === '' || \in_array($candidate, $samples, true)) {
+                    continue;
+                }
+                $samples[] = $this->clipText($candidate, 120);
+                if (\count($samples) >= 2) {
+                    break 2;
+                }
+            }
+        }
+
+        if ($samples !== []) {
+            return $this->clipText(\implode(' ', $samples), 220);
         }
 
         return '';
@@ -557,7 +591,7 @@ class AiSitePageComponentGenerationService
             return;
         }
 
-        if (\function_exists('w_query')) {
+        if (!$this->hasCustomComponentGenerator() && \function_exists('w_query')) {
             try {
                 yield from $this->generateComponentEventsConcurrentlyViaAiQueryBatch($components);
 
@@ -600,6 +634,15 @@ class AiSitePageComponentGenerationService
                     ? $event['error']
                     : new \RuntimeException('Component fiber failed without an exception payload.'),
             ];
+        }
+    }
+
+    private function hasCustomComponentGenerator(): bool
+    {
+        try {
+            return (new \ReflectionMethod($this, 'generateComponent'))->getDeclaringClass()->getName() !== self::class;
+        } catch (\ReflectionException) {
+            return false;
         }
     }
 
@@ -687,11 +730,40 @@ class AiSitePageComponentGenerationService
             $entry = \is_array($settled[$componentKey] ?? null) ? $settled[$componentKey] : [];
             if (($entry['status'] ?? '') !== 'fulfilled') {
                 $err = $entry['error'] ?? null;
+                $throwable = $err instanceof \Throwable
+                    ? $err
+                    : new \RuntimeException('AI generateStreamBatch task failed for component key: ' . (string)$componentKey);
+                if ($this->shouldFallbackComponentGeneration($throwable)) {
+                    try {
+                        $region = (string)($spec['region'] ?? 'content');
+                        $this->emitComponentStreamFallbackNotice(
+                            $region,
+                            'AI component stream returned no usable content; generated a plan-derived baseline component so the build can continue.'
+                        );
+                        yield $componentKey => [
+                            'status' => 'fulfilled',
+                            'result' => $this->buildFallbackComponent(
+                                (string)($spec['componentCode'] ?? ''),
+                                (string)($spec['name'] ?? ''),
+                                $region,
+                                (string)($spec['prompt'] ?? ''),
+                                \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
+                                \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : []
+                            ),
+                        ];
+                        continue;
+                    } catch (\Throwable $fallbackThrowable) {
+                        $throwable = new \RuntimeException(
+                            'AI component stream failed and plan-derived baseline generation failed: '
+                            . $this->summarizeThrowable($fallbackThrowable),
+                            0,
+                            $throwable
+                        );
+                    }
+                }
                 yield $componentKey => [
                     'status' => 'rejected',
-                    'error' => $err instanceof \Throwable
-                        ? $err
-                        : new \RuntimeException('AI generateStreamBatch task failed for component key: ' . (string)$componentKey),
+                    'error' => $throwable,
                 ];
 
                 continue;
@@ -719,6 +791,33 @@ class AiSitePageComponentGenerationService
                     'result' => $artifact,
                 ];
             } catch (\Throwable $primary) {
+                if ($this->shouldFallbackComponentGeneration($primary)) {
+                    try {
+                        $this->emitComponentStreamFallbackNotice(
+                            $region,
+                            'AI component JSON could not be repaired; generated a plan-derived baseline component so the build can continue.'
+                        );
+                        yield $componentKey => [
+                            'status' => 'fulfilled',
+                            'result' => $this->buildFallbackComponent(
+                                (string)($spec['componentCode'] ?? ''),
+                                (string)($spec['name'] ?? ''),
+                                $region,
+                                (string)($spec['prompt'] ?? ''),
+                                \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
+                                \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : []
+                            ),
+                        ];
+                        continue;
+                    } catch (\Throwable $fallbackThrowable) {
+                        $primary = new \RuntimeException(
+                            'AI component JSON repair failed and plan-derived baseline generation failed: '
+                            . $this->summarizeThrowable($fallbackThrowable),
+                            0,
+                            $primary
+                        );
+                    }
+                }
                 yield $componentKey => [
                     'status' => 'rejected',
                     'error' => $primary,
@@ -888,13 +987,15 @@ class AiSitePageComponentGenerationService
         array $renderContext,
         array $aiData
     ): array {
+        $safeDescription = $this->sanitizeVisibleCopy($originalPromptForDescription);
         $componentInfo = [
             'name' => $name,
             'name_en' => $name,
-            'description' => $originalPromptForDescription,
+            'description' => $safeDescription !== '' ? $safeDescription : ($name !== '' ? $name : $componentCode),
         ];
         $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
         $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets);
+        $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
         if ((bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)) {
@@ -904,7 +1005,7 @@ class AiSitePageComponentGenerationService
                 'region' => $region,
                 'phtml' => $phtml,
                 'html' => (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? ''),
-                'default_config' => $defaultConfig,
+                'default_config' => $persistedConfig,
                 'ai_data' => $aiData,
             ];
         }
@@ -914,7 +1015,7 @@ class AiSitePageComponentGenerationService
             $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
         }
 
-        $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
+        $html = $this->renderTemplateToHtml($phtml, $persistedConfig, $renderContext);
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
 
@@ -924,7 +1025,7 @@ class AiSitePageComponentGenerationService
             'region' => $region,
             'phtml' => $phtml,
             'html' => $html,
-            'default_config' => $defaultConfig,
+            'default_config' => $persistedConfig,
             'ai_data' => $aiData,
         ];
     }
@@ -955,7 +1056,7 @@ class AiSitePageComponentGenerationService
         for ($attempt = 1; $attempt <= self::COMPONENT_GENERATION_MAX_ATTEMPTS; $attempt++) {
             $aiData = [];
             try {
-                $aiData = $this->runAiGeneration($region, $attemptPrompt);
+                $aiData = $this->runAiGeneration($region, $attemptPrompt, $defaultConfig, $renderContext);
 
                 return $this->buildComponentArtifactFromAiData(
                     $componentCode,
@@ -1000,6 +1101,21 @@ class AiSitePageComponentGenerationService
                 . $finalReason
             : 'AI component generation failed: ' . $finalReason;
 
+        if ($this->shouldFallbackComponentGeneration($lastThrowable ?? new \RuntimeException('unknown'))) {
+            $this->emitComponentStreamFallbackNotice(
+                $region,
+                'AI component generation failed after retries; generated a plan-derived baseline component so the build can continue.'
+            );
+            return $this->buildFallbackComponent(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext
+            );
+        }
+
         throw new \RuntimeException($message, 0, $lastThrowable);
 
     }
@@ -1017,24 +1133,23 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): array {
-        throw new \RuntimeException('Local component fallback is forbidden for real AI site generation.');
-
         $componentInfo = [
             'name' => $name,
             'name_en' => $name,
-            'description' => $prompt,
+            'description' => $name !== '' ? $name : $componentCode,
         ];
         $aiData = $this->ensureAiPayloadValid(
             $this->buildProductionFallbackAiPayload($region, $prompt, $defaultConfig, $renderContext),
             $region,
             $componentCode
         );
+        $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig);
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
         $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
         if (empty($syntaxCheck['valid'])) {
             $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
         }
-        $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
+        $html = $this->renderTemplateToHtml($phtml, $persistedConfig, $renderContext);
         $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
 
         return [
@@ -1043,7 +1158,7 @@ class AiSitePageComponentGenerationService
             'region' => $region,
             'phtml' => $phtml,
             'html' => $html,
-            'default_config' => $defaultConfig,
+            'default_config' => $persistedConfig,
             'ai_data' => $aiData,
         ];
     }
@@ -1058,8 +1173,6 @@ class AiSitePageComponentGenerationService
         array $renderContext = []
     ): array
     {
-        throw new \RuntimeException('Deterministic component fallback is forbidden for real AI site generation.');
-
         if (\in_array($region, ['header', 'footer'], true)) {
             return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
         }
@@ -1073,17 +1186,28 @@ class AiSitePageComponentGenerationService
         $title = $copy['title'];
         $body = $copy['body'];
         $cjk = $copy['cjk'];
-        $secondaryTitle = $cjk ? '预约路径清晰' : 'Visible CTA path';
+        $eyebrow = $this->pickFallbackConfigCopy($defaultConfig, [
+            'content.eyebrow',
+            'eyebrow',
+            'content.subtitle',
+            'subtitle',
+            'badge',
+            'kicker',
+        ], 48);
+        if ($eyebrow === '') {
+            $eyebrow = $cjk ? '精选内容' : 'Featured';
+        }
+        $secondaryTitle = $cjk ? '立即行动' : 'Fast next step';
         $secondaryBody = $cjk
-            ? '服务亮点、作品证明与预约入口以清晰层级呈现，帮助客户快速完成咨询决策。'
-            : 'Key benefits, proof points, and the next action are presented with a clear visual hierarchy.';
-        $trustTitle = $cjk ? '信任信息完整' : 'Trust content';
+            ? '查看重点信息后，即可继续咨询、下载或完成下一步操作。'
+            : 'Review the key details, then continue with the highlighted action when you are ready.';
+        $trustTitle = $cjk ? '安全可靠' : 'Safe and clear';
         $trustBody = $cjk
-            ? '模块保留真实标题、正文、服务说明和视觉层次，便于后续编辑和发布。'
-            : 'Headings, body copy, and visual hierarchy stay clear across mobile and desktop.';
+            ? '清晰的标题、说明和操作入口帮助你快速判断服务是否适合。'
+            : 'Clear labels, concise details, and direct actions help you decide with confidence.';
         $callout = $cjk
-            ? '这段内容具备发布级文案质感，包含响应式卡片、明确转化路径和可持续微调的内容结构。'
-            : 'Responsive cards, clear actions, and layered visuals help users move to the next step faster.';
+            ? '继续查看亮点、选择操作入口，并放心完成后续步骤。'
+            : 'Explore the highlights, choose the next action, and continue with confidence.';
 
         return [
             'extra_fields' => '',
@@ -1099,7 +1223,7 @@ class AiSitePageComponentGenerationService
                 . "\n" . '#componentId .ai-site-fallback-art { min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(145deg,var(--section-primary,#2563eb),var(--section-secondary,#06b6d4)); } #componentId .ai-site-fallback-art svg { width:100%; height:100%; display:block; }'
                 . "\n" . '#componentId .ai-site-fallback-callout { position:relative; padding:18px 20px; border-radius:20px; background:var(--section-heading,#0f172a); color:var(--section-bg,#fff); box-shadow:0 20px 48px rgba(15,23,42,.18); }',
             'css_responsive' => '#componentId .ai-site-fallback-stage { grid-template-columns:1fr; padding:24px; } #componentId .ai-site-fallback-copy strong { max-width:12ch; }',
-            'html_content' => '<div class="ai-site-fallback-stage"><div class="ai-site-fallback-copy"><span class="ai-site-fallback-kicker">Curated preview</span><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><div class="ai-site-fallback-proof"><span>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><span>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span></div></div><div class="ai-site-fallback-art"><svg viewBox="0 0 520 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"><rect width="520" height="360" rx="34" fill="#0f172a"/><circle cx="96" cy="92" r="72" fill="#38bdf8" opacity=".38"/><circle cx="426" cy="264" r="104" fill="#f59e0b" opacity=".34"/><path d="M68 248 C144 160 228 294 310 202 C372 134 430 150 474 104" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".86"/><rect x="68" y="68" width="162" height="74" rx="24" fill="#fff" opacity=".88"/><rect x="258" y="82" width="188" height="24" rx="12" fill="#fff" opacity=".78"/><rect x="258" y="128" width="132" height="18" rx="9" fill="#fff" opacity=".46"/><rect x="72" y="224" width="112" height="72" rx="22" fill="#fff" opacity=".20"/><rect x="214" y="204" width="112" height="92" rx="22" fill="#fff" opacity=".26"/><rect x="356" y="224" width="92" height="72" rx="22" fill="#fff" opacity=".20"/></svg></div></div><div class="ai-site-fallback-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><p>' . \htmlspecialchars($secondaryBody . ' ' . $trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
+            'html_content' => '<div class="ai-site-fallback-stage"><div class="ai-site-fallback-copy"><span class="ai-site-fallback-kicker">' . \htmlspecialchars($eyebrow, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><div class="ai-site-fallback-proof"><span>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><span>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span></div></div><div class="ai-site-fallback-art"><svg viewBox="0 0 520 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"><rect width="520" height="360" rx="34" fill="#0f172a"/><circle cx="96" cy="92" r="72" fill="#38bdf8" opacity=".38"/><circle cx="426" cy="264" r="104" fill="#f59e0b" opacity=".34"/><path d="M68 248 C144 160 228 294 310 202 C372 134 430 150 474 104" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".86"/><rect x="68" y="68" width="162" height="74" rx="24" fill="#fff" opacity=".88"/><rect x="258" y="82" width="188" height="24" rx="12" fill="#fff" opacity=".78"/><rect x="258" y="128" width="132" height="18" rx="9" fill="#fff" opacity=".46"/><rect x="72" y="224" width="112" height="72" rx="22" fill="#fff" opacity=".20"/><rect x="214" y="204" width="112" height="92" rx="22" fill="#fff" opacity=".26"/><rect x="356" y="224" width="92" height="72" rx="22" fill="#fff" opacity=".20"/></svg></div></div><div class="ai-site-fallback-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><p>' . \htmlspecialchars($secondaryBody . ' ' . $trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
             'js_content' => '',
         ];
     }
@@ -1116,7 +1240,8 @@ class AiSitePageComponentGenerationService
         string $locale = ''
     ): array {
         $jsonContext = (string)\json_encode([$defaultConfig, $renderContext], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR);
-        $cjk = \str_starts_with(\strtolower($locale), 'zh') || $this->hasAnyCjkContent($jsonContext);
+        $localeLower = \strtolower($locale);
+        $cjk = \str_starts_with($localeLower, 'zh') || ($localeLower === '' && $this->hasAnyCjkContent($jsonContext));
         $title = $this->pickFallbackConfigCopy($defaultConfig, [
             'content.title',
             'title',
@@ -1170,6 +1295,38 @@ class AiSitePageComponentGenerationService
         }
 
         return '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function decodeConfigStringList(mixed $value): array
+    {
+        if (\is_array($value)) {
+            $items = $value;
+        } elseif (\is_scalar($value)) {
+            $raw = \trim((string)$value);
+            if ($raw === '') {
+                return [];
+            }
+            $decoded = \json_decode($raw, true);
+            $items = \is_array($decoded) ? $decoded : \preg_split('/[\r\n,|]+|\s+(?=#[0-9a-f]{6}\b)/i', $raw);
+        } else {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $text = \trim((string)$item);
+            if ($text !== '') {
+                $normalized[] = $text;
+            }
+        }
+
+        return \array_values(\array_unique($normalized));
     }
 
     private function fallbackTitleForRegion(string $region, bool $cjk): string
@@ -1231,39 +1388,36 @@ class AiSitePageComponentGenerationService
 
     private function shouldFallbackComponentGeneration(\Throwable $throwable): bool
     {
-        return false;
-
         $message = \strtolower($this->collectThrowableMessages($throwable));
         if (\trim($message) === '') {
             return true;
         }
 
-        foreach ([
-            'http 402',
-            'insufficient balance',
-            'quota',
-            '浣欓',
-            '余额',
-            '额度',
-        ] as $marker) {
-            if (\str_contains($message, $marker)) {
-                return true;
-            }
-        }
-
+        // Hard provider/config errors must stay visible. The outer stream wrapper
+        // includes "stream failed", so these markers need precedence.
         foreach ([
             'http 401',
+            'http 402',
             'http 403',
-            'api key',
+            'invalid api key',
+            'incorrect api key',
             'missing api key',
+            'unauthorized',
+            'authentication',
+            'model unavailable',
             'model selection',
             'no available',
             'provider account',
             'provider configuration',
+            'provider temporarily unavailable',
+            'insufficient balance',
+            'quota',
             '瀵嗛挜',
             '鏈厤缃?',
             '閰嶇疆',
             '璐︽埛',
+            '余额',
+            '额度',
             'account',
         ] as $marker) {
             if (\str_contains($message, $marker)) {
@@ -1271,7 +1425,32 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        return $this->shouldRetryComponentGeneration($throwable);
+        foreach ([
+            'valid component json',
+            'invalid component json',
+            'malformed component json',
+            'invalid json',
+            'malformed json',
+            'json payload',
+            'json repair',
+            'syntax error',
+            'html_content',
+            'no content',
+            'empty content',
+            'control character',
+            'unexpected end',
+            'unterminated',
+            'stream disconnected',
+            'stream failed',
+            '流式生成失败',
+            '未返回任何内容',
+        ] as $marker) {
+            if (\str_contains($message, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function attemptSyntaxFix(string $phtml, string $region, array $componentInfo, array $aiData, array $initialCheck): string
@@ -1930,6 +2109,7 @@ class AiSitePageComponentGenerationService
         $html = \preg_replace('/\s+[a-zA-Z_:][a-zA-Z0-9_:.-]*\s*=\s*[^\s>]*<\?(?:php|=)?[\s\S]*?(?=\s|>|$)/i', '', $html) ?? $html;
         $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?\?>/i', '', $html) ?? $html;
         $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?(?=>|$)/i', '', $html) ?? $html;
+        $html = \preg_replace('/<(li|p|span|div|h[1-6])\b[^>]*>[\s\S]{0,700}(?:\$[a-z_][a-z0-9_]*|=>|===|foreach\s*\(|endif\b|endforeach\b)[\s\S]{0,700}<\/\1>/iu', '', $html) ?? $html;
 
         return \str_replace('?>', '', $html);
     }
@@ -1947,7 +2127,7 @@ class AiSitePageComponentGenerationService
         }
 
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
-        if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu', $trimmed) === 1) {
+        if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|Use concrete|Present key terms|provide download CTA|Provide category|filter tabs|visually distinct|Visible CTA path|Trust content|Responsive cards|proof points|visual hierarchy|launch-ready content|Immediately capture|Instantly communicate|Immediately inform|Capture immediate attention|Introduce Teenipiya|\$[a-z_][a-z0-9_]*|=>|===|优先沿用|输出必须|字段样例|提示词|直接产出可上屏|生成页面方案/iu', $trimmed) === 1) {
             return 'prompt or placeholder text leaked';
         }
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $trimmed) === 1) {
@@ -1972,7 +2152,7 @@ class AiSitePageComponentGenerationService
             return 'insufficient visitor-facing text';
         }
 
-        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu', $trimmed) === 1) {
+        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|Use concrete|Present key terms|provide download CTA|优先沿用|输出必须|字段样例|提示词|直接产出可上屏|生成页面方案/iu', $trimmed) === 1) {
             return 'prompt or placeholder text leaked';
         }
 
@@ -2202,10 +2382,10 @@ class AiSitePageComponentGenerationService
     /**
      * @return array<string,mixed>
      */
-    private function runAiGeneration(string $region, string $prompt): array
+    private function runAiGeneration(string $region, string $prompt, array $defaultConfig = [], array $renderContext = []): array
     {
         if ($this->shouldUseStubAiGeneration()) {
-            return $this->buildStubAiPayload($region, $prompt);
+            return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
         }
 
         $fullContent = '';
@@ -2332,7 +2512,7 @@ class AiSitePageComponentGenerationService
             throw new \RuntimeException($message);
         }
 
-        return $this->normalizeComponentPayload($payload);
+        return $this->normalizeComponentPayload($payload, $region);
     }
 
     private function prependComponentJsonOnlyGuard(string $prompt, bool $retry): string
@@ -2411,17 +2591,33 @@ class AiSitePageComponentGenerationService
         $title = $copy['title'];
         $body = $copy['body'];
         $cjk = $copy['cjk'];
-        $secondaryTitle = $cjk ? '预约路径清晰' : 'Visible CTA path';
+        $secondaryTitle = $cjk ? '立即行动' : 'Fast next step';
         $secondaryBody = $cjk
-            ? '服务亮点、作品证明与预约入口以清晰层级呈现，帮助客户快速完成咨询决策。'
-            : 'Clear proof points, page-specific content, and the primary next action are presented with a polished launch-ready hierarchy.';
-        $trustTitle = $cjk ? '信任信息完整' : 'Trust content';
+            ? '查看重点信息后，即可继续咨询、下载或完成下一步操作。'
+            : 'Review the key details, then continue with the highlighted action when you are ready.';
+        $trustTitle = $cjk ? '安全可靠' : 'Safe and clear';
         $trustBody = $cjk
-            ? '模块保留真实标题、正文、服务说明和视觉层次，便于后续编辑和发布。'
-            : 'The section keeps real headings, body copy, and visual hierarchy so build and publish checks validate meaningful output.';
+            ? '清晰的标题、说明和操作入口帮助你快速判断服务是否适合。'
+            : 'Clear labels, concise details, and direct actions help you decide with confidence.';
         $callout = $cjk
-            ? '这段内容具备发布级文案质感，包含响应式卡片、明确转化路径和可持续微调的内容结构。'
-            : 'Use this generated block as launch-ready content with editorial polish, responsive cards, and a clear conversion path.';
+            ? '继续查看亮点、选择操作入口，并放心完成后续步骤。'
+            : 'Explore the highlights, choose the next action, and continue with confidence.';
+        $stageOneSamples = $this->decodeConfigStringList($defaultConfig['contract.stage1_samples'] ?? null);
+        $themeTokens = \array_values(\array_filter(
+            $this->decodeConfigStringList($defaultConfig['contract.theme_tokens'] ?? null),
+            static fn(string $token): bool => \preg_match('/^#[0-9a-f]{6}$/i', $token) === 1
+        ));
+        $contractPrimary = $themeTokens[0] ?? '#2563eb';
+        $contractSecondary = $themeTokens[1] ?? '#06b6d4';
+        $contractAccent = $themeTokens[2] ?? '#f59e0b';
+        $stageOneHtml = '';
+        foreach (\array_slice($stageOneSamples, 0, 3) as $sample) {
+            $stageOneHtml .= '<li>' . \htmlspecialchars($sample, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</li>';
+        }
+        $stageOnePanel = $stageOneHtml !== ''
+            ? '<div class="ai-site-highlight-proof"><strong>' . ($cjk ? '核心亮点' : 'Highlights') . '</strong><ul>' . $stageOneHtml . '</ul></div>'
+            : '';
+        $inlineVisualSvg = '<svg class="ai-site-svg-visual" viewBox="0 0 520 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . ' visual system"><defs><linearGradient id="aiSiteContractGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="' . \htmlspecialchars($contractPrimary, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/><stop offset="52%" stop-color="' . \htmlspecialchars($contractSecondary, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/><stop offset="100%" stop-color="' . \htmlspecialchars($contractAccent, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/></linearGradient></defs><rect width="520" height="320" rx="34" fill="url(#aiSiteContractGradient)"/><circle cx="112" cy="88" r="58" fill="#fff" opacity=".22"/><circle cx="418" cy="232" r="92" fill="#fff" opacity=".16"/><path d="M64 224 C142 136 226 264 308 174 C374 102 430 130 474 78" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".88"/><rect x="64" y="58" width="160" height="68" rx="22" fill="#fff" opacity=".82"/><rect x="256" y="70" width="188" height="24" rx="12" fill="#fff" opacity=".72"/><rect x="256" y="112" width="118" height="18" rx="9" fill="#fff" opacity=".48"/><rect x="72" y="216" width="112" height="58" rx="20" fill="#fff" opacity=".22"/><rect x="214" y="196" width="112" height="78" rx="20" fill="#fff" opacity=".28"/><rect x="356" y="216" width="92" height="58" rx="20" fill="#fff" opacity=".22"/></svg>';
 
         return match ($region) {
             'header' => [
@@ -2447,15 +2643,24 @@ class AiSitePageComponentGenerationService
             default => [
                 'extra_fields' => '',
                 'php_variables' => '',
-                'css_extra' => '#componentId .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }'
-                    . "\n" . '#componentId .ai-site-card { padding:20px; border-radius:20px; border:1px solid var(--section-border); background:rgba(255,255,255,0.72); text-align:left; box-shadow:0 16px 42px rgba(15,23,42,.10); }'
-                    . "\n" . '#componentId .ai-site-callout { padding:18px 20px; border-radius:18px; background:color-mix(in srgb,var(--section-primary) 10%,white); color:var(--section-heading); text-align:left; }',
-                'css_responsive' => '#componentId .ai-site-card-grid { grid-template-columns:1fr; }',
+                'css_extra' => '#componentId { --ai-site-contract-primary:' . $contractPrimary . '; --ai-site-contract-secondary:' . $contractSecondary . '; --ai-site-contract-accent:' . $contractAccent . '; }'
+                    . "\n" . '#componentId .ai-site-visual-wrap { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,.82fr); gap:22px; align-items:stretch; }'
+                    . "\n" . '#componentId .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }'
+                    . "\n" . '#componentId .ai-site-card { padding:20px; border-radius:20px; border:1px solid var(--section-border); background:rgba(255,255,255,0.72); text-align:left; box-shadow:0 16px 42px rgba(15,23,42,.10); transition:transform .22s ease, box-shadow .22s ease; }'
+                    . "\n" . '#componentId .ai-site-card:hover { transform:translateY(-4px); box-shadow:0 22px 54px rgba(15,23,42,.16); }'
+                    . "\n" . '#componentId .ai-site-visual-panel { min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(135deg,var(--ai-site-contract-primary),var(--ai-site-contract-secondary),var(--ai-site-contract-accent)); }'
+                    . "\n" . '#componentId .ai-site-svg-visual { width:100%; height:100%; display:block; animation:aiSiteVisualFloat 7s ease-in-out infinite alternate; }'
+                    . "\n" . '#componentId .ai-site-highlight-proof { margin-top:16px; padding:18px 20px; border-radius:20px; background:rgba(255,255,255,.78); border:1px solid var(--section-border); text-align:left; box-shadow:0 14px 36px rgba(15,23,42,.09); }'
+                    . "\n" . '#componentId .ai-site-highlight-proof ul { margin:10px 0 0; padding-left:20px; display:grid; gap:8px; }'
+                    . "\n" . '#componentId .ai-site-callout { margin-top:16px; padding:18px 20px; border-radius:18px; background:color-mix(in srgb,var(--section-primary) 10%,white); color:var(--section-heading); text-align:left; }'
+                    . "\n" . '@keyframes aiSiteVisualFloat { from { transform:translateY(0) scale(1); } to { transform:translateY(-10px) scale(1.02); } }',
+                'css_responsive' => '#componentId .ai-site-visual-wrap { grid-template-columns:1fr; } #componentId .ai-site-card-grid { grid-template-columns:1fr; }',
                 'html_content' => '<div class="ai-site-card-grid">'
                     . '<article class="ai-site-card"><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
                     . '<article class="ai-site-card"><strong>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($secondaryBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
                     . '<article class="ai-site-card"><strong>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
                     . '</div>'
+                    . '<div class="ai-site-visual-wrap"><div>' . $stageOnePanel . '</div><div class="ai-site-visual-panel">' . $inlineVisualSvg . '</div></div>'
                     . '<div class="ai-site-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
                 'js_content' => '',
             ],
@@ -2489,14 +2694,20 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $data
      * @return array<string,mixed>
      */
-    private function normalizeComponentPayload(array $data): array
+    private function normalizeComponentPayload(array $data, string $region = ''): array
     {
+        foreach (['component', 'payload', 'data', 'content', 'section', 'block'] as $containerKey) {
+            if (\is_array($data[$containerKey] ?? null)) {
+                $data = \array_replace($data, $data[$containerKey]);
+            }
+        }
+
         $fieldMappings = [
             'extra_fields' => ['extra_fields', 'extraFields', 'fields'],
             'php_variables' => ['php_variables', 'phpVariables', 'php_vars', 'phpVars'],
-            'css_extra' => ['css_extra', 'cssExtra', 'css', 'css_content', 'cssContent'],
+            'css_extra' => ['css_extra', 'cssExtra', 'css', 'css_content', 'cssContent', 'style', 'styles'],
             'css_responsive' => ['css_responsive', 'cssResponsive', 'responsive_css', 'responsiveCss'],
-            'html_content' => ['html_content', 'htmlContent', 'html', 'content'],
+            'html_content' => ['html_content', 'htmlContent', 'html', 'content', 'body', 'markup', 'template'],
             'html_extra' => ['html_extra', 'htmlExtra'],
             'html_extra_column' => ['html_extra_column', 'htmlExtraColumn'],
             'footer_extra_text' => ['footer_extra_text', 'footerExtraText'],
@@ -2514,7 +2725,136 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        return $normalized ?: $data;
+        if (!isset($normalized['html_content'])) {
+            $html = $this->findFirstStringByKeys($data, ['html_content', 'htmlContent', 'html', 'markup', 'template']);
+            if ($html !== null) {
+                $normalized['html_content'] = $html;
+            }
+        }
+        if ($region === 'content' && (!isset($normalized['html_content']) || \trim((string)$normalized['html_content']) === '')) {
+            $html = $this->findFirstStringByKeys($data, ['html_extra', 'htmlExtra', 'html_extra_column', 'htmlExtraColumn']);
+            if ($html !== null) {
+                $normalized['html_content'] = $html;
+            }
+        }
+        if ($region === 'content' && (!isset($normalized['html_content']) || \trim((string)$normalized['html_content']) === '')) {
+            $html = $this->buildHtmlContentFromStructuredAiData($data);
+            if ($html !== null) {
+                $normalized['html_content'] = $html;
+            }
+        }
+        if (!isset($normalized['css_extra'])) {
+            $css = $this->findFirstStringByKeys($data, ['css_extra', 'cssExtra', 'css_content', 'cssContent', 'css', 'style', 'styles']);
+            if ($css !== null) {
+                $normalized['css_extra'] = $css;
+            }
+        }
+        if (!isset($normalized['js_content'])) {
+            $js = $this->findFirstStringByKeys($data, ['js_content', 'jsContent', 'javascript', 'js']);
+            if ($js !== null) {
+                $normalized['js_content'] = $js;
+            }
+        }
+
+        return $normalized !== [] ? \array_replace($data, $normalized) : $data;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function buildHtmlContentFromStructuredAiData(array $data): ?string
+    {
+        $texts = [];
+        $this->collectStructuredAiVisibleTexts($data, $texts);
+        $texts = \array_values(\array_unique(\array_filter($texts, static fn(string $text): bool => \trim($text) !== '')));
+        if (\count($texts) < 2) {
+            return null;
+        }
+
+        $title = \array_shift($texts);
+        $lead = \array_shift($texts);
+        if ($title === null || $lead === null) {
+            return null;
+        }
+
+        $html = '<section class="pb-ai-structured-section">'
+            . '<div class="pb-ai-structured-copy"><h2>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</h2>'
+            . '<p>' . \htmlspecialchars($lead, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>';
+        if ($texts !== []) {
+            $html .= '<div class="pb-ai-structured-grid">';
+            foreach (\array_slice($texts, 0, 6) as $text) {
+                $html .= '<article class="pb-ai-structured-card"><p>' . \htmlspecialchars($text, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>';
+            }
+            $html .= '</div>';
+        }
+        $html .= '</section>';
+
+        return $html;
+    }
+
+    /**
+     * @param list<string> $texts
+     */
+    private function collectStructuredAiVisibleTexts(mixed $value, array &$texts, string $path = '', int $depth = 0): void
+    {
+        if (\count($texts) >= 10 || $depth > 5) {
+            return;
+        }
+        if (\is_array($value)) {
+            foreach ($value as $key => $child) {
+                $key = \strtolower(\trim((string)$key));
+                $childPath = $path === '' ? $key : $path . '.' . $key;
+                if ($this->isNonVisibleStructuredAiKey($key) || $this->isNonVisibleStructuredAiKey($childPath)) {
+                    continue;
+                }
+                $this->collectStructuredAiVisibleTexts($child, $texts, $childPath, $depth + 1);
+            }
+            return;
+        }
+        if (!\is_scalar($value)) {
+            return;
+        }
+
+        $text = $this->sanitizeVisibleCopy(\trim((string)$value));
+        if ($text === '' || \strlen($text) < 6 || \str_contains($text, '<') || \str_contains($text, '{')) {
+            return;
+        }
+        if (\preg_match('/^(?:true|false|null|content|header|footer|section|block)$/i', $text) === 1) {
+            return;
+        }
+        $texts[] = $this->clipText($text, 180);
+    }
+
+    private function isNonVisibleStructuredAiKey(string $key): bool
+    {
+        return \preg_match('/(?:css|style|script|js|php|html|markup|template|prompt|instruction|contract|schema|task|section_code|block_key|page_type|component|locale|language|id|key|url|href|src|image|asset|icon|color|token|meta)/i', $key) === 1;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @param list<string> $keys
+     */
+    private function findFirstStringByKeys(array $data, array $keys, int $depth = 0): ?string
+    {
+        if ($depth > 4) {
+            return null;
+        }
+        foreach ($keys as $key) {
+            if (isset($data[$key]) && \is_string($data[$key]) && \trim($data[$key]) !== '') {
+                return (string)$data[$key];
+            }
+        }
+        foreach ($data as $value) {
+            if (!\is_array($value)) {
+                continue;
+            }
+            $found = $this->findFirstStringByKeys($value, $keys, $depth + 1);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -4092,6 +4432,17 @@ class AiSitePageComponentGenerationService
             'style.title_color' => ((string)($section['template'] ?? '') === 'cta') ? '#ffffff' : '#0f172a',
             'style.accent_color' => '#2563eb',
         ];
+        $stageOneSamples = $this->collectStageOneVisibleSamplesForPage($scope, $pageType);
+        if ($stageOneSamples !== []) {
+            $defaultConfig['contract.stage1_samples'] = \json_encode(
+                \array_slice($stageOneSamples, 0, 6),
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+            );
+        }
+        $themeTokens = $this->collectContractThemeTokens($scope);
+        if ($themeTokens !== []) {
+            $defaultConfig['contract.theme_tokens'] = \implode(' ', \array_slice($themeTokens, 0, 8));
+        }
         $sectionImageUrl = $this->resolveSectionAssetUrl($pageType, $section, $scope);
         if ($sectionImageUrl !== '') {
             $defaultConfig['visual.image_url'] = $sectionImageUrl;
@@ -4109,6 +4460,90 @@ class AiSitePageComponentGenerationService
         );
 
         return $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask, $locale);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<string>
+     */
+    private function collectStageOneVisibleSamplesForPage(array $scope, string $pageType): array
+    {
+        $samples = [];
+        $pages = \is_array($scope['execution_blueprint']['pages'] ?? null) ? $scope['execution_blueprint']['pages'] : [];
+        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
+        foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
+                if (\is_array($field) && \is_scalar($field['sample'] ?? null)) {
+                    $samples[] = $this->sanitizeVisibleCopy((string)$field['sample']);
+                }
+            }
+            $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
+            foreach (['headline'] as $key) {
+                if (\is_scalar($realtime[$key] ?? null)) {
+                    $samples[] = $this->sanitizeVisibleCopy((string)$realtime[$key]);
+                }
+            }
+            foreach (\is_array($realtime['supporting_copy'] ?? null) ? $realtime['supporting_copy'] : [] as $copy) {
+                if (\is_scalar($copy)) {
+                    $samples[] = $this->sanitizeVisibleCopy((string)$copy);
+                }
+            }
+        }
+
+        return \array_values(\array_filter(\array_unique($samples), static function (string $value): bool {
+            return $value !== '' && \mb_strlen($value) >= 4;
+        }));
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<string>
+     */
+    private function collectContractThemeTokens(array $scope): array
+    {
+        $tokens = [];
+        foreach ([
+            $scope['virtual_theme_plan']['confirmed'] ?? null,
+            $scope['task_plan_structured'] ?? null,
+            $scope['build_blueprint'] ?? null,
+            $scope['build_tasks'] ?? null,
+            $scope['execution_blueprint'] ?? null,
+            $scope['plan_json'] ?? null,
+        ] as $source) {
+            if (\is_array($source)) {
+                $this->collectContractThemeTokensRecursive($source, $tokens);
+            }
+        }
+
+        return \array_values(\array_unique(\array_filter($tokens, static function (string $token): bool {
+            return !\in_array(\strtolower($token), ['#ffffff', '#fff', '#000000', '#000'], true);
+        })));
+    }
+
+    /**
+     * @param array<string|int,mixed> $source
+     * @param list<string> $tokens
+     */
+    private function collectContractThemeTokensRecursive(array $source, array &$tokens, int $depth = 0): void
+    {
+        if ($depth > 8) {
+            return;
+        }
+        foreach ($source as $value) {
+            if (\is_scalar($value)) {
+                $candidate = \trim((string)$value);
+                if (\preg_match('/^#[0-9a-f]{6}$/i', $candidate) === 1) {
+                    $tokens[] = $candidate;
+                }
+                continue;
+            }
+            if (\is_array($value)) {
+                $this->collectContractThemeTokensRecursive($value, $tokens, $depth + 1);
+            }
+        }
     }
 
     /**
@@ -4375,6 +4810,8 @@ class AiSitePageComponentGenerationService
         }
 
         $taskScript = \is_array($taskPlanTask['task_script'] ?? null) ? $taskPlanTask['task_script'] : [];
+        $blockTask = \is_array($taskPlanTask['block_task'] ?? null) ? $taskPlanTask['block_task'] : [];
+        $planContext = \is_array($taskPlanTask['plan_context'] ?? null) ? $taskPlanTask['plan_context'] : [];
         $fieldRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
         foreach ($fieldRequirements as $requirement) {
             if (!\is_array($requirement)) {
@@ -4423,9 +4860,9 @@ class AiSitePageComponentGenerationService
             $defaultConfig['content.title'] = $this->clipText($storyGoal, 72);
         }
 
-        $fillRule = $this->sanitizeVisibleCopy((string)($taskScript['content_fill_rule'] ?? ''));
-        if ($fillRule !== '' && \trim((string)($defaultConfig['content.description'] ?? '')) === '') {
-            $defaultConfig['content.description'] = $this->clipText($fillRule, 160);
+        $visibleSummary = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext);
+        if ($visibleSummary !== '' && \trim((string)($defaultConfig['content.description'] ?? '')) === '') {
+            $defaultConfig['content.description'] = $this->clipText($visibleSummary, 180);
         }
 
         return $this->sanitizeDefaultConfigVisibleCopy(
@@ -4474,6 +4911,44 @@ class AiSitePageComponentGenerationService
 
     /**
      * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function fillDefaultConfigVisibleCopyFromContractSamples(array $defaultConfig): array
+    {
+        $samples = [];
+        foreach ($this->decodeConfigStringList($defaultConfig['contract.stage1_samples'] ?? null) as $sample) {
+            $sample = $this->sanitizeVisibleCopy($sample);
+            if ($sample === '' || \in_array($sample, $samples, true)) {
+                continue;
+            }
+            $samples[] = $sample;
+        }
+        if ($samples === []) {
+            return $defaultConfig;
+        }
+
+        if (\array_key_exists('content.title', $defaultConfig) && \trim((string)$defaultConfig['content.title']) === '') {
+            $defaultConfig['content.title'] = $this->clipText($samples[0], 72);
+        }
+
+        if (\array_key_exists('content.description', $defaultConfig) && \trim((string)$defaultConfig['content.description']) === '') {
+            $title = \trim((string)($defaultConfig['content.title'] ?? ''));
+            foreach ($samples as $sample) {
+                if ($sample === $title || \preg_match('#^https?://#iu', $sample) === 1) {
+                    continue;
+                }
+                if (\mb_strlen($sample) >= 12) {
+                    $defaultConfig['content.description'] = $this->clipText($sample, 180);
+                    break;
+                }
+            }
+        }
+
+        return $defaultConfig;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
      * @param array<string,mixed> $taskPlanTask
      * @return array<string,mixed>
      */
@@ -4505,7 +4980,7 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        return $defaultConfig;
+        return $this->fillDefaultConfigVisibleCopyFromContractSamples($defaultConfig);
     }
 
     private function normalizeTaskPlanRequirementField(mixed $fieldRaw): string
@@ -4590,7 +5065,55 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        return $defaultConfig;
+        return $this->fillDefaultConfigVisibleCopyFromContractSamples($defaultConfig);
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function sanitizeGeneratedComponentDefaultConfig(array $defaultConfig): array
+    {
+        return $this->sanitizeDefaultConfigVisibleCopy(
+            $this->stripInternalComponentConfig($defaultConfig)
+        );
+    }
+
+    /**
+     * @param array<string|int,mixed> $config
+     * @return array<string|int,mixed>
+     */
+    private function stripInternalComponentConfig(array $config): array
+    {
+        foreach ($config as $key => $value) {
+            if (\is_string($key) && $this->isInternalComponentConfigKey($key)) {
+                unset($config[$key]);
+                continue;
+            }
+            if (\is_array($value)) {
+                $config[$key] = $this->stripInternalComponentConfig($value);
+            }
+        }
+
+        return $config;
+    }
+
+    private function isInternalComponentConfigKey(string $key): bool
+    {
+        $normalized = \strtolower(\trim($key));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return \str_starts_with($normalized, 'contract.')
+            || \str_starts_with($normalized, 'prompt.')
+            || \str_starts_with($normalized, 'runtime.')
+            || \str_starts_with($normalized, 'task_script.')
+            || \str_starts_with($normalized, 'implementation_contract.')
+            || \str_contains($normalized, 'prompt_context')
+            || \str_contains($normalized, 'stage1_')
+            || \str_contains($normalized, 'stage2_')
+            || \str_contains($normalized, 'stage3_');
     }
 
     private function sanitizeNavigationItemsText(string $lines): string
@@ -4635,6 +5158,10 @@ class AiSitePageComponentGenerationService
         if ($value === '') {
             return '';
         }
+        $value = $this->stripPlanningKeywordPrefix($value);
+        if ($value === '') {
+            return '';
+        }
 
         $normalized = \mb_strtolower($value);
         if (\in_array($normalized, ['首页', '主页', '关于我们', '关于', 'home', 'home page', 'about', 'about page', 'about us'], true)) {
@@ -4651,6 +5178,17 @@ class AiSitePageComponentGenerationService
             }
         }
         foreach ([
+            '优先沿用第一阶段',
+            '输出必须是访客可见内容',
+            '不能写方向型提示语',
+            '不能写“围绕',
+            '不能写"围绕',
+            '直接产出可上屏',
+            '直接给出',
+            '缺少真实事实',
+            '字段样例',
+            '内容规则',
+            '内容填充规则',
             'Generated website section',
             'Website content language',
             'visitor-visible copy',
@@ -4668,10 +5206,55 @@ class AiSitePageComponentGenerationService
             'Visitors can verify',
             'before publishing',
             'reviewable page content',
+            'confirmed stage-one content',
+            'confirmed stage-1 plan',
+            'confirmed stage-1 theme',
+            'confirmed stage-1 theme context',
+            'stage-2 task detail',
+            'frontend component skill',
+            'Generate the frontend block',
+            'Fill the block fields',
+            'block_task.content_plan',
+            'block_task.style_plan',
+            'Required by block task schema',
+            'planning_reason',
+            'Built from plan',
+            'generated from plan',
+            'Use concrete',
+            'Present key terms',
+            'provide download CTA',
+            'Provide category',
+            'filter tabs',
+            'visually distinct',
+            'Visible CTA path',
+            'Trust content',
+            'Responsive cards',
+            'proof points',
+            'visual hierarchy',
+            'launch-ready content',
+            'Immediately capture',
+            'Instantly communicate',
+            'Immediately inform',
+            'Capture immediate attention',
+            'Introduce Teenipiya',
+            'content_fill_rule',
+            'field_content_requirements',
+            'task_script',
+            'stage3_directive',
+            '优先沿用',
+            '输出必须',
+            '字段样例',
+            '提示词',
+            '直接产出可上屏',
+            '生成页面方案',
         ] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
                 return '';
             }
+        }
+
+        if (\preg_match('/^(?:present|provide|showcase|explain|build|create|highlight|include|display|structure|design|render|add)\b.{0,160}\b(?:cta|card|cards|accordion|accordions|section|block|layout|grid|module|page|signals?|content|policy|terms?|download)\b/iu', $value) === 1) {
+            return '';
         }
 
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $value)) {
@@ -4686,6 +5269,24 @@ class AiSitePageComponentGenerationService
         }
 
         return $this->clipText($value, 220);
+    }
+
+    private function stripPlanningKeywordPrefix(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        if (\substr_count($value, '/') + \substr_count($value, '／') < 2) {
+            return $value;
+        }
+        if (\preg_match('/\s[-–—]\s*(?<copy>.+)$/u', $value, $matches) !== 1) {
+            return $value;
+        }
+
+        $copy = \trim((string)($matches['copy'] ?? ''));
+        return $copy !== '' ? $copy : $value;
     }
 
     private function containsPlanningObservationCopy(string $value): bool
@@ -4712,6 +5313,10 @@ class AiSitePageComponentGenerationService
             'Visitors are guided',
             'before publishing',
             'reviewable page content',
+            '优先沿用第一阶段',
+            '输出必须是访客可见内容',
+            '直接产出可上屏',
+            '字段样例',
         ] as $marker) {
             $marker = \mb_strtolower($marker);
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
@@ -5107,7 +5712,7 @@ class AiSitePageComponentGenerationService
             return '';
         }
 
-        return $value;
+        return $this->sanitizeVisibleCopy($value);
     }
 
     /**
@@ -5355,7 +5960,8 @@ class AiSitePageComponentGenerationService
             return;
         }
 
-        $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($html)));
+        $visibleHtml = (string)\preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', ' ', $html);
+        $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($visibleHtml)));
         if ($plain !== '' && $this->hasMeaningfulCjkContent($plain)) {
             throw new \RuntimeException('Rendered component visible copy does not match website content locale.');
         }

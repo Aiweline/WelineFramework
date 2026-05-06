@@ -68,6 +68,8 @@ final class AiSiteQualityGateService
 
         foreach ($pageTypes as $pageType) {
             $pageId = (int)($pagesByType[$pageType]['page_id'] ?? 0);
+            $hasRenderedOverride = \array_key_exists($pageType, $renderedHtmlByPageType)
+                && \trim((string)$renderedHtmlByPageType[$pageType]) !== '';
             $html = (string)($renderedHtmlByPageType[$pageType] ?? '');
             $layout = [];
             $renderError = '';
@@ -86,7 +88,10 @@ final class AiSiteQualityGateService
                 }
             }
 
-            if ($html === '' && $pageId > 0) {
+            if (
+                ($html === '' || ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME && !$hasRenderedOverride))
+                && $pageId > 0
+            ) {
                 try {
                     $page = clone $this->pageModel;
                     $page->clearData()->clearQuery()->load($pageId);
@@ -362,7 +367,7 @@ final class AiSiteQualityGateService
             '/AI content placeholder|ai-empty|placeholder content|placeholder/iu',
             '/demo|example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
             '/Generated visual|inline SVG|Visual preview generated/iu',
-            '/Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu',
+            '/Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|content_fill_rule|field_content_requirements|task_script|stage3_directive/iu',
             '/欢迎访问|默认页面模板|Default Page Template|This is the default page/iu',
             '/访客看到|用户看到|让访客看到|从而产生|信任感增强|知道如何|Visitors?\s+(?:see|can review|can verify|understand how|ready to)|before publishing|reviewable page content/iu',
         ];

@@ -882,15 +882,7 @@ class MasterProcess
             @\mkdir($dir, 0755, true);
         }
 
-        // 读取现有数据并合并，保留 Start.php 保存的配置
-        $existingData = [];
-        if (\is_file($instanceFile)) {
-            $content = @\file_get_contents($instanceFile);
-            if ($content !== false) {
-                $existingData = \json_decode($content, true) ?: [];
-            }
-        }
-
+        // Master data is merged under the instance lock below.
         // Master 进程的状态信息
         $masterData = [
             'master_pid' => \getmypid(),
@@ -914,11 +906,13 @@ class MasterProcess
             $masterData['supervisor_endpoint'] = $controlServer->supervisorEndpointUri();
         }
 
-        $data = \array_merge($existingData, $masterData);
+        $mergeMasterData = static function (array $existingData) use ($masterData): array {
+            return \array_merge($existingData, $masterData);
+        };
 
-        // 使用原子写入确保与Start.php的并发写入不产生竞态条件
-        // （Start.php的saveInstanceInfo()也使用了atomicWriteJsonStatic）
-        \Weline\Server\Service\ServerInstanceManager::atomicWriteJsonStatic($instanceFile, $data, 10);
+        // Use the same read-modify-write lock as Start.php and the orchestrator.
+        // This avoids overwriting runtime fields during Windows rename windows.
+        ServerInstanceManager::atomicUpdateJsonStatic($instanceFile, $mergeMasterData, 10);
     }
 
     /**
@@ -1042,10 +1036,154 @@ class MasterProcess
             return null;
         }
         $data = \json_decode($content, true);
-        if (!\is_array($data) || empty($data['master_enabled'])) {
+        if (!\is_array($data)) {
             return null;
         }
+
+        $data = self::rehydrateMasterInfo($data);
+        if (empty($data['master_enabled'])) {
+            $data = self::discoverLiveMasterInfo($instanceName, $data);
+            if (empty($data['master_enabled'])) {
+                return null;
+            }
+        }
         return $data;
+    }
+
+    /**
+     * Recover Master control metadata from current_snapshot or instance_records
+     * when the top-level instance data was partially overwritten.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private static function rehydrateMasterInfo(array $data): array
+    {
+        if (self::hasMasterControlMetadata($data) || self::isStoppedInstanceRecord($data)) {
+            return $data;
+        }
+
+        $currentSnapshot = $data['current_snapshot'] ?? null;
+        if (\is_array($currentSnapshot)
+            && !self::isStoppedInstanceRecord($currentSnapshot)
+            && self::hasMasterControlMetadata($currentSnapshot)
+        ) {
+            return \array_merge($data, $currentSnapshot, ['master_enabled' => true]);
+        }
+
+        $records = $data['instance_records'] ?? [];
+        if (!\is_array($records)) {
+            return $data;
+        }
+
+        for ($i = \count($records) - 1; $i >= 0; $i--) {
+            $record = $records[$i] ?? null;
+            if (!\is_array($record)
+                || self::isStoppedInstanceRecord($record)
+                || !self::hasMasterControlMetadata($record)
+            ) {
+                continue;
+            }
+
+            return \array_merge($data, $record, ['master_enabled' => true]);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function hasMasterControlMetadata(array $data): bool
+    {
+        return (int)($data['master_pid'] ?? 0) > 0
+            && (int)($data['control_port'] ?? 0) > 0;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function isStoppedInstanceRecord(array $data): bool
+    {
+        return ($data['lifecycle_state'] ?? null) === 'stopped'
+            || ($data['startup_phase'] ?? null) === 'stopped';
+    }
+
+    /**
+     * Last-resort recovery for a running Master whose instance JSON lost all
+     * control metadata. This path only runs after file-based metadata fails.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private static function discoverLiveMasterInfo(string $instanceName, array $data): array
+    {
+        if (self::isStoppedInstanceRecord($data)) {
+            return $data;
+        }
+
+        $masterPids = Processer::getProcessIdsByName(self::getMasterProcessName($instanceName));
+        if ($masterPids === []) {
+            return $data;
+        }
+
+        $masterPidSet = \array_fill_keys(\array_map('intval', $masterPids), true);
+        foreach (self::getControlMetadataProbeProcessNames($instanceName) as $processName) {
+            foreach (Processer::getProcessIdsByName($processName) as $pid) {
+                $commandLine = Processer::getProcessCommandLine((int)$pid);
+                $masterPid = self::extractIntCommandOption($commandLine, 'master-pid');
+                $controlPort = self::extractIntCommandOption($commandLine, 'control-port');
+                if ($masterPid <= 0 || $controlPort <= 0 || !isset($masterPidSet[$masterPid])) {
+                    continue;
+                }
+                if (!Processer::isPortInUse($controlPort)) {
+                    continue;
+                }
+
+                return \array_merge($data, [
+                    'master_enabled' => true,
+                    'master_pid' => $masterPid,
+                    'control_port' => $controlPort,
+                    'instance_name' => $instanceName,
+                    'updated_at' => \time(),
+                ]);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function getControlMetadataProbeProcessNames(string $instanceName): array
+    {
+        return [
+            self::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
+            self::buildScopedProcessName('weline-wls-session', $instanceName),
+            self::buildScopedProcessName('weline-wls-memory', $instanceName),
+            self::buildScopedProcessName(self::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
+        ];
+    }
+
+    private static function extractIntCommandOption(string $commandLine, string $name): int
+    {
+        if ($commandLine === '' || $name === '') {
+            return 0;
+        }
+
+        $pattern = '/--' . \preg_quote($name, '/') . '(?:=|\s+)(?:"([^"]+)"|\'([^\']+)\'|([^\s]+))/i';
+        if (!\preg_match($pattern, $commandLine, $matches)) {
+            return 0;
+        }
+
+        foreach ([1, 2, 3] as $index) {
+            if (!empty($matches[$index])) {
+                return \max(0, (int)$matches[$index]);
+            }
+        }
+
+        return 0;
     }
 
     /**

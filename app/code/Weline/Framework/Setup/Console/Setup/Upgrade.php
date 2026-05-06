@@ -39,6 +39,7 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Framework\Router\Service\RouteUpdateService;
+use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Framework\Console\ParseModuleArgsTrait;
@@ -1115,6 +1116,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 仅保留已注册的模块名，避免将 stage code（如 schema_diff）等误当作模块传入注册表/标签库收集
         $validModuleNames = array_keys(Env::getInstance()->getActiveModules());
         $moduleNames = array_values(array_intersect($moduleNames, $validModuleNames));
+        RegistryProgress::enable(true);
+        RegistryProgress::section('Setup registry refresh');
 
         // 使用统一服务更新所有注册表
         try {

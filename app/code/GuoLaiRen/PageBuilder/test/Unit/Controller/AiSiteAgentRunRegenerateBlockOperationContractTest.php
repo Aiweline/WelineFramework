@@ -5,65 +5,49 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
-use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Http\Sse\SseWriter;
 
 final class AiSiteAgentRunRegenerateBlockOperationContractTest extends TestCase
 {
-    public function testRunRegenerateBlockOperationIsActuallyInvokedAndInterruptedByDebugDd(): void
+    public function testRunRegenerateBlockOperationDoesNotContainDebugStops(): void
     {
-        $tempFile = \tempnam(\sys_get_temp_dir(), 'pb-run-regenerate-');
-        self::assertIsString($tempFile);
-        $projectRoot = \str_replace('\\', '\\\\', (string)\BP);
-        $script = <<<'PHP'
-<?php
-declare(strict_types=1);
-define('BP', '__PROJECT_ROOT__');
-require BP . '/vendor/autoload.php';
+        $controllerPath = (new \ReflectionClass(AiSiteAgent::class))->getFileName();
+        self::assertIsString($controllerPath);
 
-$controllerReflection = new ReflectionClass(\GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent::class);
-$controller = $controllerReflection->newInstanceWithoutConstructor();
-$method = $controllerReflection->getMethod('runRegenerateBlockOperation');
-$method->setAccessible(true);
+        $source = (string)\file_get_contents($controllerPath);
+        $method = $this->extractControllerMethodSource($source, 'runRegenerateBlockOperation');
 
-$sessionReflection = new ReflectionClass(\GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::class);
-$session = $sessionReflection->newInstanceWithoutConstructor();
-$sse = new \Weline\Framework\Http\Sse\SseWriter();
+        self::assertStringNotContainsString('dd(', $method);
+        self::assertStringNotContainsString('var_dump(', $method);
+        self::assertStringNotContainsString('dump(', $method);
+        self::assertStringNotContainsString('die(', $method);
+        self::assertStringNotContainsString('exit(', $method);
+        self::assertStringContainsString('return [', $method);
+    }
 
-$method->invoke($controller, $sse, $session, 1, 'home_page', 'header/ai-site-header', 'test refine');
-echo "AFTER_CALL";
-PHP;
-        $script = \str_replace('__PROJECT_ROOT__', $projectRoot, $script);
-        \file_put_contents($tempFile, $script);
+    private function extractControllerMethodSource(string $source, string $methodName): string
+    {
+        $needle = 'function ' . $methodName . '(';
+        $start = \strpos($source, $needle);
+        self::assertNotFalse($start, $methodName . ' method missing.');
 
-        $cmd = \escapeshellarg((string)\PHP_BINARY) . ' ' . \escapeshellarg($tempFile) . ' 2>&1';
-        $exitCode = 0;
-        \ob_start();
-        \passthru($cmd, $exitCode);
-        $joined = (string)\ob_get_clean();
+        $braceStart = \strpos($source, '{', $start);
+        self::assertNotFalse($braceStart, $methodName . ' method body missing.');
 
-        @\unlink($tempFile);
-        if ($joined !== '') {
-            \fwrite(\STDOUT, "\n[runRegenerateBlockOperation dd output]\n" . $joined . "\n[/runRegenerateBlockOperation dd output]\n");
+        $depth = 0;
+        $length = \strlen($source);
+        for ($i = $braceStart; $i < $length; $i++) {
+            $char = $source[$i];
+            if ($char === '{') {
+                $depth++;
+            } elseif ($char === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return \substr($source, $start, $i - $start + 1);
+                }
+            }
         }
-        self::assertStringNotContainsString('Failed opening required', $joined, 'Sub-process bootstrap failed unexpectedly.');
 
-        self::assertStringNotContainsString(
-            'AFTER_CALL',
-            $joined,
-            'runRegenerateBlockOperation() should not run past the current debug dd($session).'
-        );
-        self::assertTrue(
-            \str_contains($joined, '调试输出 (dd函数)')
-            || \str_contains($joined, '程序已终止')
-            || \str_contains($joined, 'AiSiteAgentSession'),
-            'Expected dd() debug output signature was not found; method may not have reached dd($session).'
-        );
-        self::assertNotSame(
-            0,
-            $exitCode,
-            'Expected non-zero exit when hitting dd()/debug stop in runRegenerateBlockOperation().'
-        );
+        self::fail($methodName . ' method body is not balanced.');
     }
 }
