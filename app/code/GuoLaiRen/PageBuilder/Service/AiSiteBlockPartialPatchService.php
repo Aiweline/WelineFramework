@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
 use GuoLaiRen\PageBuilder\Service\AI\MockPage;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
@@ -26,6 +27,7 @@ class AiSiteBlockPartialPatchService
         private readonly ?AiSiteHtmlBlocksBuildService $htmlBlocksBuildService = null,
         private readonly ?AiResponseJsonParser $jsonParser = null,
         private readonly ?AiService $aiService = null,
+        private readonly ?Page $pageModel = null,
     ) {
     }
 
@@ -74,10 +76,22 @@ class AiSiteBlockPartialPatchService
         if ($match === null) {
             $fallbackBlocks = $this->readPageBuilderLayoutBlocks($scope, $pageType);
             $fallbackMatch = $this->findBlockInBlocks($fallbackBlocks, $blockId);
+            $blocks = $fallbackBlocks !== [] ? $fallbackBlocks : $blocks;
             if ($fallbackMatch !== null) {
                 $match = $fallbackMatch;
                 $blocks = $fallbackBlocks;
                 $source = 'pagebuilder_pages_by_type.ai_layout';
+            }
+        }
+
+        if ($match === null) {
+            $materializedBlocks = $this->readMaterializedPageAiLayoutBlocks($scope, $pageType);
+            $materializedMatch = $this->findBlockInBlocks($materializedBlocks, $blockId);
+            $blocks = $materializedBlocks !== [] ? $materializedBlocks : $blocks;
+            if ($materializedMatch !== null) {
+                $match = $materializedMatch;
+                $blocks = $materializedBlocks;
+                $source = 'page.ai_layout';
             }
         }
 
@@ -207,6 +221,9 @@ class AiSiteBlockPartialPatchService
         if ($blocks === []) {
             $blocks = $this->readPageBuilderLayoutBlocks($scope, $pageType);
         }
+        if ($blocks === []) {
+            $blocks = $this->readMaterializedPageAiLayoutBlocks($scope, $pageType);
+        }
 
         $match = $this->findBlockInBlocks($blocks, $blockId);
         if ($match === null) {
@@ -243,6 +260,8 @@ class AiSiteBlockPartialPatchService
         $virtualPage['last_generated_at'] = $createdAt;
         $virtualPages[$pageType] = $virtualPage;
         $scope['virtual_pages_by_type'] = $virtualPages;
+        $scope = $this->syncPageBuilderScopeAiLayout($scope, $pageType, $blocks, $createdAt);
+        $this->persistMaterializedPageAiLayoutBlocks($scope, $pageType, $blocks, $createdAt);
         $scope['preview_page_type'] = $pageType;
         $scope['build_summary'] = \array_replace(
             \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
@@ -497,16 +516,41 @@ class AiSiteBlockPartialPatchService
     private function buildBlockLookupValues(array $block): array
     {
         $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
-        return \array_values(\array_unique(\array_filter(\array_map('strval', [
-            $block['block_id'] ?? '',
-            $block['component_code'] ?? '',
-            $block['section_code'] ?? '',
-            $block[self::META_COMPONENT_CODE] ?? '',
-            $config[self::META_COMPONENT_CODE] ?? '',
-            $config['component_code'] ?? '',
-            $config['section_code'] ?? '',
-            $config['block_id'] ?? '',
-        ]), static fn(string $value): bool => \trim($value) !== '')));
+        $metadata = \is_array($block['metadata'] ?? null) ? $block['metadata'] : [];
+        $meta = \is_array($block['meta'] ?? null) ? $block['meta'] : [];
+        $values = [];
+        foreach ([$block, $config, $metadata, $meta] as $payload) {
+            $this->appendLookupValuesFromArray($values, $payload);
+        }
+
+        return \array_values(\array_unique(\array_filter(
+            \array_map(static fn($value): string => \trim((string)$value), $values),
+            static fn(string $value): bool => $value !== ''
+        )));
+    }
+
+    /**
+     * @param list<mixed> $values
+     * @param array<string, mixed> $payload
+     */
+    private function appendLookupValuesFromArray(array &$values, array $payload): void
+    {
+        foreach ([
+            'block_id',
+            'component_code',
+            'section_code',
+            'component',
+            'code',
+            'block_code',
+            'block_key',
+            'task_key',
+            self::META_COMPONENT_CODE,
+        ] as $key) {
+            if (!isset($payload[$key]) || (!\is_scalar($payload[$key]) && !(\is_object($payload[$key]) && \method_exists($payload[$key], '__toString')))) {
+                continue;
+            }
+            $values[] = $payload[$key];
+        }
     }
 
     /**
@@ -523,6 +567,22 @@ class AiSiteBlockPartialPatchService
         $candidates[] = $this->normalizeLookupKey(\str_replace(['content/', '/'], ['', '-'], $value));
         $candidates[] = $this->normalizeLookupKey('content/' . $value);
         $candidates[] = $this->normalizeLookupKey(\str_replace(['_', '/'], ['-', '-'], $value));
+        $parts = \array_values(\array_filter(
+            \array_map(static fn($part): string => \trim((string)$part), \preg_split('/[:|]+/', $value) ?: []),
+            static fn(string $part): bool => $part !== ''
+        ));
+        $lastPartIndex = \count($parts) - 1;
+        foreach ($parts as $partIndex => $part) {
+            $part = \trim((string)$part);
+            if ($part === '') {
+                continue;
+            }
+            if ($partIndex !== $lastPartIndex && !\str_contains($part, '/')) {
+                continue;
+            }
+            $candidates[] = $this->normalizeLookupKey($part);
+            $candidates[] = $this->normalizeLookupKey(\str_replace(['content/', '/'], ['', '-'], $part));
+        }
 
         return \array_values(\array_unique(\array_filter($candidates, static fn(string $candidate): bool => $candidate !== '')));
     }
