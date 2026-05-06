@@ -45,9 +45,9 @@ class Pixel extends FrontendRestController
             $websiteId = (int)$post['websiteId'];
         } elseif (isset($post['siteId']) && $post['siteId'] !== '') {
             $websiteId = (int)$post['siteId'];
-        } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-            $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
-        }
+        } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
+            }
 
         if (empty($post['eventName']) && empty($post['event'])) {
             $post['eventName'] = 'click';

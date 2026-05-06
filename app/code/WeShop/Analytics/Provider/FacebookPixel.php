@@ -199,11 +199,12 @@ HTML;
             return $url;
         }
 
-        if (!empty($_SERVER['HTTP_HOST']) && !empty($_SERVER['REQUEST_URI'])) {
-            $scheme = (string) ($_SERVER['REQUEST_SCHEME'] ?? 'https');
-            return $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+        $host = (string)\Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '');
+        $requestUri = (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
+        if ($host !== '' && $requestUri !== '') {
+            $scheme = (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_SCHEME', 'https');
+            return $scheme . '://' . $host . $requestUri;
         }
-
         return '';
     }
 

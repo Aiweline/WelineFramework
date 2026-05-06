@@ -39,7 +39,7 @@ class OrderCreatedPixel implements ObserverInterface
             'user_id' => $order->getCustomerId(),
             'module' => 'WeShop_Order',
             'name' => 'order_created',
-            'url' => $_SERVER['REQUEST_URI'] ?? '',
+            'url' => \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', ''),
             'value' => $order->getTotal(),
             'currency' => $order->getCurrency() ?? 'CNY',
             'additional' => [

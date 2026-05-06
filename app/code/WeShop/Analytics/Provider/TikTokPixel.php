@@ -236,8 +236,8 @@ HTML;
                 'referrer' => (string) ($eventData['referrer_url'] ?? ''),
             ],
             'user' => $user,
-            'user_agent' => (string) ($eventData['user_agent'] ?? $_SERVER['HTTP_USER_AGENT'] ?? 'cli'),
-            'ip' => (string) ($eventData['ip'] ?? $eventData['client_ip'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
+            'user_agent' => (string) ($eventData['user_agent'] ?? \Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', 'cli')),
+            'ip' => (string) ($eventData['ip'] ?? $eventData['client_ip'] ?? \Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', '127.0.0.1')),
         ];
     }
 

@@ -156,9 +156,9 @@ HTML;
         $anonymousId = trim((string) ($eventData['anonymous_id'] ?? ''));
         if ($anonymousId === '') {
             $anonymousId = md5(
-                (string) ($eventData['ip'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1')
+                (string) ($eventData['ip'] ?? \Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', '127.0.0.1'))
                 . '|'
-                . (string) ($eventData['user_agent'] ?? $_SERVER['HTTP_USER_AGENT'] ?? 'cli')
+                . (string) ($eventData['user_agent'] ?? \Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', 'cli'))
             );
         }
 
@@ -170,8 +170,8 @@ HTML;
             'eventSourceUrl' => $sourceUrl,
             'userData' => array_filter([
                 'anonymousId' => $anonymousId,
-                'clientUserAgent' => (string) ($eventData['user_agent'] ?? $_SERVER['HTTP_USER_AGENT'] ?? 'cli'),
-                'clientIpAddress' => (string) ($eventData['ip'] ?? $eventData['client_ip'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
+                'clientUserAgent' => (string) ($eventData['user_agent'] ?? \Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', 'cli')),
+                'clientIpAddress' => (string) ($eventData['ip'] ?? $eventData['client_ip'] ?? \Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', '127.0.0.1')),
                 'email' => $this->normalizeHash((string) ($eventData['email'] ?? '')),
                 'phone' => $this->normalizeHash((string) ($eventData['phone'] ?? $eventData['phone_number'] ?? '')),
                 'externalId' => $this->normalizeHash((string) ($eventData['customer_id'] ?? $eventData['user_id'] ?? '')),
