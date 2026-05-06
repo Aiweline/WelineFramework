@@ -55,8 +55,8 @@ class Analytics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取时间维度
@@ -124,8 +124,8 @@ class Analytics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取时间间隔（分钟）
@@ -187,8 +187,8 @@ class Analytics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取时间间隔
@@ -254,8 +254,8 @@ class Analytics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取天数
@@ -316,8 +316,8 @@ class Analytics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取测试ID
@@ -366,7 +366,7 @@ class Analytics extends FrontendRestController
             
             $testId = $post['testId'] ?? '';
             $name = $post['name'] ?? '';
-            $websiteId = (int)($post['websiteId'] ?? $_SERVER['WELINE_WEBSITE_ID'] ?? 0);
+            $websiteId = (int)($post['websiteId'] ?? \Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             
             if (empty($testId)) {
                 return $this->error(__('测试ID不能为空'), '', 400);
@@ -431,8 +431,8 @@ class Analytics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $status = $this->request->getParam('status') ?? $this->request->getGet('status');
@@ -485,8 +485,8 @@ class Analytics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取时间范围
@@ -613,8 +613,8 @@ class Analytics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取时间范围

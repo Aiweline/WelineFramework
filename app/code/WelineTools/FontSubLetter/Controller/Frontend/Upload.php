@@ -140,7 +140,7 @@ class Upload extends FrontendController
      */
     private function getBoundary(): ?string
     {
-        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        $contentType = \Weline\Framework\Env\WelineEnv::server('CONTENT_TYPE', '');
         if (preg_match('/boundary=(.*)$/i', $contentType, $matches)) {
             return trim($matches[1], '"');
         }

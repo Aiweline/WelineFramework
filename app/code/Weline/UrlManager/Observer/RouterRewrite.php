@@ -15,6 +15,7 @@ namespace Weline\UrlManager\Observer;
 
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Url;
 use Weline\UrlManager\Model\UrlRewrite;
@@ -215,7 +216,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         $query = Url::parse_url($origin_path, 'query');
         $decodedParams = [];
         parse_str($query, $decodedParams);
-        $_GET = $decodedParams;
+        WelineEnv::replaceGet($decodedParams);
         $this->syncDecodedWlsRequestState($origin_path, $uri, $decodedParams, $websiteId);
     }
 
@@ -225,25 +226,22 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
      */
     private function syncDecodedWlsRequestState(string $decodedUri, string $originUri, array $decodedParams, ?int $websiteId = null): void
     {
-        $_SERVER['REQUEST_URI'] = $decodedUri;
-        $_SERVER['QUERY_STRING'] = Url::parse_url($decodedUri, 'query') ?: '';
-        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = '/' . ltrim($originUri, '/');
+        $queryString = Url::parse_url($decodedUri, 'query') ?: '';
+        $originRequestUri = '/' . ltrim($originUri, '/');
+
+        WelineEnv::setServer('REQUEST_URI', $decodedUri, 'RouterRewrite decoded uri');
+        WelineEnv::setServer('QUERY_STRING', $queryString, 'RouterRewrite decoded uri');
+        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $originRequestUri, 'RouterRewrite decoded uri');
 
         if ($websiteId !== null && $websiteId > 0) {
-            $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
+            WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'RouterRewrite decoded website');
         }
 
-        if (\class_exists(\Weline\Framework\Runtime\RequestContext::class, false)) {
-            \Weline\Framework\Runtime\RequestContext::syncFromServer();
-            if ($websiteId !== null && $websiteId > 0) {
-                \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
-            }
-            if (isset($decodedParams['locale']) && \is_string($decodedParams['locale']) && $decodedParams['locale'] !== '') {
-                \Weline\Framework\Runtime\RequestContext::locale($decodedParams['locale']);
-            }
-            if (isset($decodedParams['currency']) && \is_string($decodedParams['currency']) && $decodedParams['currency'] !== '') {
-                \Weline\Framework\Runtime\RequestContext::currency($decodedParams['currency']);
-            }
+        if (isset($decodedParams['locale']) && \is_string($decodedParams['locale']) && $decodedParams['locale'] !== '') {
+            WelineEnv::set('user.lang', $decodedParams['locale'], 'RouterRewrite decoded locale');
+        }
+        if (isset($decodedParams['currency']) && \is_string($decodedParams['currency']) && $decodedParams['currency'] !== '') {
+            WelineEnv::set('user.currency', $decodedParams['currency'], 'RouterRewrite decoded currency');
         }
 
         try {
@@ -253,8 +251,8 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 ->invalidateUriCache()
                 ->unsetData('params')
                 ->setServer('REQUEST_URI', $decodedUri)
-                ->setServer('QUERY_STRING', $_SERVER['QUERY_STRING'])
-                ->setServer('WELINE_ORIGIN_REQUEST_URI', $_SERVER['WELINE_ORIGIN_REQUEST_URI']);
+                ->setServer('QUERY_STRING', $queryString)
+                ->setServer('WELINE_ORIGIN_REQUEST_URI', $originRequestUri);
 
             foreach ($decodedParams as $key => $value) {
                 if (\is_string($key)) {
@@ -262,7 +260,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 }
             }
         } catch (\Throwable $e) {
-            // 请求对象可能尚未初始化；此时保留 $_SERVER/$_GET 同步结果即可
+            // The request object may not be initialized yet; Context already contains the decoded state.
         }
     }
 }

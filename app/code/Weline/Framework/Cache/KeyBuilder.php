@@ -216,8 +216,8 @@ class KeyBuilder
     public static function buildUnifiedRequestCacheKey(string $uri = '', string $method = 'GET'): string
     {
         $fullUri = \w_env('full_request_uri', $uri);
-        if (($fullUri === '' || !\str_contains($fullUri, '://')) && \is_array($_SERVER ?? null)) {
-            $serverFull = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        if ($fullUri === '' || !\str_contains($fullUri, '://')) {
+            $serverFull = (string)\Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
             if ($serverFull !== '' && \str_contains($serverFull, '://')) {
                 $fullUri = $serverFull;
             }

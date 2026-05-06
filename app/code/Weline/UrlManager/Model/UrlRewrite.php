@@ -43,7 +43,7 @@ class UrlRewrite extends Model
     {
         $websiteId = WelineEnv::get('website_id', null);
         if ($websiteId === null || $websiteId === '') {
-            $websiteId = \w_env('website_id', '');
+            $websiteId = WelineEnv::server('WELINE_WEBSITE_ID', '');
         }
         if ($websiteId === '' || $websiteId === null) {
             return 0;

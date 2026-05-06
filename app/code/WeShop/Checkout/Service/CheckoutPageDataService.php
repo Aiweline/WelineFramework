@@ -566,7 +566,7 @@ class CheckoutPageDataService
 
     protected function resolveCheckoutCurrency(): string
     {
-        $currency = trim((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? ''));
+        $currency = trim((string) (\Weline\Framework\Env\WelineEnv::server('WELINE_USER_CURRENCY', '')));
         if ($currency !== '') {
             return strtoupper($currency);
         }
