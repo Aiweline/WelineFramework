@@ -1379,19 +1379,26 @@ class PageRenderService
             }
             $blockId = \trim((string)($block['block_id'] ?? ''));
             $blockType = \trim((string)($block['type'] ?? 'ai_html_block'));
+            $componentCode = $this->resolveAiHtmlBlockComponentCode($block);
             $html .= '<section class="pb-ai-html-block"';
             if ($blockId !== '') {
                 $html .= ' data-block-id="' . \htmlspecialchars($blockId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
+            }
+            if ($componentCode !== '') {
+                $html .= ' data-component-code="' . \htmlspecialchars($componentCode, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
             }
             if ($blockType !== '') {
                 $html .= ' data-block-type="' . \htmlspecialchars($blockType, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
             }
             $html .= '>';
             if ($visualEditor) {
-                $region = 'content';
-                $componentKey = $blockId !== '' ? $blockId : $blockType;
+                $region = \trim((string)($block['_pb_server_region'] ?? $block['region'] ?? 'content'));
+                $region = $region !== '' ? $region : 'content';
+                $componentKey = $componentCode !== '' ? $componentCode : ($blockId !== '' ? $blockId : $blockType);
                 $html .= '<div class="pb-component-wrapper tpmst-component-wrapper"'
                     . ' data-component="' . \htmlspecialchars($componentKey, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                    . ' data-component-code="' . \htmlspecialchars($componentCode !== '' ? $componentCode : $componentKey, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                    . ' data-block-id="' . \htmlspecialchars($blockId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
                     . ' data-region="' . \htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
                     . ' data-index="0"'
                     . ' data-ai-block-id="' . \htmlspecialchars($blockId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">'
@@ -1417,6 +1424,31 @@ class PageRenderService
      * 统一使用组件化模式：始终构建完整 HTML 结构
      * header/content/footer 组件只是 HTML 片段，不包含完整的 HTML 文档结构
      */
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolveAiHtmlBlockComponentCode(array $block): string
+    {
+        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
+        foreach ([
+            $block['_pb_server_component_code'] ?? '',
+            $config['_pb_server_component_code'] ?? '',
+            $block['component_code'] ?? '',
+            $config['component_code'] ?? '',
+            $block['section_code'] ?? '',
+            $config['section_code'] ?? '',
+            $block['code'] ?? '',
+            $block['component'] ?? '',
+        ] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
     private function sanitizeAiHtmlBlockFragment(string $html): string
     {
         if (!$this->containsAiInstructionLeak($html)) {
