@@ -25,8 +25,9 @@ class IpMatcher
         $ipKeys = ['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_CLIENT_IP', 'REMOTE_ADDR'];
         
         foreach ($ipKeys as $key) {
-            if (!empty($_SERVER[$key])) {
-                $ip = $_SERVER[$key];
+            $serverIp = \Weline\Framework\Env\WelineEnv::server((string)$key);
+            if (!empty($serverIp)) {
+                $ip = (string)$serverIp;
                 // 处理多个IP的情况（代理链）
                 if (str_contains($ip, ',')) {
                     $ips = explode(',', $ip);
@@ -42,7 +43,7 @@ class IpMatcher
             }
         }
         
-        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        return \Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', '127.0.0.1');
     }
     
     /**

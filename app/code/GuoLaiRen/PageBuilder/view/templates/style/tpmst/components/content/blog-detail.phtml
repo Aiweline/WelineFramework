@@ -1,7 +1,7 @@
 <?php
 /**
  * TPMST 博客文章详情组件
- * 
+ *
  * @fields_start
  * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
  * blog.show_cover|显示封面图|select:yes=是,no=否|yes
@@ -12,7 +12,7 @@
  * blog.show_related|显示相关文章|select:yes=是,no=否|yes
  * blog.related_count|相关文章数量|number|3
  * @fields_end
- * 
+ *
  * @var \Weline\Framework\View\Template $this
  * @var array $current_post 当前文章
  * @var array $related_posts 相关文章
@@ -78,14 +78,14 @@ if (empty($currentPost)):
             <span class="separator">/</span>
             <span class="current"><?= htmlspecialchars(mb_substr($currentPost['title'], 0, 30)) ?><?= mb_strlen($currentPost['title']) > 30 ? '...' : '' ?></span>
         </nav>
-        
+
         <div class="blog-detail-wrapper <?= $showSidebar ? 'with-sidebar' : 'full-width' ?>">
             <!-- 文章主体 -->
             <article class="blog-article">
                 <!-- 文章标题 -->
                 <header class="article-header">
                     <h1 class="article-title"><?= htmlspecialchars($currentPost['title']) ?></h1>
-                    
+
                     <div class="article-meta">
                         <?php if ($showDate && !empty($currentPost['published_at'])): ?>
                         <span class="meta-item meta-date">
@@ -95,7 +95,7 @@ if (empty($currentPost)):
                             <?= date('F d, Y', strtotime($currentPost['published_at'])) ?>
                         </span>
                         <?php endif; ?>
-                        
+
                         <?php if ($showAuthor && !empty($currentPost['author'])): ?>
                         <span class="meta-item meta-author">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -104,7 +104,7 @@ if (empty($currentPost)):
                             <?= htmlspecialchars($currentPost['author']) ?>
                         </span>
                         <?php endif; ?>
-                        
+
                         <?php if (!empty($currentPost['view_count'])): ?>
                         <span class="meta-item meta-views">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -115,34 +115,34 @@ if (empty($currentPost)):
                         <?php endif; ?>
                     </div>
                 </header>
-                
+
                 <!-- 封面图 -->
                 <?php if ($showCover && !empty($currentPost['cover_image'])): ?>
                 <div class="article-cover">
-                    <img src="<?= htmlspecialchars($currentPost['cover_image']) ?>" 
+                    <img src="<?= htmlspecialchars($currentPost['cover_image']) ?>"
                          alt="<?= htmlspecialchars($currentPost['title']) ?>">
                 </div>
                 <?php endif; ?>
-                
+
                 <!-- 摘要 -->
                 <?php if (!empty($currentPost['summary'])): ?>
                 <div class="article-summary">
                     <p><?= htmlspecialchars($currentPost['summary']) ?></p>
                 </div>
                 <?php endif; ?>
-                
+
                 <!-- 文章内容 -->
                 <div class="article-content">
                     <?= $currentPost['content'] ?? '' ?>
                 </div>
-                
+
                 <!-- 标签 -->
                 <?php if ($showTags && !empty($currentPost['tags'])): ?>
                 <div class="article-tags">
                     <span class="tags-label"><?= __('Tags:') ?></span>
-                    <?php 
+                    <?php
                     $tags = is_array($currentPost['tags']) ? $currentPost['tags'] : explode(',', $currentPost['tags']);
-                    foreach ($tags as $tag): 
+                    foreach ($tags as $tag):
                         $tag = trim($tag);
                         if (empty($tag)) continue;
                     ?>
@@ -150,25 +150,25 @@ if (empty($currentPost)):
                     <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
-                
+
                 <!-- 分享按钮 -->
                 <?php if ($showShare): ?>
                 <div class="article-share">
                     <span class="share-label"><?= __('Share:') ?></span>
                     <div class="share-buttons">
-                        <a href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode($_SERVER['REQUEST_URI'] ?? '') ?>" 
+                        <a href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '')) ?>"
                            target="_blank" rel="noopener" class="share-btn share-facebook" title="Share on Facebook">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M18.77 7.46H14.5v-1.9c0-.9.6-1.1 1-1.1h3V.5h-4.33C10.24.5 9.5 3.44 9.5 5.32v2.15h-3v4h3v12h5v-12h3.85l.42-4z"/>
                             </svg>
                         </a>
-                        <a href="https://twitter.com/intent/tweet?url=<?= urlencode($_SERVER['REQUEST_URI'] ?? '') ?>&text=<?= urlencode($currentPost['title']) ?>" 
+                        <a href="https://twitter.com/intent/tweet?url=<?= urlencode(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '')) ?>&text=<?= urlencode($currentPost['title']) ?>"
                            target="_blank" rel="noopener" class="share-btn share-twitter" title="Share on Twitter">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                             </svg>
                         </a>
-                        <a href="https://www.linkedin.com/shareArticle?mini=true&url=<?= urlencode($_SERVER['REQUEST_URI'] ?? '') ?>&title=<?= urlencode($currentPost['title']) ?>" 
+                        <a href="https://www.linkedin.com/shareArticle?mini=true&url=<?= urlencode(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '')) ?>&title=<?= urlencode($currentPost['title']) ?>"
                            target="_blank" rel="noopener" class="share-btn share-linkedin" title="Share on LinkedIn">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
@@ -182,7 +182,7 @@ if (empty($currentPost)):
                     </div>
                 </div>
                 <?php endif; ?>
-                
+
                 <!-- 返回博客列表 -->
                 <div class="article-navigation">
                     <a href="/blog" class="btn-back">
@@ -193,7 +193,7 @@ if (empty($currentPost)):
                     </a>
                 </div>
             </article>
-            
+
             <!-- 侧边栏 -->
             <?php if ($showSidebar): ?>
             <aside class="blog-sidebar">
@@ -212,7 +212,7 @@ if (empty($currentPost)):
                     </ul>
                 </div>
                 <?php endif; ?>
-                
+
                 <!-- 最近文章 -->
                 <?php if (!empty($recentPosts)): ?>
                 <div class="sidebar-widget">
@@ -222,7 +222,7 @@ if (empty($currentPost)):
                         <li>
                             <a href="<?= htmlspecialchars($post['url']) ?>">
                                 <?php if (!empty($post['cover_image'])): ?>
-                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" 
+                                <img src="<?= htmlspecialchars($post['cover_image']) ?>"
                                      alt="<?= htmlspecialchars($post['title']) ?>"
                                      loading="lazy">
                                 <?php endif; ?>
@@ -241,7 +241,7 @@ if (empty($currentPost)):
             </aside>
             <?php endif; ?>
         </div>
-        
+
         <!-- 相关文章 -->
         <?php if ($showRelated && !empty($relatedPosts)): ?>
         <div class="related-posts">
@@ -251,7 +251,7 @@ if (empty($currentPost)):
                 <article class="related-card">
                     <?php if (!empty($post['cover_image'])): ?>
                     <a href="<?= htmlspecialchars($post['url']) ?>" class="related-card-image">
-                        <img src="<?= htmlspecialchars($post['cover_image']) ?>" 
+                        <img src="<?= htmlspecialchars($post['cover_image']) ?>"
                              alt="<?= htmlspecialchars($post['title']) ?>"
                              loading="lazy">
                     </a>
@@ -747,7 +747,7 @@ function copyToClipboard() {
     .blog-detail-wrapper {
         flex-direction: column;
     }
-    
+
     .blog-sidebar {
         width: 100%;
     }
@@ -757,24 +757,24 @@ function copyToClipboard() {
     .tpmst-blog-detail {
         padding: 30px 0 50px;
     }
-    
+
     .tpmst-blog-detail .tpmst-section-inner {
         padding: 0 15px;
     }
-    
+
     .article-title {
         font-size: 1.8rem;
     }
-    
+
     .article-meta {
         flex-direction: column;
         gap: 10px;
     }
-    
+
     .article-content {
         font-size: 1rem;
     }
-    
+
     .article-share {
         flex-direction: column;
         align-items: flex-start;

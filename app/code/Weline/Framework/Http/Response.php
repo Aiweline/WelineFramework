@@ -242,7 +242,7 @@ class Response implements ResponseInterface
 
         $redirectCount = ((int)\w_env('wls.redirect_count', 0)) + 1;
         \w_env_set('wls.redirect_count', (string)$redirectCount, 'Response redirect');
-        $_SERVER['REDIRECT_COUNT'] = $redirectCount;
+        \Weline\Framework\Env\WelineEnv::setServer('REDIRECT_COUNT', $redirectCount, 'Response redirect');
         $currentUri = \w_env('request.uri', '/');
 
         if ($redirectCount > 5) {

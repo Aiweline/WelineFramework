@@ -152,7 +152,7 @@ class AiGenerate extends BackendController
         
         if (!$this->request->isPost()) {
             // 记录详细的请求方法信息用于调试
-            $actualMethod = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
+            $actualMethod = \Weline\Framework\Env\WelineEnv::server('REQUEST_METHOD', 'UNKNOWN');
             w_log_error("[AiGenerate::pageContent] Request method check failed. isPost()=false, actual REQUEST_METHOD={$actualMethod}");
             
             return json_encode([
