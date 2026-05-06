@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeLayout;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractMetaBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractQaReportBuilder;
@@ -18,6 +19,60 @@ use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteBuildTaskService
 {
+    private const GENERATED_ARTIFACT_PROMPT_TRACE_MARKERS = [
+        'Fill the block fields',
+        'confirmed stage-1 plan',
+        'confirmed stage-1 theme',
+        'stage-2 task detail',
+        'frontend component skill',
+        'Generate the frontend block',
+        'content_fill_rule',
+        'field_content_requirements',
+        'stage3_directive',
+        'task_script',
+        'block_task.content_plan',
+        'block_task.style_plan',
+        'Required by block task schema',
+        'Built from plan',
+        'generated from plan',
+        'Present key terms',
+        'provide download CTA',
+        'source intent',
+        'customer brief',
+        'planning_reason',
+        'implementation_contract',
+        'data_contract',
+        'visitor-visible copy',
+        'Return ONLY',
+        'Do not use the',
+        'Use concrete',
+        'Directly render',
+        'component prompt',
+        'Provide category',
+        'filter tabs',
+        'visually distinct',
+        'Visible CTA path',
+        'Trust content',
+        'Responsive cards',
+        'proof points',
+        'visual hierarchy',
+        'launch-ready content',
+        'Immediately capture',
+        'Instantly communicate',
+        'Immediately inform',
+        'Capture immediate attention',
+        'Introduce Teenipiya',
+        '$category',
+        'slug ===',
+        '提示词',
+        '输出必须',
+        '优先沿用',
+        '字段样例',
+        '直接产出可上屏',
+        '生成页面方案',
+        '内容填充规则',
+    ];
+
     /**
      * 页级 rollup / checkpoint：按 page_type 统计块级任务完成情况；可与 skip_remaining_blocks 联动跳过后续 section。
      *
@@ -1214,7 +1269,9 @@ class AiSiteBuildTaskService
             }
             $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
             $status = $this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING));
-            if ($status !== self::TASK_STATUS_PENDING) {
+            $staleRunningRetry = $status === self::TASK_STATUS_RUNNING
+                && (int)($state['attempt_no'] ?? 0) >= 2;
+            if ($status !== self::TASK_STATUS_PENDING && !$staleRunningRetry) {
                 continue;
             }
             $pending[] = \array_replace($task, $state);
@@ -1736,6 +1793,7 @@ class AiSiteBuildTaskService
     public function finalizeBuildTaskStatesAfterRunLoop(array $scope): array
     {
         $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope);
+        $scope = $this->clearResolvedRetryableAiFailures($scope);
         $summary = $this->summarize($scope);
         if ((int)($summary['running'] ?? 0) <= 0) {
             return $this->attachBuildRenderDataContract($scope);
@@ -1747,7 +1805,10 @@ class AiSiteBuildTaskService
             )
         );
 
-        return $this->attachBuildRenderDataContract($this->reconcileGeneratedArtifactsWithTaskState($scope));
+        $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope);
+        $scope = $this->clearResolvedRetryableAiFailures($scope);
+
+        return $this->attachBuildRenderDataContract($scope);
     }
 
     /**
@@ -2065,6 +2126,90 @@ class AiSiteBuildTaskService
 
     /**
      * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function clearResolvedRetryableAiFailures(array $scope): array
+    {
+        $ledger = $this->normalizeRetryableAiFailureLedger(
+            \is_array($scope[self::RETRYABLE_AI_FAILURES_SCOPE_KEY] ?? null)
+                ? $scope[self::RETRYABLE_AI_FAILURES_SCOPE_KEY]
+                : []
+        );
+        $taskState = $this->extractTaskState($scope);
+        foreach (['build', 'task_plan'] as $operation) {
+            $items = \is_array($ledger[$operation]['items'] ?? null) ? $ledger[$operation]['items'] : [];
+            foreach ($items as $itemKey => $item) {
+                if (!\is_array($item)) {
+                    unset($items[$itemKey]);
+                    continue;
+                }
+                $relatedTaskKeys = \is_array($item['task_keys'] ?? null)
+                    ? \array_values(\array_filter(\array_map('strval', $item['task_keys'])))
+                    : [];
+                $candidateKey = \trim((string)($item['item_key'] ?? $itemKey));
+                if ($candidateKey !== '') {
+                    $relatedTaskKeys[] = $candidateKey;
+                }
+                $relatedTaskKeys = \array_values(\array_unique($relatedTaskKeys));
+                if ($relatedTaskKeys === []) {
+                    continue;
+                }
+
+                $resolved = true;
+                foreach ($relatedTaskKeys as $taskKey) {
+                    $status = $this->normalizeTaskStatus((string)($taskState[$taskKey]['status'] ?? self::TASK_STATUS_PENDING));
+                    if ($status !== self::TASK_STATUS_DONE) {
+                        $resolved = false;
+                        break;
+                    }
+                }
+                if ($resolved) {
+                    unset($items[$itemKey]);
+                }
+            }
+
+            if ($items === []) {
+                unset($ledger[$operation]);
+            } else {
+                $ledger[$operation]['items'] = $items;
+                $ledger[$operation]['updated_at'] = \date('Y-m-d H:i:s');
+            }
+        }
+
+        $scope[self::RETRYABLE_AI_FAILURES_SCOPE_KEY] = $ledger;
+        $scope['retryable_ai_failure_count'] = $this->countRetryableAiFailuresFromLedger($ledger);
+        $scope['next_stage_blocked_by_ai_failures'] = $scope['retryable_ai_failure_count'] > 0 ? 1 : 0;
+        foreach (['build', 'task_plan'] as $operation) {
+            if (isset($ledger[$operation])) {
+                continue;
+            }
+            if (\is_array($scope['active_operations'][$operation] ?? null)) {
+                $scope['active_operations'][$operation]['retryable_ai_failure_count'] = 0;
+                $scope['active_operations'][$operation]['failure_mode'] = '';
+                $scope['active_operations'][$operation]['queue_waiting_for_scheduler'] = false;
+                if (($scope['active_operations'][$operation]['status'] ?? '') === self::TASK_STATUS_DONE) {
+                    $scope['active_operations'][$operation]['can_close_stream'] = false;
+                    $scope['active_operations'][$operation]['continue_other_operations'] = false;
+                }
+            }
+            if (\is_array($scope['active_operation'] ?? null)
+                && \trim((string)($scope['active_operation']['operation'] ?? '')) === $operation
+            ) {
+                $scope['active_operation']['retryable_ai_failure_count'] = 0;
+                $scope['active_operation']['failure_mode'] = '';
+                $scope['active_operation']['queue_waiting_for_scheduler'] = false;
+                if (($scope['active_operation']['status'] ?? '') === self::TASK_STATUS_DONE) {
+                    $scope['active_operation']['can_close_stream'] = false;
+                    $scope['active_operation']['continue_other_operations'] = false;
+                }
+            }
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      */
     public function hasRetryableAiFailures(array $scope, ?string $operation = null): bool
     {
@@ -2104,11 +2249,20 @@ class AiSiteBuildTaskService
      */
     public function syncBuildTaskFailuresToRetryableLedger(array $scope): array
     {
+        $scope = $this->normalizeConfirmedTaskPlanFlag($scope);
+        $scope = $this->clearResolvedRetryableAiFailures($scope);
+        $taskSummary = $this->summarize($scope);
+        $allBuildTasksComplete = $this->isBuildTaskSummaryFullyComplete($taskSummary)
+            && !$this->hasUnfinishedBlueprintTasks($scope);
         $taskState = $this->extractTaskState($scope);
         $existingBuildLedger = $this->getRetryableAiFailures($scope, 'build');
         $existingBuildFailures = \is_array($existingBuildLedger['build']['items'] ?? null)
             ? $existingBuildLedger['build']['items']
             : [];
+        if ($allBuildTasksComplete) {
+            $existingBuildFailures = [];
+            $scope = $this->clearLatestBuildFailureState($scope);
+        }
         $failures = [];
         foreach ($this->extractBlueprintTasks($scope) as $task) {
             $taskKey = \trim((string)($task['task_key'] ?? ''));
@@ -2133,11 +2287,12 @@ class AiSiteBuildTaskService
             ];
         }
 
-        if ($failures === [] && $existingBuildFailures !== []) {
+        if (!$allBuildTasksComplete && $failures === [] && $existingBuildFailures !== []) {
             $failures = $existingBuildFailures;
         }
         if (
-            $failures === []
+            !$allBuildTasksComplete
+            && $failures === []
             && (!empty($scope['latest_build_failed']) || !empty($scope['publish_blocked_by_latest_ai_failure']))
         ) {
             $latestBuildFailure = \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [];
@@ -2167,7 +2322,43 @@ class AiSiteBuildTaskService
             ];
         }
 
-        return $this->replaceRetryableAiFailures($scope, 'build', $failures);
+        $scope = $this->replaceRetryableAiFailures($scope, 'build', $failures);
+        if ($failures === [] && $allBuildTasksComplete) {
+            $scope = $this->clearLatestBuildFailureState($scope);
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     */
+    private function isBuildTaskSummaryFullyComplete(array $summary): bool
+    {
+        $total = (int)($summary['total'] ?? 0);
+        if ($total <= 0) {
+            return false;
+        }
+
+        return (int)($summary['done'] ?? 0) >= $total
+            && (int)($summary['failed'] ?? 0) === 0
+            && (int)($summary['pending'] ?? 0) === 0
+            && (int)($summary['running'] ?? 0) === 0
+            && (int)($summary['cancelled'] ?? 0) === 0;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function clearLatestBuildFailureState(array $scope): array
+    {
+        $scope['latest_build_failed'] = 0;
+        $scope['latest_build_failure'] = [];
+        $scope['publish_blocked_by_latest_ai_failure'] = 0;
+        $scope['publish_blocked_reason'] = '';
+
+        return $scope;
     }
 
     /**
@@ -2464,7 +2655,18 @@ class AiSiteBuildTaskService
         if ($taskType === 'shared_component') {
             $region = \trim((string)($task['region'] ?? ''));
             $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
-            return $region !== '' && \is_array($sharedComponents[$region] ?? null) && $sharedComponents[$region] !== [];
+            $sharedComponent = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
+            if ($region === '' || $sharedComponent === []) {
+                return false;
+            }
+
+            $payload = \json_encode($sharedComponent, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+            if (\is_string($payload) && $this->containsGeneratedArtifactPromptTrace($payload)) {
+                return false;
+            }
+
+            $componentCode = $this->resolveSharedComponentCodeForArtifactCheck($region, $task, $sharedComponent);
+            return $componentCode === '' || !$this->virtualThemeComponentHasPromptTrace($scope, $componentCode);
         }
 
         if ($taskType !== 'page_section') {
@@ -2476,19 +2678,171 @@ class AiSiteBuildTaskService
         if ($pageType === '' || $sectionCode === '') {
             return false;
         }
+        if ($this->materializedAiHtmlPageHasPromptTrace($scope, $pageType)) {
+            return false;
+        }
 
         $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
         $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
         if ($this->layoutContainsSectionCode($layout, $sectionCode)) {
-            return true;
+            return !$this->arrayContainsGeneratedArtifactPromptTrace($layout)
+                && !$this->virtualThemeComponentHasPromptTrace($scope, $sectionCode);
         }
         if ($this->persistedVirtualThemeLayoutContainsSectionCode($scope, $pageType, $sectionCode)) {
-            return true;
+            return !$this->virtualThemeComponentHasPromptTrace($scope, $sectionCode);
         }
 
         $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        return $this->virtualPageContainsSectionCode($virtualPage, $sectionCode);
+        return $this->virtualPageContainsSectionCode($virtualPage, $sectionCode)
+            && !$this->arrayContainsGeneratedArtifactPromptTrace($virtualPage)
+            && !$this->virtualThemeComponentHasPromptTrace($scope, $sectionCode);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function virtualThemeComponentHasPromptTrace(array $scope, string $componentCode): bool
+    {
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        $componentCode = \trim($componentCode);
+        if ($virtualThemeId <= 0 || $componentCode === '') {
+            return false;
+        }
+
+        try {
+            /** @var VirtualThemeComponent $component */
+            $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+            $component->clearData()->clearQuery()
+                ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+                ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
+                ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
+                ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+                ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+            if ((int)$component->getId() <= 0) {
+                return false;
+            }
+
+            $payload = \json_encode([
+                'template_content' => $component->getTemplateContent(),
+                'default_config' => $component->getDefaultConfig(),
+            ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+            return \is_string($payload) && $this->containsGeneratedArtifactPromptTrace($payload);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function containsGeneratedArtifactPromptTrace(string $payload): bool
+    {
+        foreach (self::GENERATED_ARTIFACT_PROMPT_TRACE_MARKERS as $marker) {
+            if ($marker !== '' && \stripos($payload, $marker) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function materializedAiHtmlPageHasPromptTrace(array $scope, string $pageType): bool
+    {
+        $pageId = $this->resolveMaterializedPageIdForArtifactCheck($scope, $pageType);
+        if ($pageId <= 0 && (int)($scope['website_id'] ?? $scope['draft_website_id'] ?? 0) <= 0) {
+            return false;
+        }
+
+        try {
+            /** @var Page $page */
+            $page = clone ObjectManager::getInstance(Page::class);
+            $page->clearData()->clearQuery();
+            if ($pageId > 0) {
+                $page->load($pageId);
+            } else {
+                $websiteId = (int)($scope['website_id'] ?? $scope['draft_website_id'] ?? 0);
+                $page->where(Page::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(Page::schema_fields_TYPE, $pageType)
+                    ->order(Page::schema_fields_ID, 'DESC')
+                    ->find()
+                    ->fetch();
+            }
+            if ((int)$page->getId() <= 0) {
+                return false;
+            }
+
+            $renderMode = \trim((string)$page->getData(Page::schema_fields_RENDER_MODE));
+            $aiLayout = (string)$page->getData(Page::schema_fields_AI_LAYOUT);
+            if ($renderMode !== Page::RENDER_MODE_AI_HTML && \trim($aiLayout) === '') {
+                return false;
+            }
+
+            return $this->containsGeneratedArtifactPromptTrace($aiLayout);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveMaterializedPageIdForArtifactCheck(array $scope, string $pageType): int
+    {
+        $pagesByType = \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [];
+        $pageMeta = \is_array($pagesByType[$pageType] ?? null) ? $pagesByType[$pageType] : [];
+        $pageId = (int)($pageMeta['page_id'] ?? $pageMeta['materialized_page_id'] ?? 0);
+        if ($pageId > 0) {
+            return $pageId;
+        }
+
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+
+        return (int)($virtualPage['materialized_page_id'] ?? $virtualPage['page_id'] ?? 0);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function arrayContainsGeneratedArtifactPromptTrace(array $payload): bool
+    {
+        if ($payload === []) {
+            return false;
+        }
+
+        $encoded = \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+        return \is_string($encoded) && $this->containsGeneratedArtifactPromptTrace($encoded);
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, mixed> $sharedComponent
+     */
+    private function resolveSharedComponentCodeForArtifactCheck(string $region, array $task, array $sharedComponent): string
+    {
+        foreach ([
+            $sharedComponent['code'] ?? null,
+            $sharedComponent['component_code'] ?? null,
+            $sharedComponent['section_code'] ?? null,
+            $task['component_code'] ?? null,
+            $task['section_code'] ?? null,
+        ] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return match ($region) {
+            'header' => 'header/ai-site-header',
+            'footer' => 'footer/ai-site-footer',
+            default => '',
+        };
     }
 
     /**
@@ -2549,7 +2903,10 @@ class AiSiteBuildTaskService
                 ->find()
                 ->fetch();
 
-            return $layout->getId() > 0 && $this->layoutContainsSectionCode($layout->getConfig(), $sectionCode);
+            $config = $layout->getConfig();
+            return $layout->getId() > 0
+                && $this->layoutContainsSectionCode($config, $sectionCode)
+                && !$this->arrayContainsGeneratedArtifactPromptTrace($config);
         } catch (\Throwable) {
             return false;
         }

@@ -1534,7 +1534,14 @@ class ServerInstanceManager
     public function isInstanceIpcControllable(string $name): bool
     {
         $info = $this->getPersistedInstanceInfo($name);
-        if ($info === null || $info->controlPort <= 0) {
+        $masterInfo = null;
+        $controlPort = $info?->controlPort ?? 0;
+        if ($controlPort <= 0) {
+            $masterInfo = MasterProcess::getMasterInfo($name);
+            $controlPort = (int)($masterInfo['control_port'] ?? 0);
+        }
+
+        if ($controlPort <= 0) {
             return false;
         }
 
@@ -1542,11 +1549,15 @@ class ServerInstanceManager
         // `php bin/w server:start` 进程，而不是带 `--name=weline-wls-master-*`
         // 的受管子进程。此时严格的 Master 身份校验会误判，但真正决定
         // IPC 可控性的仍是控制端口是否可达。
-        if (Processer::isPortInUse($info->controlPort)) {
+        if (Processer::isPortInUse($controlPort)) {
             return true;
         }
 
-        return $info->isMasterRunning();
+        if ($info !== null && $info->isMasterRunning()) {
+            return true;
+        }
+
+        return $masterInfo !== null && MasterProcess::isMasterRunning($name);
     }
 
     /**

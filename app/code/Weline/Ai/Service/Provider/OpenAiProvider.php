@@ -28,8 +28,10 @@ use Weline\Framework\Http\Sse\SseContext;
  * - 错误处理和重试机制
  * - Token使用量统计
  */
-class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterface
+class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterface, ModelListingProviderInterface
 {
+    use ModelListingProviderTrait;
+
     /**
      * 最大重试次数
      */
@@ -96,18 +98,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
-        
-        // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
-        if (!SseContext::isSseEnabled()) {
-            if ($timeout > 0) {
-                $timeLimit = $timeout + 10;
-                @set_time_limit($timeLimit);
-            } else {
-                @set_time_limit(0);
-            }
-        }
+        $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
+        $this->applyExecutionTimeLimit($timeout);
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
@@ -223,7 +215,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $requestData = $this->buildImageGenerationRequest($model, $prompt, $params, $config);
-        $timeout = isset($params['timeout']) ? (int)($params['timeout']) : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
+        $this->applyExecutionTimeLimit($timeout);
         $response = $this->callApiWithRetry(
             $this->resolveImageGenerationUrl($config),
             $apiKey,
@@ -291,7 +284,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
+        $this->applyExecutionTimeLimit($timeout);
 
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
@@ -562,18 +556,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
-        
-        // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
-        if (!SseContext::isSseEnabled()) {
-            if ($timeout > 0) {
-                $timeLimit = $timeout + 10;
-                @set_time_limit($timeLimit);
-            } else {
-                @set_time_limit(0);
-            }
-        }
+        $timeout = ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
+        $this->applyExecutionTimeLimit($timeout);
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
@@ -879,6 +863,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
     {
         // SSE 模式下不做 PHP 层面的超时检测
         $isSseMode = SseContext::isSseEnabled();
+        $this->applyExecutionTimeLimit($timeout);
         
         $startTime = microtime(true);
         $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
@@ -943,6 +928,13 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 throw new Exception("API返回错误: {$errorMsg}");
             }
 
+            if (str_ends_with($url, '/images/generations')) {
+                if (!isset($result['data']) || !is_array($result['data'])) {
+                    throw new Exception('API image response format error');
+                }
+                return $result;
+            }
+
             if (!isset($result['choices'][0]['message']['content'])) {
                 throw new Exception("API响应格式错误");
             }
@@ -979,6 +971,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
     {
         // SSE 模式下不做 PHP 层面的超时检测，由 SseWriter 和 curl 自身控制
         $isSseMode = SseContext::isSseEnabled();
+        $this->applyExecutionTimeLimit($timeout);
         
         $startTime = microtime(true);
         $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
@@ -1168,6 +1161,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         // 连接超时单独设置，防止长时间卡在连接阶段（不超过60秒）
         if ($timeout > 0) {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
+            curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, min(30, max(10, (int)ceil($timeout / 4))));
         } else {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
             // 当 timeout=0 时设置低速保护：如果 120 秒内传输速率低于 1 字节/秒，则中止
@@ -1200,6 +1195,16 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         return $ch;
+    }
+
+    private function applyExecutionTimeLimit(int $timeout): void
+    {
+        $timeout = \max(0, $timeout);
+        @set_time_limit(
+            $timeout > 0
+                ? $timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER
+                : 0
+        );
     }
 
     /**

@@ -217,6 +217,17 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                     </div>
                                 </div>
                                 <div class="col-md-5">
+                                    <label for="remote_model_select" class="form-label">
+                                        <?= __('供应商模型') ?>
+                                    </label>
+                                    <select class="form-select" id="remote_model_select" disabled>
+                                        <option value=""><?= __('先选择供应商账户') ?></option>
+                                    </select>
+                                    <div class="form-text" id="remote_model_help">
+                                        <?= __('从所选供应商账户的 models 接口拉取；不支持时手动填写模型代码。') ?>
+                                    </div>
+                                </div>
+                                <div class="col-md-5">
                                     <label for="api_key_input" class="form-label">
                                         <?= __('API Key') ?>
                                     </label>
@@ -362,8 +373,9 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                             <option value="text2text" <?= $primaryModality === 'text2text' ? 'selected' : '' ?>>text2text</option>
                                             <option value="text2image" <?= $primaryModality === 'text2image' ? 'selected' : '' ?>>text2image</option>
                                             <option value="text2video" <?= $primaryModality === 'text2video' ? 'selected' : '' ?>>text2video</option>
+                                            <option value="embedding" <?= $primaryModality === 'embedding' ? 'selected' : '' ?>>embedding</option>
                                         </select>
-                                        <div class="form-text">Used by adapters to route text, image, and video calls.</div>
+                                        <div class="form-text">Used by adapters to route text, image, video, and vector calls.</div>
                                     </div>
                                 </div>
 
@@ -731,6 +743,15 @@ if (!empty($displayConfig)) {
     </div>
     <div class="card-body" style="padding: 16px;">
         <div class="mb-3">
+            <label for="test_model_code_select" class="form-label"><?= __('测试模型') ?></label>
+            <select class="form-select" id="test_model_code_select" disabled>
+                <option value=""><?= __('使用当前模型') ?></option>
+            </select>
+            <div class="form-text" id="test_model_code_help">
+                <?= __('可从当前供应商账户支持的 models 接口中选择测试模型。') ?>
+            </div>
+        </div>
+        <div class="mb-3">
             <label for="test_prompt" class="form-label"><?= __('测试提示词') ?></label>
             <textarea class="form-control"
                       id="test_prompt"
@@ -871,6 +892,105 @@ if (!empty($displayConfig)) {
             }
         },
 
+        getProviderConfigValue: function(key) {
+            var providerConfigTextarea = document.getElementById('provider_config_json');
+            if (!providerConfigTextarea || !providerConfigTextarea.value.trim()) {
+                return '';
+            }
+            try {
+                var config = JSON.parse(providerConfigTextarea.value);
+                return config && config[key] ? String(config[key]) : '';
+            } catch (e) {
+                return '';
+            }
+        },
+
+        applyRemoteModel: function(item) {
+            if (!item || !item.code) return;
+            this.setFieldValue('model_code', item.code);
+            this.setFieldValue('provider_model_code', item.code);
+            this.setFieldValue('name', item.name || item.code);
+            if (item.primary_modality) {
+                this.setFieldValue('primary_modality', item.primary_modality);
+            }
+            if (item.max_tokens && Number(item.max_tokens) > 0) {
+                this.setFieldValue('max_tokens', item.max_tokens);
+            }
+        },
+
+        fillRemoteModelSelect: function(select, items, placeholder) {
+            if (!select) return;
+            select.innerHTML = '';
+            var first = document.createElement('option');
+            first.value = '';
+            first.textContent = placeholder || 'Select model';
+            select.appendChild(first);
+            (items || []).forEach(function(item) {
+                var option = document.createElement('option');
+                option.value = item.code || item.value || '';
+                option.textContent = item.label || item.name || item.code || item.value || '';
+                option.dataset.modelName = item.name || item.code || item.value || '';
+                option.dataset.maxTokens = item.max_tokens || 0;
+                option.dataset.primaryModality = item.primary_modality || '';
+                select.appendChild(option);
+            });
+            select.disabled = !items || items.length === 0;
+        },
+
+        loadRemoteModels: function(providerCode, accountId) {
+            var self = this;
+            var remoteSelect = document.getElementById('remote_model_select');
+            var testSelect = document.getElementById('test_model_code_select');
+            var remoteHelp = document.getElementById('remote_model_help');
+            var testHelp = document.getElementById('test_model_code_help');
+            var currentModel = document.getElementById('model_code');
+            var selectedCurrent = currentModel ? currentModel.value : '';
+
+            this.fillRemoteModelSelect(remoteSelect, [], providerCode ? 'Loading models...' : 'Select provider first');
+            this.fillRemoteModelSelect(testSelect, [], providerCode ? 'Loading models...' : 'Use current model');
+            if (!providerCode) return;
+
+            var url = '<?= addslashes($this->getBackendUrl('*/backend/provider/getRemoteModelsForSelect')) ?>';
+            var formData = new FormData();
+            formData.set('provider_code', providerCode);
+            formData.set('account_id', accountId || '');
+            if (!accountId) {
+                var apiKeyInput = document.getElementById('api_key_input');
+                var apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+                var baseUrl = this.getProviderConfigValue('base_url') || this.getProviderConfigValue('api_url');
+                if (apiKey) formData.set('api_key', apiKey);
+                if (baseUrl) formData.set('base_url', baseUrl);
+            }
+
+            var req = window.Weline.Api.request(url, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            req.then(function(res) {
+                var resp = (res && res.data) || res;
+                var items = resp && resp.success && Array.isArray(resp.data) ? resp.data : [];
+                if (!items.length) {
+                    var message = resp && resp.message ? resp.message : 'models endpoint unavailable, enter model manually.';
+                    if (remoteHelp) remoteHelp.textContent = message;
+                    if (testHelp) testHelp.textContent = message;
+                    self.fillRemoteModelSelect(remoteSelect, [], 'Enter model manually');
+                    self.fillRemoteModelSelect(testSelect, [], 'Use current model');
+                    return;
+                }
+
+                self.fillRemoteModelSelect(remoteSelect, items, 'Select provider model');
+                self.fillRemoteModelSelect(testSelect, items, 'Use current model');
+                if (remoteHelp) remoteHelp.textContent = 'Loaded from provider models endpoint.';
+                if (testHelp) testHelp.textContent = 'Only models returned by current provider account can be selected.';
+
+                if (selectedCurrent && testSelect) {
+                    testSelect.value = selectedCurrent;
+                }
+            }).catch(function() {
+                if (remoteHelp) remoteHelp.textContent = 'models endpoint failed, enter model manually.';
+                if (testHelp) testHelp.textContent = 'models endpoint failed, testing uses current model.';
+                self.fillRemoteModelSelect(remoteSelect, [], 'Enter model manually');
+                self.fillRemoteModelSelect(testSelect, [], 'Use current model');
+            });
+        },
+
         fillModelPresetOptions: function(providerCode) {
             var select = document.getElementById('common_model_preset');
             if (!select) return;
@@ -923,6 +1043,7 @@ if (!empty($displayConfig)) {
 
             providerSelect.addEventListener('change', function() {
                 self.fillModelPresetOptions(this.value || '');
+                self.loadRemoteModels(this.value || '', '');
             });
 
             modelSelect.addEventListener('change', function() {
@@ -937,6 +1058,22 @@ if (!empty($displayConfig)) {
             if (apiKeyInput) {
                 apiKeyInput.addEventListener('input', function() {
                     self.syncApiKeyToProviderConfig();
+                    var supplierVal = document.getElementById('supplier_value');
+                    var accountSelect = document.getElementById('provider_account_id');
+                    self.loadRemoteModels(supplierVal ? supplierVal.value : '', accountSelect ? accountSelect.value : '');
+                });
+            }
+
+            var remoteSelect = document.getElementById('remote_model_select');
+            if (remoteSelect) {
+                remoteSelect.addEventListener('change', function() {
+                    if (!this.value) return;
+                    self.applyRemoteModel({
+                        code: this.value,
+                        name: this.options[this.selectedIndex] ? this.options[this.selectedIndex].dataset.modelName : this.value,
+                        max_tokens: this.options[this.selectedIndex] ? this.options[this.selectedIndex].dataset.maxTokens : 0,
+                        primary_modality: this.options[this.selectedIndex] ? this.options[this.selectedIndex].dataset.primaryModality : ''
+                    });
                 });
             }
         },
@@ -968,10 +1105,12 @@ if (!empty($displayConfig)) {
             var supplierVal = document.getElementById('supplier_value');
             var accountSelect = document.getElementById('provider_account_id');
             if (!supplierVal || !accountSelect) return;
+            var self = this;
             var backendUrl = '<?= addslashes($this->getBackendUrl('*/backend/provider/getAccountsForSelect')) ?>';
             var selectedId = '<?= addslashes($selectedAccountId ?? '') ?>';
             function loadAccounts(providerCode) {
-                accountSelect.innerHTML = '<option value=""><?= addslashes(__('使用默认账户')) ?></option>';
+                accountSelect.innerHTML = '<option value=""><?= addslashes(__('选择账户或使用自配置')) ?></option>';
+                self.loadRemoteModels(providerCode, '');
                 if (!providerCode) return;
                 var url = backendUrl + '?provider_code=' + encodeURIComponent(providerCode) + '&limit=100';
                 var req = window.Weline.Api.get(url, { silent: true });
@@ -985,11 +1124,15 @@ if (!empty($displayConfig)) {
                             if (item.value === selectedId) opt.selected = true;
                             accountSelect.appendChild(opt);
                         });
+                        self.loadRemoteModels(providerCode, accountSelect.value || '');
                     })
                     .catch(function() {});
             }
             supplierVal.addEventListener('change', function() {
                 loadAccounts(this.value || '');
+            });
+            accountSelect.addEventListener('change', function() {
+                self.loadRemoteModels(supplierVal.value || '', this.value || '');
             });
             if (supplierVal.value) loadAccounts(supplierVal.value);
         },
@@ -1117,7 +1260,11 @@ if (!empty($displayConfig)) {
                 testModelBtn.addEventListener('click', function() {
                     var prompt = document.getElementById('test_prompt').value.trim();
                     var modelCodeInput = document.getElementById('model_code');
+                    var testModelSelect = document.getElementById('test_model_code_select');
                     var modelCode = modelCodeInput ? modelCodeInput.value : '<?= $model ? addslashes($model->getData('model_code')) : '' ?>';
+                    if (testModelSelect && testModelSelect.value) {
+                        modelCode = testModelSelect.value;
+                    }
                     var form = document.getElementById('modelEditForm');
 
                     if (!prompt) {
@@ -1158,6 +1305,7 @@ if (!empty($displayConfig)) {
 
                     var formData = form ? new FormData(form) : new FormData();
                     formData.set('model_code', modelCode);
+                    formData.set('provider_model_code', modelCode);
                     formData.set('prompt', prompt);
                     formData.set('test_only', '1');
 

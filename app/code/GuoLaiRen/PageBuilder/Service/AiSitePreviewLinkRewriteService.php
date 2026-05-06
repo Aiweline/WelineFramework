@@ -49,7 +49,8 @@ final class AiSitePreviewLinkRewriteService
         string $html,
         string $publicId,
         array $virtualPages,
-        int $virtualThemeId = 0
+        int $virtualThemeId = 0,
+        bool $visualEditor = false
     ): string {
         $publicId = \trim($publicId);
         if ($publicId === '') {
@@ -63,20 +64,44 @@ final class AiSitePreviewLinkRewriteService
             }
 
             $urls = $this->visualUrlService->resolveVirtualUrls($publicId, $pageType, $virtualThemeId);
-            $previewUrl = \trim((string)($urls['preview_full_url'] ?? ''));
+            $previewUrl = \trim((string)($urls[$visualEditor ? 'visual_preview_url' : 'preview_full_url'] ?? ''));
             if ($previewUrl === '') {
                 continue;
             }
 
-            $handle = \trim((string)($pageData['handle'] ?? ''));
-            $path = ($pageType === Page::TYPE_HOME || $handle === '') ? '/' : '/' . \ltrim($handle, '/');
-            $normalized = $this->normalizePath($path);
-            if ($normalized !== '') {
-                $previewByPath[$normalized] = $previewUrl;
+            foreach ($this->resolveVirtualPagePaths($pageType, $pageData) as $path) {
+                $previewByPath[$path] = $previewUrl;
             }
         }
 
         return $this->rewriteAnchors($html, $previewByPath);
+    }
+
+    /**
+     * @param array<string, mixed> $pageData
+     * @return list<string>
+     */
+    public function resolveVirtualPagePaths(string $pageType, array $pageData): array
+    {
+        $paths = [];
+        $handle = \trim((string)($pageData['handle'] ?? ''));
+        $url = \trim((string)($pageData['url'] ?? ''));
+
+        if ($pageType === Page::TYPE_HOME) {
+            $paths['/'] = '/';
+        }
+        foreach ([$url, $handle, $pageType, \preg_replace('/_page$/u', '', $pageType) ?: ''] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate === '') {
+                continue;
+            }
+            $normalized = $this->normalizePath('/' . \ltrim($candidate, '/'));
+            if ($normalized !== '') {
+                $paths[$normalized] = $normalized;
+            }
+        }
+
+        return \array_values($paths);
     }
 
     /**
@@ -118,9 +143,7 @@ final class AiSitePreviewLinkRewriteService
             return $html;
         }
 
-        $rewritten = \preg_replace_callback(
-            '/<a\b([^>]*?)\bhref\s*=\s*(["\'])(.*?)\2([^>]*)>/isu',
-            function (array $matches) use ($previewByPath): string {
+        $rewrite = function (array $matches) use ($previewByPath): string {
                 $tag = (string)$matches[0];
                 if (\stripos($tag, 'data-glr-ref=') !== false) {
                     return $tag;
@@ -146,10 +169,13 @@ final class AiSitePreviewLinkRewriteService
                         . '"';
                 }
 
-                return '<a' . (string)$matches[1] . 'href=' . $quote . $newHref . $quote . $extra . (string)$matches[4] . '>';
-            },
-            $html
-        );
+                return '<a' . (string)$matches[1] . ' href=' . $quote . $newHref . $quote . $extra . (string)$matches[4] . '>';
+        };
+
+        $rewritten = \preg_replace_callback('/<a\b([^>]*?)\shref\s*=\s*(["\'])(.*?)\2([^>]*)>/isu', $rewrite, $html);
+        if (!\is_string($rewritten)) {
+            $rewritten = \preg_replace_callback('/<a\b([^>]*?)\shref\s*=\s*(["\'])(.*?)\2([^>]*)>/is', $rewrite, $html);
+        }
 
         return \is_string($rewritten) ? $rewritten : $html;
     }
@@ -179,9 +205,7 @@ final class AiSitePreviewLinkRewriteService
         if (!\is_array($parts)) {
             return null;
         }
-        if (isset($parts['scheme']) || isset($parts['host'])) {
-            return null;
-        }
+        $isAbsoluteUrl = isset($parts['scheme']) || isset($parts['host']);
 
         $path = \trim((string)($parts['path'] ?? ''));
         if ($path === '') {
@@ -198,6 +222,10 @@ final class AiSitePreviewLinkRewriteService
                 'href' => $this->appendFragment($previewByPath[$normalizedPath], (string)($parts['fragment'] ?? '')),
                 'unresolved' => false,
             ];
+        }
+
+        if ($isAbsoluteUrl) {
+            return null;
         }
 
         if ($this->shouldDisableUnresolvedInternalPath($normalizedPath)) {

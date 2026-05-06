@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
+use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
@@ -93,7 +94,15 @@ class AiSitePlanQueue implements QueueInterface
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
 
             $hasQueuedPlanMutation = $this->hasQueuedPlanMutationRequest($content);
-            $guard = $this->guardPlanQueueExecution($sessionService, $scopeService, $session, $adminId, $forceRebuild, $hasQueuedPlanMutation);
+            $hasQueuedPlanResume = $this->hasQueuedPlanResumeRequest($content);
+            $guard = $this->guardPlanQueueExecution(
+                $sessionService,
+                $scopeService,
+                $session,
+                $adminId,
+                $forceRebuild,
+                $hasQueuedPlanMutation || $hasQueuedPlanResume
+            );
             if (!($guard['ok'] ?? false)) {
                 $message = (string)($guard['message'] ?? 'Stage-one plan queue stopped.');
                 $this->appendQueueLifecycleLine($queue, $message);
@@ -486,16 +495,37 @@ class AiSitePlanQueue implements QueueInterface
             $active['attempt_no'] = $attemptNo;
             $active['updated_at'] = \date('Y-m-d H:i:s');
             $scope['active_operation'] = $active;
+            $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+            $activeOperations['plan'] = $active;
+            $scope['active_operations'] = $activeOperations;
             $scope['plan_generation_last_error'] = [
                 'message' => $message,
                 'attempt_no' => $attemptNo,
                 'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
                 'updated_at' => \date('Y-m-d H:i:s'),
             ];
+            $scope = $this->markPlanGenerationFailureRetryable($scope, $active, $message, $attemptNo);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
             $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function hasQueuedPlanResumeRequest(array $content): bool
+    {
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
+        $request = \array_replace(
+            \is_array($scopePatch['_plan_sse_request'] ?? null) ? $scopePatch['_plan_sse_request'] : [],
+            \is_array($content['_plan_sse_request'] ?? null) ? $content['_plan_sse_request'] : [],
+            \is_array($details['_plan_sse_request'] ?? null) ? $details['_plan_sse_request'] : []
+        );
+        $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
+
+        return $promptMode === 'resume_plan';
     }
 
     private function ensureQueuedActiveOperation(
@@ -517,7 +547,7 @@ class AiSitePlanQueue implements QueueInterface
         if (
             (string)($active['operation'] ?? '') === $operation
             && (string)($active['execution_token'] ?? '') === $executionToken
-            && \in_array($activeStatus, ['queued', 'running'], true)
+            && $activeStatus === 'queued'
             && ($activeQueueId === $queueId || $queueId <= 0)
         ) {
             return $fresh;
@@ -591,6 +621,9 @@ class AiSitePlanQueue implements QueueInterface
             $active['message'] = $message;
             $active['updated_at'] = \date('Y-m-d H:i:s');
             $scope['active_operation'] = $active;
+            $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+            $activeOperations['plan'] = $active;
+            $scope['active_operations'] = $activeOperations;
         }
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
         if ($skipAsDone) {
@@ -602,8 +635,42 @@ class AiSitePlanQueue implements QueueInterface
                 'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
                 'updated_at' => \date('Y-m-d H:i:s'),
             ];
+            $scope = $this->markPlanGenerationFailureRetryable(
+                $scope,
+                $active,
+                $message,
+                \max(0, (int)($active['attempt_no'] ?? 0))
+            );
         }
         $sessionService->replaceScope($sessionId, $adminId, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $active
+     * @return array<string, mixed>
+     */
+    private function markPlanGenerationFailureRetryable(array $scope, array $active, string $message, int $attemptNo): array
+    {
+        try {
+            /** @var AiSiteBuildTaskService $buildTaskService */
+            $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
+            return $buildTaskService->replaceRetryableAiFailures($scope, 'plan', [
+                'stage1_plan' => [
+                    'operation' => 'plan',
+                    'item_key' => 'stage1_plan',
+                    'item_type' => 'stage_one_plan',
+                    'retry_scope' => 'plan',
+                    'message' => $message,
+                    'queue_id' => (int)($active['queue_id'] ?? 0),
+                    'execution_token' => (string)($active['execution_token'] ?? ''),
+                    'attempt_no' => $attemptNo,
+                    'failed_at' => \date('Y-m-d H:i:s'),
+                ],
+            ]);
+        } catch (\Throwable) {
+            return $scope;
+        }
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed

@@ -191,7 +191,7 @@ class AiSiteAssetQueue implements QueueInterface
             $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest]);
             $sse->complete(['success' => false, 'slot_id' => $slotId, 'message' => $throwable->getMessage()]);
 
-            throw new \RuntimeException('Image asset generation failed: ' . $throwable->getMessage(), 0, $throwable);
+            return 'Image asset generation failed and was recorded for retry: ' . $slotId . ' - ' . $throwable->getMessage();
         }
     }
 

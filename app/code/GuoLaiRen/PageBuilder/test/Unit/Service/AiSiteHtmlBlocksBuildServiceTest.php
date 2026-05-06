@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
+use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use PHPUnit\Framework\TestCase;
 
@@ -88,6 +89,72 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
         self::assertArrayHasKey('logo.text', $schema['logo']['fields'] ?? []);
         self::assertArrayHasKey('navigation', $schema);
         self::assertSame('nav-lines', $schema['navigation']['fields']['navigation.items']['format'] ?? null);
+    }
+
+    public function testPlaceholderBlocksContainOnlyPageContentBlocks(): void
+    {
+        $pageGenerator = new class extends AiSitePageComponentGenerationService {
+            public function generatePageSections(string $pageType, array $websiteProfile, array $scope): array
+            {
+                return [
+                    'sections' => [
+                        [
+                            'code' => 'content/blog-hero-header',
+                            'name' => 'Blog Hero Header',
+                            'html' => '<section><h1>Blog</h1></section>',
+                            'phtml' => '',
+                            'default_config' => ['region' => 'content'],
+                        ],
+                    ],
+                ];
+            }
+        };
+        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService(), $pageGenerator);
+
+        $blocks = $service->buildPlaceholderBlocksForPageType(Page::TYPE_BLOG_LIST, [
+            'site_title' => 'Demo Site',
+            'brief_description' => 'Demo summary',
+        ]);
+
+        self::assertCount(1, $blocks);
+        self::assertSame('blog-hero-header', (string)($blocks[0]['block_id'] ?? ''));
+        self::assertSame('ai_generated_section', (string)($blocks[0]['type'] ?? ''));
+        self::assertFalse(AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($blocks[0]));
+        self::assertSame('', $service->resolveSharedBlockRegion($blocks[0]));
+    }
+
+    public function testSharedLayoutBlockDetectionDoesNotMatchContentHeaderNames(): void
+    {
+        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+
+        self::assertFalse(AiSiteHtmlBlocksBuildService::isSharedLayoutBlock([
+            'block_id' => 'blog-list-blog-hero-header',
+            'type' => 'ai_generated_section',
+            'html' => '<section>Blog</section>',
+            'config' => ['region' => 'content'],
+        ]));
+        self::assertSame('', $service->resolveSharedBlockRegion([
+            'block_id' => 'blog-list-blog-hero-header',
+            'type' => 'ai_generated_section',
+            'config' => ['region' => 'content'],
+        ]));
+        self::assertSame('', $service->resolveSharedBlockRegion([
+            'block_id' => 'content-product-site-header',
+            'type' => 'ai_generated_section',
+            'config' => ['region' => 'content'],
+        ]));
+
+        self::assertTrue(AiSiteHtmlBlocksBuildService::isSharedLayoutBlock([
+            'block_id' => 'header-ai-site-header',
+            'type' => 'ai_generated_shared_header',
+            'html' => '<header>Header</header>',
+            'config' => ['region' => 'header'],
+        ]));
+        self::assertSame('footer', $service->resolveSharedBlockRegion([
+            'block_id' => 'footer-ai-site-footer',
+            'type' => 'ai_generated_shared_footer',
+            'config' => ['region' => 'footer'],
+        ]));
     }
 
     public function testRebuildGeneratedSharedHeaderUsesEditableConfigAndPreservesSharedNavigation(): void

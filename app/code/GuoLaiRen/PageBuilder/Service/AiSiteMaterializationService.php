@@ -6,6 +6,8 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\PageLayout;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\UrlManager\Model\UrlRewrite;
 
 class AiSiteMaterializationService
 {
@@ -58,7 +60,10 @@ class AiSiteMaterializationService
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
             $layoutConfig = $layouts[$pageType] ?? $this->scopeCompatibilityService->normalizeLayoutConfig([]);
             $materializedLayoutConfig = $this->resolveMaterializedLayoutConfig($layoutConfig);
-            $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+            $blocks = \is_array($virtualPage['blocks'] ?? null) ? $this->filterPageContentAiHtmlBlocks($virtualPage['blocks']) : [];
+            if ($blocks === []) {
+                $blocks = $this->resolveExistingAiHtmlBlocks($page);
+            }
             if ($blocks === [] && !$this->layoutHasGeneratedContentComponents($materializedLayoutConfig)) {
                 throw new \RuntimeException((string)__('AI virtual theme page has no generated layout or blocks: %{1}', [$pageType]));
             }
@@ -104,6 +109,7 @@ class AiSiteMaterializationService
             } elseif ($homePageId > 0 && (int)$page->getData(Page::schema_fields_PARENT_ID) !== $homePageId) {
                 $page->setData(Page::schema_fields_PARENT_ID, $homePageId)->save(true);
             }
+            $this->createOrUpdateUrlRewrite($page);
 
             $layout = $this->getOrCreateLayout($pageId);
             $layout->importConfig($materializedLayoutConfig)->useOriginalTemplate(false)->save();
@@ -166,7 +172,7 @@ class AiSiteMaterializationService
             $pageLocale = $this->resolveMaterializedLocale($virtualPage, $websiteProfile);
             $pageLocales = $this->resolveMaterializedLocales($pageLocale, $websiteProfile);
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
-            $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+            $blocks = \is_array($virtualPage['blocks'] ?? null) ? $this->filterPageContentAiHtmlBlocks($virtualPage['blocks']) : [];
             if ($blocks === []) {
                 $blocks = $this->resolveExistingAiHtmlBlocks($page);
             }
@@ -211,6 +217,7 @@ class AiSiteMaterializationService
             } elseif ($homePageId > 0 && (int)$page->getData(Page::schema_fields_PARENT_ID) !== $homePageId) {
                 $page->setData(Page::schema_fields_PARENT_ID, $homePageId)->save(true);
             }
+            $this->createOrUpdateUrlRewrite($page);
 
             $layout = $this->getOrCreateLayout($pageId);
             $emptyExport = [
@@ -251,6 +258,49 @@ class AiSiteMaterializationService
         $page->clearData()->clearQuery();
 
         return $page;
+    }
+
+    private function createOrUpdateUrlRewrite(Page $page): void
+    {
+        $pageId = (int)$page->getId();
+        if ($pageId <= 0) {
+            return;
+        }
+
+        $websiteId = (int)($page->getData(Page::schema_fields_WEBSITE_ID) ?? 0);
+        $handle = \trim((string)($page->getData(Page::schema_fields_HANDLE) ?? ''));
+        $rewritePath = $handle !== '' ? $handle : '';
+        $urlIdentify = "pagebuilder_page_{$pageId}";
+        $originalPath = "pagebuilder/frontend/page/view?page_id={$pageId}";
+
+        /** @var UrlRewrite $urlRewriteModel */
+        $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
+        $rewrite = clone $urlRewriteModel;
+        $rewrite->clear()
+            ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+            ->find()
+            ->fetch();
+
+        if (!$rewrite->getId()) {
+            $rewrite = clone $urlRewriteModel;
+            $rewrite->clear()
+                ->where(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
+                ->find()
+                ->fetch();
+        }
+
+        if (!$rewrite->getId()) {
+            $rewrite = clone $urlRewriteModel;
+            $rewrite->clearData();
+        }
+
+        $rewrite
+            ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+            ->setData(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
+            ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+            ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
+            ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
+            ->save(true);
     }
 
     private function getOrCreateLayout(int $pageId): PageLayout
@@ -457,7 +507,18 @@ class AiSiteMaterializationService
         $layout = $page->getAiLayoutArray();
         $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
 
-        return \array_values(\array_filter($blocks, static fn(mixed $block): bool => \is_array($block)));
+        return $this->filterPageContentAiHtmlBlocks($blocks);
+    }
+
+    /**
+     * @param list<mixed> $blocks
+     * @return list<array<string, mixed>>
+     */
+    private function filterPageContentAiHtmlBlocks(array $blocks): array
+    {
+        return \array_values(\array_filter($blocks, static function (mixed $block): bool {
+            return \is_array($block) && !AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block);
+        }));
     }
 
     /**
