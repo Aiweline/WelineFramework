@@ -47,6 +47,7 @@ class VendorConfigManager
      */
     public static function getProviderConfig(string $providerCode): ?array
     {
+        $providerCode = strtolower(trim($providerCode));
         $providers = self::getSupportedProviders();
         return $providers[$providerCode] ?? null;
     }
@@ -95,6 +96,7 @@ class VendorConfigManager
      */
     public static function isModelFromProvider(string $modelCode, string $providerCode): bool
     {
+        $providerCode = strtolower(trim($providerCode));
         $config = self::getProviderConfig($providerCode);
         if (!$config) {
             return false;

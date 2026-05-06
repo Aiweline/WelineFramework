@@ -119,6 +119,11 @@ class LayoutOwnerResolver
         
         // 虚拟页面（id=0）处理：直接使用默认布局配置，不访问数据库
         if ($layoutOwnerPageId === 0) {
+            $virtualLayoutConfig = $this->resolveVirtualPageLayoutConfig($page);
+            if ($this->hasCustomLayoutConfig($virtualLayoutConfig)) {
+                return $virtualLayoutConfig;
+            }
+
             $layoutConfig = [];
             if ($pageType) {
                 $defaultConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
@@ -179,6 +184,28 @@ class LayoutOwnerResolver
         return $layoutConfig;
     }
     
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveVirtualPageLayoutConfig(Page $page): array
+    {
+        $virtualLayoutConfig = $page->getData('virtual_layout_config');
+        if (\is_array($virtualLayoutConfig)) {
+            return $virtualLayoutConfig;
+        }
+
+        $layoutConfig = $page->getData(Page::schema_fields_LAYOUT_CONFIG);
+        if (\is_array($layoutConfig)) {
+            return $layoutConfig;
+        }
+        if (\is_string($layoutConfig) && \trim($layoutConfig) !== '') {
+            $decoded = \json_decode($layoutConfig, true);
+            return \is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
+    }
+
     /**
      * 检查布局配置是否有自定义内容
      * 

@@ -138,7 +138,9 @@ class SearchSelect implements TaglibInterface
             $html[] = '.w-search-select-trigger:hover { border-color: #80bdff; }';
             $html[] = '.w-search-select-trigger:focus-within { border-color: #80bdff; box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); }';
             $html[] = '.w-search-select-input { border: none; outline: none; flex: 1; background: transparent; font-size: inherit; padding: 6px 0; width: 100%; }';
-            $html[] = '.w-search-select-display { position: absolute; left: 10px; right: 30px; pointer-events: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #495057; }';
+            $html[] = '.w-search-select-display { display: none; position: absolute; left: 10px; right: 30px; pointer-events: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #495057; }';
+            $html[] = '.w-search-select.has-value .w-search-select-display { display: block; }';
+            $html[] = '.w-search-select.has-value .w-search-select-input::placeholder { color: transparent; }';
             $html[] = '.w-search-select-input:focus + .w-search-select-display { display: none; }';
             $html[] = '.w-search-select-arrow { position: absolute; right: 10px; color: #6c757d; font-size: 10px; transition: transform 0.2s; }';
             $html[] = '.w-search-select.open .w-search-select-arrow { transform: rotate(180deg); }';

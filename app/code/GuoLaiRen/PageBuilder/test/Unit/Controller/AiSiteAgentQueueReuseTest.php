@@ -6,6 +6,8 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -93,7 +95,11 @@ final class AiSiteAgentQueueReuseTest extends TestCase
 
     public function testStageOnePlanPersistenceDetectionRequiresRealPlanArtifacts(): void
     {
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $reflection = new ReflectionClass(AiSiteAgent::class);
+        $controller = $reflection->newInstanceWithoutConstructor();
+        $property = $reflection->getProperty('scopeCompatibilityService');
+        $property->setAccessible(true);
+        $property->setValue($controller, new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer()));
         $method = new ReflectionMethod(AiSiteAgent::class, 'scopeHasPersistedStageOnePlan');
         $method->setAccessible(true);
 
@@ -107,9 +113,10 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         ]));
         self::assertFalse($method->invoke($controller, ['plan_confirmed' => 1]));
         self::assertTrue($method->invoke($controller, ['execution_blueprint_draft' => ['tasks' => [['task_key' => 'stage1']]]]));
-        self::assertTrue($method->invoke($controller, ['plan_json' => ['pages' => [['page_type' => 'home_page']]]]));
-        self::assertTrue($method->invoke($controller, ['plan_workbench' => ['draft' => ['summary' => 'draft']]]));
-        self::assertTrue($method->invoke($controller, ['plan_markdown' => '阶段一方案']));
+        self::assertFalse($method->invoke($controller, ['plan_json' => ['pages' => [['page_type' => 'home_page']]]]));
+        self::assertFalse($method->invoke($controller, ['plan_workbench' => ['draft' => ['summary' => 'draft']]]));
+        self::assertFalse($method->invoke($controller, ['plan_markdown' => 'stage-one markdown']));
+        self::assertTrue($method->invoke($controller, ['plan_json' => $this->buildUsableStageOnePlanJson()]));
     }
 
     public function testQueuedOperationStartOnlyReusesSameNonPlanQueueOperation(): void
@@ -497,6 +504,25 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         }
     }
 
+    public function testBuildResumeRetriesOnlyFailedOrInterruptedCheckpointTasks(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $handleStartBuild = $this->extractControllerMethodSource($source, 'handleStartBuild');
+        $startOperation = $this->extractControllerMethodSource($source, 'startOperation');
+
+        self::assertStringContainsString('$resumeTaskCount = (int)($resumeSummary[\'pending\'] ?? 0)', $handleStartBuild);
+        self::assertStringContainsString('+ (int)($resumeSummary[\'failed\'] ?? 0)', $handleStartBuild);
+        self::assertStringContainsString('+ (int)($resumeSummary[\'running\'] ?? 0)', $handleStartBuild);
+        self::assertStringContainsString('summarizeRetryableAiFailures($mergedScope, \'build\')', $handleStartBuild);
+        self::assertStringContainsString('$isResume ? [\'resume_failed_tasks\' => 1] : [\'fresh_repair_failed_tasks\' => 1]', $handleStartBuild);
+
+        self::assertStringContainsString('$resetFailedOrInterruptedTasks', $startOperation);
+        self::assertStringContainsString('$operationDetails[\'resume_failed_tasks\']', $startOperation);
+        self::assertStringContainsString('resetFailedTasksForFreshRepair(', $startOperation);
+        self::assertStringContainsString('resetRunningTasksForInterruptedBuild(', $startOperation);
+        self::assertStringContainsString('Resume build after previous task failure', $startOperation);
+    }
+
     public function testVirtualThemeBuildInvalidatesQualityFailedPagesBeforePendingSelection(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
@@ -613,6 +639,111 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'latest_build_failed'] = 1", $methodSource);
         self::assertStringContainsString("'publish_blocked_by_latest_ai_failure'] = 1", $methodSource);
         self::assertStringContainsString('resetRunningTasksForInterruptedBuild', $methodSource);
+    }
+
+    public function testPlanQueueTerminalErrorCreatesRetryablePlanFailure(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSitePlanQueue.php');
+        $methodSource = $this->extractControllerMethodSource($source, 'updateSessionError');
+
+        self::assertStringContainsString('markPlanGenerationFailureRetryable', $methodSource);
+        self::assertStringContainsString("'plan'] = \$active", $methodSource);
+        self::assertStringContainsString('replaceRetryableAiFailures($scope, \'plan\'', $source);
+        self::assertStringContainsString("'item_key' => 'stage1_plan'", $source);
+        self::assertStringContainsString("'retry_scope' => 'plan'", $source);
+    }
+
+    public function testStageScopeWhitelistKeepsPlanRetryStateVisible(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/AiSiteAgentSessionService.php');
+        $commonKeysSource = $this->extractConstantArraySource($source, 'COMMON_STAGE_SCOPE_KEYS');
+
+        self::assertStringContainsString("'plan_generation_last_error'", $commonKeysSource);
+        self::assertStringContainsString("'retryable_ai_failures'", $commonKeysSource);
+        self::assertStringContainsString("'retryable_ai_failure_count'", $commonKeysSource);
+        self::assertStringContainsString("'next_stage_blocked_by_ai_failures'", $commonKeysSource);
+
+        $planKeysSource = $this->extractConstantArraySource($source, 'PLAN_STAGE_SCOPE_KEYS');
+        $visualEditKeysSource = $this->extractConstantArraySource($source, 'VISUAL_EDIT_STAGE_SCOPE_KEYS');
+        self::assertStringContainsString("'_plan_generation_checkpoint'", $planKeysSource);
+        self::assertStringContainsString("'plan_generation_progress'", $planKeysSource);
+        self::assertStringContainsString("'_task_plan_generation_checkpoint'", $visualEditKeysSource);
+    }
+
+    public function testPlanAndTaskPlanResumeQueuesBypassDuplicatePersistedArtifactGuard(): void
+    {
+        $planQueueSource = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSitePlanQueue.php');
+        $taskPlanQueueSource = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSiteTaskPlanQueue.php');
+        $planExecuteSource = $this->extractFunctionSource($planQueueSource, 'execute');
+        $taskPlanExecuteSource = $this->extractFunctionSource($taskPlanQueueSource, 'execute');
+
+        self::assertStringContainsString('hasQueuedPlanResumeRequest($content)', $planExecuteSource);
+        self::assertStringContainsString('$hasQueuedPlanMutation || $hasQueuedPlanResume', $planExecuteSource);
+        self::assertStringContainsString("return \$promptMode === 'resume_plan';", $planQueueSource);
+
+        self::assertStringContainsString('hasQueuedTaskPlanResumeRequest($content)', $taskPlanExecuteSource);
+        self::assertStringContainsString('$hasQueuedTaskPlanMutation || $hasQueuedTaskPlanResume', $taskPlanExecuteSource);
+        self::assertStringContainsString("return \$promptMode === 'resume_task_plan';", $taskPlanQueueSource);
+    }
+
+    public function testImageAssetQueueRecordsSlotErrorWithoutThrowingWholeQueue(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSiteAssetQueue.php');
+        $executeSource = $this->extractFunctionSource($source, 'execute');
+
+        self::assertStringContainsString('recordError(', $executeSource);
+        self::assertStringContainsString("'asset_generation_failed'", $executeSource);
+        self::assertStringContainsString('Image asset generation failed and was recorded for retry', $executeSource);
+        self::assertStringNotContainsString(
+            "throw new \\RuntimeException('Image asset generation failed:",
+            $executeSource
+        );
+    }
+
+    public function testWorkspaceHydrateShowsPlanRetryButtonFromPersistedFailureState(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $hydrateSource = $this->extractFunctionSource($source, 'hydrateWorkspaceFromState');
+        $retryResolverSource = $this->extractFunctionSource($source, 'shouldShowPlanRetryButtonFromWorkspaceState');
+
+        self::assertStringContainsString(
+            'setPlanRetryButtonVisible(shouldShowPlanRetryButtonFromWorkspaceState(workspaceState))',
+            $hydrateSource
+        );
+        self::assertStringContainsString("getRetryableAiFailureCount(state, 'plan') > 0", $retryResolverSource);
+        self::assertStringContainsString('plan_generation_last_error', $retryResolverSource);
+        self::assertStringContainsString("operations.plan", $retryResolverSource);
+        self::assertStringContainsString("'error'", $retryResolverSource);
+    }
+
+    public function testOperationStreamServerErrorClosesEventSourceBeforeRetryUi(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        $streamSource = $this->extractFunctionSource($source, 'startOperationStream');
+        $serverErrorOffset = \strpos($streamSource, "source.addEventListener('error'");
+        self::assertNotFalse($serverErrorOffset, 'server error SSE handler missing');
+
+        $serverErrorSource = \substr($streamSource, $serverErrorOffset, \strpos($streamSource, "source.addEventListener('warning'", $serverErrorOffset) - $serverErrorOffset);
+        self::assertStringContainsString('settled = true;', $serverErrorSource);
+        self::assertStringContainsString('closeOperationSource(source);', $serverErrorSource);
+        self::assertStringContainsString("markBuildOperationTerminalForRuntimeUi(operation, 'error', lastServerError)", $serverErrorSource);
+        self::assertStringContainsString('resetOperationUiOnFailure(operation)', $serverErrorSource);
+        self::assertStringContainsString('offerRetryForFailedOperation(operation, payload)', $serverErrorSource);
+        self::assertLessThan(
+            \strpos($serverErrorSource, 'offerRetryForFailedOperation(operation, payload)'),
+            \strpos($serverErrorSource, 'closeOperationSource(source);'),
+            'server error must close EventSource before showing retry UI'
+        );
+
+        $transportErrorOffset = \strpos($streamSource, 'source.onerror = function ()');
+        self::assertNotFalse($transportErrorOffset, 'transport error handler missing');
+        $transportErrorSource = \substr($streamSource, $transportErrorOffset);
+        self::assertStringContainsString('closeOperationSource(source);', $transportErrorSource);
+        self::assertLessThan(
+            \strpos($transportErrorSource, 'offerRetryForFailedOperation(operation, failurePayload)'),
+            \strpos($transportErrorSource, 'closeOperationSource(source);'),
+            'transport error must close EventSource before showing retry UI'
+        );
     }
 
     public function testNewBuildQueueStopsOlderPendingDuplicateRowsBeforeSchedulerCanRunThem(): void
@@ -776,6 +907,61 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         );
     }
 
+    public function testOperationSseReturnsCheckpointForQueuedSchedulerWaitInsteadOfLongObserverStream(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $body = $this->extractControllerMethodSource($source, 'handleOperationSse');
+        $observer = $this->extractControllerMethodSource($source, 'observeDuplicateOperationStream');
+
+        self::assertStringContainsString(
+            '$queueWaitingForScheduler || !$this->shouldKeepQueuedObserverStreamOpen($operation)',
+            $body
+        );
+        self::assertStringContainsString("'queue_waiting_for_scheduler' => \$queueWaitingForScheduler", $body);
+        self::assertStringNotContainsString("\$operation === 'plan'", $observer);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildUsableStageOnePlanJson(): array
+    {
+        return [
+            'requirement_expansion' => [
+                'original_brief' => 'Build a real website.',
+                'expanded_brief' => 'Build a real conversion website for the selected audience.',
+                'planning_summary' => 'Use a strong landing page and supporting trust pages.',
+                'site_goal' => 'Convert visitors into leads.',
+                'page_strategy' => [
+                    ['page_type' => 'home_page', 'intent' => 'Explain value and drive action.'],
+                ],
+            ],
+            'theme_design' => [
+                'theme_purpose' => 'Create a coherent visual system.',
+                'selection_reason' => 'Matches the target buyer and content needs.',
+                'color_scheme' => [
+                    'primary' => '#1D4ED8',
+                    'accent' => '#F97316',
+                ],
+                'typography_spacing_radius' => [
+                    'font_family' => 'Aptos',
+                    'spacing_scale' => 'comfortable',
+                ],
+                'visual_keywords' => ['credible', 'direct'],
+            ],
+            'shared_components' => [
+                'header' => [
+                    'goal' => 'Make navigation clear.',
+                    'implementation_detail' => 'Show logo, primary navigation, and CTA.',
+                ],
+                'footer' => [
+                    'goal' => 'Close with trust and useful links.',
+                    'implementation_detail' => 'Show links, contact notes, and legal navigation.',
+                ],
+            ],
+        ];
+    }
+
     private function extractControllerMethodSource(string $source, string $methodName): string
     {
         $methodOffset = \strpos($source, 'private function ' . $methodName);
@@ -787,5 +973,28 @@ final class AiSiteAgentQueueReuseTest extends TestCase
             : \substr($source, $methodOffset, $nextMethodOffset - $methodOffset);
 
         return \str_replace(["\r\n", "\r"], "\n", $methodSource);
+    }
+
+    private function extractConstantArraySource(string $source, string $constantName): string
+    {
+        $constantOffset = \strpos($source, 'const ' . $constantName . ' = [');
+        self::assertNotFalse($constantOffset, $constantName . ' missing');
+        $endOffset = \strpos($source, '];', $constantOffset);
+        self::assertNotFalse($endOffset, $constantName . ' array end missing');
+
+        return \str_replace(["\r\n", "\r"], "\n", \substr($source, $constantOffset, $endOffset - $constantOffset));
+    }
+
+    private function extractFunctionSource(string $source, string $functionName): string
+    {
+        $functionOffset = \strpos($source, 'function ' . $functionName);
+        self::assertNotFalse($functionOffset, $functionName . ' missing');
+        $nextFunctionOffset = \strpos($source, "\n    function ", $functionOffset + 1);
+
+        $functionSource = $nextFunctionOffset === false
+            ? \substr($source, $functionOffset)
+            : \substr($source, $functionOffset, $nextFunctionOffset - $functionOffset);
+
+        return \str_replace(["\r\n", "\r"], "\n", $functionSource);
     }
 }

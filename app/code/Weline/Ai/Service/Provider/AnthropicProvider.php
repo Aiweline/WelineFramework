@@ -24,8 +24,10 @@ use Weline\Framework\App\Exception;
  * - 错误处理和重试机制
  * - Token使用量统计
  */
-class AnthropicProvider implements ProviderInterface
+class AnthropicProvider implements ProviderInterface, ModelListingProviderInterface
 {
+    use ModelListingProviderTrait;
+
     /**
      * 最大重试次数
      */
@@ -757,8 +759,12 @@ class AnthropicProvider implements ProviderInterface
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
         if ($timeout > 0) {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
+            curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, min(30, max(10, (int)ceil($timeout / 4))));
         } else {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
+            curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
         }
         
         // SSL配置

@@ -9167,15 +9167,101 @@ class ServiceOrchestrator
         $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
         ServerInstanceManager::atomicUpdateJsonStatic(
             $instanceFile,
-            static function (array $data) use ($totalServices): array {
+            static function (array $data) use ($context, $totalServices): array {
+                $data = self::hydrateStartupRuntimeMetadata($data, $context);
                 $data['lifecycle_state'] = 'running';
                 $data['startup_phase'] = 'running';
                 $data['server_ready_at'] = \date('Y-m-d H:i:s');
                 $data['server_ready_service_count'] = $totalServices;
+                $data['updated_at'] = \time();
+                if (isset($data['current_snapshot']) && \is_array($data['current_snapshot'])) {
+                    foreach ([
+                        'pid',
+                        'master_pid',
+                        'master_enabled',
+                        'control_port',
+                        'host',
+                        'public_host',
+                        'port',
+                        'main_port',
+                        'ssl_enabled',
+                        'ssl_cert',
+                        'ssl_key',
+                        'daemon',
+                        'frontend',
+                        'master_mode',
+                        'dispatcher_enabled',
+                        'worker_base_port',
+                        'worker_port',
+                        'http_redirect_port',
+                        'instance_name',
+                        'updated_at',
+                    ] as $field) {
+                        if (\array_key_exists($field, $data)) {
+                            $data['current_snapshot'][$field] = $data[$field];
+                        }
+                    }
+                    $data['current_snapshot']['lifecycle_state'] = 'running';
+                    $data['current_snapshot']['startup_phase'] = 'running';
+                }
 
                 return $data;
             }
         );
+    }
+
+    /**
+     * Keep the Master IPC metadata available even if the instance JSON was read
+     * during a partial write or created from an empty baseline.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private static function hydrateStartupRuntimeMetadata(array $data, ServiceContext $context): array
+    {
+        if ((int)($data['master_pid'] ?? 0) <= 0 && $context->masterPid > 0) {
+            $data['master_pid'] = $context->masterPid;
+        }
+        if ((int)($data['pid'] ?? 0) <= 0 && $context->masterPid > 0) {
+            $data['pid'] = $context->masterPid;
+        }
+        if ((int)($data['control_port'] ?? 0) <= 0 && $context->controlPort > 0) {
+            $data['control_port'] = $context->controlPort;
+        }
+        if (!empty($data['master_pid']) || !empty($data['control_port'])) {
+            $data['master_enabled'] = true;
+        }
+
+        $defaults = [
+            'instance_name' => $context->instanceName,
+            'host' => $context->host,
+            'public_host' => $context->publicHost ?: $context->host,
+            'port' => $context->mainPort,
+            'main_port' => $context->mainPort,
+            'ssl_enabled' => $context->sslEnabled,
+            'ssl_cert' => $context->sslCert,
+            'ssl_key' => $context->sslKey,
+            'daemon' => $context->daemon,
+            'frontend' => $context->frontend,
+            'master_mode' => $context->mode,
+            'dispatcher_enabled' => $context->isDispatcherEnabled(),
+            'worker_base_port' => $context->getWorkerBasePort(),
+            'worker_port' => $context->getWorkerPort(),
+            'http_redirect_port' => $context->httpRedirectPort,
+        ];
+
+        $workerCount = $context->getWorkerCount();
+        if (\is_int($workerCount) || (\is_string($workerCount) && \ctype_digit($workerCount))) {
+            $defaults['count'] = (int)$workerCount;
+        }
+
+        foreach ($defaults as $field => $value) {
+            if (!\array_key_exists($field, $data) || $data[$field] === '' || $data[$field] === null) {
+                $data[$field] = $value;
+            }
+        }
+
+        return $data;
     }
 
     private function armServerReadyNotification(): void

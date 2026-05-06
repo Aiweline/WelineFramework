@@ -12,6 +12,7 @@ namespace Weline\Framework\Plugin\Config;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\Xml\Parser;
 
@@ -21,17 +22,22 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
      * @var CachePoolInterface
      */
     private CachePoolInterface $pluginCache;
+    private ModuleScanService $moduleScanService;
 
     private const RELATIVE_PATH = 'etc' . DIRECTORY_SEPARATOR . 'plugin.xml';
 
     public function __construct(
         Scanner     $scanner,
         Parser      $parser,
-                    $path = 'etc'.DS.'plugin.xml'
+                    $path = 'etc'.DS.'plugin.xml',
+        $moduleScanService = null
     )
     {
         parent::__construct($scanner, $parser, $path);
         $this->pluginCache = w_cache('plugin');
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService($scanner);
     }
 
     /**
@@ -52,8 +58,8 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
             if ($name === '' || $basePath === '') {
                 continue;
             }
-            $filePath = $basePath . DIRECTORY_SEPARATOR . self::RELATIVE_PATH;
-            if (is_file($filePath)) {
+            $filePath = $this->moduleScanService->resolveFile($basePath, self::RELATIVE_PATH);
+            if ($filePath !== null) {
                 $result[$name] = $filePath;
             }
         }

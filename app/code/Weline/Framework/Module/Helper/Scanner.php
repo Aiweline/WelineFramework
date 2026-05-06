@@ -11,6 +11,7 @@ namespace Weline\Framework\Module\Helper;
 
 use Weline\Framework\System\File\Scan;
 use Weline\Framework\Module\Api\Data\DirectoryInterface;
+use Weline\Framework\Module\Service\ModuleScanService;
 
 /**
  * 文件信息
@@ -32,20 +33,25 @@ class Scanner
      * @var Data
      */
     private Data $data;
+    private ModuleScanService $moduleScanService;
 
     public function __construct(
         Scan $scan,
-        Data $data
+        Data $data,
+        $moduleScanService = null
     )
     {
         $this->scan = $scan;
         $this->data = $data;
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService($scan);
     }
 
     public function getEtcFile(string $moduleName)
     {
         $moduleDir = $this->data->getModulePath($moduleName);
 
-        return $this->scan->scanDirTree($moduleDir . DS . DirectoryInterface::etc, 12);
+        return $this->moduleScanService->scanDirTreeIfExists($moduleDir, DirectoryInterface::etc, 12);
     }
 }

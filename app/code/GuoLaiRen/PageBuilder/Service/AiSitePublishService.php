@@ -29,7 +29,7 @@ class AiSitePublishService
         ?DomainPool $domainPoolModel = null,
         ?AiSitePublishVerificationService $publishVerificationService = null,
     ) {
-        $this->virtualThemeModel = $virtualThemeModel;
+        $this->virtualThemeModel = $virtualThemeModel ?? ObjectManager::getInstance(VirtualTheme::class);
         $this->htmlSanitizer = $htmlSanitizer ?? ObjectManager::getInstance(AiHtmlSanitizerService::class);
         $this->pageModel = $pageModel ?? ObjectManager::getInstance(Page::class);
         $this->websiteDomainModel = $websiteDomainModel ?? ObjectManager::getInstance(WebsiteDomain::class);
@@ -82,6 +82,11 @@ class AiSitePublishService
             );
         }
 
+        $pageTypeLayouts = $this->resolveVirtualThemePublishLayouts(
+            $virtualThemeId,
+            $pageTypes,
+            $pageTypeLayouts
+        );
         $materialized = $this->materializationService->materialize(
             $websiteId,
             $websiteProfile,
@@ -131,6 +136,46 @@ class AiSitePublishService
             ],
             $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId)
         );
+    }
+
+    /**
+     * The generated virtual theme is the source of truth at publish time. Older
+     * callers may still pass the pre-generation layout snapshot, which would
+     * materialize default/stale components instead of the AI site components.
+     *
+     * @param list<string> $pageTypes
+     * @param array<string, array<string, mixed>> $incomingLayouts
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveVirtualThemePublishLayouts(int $virtualThemeId, array $pageTypes, array $incomingLayouts): array
+    {
+        if ($virtualThemeId <= 0 || $this->virtualThemeModel === null) {
+            return $incomingLayouts;
+        }
+
+        $theme = clone $this->virtualThemeModel;
+        $theme->clearData()->clearQuery()->load($virtualThemeId);
+        if ((int)$theme->getId() <= 0) {
+            return $incomingLayouts;
+        }
+
+        $config = $theme->getConfig();
+        $virtualLayouts = \is_array($config['virtual_page_layouts'] ?? null)
+            ? $config['virtual_page_layouts']
+            : [];
+        if ($virtualLayouts === []) {
+            return $incomingLayouts;
+        }
+
+        $resolved = $incomingLayouts;
+        foreach ($pageTypes as $pageType) {
+            if (!\is_array($virtualLayouts[$pageType] ?? null)) {
+                continue;
+            }
+            $resolved[$pageType] = $virtualLayouts[$pageType];
+        }
+
+        return $resolved;
     }
 
     private function deactivateOtherActiveVirtualThemes(int $websiteId, int $keepVirtualThemeId): void
