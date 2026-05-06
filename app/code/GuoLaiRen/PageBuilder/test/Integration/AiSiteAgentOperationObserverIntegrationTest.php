@@ -222,7 +222,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame('block_partial_patch', (string)($content['operation'] ?? ''));
         self::assertSame(Page::TYPE_HOME, (string)($content['page_type'] ?? ''));
         self::assertSame('hero', (string)($content['block_id'] ?? ''));
-        self::assertSame('hero', (string)($content['component_code'] ?? ''));
+        self::assertSame('content/hero', (string)($content['component_code'] ?? ''));
         self::assertSame('Make the headline more conversion-focused.', (string)($content['instruction'] ?? ''));
         self::assertSame('virtual_theme.block.partial_patch', (string)($content['job_type'] ?? ''));
         self::assertIsArray($content['scope_patch'] ?? null);

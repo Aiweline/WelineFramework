@@ -8438,7 +8438,10 @@
     function resolvePayloadBlockId(wrapper, sourceEl) {
         return resolvePayloadIdentifier(wrapper, sourceEl, [
             'data-block-id',
+            'data-ai-block-id',
+            'data-block-key',
             'data-component-code',
+            'data-section-code',
             'data-component'
         ]);
     }
@@ -8446,8 +8449,11 @@
     function resolvePayloadComponentCode(wrapper, sourceEl) {
         return resolvePayloadIdentifier(wrapper, sourceEl, [
             'data-component-code',
+            'data-section-code',
             'data-component',
-            'data-block-id'
+            'data-block-key',
+            'data-block-id',
+            'data-ai-block-id'
         ]);
     }
 
