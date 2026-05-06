@@ -186,7 +186,7 @@
                                                             // 加上请求的端口
                                                             if (!empty($rawWebsiteUrl)) {
                                                                 $parsedUrl = parse_url($rawWebsiteUrl);
-                                                                $requestPort = $_SERVER['SERVER_PORT'] ?? null;
+                                                                $requestPort = \Weline\Framework\Env\WelineEnv::server('SERVER_PORT');
                                                                 // 若 $parsedUrl 没有端口且请求端口不是默认端口（80, 443），则加上端口
                                                                 $scheme = $parsedUrl['scheme'] ?? 'http';
                                                                 $host = $parsedUrl['host'] ?? '';

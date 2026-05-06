@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Controller;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
 
@@ -42,32 +43,27 @@ class Router implements RouterInterface
             $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? self::getCurrentWebsiteId();
             // 无站点时按请求 host 解析站点，便于直接用域名访问首页
             if ($websiteId <= 0) {
-                $host = $_SERVER['HTTP_HOST'] ?? '';
+                $host = (string)WelineEnv::server('HTTP_HOST', '');
                 if ($host !== '') {
                     $websiteId = self::findWebsiteIdByHost($host) ?? 0;
                     if ($websiteId > 0) {
-                        $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
-                        if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
-                            \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
-                        }
+                        WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'PageBuilder router host website');
                     }
                 }
             }
             // 预览模式：优先用 query 的 handle + website_id 配合 URL 解码
-            $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
-            $queryHandle = isset($_GET['handle']) && is_string($_GET['handle']) ? trim(rawurldecode($_GET['handle'])) : '';
+            $isPreview = (string)WelineEnv::getGet('preview', '') === '1';
+            $queryHandleValue = WelineEnv::getGet('handle');
+            $queryHandle = is_string($queryHandleValue) ? trim(rawurldecode($queryHandleValue)) : '';
             if ($isPreview && $queryHandle !== '') {
-                $websiteIdParam = isset($_GET['website_id']) ? (int)$_GET['website_id'] : 0;
+                $websiteIdParam = (int)WelineEnv::getGet('website_id', 0);
                 if ($websiteIdParam > 0) {
-                    $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteIdParam;
-                    if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
-                        \Weline\Framework\Runtime\RequestContext::websiteId($websiteIdParam);
-                    }
+                    WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteIdParam, 'PageBuilder preview website');
                 }
                 $path = '/pagebuilder/frontend/page/view';
                 $rule['module'] = 'GuoLaiRen_PageBuilder';
                 $rule['handle'] = $queryHandle;
-                $_GET['handle'] = $queryHandle;
+                WelineEnv::setGet('handle', $queryHandle);
                 return;
             }
             if ($websiteId > 0) {
@@ -77,7 +73,7 @@ class Router implements RouterInterface
                     $path = '/pagebuilder/frontend/page/view';
                     $rule['module'] = 'GuoLaiRen_PageBuilder';
                     $rule['handle'] = $homePageHandle;
-                    $_GET['handle'] = $homePageHandle;
+                    WelineEnv::setGet('handle', $homePageHandle);
                     return;
                 }
             }
@@ -93,7 +89,7 @@ class Router implements RouterInterface
         
         // 5. 检查当前站点下 handle 是否存在；同站可省略前缀，如 /about 匹配 handle about 或 home-about
         $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? self::getCurrentWebsiteId();
-        $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
+        $isPreview = (string)WelineEnv::getGet('preview', '') === '1';
         if (!self::handleExists($handle, $websiteId, $isPreview)) {
             // 同站短路径：先试 path 作为 handle，再试「首页handle- path」
             if ($websiteId > 0) {
@@ -111,10 +107,7 @@ class Router implements RouterInterface
             } else {
                 $resolvedWebsiteId = self::findWebsiteIdByHandle($handle, $isPreview);
                 if ($resolvedWebsiteId !== null) {
-                    $_SERVER['WELINE_WEBSITE_ID'] = (string)$resolvedWebsiteId;
-                    if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
-                        \Weline\Framework\Runtime\RequestContext::websiteId($resolvedWebsiteId);
-                    }
+                    WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$resolvedWebsiteId, 'PageBuilder handle website');
                     $websiteId = $resolvedWebsiteId;
                 } else {
                     return;
@@ -128,11 +121,11 @@ class Router implements RouterInterface
         $rule['module'] = 'GuoLaiRen_PageBuilder';
         $rule['handle'] = $handle;
         
-        // 将handle参数写入$_GET，确保控制器能接收到
-        $_GET['handle'] = $handle;
+        // Write handle into the request context so the controller can receive it.
+        WelineEnv::setGet('handle', $handle);
         
         // 保留原始URL参数（如 preview、locale 等）
-        // $_GET中的参数会自动保留，无需特殊处理
+        // Existing query parameters stay in the request context.
     }
     
     /**
@@ -282,17 +275,14 @@ class Router implements RouterInterface
      */
     private static function resolveWebsiteIdFromCurrentHost(): ?int
     {
-        $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? '');
+        $host = (string)(WelineEnv::server('HTTP_HOST') ?: WelineEnv::server('SERVER_NAME', ''));
         if ($host === '') {
             return null;
         }
 
         $websiteId = self::findWebsiteIdByHost((string)$host);
         if ($websiteId !== null && $websiteId > 0) {
-            $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
-            if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
-                \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
-            }
+            WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'PageBuilder current host website');
             return $websiteId;
         }
 
@@ -351,7 +341,7 @@ class Router implements RouterInterface
             if ($websiteId > 0) {
                 return $websiteId;
             }
-            return (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
+            return (int)(WelineEnv::getWebsiteId() ?? 0);
         } catch (\Exception $e) {
             return 0;
         }

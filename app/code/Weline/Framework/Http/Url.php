@@ -13,8 +13,8 @@ namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
-use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -1570,63 +1570,26 @@ class Url implements UrlInterface
 
     private static function currentServer(): array
     {
-        // WLS 常驻模式下，若当前不在 Fiber 请求上下文，禁止回退 mainContext，
-        // 避免误读上一次请求残留的上下文 server 快照。
         if (\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
             && \Weline\Framework\Runtime\Runtime::isPersistent()
             && \class_exists(\Fiber::class)
             && \Fiber::getCurrent() === null
         ) {
-            return \is_array($_SERVER ?? null) ? $_SERVER : [];
+            return [];
         }
 
-        $context = Context::getCurrent();
-        $server = $context?->server();
-        if (\is_array($server) && $server !== []) {
-            return $server;
-        }
-
-        return \is_array($_SERVER ?? null) ? $_SERVER : [];
+        return WelineEnv::serverAll();
     }
 
     private static function updateCurrentServerVar(string $key, mixed $value): void
     {
-        $_SERVER[$key] = $value;
-
-        $context = Context::getCurrent();
-        if ($context === null) {
-            return;
-        }
-
-        $server = $context->server();
-        if (!\is_array($server)) {
-            $server = [];
-        }
-        $server[$key] = $value;
-        $context->set('input.server', $server);
+        WelineEnv::setServer($key, $value, 'Url parser server update');
     }
 
     private static function syncParserServerToCurrentContext(): void
     {
-        $context = Context::getCurrent();
-        if ($context === null) {
-            return;
-        }
-
-        $server = $context->server();
-        if (!\is_array($server)) {
-            $server = [];
-        }
-        $server = \array_merge($server, self::$parserServer);
-        $context->set('input.server', $server);
-        $context->set('input.uri', (string)(self::$parserServer['REQUEST_URI'] ?? $context->get('input.uri', '/')));
-        $context->set('route.area', (string)(self::$parserServer['WELINE_AREA'] ?? $context->get('route.area', 'frontend')));
-        $context->set('route.area_route', (string)(self::$parserServer['WELINE_AREA_ROUTE'] ?? $context->get('route.area_route', '')));
-        $context->set('route.website_id', (int)(self::$parserServer['WELINE_WEBSITE_ID'] ?? $context->get('route.website_id', 0)));
-        $context->set('route.website_code', (string)(self::$parserServer['WELINE_WEBSITE_CODE'] ?? $context->get('route.website_code', '')));
-        $context->set('route.website_url', (string)(self::$parserServer['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', '')));
-        $context->set('route.language', (string)(self::$parserServer['WELINE_USER_LANG'] ?? $context->get('route.language', 'zh_Hans_CN')));
-        $context->set('route.currency', (string)(self::$parserServer['WELINE_USER_CURRENCY'] ?? $context->get('route.currency', 'CNY')));
+        $server = WelineEnv::serverAll();
+        WelineEnv::replaceServer(\array_merge($server, self::$parserServer));
     }
 
     /**
