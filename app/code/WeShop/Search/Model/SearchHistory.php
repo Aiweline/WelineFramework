@@ -61,8 +61,8 @@ class SearchHistory extends Model
                 ->setData(self::schema_fields_SEARCH_COUNT, $this->resolveExistingSearchCount($existing) + 1)
                 ->setData(self::schema_fields_RESULT_COUNT, $resultCount)
                 ->setData(self::schema_fields_USER_ID, $userId ?? 0)
-                ->setData(self::schema_fields_IP_ADDRESS, $_SERVER['REMOTE_ADDR'] ?? '')
-                ->setData(self::schema_fields_USER_AGENT, $_SERVER['HTTP_USER_AGENT'] ?? '')
+                ->setData(self::schema_fields_IP_ADDRESS, \Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', ''))
+                ->setData(self::schema_fields_USER_AGENT, \Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', ''))
                 ->save();
         } else {
             $this->clear()
@@ -70,8 +70,8 @@ class SearchHistory extends Model
                 ->setData(self::schema_fields_SEARCH_COUNT, 1)
                 ->setData(self::schema_fields_RESULT_COUNT, $resultCount)
                 ->setData(self::schema_fields_USER_ID, $userId ?? 0)
-                ->setData(self::schema_fields_IP_ADDRESS, $_SERVER['REMOTE_ADDR'] ?? '')
-                ->setData(self::schema_fields_USER_AGENT, $_SERVER['HTTP_USER_AGENT'] ?? '')
+                ->setData(self::schema_fields_IP_ADDRESS, \Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', ''))
+                ->setData(self::schema_fields_USER_AGENT, \Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', ''))
                 ->save();
         }
         return true;
