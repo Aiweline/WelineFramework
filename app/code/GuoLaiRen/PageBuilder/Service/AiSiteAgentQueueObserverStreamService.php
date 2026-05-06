@@ -60,6 +60,11 @@ class AiSiteAgentQueueObserverStreamService
         return \in_array($queueStatus, ['pending', 'queued'], true);
     }
 
+    private function isTerminalQueueFailureStatus(string $queueStatus): bool
+    {
+        return \in_array($queueStatus, ['error', 'stop', 'cancelled', 'canceled'], true);
+    }
+
     private function buildSystemSchedulerWaitMessage(int $queueId = 0): string
     {
         if ($queueId > 0) {
@@ -275,6 +280,7 @@ class AiSiteAgentQueueObserverStreamService
         $queueSnapshot = $snapshotService->buildObserverPublicSnapshot($queueRow);
         $queuePanelInfo = $helperService->buildPanelPayload($queueRow, $queueSnapshot);
         $tokenUsage = \is_array($queueSnapshot['token_usage'] ?? null) ? $queueSnapshot['token_usage'] : [];
+        $process = \trim((string)($queueRow['process'] ?? ''));
 
         if ($queueStatus !== '' && $lastQueueStatus !== '' && $queueStatus !== $lastQueueStatus) {
             $sse->sendEvent('info', [
@@ -328,7 +334,27 @@ class AiSiteAgentQueueObserverStreamService
 
         $nextQueueStatus = $queueStatus !== '' ? $queueStatus : $lastQueueStatus;
 
-        $process = \trim((string)($queueRow['process'] ?? ''));
+        if ($queueStatus !== '' && $queueStatus !== $lastQueueStatus && $this->isTerminalQueueFailureStatus($queueStatus)) {
+            $message = \trim($helperService->resolveMessage($queueRow, false));
+            if ($message === '') {
+                $message = 'Queue operation failed.';
+            }
+            $sse->sendEvent('error', [
+                'message' => $message,
+                'operation' => $operation,
+                'queue_id' => $queueId,
+                'queue_status' => $queueStatus,
+                'queue_snapshot' => $queueSnapshot,
+                'queue_info' => $queuePanelInfo,
+                'queue_process' => $process,
+                'token_usage' => $tokenUsage,
+                'progress_kind' => 'queue_info',
+                'observer_detail' => true,
+                'queue_panel_update' => true,
+                'http_code' => 409,
+            ]);
+        }
+
         if ($process !== '' && $process !== $lastQueueProcess) {
             if ($helperService->shouldSuppressProcessMirror($operation)) {
                 $sse->sendEvent('info', [

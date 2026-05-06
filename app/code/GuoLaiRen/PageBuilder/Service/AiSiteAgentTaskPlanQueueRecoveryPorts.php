@@ -45,6 +45,10 @@ final class AiSiteAgentTaskPlanQueueRecoveryPorts
         public readonly \Closure $logSse,
         /** @var \Closure(string $operation): string operation→stage 映射 */
         public readonly \Closure $resolveQueueStage,
+        /** @var \Closure(\GuoLaiRen\PageBuilder\Model\AiSiteAgentSession $session, int $adminId, string $operation, int $queueId, string $executionToken, bool $force): array|null 确保队列 worker 已调度 */
+        public readonly ?\Closure $ensureWorkerDispatched = null,
+        /** @var \Closure(int $queueId, array $payload): void|null 更新队列行 */
+        public readonly ?\Closure $updateQueueRow = null,
     ) {
     }
 }

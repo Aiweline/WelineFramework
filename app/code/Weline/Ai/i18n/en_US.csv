@@ -127,10 +127,12 @@ FAQ,FAQ
 模型自配置不完整,"The model self-configuration is incomplete."
 无法创建供应商实例,"Unable to create provider instance"
 API响应为空,"API response is empty"
+文生图模型测试未返回图片,文生图模型测试未返回图片
 模型没有自配置密钥,"The model does not have a self-configuration key."
 "自配置测试失败: %{msg}","Self-configuration test failed: %{msg}"
 "模型未配置API密钥，且无可用供应商账户，无法激活。请先在供应商账户中添加可用账号或在配置中填写 api_key。","The model is not configured with an API key, and there are no available vendor accounts to activate. Please first add an available account in the vendor account or fill in the api_key in the configuration."
 模型连通性测试未通过，无法激活。请先进行连通性测试。,"The model connectivity test failed and cannot be activated. Please perform the connectivity test first."
+"模型必须选择一个供应商账户，或者在自配置模式填写 API Key / api_key_env。","模型必须选择一个供应商账户，或者在自配置模式填写 API Key / api_key_env。"
 "供应商 %{1} 不支持模型 %{2}，不允许切换。请先同步供应商支持模型或更换模型代码。","供应商 %{1} 不支持模型 %{2}，不允许切换。请先同步供应商支持模型或更换模型代码。"
 模型保存成功,"Model saved successfully"
 "模型保存失败: %{1}","Model save failed: %{1}"
@@ -168,12 +170,17 @@ API响应为空,"API response is empty"
 "不支持的供应商: %{1}","不支持的供应商: %{1}"
 "获取模型列表失败: %{1}","获取模型列表失败: %{1}"
 AI供应商账户管理,"AI Supplier Account Management"
+请选择供应商,"Please select a supplier"
 "供应商不存在: %{1}","供应商不存在: %{1}"
+"该供应商未配置 models 接口，请手动输入模型代码。","该供应商未配置 models 接口，请手动输入模型代码。"
+供应商账户不存在或不属于当前供应商,供应商账户不存在或不属于当前供应商
+"请选择供应商账户，或在自配置模式填写 API Key 后再拉取模型。","请选择供应商账户，或在自配置模式填写 API Key 后再拉取模型。"
+"该供应商类未实现 models 接口，请手动输入模型代码。","该供应商类未实现 models 接口，请手动输入模型代码。"
+"models 接口未返回可用模型","models 接口未返回可用模型"
 添加供应商账户,"Add supplier account"
 账户ID无效,"The account ID is invalid."
 账户不存在,"Account does not exist."
 编辑供应商账户,"Edit supplier account"
-请选择供应商,"Please select a supplier"
 请输入账户名称,"Please enter the account name"
 请输入API密钥,"Please enter the API key"
 账户保存成功,"Account saved successfully"
@@ -321,10 +328,15 @@ Token价格必须是数字,"Token price must be a number"
 该模型为系统原始模型，不能删除。如需移除请先取消保护或联系管理员。,"This model is a system original model and cannot be deleted. To remove it, please cancel protection first or contact administrator."
 "删除失败: %{msg}","Delete failed: %{msg}"
 "不支持的供应商: %{provider}","Unsupported provider: %{provider}"
+供应商未配置测试模型,供应商未配置测试模型
 连接测试成功,"Connection test successful"
 "连接测试失败: %{msg}","Connection test failed: %{msg}"
+无法自动创建供应商测试模型：%{1},无法自动创建供应商测试模型：%{1}
 "AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。","AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。"
 "AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。","AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。"
+"API key is required for image generation.","API key is required for image generation."
+"供应商 API 基础 URL 不能为空。","供应商 API 基础 URL 不能为空。"
+"models 接口返回的不是 JSON","models 接口返回的不是 JSON"
 "供应商 %{1} 未配置模型列表接口","供应商 %{1} 未配置模型列表接口"
 "供应商 %{1} 缺少可用API Key，无法同步模型列表","供应商 %{1} 缺少可用API Key，无法同步模型列表"
 "供应商 %{1} 未配置 base_url","供应商 %{1} 未配置 base_url"
@@ -334,7 +346,8 @@ Token价格必须是数字,"Token price must be a number"
 模型列表请求失败,模型列表请求失败
 "模型列表请求失败，HTTP状态码: %{1}","模型列表请求失败，HTTP状态码: %{1}"
 "模型列表响应解析失败: %{1}","模型列表响应解析失败: %{1}"
-"API key is required for image generation.","API key is required for image generation."
+"VectorEngine API 基础 URL 不能为空。","VectorEngine API 基础 URL 不能为空。"
+"VectorEngine API 返回的不是 JSON","VectorEngine API 返回的不是 JSON"
 未配置翻译默认模型,未配置翻译默认模型
 id属性不能为空,"The id attribute cannot be empty."
 使用默认模型,"Using the default model"
@@ -687,6 +700,9 @@ ID,ID
 常用模型快速新增,常用模型快速新增
 先选供应商，减少模型列表干扰。,先选供应商，减少模型列表干扰。
 "自动填充模型代码、Base URL、最大输出和价格参数。","自动填充模型代码、Base URL、最大输出和价格参数。"
+供应商模型,供应商模型
+先选择供应商账户,先选择供应商账户
+"从所选供应商账户的 models 接口拉取；不支持时手动填写模型代码。","从所选供应商账户的 models 接口拉取；不支持时手动填写模型代码。"
 "填入 API Key 即可保存常用模型","填入 API Key 即可保存常用模型"
 "常见模型填 API Key 即可；也可以留空后使用供应商账户。","常见模型填 API Key 即可；也可以留空后使用供应商账户。"
 基础信息,基础信息
@@ -722,7 +738,10 @@ Temperature,Temperature
 已弃用,Deprecated
 维护中,"Under maintenance"
 模型的当前状态,"The current state of the model"
+使用当前模型,使用当前模型
+"可从当前供应商账户支持的 models 接口中选择测试模型。","可从当前供应商账户支持的 models 接口中选择测试模型。"
 开始测试,"Start testing"
+选择账户或使用自配置,选择账户或使用自配置
 模型已成功保存,模型已成功保存
 账户名称,账户名称
 密钥,密钥

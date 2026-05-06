@@ -18,6 +18,7 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         $prepared = $service->prepareScopeForStorage(123, [
             'plan_json' => ['pages' => ['home_page' => ['title' => 'Home']]],
             'plan_structured' => ['summary' => 'stage one'],
+            'plan_markdown' => '# Stage one plan',
             'confirmed_stage1_plan_book' => ['plan' => ['home_page']],
             'task_plan_structured' => ['shared_tasks' => [['task_key' => 'shared:header']]],
             'task_plan_markdown' => '# Task plan',
@@ -41,6 +42,7 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
 
         self::assertSame([], $scope['plan_json']);
         self::assertSame([], $scope['plan_structured']);
+        self::assertSame('', $scope['plan_markdown']);
         self::assertArrayNotHasKey('confirmed_stage1_plan_book', $scope);
         self::assertSame([], $scope['task_plan_structured']);
         self::assertSame('', $scope['task_plan_markdown']);
@@ -50,6 +52,7 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertSame('', $scope['virtual_theme_plan']['confirmed_markdown']);
         self::assertSame([], $scope['build_blueprint']);
         self::assertContains('plan_json', $artifactKeys);
+        self::assertContains('plan_markdown', $artifactKeys);
         self::assertNotContains('confirmed_stage1_plan_book', $artifactKeys);
         self::assertContains('task_plan_draft', $artifactKeys);
         self::assertContains('task_plan_confirmed', $artifactKeys);
@@ -131,5 +134,14 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
 
         self::assertArrayNotHasKey('_artifact_refs', $prepared['scope']);
         self::assertSame([], $prepared['artifacts']);
+    }
+
+    public function testPlanMarkdownPatchMarksArtifactTouched(): void
+    {
+        $service = new AiSiteAgentSessionArtifactService(new AiSiteAgentSessionArtifact());
+
+        self::assertContains('plan_markdown', $service->resolveTouchedArtifactKeysFromPatch([
+            'plan_markdown' => '',
+        ]));
     }
 }

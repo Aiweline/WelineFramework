@@ -69,6 +69,21 @@ class AiSiteAgentSessionArtifactService
             'path' => ['build_blueprint'],
             'empty' => [],
         ],
+        'build_workbench' => [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'path' => ['build_workbench'],
+            'empty' => [],
+        ],
+        'build_contracts' => [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'path' => ['build_contracts'],
+            'empty' => [],
+        ],
+        'render_data_contract' => [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'path' => ['render_data_contract'],
+            'empty' => [],
+        ],
     ];
 
     /**
@@ -587,7 +602,7 @@ class AiSiteAgentSessionArtifactService
     public function resolveTouchedArtifactKeysFromPatch(array $patch): array
     {
         $keys = [];
-        foreach (['plan_json', 'plan_structured', 'task_plan_structured', 'task_plan_markdown', 'build_blueprint'] as $topLevelKey) {
+        foreach (['plan_json', 'plan_structured', 'plan_markdown', 'task_plan_structured', 'task_plan_markdown', 'build_blueprint'] as $topLevelKey) {
             if (\array_key_exists($topLevelKey, $patch)) {
                 $keys[] = $topLevelKey;
             }

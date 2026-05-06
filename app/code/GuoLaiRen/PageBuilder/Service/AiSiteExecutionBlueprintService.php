@@ -19,6 +19,8 @@ final class AiSiteExecutionBlueprintService
     public const VERSION = 1;
     private const STAGE_ONE_LOCAL_REGEN_MAX_ROUNDS = 3;
     private const STAGE_ONE_LOCAL_REGEN_BATCH_BLOCKS = 5;
+    private const STAGE_ONE_PAGE_PLAN_MAX_TOKENS = 6144;
+    private const STAGE_ONE_JSON_RETRY_MAX_TOKENS = 8192;
     /** @var array<string, array<string, mixed>|null> */
     private array $appendInstructionDecisionCache = [];
 
@@ -431,7 +433,7 @@ final class AiSiteExecutionBlueprintService
             $existingPagePlans = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
             $pendingPageTypes = \array_values(\array_filter(
                 $pageTypes,
-                static fn(string $pageType): bool => !\is_array($existingPagePlans[$pageType] ?? null) || $existingPagePlans[$pageType] === []
+                fn(string $pageType): bool => !$this->hasStageOnePagePlanCheckpoint($existingPagePlans, $pageType)
             ));
             if ($pendingPageTypes === []) {
                 $this->emitStageOnePipelineProgress(
@@ -474,7 +476,7 @@ final class AiSiteExecutionBlueprintService
                 ? $pageTypes
                 : \array_values(\array_filter(
                     $pageTypes,
-                    static fn(string $pageType): bool => \is_array($planJson['pages'][$pageType] ?? null) && $planJson['pages'][$pageType] !== []
+                    fn(string $pageType): bool => $this->hasStageOnePagePlanCheckpoint(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $pageType)
                 ));
             $artifacts = $this->mapAiPlanToArtifacts(
                 $scope,
@@ -485,7 +487,8 @@ final class AiSiteExecutionBlueprintService
                 $instruction,
                 $targetScope,
                 $validationPageTypes,
-                $pageFanoutFailures !== []
+                $pageFanoutFailures !== [],
+                $onProgress
             );
             $artifacts['ai_generated'] = 1;
             $artifacts['generation_source'] = 'ai_staged';
@@ -567,6 +570,30 @@ final class AiSiteExecutionBlueprintService
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlans
+     */
+    private function hasStageOnePagePlanCheckpoint(array $pagePlans, string $pageType): bool
+    {
+        $page = \is_array($pagePlans[$pageType] ?? null) ? $pagePlans[$pageType] : [];
+        if ($page === []) {
+            return false;
+        }
+
+        $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+        if ($blocks === []) {
+            return false;
+        }
+
+        foreach ($blocks as $block) {
+            if (!\is_array($block) || \trim((string)($block['block_key'] ?? '')) === '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -662,29 +689,214 @@ final class AiSiteExecutionBlueprintService
         ], $requestParamOverrides);
         $requestParams = $this->sanitizeStageOneJsonRequestParams($requestParams);
 
-        $this->getAiService()->generateStream(
-            $attemptPrompt,
-            static function (string $chunk) use (&$fullContent, $onChunk): bool {
-                $fullContent .= $chunk;
-                if (\is_callable($onChunk) && $chunk !== '') {
-                    $onChunk($chunk);
-                }
-                return true;
-            },
-            null,
-            $scenarioCode,
-            null,
-            $requestParams
-        );
+        $streamThrowable = null;
+        try {
+            $this->getAiService()->generateStream(
+                $attemptPrompt,
+                static function (string $chunk) use (&$fullContent, $onChunk): bool {
+                    $fullContent .= $chunk;
+                    if (\is_callable($onChunk) && $chunk !== '') {
+                        $onChunk($chunk);
+                    }
+                    return true;
+                },
+                null,
+                $scenarioCode,
+                null,
+                $requestParams
+            );
+        } catch (\Throwable $throwable) {
+            $streamThrowable = $throwable;
+            if (!$this->isEmptyAiStreamCompletionFailure($throwable) && $fullContent === '') {
+                throw $throwable;
+            }
+        }
 
         $decoded = $this->getResponseJsonParser()->extractAndDecode($fullContent);
         if (\is_array($decoded)) {
             return $decoded;
         }
 
+        $invalidPreview = $this->buildSafeAiJsonDiagnosticSnippet($fullContent, 500);
+        $retryParams = $this->buildStageOneJsonRetryRequestParams($requestParams);
+        $retryContent = '';
+        try {
+            $this->getAiService()->generateStream(
+                $this->buildStageOneJsonRecoveryPrompt(
+                    $prompt,
+                    $streamThrowable instanceof \Throwable
+                        ? 'previous streaming attempt failed before a complete JSON object was available: ' . $streamThrowable->getMessage()
+                        : 'previous streaming response was invalid or truncated JSON. Invalid preview: ' . $invalidPreview
+                ),
+                static function (string $chunk) use (&$retryContent, $onChunk): bool {
+                    $retryContent .= $chunk;
+                    if (\is_callable($onChunk) && $chunk !== '') {
+                        $onChunk($chunk);
+                    }
+                    return true;
+                },
+                null,
+                $scenarioCode,
+                null,
+                $retryParams
+            );
+            $decoded = $this->getResponseJsonParser()->extractAndDecode($retryContent);
+            if (\is_array($decoded)) {
+                return $decoded;
+            }
+        } catch (\Throwable $retryThrowable) {
+            if ($streamThrowable === null) {
+                $streamThrowable = $retryThrowable;
+            }
+        }
+
+        $recoveryContent = '';
+        try {
+            $recoveryContent = $this->generateStageOneJsonByAiRecovery(
+                $prompt,
+                $scenarioCode,
+                $retryParams,
+                'previous streaming responses were invalid or truncated JSON. Invalid preview: ' . $invalidPreview
+            );
+            $decoded = $this->getResponseJsonParser()->extractAndDecode($recoveryContent);
+            if (\is_array($decoded)) {
+                return $decoded;
+            }
+        } catch (\Throwable $recoveryThrowable) {
+            if ($streamThrowable === null) {
+                $streamThrowable = $recoveryThrowable;
+            }
+        }
+
         throw new \RuntimeException(
-            'invalid ai json: ' . \substr(\preg_replace('/\s+/', ' ', $fullContent), 0, 200)
+            $this->buildInvalidStageOneJsonDiagnostic($fullContent, $retryContent, $recoveryContent),
+            0,
+            $streamThrowable
         );
+    }
+
+    /**
+     * @param array<string, mixed> $requestParams
+     */
+    private function generateStageOneJsonByAiRecovery(
+        string $prompt,
+        string $scenarioCode,
+        array $requestParams,
+        string $reason
+    ): string {
+        return (string)$this->getAiService()->generate(
+            $this->buildStageOneJsonRecoveryPrompt($prompt, $reason),
+            null,
+            $scenarioCode,
+            null,
+            $requestParams
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $requestParams
+     * @return array<string, mixed>
+     */
+    private function buildStageOneJsonRetryRequestParams(array $requestParams): array
+    {
+        $currentMaxTokens = \max(512, (int)($requestParams['max_tokens'] ?? 0));
+        $requestParams['max_tokens'] = \min(
+            self::STAGE_ONE_JSON_RETRY_MAX_TOKENS,
+            \max($currentMaxTokens * 2, $currentMaxTokens + 1800)
+        );
+        $requestParams['temperature'] = 0.1;
+        $requestParams['timeout'] = 0;
+        $requestParams['disable_ai_timeout'] = true;
+        $requestParams['disable_cli_timeout'] = true;
+        $requestParams['enforce_timeout_in_stream'] = false;
+        $requestParams['response_format'] = ['type' => 'json_object'];
+
+        return $this->sanitizeStageOneJsonRequestParams($requestParams);
+    }
+
+    private function buildStageOneJsonRecoveryPrompt(string $prompt, string $reason): string
+    {
+        return $this->prependStageOneJsonOnlyGuard(
+            "RECOVERY MODE: {$reason}. Return one complete final JSON object immediately. "
+            . "Prefer compact strings over long prose. Do not stream partial JSON, do not add markdown, and do not explain.\n\n"
+            . $prompt
+        );
+    }
+
+    private function buildInvalidStageOneJsonDiagnostic(string $primaryContent, string $retryContent, string $recoveryContent): string
+    {
+        $diagnostic = [
+            'primary_len' => \strlen($primaryContent),
+            'retry_len' => \strlen($retryContent),
+            'recovery_len' => \strlen($recoveryContent),
+            'primary_tail' => $this->buildSafeAiJsonDiagnosticTail($primaryContent, 220),
+            'retry_tail' => $this->buildSafeAiJsonDiagnosticTail($retryContent, 220),
+            'recovery_tail' => $this->buildSafeAiJsonDiagnosticTail($recoveryContent, 220),
+        ];
+
+        return 'invalid ai json: '
+            . $this->buildSafeAiJsonDiagnosticSnippet($primaryContent, 200)
+            . ' [debug='
+            . (string)\json_encode(
+                $diagnostic,
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR
+            )
+            . ']';
+    }
+
+    private function buildSafeAiJsonDiagnosticSnippet(string $content, int $maxChars): string
+    {
+        $content = $this->normalizeUtf8DiagnosticText((string)\preg_replace('/\s+/', ' ', $content));
+        if ($content === '' || $maxChars <= 0) {
+            return '';
+        }
+
+        return (string)\mb_substr($content, 0, $maxChars, 'UTF-8');
+    }
+
+    private function buildSafeAiJsonDiagnosticTail(string $content, int $maxChars): string
+    {
+        $content = $this->normalizeUtf8DiagnosticText($content);
+        if ($content === '' || $maxChars <= 0) {
+            return '';
+        }
+
+        return (string)\mb_substr($content, -$maxChars, null, 'UTF-8');
+    }
+
+    private function normalizeUtf8DiagnosticText(string $content): string
+    {
+        if ($content === '' || \preg_match('//u', $content)) {
+            return $content;
+        }
+
+        $converted = \function_exists('iconv') ? @\iconv('UTF-8', 'UTF-8//IGNORE', $content) : false;
+        if (\is_string($converted) && \preg_match('//u', $converted)) {
+            return $converted;
+        }
+        if (\function_exists('mb_convert_encoding')) {
+            $converted = @\mb_convert_encoding($content, 'UTF-8', 'UTF-8');
+            if (\is_string($converted) && \preg_match('//u', $converted)) {
+                return $converted;
+            }
+        }
+
+        return (string)\preg_replace('/[^\x09\x0A\x0D\x20-\x7E]/', '', $content);
+    }
+
+    private function isEmptyAiStreamCompletionFailure(\Throwable $throwable): bool
+    {
+        for ($current = $throwable; $current instanceof \Throwable; $current = $current->getPrevious()) {
+            $message = $current->getMessage();
+            if (\str_contains($message, '流式生成完成但未返回任何内容')
+                || \str_contains($message, '流式生成完成但未返回任何正文')
+                || \str_contains($message, 'streaming completed without final content')
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function prependStageOneJsonOnlyGuard(string $prompt): string
@@ -1099,13 +1311,53 @@ final class AiSiteExecutionBlueprintService
             $retryableFailures = [];
         }
 
+        $totalPages = \count($pageTypes);
+        $fallbackPlanJson = null;
+        $prebuiltResults = [];
+        foreach ($pageTypes as $pageType) {
+            $pageKey = (string)$pageType;
+            if (!$this->hasStageOneRetryablePageFailure($scope, $pageKey)) {
+                continue;
+            }
+            $fallbackPagePlan = $this->buildStageOneFallbackPagePlanForAiFailure(
+                $scope,
+                $websiteProfile,
+                $planJson,
+                $pageTypes,
+                $pageKey,
+                $instruction,
+                $targetScope,
+                'previous retryable page failure: ' . $this->resolveStageOneRetryablePageFailureMessage($scope, $pageKey),
+                $fallbackPlanJson
+            );
+            if ($fallbackPagePlan === []) {
+                continue;
+            }
+            $prebuiltResults[$pageKey] = $fallbackPagePlan;
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                'Previous page AI failure was filled by local contract fallback: ' . $pageKey,
+                82,
+                'page_plan',
+                'fallback',
+                ['page_type' => $pageKey]
+            );
+        }
+
+        $pageTypes = \array_values(\array_filter(
+            $pageTypes,
+            static fn(string $pageType): bool => !\array_key_exists($pageType, $prebuiltResults)
+        ));
+        if ($pageTypes === []) {
+            return $prebuiltResults;
+        }
+
         $concurrency = \max(1, \count($pageTypes));
         $ai = $this->getAiService();
 
         /** @var array<string, callable(array<string, mixed>, string|int): array<string, mixed>> $tasks */
         $tasks = [];
-        $totalPages = \count($pageTypes);
-        $completedPages = 0;
+        $completedPages = \count($prebuiltResults);
         foreach ($pageTypes as $pageIndex => $pageType) {
             $pageKey = (string)$pageType;
             $pageOrder = (int)$pageIndex + 1;
@@ -1121,7 +1373,7 @@ final class AiSiteExecutionBlueprintService
                 $decoded = $this->generateStageOneJsonByAi(
                     $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
                     'pagebuilder_plan_generation',
-                    4096,
+                    self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
                     150,
                     null,
                     $sessionParams
@@ -1154,7 +1406,7 @@ final class AiSiteExecutionBlueprintService
             'disable_conversation_persist' => true,
         ]);
 
-        $results = [];
+        $results = $prebuiltResults;
         foreach ($pageTypes as $pageType) {
             $pageKey = (string)$pageType;
             $entry = \is_array($settled[$pageKey] ?? null) ? $settled[$pageKey] : [];
@@ -1167,6 +1419,32 @@ final class AiSiteExecutionBlueprintService
                 ? $entry['error']
                 : new \RuntimeException('Stage-one page fanout task did not return a usable page plan.');
             $message = \trim($throwable->getMessage());
+            $fallbackPagePlan = $this->buildStageOneFallbackPagePlanForAiFailure(
+                $scope,
+                $websiteProfile,
+                $planJson,
+                $pageTypes,
+                $pageKey,
+                $instruction,
+                $targetScope,
+                $message !== '' ? $message : $throwable::class,
+                $fallbackPlanJson
+            );
+            if ($fallbackPagePlan !== []) {
+                $results[$pageKey] = $fallbackPagePlan;
+                $completedPages++;
+                $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    'Page plan AI failed; local contract fallback was used: ' . $pageKey,
+                    $pageProgress,
+                    'page_plan',
+                    'fallback',
+                    ['page_type' => $pageKey, 'error_message' => $this->clipText($message, 800)]
+                );
+                continue;
+            }
+
             $retryableFailures[$pageKey] = $this->buildStageOneRetryablePageFailure($pageKey, $message !== '' ? $message : $throwable::class);
             $this->emitStageOnePipelineProgress(
                 $onProgress,
@@ -1179,6 +1457,64 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $results;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $planJson
+     * @param list<string> $pageTypes
+     * @param array<string, mixed>|null $fallbackPlanJson
+     * @return array<string, mixed>
+     */
+    private function buildStageOneFallbackPagePlanForAiFailure(
+        array $scope,
+        array $websiteProfile,
+        array $planJson,
+        array $pageTypes,
+        string $pageKey,
+        string $instruction,
+        string $targetScope,
+        string $failureMessage,
+        ?array &$fallbackPlanJson
+    ): array {
+        if ($fallbackPlanJson === null) {
+            $fallbackArtifacts = $this->buildPlanArtifacts(\array_replace($scope, ['page_types' => $pageTypes]), $websiteProfile, [
+                'instruction' => $instruction,
+                'target_scope' => $targetScope,
+            ]);
+            $fallbackPlanJson = \is_array($fallbackArtifacts['plan_json'] ?? null) ? $fallbackArtifacts['plan_json'] : [];
+        }
+
+        $fallbackPages = \is_array($fallbackPlanJson['pages'] ?? null) ? $fallbackPlanJson['pages'] : [];
+        $fallbackPage = \is_array($fallbackPages[$pageKey] ?? null) ? $fallbackPages[$pageKey] : [];
+        if (!$this->hasStageOnePagePlanCheckpoint([$pageKey => $fallbackPage], $pageKey)) {
+            return [];
+        }
+
+        $pagePlan = $this->normalizeStageOneAiPagePlanWithBaseline(
+            $fallbackPage,
+            \is_array($planJson['pages'][$pageKey] ?? null) ? $planJson['pages'][$pageKey] : [],
+            $pageKey
+        );
+        $pagePlan['_ai_fallback_used'] = 1;
+        $pagePlan['_ai_fallback_reason'] = $this->clipText($failureMessage, 800);
+
+        return $pagePlan;
+    }
+
+    private function hasStageOneRetryablePageFailure(array $scope, string $pageKey): bool
+    {
+        return \is_array($scope['retryable_ai_failures']['plan']['items'][$pageKey] ?? null);
+    }
+
+    private function resolveStageOneRetryablePageFailureMessage(array $scope, string $pageKey): string
+    {
+        $item = \is_array($scope['retryable_ai_failures']['plan']['items'][$pageKey] ?? null)
+            ? $scope['retryable_ai_failures']['plan']['items'][$pageKey]
+            : [];
+
+        return \trim((string)($item['message'] ?? ''));
     }
 
     /**
@@ -1233,7 +1569,7 @@ final class AiSiteExecutionBlueprintService
             $decoded = $this->generateStageOneJsonByAi(
                 $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
                 'pagebuilder_plan_generation',
-                4096,
+                self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
                 150,
                 $onChunk
             );
@@ -1418,8 +1754,8 @@ final class AiSiteExecutionBlueprintService
             'Step 3 only: generate exactly this page type by carrying the confirmed requirement expansion, theme, Header, and Footer. Other page types are generated in parallel calls.',
             'Decision order: first page_design_plan, then blocks, then field_plan + execution_script; never draft block copy before page_design_plan is complete.',
             'Return STRICT JSON only for exactly one page. Start with `{` and end with `}`. Do not return other pages, markdown, explanation, or reasoning text.',
-            'JSON size rule: produce 2-4 blocks only unless the page type requires legal/support details; keep each field concise.',
-            'Output budget: each block should contain 2-4 concrete sentences of visible content; avoid oversized paragraphs that stage-2 must split again.',
+            'JSON size rule: produce 2-3 blocks only; even legal/support pages must stay compact and split dense policy details into concise block fields.',
+            'Output budget: page_goal/theme_alignment_summary <= 180 chars each; each block.content/core_copy <= 220 chars; each field_plan.sample <= 120 chars; avoid long policy paragraphs that cause truncated JSON.',
             'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
             'Language rule: blocks[].content, field_plan[].sample, CTA labels, link labels, alt text, and media descriptions are customer-visible website content and MUST use Website content locale. Do not use Plan locale for website copy unless it is identical to Website content locale.',
@@ -1449,14 +1785,14 @@ final class AiSiteExecutionBlueprintService
             '- home_page usually needs conversion-first blocks such as hero, featured_games/highlights, trust/social proof, final_cta.',
             '- about_page usually needs story/mission/team/values/trust narrative blocks, not another homepage conversion sequence.',
             '- contact_page usually needs contact_methods, form_guidance, map/service_area, support_faq.',
-            '- policy/legal pages usually need structured legal_content, summary, details, help_cta; avoid marketing hero clones.',
+            '- policy/legal pages usually need summary, key_rules, refund_or_support_steps, help_cta; keep rules concise and avoid full legal prose in Stage-1.',
             '- Every block MUST include design_tags with visual, motion, interaction, texture, responsive arrays and an implementation_note.',
             '- Every field_plan row MUST include field, sample, and a concrete implementation_note explaining where/how that exact sample is rendered on the page.',
             '- design_tags examples: visual=["premium","card shadow","rounded image","large banner"], motion=["5s fade in/out","subtle parallax","hover lift"], interaction=["primary CTA hover","tabs","accordion"], texture=["soft gradient","glass surface","Indian pattern accent"], responsive=["mobile stacked cards","desktop two-column"].',
             '- These design_tags are source-of-truth for stage-2 and stage-3; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
             'Schema:',
             '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
-            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow.',
+            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow; return a complete JSON object within the token budget.',
             'Self-check before return: verify every block has explicit page_flow_role rhythm (opening/proof/details/cta/support) and does not duplicate another page type block purpose.',
         ]);
     }
@@ -2633,7 +2969,8 @@ final class AiSiteExecutionBlueprintService
         string $instruction,
         string $targetScope,
         ?array $validationPageTypes = null,
-        bool $skipLocalRepair = false
+        bool $skipLocalRepair = false,
+        ?callable $onProgress = null
     ): array {
         $decoded = $this->normalizeAiPlanResponseShape($decoded);
         $baseline = $this->buildPlanArtifacts($scope, $websiteProfile, [
@@ -2647,6 +2984,14 @@ final class AiSiteExecutionBlueprintService
             );
         }
 
+        $this->emitStageOnePipelineProgress(
+            $onProgress,
+            '正在整理阶段一原始方案与基线蓝图',
+            89,
+            'plan_assemble',
+            'normalize_input',
+            ['page_total' => \count($pageTypes)]
+        );
         $planJson['page_types'] = $pageTypes;
         $validationPageTypes = \array_values(\array_filter(
             $validationPageTypes ?? $pageTypes,
@@ -2662,6 +3007,14 @@ final class AiSiteExecutionBlueprintService
         $contentLocale = $this->resolveStageOneContentLocale($scope, $planLocale);
         $localRegenReport = [];
         if (!$skipLocalRepair) {
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '正在检查阶段一方案是否需要断点局部修复',
+                89,
+                'plan_assemble',
+                'local_repair_scan',
+                ['page_total' => \count($validationPageTypes)]
+            );
             [$planJson, $localRegenReport] = $this->repairAiStageOneProblemBlocksByAi(
                 $scope,
                 $websiteProfile,
@@ -2671,19 +3024,37 @@ final class AiSiteExecutionBlueprintService
                 $contentLocale,
                 $instruction,
                 $targetScope,
-                $briefDescription
+                $briefDescription,
+                $onProgress
             );
         }
         if ($localRegenReport !== []) {
             $planJson['_stage1_local_regen_report'] = $localRegenReport;
         }
+        $planJson = $this->ensureStageOneNavigationAndFooterPlans($planJson, $validationPageTypes, $contentLocale);
 
+        $this->emitStageOnePipelineProgress(
+            $onProgress,
+            '阶段一页面内容已校验，正在生成共享区块与队列索引',
+            90,
+            'plan_assemble',
+            'build_shared_index',
+            ['page_total' => \count($validationPageTypes)]
+        );
         $planBlocks = $this->normalizePlanBlocks(\is_array($planJson['plan_blocks'] ?? null) ? $planJson['plan_blocks'] : []);
         if ($planBlocks === []) {
             $planBlocks = $this->buildPlanBlocksFromPlanJson($planJson, $planLocale);
         }
         $planJson['plan_blocks'] = $planBlocks;
 
+        $this->emitStageOnePipelineProgress(
+            $onProgress,
+            '正在执行阶段一强契约校验',
+            90,
+            'plan_assemble',
+            'validate_contract',
+            ['page_total' => \count($validationPageTypes)]
+        );
         $this->assertAiStageOnePlanJsonIsStrict($planJson, $validationPageTypes, $briefDescription, $planLocale);
 
         $executionBlueprint = \is_array($baseline['execution_blueprint'] ?? null) ? $baseline['execution_blueprint'] : [];
@@ -2786,6 +3157,14 @@ final class AiSiteExecutionBlueprintService
         $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
         $structured['stage1_queue'] = $stageOneQueue;
         $executionBlueprint['stage1_queue'] = $stageOneQueue;
+        $this->emitStageOnePipelineProgress(
+            $onProgress,
+            '正在生成页面任务、区块索引与断点队列',
+            91,
+            'plan_assemble',
+            'build_queue_envelope',
+            ['page_total' => \count($validationPageTypes)]
+        );
         foreach ($pagePlans as $pageType => $pagePlan) {
             if (!\is_array($pagePlan) || !\is_array($planJson['pages'][$pageType] ?? null)) {
                 continue;
@@ -2838,6 +3217,14 @@ final class AiSiteExecutionBlueprintService
         $executionBlueprint['tasks'] = $tasks;
         $executionBlueprint['signature'] = $this->buildExecutionBlueprintSignature($executionBlueprint);
 
+        $this->emitStageOnePipelineProgress(
+            $onProgress,
+            '正在生成工作台预览数据与方案文档',
+            91,
+            'plan_assemble',
+            'build_workbench',
+            ['page_total' => \count($validationPageTypes)]
+        );
         $markdown = $this->buildMarkdownPlan($planJson, $planLocale);
         $planWorkbench = $this->buildPlanWorkbenchArtifacts($scope, $structured, $executionBlueprint, $planJson, $markdown, $planLocale);
 
@@ -3623,7 +4010,8 @@ final class AiSiteExecutionBlueprintService
         string $contentLocale,
         string $instruction,
         string $targetScope,
-        string $briefDescription
+        string $briefDescription,
+        ?callable $onProgress = null
     ): array {
         $report = [
             'rounds' => [],
@@ -3634,10 +4022,34 @@ final class AiSiteExecutionBlueprintService
         for ($round = 1; $round <= self::STAGE_ONE_LOCAL_REGEN_MAX_ROUNDS; $round++) {
             $issues = $this->collectAiStageOneProblemIssues($working, $pageTypes, $briefDescription, $planLocale);
             if ($issues === []) {
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    '阶段一局部修复检查通过，未发现需重生成的问题块',
+                    90,
+                    'plan_assemble',
+                    'local_repair_done',
+                    [
+                        'page_total' => \count($pageTypes),
+                        'repair_round' => $round,
+                        'issue_count' => 0,
+                    ]
+                );
                 $report['final_issue_count'] = 0;
                 return [$working, $report];
             }
 
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '发现阶段一问题块，正在准备断点局部修复（第' . $round . '轮，' . \count($issues) . '项）',
+                90,
+                'plan_assemble',
+                'local_repair_prepare',
+                [
+                    'page_total' => \count($pageTypes),
+                    'repair_round' => $round,
+                    'issue_count' => \count($issues),
+                ]
+            );
             $issueBlockMap = [];
             foreach ($issues as $issue) {
                 $pageType = \trim((string)($issue['page_type'] ?? ''));
@@ -3663,6 +4075,19 @@ final class AiSiteExecutionBlueprintService
                 break;
             }
 
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '正在局部重生成异常页面内容（第' . $round . '轮，' . \count($targetPageTypes) . '个页面）',
+                90,
+                'plan_assemble',
+                'local_repair_generate',
+                [
+                    'page_total' => \count($pageTypes),
+                    'repair_round' => $round,
+                    'repair_page_total' => \count($targetPageTypes),
+                    'issue_count' => \count($issues),
+                ]
+            );
             $issueSummary = [];
             foreach ($issues as $issue) {
                 $pageType = (string)($issue['page_type'] ?? '');
@@ -3682,16 +4107,43 @@ final class AiSiteExecutionBlueprintService
                 . 'Return final customer-visible copy, not writing guidance. '
                 . 'Issue list: ' . \implode('; ', $issueSummary));
 
-            $regeneratedPages = $this->generateStageOnePagePlansByAiSequential(
-                $scope,
-                $websiteProfile,
-                $working,
-                $targetPageTypes,
-                $planLocale,
-                $contentLocale,
-                $regenInstruction,
-                $targetScope
-            );
+            try {
+                $regeneratedPages = $this->generateStageOnePagePlansByAiSequential(
+                    $scope,
+                    $websiteProfile,
+                    $working,
+                    $targetPageTypes,
+                    $planLocale,
+                    $contentLocale,
+                    $regenInstruction,
+                    $targetScope,
+                    null,
+                    $onProgress
+                );
+            } catch (\Throwable $throwable) {
+                $report['rounds'][] = [
+                    'round' => $round,
+                    'target_pages' => $targetPageTypes,
+                    'target_blocks' => $selectedIssueBlocks,
+                    'issue_count_before' => \count($issues),
+                    'merged' => 0,
+                    'repair_error' => $this->clipText($throwable->getMessage(), 800),
+                ];
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    '阶段一局部重生成失败，已记录错误并切换为安全兜底修复',
+                    90,
+                    'plan_assemble',
+                    'local_repair_error',
+                    [
+                        'page_total' => \count($pageTypes),
+                        'repair_round' => $round,
+                        'issue_count' => \count($issues),
+                        'error_message' => $this->clipText($throwable->getMessage(), 800),
+                    ]
+                );
+                break;
+            }
 
             $merged = false;
             foreach ($targetPageTypes as $pageType) {
@@ -3728,6 +4180,19 @@ final class AiSiteExecutionBlueprintService
                 'merged' => $merged ? 1 : 0,
             ];
 
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '阶段一局部修复第' . $round . '轮已合并，正在继续校验',
+                90,
+                'plan_assemble',
+                'local_repair_merge',
+                [
+                    'page_total' => \count($pageTypes),
+                    'repair_round' => $round,
+                    'issue_count' => \count($issues),
+                    'merged' => $merged ? 1 : 0,
+                ]
+            );
             if (!$merged) {
                 break;
             }
@@ -3735,6 +4200,17 @@ final class AiSiteExecutionBlueprintService
 
         $finalIssues = $this->collectAiStageOneProblemIssues($working, $pageTypes, $briefDescription, $planLocale);
         if ($finalIssues !== []) {
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '阶段一局部修复仍有残留问题，正在应用安全兜底内容',
+                90,
+                'plan_assemble',
+                'local_repair_fallback',
+                [
+                    'page_total' => \count($pageTypes),
+                    'issue_count' => \count($finalIssues),
+                ]
+            );
             $working = $this->applyStageOneIssueFallbacks($working, $finalIssues, $planLocale);
             $working = $this->repairAiStageOnePlanJsonBeforeValidation($working, $pageTypes, $planLocale, $briefDescription);
         }
@@ -4566,7 +5042,7 @@ final class AiSiteExecutionBlueprintService
                 'page_details' => 'Page And Block Execution Details',
             ]
             : [
-                'title' => '闃舵涓€鎵ц钃濆浘锛堝畬鏁磋鍒掞級',
+                'title' => '阶段一执行蓝图（完整规划）',
                 'site' => '站点',
                 'summary' => '摘要',
                 'site_structure' => '全站结构',
@@ -5534,10 +6010,10 @@ final class AiSiteExecutionBlueprintService
     private function shouldAppendAboutBlock(string $instruction, string $targetScope, string $pageType): bool
     {
         $instructionLower = \mb_strtolower(\trim($instruction));
-        if (!$this->containsAny($instructionLower, ['鍏充簬鎴戜滑', 'about us', 'about', 'company intro', '鍝佺墝浠嬬粛'])) {
+        if (!$this->containsAny($instructionLower, ['关于我们', 'about us', 'about', 'company intro', '品牌介绍'])) {
             return false;
         }
-        if (!$this->containsAny($instructionLower, ['娣诲姞', '鏂板', '鍔犲叆', 'append', 'add', 'insert'])) {
+        if (!$this->containsAny($instructionLower, ['添加', '新增', '加入', 'append', 'add', 'insert'])) {
             return false;
         }
         if ($targetScope === '') {
@@ -9382,10 +9858,10 @@ final class AiSiteExecutionBlueprintService
 
         return \array_values(\array_unique($keywords));
 
-        $keywords = [$pageLabel . ' 鎸囧崡', $pageLabel . ' 甯歌闂'];
+        $keywords = [$pageLabel . ' 指南', $pageLabel . ' 常见问题'];
         if ($pageType === Page::TYPE_HOME) {
-            $keywords[] = '鍝佺墝浠嬬粛';
-            $keywords[] = '鏍稿績浼樺娍';
+            $keywords[] = '品牌介绍';
+            $keywords[] = '核心优势';
         }
 
         return \array_values(\array_unique($keywords));
@@ -11719,11 +12195,11 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * T5: 鏂规 Markdown 绔犺妭瀹屾暣鎬ф牎楠屽櫒
-     * 楠岃瘉鐢熸垚鐨勬柟妗?Markdown 鏄惁鍖呭惈鎵€鏈夊繀椤荤珷鑺?
+     * T5: 方案 Markdown 章节完整性校验器
+     * 验证生成的方案 Markdown 是否包含所有必需章节
      *
-     * @param string $markdown 鏂规 Markdown 鏂囨湰
-     * @param string $locale 鏂规璇█
+     * @param string $markdown 方案 Markdown 文本
+     * @param string $locale 方案语言
      * @return array{valid: bool, missing_sections: list<string>, warnings: list<string>}
      */
     public function validateMarkdownSections(string $markdown, string $locale = ''): array
@@ -11733,7 +12209,7 @@ final class AiSiteExecutionBlueprintService
         $missingSections = [];
         $warnings = [];
 
-        // 蹇呴』鍖呭惈鐨勭珷鑺傦紙鍙岃瀵圭収锛?
+        // 必须包含的章节（双语对照）。
         $requiredSections = [
             'style_overview' => [
                 'zh' => ['风格总览', '主题风格', '风格概览'],
@@ -11765,7 +12241,7 @@ final class AiSiteExecutionBlueprintService
             ],
         ];
 
-        // 妫€鏌ユ瘡涓繀椤荤珷鑺?
+        // 检查每一个必需章节。
         foreach ($requiredSections as $sectionKey => $sectionLabels) {
             $labels = $isEn ? $sectionLabels['en'] : $sectionLabels['zh'];
             $found = false;
@@ -11780,8 +12256,8 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        // 妫€鏌ユ槸鍚﹀寘鍚〉闈㈣鐩栨竻鍗?
-        if (\mb_stripos($markdown, '椤甸潰瑕嗙洊娓呭崟') === false
+        // 检查是否包含页面覆盖清单。
+        if (\mb_stripos($markdown, '页面覆盖清单') === false
             && \mb_stripos($markdown, 'Page Coverage') === false
             && \mb_stripos($markdown, 'Selected Pages') === false
         ) {
@@ -11798,11 +12274,11 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 妫€鏌ユ柟妗?Markdown 鏄惁鍖呭惈鎸囧畾椤甸潰绫诲瀷鐨勮鍒?
+     * 检查方案 Markdown 是否包含指定页面类型的规划。
      *
-     * @param string $markdown 鏂规 Markdown
-     * @param list<string> $selectedPageTypes 鐢ㄦ埛閫夋嫨鐨勯〉闈㈢被鍨?
-     * @param string $locale 鏂规璇█
+     * @param string $markdown 方案 Markdown
+     * @param list<string> $selectedPageTypes 用户选择的页面类型
+     * @param string $locale 方案语言
      * @return array{valid: bool, missing_pages: list<string>, extra_pages: list<string>}
      */
     public function validatePageCoverage(string $markdown, array $selectedPageTypes, string $locale = ''): array
@@ -11812,19 +12288,19 @@ final class AiSiteExecutionBlueprintService
         $missingPages = [];
         $extraPages = [];
 
-        // 甯歌椤甸潰绫诲瀷鍏抽敭璇嶆槧灏?
+        // 常见页面类型关键词映射。
         $pageTypeKeywords = [
-            'home_page' => ['棣栭〉', 'home page', 'homepage'],
-            'about_page' => ['鍏充簬椤甸潰', 'about', '鍏充簬鎴戜滑'],
-            'contact_page' => ['鑱旂郴椤甸潰', 'contact', '鑱旂郴鎴戜滑'],
-            'product_page' => ['浜у搧椤甸潰', 'product', '浜у搧鍒楄〃'],
-            'blog_page' => ['鍗氬椤甸潰', 'blog', '鍗氬'],
-            'service_page' => ['鏈嶅姟椤甸潰', 'service', '鏈嶅姟'],
-            'privacy_page' => ['闅愮鏀跨瓥', 'privacy'],
-            'terms_page' => ['鏈嶅姟鏉℃', 'terms'],
+            'home_page' => ['首页', 'home page', 'homepage'],
+            'about_page' => ['关于页面', 'about', '关于我们'],
+            'contact_page' => ['联系页面', 'contact', '联系我们'],
+            'product_page' => ['产品页面', 'product', '产品列表'],
+            'blog_page' => ['博客页面', 'blog', '博客'],
+            'service_page' => ['服务页面', 'service', '服务'],
+            'privacy_page' => ['隐私政策', 'privacy'],
+            'terms_page' => ['服务条款', 'terms'],
         ];
 
-        // 妫€鏌ユ瘡涓凡閫夐〉闈㈡槸鍚︽湁瑙勫垝
+        // 检查每一个已选页面是否有规划。
         foreach ($selectedPageTypes as $pageType) {
             $keywords = $pageTypeKeywords[$pageType] ?? [$pageType, \str_replace('_', ' ', $pageType)];
             $found = false;
