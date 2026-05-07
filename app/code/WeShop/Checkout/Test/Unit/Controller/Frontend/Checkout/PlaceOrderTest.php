@@ -9,6 +9,8 @@ use WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder;
 use WeShop\Checkout\Service\CheckoutService;
 use WeShop\Customer\Model\Customer;
 use WeShop\Customer\Session\CustomerSession;
+use Weline\Framework\Context;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 
 class PlaceOrderTest extends TestCase
@@ -16,12 +18,14 @@ class PlaceOrderTest extends TestCase
     protected function tearDown(): void
     {
         unset($_SERVER['WELINE_USER_CURRENCY']);
+        Context::leave();
         parent::tearDown();
     }
 
     public function testIndexPersistsCheckoutContextIntoSessionWhenOrderIsPlaced(): void
     {
         $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+        WelineEnv::setCurrency('USD');
 
         $customer = $this->createCustomer(9);
         $customerSession = $this->createMock(CustomerSession::class);
@@ -120,6 +124,7 @@ class PlaceOrderTest extends TestCase
     public function testIndexPassesRetryOrderIdThroughToCheckoutService(): void
     {
         $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+        WelineEnv::setCurrency('USD');
 
         $customer = $this->createCustomer(9);
         $customerSession = $this->createMock(CustomerSession::class);
@@ -192,6 +197,7 @@ class PlaceOrderTest extends TestCase
     public function testIndexReadsBodyAndPostPayloadWithRetryOrderFallback(): void
     {
         $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+        WelineEnv::setCurrency('USD');
 
         $customer = $this->createCustomer(9);
         $customerSession = $this->createMock(CustomerSession::class);

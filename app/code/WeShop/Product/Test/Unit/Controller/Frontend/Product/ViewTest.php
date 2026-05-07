@@ -53,10 +53,10 @@ class ViewTest extends TestCase
         $pageDataService->expects($this->never())->method('build');
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['id', null, 0],
-            ['product_id', null, 0],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'id' => 0,
+            'product_id' => 0,
+        ]));
 
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())->method('addError');
@@ -87,10 +87,10 @@ class ViewTest extends TestCase
             ->willReturn([]);
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['id', null, 77],
-            ['product_id', null, 0],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'id' => 77,
+            'product_id' => 0,
+        ]));
 
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())->method('addError');
@@ -127,10 +127,10 @@ class ViewTest extends TestCase
             ->willReturn($pageData);
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['id', null, 77],
-            ['product_id', null, 0],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'id' => 77,
+            'product_id' => 0,
+        ]));
 
         $controller = $this->getMockBuilder(View::class)
             ->setConstructorArgs([$recorder, $pageDataService])
@@ -154,5 +154,15 @@ class ViewTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = null): mixed => \array_key_exists($key, $params)
+            ? $params[$key]
+            : $default;
     }
 }
