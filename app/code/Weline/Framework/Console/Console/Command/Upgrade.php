@@ -235,6 +235,12 @@ class Upgrade extends CommandAbstract
                 if ($fileReal && isset($processedFiles[$fileReal])) {
                     continue;
                 }
+                if ($this->shouldSkipCommandScanFile($filePath)) {
+                    if ($fileReal) {
+                        $processedFiles[$fileReal] = true;
+                    }
+                    continue;
+                }
                 // 直接按文件加载一次，避免命名空间不一致导致的重复加载
                 $before = get_declared_classes();
                 if ($fileReal && is_file($fileReal)) {
@@ -530,6 +536,12 @@ class Upgrade extends CommandAbstract
                 $fileReal = is_file($filePath) ? realpath($filePath) : $filePath;
                 
                 if ($fileReal && isset($processedFiles[$fileReal])) {
+                    continue;
+                }
+                if ($this->shouldSkipCommandScanFile($filePath)) {
+                    if ($fileReal) {
+                        $processedFiles[$fileReal] = true;
+                    }
                     continue;
                 }
                 
@@ -899,5 +911,25 @@ class Upgrade extends CommandAbstract
             // 反射失败，假设不是静态类
             return false;
         }
+    }
+
+    /**
+     * Skip test harness files before include so runtime command refresh does not require dev PHPUnit classes.
+     */
+    private function shouldSkipCommandScanFile(string $filePath): bool
+    {
+        if (!is_file($filePath)) {
+            return false;
+        }
+
+        $source = @file_get_contents($filePath);
+        if (!is_string($source)) {
+            return false;
+        }
+
+        return str_contains($source, 'PHPUnit\\Framework\\TestCase')
+            || str_contains($source, 'Weline\\Framework\\UnitTest\\TestCore')
+            || str_contains($source, 'app/bootstrap_phpunit.php')
+            || preg_match('/extends\s+\\\\?TestCore\b/', $source) === 1;
     }
 }
