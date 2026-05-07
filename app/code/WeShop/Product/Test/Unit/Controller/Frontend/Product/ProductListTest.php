@@ -75,17 +75,17 @@ class ProductListTest extends TestCase
         $categoryService->expects($this->never())->method('getCategory');
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['page', null, null],
-            ['page_size', null, null],
-            ['category_id', null, null],
-            ['q', null, null],
-            ['search', null, null],
-            ['min_price', null, null],
-            ['max_price', null, null],
-            ['order_by', null, null],
-            ['order_dir', null, null],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'page' => null,
+            'page_size' => null,
+            'category_id' => null,
+            'q' => null,
+            'search' => null,
+            'min_price' => null,
+            'max_price' => null,
+            'order_by' => null,
+            'order_dir' => null,
+        ]));
 
         $assigned = [];
         $controller = $this->createController($productService, $categoryService, $request, $assigned);
@@ -134,17 +134,17 @@ class ProductListTest extends TestCase
             );
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['page', null, 3],
-            ['page_size', null, 12],
-            ['category_id', null, 8],
-            ['q', null, 'helmet'],
-            ['search', null, 'legacy-search'],
-            ['min_price', null, '50'],
-            ['max_price', null, '200'],
-            ['order_by', null, 'price'],
-            ['order_dir', null, 'asc'],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'page' => 3,
+            'page_size' => 12,
+            'category_id' => 8,
+            'q' => 'helmet',
+            'search' => 'legacy-search',
+            'min_price' => '50',
+            'max_price' => '200',
+            'order_by' => 'price',
+            'order_dir' => 'asc',
+        ]));
 
         $assigned = [];
         $controller = $this->createController($productService, $categoryService, $request, $assigned);
@@ -181,17 +181,17 @@ class ProductListTest extends TestCase
         $categoryService->expects($this->never())->method('getCategory');
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['page', null, 2],
-            ['page_size', null, 30],
-            ['category_id', null, 0],
-            ['q', null, ''],
-            ['search', null, ''],
-            ['min_price', null, 'abc'],
-            ['max_price', null, null],
-            ['order_by', null, 'dangerous_column'],
-            ['order_dir', null, 'sideways'],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'page' => 2,
+            'page_size' => 30,
+            'category_id' => 0,
+            'q' => '',
+            'search' => '',
+            'min_price' => 'abc',
+            'max_price' => null,
+            'order_by' => 'dangerous_column',
+            'order_dir' => 'sideways',
+        ]));
 
         $assigned = [];
         $controller = $this->createController($productService, $categoryService, $request, $assigned);
@@ -238,5 +238,15 @@ class ProductListTest extends TestCase
             'pagination' => ['current_page' => 1, 'total_pages' => 1],
             'total' => count($items),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = null): mixed => \array_key_exists($key, $params)
+            ? $params[$key]
+            : $default;
     }
 }
