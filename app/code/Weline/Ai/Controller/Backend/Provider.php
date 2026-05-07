@@ -220,7 +220,7 @@ class Provider extends BaseController
         try {
             $providerCode = $this->normalizeProviderCode((string)($this->request->getParam('provider_code') ?? $this->request->getGet('provider_code') ?? ''));
             $accountId = (int)($this->request->getParam('account_id') ?? $this->request->getGet('account_id') ?? 0);
-            $apiKey = trim((string)($this->request->getParam('api_key') ?? ''));
+            $apiKey = trim((string)($this->request->getParam('api_key') ?? $this->request->getGet('api_key') ?? ''));
             $baseUrl = trim((string)($this->request->getParam('base_url') ?? $this->request->getGet('base_url') ?? ''));
             $requireRemote = (string)($this->request->getParam('require_remote') ?? $this->request->getGet('require_remote') ?? '') === '1';
 
@@ -250,6 +250,23 @@ class Provider extends BaseController
                 }
                 $apiKey = $account->getDecryptedApiKey();
                 $baseUrl = (string)($account->getData(Account::schema_fields_BASE_URL) ?: ($config['base_url'] ?? ''));
+            } elseif ($apiKey === '') {
+                $account = $this->accountService->getAvailableAccount($providerCode);
+                if (!$account || !$account->getId()) {
+                    /** @var Account $account */
+                    $account = ObjectManager::getInstance(Account::class)->clear()
+                        ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+                        ->where(Account::schema_fields_IS_ACTIVE, 1)
+                        ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+                        ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
+                        ->order(Account::schema_fields_CREATED_AT, 'DESC')
+                        ->find()
+                        ->fetch();
+                }
+                if ($account && $account->getId()) {
+                    $apiKey = $account->getDecryptedApiKey();
+                    $baseUrl = (string)($account->getData(Account::schema_fields_BASE_URL) ?: ($config['base_url'] ?? ''));
+                }
             }
 
             if ($apiKey === '') {
@@ -301,13 +318,16 @@ class Provider extends BaseController
                     'unsupported' => false,
                     'message' => $remoteError !== '' ? $remoteError : __('models 接口未返回可用模型'),
                     'source' => $source,
+                    'default_model_code' => (string)($config['test_model'] ?? ''),
                 ]);
             }
+            $defaultModelCode = $this->resolveDefaultModelCode($models, (string)($config['test_model'] ?? ''));
             return $this->fetchJson([
                 'success' => true,
                 'data' => $models,
                 'unsupported' => false,
                 'source' => $source,
+                'default_model_code' => $defaultModelCode,
                 'warning' => $remoteError,
             ]);
         } catch (ResponseTerminateException $e) {
@@ -357,6 +377,28 @@ class Provider extends BaseController
             ];
         }
         return $items;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $models
+     */
+    private function resolveDefaultModelCode(array $models, string $configuredDefault): string
+    {
+        $configuredDefault = trim($configuredDefault);
+        $first = '';
+        foreach ($models as $model) {
+            $code = trim((string)($model['code'] ?? $model['value'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            if ($first === '') {
+                $first = $code;
+            }
+            if ($configuredDefault !== '' && strcasecmp($code, $configuredDefault) === 0) {
+                return $code;
+            }
+        }
+        return $first;
     }
 
     /**
