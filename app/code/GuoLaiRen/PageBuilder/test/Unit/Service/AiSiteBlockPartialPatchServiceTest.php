@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
+use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBlockPartialPatchService;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
@@ -74,6 +75,60 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertTrue($result['success']);
         self::assertSame('hero', $result['block_id']);
         self::assertSame('content/hero', $result['component_code']);
+    }
+
+    public function testReadCurrentBlockFallsBackToMaterializedPageAiLayout(): void
+    {
+        $page = $this->createMaterializedPageMock(444, 1, [
+            $this->block('home-page-hero-banner', 'Materialized Headline', '<section>Materialized</section>', 'content/home-page-hero-banner'),
+        ]);
+        $service = new AiSiteBlockPartialPatchService(pageModel: $page);
+
+        $result = $service->readCurrentBlockFromScope($this->materializedScope(444), 'home_page', 'home-page-hero-banner');
+
+        self::assertTrue($result['success']);
+        self::assertSame('page.ai_layout', $result['source']);
+        self::assertSame('home-page-hero-banner', $result['block_id']);
+        self::assertSame('content/home-page-hero-banner', $result['component_code']);
+    }
+
+    public function testReplaceCurrentBlockPersistsMaterializedPageAiLayout(): void
+    {
+        $currentBlocks = [
+            $this->block('home-page-hero-banner', 'Materialized Headline', '<section>Materialized</section>', 'content/home-page-hero-banner'),
+            $this->block('home-page-proof', 'Proof', '<section>Proof</section>', 'content/home-page-proof'),
+        ];
+        $replacement = $this->block(
+            'home-page-hero-banner',
+            'Patched Materialized Headline',
+            '<section>Patched Materialized</section>',
+            'content/home-page-hero-banner'
+        );
+        $page = $this->createMaterializedPageMock(555, 3, $currentBlocks);
+        $page->expects(self::once())
+            ->method('setAiLayoutArray')
+            ->with(self::callback(static function (array $layout): bool {
+                $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+
+                return \count($blocks) === 2
+                    && ($blocks[0]['config']['headline'] ?? '') === 'Patched Materialized Headline'
+                    && ($blocks[1]['block_id'] ?? '') === 'home-page-proof'
+                    && \trim((string)($layout['updated_at'] ?? '')) !== '';
+            }))
+            ->willReturnSelf();
+        $page->expects(self::once())->method('save')->willReturn(true);
+        $service = new AiSiteBlockPartialPatchService(pageModel: $page);
+
+        $result = $service->applyReplacementBlockToScope(
+            $this->materializedScope(555),
+            'home_page',
+            'home-page-hero-banner',
+            $replacement
+        );
+
+        self::assertTrue($result['success']);
+        self::assertSame('Patched Materialized Headline', $result['scope']['virtual_pages_by_type']['home_page']['blocks'][0]['config']['headline']);
+        self::assertSame('Patched Materialized Headline', $result['scope']['pagebuilder_pages_by_type']['home_page']['ai_layout']['blocks'][0]['config']['headline']);
     }
 
     public function testReplaceCurrentBlockOnlyChangesTargetAndKeepsHistory(): void
@@ -312,6 +367,53 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         ];
 
         return $scope;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function materializedScope(int $pageId): array
+    {
+        return [
+            'page_types' => ['home_page'],
+            'pagebuilder_pages_by_type' => [
+                'home_page' => [
+                    'page_id' => $pageId,
+                    'type' => 'home_page',
+                    'title' => 'Home',
+                    'handle' => '',
+                ],
+            ],
+            'virtual_pages_by_type' => [
+                'home_page' => [
+                    'title' => 'Home',
+                    'materialized_page_id' => $pageId,
+                    'blocks' => [],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $blocks
+     */
+    private function createMaterializedPageMock(int $pageId, int $loadCount, array $blocks): Page
+    {
+        $page = $this->getMockBuilder(Page::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['clearData', 'load', 'getId', 'resolveAiLayoutForFrontend', 'setAiLayoutArray', 'save'])
+            ->addMethods(['clearQuery'])
+            ->getMock();
+        $page->method('clearData')->willReturnSelf();
+        $page->method('clearQuery')->willReturnSelf();
+        $page->expects(self::exactly($loadCount))->method('load')->with($pageId)->willReturnSelf();
+        $page->method('getId')->willReturn($pageId);
+        $page->expects(self::exactly($loadCount))
+            ->method('resolveAiLayoutForFrontend')
+            ->with(true)
+            ->willReturn(['blocks' => $blocks]);
+
+        return $page;
     }
 
     /**

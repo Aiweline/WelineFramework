@@ -100,6 +100,11 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                             <label for="common_model_preset" class="form-label">
                                 <?= __('模型') ?> <span class="text-danger">*</span>
                             </label>
+                            <input type="search"
+                                   class="form-control mb-2"
+                                   id="common_model_search"
+                                   placeholder="Search provider models"
+                                   disabled>
                             <select class="form-select" id="common_model_preset" disabled>
                                 <option value=""><?= __('先选择供应商') ?></option>
                             </select>
@@ -710,6 +715,8 @@ if (!empty($displayConfig)) {
         var element = document.getElementById(id);
         if (!element) return;
         element.value = value === undefined || value === null ? '' : value;
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     function setCheckboxValue(id, checked) {
@@ -744,6 +751,8 @@ if (!empty($displayConfig)) {
         }
     }
 
+    var remoteModelOptions = [];
+
     function fillModelPresetOptions(providerCode) {
         var select = document.getElementById('common_model_preset');
         if (!select) return;
@@ -754,6 +763,33 @@ if (!empty($displayConfig)) {
         placeholder.textContent = providerCode ? '<?= addslashes(__('选择模型')) ?>' : '<?= addslashes(__('先选择供应商')) ?>';
         select.appendChild(placeholder);
         select.disabled = !providerCode;
+
+        var searchInput = document.getElementById('common_model_search');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.disabled = !providerCode;
+        }
+        remoteModelOptions = [];
+        if (!providerCode) return;
+
+        placeholder.textContent = '正在从供应商 models 接口加载...';
+        select.disabled = true;
+        if (searchInput) searchInput.disabled = true;
+        loadProviderRemoteModels(providerCode).then(function(models) {
+            remoteModelOptions = models;
+            renderRemoteModelOptions('');
+            select.disabled = false;
+            if (searchInput) searchInput.disabled = false;
+        }).catch(function(error) {
+            select.innerHTML = '';
+            var option = document.createElement('option');
+            option.value = '';
+            option.textContent = error && error.message ? error.message : 'Unable to load provider models';
+            select.appendChild(option);
+            select.disabled = true;
+            if (searchInput) searchInput.disabled = true;
+        });
+        return;
 
         if (!providerCode || !Array.isArray(commonModelPresets)) return;
 
@@ -770,6 +806,121 @@ if (!empty($displayConfig)) {
         if (presets.length === 1) {
             select.value = presets[0].key;
             applyPreset(presets[0]);
+        }
+    }
+
+    function loadProviderRemoteModels(providerCode) {
+        var params = new URLSearchParams({
+            provider_code: providerCode,
+            require_remote: '1'
+        });
+        var apiKeyInput = document.getElementById('api_key_input');
+        if (apiKeyInput && apiKeyInput.value.trim()) {
+            params.set('api_key', apiKeyInput.value.trim());
+        }
+        var url = '<?= addslashes($this->getBackendUrl('*/backend/provider/getRemoteModelsForSelect')) ?>?' + params.toString();
+        return fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function(response) {
+            return response.text().then(function(text) {
+                var json = {};
+                try {
+                    json = text ? JSON.parse(text) : {};
+                } catch (e) {
+                    throw new Error('models endpoint returned non-JSON response');
+                }
+                if (!response.ok || !json.success) {
+                    throw new Error(json.message || ('models endpoint HTTP ' + response.status));
+                }
+                if (!Array.isArray(json.data) || !json.data.length) {
+                    throw new Error('models endpoint returned empty list');
+                }
+                return json.data;
+            });
+        });
+    }
+
+    function renderRemoteModelOptions(keyword) {
+        var select = document.getElementById('common_model_preset');
+        if (!select) return;
+        var normalizedKeyword = String(keyword || '').trim().toLowerCase();
+        select.innerHTML = '';
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '选择模型';
+        select.appendChild(placeholder);
+
+        var matchedCount = 0;
+        var firstValue = '';
+        remoteModelOptions.filter(function(model) {
+            if (!normalizedKeyword) return true;
+            var text = [
+                model.code || model.value || '',
+                model.name || '',
+                model.label || '',
+                model.description || '',
+                model.primary_modality || ''
+            ].join(' ').toLowerCase();
+            return text.indexOf(normalizedKeyword) !== -1;
+        }).forEach(function(model) {
+            var code = model.code || model.value || '';
+            if (!code) return;
+            var option = document.createElement('option');
+            option.value = code;
+            option.textContent = model.label || ((model.name || code) + ' (' + code + ')');
+            option.dataset.modelName = model.name || code;
+            option.dataset.maxTokens = model.max_tokens || model.context_window || 4096;
+            option.dataset.primaryModality = model.primary_modality || '';
+            option.dataset.description = model.description || '';
+            select.appendChild(option);
+            matchedCount++;
+            if (!firstValue) firstValue = code;
+        });
+        select.disabled = matchedCount === 0;
+        if (matchedCount === 1 && firstValue) {
+            select.value = firstValue;
+            applyRemoteModelOption(select.options[select.selectedIndex]);
+        }
+    }
+
+    function applyRemoteModelOption(option) {
+        if (!option || !option.value) return;
+        var providerSelect = document.getElementById('common_provider_preset');
+        var providerCode = providerSelect ? providerSelect.value : '';
+        var code = option.value;
+        var maxTokens = parseInt(option.dataset.maxTokens || '4096', 10) || 4096;
+        var primaryModality = option.dataset.primaryModality || '';
+        var name = option.dataset.modelName || code;
+        var preset = {
+            provider: providerCode,
+            model_code: code,
+            provider_model_code: code,
+            name: name,
+            version: '1.0',
+            max_tokens: maxTokens,
+            token_price_input: 0,
+            token_price_output: 0,
+            config: {
+                model: code,
+                model_id: code,
+                max_tokens: maxTokens,
+                temperature: 0,
+                top_p: 1,
+                stream: false
+            }
+        };
+        if (primaryModality) {
+            preset.primary_modality = primaryModality;
+            preset.config.primary_modality = primaryModality;
+        }
+        applyPreset(preset);
+        setFieldValue('primary_modality', primaryModality || 'text2text');
+        var currentModelInput = document.getElementById('model_code');
+        if (currentModelInput) {
+            currentModelInput.dispatchEvent(new Event('input', { bubbles: true }));
+            currentModelInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }
 
@@ -799,11 +950,22 @@ if (!empty($displayConfig)) {
 
         modelSelect.addEventListener('change', function() {
             if (!this.value) return;
-            var preset = commonModelPresets.find(function(item) {
-                return item.key === modelSelect.value;
-            });
-            applyPreset(preset);
+            applyRemoteModelOption(this.options[this.selectedIndex]);
         });
+
+        var searchInput = document.getElementById('common_model_search');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                renderRemoteModelOptions(this.value || '');
+            });
+        }
+
+        var apiKeyInput = document.getElementById('api_key_input');
+        if (apiKeyInput) {
+            apiKeyInput.addEventListener('change', function() {
+                if (providerSelect.value) fillModelPresetOptions(providerSelect.value);
+            });
+        }
     })();
     
     document.getElementById('model-form').addEventListener('submit', function(e) {
