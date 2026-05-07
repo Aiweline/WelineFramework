@@ -23,3 +23,5 @@
 - `default` product detail exposes stable review and Q&A tab slots so module slices can render user content without editing theme modules.
 - `default` customer account center exposes stable security, discovery, and order/after-sales card hooks so post-purchase modules can inject entry points without editing theme modules.
 - `WeShop_Customer::frontend::account::security::cards` and `WeShop_Customer::frontend::account::discovery::cards` remain available for cross-module injection.
+- Supplier, seller, and store capability review for WEL-58 is not accepted until each checked chain is classified as completed, incomplete, defective, needs product confirmation, or not applicable in `supplier-review-checklist.md`.
+- Any supplier-related code, configuration, permission, API, query-provider, template, or i18n change must update the owning module `doc/README.md`, API/event/hook doc, or an equivalent module-local change note.

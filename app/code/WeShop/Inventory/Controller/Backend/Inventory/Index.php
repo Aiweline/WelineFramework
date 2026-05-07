@@ -6,7 +6,9 @@ namespace WeShop\Inventory\Controller\Backend\Inventory;
 
 use WeShop\Inventory\Service\SourceManagementService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Inventory::inventory_management', 'Inventory Management', 'mdi mdi-warehouse', 'Manage inventory', 'Weline_Backend::shop_group')]
 class Index extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Index extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Inventory::inventory_management_index', 'View inventory', 'mdi mdi-warehouse', 'View inventory management page')]
     public function index(): string
     {
         $this->assign([

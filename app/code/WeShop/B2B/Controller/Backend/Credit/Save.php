@@ -6,7 +6,9 @@ namespace WeShop\B2B\Controller\Backend\Credit;
 
 use WeShop\B2B\Service\CreditService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_B2B::b2b_credit_actions', 'B2B credit actions', 'mdi mdi-credit-card-edit-outline', 'Update B2B credit lines', 'WeShop_B2B::b2b_credit')]
 class Save extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Save extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_B2B::b2b_credit_save_post', 'Save B2B credit line', 'mdi mdi-content-save', 'Save B2B credit line data')]
     public function post(): string
     {
         $back = (string) $this->request->getParam('back_url', $this->request->getUrlBuilder()->getBackendUrl('*/backend/credit'));
