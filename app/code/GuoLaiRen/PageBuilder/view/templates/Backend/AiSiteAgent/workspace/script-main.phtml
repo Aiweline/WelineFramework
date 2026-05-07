@@ -704,25 +704,66 @@
         return normalizedOperation === 'plan' || normalizedOperation === 'phase_one_plan';
     }
 
-    function normalizeQueueUiStateName(status, queueInfo) {
+    function normalizeQueueUiContractStatus(status) {
         var normalized = normalizeQueueStatusForPrompt(status);
+        if (normalized === 'in_progress') {
+            return 'running';
+        }
+        if (normalized === 'complete' || normalized === 'completed' || normalized === 'finished') {
+            return 'done';
+        }
+        if (normalized === 'fail') {
+            return 'failed';
+        }
+        if (normalized === 'canceled' || normalized === 'stop' || normalized === 'stopped') {
+            return 'cancelled';
+        }
+        if (normalized === 'expired' || normalized === 'outdated') {
+            return 'stale';
+        }
+        if (normalized === 'timed_out' || normalized === 'connection_timeout') {
+            return 'timeout';
+        }
+        if (normalized === 'disconnected' || normalized === 'interrupted' || normalized === 'sse_interrupted') {
+            return 'connection_lost';
+        }
+        return normalized;
+    }
+
+    function normalizeQueueUiStateName(status, queueInfo) {
+        var normalized = normalizeQueueUiContractStatus(status);
         if (normalized === 'saving') {
             return 'saving';
+        }
+        if (normalized === 'pending') {
+            return 'pending';
         }
         if (normalized === 'queued') {
             return 'queued';
         }
-        if (normalized === 'pending') {
-            return 'waiting';
-        }
         if (normalized === 'running' || normalized === 'processing') {
             return 'running';
         }
-        if (normalized === 'done' || normalized === 'success' || normalized === 'finished' || normalized === 'complete' || normalized === 'completed') {
+        if (normalized === 'done' || normalized === 'success') {
             return 'completed';
         }
-        if (normalized === 'error' || normalized === 'failed' || normalized === 'cancelled' || normalized === 'canceled' || normalized === 'stop') {
+        if (normalized === 'partial_retry_required') {
+            return 'retryable';
+        }
+        if (normalized === 'error' || normalized === 'failed') {
             return 'failed';
+        }
+        if (normalized === 'cancelled') {
+            return 'cancelled';
+        }
+        if (normalized === 'stale') {
+            return 'stale';
+        }
+        if (normalized === 'timeout') {
+            return 'timeout';
+        }
+        if (normalized === 'connection_lost') {
+            return 'connection_lost';
         }
         if (queueInfo && typeof queueInfo === 'object' && !!queueInfo.queue_waiting_for_scheduler) {
             return 'waiting';
@@ -733,7 +774,7 @@
     function isQueueUiStateBusy(stage) {
         var state = queueUiStateByStage[normalizeQueueUiStage(stage)];
         var name = state && typeof state === 'object' ? String(state.state || '') : '';
-        return ['saving', 'queued', 'waiting', 'running'].indexOf(name) !== -1;
+        return ['saving', 'pending', 'queued', 'waiting', 'running', 'connection_lost'].indexOf(name) !== -1;
     }
 
     function pickQueueInfoForUiState(stage, source) {
@@ -825,6 +866,43 @@
         var stateName = payload.state
             ? normalizeQueueUiStateName(payload.state, queueInfo)
             : normalizeQueueUiStateName(status, queueInfo);
+        var retryAllowed = !!(
+            payload.retry_allowed
+            || active.retry_allowed
+            || nestedActive.retry_allowed
+            || queueInfo.retry_allowed
+            || snapshot.retry_allowed
+        );
+        var failureMode = String(
+            payload.failure_mode
+            || active.failure_mode
+            || nestedActive.failure_mode
+            || queueInfo.failure_mode
+            || snapshot.failure_mode
+            || ''
+        ).trim();
+        var queueWaitingForScheduler = !!(
+            payload.queue_waiting_for_scheduler
+            || active.queue_waiting_for_scheduler
+            || nestedActive.queue_waiting_for_scheduler
+            || queueInfo.queue_waiting_for_scheduler
+            || snapshot.queue_waiting_for_scheduler
+        );
+        var canCloseStream = !!(
+            payload.can_close_stream
+            || active.can_close_stream
+            || nestedActive.can_close_stream
+            || queueInfo.can_close_stream
+            || snapshot.can_close_stream
+        );
+        if (queueWaitingForScheduler && stateName === 'idle') {
+            stateName = 'waiting';
+        }
+        if ((stateName === 'failed' || stateName === 'cancelled' || stateName === 'stale' || stateName === 'timeout')
+            && (retryAllowed || failureMode === 'partial_retry_required')
+        ) {
+            stateName = 'retryable';
+        }
         var queueId = readQueueUiId(normalizedStage, payload, queueInfo);
         var message = String(
             (payloadMatchesStage ? (payload.message
@@ -841,7 +919,11 @@
             status: normalizeQueueStatusForPrompt(status || stateName),
             queue_id: queueId,
             message: message,
-            percent: Number(payload.percent || payload.progress_percent || snapshot.progress_percent || 0) || 0
+            percent: Number(payload.percent || payload.progress_percent || snapshot.progress_percent || 0) || 0,
+            retry_allowed: retryAllowed,
+            failure_mode: failureMode,
+            queue_waiting_for_scheduler: queueWaitingForScheduler,
+            can_close_stream: canCloseStream
         };
     }
 
@@ -861,13 +943,36 @@
         var labels = {
             idle: <?= \json_encode((string)__('空闲'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
             saving: <?= \json_encode((string)__('保存需求中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            pending: <?= \json_encode((string)__('待调度'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
             queued: <?= \json_encode((string)__('已入队'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
             waiting: <?= \json_encode((string)__('等待调度'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
             running: <?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
             failed: <?= \json_encode((string)__('失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            cancelled: <?= \json_encode((string)__('已取消'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            stale: <?= \json_encode((string)__('状态已过期'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            retryable: <?= \json_encode((string)__('需重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            timeout: <?= \json_encode((string)__('等待超时'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            connection_lost: <?= \json_encode((string)__('连接中断'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
             completed: <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
         };
         return labels[normalized] || normalized || labels.idle;
+    }
+
+    function getQueueUiTextTone(stateName) {
+        var normalized = String(stateName || '').trim();
+        if (normalized === 'failed' || normalized === 'timeout') {
+            return 'text-danger';
+        }
+        if (normalized === 'retryable' || normalized === 'cancelled' || normalized === 'stale' || normalized === 'connection_lost') {
+            return 'text-warning';
+        }
+        if (normalized === 'running') {
+            return 'text-primary';
+        }
+        if (normalized === 'completed') {
+            return 'text-success';
+        }
+        return 'text-muted';
     }
 
     function buildQueueUiDetailText(queueState) {
@@ -876,8 +981,18 @@
         if (state.queue_id > 0) {
             parts.push('Queue #' + String(state.queue_id));
         }
-        if (state.state === 'waiting' || state.state === 'queued') {
+        if (state.state === 'waiting' || state.state === 'queued' || state.state === 'pending') {
             parts.push(<?= \json_encode((string)__('队列由后端调度器执行，通常 1 分钟内开始。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        } else if (state.state === 'connection_lost') {
+            parts.push(<?= \json_encode((string)__('SSE 日志连接中断，已切换为工作台快照轮询；请等待终态或使用重试入口。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        } else if (state.state === 'timeout') {
+            parts.push(<?= \json_encode((string)__('长时间未收到队列终态，请刷新工作台确认真实结果后再继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        } else if (state.state === 'retryable') {
+            parts.push(<?= \json_encode((string)__('检测到 retry_allowed 或 partial_retry_required，请使用重试失败项入口处理。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        } else if (state.state === 'cancelled') {
+            parts.push(<?= \json_encode((string)__('当前队列已取消，不会继续自动推进。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        } else if (state.state === 'stale') {
+            parts.push(<?= \json_encode((string)__('当前状态已过期，请以最新工作台快照为准。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         } else if (state.state === 'failed') {
             parts.push(<?= \json_encode((string)__('失败后可使用重试入口继续，不要重复启动新任务。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         }
@@ -894,8 +1009,10 @@
         var detailText = buildQueueUiDetailText(queueState);
         document.querySelectorAll('[data-pb-queue-state-detail="' + queueState.stage + '"]').forEach(function (el) {
             el.textContent = detailText;
-            el.classList.toggle('text-danger', queueState.state === 'failed');
-            el.classList.toggle('text-muted', queueState.state !== 'failed');
+            ['text-danger', 'text-warning', 'text-primary', 'text-success', 'text-muted'].forEach(function (className) {
+                el.classList.remove(className);
+            });
+            el.classList.add(getQueueUiTextTone(queueState.state));
         });
         if (opts.updateStatus === true) {
             var statusEl = queueState.stage === 'task_plan'
@@ -909,6 +1026,9 @@
         if (document.body && document.body.dataset) {
             document.body.dataset.pbAiQueueStage = queueState.stage;
             document.body.dataset.pbAiQueueState = queueState.state;
+            document.body.dataset.pbAiQueueStatus = queueState.status;
+            document.body.dataset.pbAiQueueRetryAllowed = queueState.retry_allowed ? '1' : '0';
+            document.body.dataset.pbAiQueueFailureMode = queueState.failure_mode || '';
         }
         syncGenerationPrimaryActions();
         return queueState;
@@ -2004,6 +2124,9 @@
         workspaceApi = {};
     }
     workspaceApi.hydrateWorkspaceFromState = hydrateWorkspaceFromState;
+    workspaceApi.renderQueueUiState = renderQueueUiState;
+    workspaceApi.syncQueueUiStateFromWorkspace = syncQueueUiStateFromWorkspace;
+    workspaceApi.buildQueueUiState = buildQueueUiState;
     workspaceApi.getPlanConfirmedState = function () {
         return !!planConfirmedState;
     };
@@ -2449,6 +2572,12 @@
         publishStageEntryFailedTitle: <?= \json_encode((string)__('最新 AI 生成未成功，禁止进入发布以避免发布旧内容'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryFailedHint: <?= \json_encode((string)__('请先等待真实 AI 队列成功完成后再进入第三阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishBlockedLatestBuildFailure: <?= \json_encode((string)__('最新 AI 生成失败或仍在运行，禁止发布旧站点；请先重新生成并等待成功完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishBlockedByRunningQueue: <?= \json_encode((string)__('AI 队列仍处于 pending、queued 或 running 状态，发布按钮已锁定。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishBlockedByRetryable: <?= \json_encode((string)__('存在 retry_allowed 或 partial_retry_required 失败项，发布前必须先完成重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishBlockedByNotReady: <?= \json_encode((string)__('当前工作台尚未满足 can_publish 合同，发布按钮保持锁定。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishReadyContract: <?= \json_encode((string)__('can_publish 已满足，可以先运行发布检查，再确认发布。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        queueStateTimeout: <?= \json_encode((string)__('长时间未收到队列终态，请刷新工作台确认真实结果后再继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        sseConnectionInterrupted: <?= \json_encode((string)__('SSE 日志连接中断，已切换为工作台快照轮询；请等待终态或稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyBadge: <?= \json_encode((string)__('可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyTitle: <?= \json_encode((string)__('虚拟主题已就绪，下一步进入确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyHint: <?= \json_encode((string)__('进入第三阶段后可先运行发布前预检，再确认准备发布。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -13652,11 +13781,11 @@
     }
 
     function isPublishFailureStatus(status) {
-        return ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
+        return ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled', 'stale', 'expired', 'outdated'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
     }
 
     function isPublishRunningStatus(status) {
-        return ['queued', 'pending', 'running', 'processing'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
+        return ['queued', 'pending', 'running', 'processing', 'in_progress', 'waiting', 'timeout', 'timed_out', 'connection_timeout', 'connection_lost', 'disconnected', 'interrupted', 'sse_interrupted'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
     }
 
     function readPublishQueueStatus(queueInfo) {
@@ -13790,34 +13919,79 @@
         }
         var workspaceStatus = String(state.workspace_status || '').toLowerCase();
         var publishStatus = String(state.publish_status || '').toLowerCase();
-        return !!state.can_publish
+        return jsonTruthyFlag(state.can_publish)
             || workspaceStatus === 'can_publish'
             || workspaceStatus === 'published'
             || publishStatus === 'published';
     }
 
+    function resolvePublishBlockingMessage(state, flags) {
+        var nextFlags = flags && typeof flags === 'object' ? flags : {};
+        if (nextFlags.blockedByRetryable) {
+            return getRetryableAiFailureMessage(state, 'build') || messages.publishBlockedByRetryable || '';
+        }
+        if (nextFlags.blockedByRunning) {
+            return messages.publishBlockedByRunningQueue || messages.publishBlockedLatestBuildFailure || '';
+        }
+        if (nextFlags.blockedByFailure) {
+            var failure = state && state.latest_build_failure && typeof state.latest_build_failure === 'object'
+                ? state.latest_build_failure
+                : {};
+            return String(state.publish_blocked_reason || failure.message || messages.publishBlockedLatestBuildFailure || '');
+        }
+        if (nextFlags.blockedByNotReady) {
+            return messages.publishBlockedByNotReady || '';
+        }
+        return messages.publishReadyContract || '';
+    }
+
+    function syncPublishBlockingAlert(state, flags) {
+        var alertEl = document.getElementById('pb-ai-publish-blocking-alert');
+        if (!alertEl) {
+            return;
+        }
+        var nextFlags = flags && typeof flags === 'object' ? flags : {};
+        var blocked = !!(nextFlags.blockedByRetryable || nextFlags.blockedByRunning || nextFlags.blockedByFailure || nextFlags.blockedByNotReady);
+        alertEl.classList.toggle('d-none', !blocked);
+        if (!blocked) {
+            alertEl.textContent = messages.publishReadyContract || '';
+            return;
+        }
+        alertEl.textContent = resolvePublishBlockingMessage(state, nextFlags);
+        alertEl.classList.remove('alert-danger', 'alert-warning', 'alert-info');
+        alertEl.classList.add(nextFlags.blockedByFailure || nextFlags.blockedByRetryable ? 'alert-danger' : 'alert-warning');
+    }
+
     function syncPublishStartButtonFromWorkspaceState(workspaceState) {
         var state = getWorkspaceStateForPublishGate(workspaceState);
         var publishBtn = document.getElementById('pb-ai-start-publish');
-        if (!publishBtn) {
-            return;
-        }
         var blockedByFailure = hasPublishBlockingLatestBuildFailureFromWorkspaceState(state);
         var blockedByRunning = hasPublishBlockingAiOperationRunningFromWorkspaceState(state);
         var blockedByRetryable = hasRetryableAiFailures(state, null);
-        var disabled = blockedByFailure || blockedByRunning || blockedByRetryable || !canEnterPublishStageFromWorkspaceState(state);
-        publishBtn.disabled = disabled;
-        if (disabled) {
-            publishBtn.setAttribute('aria-disabled', 'true');
-            if (blockedByRetryable) {
-                publishBtn.setAttribute('title', getRetryableAiFailureMessage(state, 'build'));
-            } else if (blockedByFailure || blockedByRunning) {
-                publishBtn.setAttribute('title', String(messages.publishBlockedLatestBuildFailure || ''));
+        var canEnterPublish = canEnterPublishStageFromWorkspaceState(state);
+        var blockedByNotReady = !canEnterPublish && !blockedByFailure && !blockedByRunning && !blockedByRetryable;
+        var disabled = blockedByFailure || blockedByRunning || blockedByRetryable || blockedByNotReady;
+        var publishFlags = {
+            blockedByFailure: blockedByFailure,
+            blockedByRunning: blockedByRunning,
+            blockedByRetryable: blockedByRetryable,
+            blockedByNotReady: blockedByNotReady
+        };
+        if (publishBtn) {
+            publishBtn.disabled = disabled;
+            publishBtn.dataset.pbContractCanPublish = jsonTruthyFlag(state.can_publish) ? '1' : '0';
+            publishBtn.dataset.pbContractBlockedByFailure = blockedByFailure ? '1' : '0';
+            publishBtn.dataset.pbContractBlockedByRunning = blockedByRunning ? '1' : '0';
+            publishBtn.dataset.pbContractBlockedByRetryable = blockedByRetryable ? '1' : '0';
+            if (disabled) {
+                publishBtn.setAttribute('aria-disabled', 'true');
+                publishBtn.setAttribute('title', resolvePublishBlockingMessage(state, publishFlags));
+            } else {
+                publishBtn.removeAttribute('aria-disabled');
+                publishBtn.removeAttribute('title');
             }
-        } else {
-            publishBtn.removeAttribute('aria-disabled');
-            publishBtn.removeAttribute('title');
         }
+        syncPublishBlockingAlert(state, publishFlags);
         document.querySelectorAll('.pb-ai-set-stage[data-stage="publish"]').forEach(function (btn) {
             btn.disabled = disabled;
             if (disabled) {
