@@ -26,6 +26,13 @@ class ApiUser extends Model
 {
     public const DEFAULT_TOKEN_EXPIRE_TIME = 604800;
     public const DEFAULT_REFRESH_TOKEN_EXPIRE_TIME = 2592000;
+    public const DEFAULT_IS_ENABLED = 1;
+    public const DEFAULT_IS_DELETED = 0;
+    public const DEFAULT_IP_WHITELIST_ENABLED = 0;
+    public const DEFAULT_ALLOWED_IPS = '';
+    public const DEFAULT_USER_AGENT_RESTRICTION_ENABLED = 0;
+    public const DEFAULT_ALLOWED_USER_AGENTS = '';
+    public const DEFAULT_IS_SANDBOX = 0;
 
     public const fields_ID = 'user_id';
     public const schema_table = 'm_api_user';
@@ -49,19 +56,19 @@ class ApiUser extends Model
     public const schema_fields_token_expire_time = 'token_expire_time';
     #[Col(type: 'integer', length: 11, nullable: false, default: self::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME, comment: '刷新令牌有效期')]
     public const schema_fields_refresh_token_expire_time = 'refresh_token_expire_time';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: self::DEFAULT_IS_ENABLED, comment: '是否启用')]
     public const schema_fields_is_enabled = 'is_enabled';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否删除')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: self::DEFAULT_IS_DELETED, comment: '是否删除')]
     public const schema_fields_is_deleted = 'is_deleted';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用IP白名单')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: self::DEFAULT_IP_WHITELIST_ENABLED, comment: '是否启用IP白名单')]
     public const schema_fields_ip_whitelist_enabled = 'ip_whitelist_enabled';
-    #[Col(type: 'varchar', length: 255, nullable: false, comment: '允许的IP地址列表')]
+    #[Col(type: 'varchar', length: 255, nullable: false, default: self::DEFAULT_ALLOWED_IPS, comment: '允许的IP地址列表')]
     public const schema_fields_allowed_ips = 'allowed_ips';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用用户代理限制')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: self::DEFAULT_USER_AGENT_RESTRICTION_ENABLED, comment: '是否启用用户代理限制')]
     public const schema_fields_user_agent_restriction_enabled = 'user_agent_restriction_enabled';
-    #[Col(type: 'varchar', length: 255, nullable: false, comment: '允许的用户代理列表')]
+    #[Col(type: 'varchar', length: 255, nullable: false, default: self::DEFAULT_ALLOWED_USER_AGENTS, comment: '允许的用户代理列表')]
     public const schema_fields_allowed_user_agents = 'allowed_user_agents';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否沙盒账户')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: self::DEFAULT_IS_SANDBOX, comment: '是否沙盒账户')]
     public const schema_fields_is_sandbox = 'is_sandbox';
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
     public const schema_fields_created_at = 'created_at';
@@ -240,7 +247,7 @@ class ApiUser extends Model
      */
     public function getIsEnabled(): bool
     {
-        return (bool)($this->getData(self::schema_fields_is_enabled) ?? true);
+        return (bool)($this->getData(self::schema_fields_is_enabled) ?? self::DEFAULT_IS_ENABLED);
     }
     /**
      * 设置是否启用
@@ -254,7 +261,7 @@ class ApiUser extends Model
      */
     public function isSandboxAccount(): bool
     {
-        return (bool)($this->getData(self::schema_fields_is_sandbox) ?? false);
+        return (bool)($this->getData(self::schema_fields_is_sandbox) ?? self::DEFAULT_IS_SANDBOX);
     }
     /**
      * 设置沙盒账户
@@ -268,7 +275,7 @@ class ApiUser extends Model
      */
     public function getIsDeleted(): bool
     {
-        return (bool)($this->getData(self::schema_fields_is_deleted) ?? false);
+        return (bool)($this->getData(self::schema_fields_is_deleted) ?? self::DEFAULT_IS_DELETED);
     }
     /**
      * 设置是否删除
@@ -282,7 +289,7 @@ class ApiUser extends Model
      */
     public function isIpWhitelistEnabled(): bool
     {
-        return (bool)($this->getData(self::schema_fields_ip_whitelist_enabled) ?? false);
+        return (bool)($this->getData(self::schema_fields_ip_whitelist_enabled) ?? self::DEFAULT_IP_WHITELIST_ENABLED);
     }
     /**
      * 设置是否启用IP白名单
@@ -329,7 +336,7 @@ class ApiUser extends Model
      */
     public function isUserAgentRestrictionEnabled(): bool
     {
-        return (bool)($this->getData(self::schema_fields_user_agent_restriction_enabled) ?? false);
+        return (bool)($this->getData(self::schema_fields_user_agent_restriction_enabled) ?? self::DEFAULT_USER_AGENT_RESTRICTION_ENABLED);
     }
     /**
      * 设置是否启用用户代理限制
@@ -455,6 +462,14 @@ class ApiUser extends Model
         if ($this->getData(self::schema_fields_refresh_token_expire_time) === null || $this->getData(self::schema_fields_refresh_token_expire_time) === '') {
             $this->setRefreshTokenExpireTime(self::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME);
         }
+
+        $this->setDefaultDataIfMissing(self::schema_fields_is_enabled, self::DEFAULT_IS_ENABLED);
+        $this->setDefaultDataIfMissing(self::schema_fields_is_deleted, self::DEFAULT_IS_DELETED);
+        $this->setDefaultDataIfMissing(self::schema_fields_ip_whitelist_enabled, self::DEFAULT_IP_WHITELIST_ENABLED);
+        $this->setDefaultDataIfMissing(self::schema_fields_allowed_ips, self::DEFAULT_ALLOWED_IPS);
+        $this->setDefaultDataIfMissing(self::schema_fields_user_agent_restriction_enabled, self::DEFAULT_USER_AGENT_RESTRICTION_ENABLED);
+        $this->setDefaultDataIfMissing(self::schema_fields_allowed_user_agents, self::DEFAULT_ALLOWED_USER_AGENTS);
+        $this->setDefaultDataIfMissing(self::schema_fields_is_sandbox, self::DEFAULT_IS_SANDBOX);
         
         // 设置更新时间
         $this->setData(self::schema_fields_updated_at, date('Y-m-d H:i:s'));
@@ -465,5 +480,13 @@ class ApiUser extends Model
         }
         
         parent::save_before();
+    }
+
+    private function setDefaultDataIfMissing(string $field, mixed $default): void
+    {
+        $value = $this->getData($field);
+        if ($value === null || $value === '') {
+            $this->setData($field, $default);
+        }
     }
 }
