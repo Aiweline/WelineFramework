@@ -897,10 +897,15 @@ $this->assign('providerAdd', $providerAdd);
                 throw new Error('models endpoint returned empty list');
             }
             var options = {};
+            var defaultModelCode = data.default_model_code || '';
             data.data.forEach(function(model) {
                 var code = model.code || model.value || '';
                 if (code) options[code] = model.label || model.name || code;
             });
+            if (!defaultModelCode) {
+                var optionKeys = Object.keys(options);
+                defaultModelCode = optionKeys.length ? optionKeys[0] : '';
+            }
             var subtitle = data.source === 'preset'
                 ? '远程 models 暂不可用，已使用供应商预置模型。' + (data.warning ? '\n原因: ' + data.warning : '')
                 : '';
@@ -909,6 +914,7 @@ $this->assign('providerAdd', $providerAdd);
                 text: subtitle,
                 input: 'select',
                 inputOptions: options,
+                inputValue: defaultModelCode,
                 inputPlaceholder: '请选择模型',
                 showCancelButton: true,
                 confirmButtonText: '开始测试',

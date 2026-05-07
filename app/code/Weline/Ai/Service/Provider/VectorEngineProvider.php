@@ -389,6 +389,10 @@ class VectorEngineProvider extends OpenAiProvider
      */
     private function postJson(string $url, string $apiKey, array $payload, int $timeout): array
     {
+        if (function_exists('curl_init')) {
+            return $this->postJsonWithCurl($url, $apiKey, $payload, $timeout);
+        }
+
         $context = stream_context_create([
             'http' => [
                 'method' => 'POST',
@@ -429,6 +433,61 @@ class VectorEngineProvider extends OpenAiProvider
         }
         if (!is_array($decoded)) {
             throw new Exception(__('VectorEngine API 返回的不是 JSON'));
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function postJsonWithCurl(string $url, string $apiKey, array $payload, int $timeout): array
+    {
+        $jsonPayload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($jsonPayload === false) {
+            throw new Exception('VectorEngine API request payload JSON encode failed');
+        }
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            throw new Exception('VectorEngine API failed (URL: ' . $url . '): curl init failed');
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $jsonPayload,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'Authorization: Bearer ' . $apiKey,
+                'User-Agent: Weline-Ai-VectorEngine/1.0',
+            ],
+            CURLOPT_TIMEOUT => max(1, $timeout),
+            CURLOPT_CONNECTTIMEOUT => min(10, max(1, $timeout)),
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+        ]);
+
+        $body = curl_exec($ch);
+        $statusCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false) {
+            throw new Exception('VectorEngine API failed (URL: ' . $url . ', HTTP: ' . $statusCode . '): ' . ($curlError !== '' ? $curlError : 'empty response'));
+        }
+
+        $decoded = json_decode((string)$body, true);
+        if ($statusCode < 200 || $statusCode >= 300) {
+            $message = is_array($decoded)
+                ? (string)($decoded['error']['message'] ?? $decoded['message'] ?? ('HTTP ' . $statusCode))
+                : ('HTTP ' . $statusCode . ' ' . substr((string)$body, 0, 300));
+            throw new Exception('VectorEngine API returned error (URL: ' . $url . ', HTTP: ' . $statusCode . '): ' . $message);
+        }
+        if (!is_array($decoded)) {
+            $preview = trim(substr((string)$body, 0, 300));
+            throw new Exception(__('VectorEngine API 返回的不是 JSON') . ($preview !== '' ? (': ' . $preview) : ''));
         }
 
         return $decoded;
