@@ -17,7 +17,8 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class AddTokenPriceFields20250111V110 extends AbstractMigration
 {
-    private const TABLE_AI = 'ai';
+    private const TABLE_AI_MODEL = 'ai_model';
+    private const PRIMARY_KEY = 'id';
 
     public function getDescription(): string
     {
@@ -32,7 +33,10 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
     public function install(): bool
     {
         $connection = ObjectManager::getInstance()->get(ConnectionFactory::class)->getConnection();
-        $alter = $connection->alterTable()->forTable(self::TABLE_AI, 'entity_id', '');
+        if (!$connection->tableExist(self::TABLE_AI_MODEL)) {
+            return true;
+        }
+        $alter = $connection->alterTable()->forTable(self::TABLE_AI_MODEL, self::PRIMARY_KEY, '');
 
         $hasField = method_exists($connection, 'hasField')
             ? fn(string $t, string $f) => $connection->hasField($t, $f)
@@ -47,7 +51,7 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
                 return false;
             };
 
-        if (!$hasField(self::TABLE_AI, 'token_price_input')) {
+        if (!$hasField(self::TABLE_AI_MODEL, 'token_price_input')) {
             $alter->addColumn(
                 'token_price_input',
                 '',
@@ -57,7 +61,7 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
                 '每1000个输入tokens的价格(美元)'
             );
         }
-        if (!$hasField(self::TABLE_AI, 'token_price_output')) {
+        if (!$hasField(self::TABLE_AI_MODEL, 'token_price_output')) {
             $alter->addColumn(
                 'token_price_output',
                 '',
@@ -74,7 +78,10 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
     public function uninstall(): bool
     {
         $connection = ObjectManager::getInstance()->get(ConnectionFactory::class)->getConnection();
-        $alter = $connection->alterTable()->forTable(self::TABLE_AI, 'entity_id', '');
+        if (!$connection->tableExist(self::TABLE_AI_MODEL)) {
+            return true;
+        }
+        $alter = $connection->alterTable()->forTable(self::TABLE_AI_MODEL, self::PRIMARY_KEY, '');
 
         $hasField = method_exists($connection, 'hasField')
             ? fn(string $t, string $f) => $connection->hasField($t, $f)
@@ -89,10 +96,10 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
                 return false;
             };
 
-        if ($hasField(self::TABLE_AI, 'token_price_input')) {
+        if ($hasField(self::TABLE_AI_MODEL, 'token_price_input')) {
             $alter->deleteColumn('token_price_input');
         }
-        if ($hasField(self::TABLE_AI, 'token_price_output')) {
+        if ($hasField(self::TABLE_AI_MODEL, 'token_price_output')) {
             $alter->deleteColumn('token_price_output');
         }
         $alter->alter();
