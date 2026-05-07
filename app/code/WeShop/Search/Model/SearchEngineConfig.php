@@ -72,6 +72,7 @@ class SearchEngineConfig extends Model
     }
     public function saveConfig(string $engineType, string $scope, array $configData, bool $isActive = true, int $priority = 0): bool
     {
+        $now = date('Y-m-d H:i:s');
         $this->clear();
         $existing = $this->where(self::schema_fields_ENGINE_TYPE, $engineType)
             ->where(self::schema_fields_SCOPE, $scope)
@@ -81,6 +82,7 @@ class SearchEngineConfig extends Model
             $existing->setData(self::schema_fields_CONFIG_DATA, json_encode($configData, JSON_UNESCAPED_UNICODE))
                 ->setData(self::schema_fields_IS_ACTIVE, $isActive ? 1 : 0)
                 ->setData(self::schema_fields_PRIORITY, $priority)
+                ->setData(self::schema_fields_UPDATED_AT, $now)
                 ->save();
         } else {
             $this->setData(self::schema_fields_ENGINE_TYPE, $engineType)
@@ -88,6 +90,8 @@ class SearchEngineConfig extends Model
                 ->setData(self::schema_fields_CONFIG_DATA, json_encode($configData, JSON_UNESCAPED_UNICODE))
                 ->setData(self::schema_fields_IS_ACTIVE, $isActive ? 1 : 0)
                 ->setData(self::schema_fields_PRIORITY, $priority)
+                ->setData(self::schema_fields_CREATED_AT, $now)
+                ->setData(self::schema_fields_UPDATED_AT, $now)
                 ->save();
         }
         return true;
