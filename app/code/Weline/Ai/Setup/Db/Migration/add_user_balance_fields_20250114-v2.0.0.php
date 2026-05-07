@@ -4,77 +4,91 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Setup\Db\Migration;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\Schema;
+use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
 
-/**
- * 为frontend_user表添加余额相关字段
- * 支持API计费系统
- */
-class add_user_balance_fields_20250114_v2_0_0
+class AddUserBalanceFields20250114V200 extends AbstractMigration
 {
-    public function upgrade(ModelSetup $setup, Context $context): void
+    private const TABLE_FRONTEND_USER = 'frontend_user';
+
+    public function getDescription(): string
     {
-        $table = $setup->getConnection()->getTableName('frontend_user');
-        
-        if (!$setup->getConnection()->tableColumnExist($table, 'balance')) {
-            $setup->getConnection()->addColumn(
-                $table,
-                'balance',
-                TableInterface::column_type_DECIMAL . '(12,4)',
-                0.0000,
-                '账户余额'
-            );
-            echo "✅ 已添加 frontend_user.balance 字段\n";
+        return 'Add billing balance fields to frontend_user';
+    }
+
+    public function getVersion(): string
+    {
+        return '2.0.0';
+    }
+
+    public function getDate(): string
+    {
+        return '2025-01-14';
+    }
+
+    public function getAffectedTables(): array
+    {
+        return [self::TABLE_FRONTEND_USER];
+    }
+
+    public function install(): bool
+    {
+        $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
+        if (!$connection->tableExist(self::TABLE_FRONTEND_USER)) {
+            return true;
         }
-        
-        if (!$setup->getConnection()->tableColumnExist($table, 'total_recharge')) {
-            $setup->getConnection()->addColumn(
-                $table,
-                'total_recharge',
-                TableInterface::column_type_DECIMAL . '(12,4)',
-                0.0000,
-                '累计充值金额'
-            );
-            echo "✅ 已添加 frontend_user.total_recharge 字段\n";
+
+        $hasField = $this->columnExistsFn($connection);
+        $alter = $connection->alterTable()->forTable(self::TABLE_FRONTEND_USER, 'id', '');
+        $changed = false;
+
+        if (!$hasField(self::TABLE_FRONTEND_USER, 'balance')) {
+            $alter->addColumn('balance', '', TableInterface::column_type_DECIMAL, '12,4', 'NULL DEFAULT 0', 'Account balance');
+            $changed = true;
         }
-        
-        if (!$setup->getConnection()->tableColumnExist($table, 'total_consumption')) {
-            $setup->getConnection()->addColumn(
-                $table,
-                'total_consumption',
-                TableInterface::column_type_DECIMAL . '(12,4)',
-                0.0000,
-                '累计消费金额'
-            );
-            echo "✅ 已添加 frontend_user.total_consumption 字段\n";
+        if (!$hasField(self::TABLE_FRONTEND_USER, 'total_recharge')) {
+            $alter->addColumn('total_recharge', '', TableInterface::column_type_DECIMAL, '12,4', 'NULL DEFAULT 0', 'Total recharge');
+            $changed = true;
         }
-        
-        if (!$setup->getConnection()->tableColumnExist($table, 'currency')) {
-            $setup->getConnection()->addColumn(
-                $table,
-                'currency',
-                TableInterface::column_type_VARCHAR . '(10)',
-                'CNY',
-                '货币类型'
-            );
-            echo "✅ 已添加 frontend_user.currency 字段\n";
+        if (!$hasField(self::TABLE_FRONTEND_USER, 'total_consumption')) {
+            $alter->addColumn('total_consumption', '', TableInterface::column_type_DECIMAL, '12,4', 'NULL DEFAULT 0', 'Total consumption');
+            $changed = true;
         }
-        
-        // 添加索引
-        if (!$setup->getConnection()->indexExist($table, 'idx_balance')) {
-            $setup->getConnection()->addIndex(
-                $table,
-                'idx_balance',
-                'balance',
-                TableInterface::index_type_DEFAULT
-            );
-            echo "✅ 已添加 frontend_user.balance 索引\n";
+        if (!$hasField(self::TABLE_FRONTEND_USER, 'currency')) {
+            $alter->addColumn('currency', '', TableInterface::column_type_VARCHAR, 10, "NOT NULL DEFAULT 'CNY'", 'Currency');
+            $changed = true;
         }
-        
-        echo "✅ 用户余额字段迁移完成\n";
+
+        if ($changed) {
+            $alter->alter();
+        }
+
+        return true;
+    }
+
+    public function uninstall(): bool
+    {
+        return true;
+    }
+
+    /** @return callable(string,string):bool */
+    private function columnExistsFn(object $connection): callable
+    {
+        return function (string $table, string $field) use ($connection): bool {
+            if (\method_exists($connection, 'hasField')) {
+                return $connection->hasField($table, $field);
+            }
+
+            foreach ($connection->getTableColumns($table) as $column) {
+                $name = $column['Field'] ?? $column['field'] ?? $column['column_name'] ?? '';
+                if (\strcasecmp((string)$name, $field) === 0) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
     }
 }
-

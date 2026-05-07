@@ -8,6 +8,7 @@ use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Type;
+use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
@@ -30,18 +31,23 @@ class Install implements InstallInterface
 
     private function installProductDefaultAttributeSet(): void
     {
-        /** @var Product $product */
-        $product = ObjectManager::getInstance(Product::class);
-        $eavEntityId = $product->getEavEntityId();
+        /** @var EavEntity $eavEntity */
+        $eavEntity = ObjectManager::make(EavEntity::class)
+            ->loadByCode(Product::entity_code);
+        $eavEntityId = (int) $eavEntity->getId();
+
+        if ($eavEntityId === 0) {
+            return;
+        }
 
         /** @var Set $setModel */
         $setModel = ObjectManager::getInstance(Set::class);
-        $set_id = $setModel->reset()->where(Set::schema_fields_code, 'default')
+        $set_id = $setModel->clear()->where(Set::schema_fields_code, 'default')
             ->where(Set::schema_fields_eav_entity_id, $eavEntityId)
             ->find()->fetch()['set_id'] ?? 0;
 
         if ($set_id == 0) {
-            $setModel->reset()->setData(Set::schema_fields_code, 'default')
+            $setModel->clear()->setData(Set::schema_fields_code, 'default')
                 ->setData(Set::schema_fields_eav_entity_id, $eavEntityId)
                 ->setData(Set::schema_fields_name, '默认属性集')
                 ->forceCheck(true, [Set::schema_fields_code, Set::schema_fields_eav_entity_id])
@@ -55,7 +61,7 @@ class Install implements InstallInterface
 
         /** @var Group $groupModel */
         $groupModel = ObjectManager::getInstance(Group::class);
-        $groupModel->reset()->clearData()
+        $groupModel->clear()
             ->setData(Group::schema_fields_code, 'default')
             ->setData(Group::schema_fields_eav_entity_id, $eavEntityId)
             ->setData(Group::schema_fields_set_id, $set_id)
@@ -63,11 +69,11 @@ class Install implements InstallInterface
             ->forceCheck(true, [
                 Group::schema_fields_code,
                 Group::schema_fields_eav_entity_id,
-                Group::schema_fields_set_id,
             ])
             ->save();
 
-        $group_id = (int) ($groupModel->where(Group::schema_fields_code, 'default')
+        $group_id = (int) ($groupModel->clear()
+            ->where(Group::schema_fields_code, 'default')
             ->where(Group::schema_fields_eav_entity_id, $eavEntityId)
             ->where(Group::schema_fields_set_id, $set_id)
             ->find()->fetch()['group_id'] ?? 0);
@@ -78,7 +84,8 @@ class Install implements InstallInterface
 
         /** @var Type $type */
         $type = ObjectManager::getInstance(Type::class);
-        $type_id = (int) ($type->where(Type::fields_code, 'input_string')
+        $type_id = (int) ($type->clear()
+            ->where(Type::fields_code, 'input_string')
             ->find()->fetch()[Type::fields_ID] ?? 0);
 
         if ($type_id === 0) {
@@ -86,8 +93,8 @@ class Install implements InstallInterface
         }
 
         /** @var EavAttribute $attributeModel */
-        $attributeModel = ObjectManager::getInstance(EavAttribute::class);
-        $attributeModel->reset()->clearData()
+        $attributeModel = ObjectManager::make(EavAttribute::class);
+        $attributeModel->clear()
             ->setData(EavAttribute::schema_fields_code, 'image')
             ->setData(EavAttribute::schema_fields_eav_entity_id, $eavEntityId)
             ->setData(EavAttribute::schema_fields_group_id, $group_id)
@@ -98,11 +105,10 @@ class Install implements InstallInterface
             ->forceCheck(true, [
                 EavAttribute::schema_fields_code,
                 EavAttribute::schema_fields_eav_entity_id,
-                EavAttribute::schema_fields_set_id,
             ])
             ->save();
 
-        $attributeModel->reset()->clearData()
+        $attributeModel->clear()
             ->setData(EavAttribute::schema_fields_code, 'images')
             ->setData(EavAttribute::schema_fields_eav_entity_id, $eavEntityId)
             ->setData(EavAttribute::schema_fields_group_id, $group_id)
@@ -113,7 +119,6 @@ class Install implements InstallInterface
             ->forceCheck(true, [
                 EavAttribute::schema_fields_code,
                 EavAttribute::schema_fields_eav_entity_id,
-                EavAttribute::schema_fields_set_id,
             ])
             ->save();
     }
