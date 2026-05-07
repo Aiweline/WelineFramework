@@ -143,8 +143,8 @@ class Request extends CommandAbstract
             return;
         }
         
-        // 发送HTTP请求（使用Guzzle）
-        $response = $this->sendGuzzleRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
+        // 发送HTTP请求
+        $response = $this->sendRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
         
         if ($response === false) {
             $this->printer->error(__('请求失败！'));
@@ -391,6 +391,9 @@ class Request extends CommandAbstract
     {
         $env = Env::getInstance();
         $serverConfig = $env->get('wls') ?? [];
+        if (!\is_array($serverConfig)) {
+            $serverConfig = [];
+        }
         
         // 获取服务器配置（默认 0.0.0.0 监听所有网卡，支持公网访问）
         $host = $serverConfig['host'] ?? '0.0.0.0';
@@ -460,12 +463,22 @@ class Request extends CommandAbstract
         string $url, 
         string $method = 'GET', 
         array $headers = [], 
-        string $body = '',
-        bool $verifyTls = false
+        string|array $body = '',
+        bool $verifyTls = false,
+        string $cookieFile = '',
+        bool $saveCookie = true
     ): array|false {
+        if (is_array($body)) {
+            $body = json_encode($body, JSON_UNESCAPED_UNICODE) ?: '';
+        }
+
         // 优先尝试使用cURL（支持HTTP/2）
         if (function_exists('curl_init')) {
-            return $this->sendCurlRequest($url, $method, $headers, $body, $verifyTls);
+            return $this->sendCurlRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
+        }
+
+        if (class_exists(\GuzzleHttp\Client::class)) {
+            return $this->sendGuzzleRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
         }
         
         // 降级到file_get_contents
