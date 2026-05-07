@@ -35,6 +35,8 @@ class ApiUserToken extends Model
     public const schema_fields_type = 'type';
     #[Col(type: 'int', nullable: true, comment: '过期时间（Unix时间戳）')]
     public const schema_fields_token_expire_time = 'token_expire_time';
+    #[Col(type: 'datetime', nullable: false, comment: 'Created at')]
+    public const schema_fields_created_at = 'created_at';
 
     public const TYPE_ACCESS_TOKEN = 'access_token';
     public const TYPE_REFRESH_TOKEN = 'refresh_token';
@@ -133,7 +135,7 @@ class ApiUserToken extends Model
     public function save_before()
     {
         if (!$this->getId()) {
-            $this->setData('created_at', date('Y-m-d H:i:s'));
+            $this->setData(self::schema_fields_created_at, date('Y-m-d H:i:s'));
         }
         parent::save_before();
     }
