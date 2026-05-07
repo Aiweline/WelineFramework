@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Setup\Db\Migration;
 
+use Weline\Ai\Model\AiModel;
 use Weline\Database\AbstractMigration;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
@@ -17,7 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class AddTokenPriceFields20250111V110 extends AbstractMigration
 {
-    private const TABLE_AI = 'ai';
+    private const TABLE_AI_MODEL = AiModel::schema_table;
 
     public function getDescription(): string
     {
@@ -32,7 +33,8 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
     public function install(): bool
     {
         $connection = ObjectManager::getInstance()->get(ConnectionFactory::class)->getConnection();
-        $alter = $connection->alterTable()->forTable(self::TABLE_AI, 'entity_id', '');
+        $table = self::TABLE_AI_MODEL;
+        $alter = $connection->alterTable()->forTable($table, AiModel::schema_primary_key, '');
 
         $hasField = method_exists($connection, 'hasField')
             ? fn(string $t, string $f) => $connection->hasField($t, $f)
@@ -47,25 +49,31 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
                 return false;
             };
 
-        if (!$hasField(self::TABLE_AI, 'token_price_input')) {
+        $changed = false;
+        if (!$hasField($table, AiModel::schema_fields_TOKEN_PRICE_INPUT)) {
             $alter->addColumn(
-                'token_price_input',
+                AiModel::schema_fields_TOKEN_PRICE_INPUT,
                 '',
                 TableInterface::column_type_DECIMAL,
                 '10,6',
                 'NULL DEFAULT 0',
                 '每1000个输入tokens的价格(美元)'
             );
+            $changed = true;
         }
-        if (!$hasField(self::TABLE_AI, 'token_price_output')) {
+        if (!$hasField($table, AiModel::schema_fields_TOKEN_PRICE_OUTPUT)) {
             $alter->addColumn(
-                'token_price_output',
+                AiModel::schema_fields_TOKEN_PRICE_OUTPUT,
                 '',
                 TableInterface::column_type_DECIMAL,
                 '10,6',
                 'NULL DEFAULT 0',
                 '每1000个输出tokens的价格(美元)'
             );
+            $changed = true;
+        }
+        if (!$changed) {
+            return true;
         }
         $alter->alter();
         return true;
@@ -74,7 +82,8 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
     public function uninstall(): bool
     {
         $connection = ObjectManager::getInstance()->get(ConnectionFactory::class)->getConnection();
-        $alter = $connection->alterTable()->forTable(self::TABLE_AI, 'entity_id', '');
+        $table = self::TABLE_AI_MODEL;
+        $alter = $connection->alterTable()->forTable($table, AiModel::schema_primary_key, '');
 
         $hasField = method_exists($connection, 'hasField')
             ? fn(string $t, string $f) => $connection->hasField($t, $f)
@@ -89,11 +98,17 @@ class AddTokenPriceFields20250111V110 extends AbstractMigration
                 return false;
             };
 
-        if ($hasField(self::TABLE_AI, 'token_price_input')) {
-            $alter->deleteColumn('token_price_input');
+        $changed = false;
+        if ($hasField($table, AiModel::schema_fields_TOKEN_PRICE_INPUT)) {
+            $alter->deleteColumn(AiModel::schema_fields_TOKEN_PRICE_INPUT);
+            $changed = true;
         }
-        if ($hasField(self::TABLE_AI, 'token_price_output')) {
-            $alter->deleteColumn('token_price_output');
+        if ($hasField($table, AiModel::schema_fields_TOKEN_PRICE_OUTPUT)) {
+            $alter->deleteColumn(AiModel::schema_fields_TOKEN_PRICE_OUTPUT);
+            $changed = true;
+        }
+        if (!$changed) {
+            return true;
         }
         $alter->alter();
         return true;
