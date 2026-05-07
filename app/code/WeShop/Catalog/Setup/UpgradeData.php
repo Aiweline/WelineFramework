@@ -105,11 +105,7 @@ class UpgradeData
             ->setEavEntityId($eavEntity->getId())
             ->setSetId($setId)
             ->setName(__('默认属性组'))
-            ->forceCheck(true, [
-                Group::schema_fields_code,
-                Group::schema_fields_eav_entity_id,
-                Group::schema_fields_set_id,
-            ])
+            ->forceCheck(true, $groupModel->getUnitPrimaryKeys())
             ->save();
         
         return (int) $groupModel->getId();

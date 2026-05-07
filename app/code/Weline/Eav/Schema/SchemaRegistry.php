@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Eav\Schema;
 
 use Weline\Framework\Database\Api\Db\TableInterface;
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Db\ModelSetup;
@@ -145,9 +146,11 @@ class SchemaRegistry
         
         // 检查表是否存在
         $connection = $setup->getModel()->getConnection();
+        $connector = $connection->getConnector();
         $fullTableName = $connection->getConfigProvider()->getPrefix() . $tableName;
         
-        if ($this->tableExists($connection, $fullTableName)) {
+        if ($this->tableExists($connector, $fullTableName)) {
+            $this->ensureIndexes($connector, $fullTableName, $schema);
             return;
         }
 
@@ -195,6 +198,72 @@ class SchemaRegistry
         $this->insertInitialData($setup, $schema);
     }
 
+    private function ensureIndexes(ConnectorInterface $connector, string $tableName, SchemaInterface $schema): void
+    {
+        foreach ($schema->getIndexes() as $indexName => $indexDef) {
+            if ($this->indexExists($connector, $tableName, $indexName, $indexDef)) {
+                continue;
+            }
+
+            $columns = $indexDef['columns'] ?? [];
+            if (is_string($columns)) {
+                $columns = array_map('trim', explode(',', $columns));
+            }
+            if ($columns === []) {
+                continue;
+            }
+
+            $sql = $connector->buildAddIndexSql($tableName, [
+                'name' => $indexName,
+                'columns' => array_values($columns),
+                'type' => $indexDef['type'] ?? TableInterface::index_type_KEY,
+                'method' => $indexDef['method'] ?? 'BTREE',
+            ]);
+            if ($sql === '') {
+                continue;
+            }
+
+            try {
+                $connector->query($sql)->fetch();
+            } catch (\Throwable $e) {
+                throw new \RuntimeException(
+                    "EAV schema index creation failed table={$tableName} index={$indexName}: " . $e->getMessage(),
+                    0,
+                    $e
+                );
+            }
+        }
+    }
+
+    private function indexExists(ConnectorInterface $connector, string $tableName, string $indexName, array $indexDef): bool
+    {
+        if ($connector->hasIndex($tableName, $indexName)) {
+            return true;
+        }
+
+        $declaredColumns = $indexDef['columns'] ?? [];
+        if (is_string($declaredColumns)) {
+            $declaredColumns = array_map('trim', explode(',', $declaredColumns));
+        }
+        $declaredColumns = array_values(array_map(
+            static fn(string $column): string => trim(str_replace(['`', '"'], '', $column)),
+            $declaredColumns
+        ));
+        $declaredUnique = strtoupper((string)($indexDef['type'] ?? '')) === TableInterface::index_type_UNIQUE;
+
+        foreach ($connector->getTableIndexes($tableName) as $actualIndex) {
+            $actualColumns = array_values(array_map(
+                static fn(string $column): string => trim(str_replace(['`', '"'], '', $column)),
+                $actualIndex['columns'] ?? []
+            ));
+            if ($actualColumns === $declaredColumns && (bool)($actualIndex['unique'] ?? false) === $declaredUnique) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * 插入初始数据
      */
@@ -232,25 +301,11 @@ class SchemaRegistry
     /**
      * 检查表是否存在
      */
-    private function tableExists($connection, string $tableName): bool
+    private function tableExists(ConnectorInterface $connector, string $tableName): bool
     {
         try {
-            $dbType = $connection->getConfigProvider()->getDbType();
-            $query = $connection->getQuery();
-            
-            if ($dbType === 'pgsql') {
-                // PostgreSQL
-                $tableName = str_replace('"', '', $tableName);
-                $sql = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{$tableName}')";
-                $result = $query->query($sql)->fetch();
-                return !empty($result) && ($result[0]['exists'] ?? false);
-            } else {
-                // MySQL
-                $sql = "SHOW TABLES LIKE '{$tableName}'";
-                $result = $query->query($sql)->fetch();
-                return !empty($result);
-            }
-        } catch (\Exception $e) {
+            return $connector->tableExist($tableName);
+        } catch (\Throwable $e) {
             return false;
         }
     }
@@ -276,7 +331,7 @@ class SchemaRegistry
         $connection = $setup->getModel()->getConnection();
         $fullTableName = $connection->getConfigProvider()->getPrefix() . $tableName;
 
-        if (!$this->tableExists($connection, $fullTableName)) {
+        if (!$this->tableExists($connection->getConnector(), $fullTableName)) {
             return;
         }
 
