@@ -705,15 +705,21 @@ SCRIPT;
             if (!empty($publishBlock['blocked'])) {
                 return $this->fetchJson([
                     'success' => false,
+                    'code' => 'LATEST_AI_BUILD_FAILED',
                     'message' => $this->formatPublishBlockedByAiFailureMessage($publishBlock),
                     'data' => [
+                        'code' => 'LATEST_AI_BUILD_FAILED',
                         'publish_blocked_by_latest_ai_failure' => true,
                         'latest_build_failure' => $publishBlock,
                     ],
                 ]);
             }
             if (empty($state['can_publish']) && $session->getPublishStatus() !== AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED) {
-                return $this->fetchJson(['success' => false, 'message' => __('Current workspace is not ready to publish. Finish AI page generation first.')]);
+                return $this->fetchJson([
+                    'success' => false,
+                    'code' => 'WORKSPACE_NOT_READY',
+                    'message' => __('Current workspace is not ready to publish. Finish AI page generation first.'),
+                ]);
             }
         }
 
@@ -4681,8 +4687,10 @@ SCRIPT;
         if (!empty($publishBlock['blocked'])) {
             return $this->fetchJson([
                 'success' => false,
+                'code' => 'LATEST_AI_BUILD_FAILED',
                 'message' => $this->formatPublishBlockedByAiFailureMessage($publishBlock),
                 'data' => [
+                    'code' => 'LATEST_AI_BUILD_FAILED',
                     'publish_blocked_by_latest_ai_failure' => true,
                     'latest_build_failure' => $publishBlock,
                 ],
@@ -4690,23 +4698,24 @@ SCRIPT;
         }
         if (empty($state['can_publish'])) {
             if ((int)($state['site_ready'] ?? 1) !== 1) {
-                return $this->fetchJson(['success' => false, 'message' => __('域名尚未就绪，请先完成域名流程后再发布。')]);
+                return $this->fetchJson(['success' => false, 'code' => 'SITE_NOT_READY', 'message' => __('域名尚未就绪，请先完成域名流程后再发布。')]);
             }
             if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
-                return $this->fetchJson(['success' => false, 'message' => __('请先确认阶段一方案，再进入发布流程。')]);
+                return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认阶段一方案，再进入发布流程。')]);
             }
             if ((int)($state['task_plan_confirmed'] ?? 0) !== 1) {
-                return $this->fetchJson(['success' => false, 'message' => __('请先确认第二阶段任务方案，再进入发布流程。')]);
+                return $this->fetchJson(['success' => false, 'code' => 'TASK_PLAN_NOT_CONFIRMED', 'message' => __('请先确认第二阶段任务方案，再进入发布流程。')]);
             }
-            return $this->fetchJson(['success' => false, 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
+            return $this->fetchJson(['success' => false, 'code' => 'WORKSPACE_NOT_READY', 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
         }
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
         $qualityReport = $qualityGate->inspectScope(\is_array($state['scope'] ?? null) ? $state['scope'] : []);
         if (empty($qualityReport['passed'])) {
             return $this->fetchJson([
                 'success' => false,
+                'code' => 'PUBLISH_QUALITY_GATE_FAILED',
                 'message' => __('发布门禁未通过，请先修复页面内容质量、破图或任务状态问题。'),
-                'data' => $qualityReport,
+                'data' => \array_replace(['code' => 'PUBLISH_QUALITY_GATE_FAILED'], $qualityReport),
             ]);
         }
         $confirmVisualTheme = \in_array(
@@ -4717,8 +4726,10 @@ SCRIPT;
         if (!$confirmVisualTheme && (int)($state['scope']['virtual_theme_effect_confirmed'] ?? 0) !== 1) {
             return $this->fetchJson([
                 'success' => false,
+                'code' => 'VISUAL_THEME_CONFIRM_REQUIRED',
                 'message' => __('请先确认虚拟主题预览效果无问题，再发布正式站点。'),
                 'data' => [
+                    'code' => 'VISUAL_THEME_CONFIRM_REQUIRED',
                     'required_param' => 'confirm_visual_theme',
                     'publish_quality_gate' => $qualityReport,
                 ],
@@ -5231,6 +5242,7 @@ SCRIPT;
         if (!empty($publishBlock['blocked'])) {
             $publishBlockedItem = [
                 'key' => 'latest_ai_build',
+                'code' => 'LATEST_AI_BUILD_FAILED',
                 'label' => 'Latest AI build completed successfully',
                 'ok' => false,
                 'value' => (string)($publishBlock['status'] ?? 'failed'),
@@ -5238,10 +5250,10 @@ SCRIPT;
             ];
         }
         if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
-            return $this->fetchJson(['success' => false, 'message' => __('请先确认阶段一方案，再检查发布条件。')]);
+            return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认阶段一方案，再检查发布条件。')]);
         }
         if ((int)($state['task_plan_confirmed'] ?? 0) !== 1) {
-            return $this->fetchJson(['success' => false, 'message' => __('请先确认第二阶段任务方案，再检查发布条件。')]);
+            return $this->fetchJson(['success' => false, 'code' => 'TASK_PLAN_NOT_CONFIRMED', 'message' => __('请先确认第二阶段任务方案，再检查发布条件。')]);
         }
         $virtualPages = \is_array($state['virtual_pages_by_type']) ? $state['virtual_pages_by_type'] : [];
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
@@ -5250,9 +5262,10 @@ SCRIPT;
             || $this->scopeCompatibilityService->htmlTrackHasCompleteBlocks($virtualPages, $pageTypes)
             || $this->htmlTrackHasMaterializedAiBlocks($scope, $virtualPages, $pageTypes);
         $checkItems = [
-            ['key' => 'draft_website', 'label' => __('草稿站点已创建'), 'ok' => (int)$state['draft_website_id'] > 0, 'value' => (int)$state['draft_website_id']],
+            ['key' => 'draft_website', 'code' => 'DRAFT_WEBSITE_READY', 'label' => __('草稿站点已创建'), 'ok' => (int)$state['draft_website_id'] > 0, 'value' => (int)$state['draft_website_id']],
             [
                 'key' => 'virtual_theme',
+                'code' => 'VIRTUAL_THEME_READY',
                 'label' => $track === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS
                     ? __('HTML 区块轨（无需虚拟主题）')
                     : __('虚拟主题已生成'),
@@ -5261,22 +5274,25 @@ SCRIPT;
                     : ((int)$state['virtual_theme_id'] > 0),
                 'value' => (int)$state['virtual_theme_id'],
             ],
-            ['key' => 'website_profile', 'label' => __('网站级资料已齐备'), 'ok' => \trim((string)($state['website_profile']['site_title'] ?? '')) !== '', 'value' => $state['website_profile']],
-            ['key' => 'virtual_pages', 'label' => __('虚拟页面已生成'), 'ok' => \count($virtualPages) >= \count($pageTypes), 'value' => \array_keys($virtualPages)],
+            ['key' => 'website_profile', 'code' => 'WEBSITE_PROFILE_READY', 'label' => __('网站级资料已齐备'), 'ok' => \trim((string)($state['website_profile']['site_title'] ?? '')) !== '', 'value' => $state['website_profile']],
+            ['key' => 'virtual_pages', 'code' => 'VIRTUAL_PAGES_READY', 'label' => __('虚拟页面已生成'), 'ok' => \count($virtualPages) >= \count($pageTypes), 'value' => \array_keys($virtualPages)],
             [
                 'key' => 'html_blocks',
+                'code' => 'HTML_BLOCKS_READY',
                 'label' => __('各页 HTML 区块已就绪'),
                 'ok' => $htmlBlocksReady,
                 'value' => $track,
             ],
             [
                 'key' => 'site_ready',
+                'code' => 'SITE_READY',
                 'label' => __('域名/站点就绪（可发布）'),
                 'ok' => (int)($scope['site_ready'] ?? 1) === 1,
                 'value' => (int)($scope['site_ready'] ?? 1),
             ],
             [
                 'key' => 'visual_editor',
+                'code' => 'VISUAL_EDITOR_READY',
                 'label' => __('可视化预览/编辑地址已就绪'),
                 'ok' => $track === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS
                     || (\trim((string)$state['visual_edit_url']) !== '' && \trim((string)$state['visual_preview_url']) !== ''),
@@ -5302,6 +5318,7 @@ SCRIPT;
         }
         $payload = [
             'passed' => $passed,
+            'code' => $passed ? 'PUBLISH_CHECKLIST_PASSED' : 'PUBLISH_CHECKLIST_BLOCKED',
             'items' => $checkItems,
             'stage' => $state['stage'],
             'workspace_status' => $state['workspace_status'],
@@ -9358,7 +9375,7 @@ SCRIPT;
         // $currentStage 作为签名保留，便于后续扩展。
         $activeName = \trim((string)($activeOperation['operation'] ?? ''));
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-        return $activeName === $operation && \in_array($activeStatus, ['queued', 'running', 'done', 'error', 'cancelled'], true);
+        return $activeName === $operation && \in_array($activeStatus, ['queued', 'running', 'done', 'error', 'stop', 'cancelled', 'canceled'], true);
     }
 
     /**
