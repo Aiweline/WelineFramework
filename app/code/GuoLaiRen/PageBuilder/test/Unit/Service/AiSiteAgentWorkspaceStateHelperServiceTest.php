@@ -597,6 +597,8 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
 
         $stateDone = ['can_publish' => true];
         self::assertSame(100, $service->resolveEnvelopeProgressPercent($stateDone, [], 'queued'));
+        self::assertSame(0, $service->resolveEnvelopeProgressPercent($stateDone, [], 'cancelled'));
+        self::assertSame(0, $service->resolveEnvelopeProgressPercent($stateDone, [], 'failed'));
 
         self::assertSame(100, $service->resolveEnvelopeProgressPercent([], [], 'done'));
         self::assertSame(0, $service->resolveEnvelopeProgressPercent([], [], 'queued'));
@@ -815,5 +817,33 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         // context_hash 应回落到 state_fingerprint
         self::assertSame($envelope['state_fingerprint'], $envelope['context_hash']);
         self::assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $envelope['context_hash']);
+    }
+
+    public function testBuildStatusEnvelopeKeepsStoppedQueueCancelledEvenWhenWorkspaceCanPublish(): void
+    {
+        $service = new AiSiteAgentWorkspaceStateHelperService(new AiSiteQueueSnapshotService());
+
+        $state = [
+            'public_id' => 'pub_cancelled_queue',
+            'can_publish' => 1,
+            'active_operation' => [
+                'operation' => 'build',
+                'status' => 'done',
+            ],
+            'build_queue_info' => [
+                'snapshot' => [
+                    'status' => 'stop',
+                    'job_key' => 'build-job-1',
+                ],
+            ],
+            'events' => [],
+            'scope' => [],
+        ];
+
+        $envelope = $service->buildStatusEnvelope($state, 'queue');
+
+        self::assertSame('cancelled', $envelope['status']);
+        self::assertSame(0, $envelope['progress_percent']);
+        self::assertSame('build-job-1', $envelope['job_key']);
     }
 }
