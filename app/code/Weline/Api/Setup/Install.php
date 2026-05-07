@@ -167,6 +167,13 @@ class Install implements InstallInterface
                 ->autoGenerateApiCredentials()
                 ->setTokenExpireTime(ApiUser::DEFAULT_TOKEN_EXPIRE_TIME)
                 ->setRefreshTokenExpireTime(ApiUser::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME)
+                ->setIsEnabled((bool)ApiUser::DEFAULT_IS_ENABLED)
+                ->setIsDeleted((bool)ApiUser::DEFAULT_IS_DELETED)
+                ->setIpWhitelistEnabled((bool)ApiUser::DEFAULT_IP_WHITELIST_ENABLED)
+                ->setAllowedIps(ApiUser::DEFAULT_ALLOWED_IPS)
+                ->setUserAgentRestrictionEnabled((bool)ApiUser::DEFAULT_USER_AGENT_RESTRICTION_ENABLED)
+                ->setAllowedUserAgents(ApiUser::DEFAULT_ALLOWED_USER_AGENTS)
+                ->setSandboxAccount((bool)ApiUser::DEFAULT_IS_SANDBOX)
                 ->setData('created_at', date('Y-m-d H:i:s'))
                 ->setData('updated_at', date('Y-m-d H:i:s'))
                 ->save(); 
