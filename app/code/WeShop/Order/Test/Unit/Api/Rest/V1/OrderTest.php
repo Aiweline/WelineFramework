@@ -71,9 +71,9 @@ class OrderTest extends TestCase
             ->getMock();
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['id', 0, 81],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'id' => 81,
+        ]));
         $this->setProtectedProperty($api, 'request', $request);
 
         $api->expects($this->once())
@@ -158,6 +158,16 @@ class OrderTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = null): mixed => \array_key_exists($key, $params)
+            ? $params[$key]
+            : $default;
     }
 
     /**
