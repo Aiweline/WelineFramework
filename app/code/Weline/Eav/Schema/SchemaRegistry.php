@@ -213,6 +213,10 @@ class SchemaRegistry
 
         // 逐条插入数据，避免批量插入时的参数绑定问题
         foreach ($initialData as $row) {
+            if ($this->initialDataRowExists($connection, $fullTableName, $uniqueKey, $row)) {
+                continue;
+            }
+
             try {
                 $query = $connection->getQuery();
                 $query->table($fullTableName)
@@ -229,12 +233,41 @@ class SchemaRegistry
         }
     }
 
+    private function initialDataRowExists($connection, string $tableName, string|array $uniqueKey, array $row): bool
+    {
+        $uniqueFields = is_array($uniqueKey) ? $uniqueKey : [$uniqueKey];
+        $uniqueFields = array_values(array_filter($uniqueFields, static fn($field) => is_string($field) && $field !== ''));
+        if (empty($uniqueFields)) {
+            return false;
+        }
+
+        $query = $connection->getQuery();
+        $query->table($tableName)->select('1');
+
+        foreach ($uniqueFields as $field) {
+            if (!array_key_exists($field, $row)) {
+                return false;
+            }
+            $query->where($field, $row[$field]);
+        }
+
+        try {
+            return !empty($query->limit(1)->fetch());
+        } catch (\Exception) {
+            return false;
+        }
+    }
+
     /**
      * 检查表是否存在
      */
     private function tableExists($connection, string $tableName): bool
     {
         try {
+            if (method_exists($connection, 'tableExist')) {
+                return (bool)$connection->tableExist($tableName);
+            }
+
             $dbType = $connection->getConfigProvider()->getDbType();
             $query = $connection->getQuery();
             
