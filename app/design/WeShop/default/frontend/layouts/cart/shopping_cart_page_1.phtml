@@ -859,7 +859,7 @@ $area = $themeData['area'] ?? 'frontend';
                                                 </div>
                                                 <div class="weshop-cart-item-info">
                                                     <p class="weshop-cart-item-stock <?= ($item['stock_status'] ?? '') === 'low' ? 'warning' : '' ?>">
-                                                        <?= $item['stock_status'] === 'low' ? __('Only %1 left in stock - order soon.', $item['stock_qty']) : __('In Stock') ?>
+                                                        <?= $item['stock_status'] === 'low' ? __('Only %{1} left in stock - order soon.', $item['stock_qty']) : __('In Stock') ?>
                                                     </p>
                                                     <?php if ($item['option'] ?? null): ?>
                                                         <p class="weshop-cart-item-option">
@@ -871,7 +871,7 @@ $area = $themeData['area'] ?? 'frontend';
                                                     </p>
                                                     <?php if ($item['seller'] ?? null): ?>
                                                         <p class="weshop-cart-item-option">
-                                                            <?= __('Sold by %1', htmlspecialchars($item['seller'])) ?>
+                                                            <?= __('Sold by %{1}', htmlspecialchars((string) $item['seller'], ENT_QUOTES)) ?>
                                                         </p>
                                                     <?php endif; ?>
                                                     <div class="weshop-cart-item-gift">
@@ -927,7 +927,7 @@ $area = $themeData['area'] ?? 'frontend';
                                 $tax = $this->getData('tax') ?? 0;
                                 ?>
                                 <div class="weshop-order-summary-row">
-                                    <span class="weshop-order-summary-label"><?= __('Items (%1):', $cartCount) ?></span>
+                                    <span class="weshop-order-summary-label"><?= __('Items (%{1}):', $cartCount) ?></span>
                                     <span class="weshop-order-summary-value"><?= $this->formatPrice($cartTotal) ?></span>
                                 </div>
                                 <div class="weshop-order-summary-row">

@@ -58,7 +58,7 @@ $recommendations = $this->getData('recommendations') ?? [];
                         </div>
                         <div class="flex-1">
                             <p class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($item['name']) ?></p>
-                            <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Qty: %1', $item['qty']) ?></p>
+                            <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Qty: %{1}', $item['qty']) ?></p>
                         </div>
                         <div class="text-right">
                             <p class="font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($item['row_total']) ?></p>
@@ -93,7 +93,7 @@ $recommendations = $this->getData('recommendations') ?? [];
                 <div class="text-sm text-text-secondary-light dark:text-text-secondary-dark">
                     <p class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($paymentMethod['name'] ?? '') ?></p>
                     <?php if ($paymentMethod['card_last4'] ?? null): ?>
-                        <p><?= __('Card ending in %1', $paymentMethod['card_last4']) ?></p>
+                        <p><?= __('Card ending in %{1}', $paymentMethod['card_last4']) ?></p>
                     <?php endif; ?>
                 </div>
             </div>

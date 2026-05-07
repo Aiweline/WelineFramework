@@ -67,7 +67,7 @@ class CartApiPayloadService
         if ($stock < $qty) {
             return $this->errorResponse(
                 422,
-                (string) __('Insufficient stock. Available quantity: %1', $stock)
+                (string) __('Insufficient stock. Available quantity: %{1}', $stock)
             );
         }
 

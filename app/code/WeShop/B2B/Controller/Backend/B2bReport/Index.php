@@ -8,10 +8,13 @@ use WeShop\B2B\Model\Credit;
 use WeShop\B2B\Model\Receivable;
 use WeShop\B2B\Service\ReceivableService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
+#[Acl('WeShop_B2B::b2b_report', 'B2B AR Summary', 'mdi mdi-chart-box-outline', 'View B2B AR summary report', 'Weline_Backend::customer_group')]
 class Index extends BaseController
 {
+    #[Acl('WeShop_B2B::b2b_report_index', 'View B2B AR summary', 'mdi mdi-chart-line', 'View B2B AR summary report page')]
     public function index(): string
     {
         /** @var Credit $credit */
