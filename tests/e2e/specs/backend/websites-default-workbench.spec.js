@@ -222,7 +222,7 @@ test.describe('Websites default AI workbench (fake_mode)', () => {
   test('postRecommendDomain in fake_mode returns candidate_domains', async ({ page }) => {
     test.setTimeout(120000);
     const { backendRoot } = await openHub(page, 'websites_default', true);
-    await expect(page.locator('#site-agent-api-recommend-domain')).toHaveCount(1);
+    await expect(page.locator('#site-agent-api-recommend-domain, #sbv1-recommend-domain')).toHaveCount(1);
     const data = await postRecommendDomain(page, backendRoot, {
       description: 'Coffee roastery with subscription box',
       domain: '',
