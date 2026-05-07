@@ -25,6 +25,7 @@ use Weline\Framework\Manager\ObjectManager;
 class ApiUser extends Model
 {
     public const fields_ID = 'user_id';
+    public const schema_table = 'm_api_user';
     public string $table = 'm_api_user';
     /** 主键列名，避免 Schema 解析时把父类 id 一并建表导致 PostgreSQL 报 multiple primary keys */
     public const schema_primary_key = 'user_id';
@@ -59,6 +60,10 @@ class ApiUser extends Model
     public const schema_fields_allowed_user_agents = 'allowed_user_agents';
     #[Col(type: 'integer', length: 1, nullable: false, comment: '是否沙盒账户')]
     public const schema_fields_is_sandbox = 'is_sandbox';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_updated_at = 'updated_at';
 
     public array $_unit_primary_keys = ['user_id'];
     public array $_index_sort_keys = ['user_id', 'username', 'email', 'api_key'];
@@ -441,11 +446,11 @@ class ApiUser extends Model
         }
         
         // 设置更新时间
-        $this->setData('updated_at', date('Y-m-d H:i:s'));
+        $this->setData(self::schema_fields_updated_at, date('Y-m-d H:i:s'));
         
         // 如果是新用户，设置创建时间
         if (!$this->getId()) {
-            $this->setData('created_at', date('Y-m-d H:i:s'));
+            $this->setData(self::schema_fields_created_at, date('Y-m-d H:i:s'));
         }
         
         parent::save_before();
