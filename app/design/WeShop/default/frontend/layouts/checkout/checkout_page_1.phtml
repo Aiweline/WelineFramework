@@ -614,7 +614,7 @@ $area = $themeData['area'] ?? 'frontend';
                     <else>
                 <div class="weshop-checkout-title">
                     <?php $itemCount = $this->getData('item_count') ?? 0; ?>
-                    <?= __('Checkout (%1 item)', $itemCount) ?>
+                    <?= __('Checkout (%{1} item)', $itemCount) ?>
                 </div>
                 
                 <div class="weshop-content-grid">
@@ -819,7 +819,7 @@ $area = $themeData['area'] ?? 'frontend';
                                 $tax = $this->getData('tax') ?? 0;
                                 ?>
                                 <div class="weshop-order-summary-row">
-                                    <span><?= __('Items (%1):', $cartCount) ?></span>
+                                    <span><?= __('Items (%{1}):', $cartCount) ?></span>
                                     <span><?= $this->formatPrice($cartTotal) ?></span>
                                 </div>
                                 <div class="weshop-order-summary-row">
@@ -843,7 +843,7 @@ $area = $themeData['area'] ?? 'frontend';
                                 <?= __('Place your order') ?>
                             </button>
                             <p class="weshop-order-summary-terms">
-                                <?= __('By placing your order, you agree to %1\'s', $this->getStoreName()) ?>
+                                <?= __('By placing your order, you agree to %{1}\'s', $this->getStoreName()) ?>
                                 <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="weshop-order-summary-terms-link">
                                     <?= __('privacy notice') ?>
                                 </a>

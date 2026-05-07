@@ -8,11 +8,13 @@ use WeShop\Product\Model\Product;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Type;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Product\Model\ProductCategory;
 
+#[Acl('WeShop_Product::product_edit', 'Product edit actions', 'mdi mdi-package-variant-closed-edit', 'Edit products', 'WeShop_Product::product')]
 class Edit extends BackendController
 {
     private \WeShop\Product\Model\Product $product;
@@ -22,6 +24,7 @@ class Edit extends BackendController
         $this->product = $product;
     }
 
+    #[Acl('WeShop_Product::product_edit_index', 'Edit product', 'mdi mdi-package-variant-closed-edit', 'Open product edit page')]
     function index()
     {
         if ($this->request->isGet()) {
@@ -129,6 +132,7 @@ class Edit extends BackendController
         $this->redirect('*/backend/product/edit', ['product_id' => $product_id]);
     }
 
+    #[Acl('WeShop_Product::product_edit_check_attributes', 'Validate product attributes', 'mdi mdi-clipboard-check-outline', 'Validate product attributes during update')]
     public function checkAttributes(array $attributes, Product $product): array
     {
 # 批量查询属性

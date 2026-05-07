@@ -127,7 +127,7 @@ $relatedProducts = $this->getData('related_products') ?? [];
                             <w:hook name="WeShop_Cart::summary::rows_before"/>
                             <div class="flex justify-between text-sm">
                                 <w:hook name="WeShop_Cart::summary::subtotal_before"/>
-                                <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Items (%1):', count($cartItems)) ?></span>
+                                <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Items (%{1}):', count($cartItems)) ?></span>
                                 <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['subtotal'] ?? 0) ?></span>
                                 <w:hook name="WeShop_Cart::summary::subtotal_after"/>
                             </div>

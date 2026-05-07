@@ -2,13 +2,16 @@
 
 namespace WeShop\Product\Controller\Backend\Product;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
 
+#[Acl('WeShop_Product::product_delete', 'Product delete actions', 'mdi mdi-package-variant-remove', 'Delete products', 'WeShop_Product::product')]
 class Delete extends BackendController
 {
+    #[Acl('WeShop_Product::product_delete_post_index', 'Delete product', 'mdi mdi-delete-outline', 'Delete product data')]
     public function postIndex()
     {
         $id = $this->request->getGet('product_id') ?? $this->request->getPost('product_id');

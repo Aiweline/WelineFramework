@@ -6,7 +6,9 @@ namespace WeShop\Affiliate\Controller\Backend\Affiliate;
 
 use WeShop\Affiliate\Service\AffiliateService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Affiliate::affiliate_management_delete', 'Affiliate delete actions', 'mdi mdi-account-remove-outline', 'Delete affiliate records', 'WeShop_Affiliate::affiliate_management')]
 class Delete extends BaseController
 {
     public function __construct(
@@ -14,11 +16,13 @@ class Delete extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Affiliate::affiliate_management_delete_get', 'Open affiliate delete route', 'mdi mdi-account-remove-outline', 'Open affiliate delete route')]
     public function get(): string
     {
         return $this->post();
     }
 
+    #[Acl('WeShop_Affiliate::affiliate_management_delete_post', 'Delete affiliate', 'mdi mdi-delete-outline', 'Delete affiliate data')]
     public function post(): string
     {
         $affiliateId = (int) $this->request->getParam('id', 0);
