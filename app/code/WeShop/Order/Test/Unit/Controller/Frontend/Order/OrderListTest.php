@@ -65,10 +65,10 @@ class OrderListTest extends TestCase
         $controller->expects($this->once())->method('renderPage')->willReturn('page');
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['page', null, 2],
-            ['page_size', null, 15],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'page' => 2,
+            'page_size' => 15,
+        ]));
         $this->setProtectedProperty($controller, 'request', $request);
 
         $this->assertSame('page', $controller->index());
@@ -100,5 +100,15 @@ class OrderListTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = null): mixed => \array_key_exists($key, $params)
+            ? $params[$key]
+            : $default;
     }
 }

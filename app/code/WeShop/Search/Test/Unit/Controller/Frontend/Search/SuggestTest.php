@@ -14,10 +14,10 @@ class SuggestTest extends TestCase
     public function testIndexReturnsEmptyPayloadWhenKeywordIsBlank(): void
     {
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['q', null, '   '],
-            ['limit', null, 10],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'q' => '   ',
+            'limit' => 10,
+        ]));
 
         $searchService = $this->createMock(SearchService::class);
         $searchService->expects($this->never())->method('getSearchSuggestions');
@@ -43,10 +43,10 @@ class SuggestTest extends TestCase
     public function testIndexReturnsSearchSuggestions(): void
     {
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['q', null, 'bag'],
-            ['limit', null, '5'],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'q' => 'bag',
+            'limit' => '5',
+        ]));
 
         $searchService = $this->createMock(SearchService::class);
         $searchService->expects($this->once())
@@ -83,5 +83,13 @@ class SuggestTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = ''): mixed => $params[$key] ?? $default;
     }
 }

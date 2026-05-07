@@ -2,8 +2,10 @@
 
 namespace WeShop\Product\Controller\Backend;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 
+#[Acl('WeShop_Product::product_test', 'Product test actions', 'mdi mdi-test-tube', 'Access product backend test route', 'WeShop_Product::product')]
 class Test extends BackendController
 {
     private \WeShop\Product\Model\Test $test;
@@ -13,6 +15,7 @@ class Test extends BackendController
         $this->test = $test;
     }
 
+    #[Acl('WeShop_Product::product_test_index', 'Open product test route', 'mdi mdi-test-tube', 'Open product backend test route')]
     function index()
     {
 //        $this->test->setName('test')

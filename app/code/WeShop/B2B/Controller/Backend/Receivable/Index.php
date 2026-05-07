@@ -6,7 +6,9 @@ namespace WeShop\B2B\Controller\Backend\Receivable;
 
 use WeShop\B2B\Service\ReceivableService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_B2B::b2b_receivable', 'B2B Receivables', 'mdi mdi-file-document-outline', 'Manage B2B receivables', 'Weline_Backend::customer_group')]
 class Index extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Index extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_B2B::b2b_receivable_index', 'View B2B receivables', 'mdi mdi-file-search-outline', 'View B2B receivable management page')]
     public function index(): string
     {
         $this->receivableService->refreshOverdueFlags();
