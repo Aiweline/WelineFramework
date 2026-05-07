@@ -49,6 +49,18 @@ class TargetWebsite extends Model
     {
         $this->_primary_key = self::schema_fields_ID;
     }
+
+    public function save_before(): void
+    {
+        parent::save_before();
+
+        $now = date('Y-m-d H:i:s');
+        if (!$this->getData(self::schema_fields_CREATED_AT)) {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
+        }
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
+    }
+
     /**
      * 获取启用的目标网站列表
      * 
