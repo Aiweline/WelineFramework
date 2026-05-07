@@ -24,6 +24,9 @@ use Weline\Framework\Manager\ObjectManager;
 #[Index(name: 'idx_w_api_user_user_agent_restriction_enabled', columns: ['user_agent_restriction_enabled'], comment: 'UA限制')]
 class ApiUser extends Model
 {
+    public const DEFAULT_TOKEN_EXPIRE_TIME = 604800;
+    public const DEFAULT_REFRESH_TOKEN_EXPIRE_TIME = 2592000;
+
     public const fields_ID = 'user_id';
     public const schema_table = 'm_api_user';
     public string $table = 'm_api_user';
@@ -42,9 +45,9 @@ class ApiUser extends Model
     public const schema_fields_api_key = 'api_key';
     #[Col(type: 'varchar', length: 255, nullable: false, comment: 'API Secret')]
     public const schema_fields_api_secret = 'api_secret';
-    #[Col(type: 'integer', length: 11, nullable: false, comment: '访问令牌有效期')]
+    #[Col(type: 'integer', length: 11, nullable: false, default: self::DEFAULT_TOKEN_EXPIRE_TIME, comment: '访问令牌有效期')]
     public const schema_fields_token_expire_time = 'token_expire_time';
-    #[Col(type: 'integer', length: 11, nullable: false, comment: '刷新令牌有效期')]
+    #[Col(type: 'integer', length: 11, nullable: false, default: self::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME, comment: '刷新令牌有效期')]
     public const schema_fields_refresh_token_expire_time = 'refresh_token_expire_time';
     #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用')]
     public const schema_fields_is_enabled = 'is_enabled';
@@ -201,7 +204,7 @@ class ApiUser extends Model
      */
     public function getTokenExpireTime(): int
     {
-        return (int)($this->getData(self::schema_fields_token_expire_time) ?? 604800); // 默认7天
+        return (int)($this->getData(self::schema_fields_token_expire_time) ?? self::DEFAULT_TOKEN_EXPIRE_TIME); // 默认7天
     }
     /**
      * 设置访问令牌有效期（秒）
@@ -219,7 +222,7 @@ class ApiUser extends Model
      */
     public function getRefreshTokenExpireTime(): int
     {
-        return (int)($this->getData(self::schema_fields_refresh_token_expire_time) ?? 2592000); // 默认30天
+        return (int)($this->getData(self::schema_fields_refresh_token_expire_time) ?? self::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME); // 默认30天
     }
     /**
      * 设置刷新令牌有效期（秒）
@@ -443,6 +446,14 @@ class ApiUser extends Model
         // 如果是新用户且没有API Key，自动生成
         if (!$this->getId() && empty($this->getApiKey())) {
             $this->autoGenerateApiCredentials();
+        }
+
+        if ($this->getData(self::schema_fields_token_expire_time) === null || $this->getData(self::schema_fields_token_expire_time) === '') {
+            $this->setTokenExpireTime(self::DEFAULT_TOKEN_EXPIRE_TIME);
+        }
+
+        if ($this->getData(self::schema_fields_refresh_token_expire_time) === null || $this->getData(self::schema_fields_refresh_token_expire_time) === '') {
+            $this->setRefreshTokenExpireTime(self::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME);
         }
         
         // 设置更新时间
