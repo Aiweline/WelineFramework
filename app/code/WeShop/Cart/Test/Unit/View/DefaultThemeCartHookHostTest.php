@@ -33,5 +33,29 @@ class DefaultThemeCartHookHostTest extends TestCase
         foreach ($expectedHooks as $hook) {
             $this->assertStringContainsString($hook, $template);
         }
+
+        $this->assertStringContainsString('Items (%{1}):', $template);
+        $this->assertStringNotContainsString('Items (%1):', $template);
+    }
+
+    public function testCartLayoutSellerLabelsUseWelineI18nPlaceholders(): void
+    {
+        $moduleTemplate = file_get_contents(__DIR__ . '/../../../view/theme/frontend/layouts/cart/default.phtml');
+        $this->assertIsString($moduleTemplate);
+        $this->assertStringContainsString("'%{1} items in your cart'", $moduleTemplate);
+        $this->assertStringNotContainsString("'%1 items in your cart'", $moduleTemplate);
+
+        foreach ([1, 2, 3, 4] as $variant) {
+            $template = file_get_contents(__DIR__ . "/../../../../../../design/WeShop/default/frontend/layouts/cart/shopping_cart_page_{$variant}.phtml");
+            $this->assertIsString($template);
+
+            $this->assertStringContainsString('Sold by %{1}', $template);
+            $this->assertStringContainsString('Only %{1} left in stock - order soon.', $template);
+            $this->assertStringContainsString('Items (%{1}):', $template);
+            $this->assertStringContainsString('ENT_QUOTES', $template);
+            $this->assertStringNotContainsString('Sold by %1', $template);
+            $this->assertStringNotContainsString('Only %1 left in stock - order soon.', $template);
+            $this->assertStringNotContainsString('Items (%1):', $template);
+        }
     }
 }

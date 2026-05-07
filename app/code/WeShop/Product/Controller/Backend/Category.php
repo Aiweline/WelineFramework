@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Controller\Backend;
 
 use Weline\Eav\Model\EavAttribute\Set;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Cookie;
@@ -22,6 +23,7 @@ use WeShop\Catalog\Model\Category as CatalogCategory;
 use WeShop\Catalog\Service\CategoryService;
 use WeShop\Product\Model\Product;
 
+#[Acl('WeShop_Product::category', 'Categories', 'mdi mdi-shape-outline', 'Manage product categories', 'WeShop_Product::catalog')]
 class Category extends \Weline\Framework\App\Controller\BackendController
 {
     private \WeShop\Catalog\Model\Category $category;
@@ -39,6 +41,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
         $this->categoryService = $categoryService;
     }
 
+    #[Acl('WeShop_Product::category_index', 'View categories', 'mdi mdi-shape-outline', 'View category management page')]
     public function index()
     {
         // 使用树形结构获取分类数据
@@ -49,6 +52,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch();
     }
 
+    #[Acl('WeShop_Product::category_search', 'Search categories', 'mdi mdi-magnify', 'Search category data')]
     public function getSearch(): string
     {
         $id = $this->request->getGet('id', 0);
@@ -75,6 +79,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
         return $this->fetchJson($json);
     }
 
+    #[Acl('WeShop_Product::category_edit', 'Edit category', 'mdi mdi-pencil-outline', 'Edit category data')]
     public function edit()
     {
         if ($this->request->isGet()) {
@@ -539,6 +544,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
         $this->redirect('*/backend/category/edit', ['id' => $redirectId]);
     }
 
+    #[Acl('WeShop_Product::category_add', 'Add category', 'mdi mdi-plus-box-outline', 'Add category data')]
     public function add()
     {
         if ($this->request->isGet()) {
@@ -652,6 +658,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
         $this->redirect('*/backend/category/add');
     }
 
+    #[Acl('WeShop_Product::category_delete', 'Delete category', 'mdi mdi-delete-outline', 'Delete category data')]
     public function getDelete()
     {
         $id = $this->request->getGet('id', 0);
@@ -674,6 +681,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
      * 获取分类的默认属性集
      * @return string
      */
+    #[Acl('WeShop_Product::category_default_set', 'View default category attribute set', 'mdi mdi-format-list-bulleted-type', 'View default category attribute set data')]
     public function getGetDefaultSet(): string
     {
         $categoryId = (int)$this->request->getGet('category_id', 0);
