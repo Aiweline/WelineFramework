@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Eav\Test\Unit\Schema;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Eav\Model\EavAttribute\Group;
+use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Schema\EavEntitySchema;
 use Weline\Eav\Schema\EavAttributeGroupSchema;
 use Weline\Eav\Schema\EavAttributeOptionSchema;
@@ -133,5 +135,25 @@ class EavEntityIdTypeFixTest extends TestCase
                 "{$name}.eav_entity_id should be INTEGER for PostgreSQL compatibility"
             );
         }
+    }
+
+    public function testAttributeSetConflictKeysMatchSchemaUniqueKey(): void
+    {
+        $schema = new EavAttributeSetSchema();
+        $model = new Set();
+        $model->__init();
+
+        $this->assertSame('set_id', $model->getPrimaryKey());
+        $this->assertSame($schema->getUniqueKey(), $model->getUnitPrimaryKeys());
+    }
+
+    public function testAttributeGroupConflictKeysMatchSchemaUniqueKey(): void
+    {
+        $schema = new EavAttributeGroupSchema();
+        $model = new Group();
+        $model->__init();
+
+        $this->assertSame('group_id', $model->getPrimaryKey());
+        $this->assertSame($schema->getUniqueKey(), $model->getUnitPrimaryKeys());
     }
 }
