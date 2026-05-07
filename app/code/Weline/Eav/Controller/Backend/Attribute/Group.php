@@ -117,7 +117,7 @@ class Group extends \Weline\Framework\App\Controller\BackendController
             try {
                 $this->validatePost();
                 $this->group->setData($this->request->getPost())
-                    ->forceCheck(true, [$this->group::schema_fields_code, $this->group::schema_fields_eav_entity_id, $this->group::schema_fields_set_id])
+                    ->forceCheck(true, $this->group->getUnitPrimaryKeys())
                     ->save();
                 $this->getMessageManager()->addSuccess(__('修改成功！'));
                 $this->session->delete('eav_group');

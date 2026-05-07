@@ -5,6 +5,7 @@ namespace WeShop\Product\Controller\Backend\Product;
 use Weline\Backend\Model\BackendUserData;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Set;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
@@ -12,6 +13,7 @@ use Weline\Framework\Manager\ObjectManager;
 use WeShop\Product\Model\Category;
 use WeShop\Product\Model\Product\OptionId;
 
+#[Acl('WeShop_Product::product_add', 'Product add actions', 'mdi mdi-package-variant-plus', 'Create products', 'WeShop_Product::product')]
 class Add extends BackendController
 {
     private \WeShop\Product\Model\Product $product;
@@ -24,6 +26,7 @@ class Add extends BackendController
         $this->product->loadLocalDescription();
     }
 
+    #[Acl('WeShop_Product::product_add_index', 'Add product', 'mdi mdi-package-variant-plus', 'Open product creation page')]
     public function index()
     {
         # get请求返回产品创建表单
@@ -203,6 +206,7 @@ class Add extends BackendController
      * @throws \ReflectionException
      * @throws \Weline\Framework\App\Exception
      */
+    #[Acl('WeShop_Product::product_add_check_attributes', 'Validate product attributes', 'mdi mdi-clipboard-check-outline', 'Validate product attributes during creation')]
     public function checkAttributes(array $attributes, int $eav_entity_id): array
     {
         # 批量查询属性

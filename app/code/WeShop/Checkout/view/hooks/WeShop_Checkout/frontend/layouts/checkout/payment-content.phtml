@@ -125,7 +125,7 @@ foreach ($paymentMethods as $paymentMethod) {
                                     <div class="weshop-checkout-layout-payment-text"><?= htmlspecialchars($checkoutNote, ENT_QUOTES) ?></div>
                                 <?php endif; ?>
                                 <?php if ($flowLabel !== ''): ?>
-                                    <div class="weshop-checkout-layout-payment-text"><?= __('Payment flow: %1', $flowLabel) ?></div>
+                                    <div class="weshop-checkout-layout-payment-text"><?= __('Payment flow: %{1}', $flowLabel) ?></div>
                                 <?php endif; ?>
                             </span>
                         </div>
