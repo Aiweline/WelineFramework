@@ -13,6 +13,8 @@ use Weline\Eav\Schema\EavAttributeSetSchema;
 use Weline\Eav\Schema\EavAttributeGroupSchema;
 use Weline\Eav\Schema\EavAttributeSchema;
 use Weline\Eav\Schema\EavAttributeOptionSchema;
+use Weline\Framework\Database\Connection\Adapter\Sqlite\Connector;
+use Weline\Framework\Database\DbManager\ConfigProvider;
 
 /**
  * @covers \Weline\Eav\Schema\SchemaRegistry
@@ -132,5 +134,34 @@ class SchemaRegistryTest extends TestCase
         
         $all = $this->registry->getAll();
         $this->assertCount(2, $all);
+    }
+
+    public function testTableExistsUsesSqliteNativeLookup(): void
+    {
+        $dbPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-eav-schema-registry-' . uniqid('', true) . '.sqlite';
+
+        try {
+            $connector = new Connector(new ConfigProvider([
+                'type' => 'sqlite',
+                'path' => $dbPath,
+                'database' => '',
+                'prefix' => '',
+            ]));
+            $connector->create();
+            $connector->query('CREATE TABLE eav_attribute_type (code varchar(255) unique not null)')->fetch();
+
+            $method = new \ReflectionMethod(SchemaRegistry::class, 'tableExists');
+            $method->setAccessible(true);
+
+            $this->assertTrue($method->invoke($this->registry, $connector, 'eav_attribute_type'));
+            $this->assertFalse($method->invoke($this->registry, $connector, 'missing_eav_attribute_type'));
+        } finally {
+            if (isset($connector)) {
+                $connector->close();
+            }
+            if (is_file($dbPath)) {
+                unlink($dbPath);
+            }
+        }
     }
 }
