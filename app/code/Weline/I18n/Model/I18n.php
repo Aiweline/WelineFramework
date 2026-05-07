@@ -16,6 +16,48 @@ use Weline\I18n\Service\TranslationCollector;
 class I18n
 {
     private const MODULE_COLLECTION_FIBER_LIMIT = 6;
+    private const FALLBACK_LOCALE_NAMES = [
+        'en' => 'English',
+        'en_US' => 'English (United States)',
+        'zh_Hans_CN' => 'Chinese (Simplified, China)',
+        'zh_Hant_TW' => 'Chinese (Traditional, Taiwan)',
+        'ja_JP' => 'Japanese (Japan)',
+        'ko_KR' => 'Korean (South Korea)',
+        'de_DE' => 'German (Germany)',
+        'fr_FR' => 'French (France)',
+        'es_ES' => 'Spanish (Spain)',
+        'it_IT' => 'Italian (Italy)',
+        'pt_BR' => 'Portuguese (Brazil)',
+        'ru_RU' => 'Russian (Russia)',
+        'nl_NL' => 'Dutch (Netherlands)',
+    ];
+
+    private const FALLBACK_COUNTRY_NAMES = [
+        'AR' => 'Argentina',
+        'AU' => 'Australia',
+        'BE' => 'Belgium',
+        'BR' => 'Brazil',
+        'CA' => 'Canada',
+        'CH' => 'Switzerland',
+        'CN' => 'China',
+        'DE' => 'Germany',
+        'DK' => 'Denmark',
+        'ES' => 'Spain',
+        'FI' => 'Finland',
+        'FR' => 'France',
+        'GB' => 'United Kingdom',
+        'IN' => 'India',
+        'IT' => 'Italy',
+        'JP' => 'Japan',
+        'KR' => 'South Korea',
+        'MX' => 'Mexico',
+        'NL' => 'Netherlands',
+        'NO' => 'Norway',
+        'RU' => 'Russia',
+        'SE' => 'Sweden',
+        'TW' => 'Taiwan',
+        'US' => 'United States',
+    ];
 
     private static array $local_words = [];
     private Reader $reader;
@@ -28,12 +70,85 @@ class I18n
         $this->i18nCache = w_cache('i18n');
     }
 
+    public function getAvailableLocaleCodes(): array
+    {
+        if (class_exists(Locales::class)) {
+            try {
+                return Locales::getLocales();
+            } catch (\Throwable) {
+            }
+        }
+
+        return array_keys(self::FALLBACK_LOCALE_NAMES);
+    }
+
+    public function getLocaleNames(string $displayLocale = 'zh_Hans_CN'): array
+    {
+        $displayLocale = $this->normalizeIntlDisplayLocale($displayLocale);
+        if (class_exists(Locales::class)) {
+            try {
+                return Locales::getNames($displayLocale);
+            } catch (\Throwable) {
+                try {
+                    return Locales::getNames('en');
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        return self::FALLBACK_LOCALE_NAMES;
+    }
+
+    private function normalizeIntlDisplayLocale(string $locale): string
+    {
+        return extension_loaded('intl') ? $locale : 'en';
+    }
+
+    private function getLocaleNameFromProvider(string $localeCode, string $displayLocale): string
+    {
+        $displayLocale = $this->normalizeIntlDisplayLocale($displayLocale);
+        if (class_exists(Locales::class)) {
+            try {
+                return Locales::getName($localeCode, $displayLocale);
+            } catch (\Throwable) {
+            }
+        }
+
+        return self::FALLBACK_LOCALE_NAMES[$localeCode] ?? $localeCode;
+    }
+
+    private function countryExists(string $countryCode): bool
+    {
+        $countryCode = strtoupper($countryCode);
+        if (class_exists(Countries::class)) {
+            try {
+                return Countries::exists($countryCode);
+            } catch (\Throwable) {
+            }
+        }
+
+        return isset(self::FALLBACK_COUNTRY_NAMES[$countryCode]);
+    }
+
+    private function getCountryName(string $countryCode, string $displayLocale = 'en'): string
+    {
+        $countryCode = strtoupper($countryCode);
+        if (class_exists(Countries::class)) {
+            try {
+                return Countries::getName($countryCode, $this->normalizeIntlDisplayLocale($displayLocale));
+            } catch (\Throwable) {
+            }
+        }
+
+        return self::FALLBACK_COUNTRY_NAMES[$countryCode] ?? $countryCode;
+    }
+
     public function getLocalByCode(string $locale_code): string
     {
         if ($data = $this->i18nCache->get($locale_code)) {
             return $data;
         }
-        $locales = Locales::getLocales();
+        $locales = $this->getAvailableLocaleCodes();
         foreach ($locales as $locale) {
             if (strtolower($locale_code) === strtolower($locale)) {
                 $this->i18nCache->set($locale_code, $locale);
@@ -47,35 +162,28 @@ class I18n
     public function getLocals(string $lang_code = 'zh_Hans_CN'): array
     {
         // 未安装 intl 时 Symfony Polyfill 仅支持 en，传 zh_Hans_CN 会抛错，降级为 en
-        if (!extension_loaded('intl')) {
-            $lang_code = 'en';
-        }
+        $lang_code = $this->normalizeIntlDisplayLocale($lang_code);
         $cache_key = 'getLocals' . $lang_code;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
         }
-        $locals = Locales::getNames($lang_code);
+        $locals = $this->getLocaleNames($lang_code);
         $this->i18nCache->set($cache_key, $locals);
         return $locals;
     }
 
     public function getLocaleName(string $locale_code, string $displace_locale_code = 'zh_Hans_CN'): string
     {
-        if (!extension_loaded('intl')) {
-            $displace_locale_code = 'en';
-        }
         $name = $locale_code;
-        if (Locales::exists($locale_code)) {
-            $name = Locales::getName($locale_code, $displace_locale_code);
+        if ($this->localeExists($locale_code)) {
+            $name = $this->getLocaleNameFromProvider($locale_code, $displace_locale_code);
         }
         return $name;
     }
 
     public function getLocalesWithFlags(int $width = 24, int $height = 18, string $lang_code = 'zh_Hans_CN', bool $installed = true)
     {
-        if (!extension_loaded('intl')) {
-            $lang_code = 'en';
-        }
+        $lang_code = $this->normalizeIntlDisplayLocale($lang_code);
         $cache_key = 'getLocalesWithFlags' . $lang_code . $width . $height . (string)$installed;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
@@ -92,7 +200,7 @@ class I18n
 
         $locals = [];
         $lang_locals = $this->getLocals($lang_code);
-        $allLocales = Locales::getLocales();
+        $allLocales = $this->getAvailableLocaleCodes();
         
         foreach ($allLocales as $locale) {
             if ($installed && !in_array($locale, $install_packs)) {
@@ -140,7 +248,7 @@ class I18n
 
         $locals = [];
         $lang_locals = $this->getLocals();
-        $allLocales = Locales::getLocales();
+        $allLocales = $this->getAvailableLocaleCodes();
         
         // 收集所有需要获取的国家代码
         $countryCodes = [];
@@ -660,20 +768,20 @@ class I18n
 
     public function getCountry(string $country_code = 'CN'): array
     {
-        if (!Countries::exists($country_code)) {
+        if (!$this->countryExists($country_code)) {
             return [];
         }
 
         return [
             'code' => $country_code,
-            'name' => Countries::getName($country_code),
+            'name' => $this->getCountryName($country_code),
             'locales' => $this->getLocalesForCountry($country_code)
         ];
     }
 
     private function getLocalesForCountry(string $countryCode): array
     {
-        $locales = Locales::getLocales();
+        $locales = $this->getAvailableLocaleCodes();
         $countryLocales = [];
         $countryCode = strtoupper($countryCode);
         
@@ -697,7 +805,14 @@ class I18n
 
     public function localeExists(string $locale_code): bool
     {
-        return Locales::exists($locale_code);
+        if (class_exists(Locales::class)) {
+            try {
+                return Locales::exists($locale_code);
+            } catch (\Throwable) {
+            }
+        }
+
+        return isset(self::FALLBACK_LOCALE_NAMES[$locale_code]);
     }
 
     public function getLocalsWords(bool $cache = true, ?string $moduleName = null): array
@@ -732,7 +847,7 @@ class I18n
             }
         }
         
-        $locals_names = extension_loaded('intl') ? Locales::getNames() : Locales::getNames('en');
+        $locals_names = $this->getLocaleNames();
         if (!isset($locals_words)) {
             $locals_words = [];
         }
@@ -1190,7 +1305,18 @@ class I18n
 
     public function getCountries(string $display_local_code = 'zh_Hans_CN'): array
     {
-        return Countries::getNames($display_local_code);
+        if (class_exists(Countries::class)) {
+            try {
+                return Countries::getNames($this->normalizeIntlDisplayLocale($display_local_code));
+            } catch (\Throwable) {
+                try {
+                    return Countries::getNames('en');
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        return self::FALLBACK_COUNTRY_NAMES;
     }
 
     public function getActiveLocalsModel(string $target_local = 'zh_Hans_CN'): Locals
@@ -1215,7 +1341,7 @@ class I18n
 
         try {
             $countryCode = $this->getCountryCodeFromLocale($localeCode);
-            if ($countryCode && Countries::exists($countryCode)) {
+            if ($countryCode && $this->countryExists($countryCode)) {
                 $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
                 $country = $countriesModel->reset()
                     ->where(\Weline\I18n\Model\Countries::schema_fields_CODE, $countryCode)
