@@ -97,8 +97,9 @@ class DownloadCompleteObserver implements ObserverInterface
         } catch (\Exception $e) {
             // 记录错误日志
             \Weline\Framework\App\Env::log_error(
-                'AppStore module install failed: ' . $e->getMessage(),
-                ['data' => $data]
+                'appstore/download_complete.log',
+                'AppStore module install failed: ' . $e->getMessage()
+                . '; data=' . \json_encode($data, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR)
             );
 
             return [
