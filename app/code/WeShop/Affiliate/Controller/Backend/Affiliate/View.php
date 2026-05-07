@@ -6,7 +6,9 @@ namespace WeShop\Affiliate\Controller\Backend\Affiliate;
 
 use WeShop\Affiliate\Service\AffiliateAdminPageDataService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Affiliate::affiliate_management_view', 'Affiliate view actions', 'mdi mdi-eye-outline', 'View affiliate details', 'WeShop_Affiliate::affiliate_management')]
 class View extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class View extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Affiliate::affiliate_management_view_index', 'View affiliate detail', 'mdi mdi-eye', 'View affiliate detail page')]
     public function index(): string
     {
         $affiliateId = (int) $this->request->getParam('id', 0);

@@ -86,7 +86,7 @@ class Add extends FrontendController
 
             // 检查库存
             if ($product->getStock() < $qty) {
-                $this->getMessageManager()->addError(__('库存不足，当前库存: %1', $product->getStock()));
+                $this->getMessageManager()->addError(__('库存不足，当前库存: %{1}', $product->getStock()));
                 $this->redirectBack();
                 return;
             }
@@ -106,7 +106,7 @@ class Add extends FrontendController
             }
 
         } catch (\Throwable $e) {
-            $this->getMessageManager()->addError(__('添加购物车失败: %1', $e->getMessage()));
+            $this->getMessageManager()->addError(__('添加购物车失败: %{1}', $e->getMessage()));
             $this->redirectBack();
         }
     }

@@ -6,7 +6,9 @@ namespace WeShop\Affiliate\Controller\Backend\Affiliate;
 
 use WeShop\Affiliate\Service\AffiliateService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Affiliate::affiliate_management_actions', 'Affiliate actions', 'mdi mdi-account-edit-outline', 'Create and update affiliate records', 'WeShop_Affiliate::affiliate_management')]
 class Save extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Save extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Affiliate::affiliate_management_save_post', 'Save affiliate', 'mdi mdi-content-save', 'Save affiliate data')]
     public function post(): string
     {
         $defaultBackUrl = $this->_url->getBackendUrl('*/backend/affiliate');
@@ -43,6 +46,7 @@ class Save extends BaseController
         }
     }
 
+    #[Acl('WeShop_Affiliate::affiliate_management_save_index', 'Open affiliate save route', 'mdi mdi-content-save-outline', 'Open affiliate save route')]
     public function index(): string
     {
         return $this->post();
