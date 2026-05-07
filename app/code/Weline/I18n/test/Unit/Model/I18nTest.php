@@ -31,6 +31,14 @@ class I18nTest extends TestCore
         assertIsArray($this->i18n->getLocals(), __('Weline_I18n:语言包Locals读取'));
     }
 
+    public function testIntlProviderFallbacksReturnCoreLocaleData(): void
+    {
+        $this->assertContains('en_US', $this->i18n->getAvailableLocaleCodes());
+        $this->assertArrayHasKey('en_US', $this->i18n->getLocals('en'));
+        $this->assertNotSame('', $this->i18n->getLocaleName('en_US', 'en'));
+        $this->assertArrayHasKey('US', $this->i18n->getCountries('en'));
+    }
+
     public function testGetLocalWords()
     {
         assertIsArray($this->i18n->getLocalsWords(), __('Weline_I18n:语言包Locals翻译词典读取'));

@@ -6,7 +6,9 @@ namespace WeShop\B2B\Controller\Backend\Receivable;
 
 use WeShop\B2B\Service\B2BReceivablePaymentService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_B2B::b2b_receivable_actions', 'B2B receivable actions', 'mdi mdi-cash-register', 'Record B2B receivable payments', 'WeShop_B2B::b2b_receivable')]
 class Payment extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Payment extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_B2B::b2b_receivable_payment_post', 'Record B2B receivable payment', 'mdi mdi-cash-plus', 'Record B2B receivable payment data')]
     public function post(): string
     {
         $back = (string) $this->request->getParam('back_url', $this->request->getUrlBuilder()->getBackendUrl('*/backend/receivable'));

@@ -36,6 +36,8 @@ class CheckoutPaymentDynamicHookTemplateTest extends TestCase
         $this->assertStringContainsString("getData('payment_methods')", $template);
         $this->assertStringContainsString('data-weshop-payment-detail-list', $template);
         $this->assertStringContainsString('input[name="payment_method"]', $template);
+        $this->assertStringContainsString('Payment flow: %{1}', $template);
+        $this->assertStringNotContainsString('Payment flow: %1', $template);
     }
 
     public function testCheckoutLayoutPaymentContentHookTemplateUsesDynamicMethods(): void
@@ -46,5 +48,7 @@ class CheckoutPaymentDynamicHookTemplateTest extends TestCase
         $this->assertStringContainsString("getData('payment_methods')", $template);
         $this->assertStringContainsString('name="payment_method"', $template);
         $this->assertStringContainsString('data-weshop-layout-payment-guidance', $template);
+        $this->assertStringContainsString('Payment flow: %{1}', $template);
+        $this->assertStringNotContainsString('Payment flow: %1', $template);
     }
 }

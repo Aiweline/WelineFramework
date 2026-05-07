@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Weline\Eav\Test\Unit\Schema;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Model\EavAttribute\Group;
+use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Schema\EavEntitySchema;
 use Weline\Eav\Schema\EavAttributeGroupSchema;
 use Weline\Eav\Schema\EavAttributeOptionSchema;
@@ -133,5 +136,75 @@ class EavEntityIdTypeFixTest extends TestCase
                 "{$name}.eav_entity_id should be INTEGER for PostgreSQL compatibility"
             );
         }
+    }
+
+    public function testAttributeSetConflictKeysMatchSchemaUniqueKey(): void
+    {
+        $schema = new EavAttributeSetSchema();
+        $model = new Set();
+        $model->__init();
+
+        $this->assertSame('set_id', $model->getPrimaryKey());
+        $this->assertSame($schema->getUniqueKey(), $model->getUnitPrimaryKeys());
+    }
+
+    public function testAttributeGroupConflictKeysMatchSchemaUniqueKey(): void
+    {
+        $schema = new EavAttributeGroupSchema();
+        $model = new Group();
+        $model->__init();
+
+        $this->assertSame('group_id', $model->getPrimaryKey());
+        $this->assertSame($schema->getUniqueKey(), $model->getUnitPrimaryKeys());
+    }
+
+    public function testAttributeConflictKeysMatchSchemaUniqueKey(): void
+    {
+        $schema = new EavAttributeSchema();
+        $model = new EavAttribute();
+        $model->__init();
+
+        $this->assertEqualsCanonicalizing($schema->getUniqueKey(), $model->getUnitPrimaryKeys());
+        $this->assertNotContains(EavAttribute::schema_fields_set_id, $schema->getUniqueKey());
+    }
+
+    public function testAttributeConflictKeysMatchSqliteUniqueConstraint(): void
+    {
+        $schema = new EavAttributeSchema();
+        $db = new \PDO('sqlite::memory:');
+        $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $db->exec(
+            'CREATE TABLE eav_attribute (' .
+            'code TEXT NOT NULL, ' .
+            'eav_entity_id INTEGER NOT NULL, ' .
+            'set_id INTEGER NOT NULL, ' .
+            'name TEXT, ' .
+            'UNIQUE(code, eav_entity_id)' .
+            ')'
+        );
+
+        $conflictTarget = '"' . implode('", "', $schema->getUniqueKey()) . '"';
+        $db->exec(
+            'INSERT INTO eav_attribute (code, eav_entity_id, set_id, name) ' .
+            "VALUES ('image', 1, 2, 'old')"
+        );
+        $db->exec(
+            'INSERT INTO eav_attribute (code, eav_entity_id, set_id, name) ' .
+            "VALUES ('image', 1, 3, 'new') " .
+            "ON CONFLICT ($conflictTarget) DO UPDATE SET name=excluded.name"
+        );
+
+        $this->assertSame(
+            'new',
+            $db->query("SELECT name FROM eav_attribute WHERE code = 'image' AND eav_entity_id = 1")
+                ->fetchColumn()
+        );
+
+        $this->expectException(\PDOException::class);
+        $db->exec(
+            'INSERT INTO eav_attribute (code, eav_entity_id, set_id, name) ' .
+            "VALUES ('icon', 1, 2, 'bad') " .
+            'ON CONFLICT ("code", "eav_entity_id", "set_id") DO UPDATE SET name=excluded.name'
+        );
     }
 }

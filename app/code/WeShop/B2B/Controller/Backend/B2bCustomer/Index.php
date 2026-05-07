@@ -7,7 +7,9 @@ namespace WeShop\B2B\Controller\Backend\B2bCustomer;
 use WeShop\B2B\Service\B2bCustomerService;
 use WeShop\B2B\Service\PaymentTermService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_B2B::b2b_customer_profile', 'B2B Enterprise Customers', 'mdi mdi-account-group-outline', 'Manage B2B enterprise customers', 'Weline_Backend::customer_group')]
 class Index extends BaseController
 {
     public function __construct(
@@ -16,6 +18,7 @@ class Index extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_B2B::b2b_customer_profile_index', 'View B2B enterprise customers', 'mdi mdi-account-search-outline', 'View B2B enterprise customer management page')]
     public function index(): string
     {
         $this->paymentTermService->ensureDefaultTerms();
