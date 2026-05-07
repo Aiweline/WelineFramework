@@ -184,6 +184,9 @@
         if (['stop', 'stopped', 'cancelled', 'canceled'].indexOf(normalized) !== -1) {
             return 'stop';
         }
+        if (['timeout', 'timed_out', 'connection_timeout', 'connection_lost', 'sse_interrupted'].indexOf(normalized) !== -1) {
+            return 'timeout';
+        }
         return '';
     }
 
@@ -272,7 +275,7 @@
             message: message
         }, status === 'error' ? 'error' : status, message || (status === 'done' ? '队列执行完成' : '队列执行已停止'));
 
-        if (status === 'error' || status === 'stop') {
+        if (status === 'error' || status === 'stop' || status === 'timeout') {
             rememberOperationFailurePayload(op, {
                 operation: op,
                 state: workspaceState,
@@ -356,40 +359,18 @@
         aiGeneratingSummary: <?= \json_encode((string)__('AI 生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         aiQueuedSummary: <?= \json_encode((string)__('AI 排队中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
     };
-    runtimeLabels.statusDone = '已完成';
-    runtimeLabels.statusRunning = '进行中';
-    runtimeLabels.statusFailed = '失败';
-    runtimeLabels.statusPending = '待处理';
-    runtimeLabels.taskBlock = '区块';
-    runtimeLabels.taskComponent = '组件';
-    runtimeLabels.taskAttempt = '尝试次数';
-    runtimeLabels.taskUpdatedAt = '更新时间';
-    runtimeLabels.taskFinishedAt = '完成时间';
-    runtimeLabels.runningSummary = '进行中...';
-
-    runtimeLabels.statusDone = '已完成';
-    runtimeLabels.statusRunning = '进行中';
-    runtimeLabels.statusFailed = '失败';
-    runtimeLabels.statusPending = '待处理';
-    runtimeLabels.taskBlock = '区块';
-    runtimeLabels.taskComponent = '组件';
-    runtimeLabels.taskAttempt = '尝试次数';
-    runtimeLabels.taskUpdatedAt = '更新时间';
-    runtimeLabels.taskFinishedAt = '完成时间';
-    runtimeLabels.runningSummary = '进行中...';
-
     // A44 task-progress badges intentionally expose the semantic status contract.
-    runtimeLabels.statusTodo = 'todo';
-    runtimeLabels.statusQueued = 'queued';
-    runtimeLabels.statusRunning = 'running';
-    runtimeLabels.statusDone = 'done';
-    runtimeLabels.statusFailed = 'failed';
-    runtimeLabels.statusStale = 'stale';
-    runtimeLabels.statusCancelled = 'cancelled';
-    runtimeLabels.statusBlocked = 'blocked';
-    runtimeLabels.runningSummary = 'running...';
-    runtimeLabels.aiGeneratingSummary = 'AI 生成中';
-    runtimeLabels.aiQueuedSummary = 'AI 排队中';
+    runtimeLabels.statusTodo = <?= \json_encode((string)__('todo'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.statusQueued = <?= \json_encode((string)__('queued'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.statusRunning = <?= \json_encode((string)__('running'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.statusDone = <?= \json_encode((string)__('done'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.statusFailed = <?= \json_encode((string)__('failed'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.statusStale = <?= \json_encode((string)__('stale'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.statusCancelled = <?= \json_encode((string)__('cancelled'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.statusBlocked = <?= \json_encode((string)__('blocked'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.runningSummary = <?= \json_encode((string)__('running...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.aiGeneratingSummary = <?= \json_encode((string)__('AI 生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    runtimeLabels.aiQueuedSummary = <?= \json_encode((string)__('AI 排队中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
 
     function relayoutExpertWorkspaceWithRightLog() {
         if (isGuidedUi) {
@@ -650,6 +631,19 @@
             }
             if (deferredQueueStatePollDeadline > 0 && Date.now() > deferredQueueStatePollDeadline) {
                 stopDeferredQueueStatePoll();
+                var timeoutApi = resolveWorkspaceApi();
+                if (timeoutApi && typeof timeoutApi.renderQueueUiState === 'function') {
+                    timeoutApi.renderQueueUiState(normalizedOperation, {
+                        operation: normalizedOperation,
+                        state: 'timeout',
+                        status: 'timeout',
+                        message: messages.queueStateTimeout || <?= \json_encode((string)__('长时间未收到队列终态，请刷新工作台确认真实结果后再继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    }, { updateStatus: true });
+                }
+                if (workspaceTerminal && typeof workspaceTerminal.setStatus === 'function') {
+                    workspaceTerminal.setStatus('error', messages.queueStateTimeout || <?= \json_encode((string)__('长时间未收到队列终态'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                }
+                toast('warning', messages.queueStateTimeout || <?= \json_encode((string)__('长时间未收到队列终态，请刷新工作台确认真实结果后再继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
                 return;
             }
             deferredQueueStatePollInFlight = true;
@@ -2229,238 +2223,270 @@
     function normalizeStageStatusPresentation(kind, workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var active = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : (activeOperation || {});
-        var activeOp = String(active.operation || '').toLowerCase();
-        var activeStatus = String(active.status || '').toLowerCase();
+        var activeOp = String(active.operation || '').trim().toLowerCase();
+        var activeStatus = normalizeContractStatus(active.status);
         var activeMessage = String(active.message || '').trim();
-        var workspaceStatus = String(state.workspace_status || '').toLowerCase();
-        var publishStatus = String(state.publish_status || '').toLowerCase();
-        if (publishStatus === 'published') {
-            workspaceStatus = 'published';
-        }
-        var planConfirmed = !!state.plan_confirmed;
-        var taskPlanConfirmed = !!state.task_plan_confirmed;
+        var workspaceStatus = String(state.workspace_status || '').trim().toLowerCase();
+        var publishStatus = String(state.publish_status || '').trim().toLowerCase();
+        var planConfirmed = runtimeTruthyFlag(state.plan_confirmed);
+        var taskPlanConfirmed = runtimeTruthyFlag(state.task_plan_confirmed);
         var hasPlanDraft = Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')
-            ? !!state.has_stage_one_plan
-            : !!state.has_execution_blueprint;
-        var hasTaskPlanDraft = !!state.has_virtual_theme_plan;
+            ? runtimeTruthyFlag(state.has_stage_one_plan)
+            : runtimeTruthyFlag(state.has_execution_blueprint);
+        var hasTaskPlanDraft = runtimeTruthyFlag(state.has_virtual_theme_plan);
+
+        var labels = {
+            pending: <?= \json_encode((string)__('待调度'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            queued: <?= \json_encode((string)__('排队中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            generating: <?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            building: <?= \json_encode((string)__('构建中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            failed: <?= \json_encode((string)__('失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            cancelled: <?= \json_encode((string)__('已取消'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            stale: <?= \json_encode((string)__('状态已过期'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            retryable: <?= \json_encode((string)__('需重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            timeout: <?= \json_encode((string)__('等待超时'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            connectionLost: <?= \json_encode((string)__('连接中断'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            confirmed: <?= \json_encode((string)__('已确认'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            waitingConfirm: <?= \json_encode((string)__('待确认'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            locked: <?= \json_encode((string)__('未解锁'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            readyPublish: <?= \json_encode((string)__('可发布'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            published: <?= \json_encode((string)__('已发布'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            processing: <?= \json_encode((string)__('处理中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            notStarted: <?= \json_encode((string)__('待开始'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        };
+        var messagesByStage = {
+            planPending: <?= \json_encode((string)__('第一阶段方案等待系统调度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            planQueued: <?= \json_encode((string)__('第一阶段方案已进入后台队列。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            planRunning: <?= \json_encode((string)__('第一阶段方案正在后台生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            planFailed: <?= \json_encode((string)__('第一阶段方案生成失败，请使用重试入口继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            planDone: <?= \json_encode((string)__('第一阶段方案已确认，可以继续第二阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            planDraft: <?= \json_encode((string)__('第一阶段方案已生成，等待确认。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            planIdle: <?= \json_encode((string)__('等待生成第一阶段建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            taskLocked: <?= \json_encode((string)__('请先确认第一阶段方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            taskPending: <?= \json_encode((string)__('第二阶段任务方案等待系统调度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            taskQueued: <?= \json_encode((string)__('第二阶段任务方案已进入后台队列。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            taskRunning: <?= \json_encode((string)__('第二阶段任务方案正在后台生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            taskFailed: <?= \json_encode((string)__('第二阶段任务方案生成失败，请使用重试入口继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            taskDone: <?= \json_encode((string)__('第二阶段任务方案已确认，可以进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            taskDraft: <?= \json_encode((string)__('第二阶段任务方案已生成，等待确认。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            taskIdle: <?= \json_encode((string)__('等待生成第二阶段任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildLocked: <?= \json_encode((string)__('请先确认第二阶段任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildPending: <?= \json_encode((string)__('站点构建等待系统调度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildQueued: <?= \json_encode((string)__('站点构建已进入后台队列。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildRunning: <?= \json_encode((string)__('站点正在后台构建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildFailed: <?= \json_encode((string)__('站点构建失败，请使用重试入口继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildReady: <?= \json_encode((string)__('站点内容已就绪，可继续编辑或发布。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildPublished: <?= \json_encode((string)__('站点已发布。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildProcessing: <?= \json_encode((string)__('后台正在处理构建或发布任务。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            buildIdle: <?= \json_encode((string)__('等待第二阶段确认后进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            cancelled: <?= \json_encode((string)__('当前队列已取消，不会继续自动推进。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            stale: <?= \json_encode((string)__('当前状态已过期，请以最新工作台快照为准。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            retryable: <?= \json_encode((string)__('检测到 retry_allowed 或 partial_retry_required，请使用重试失败项入口处理。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            timeout: <?= \json_encode((string)__('长时间未收到队列终态，请刷新工作台确认真实结果后再继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+            connectionLost: <?= \json_encode((string)__('SSE 日志连接中断，已切换为工作台快照轮询；请等待终态或使用重试入口。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        };
 
         function make(label, badgeClass, message) {
             return { label: label, badgeClass: badgeClass, message: message };
         }
 
+        function normalizeContractStatus(raw) {
+            var normalized = String(raw || '').trim().toLowerCase();
+            if (normalized === 'in_progress' || normalized === 'processing') {
+                return 'running';
+            }
+            if (normalized === 'complete' || normalized === 'completed' || normalized === 'finished' || normalized === 'success') {
+                return 'done';
+            }
+            if (normalized === 'fail') {
+                return 'failed';
+            }
+            if (normalized === 'error') {
+                return 'failed';
+            }
+            if (normalized === 'canceled' || normalized === 'stop' || normalized === 'stopped') {
+                return 'cancelled';
+            }
+            if (normalized === 'expired' || normalized === 'outdated') {
+                return 'stale';
+            }
+            if (normalized === 'timed_out' || normalized === 'connection_timeout') {
+                return 'timeout';
+            }
+            if (normalized === 'disconnected' || normalized === 'interrupted' || normalized === 'sse_interrupted') {
+                return 'connection_lost';
+            }
+            if (normalized === 'partial_retry_required') {
+                return 'retryable';
+            }
+            return normalized;
+        }
+
+        function stageOperationMatches(stage, operation) {
+            var op = String(operation || '').trim().toLowerCase();
+            if (stage === 'plan') {
+                return op === 'plan' || op === 'phase_one_plan';
+            }
+            if (stage === 'task_plan') {
+                return op === 'task_plan' || op === 'task-plan';
+            }
+            return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine', 'image_asset'].indexOf(op) !== -1;
+        }
+
+        function readStageQueueInfo(stage) {
+            if (stage === 'plan') {
+                return state.plan_queue_info && typeof state.plan_queue_info === 'object' ? state.plan_queue_info : {};
+            }
+            if (stage === 'task_plan') {
+                return state.task_plan_queue_info && typeof state.task_plan_queue_info === 'object' ? state.task_plan_queue_info : {};
+            }
+            return state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : {};
+        }
+
         function readStageQueueStatus(queueInfo) {
             var snapshot = queueInfo && typeof queueInfo === 'object' && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
                 ? queueInfo.snapshot
-                : null;
-            return String(
-                (snapshot ? (snapshot.status || snapshot.job_status || '') : '')
-                || (queueInfo && typeof queueInfo === 'object' ? (queueInfo.queue_status || '') : '')
-                || ''
-            ).trim().toLowerCase();
-        }
-
-        function readStageQueueMessage(queueInfo) {
-            return String(queueInfo && typeof queueInfo === 'object' ? (queueInfo.process || queueInfo.message || '') : '').trim();
-        }
-
-        function readStageQueueFailureMessage(queueInfo) {
-            var resultTail = readQueueResultTail(queueInfo);
-            var message = String(queueInfo && typeof queueInfo === 'object' ? (queueInfo.message || '') : '').trim();
-            var process = String(queueInfo && typeof queueInfo === 'object' ? (queueInfo.process || '') : '').trim();
-            return resultTail || message || process || '';
-        }
-
-        function isStageQueueInProgress(queueStatus) {
-            return ['pending', 'queued', 'running'].indexOf(String(queueStatus || '').toLowerCase()) !== -1;
-        }
-
-        function isStageQueueDone(queueStatus) {
-            return ['done', 'complete', 'completed'].indexOf(String(queueStatus || '').toLowerCase()) !== -1;
-        }
-
-        function isStageQueueFailed(queueStatus) {
-            return ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(String(queueStatus || '').toLowerCase()) !== -1;
-        }
-
-        if (kind === 'plan') {
-            var planQueueStatus = readStageQueueStatus(state.plan_queue_info);
-            if (isStageQueueFailed(planQueueStatus)) {
-                return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.plan_queue_info) || activeMessage || '第一阶段方案生成失败，请重试。');
-            }
-            if (isStageQueueInProgress(planQueueStatus)) {
-                return make(
-                    planQueueStatus === 'running' ? '生成中' : '排队中',
-                    planQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
-                    readStageQueueMessage(state.plan_queue_info) || activeMessage || '第一阶段方案正在后台队列执行。'
-                );
-            }
-            if (isStageQueueDone(planQueueStatus)) {
-                if (activeOp === 'plan') {
-                    activeStatus = 'done';
-                }
-            }
-            if (activeOp === 'plan' && activeStatus === 'queued') {
-                return make('排队中', 'text-bg-warning', activeMessage || '第一阶段方案已进入后台队列。');
-            }
-            if (activeOp === 'plan' && activeStatus === 'running') {
-                return make('生成中', 'text-bg-primary', activeMessage || '第一阶段方案正在后台生成。');
-            }
-            if (activeOp === 'plan' && activeStatus === 'error') {
-                return make('失败', 'text-bg-danger', activeMessage || '第一阶段方案生成失败，请重试。');
-            }
-            if (planConfirmed) {
-                return make('已确认', 'text-bg-success', '第一阶段方案已确认，可以继续第二阶段。');
-            }
-            if (hasPlanDraft) {
-                return make('待确认', 'text-bg-info', '第一阶段方案已生成，等待确认。');
-            }
-            return make('待开始', 'text-bg-secondary', '等待生成第一阶段建站方案。');
-        }
-
-        if (kind === 'task_plan') {
-            var taskPlanQueueStatus = readStageQueueStatus(state.task_plan_queue_info);
-            if (isStageQueueFailed(taskPlanQueueStatus)) {
-                return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.task_plan_queue_info) || activeMessage || '第二阶段任务方案生成失败，请重试。');
-            }
-            if (planConfirmed && isStageQueueInProgress(taskPlanQueueStatus)) {
-                return make(
-                    taskPlanQueueStatus === 'running' ? '生成中' : '排队中',
-                    taskPlanQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
-                    readStageQueueMessage(state.task_plan_queue_info) || activeMessage || '第二阶段任务方案正在后台队列执行。'
-                );
-            }
-            if (isStageQueueDone(taskPlanQueueStatus)) {
-                if (activeOp === 'task_plan') {
-                    activeStatus = 'done';
-                }
-                hasTaskPlanDraft = true;
-            }
-            if (!planConfirmed) {
-                return make('未解锁', 'text-bg-secondary', '请先确认第一阶段方案。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'queued') {
-                return make('排队中', 'text-bg-warning', activeMessage || '第二阶段任务方案已进入后台队列。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'running') {
-                return make('生成中', 'text-bg-primary', activeMessage || '第二阶段任务方案正在后台生成。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'error') {
-                return make('失败', 'text-bg-danger', activeMessage || '第二阶段任务方案生成失败，请重试。');
-            }
-            if (taskPlanConfirmed) {
-                return make('已确认', 'text-bg-success', '第二阶段任务方案已确认，可以进入构建。');
-            }
-            if (hasTaskPlanDraft) {
-                return make('待确认', 'text-bg-info', '第二阶段任务方案已生成，等待确认。');
-            }
-            return make('待开始', 'text-bg-secondary', '等待生成第二阶段任务方案。');
-        }
-
-        if (!taskPlanConfirmed) {
-            return make('未解锁', 'text-bg-secondary', '请先确认第二阶段任务方案。');
-        }
-        var buildQueueStatus = readStageQueueStatus(state.build_queue_info);
-        if (isStageQueueFailed(buildQueueStatus)) {
-            return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.build_queue_info) || activeMessage || '站点构建失败，请重试。');
-        }
-        if (isStageQueueInProgress(buildQueueStatus)) {
-            return make(
-                buildQueueStatus === 'running' ? '构建中' : '排队中',
-                buildQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
-                readStageQueueMessage(state.build_queue_info) || activeMessage || '虚拟主题正在后台队列执行。'
+                : {};
+            return normalizeContractStatus(
+                snapshot.status
+                || snapshot.job_status
+                || snapshot.queue_status
+                || (queueInfo && typeof queueInfo === 'object' ? (queueInfo.status || queueInfo.job_status || queueInfo.queue_status) : '')
             );
         }
-        if (isStageQueueDone(buildQueueStatus)) {
-            if (activeOp === 'build') {
-                activeStatus = 'done';
+
+        function readStageMessage(queueInfo) {
+            return String(
+                readQueueResultTail(queueInfo)
+                || (queueInfo && typeof queueInfo === 'object' ? (queueInfo.message || queueInfo.process || queueInfo.error) : '')
+                || activeMessage
+                || ''
+            ).trim();
+        }
+
+        function stageHasRetryableContract(stage, queueInfo) {
+            var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
+            var failures = state.retryable_ai_failures && typeof state.retryable_ai_failures === 'object' ? state.retryable_ai_failures : {};
+            var bucket = stage === 'task_plan' ? (failures.task_plan || failures.task || []) : (stage === 'build' ? (failures.build || []) : (failures.plan || []));
+            var hasBucket = Array.isArray(bucket) ? bucket.length > 0 : !!bucket;
+            var activeMatchesStage = stageOperationMatches(stage, activeOp);
+            return !!(
+                (activeMatchesStage && active.retry_allowed)
+                || (activeMatchesStage && active.failure_mode === 'partial_retry_required')
+                || queueInfo.retry_allowed
+                || queueInfo.failure_mode === 'partial_retry_required'
+                || snapshot.retry_allowed
+                || snapshot.failure_mode === 'partial_retry_required'
+                || hasBucket
+                || (stage === 'build' && ((parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0) > 0))
+            );
+        }
+
+        function presentationForContractStatus(stage, status, queueInfo, fallbackMessage) {
+            var message = readStageMessage(queueInfo) || fallbackMessage || '';
+            if (status === 'retryable' || (['failed', 'cancelled', 'stale', 'timeout'].indexOf(status) !== -1 && stageHasRetryableContract(stage, queueInfo))) {
+                return make(labels.retryable, 'text-bg-warning', message || messagesByStage.retryable);
             }
-            if (!workspaceStatus || workspaceStatus === 'building') {
-                workspaceStatus = 'can_publish';
+            if (status === 'pending') {
+                return make(labels.pending, 'text-bg-warning', message || messagesByStage[stage === 'plan' ? 'planPending' : (stage === 'task_plan' ? 'taskPending' : 'buildPending')]);
             }
+            if (status === 'queued') {
+                return make(labels.queued, 'text-bg-warning', message || messagesByStage[stage === 'plan' ? 'planQueued' : (stage === 'task_plan' ? 'taskQueued' : 'buildQueued')]);
+            }
+            if (status === 'running') {
+                return make(stage === 'build' ? labels.building : labels.generating, 'text-bg-primary', message || messagesByStage[stage === 'plan' ? 'planRunning' : (stage === 'task_plan' ? 'taskRunning' : 'buildRunning')]);
+            }
+            if (status === 'failed') {
+                return make(labels.failed, 'text-bg-danger', message || messagesByStage[stage === 'plan' ? 'planFailed' : (stage === 'task_plan' ? 'taskFailed' : 'buildFailed')]);
+            }
+            if (status === 'cancelled') {
+                return make(labels.cancelled, 'text-bg-warning', message || messagesByStage.cancelled);
+            }
+            if (status === 'stale') {
+                return make(labels.stale, 'text-bg-warning', message || messagesByStage.stale);
+            }
+            if (status === 'timeout') {
+                return make(labels.timeout, 'text-bg-danger', message || messagesByStage.timeout);
+            }
+            if (status === 'connection_lost') {
+                return make(labels.connectionLost, 'text-bg-warning', message || messagesByStage.connectionLost);
+            }
+            return null;
         }
-        if (activeOp === 'build' && activeStatus === 'queued') {
-            return make('排队中', 'text-bg-warning', activeMessage || '站点构建已进入后台队列。');
+
+        function readStageContractStatus(stage) {
+            var queueInfo = readStageQueueInfo(stage);
+            var queueStatus = readStageQueueStatus(queueInfo);
+            if (stageOperationMatches(stage, activeOp) && activeStatus && activeStatus !== 'done') {
+                return { status: activeStatus, queueInfo: queueInfo };
+            }
+            if (queueStatus) {
+                return { status: queueStatus, queueInfo: queueInfo };
+            }
+            if (stageOperationMatches(stage, activeOp)) {
+                return { status: activeStatus, queueInfo: queueInfo };
+            }
+            return { status: '', queueInfo: queueInfo };
         }
-        if (activeOp === 'build' && activeStatus === 'running') {
-            return make('构建中', 'text-bg-primary', activeMessage || '站点正在后台构建。');
+
+        if (publishStatus === 'published') {
+            workspaceStatus = 'published';
         }
-        if (activeOp === 'build' && activeStatus === 'error') {
-            return make('失败', 'text-bg-danger', activeMessage || '站点构建失败，请重试。');
-        }
-        if (workspaceStatus === 'published') {
-            return make('已发布', 'text-bg-success', '站点已发布。');
-        }
-        if (workspaceStatus === 'can_publish' || workspaceStatus === 'editing') {
-            return make('可发布', 'text-bg-success', '站点内容已就绪，可继续编辑或发布。');
-        }
-        if (workspaceStatus === 'building' || workspaceStatus === 'publishing') {
-            return make('处理中', 'text-bg-primary', activeMessage || '后台正在处理构建或发布任务。');
-        }
-        return make('待开始', 'text-bg-secondary', '等待第二阶段确认后进入构建。');
 
         if (kind === 'plan') {
-            if (activeOp === 'plan' && activeStatus === 'queued') {
-                return make('排队中', 'text-bg-warning', activeMessage || '第一阶段方案已进入后台队列。');
+            var planContract = readStageContractStatus('plan');
+            var planPresentation = presentationForContractStatus('plan', planContract.status, planContract.queueInfo, messagesByStage.planFailed);
+            if (planPresentation && planContract.status !== 'done') {
+                return planPresentation;
             }
-            if (activeOp === 'plan' && activeStatus === 'running') {
-                return make('生成中', 'text-bg-primary', activeMessage || '第一阶段方案正在后台生成。');
-            }
-            if (activeOp === 'plan' && activeStatus === 'error') {
-                return make('失败', 'text-bg-danger', activeMessage || '第一阶段方案生成失败，请重试。');
-            }
-            if (planConfirmed) {
-                return make('已确认', 'text-bg-success', '第一阶段方案已确认，可继续第二阶段。');
+            if (planContract.status === 'done' || planConfirmed) {
+                return make(labels.confirmed, 'text-bg-success', messagesByStage.planDone);
             }
             if (hasPlanDraft) {
-                return make('待确认', 'text-bg-info', '第一阶段方案已生成，等待确认。');
+                return make(labels.waitingConfirm, 'text-bg-info', messagesByStage.planDraft);
             }
-            return make('待开始', 'text-bg-secondary', '等待生成第一阶段建站方案。');
+            return make(labels.notStarted, 'text-bg-secondary', messagesByStage.planIdle);
         }
 
         if (kind === 'task_plan') {
             if (!planConfirmed) {
-                return make('未解锁', 'text-bg-secondary', '请先确认第一阶段方案。');
+                return make(labels.locked, 'text-bg-secondary', messagesByStage.taskLocked);
             }
-            if (activeOp === 'task_plan' && activeStatus === 'queued') {
-                return make('排队中', 'text-bg-warning', activeMessage || '第二阶段任务方案已进入后台队列。');
+            var taskContract = readStageContractStatus('task_plan');
+            var taskPresentation = presentationForContractStatus('task_plan', taskContract.status, taskContract.queueInfo, messagesByStage.taskFailed);
+            if (taskPresentation && taskContract.status !== 'done') {
+                return taskPresentation;
             }
-            if (activeOp === 'task_plan' && activeStatus === 'running') {
-                return make('生成中', 'text-bg-primary', activeMessage || '第二阶段任务方案正在后台生成。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'error') {
-                return make('失败', 'text-bg-danger', activeMessage || '第二阶段任务方案生成失败，请重试。');
+            if (taskContract.status === 'done') {
+                hasTaskPlanDraft = true;
             }
             if (taskPlanConfirmed) {
-                return make('已确认', 'text-bg-success', '第二阶段任务方案已确认，可进入构建。');
+                return make(labels.confirmed, 'text-bg-success', messagesByStage.taskDone);
             }
             if (hasTaskPlanDraft) {
-                return make('待确认', 'text-bg-info', '第二阶段任务方案已生成，等待确认。');
+                return make(labels.waitingConfirm, 'text-bg-info', messagesByStage.taskDraft);
             }
-            return make('待开始', 'text-bg-secondary', '等待生成第二阶段任务方案。');
+            return make(labels.notStarted, 'text-bg-secondary', messagesByStage.taskIdle);
         }
 
         if (!taskPlanConfirmed) {
-            return make('未解锁', 'text-bg-secondary', '请先确认第二阶段任务方案。');
+            return make(labels.locked, 'text-bg-secondary', messagesByStage.buildLocked);
         }
-        if (activeOp === 'build' && activeStatus === 'queued') {
-            return make('排队中', 'text-bg-warning', activeMessage || '站点构建已进入后台队列。');
-        }
-        if (activeOp === 'build' && activeStatus === 'running') {
-            return make('构建中', 'text-bg-primary', activeMessage || '站点正在后台构建。');
-        }
-        if (activeOp === 'build' && activeStatus === 'error') {
-            return make('失败', 'text-bg-danger', activeMessage || '站点构建失败，请重试。');
+        var buildContract = readStageContractStatus('build');
+        var buildPresentation = presentationForContractStatus('build', buildContract.status, buildContract.queueInfo, messagesByStage.buildFailed);
+        if (buildPresentation && buildContract.status !== 'done') {
+            return buildPresentation;
         }
         if (workspaceStatus === 'published') {
-            return make('已发布', 'text-bg-success', '站点已发布。');
+            return make(labels.published, 'text-bg-success', messagesByStage.buildPublished);
         }
-        if (workspaceStatus === 'can_publish' || workspaceStatus === 'editing') {
-            return make('可发布', 'text-bg-success', '站点内容已就绪，可继续编辑或发布。');
+        if (workspaceStatus === 'can_publish' || workspaceStatus === 'editing' || runtimeTruthyFlag(state.can_publish) || buildContract.status === 'done') {
+            return make(labels.readyPublish, 'text-bg-success', messagesByStage.buildReady);
         }
         if (workspaceStatus === 'building' || workspaceStatus === 'publishing') {
-            return make('处理中', 'text-bg-primary', activeMessage || '后台正在处理构建或发布任务。');
+            return make(labels.processing, 'text-bg-primary', activeMessage || messagesByStage.buildProcessing);
         }
-        return make('待开始', 'text-bg-secondary', '等待第二阶段确认后进入构建。');
+        return make(labels.notStarted, 'text-bg-secondary', messagesByStage.buildIdle);
     }
 
     function renderStageStatusCard(kind, presentation) {
@@ -3191,7 +3217,27 @@
                     previewBridge.resumeWorkspaceStream();
                 }
                 offerRetryForFailedOperation(operation, failurePayload);
+                return;
             }
+            settled = true;
+            var disconnectMessage = messages.sseConnectionInterrupted || <?= \json_encode((string)__('SSE 日志连接中断，已切换为工作台快照轮询；请等待终态或稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            var disconnectApi = resolveWorkspaceApi();
+            if (disconnectApi && typeof disconnectApi.renderQueueUiState === 'function') {
+                disconnectApi.renderQueueUiState(operation, {
+                    operation: operation,
+                    state: 'connection_lost',
+                    status: 'connection_lost',
+                    message: disconnectMessage
+                }, { updateStatus: true });
+            }
+            if (workspaceTerminal && typeof workspaceTerminal.setStatus === 'function') {
+                workspaceTerminal.setStatus('error', disconnectMessage);
+            }
+            toast('warning', disconnectMessage);
+            if (source && typeof source.close === 'function') {
+                source.close();
+            }
+            startDeferredQueueStatePoll(operation);
         };
 
         }, PB_SSE_CONNECT_DELAY_MS);
