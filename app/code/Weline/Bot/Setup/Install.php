@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Bot\Setup;
 
 use Weline\Framework\Database\Db\Ddl\Table;
+use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\InstallInterface;
 
@@ -15,7 +16,7 @@ class Install implements InstallInterface
     /**
      * 安装时创建种子数据
      */
-    public function setup(Setup $setup, \Weline\Framework\Setup\Context $context): void
+    public function setup(Setup $setup, Context $context): void
     {
         // 数据表由 #[Col] 声明式自动创建，这里只添加种子数据
         $this->createDefaultRole($setup);
