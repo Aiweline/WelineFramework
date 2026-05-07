@@ -56,7 +56,7 @@ $tax = $this->getData('tax') ?? 0;
                         <w:hook>WeShop_Cart::frontend::cart::header-before</w:hook>
                         <h1 class="cart-page__title"><?= __('Shopping Cart') ?></h1>
                         <if condition="cartCount > 0">
-                            <p class="cart-page__count"><?= __('%1 items in your cart', $cartCount) ?></p>
+                            <p class="cart-page__count"><?= __('%{1} items in your cart', $cartCount) ?></p>
                         </if>
                         <w:hook>WeShop_Cart::frontend::cart::header-after</w:hook>
                     </div>
