@@ -6,7 +6,9 @@ namespace WeShop\B2B\Controller\Backend\Account;
 
 use WeShop\B2B\Service\AccountService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_B2B::b2b_account_actions', 'B2B trade account actions', 'mdi mdi-account-edit-outline', 'Create and update B2B trade accounts', 'WeShop_B2B::b2b_account')]
 class Save extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Save extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_B2B::b2b_account_save_post', 'Save B2B trade account', 'mdi mdi-content-save', 'Save B2B trade account data')]
     public function post(): string
     {
         $back = (string) $this->request->getParam('back_url', $this->request->getUrlBuilder()->getBackendUrl('*/backend/account'));
