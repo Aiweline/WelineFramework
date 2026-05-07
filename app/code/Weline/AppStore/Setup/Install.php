@@ -84,9 +84,10 @@ class Install implements InstallInterface
             }
         } catch (\Exception $e) {
             // 记录错误但不中断安装
-            Env::log_error('AppStore Install: Failed to add EAV attribute', [
-                'error' => $e->getMessage()
-            ]);
+            Env::log_error(
+                'appstore_install',
+                'AppStore Install: Failed to add EAV attribute: ' . $e->getMessage()
+            );
         }
     }
 }
