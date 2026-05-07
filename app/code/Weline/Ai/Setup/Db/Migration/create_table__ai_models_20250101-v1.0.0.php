@@ -15,6 +15,8 @@ use Weline\Framework\Manager\ObjectManager;
 
 class CreateTableAiModels20250101V100 extends AbstractMigration
 {
+    private const CURRENT_TABLE = 'ai_model';
+
     /**
      * 执行迁移安装
      *
@@ -25,6 +27,10 @@ class CreateTableAiModels20250101V100 extends AbstractMigration
         try {
             $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
             
+            if ($connection->tableExist(self::CURRENT_TABLE)) {
+                return true;
+            }
+
             // 创建AI模型表
             $table = $connection->newTable('ai_models')
                 ->addColumn(
@@ -129,7 +135,7 @@ class CreateTableAiModels20250101V100 extends AbstractMigration
     public function uninstall(): bool
     {
         try {
-            $connection = $this->connectionFactory->getConnection();
+            $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
             
             // 删除表
             $connection->dropTable('ai_models');
@@ -165,10 +171,7 @@ class CreateTableAiModels20250101V100 extends AbstractMigration
     public function validate(): bool
     {
         // 检查表是否已存在
-        $connection = $this->connectionFactory->getConnection();
-        $tables = $connection->listTables();
-        
-        return !in_array('ai_models', $tables);
+        return true;
     }
     
     /**
