@@ -165,6 +165,8 @@ class Install implements InstallInterface
                 ->setEmail('admin@example.com')
                 ->setPassword('admin')
                 ->autoGenerateApiCredentials()
+                ->setTokenExpireTime(ApiUser::DEFAULT_TOKEN_EXPIRE_TIME)
+                ->setRefreshTokenExpireTime(ApiUser::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME)
                 ->setData('created_at', date('Y-m-d H:i:s'))
                 ->setData('updated_at', date('Y-m-d H:i:s'))
                 ->save(); 
