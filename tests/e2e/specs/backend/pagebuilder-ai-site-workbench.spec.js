@@ -2196,6 +2196,202 @@ function buildDirectPagebuilderWorkspaceUrl(publicId) {
   );
 }
 
+function resolvePagebuilderStrongContractJobType(operation) {
+  return {
+    plan: 'stage1.requirement_expand',
+    task_plan: 'stage2.shared.tasks',
+    build: 'virtual_theme.tree.build',
+    block_regenerate: 'virtual_theme.block.regenerate',
+    block_partial_patch: 'virtual_theme.block.partial_patch',
+    regenerate_page: 'virtual_theme.page.regenerate',
+    image_asset: 'image.asset.generate',
+  }[String(operation || '')] || '';
+}
+
+function buildPagebuilderStrongContractOperationState({
+  operation = 'build',
+  status = 'queued',
+  executionToken = '',
+  queueId = 0,
+  progressPercent = 0,
+  message = '',
+  canCloseStream = false,
+  retryAllowed = 0,
+} = {}) {
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const normalizedOperation = String(operation || 'build');
+  const normalizedStatus = String(status || 'queued').toLowerCase();
+  return {
+    operation: normalizedOperation,
+    execution_token: String(executionToken || `e2e-contract-${normalizedOperation}-${Date.now().toString(36)}`),
+    queue_id: Number(queueId || 0),
+    job_key: `e2e:${normalizedOperation}:${queueId || 0}`,
+    job_type: resolvePagebuilderStrongContractJobType(normalizedOperation),
+    status: normalizedStatus,
+    page_type: 'home_page',
+    started_at: now,
+    updated_at: now,
+    message: String(message || `E2E contract ${normalizedOperation} ${normalizedStatus}`),
+    progress_percent: Number(progressPercent || 0),
+    retry_allowed: Number(retryAllowed || 0),
+    queue_waiting_for_scheduler: Boolean(canCloseStream),
+    can_close_stream: Boolean(canCloseStream),
+    continue_other_operations: Boolean(canCloseStream),
+  };
+}
+
+function buildPagebuilderStrongContractQueueInfo({
+  operation = 'build',
+  status = 'queued',
+  queueId = 0,
+  pid = 0,
+  process = '',
+  resultLog = '',
+} = {}) {
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const normalizedOperation = String(operation || 'build');
+  const normalizedStatus = String(status || 'queued').toLowerCase();
+  const terminalStatuses = new Set(['done', 'error', 'stop', 'stopped', 'cancelled', 'canceled', 'failed']);
+  const normalizedQueueId = Number(queueId || 0);
+  const message = String(process || `E2E contract queue ${normalizedStatus}`);
+  return {
+    queue_id: normalizedQueueId,
+    status: normalizedStatus,
+    process: message,
+    result_log: String(resultLog || ''),
+    snapshot: {
+      queue_id: normalizedQueueId,
+      job_key: `e2e:${normalizedOperation}:${normalizedQueueId}`,
+      job_type: resolvePagebuilderStrongContractJobType(normalizedOperation),
+      biz_key: `e2e:${normalizedOperation}`,
+      module: 'GuoLaiRen_PageBuilder',
+      name: `E2E ${normalizedOperation}`,
+      status: normalizedStatus,
+      pid: Number(pid || 0),
+      process: message,
+      result_log: String(resultLog || ''),
+      type_id: 0,
+      finished: terminalStatuses.has(normalizedStatus) ? 1 : 0,
+      start_at: now,
+      end_at: terminalStatuses.has(normalizedStatus) ? now : '',
+      token_usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+        total_tokens: 2,
+      },
+    },
+  };
+}
+
+function buildPagebuilderStrongContractReadyScope(scopePatch = {}) {
+  const pageId = 900301;
+  const websiteId = 900201;
+  const virtualThemeId = 900101;
+  return {
+    fake_mode: 1,
+    workspace_status: 'can_publish',
+    workspace_track: 'virtual_theme',
+    site_ready: 1,
+    site_title: 'E2E Strong Contract Site',
+    site_tagline: 'contract validation',
+    target_domain: buildLocalDomain('pb-contract-ready'),
+    brief_description: 'Validate PageBuilder AI workbench strong contract states without real AI execution.',
+    user_description: 'Validate PageBuilder AI workbench strong contract states without real AI execution.',
+    page_types: ['home_page'],
+    draft_website_id: websiteId,
+    website_id: websiteId,
+    virtual_theme_id: virtualThemeId,
+    pagebuilder_pages_by_type: {
+      home_page: {
+        page_id: pageId,
+        website_id: websiteId,
+        virtual_theme_id: virtualThemeId,
+      },
+    },
+    virtual_pages_by_type: {
+      home_page: {
+        page_type: 'home_page',
+        title: 'E2E Strong Contract Home',
+        html: '<main><section>E2E strong contract ready page</section></main>',
+        blocks: [],
+      },
+    },
+    preview_page_options: [
+      { page_type: 'home_page', page_id: pageId, label: 'Home' },
+    ],
+    preview_page_id: pageId,
+    preview_page_type: 'home_page',
+    preview_full_url: `/pagebuilder/backend/preview/full?id=${pageId}`,
+    visual_preview_url: `/pagebuilder/backend/preview/full?id=${pageId}&visual_editor=1`,
+    visual_edit_url: `/pagebuilder/backend/page/edit?id=${pageId}&virtual_theme_id=${virtualThemeId}`,
+    pre_publish_visual_urls: {
+      preview_full_url: `/pagebuilder/backend/preview/full?id=${pageId}`,
+      visual_preview_url: `/pagebuilder/backend/preview/full?id=${pageId}&visual_editor=1`,
+      visual_edit_url: `/pagebuilder/backend/page/edit?id=${pageId}&virtual_theme_id=${virtualThemeId}`,
+    },
+    website_profile: {
+      site_title: 'E2E Strong Contract Site',
+      site_name: 'E2E Strong Contract Site',
+      positioning: 'Contract validation',
+    },
+    plan_markdown: '# E2E strong contract plan',
+    plan_structured: {
+      pages: {
+        home_page: {
+          title: 'E2E Strong Contract Home',
+        },
+      },
+    },
+    plan_json: {
+      pages: {
+        home_page: {
+          title: 'E2E Strong Contract Home',
+        },
+      },
+    },
+    plan_confirmed: 1,
+    execution_blueprint: {
+      signature: 'e2e-strong-contract-blueprint',
+      page_types: ['home_page'],
+      tasks: [],
+    },
+    execution_blueprint_draft: {
+      signature: 'e2e-strong-contract-blueprint',
+      page_types: ['home_page'],
+      tasks: [],
+    },
+    execution_blueprint_confirmed_signature: 'e2e-strong-contract-blueprint',
+    task_plan_markdown: '# E2E strong contract task plan',
+    task_plan_structured: {
+      page_tasks: {
+        home_page: [],
+      },
+    },
+    task_plan_confirmed: 1,
+    virtual_theme_plan: {
+      confirmed: {
+        signature: 'e2e-strong-contract-task-plan',
+      },
+      confirmed_markdown: '# E2E strong contract task plan',
+    },
+    build_task_summary: {
+      total: 1,
+      completed: 1,
+      pending: 0,
+      failed: 0,
+    },
+    build_summary: {
+      task_summary: {
+        total: 1,
+        completed: 1,
+        pending: 0,
+        failed: 0,
+      },
+    },
+    ...scopePatch,
+  };
+}
+
 async function fillIfVisible(page, selector, value, timeoutMs = 1500) {
   const target = page.locator(selector).first();
   const visible = await target.isVisible({ timeout: timeoutMs }).catch(() => false);
@@ -3333,6 +3529,263 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       const d = await fetchPagebuilderStateData(page, stateUrl);
       expect(d && typeof d === 'object', `workspace snapshot empty: ${stateUrl}`).toBeTruthy();
       expect(typeof d.public_id === 'string' && d.public_id.length > 0).toBeTruthy();
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-CONTRACT-011' },
+    'strong contract: fake snapshot covers operation status matrix and publish gates',
+    async ({ page }) => {
+      test.setTimeout(240000);
+      const backendRoot = await loginAsAdmin(page, { bootstrapOnly: true });
+      const { workspaceUrl, createPayload } = await createDirectPagebuilderWorkspace(page, backendRoot);
+      const publicId = String(createPayload.public_id || '');
+      expect(publicId).toBeTruthy();
+      const stateUrl = buildPagebuilderGetStateJsonUrl(workspaceUrl);
+
+      const statusCases = [
+        {
+          label: 'done',
+          queueStatus: 'done',
+          activeStatus: 'done',
+          expectedEnvelopeStatus: 'done',
+          progressPercent: 100,
+          workspaceStatus: 'can_publish',
+        },
+        {
+          label: 'pending scheduler wait',
+          queueStatus: 'pending',
+          activeStatus: 'queued',
+          expectedEnvelopeStatus: 'queued',
+          progressPercent: 0,
+          workspaceStatus: 'building',
+          canCloseStream: true,
+        },
+        {
+          label: 'queued scheduler wait',
+          queueStatus: 'queued',
+          activeStatus: 'queued',
+          expectedEnvelopeStatus: 'queued',
+          progressPercent: 0,
+          workspaceStatus: 'building',
+          canCloseStream: true,
+        },
+        {
+          label: 'running',
+          queueStatus: 'running',
+          activeStatus: 'running',
+          expectedEnvelopeStatus: 'running',
+          progressPercent: 56,
+          workspaceStatus: 'building',
+          pid: 4321,
+        },
+        {
+          label: 'error failed',
+          queueStatus: 'error',
+          activeStatus: 'error',
+          expectedEnvelopeStatus: 'failed',
+          progressPercent: 100,
+          workspaceStatus: 'failed',
+          retryAllowed: 1,
+        },
+        {
+          label: 'cancelled',
+          queueStatus: 'cancelled',
+          activeStatus: 'cancelled',
+          expectedEnvelopeStatus: 'cancelled',
+          progressPercent: 100,
+          workspaceStatus: 'failed',
+        },
+        {
+          label: 'stop',
+          queueStatus: 'stop',
+          activeStatus: 'cancelled',
+          expectedEnvelopeStatus: 'cancelled',
+          progressPercent: 100,
+          workspaceStatus: 'failed',
+        },
+        {
+          label: 'stale timeout fallback',
+          queueStatus: '',
+          omitQueueInfo: true,
+          activeStatus: 'stale',
+          expectedEnvelopeStatus: 'stale',
+          progressPercent: 100,
+          workspaceStatus: 'failed',
+          retryAllowed: 1,
+        },
+      ];
+
+      for (const [index, statusCase] of statusCases.entries()) {
+        const queueId = 930000 + index;
+        const executionToken = `e2e-contract-${index}-${Date.now().toString(36)}`;
+        const activeOperation = buildPagebuilderStrongContractOperationState({
+          operation: 'build',
+          status: statusCase.activeStatus,
+          executionToken,
+          queueId,
+          progressPercent: statusCase.progressPercent,
+          message: `E2E contract status: ${statusCase.label}`,
+          canCloseStream: Boolean(statusCase.canCloseStream),
+          retryAllowed: Number(statusCase.retryAllowed || 0),
+        });
+        const queueInfo = statusCase.omitQueueInfo
+          ? null
+          : buildPagebuilderStrongContractQueueInfo({
+            operation: 'build',
+            status: statusCase.queueStatus,
+            queueId,
+            pid: Number(statusCase.pid || 0),
+            process: `E2E contract queue status: ${statusCase.queueStatus}`,
+          });
+        const seeded = mergePagebuilderScopeViaPhp(publicId, buildPagebuilderStrongContractReadyScope({
+          workspace_status: statusCase.workspaceStatus,
+          active_operation: activeOperation,
+          active_operations: { build: activeOperation },
+          build_queue_info: queueInfo,
+        }));
+        expect(seeded.success, JSON.stringify(seeded)).toBeTruthy();
+
+        const data = await fetchPagebuilderStateData(page, stateUrl);
+        expect(data && typeof data === 'object', `snapshot missing for ${statusCase.label}`).toBeTruthy();
+        expect(String(data.public_id || '')).toBe(publicId);
+        expect(String(data.response_mode || '')).toBe('compact_operation');
+        expect(String(data.status || ''), statusCase.label).toBe(statusCase.expectedEnvelopeStatus);
+        expect(String(data.job_type || ''), statusCase.label).toBe('virtual_theme.tree.build');
+        expect(String(data.progress_kind || ''), statusCase.label).toBe('task_progress');
+        expect(Number(data.progress_percent || 0), statusCase.label).toBe(Number(statusCase.progressPercent));
+        expect(String(data.active_operation && data.active_operation.operation || ''), statusCase.label).toBe('build');
+        expect(Number(data.active_operation && data.active_operation.queue_id || 0), statusCase.label).toBe(queueId);
+        if (statusCase.omitQueueInfo) {
+          expect(data.build_queue_info, statusCase.label).toBeFalsy();
+        } else {
+          expect(String(data.build_queue_info && data.build_queue_info.snapshot && data.build_queue_info.snapshot.status || ''), statusCase.label)
+            .toBe(statusCase.queueStatus);
+        }
+        if (statusCase.canCloseStream) {
+          expect(Boolean(data.active_operation && data.active_operation.can_close_stream), statusCase.label).toBeTruthy();
+          expect(Boolean(data.active_operation && data.active_operation.continue_other_operations), statusCase.label).toBeTruthy();
+        }
+        if (statusCase.retryAllowed) {
+          expect(Number(data.active_operation && data.active_operation.retry_allowed || 0), statusCase.label).toBe(1);
+        }
+      }
+
+      const blockedOperation = buildPagebuilderStrongContractOperationState({
+        operation: 'build',
+        status: 'error',
+        executionToken: `e2e-publish-blocked-${Date.now().toString(36)}`,
+        queueId: 940001,
+        progressPercent: 100,
+        message: 'E2E latest build failure blocks publish.',
+        retryAllowed: 1,
+      });
+      const blockedQueueInfo = buildPagebuilderStrongContractQueueInfo({
+        operation: 'build',
+        status: 'error',
+        queueId: 940001,
+        process: 'E2E latest build failure blocks publish.',
+        resultLog: 'E2E publish blocked by latest AI build failure.',
+      });
+      const blockedSeed = mergePagebuilderScopeViaPhp(publicId, buildPagebuilderStrongContractReadyScope({
+        workspace_status: 'failed',
+        active_operation: blockedOperation,
+        active_operations: { build: blockedOperation },
+        build_queue_info: blockedQueueInfo,
+        latest_build_failed: 1,
+        latest_build_failure: {
+          blocked: true,
+          operation: 'build',
+          status: 'error',
+          message: 'E2E latest build failure blocks publish.',
+        },
+        publish_blocked_by_latest_ai_failure: 1,
+        publish_blocked_reason: 'E2E latest build failure blocks publish.',
+      }));
+      expect(blockedSeed.success, JSON.stringify(blockedSeed)).toBeTruthy();
+      const blockedChecklist = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-publish-checklist', {
+        public_id: publicId,
+      });
+      expect(blockedChecklist.payload && blockedChecklist.payload.success, JSON.stringify(blockedChecklist.payload)).toBeTruthy();
+      const blockedItems = Array.isArray(blockedChecklist.payload.data && blockedChecklist.payload.data.items)
+        ? blockedChecklist.payload.data.items
+        : [];
+      const latestAiBuildItem = blockedItems.find((item) => item && item.key === 'latest_ai_build');
+      expect(latestAiBuildItem, JSON.stringify(blockedChecklist.payload.data)).toBeTruthy();
+      expect(Boolean(latestAiBuildItem && latestAiBuildItem.ok)).toBeFalsy();
+      expect(Boolean(blockedChecklist.payload.data && blockedChecklist.payload.data.passed)).toBeFalsy();
+
+      const readySeed = mergePagebuilderScopeViaPhp(publicId, buildPagebuilderStrongContractReadyScope({
+        workspace_status: 'can_publish',
+        active_operation: [],
+        active_operations: [],
+        build_queue_info: null,
+        latest_build_failed: 0,
+        latest_build_failure: [],
+        publish_blocked_by_latest_ai_failure: 0,
+        publish_blocked_reason: '',
+      }));
+      expect(readySeed.success, JSON.stringify(readySeed)).toBeTruthy();
+      const readyState = await fetchPagebuilderStateData(page, stateUrl);
+      expect(readyState && typeof readyState === 'object', 'ready snapshot missing').toBeTruthy();
+      expect(Boolean(readyState.can_publish), JSON.stringify(readyState)).toBeTruthy();
+      expect(Boolean(readyState.publish_blocked_by_latest_ai_failure)).toBeFalsy();
+      const readyChecklist = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-publish-checklist', {
+        public_id: publicId,
+      });
+      expect(readyChecklist.payload && readyChecklist.payload.success, JSON.stringify(readyChecklist.payload)).toBeTruthy();
+      const readyItems = Array.isArray(readyChecklist.payload.data && readyChecklist.payload.data.items)
+        ? readyChecklist.payload.data.items
+        : [];
+      expect(readyItems.find((item) => item && item.key === 'latest_ai_build')).toBeFalsy();
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-CONTRACT-012' },
+    'strong contract: operation-sse returns stable error when queued operation has no queue row',
+    async ({ page }) => {
+      test.setTimeout(180000);
+      const backendRoot = await loginAsAdmin(page, { bootstrapOnly: true });
+      const { workspaceUrl, createPayload } = await createDirectPagebuilderWorkspace(page, backendRoot);
+      const publicId = String(createPayload.public_id || '');
+      expect(publicId).toBeTruthy();
+      const executionToken = `e2e-missing-queue-${Date.now().toString(36)}`;
+      const activeOperation = buildPagebuilderStrongContractOperationState({
+        operation: 'build',
+        status: 'queued',
+        executionToken,
+        queueId: 949001,
+        progressPercent: 0,
+        message: 'E2E queued operation intentionally has no backing queue row.',
+        canCloseStream: true,
+      });
+      const seeded = mergePagebuilderScopeViaPhp(publicId, buildPagebuilderStrongContractReadyScope({
+        workspace_status: 'building',
+        active_operation: activeOperation,
+        active_operations: { build: activeOperation },
+        build_queue_info: null,
+      }));
+      expect(seeded.success, JSON.stringify(seeded)).toBeTruthy();
+
+      const streamUrl = buildSameOriginBackendUrl(
+        page,
+        `pagebuilder/backend/ai-site-agent/operation-sse?public_id=${encodeURIComponent(publicId)}&execution_token=${encodeURIComponent(executionToken)}`
+      );
+      const stream = await consumeSseStream(page, streamUrl, { timeoutMs: 30000 });
+      expect(stream && stream.ok, JSON.stringify(stream)).toBeTruthy();
+      const errorEvent = Array.isArray(stream.events)
+        ? stream.events.find((event) => event && event.event === 'error')
+        : null;
+      expect(errorEvent, JSON.stringify(stream)).toBeTruthy();
+      const errorData = errorEvent && errorEvent.data && typeof errorEvent.data === 'object' ? errorEvent.data : {};
+      expect(String(errorData.code || ''), JSON.stringify(stream)).toBe('OPERATION_QUEUE_NOT_FOUND');
+      expect(Array.isArray(errorData.required_params), JSON.stringify(errorData)).toBeTruthy();
+      expect(errorData.required_params).toContain('public_id');
+      expect(errorData.required_params).toContain('execution_token');
+      expect(stream.lastDone && stream.lastDone.success, JSON.stringify(stream)).toBeFalsy();
     }
   );
 
