@@ -6,7 +6,9 @@ namespace WeShop\Order\Controller\Backend\Order;
 
 use WeShop\Order\Service\OrderService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Order::order_management_actions', 'Order actions', 'mdi mdi-receipt-text-edit-outline', 'Update order state', 'WeShop_Order::order_management')]
 class UpdateStatus extends BaseController
 {
     private const DEFAULT_BACK_ROUTE = '*/backend/order';
@@ -16,6 +18,7 @@ class UpdateStatus extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Order::order_management_update_status_post', 'Update order status', 'mdi mdi-swap-horizontal', 'Update order status data')]
     public function post(): string
     {
         $orderId = (int) $this->request->getParam('id', 0);
@@ -48,6 +51,7 @@ class UpdateStatus extends BaseController
         return '';
     }
 
+    #[Acl('WeShop_Order::order_management_update_status_index', 'Open order status route', 'mdi mdi-swap-horizontal-circle', 'Open order status update route')]
     public function index(): string
     {
         return $this->post();

@@ -352,7 +352,7 @@ $checkoutCurrency = strtoupper((string)\w_env('user.currency', 'USD'));
                     <img src="<?= htmlspecialchars((string) ($item['image'] ?? '')) ?>" alt="<?= htmlspecialchars((string) ($item['name'] ?? '')) ?>">
                     <div>
                         <div class="checkout-summary__item-name"><?= htmlspecialchars((string) ($item['name'] ?? '')) ?></div>
-                        <div class="checkout-summary__item-meta"><?= __('Qty: %1', (int) ($item['qty'] ?? 0)) ?></div>
+                        <div class="checkout-summary__item-meta"><?= __('Qty: %{1}', (int) ($item['qty'] ?? 0)) ?></div>
                     </div>
                     <div><?= $this->formatPrice((float) ($item['row_total'] ?? 0)) ?></div>
                 </div>
@@ -617,7 +617,7 @@ $checkoutCurrency = strtoupper((string)\w_env('user.currency', 'USD'));
                     + '<div class="weshop-checkout-payment-detail-title">' + escapeHtml(method.title || method.name || method.code) + '</div>';
 
                 if (method.flow_label) {
-                    html += '<div class="weshop-checkout-payment-detail-meta"><?= __('Payment flow: %1', '__FLOW__') ?>'.replace('__FLOW__', escapeHtml(method.flow_label)) + '</div>';
+                    html += '<div class="weshop-checkout-payment-detail-meta"><?= __('Payment flow: %{1}', '__FLOW__') ?>'.replace('__FLOW__', escapeHtml(method.flow_label)) + '</div>';
                 }
 
                 if (method.checkout_note) {

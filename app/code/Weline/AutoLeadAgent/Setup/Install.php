@@ -409,6 +409,7 @@ class Install implements InstallInterface
         ];
         
         $insertedCount = 0;
+        $now = date('Y-m-d H:i:s');
         foreach ($defaultWebsites as $website) {
             try {
                 $targetWebsiteModel->clear()
@@ -419,6 +420,8 @@ class Install implements InstallInterface
                     ->setData(TargetWebsite::schema_fields_SORT_ORDER, $website['sort_order'])
                     ->setData(TargetWebsite::schema_fields_DESCRIPTION, $website['description'])
                     ->setData(TargetWebsite::schema_fields_ICON_URL, $website['icon_url'])
+                    ->setData(TargetWebsite::schema_fields_CREATED_AT, $now)
+                    ->setData(TargetWebsite::schema_fields_UPDATED_AT, $now)
                     ->save();
                 $insertedCount++;
             } catch (\Throwable $e) {

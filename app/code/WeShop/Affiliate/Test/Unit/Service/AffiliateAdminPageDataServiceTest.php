@@ -61,7 +61,7 @@ class AffiliateAdminPageDataServiceTest extends TestCase
         $affiliateService->expects(self::never())
             ->method('getAffiliateRecord');
 
-        $service = new AffiliateAdminPageDataService($affiliateService);
+        $service = $this->createService($affiliateService);
         $result = $service->getPageData(2, 15, [
             'customer_id' => '123',
             'referral_code' => '  REF ',
@@ -135,12 +135,27 @@ class AffiliateAdminPageDataServiceTest extends TestCase
             ->with(7)
             ->willReturn($affiliateModel);
 
-        $service = new AffiliateAdminPageDataService($affiliateService);
+        $service = $this->createService($affiliateService);
         $result = $service->getPageData(1, 20, [], 7);
 
         $this->assertSame(7, $result['editingRecord']['affiliate_id']);
         $this->assertSame(444, $result['editingRecord']['customer_id']);
         $this->assertSame('REF00000044Z', $result['editingRecord']['referral_code']);
         $this->assertSame('Disabled', $result['editingRecord']['status_label']);
+    }
+
+    private function createService(AffiliateService $affiliateService): AffiliateAdminPageDataService
+    {
+        return new class($affiliateService) extends AffiliateAdminPageDataService {
+            public function getSummary(): array
+            {
+                return [
+                    'total' => 0,
+                    'active' => 0,
+                    'disabled' => 0,
+                    'total_commission' => 0.0,
+                ];
+            }
+        };
     }
 }

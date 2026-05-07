@@ -6,7 +6,9 @@ namespace WeShop\B2B\Controller\Backend\B2bCustomer;
 
 use WeShop\B2B\Service\B2bCustomerService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_B2B::b2b_customer_profile_actions', 'B2B enterprise customer actions', 'mdi mdi-account-edit-outline', 'Create and update B2B enterprise customers', 'WeShop_B2B::b2b_customer_profile')]
 class Save extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Save extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_B2B::b2b_customer_profile_save_post', 'Save B2B enterprise customer', 'mdi mdi-content-save', 'Save B2B enterprise customer data')]
     public function post(): string
     {
         $back = (string) $this->request->getParam('back_url', $this->request->getUrlBuilder()->getBackendUrl('*/backend/b2b-customer'));
