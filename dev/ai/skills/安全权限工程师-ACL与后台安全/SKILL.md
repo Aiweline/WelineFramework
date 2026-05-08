@@ -1,7 +1,7 @@
 ---
 name: 安全权限工程师-ACL与后台安全
 description: Security engineer skill for backend ACL structure, menu visibility control, and administrative access safety.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -73,4 +73,16 @@ This skill owns backend ACL structure, menu visibility rules, and administrative
 - Do not leave source identifiers inconsistent across menu and controller layers.
 - Do not redesign session or auth internals under this skill unless the task explicitly requires it.
 - Do not expose new admin surfaces without validation.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

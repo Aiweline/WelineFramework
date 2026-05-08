@@ -15,7 +15,7 @@ const sourceSkillsDir = resolve(process.cwd(), inputDir);
 const stagingRoot = join(scriptDir, ".skills-sh-publish");
 const stagingSkillsDir = join(stagingRoot, "skills");
 const dryRun = cliArgs.includes("--dry-run");
-const tag = process.env.SKILLS_SH_TAG || "weline-skills-v1.0.0";
+const tag = process.env.SKILLS_SH_TAG || "weline-skills-v1.1.0";
 const githubToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
 const skillSlugMap = new Map([
   ["CI发布工程师-CI与发布门禁", "ci-release-gate"],

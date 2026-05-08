@@ -1,7 +1,7 @@
 ---
 name: E2E自动化工程师-路由与UI冒烟验证
 description: E2E automation engineer skill for route smoke checks, HTTP reachability, and lightweight UI confidence validation.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -72,4 +72,16 @@ This skill performs lightweight route and UI smoke validation. It is optimized f
 - Do not skip route refresh when the route graph changed.
 - Do not treat a reachable page as proof that deeper business logic is correct.
 - Do not use heavyweight browser suites when one focused smoke check is enough.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

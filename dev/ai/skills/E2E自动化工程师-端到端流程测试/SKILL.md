@@ -1,7 +1,7 @@
 ---
 name: E2E自动化工程师-端到端流程测试
 description: E2E automation engineer skill for Playwright-driven flow validation, browser interaction coverage, and end-to-end regression checks.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -72,4 +72,16 @@ This skill validates real user flows through browser automation and route-backed
 - Do not run unsupported Playwright invocation patterns from the wrong directory context.
 - Do not bloat one E2E check into a full unrelated suite unless necessary.
 - Do not hide flaky prerequisites; report them explicitly.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 
