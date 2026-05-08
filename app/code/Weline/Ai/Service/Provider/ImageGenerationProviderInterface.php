@@ -10,9 +10,12 @@ interface ImageGenerationProviderInterface
     /**
      * @return array{
      *     images: array<int, array{url?:string,b64_json?:string,mime_type?:string,revised_prompt?:string}>,
+     *     content?: string,
      *     usage?: array<string,int|float>,
      *     model?: string,
      *     finish_reason?: string,
+     *     request_url?: string,
+     *     request?: array<string,mixed>,
      *     raw?: mixed
      * }
      */

@@ -170,3 +170,7 @@ Weline_Ai/
 **开发完成时间**: 2024年12月
 **版本**: v1.0.0
 **状态**: ✅ 生产就绪
+
+## Test Status
+
+- 2026-05-08: Image provider response normalization and text-to-image timeout policy covered by `ProviderTimeoutPolicyTest` and `ImageGenerationResponseNormalizerTest`.
