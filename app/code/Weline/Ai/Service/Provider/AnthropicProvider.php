@@ -24,9 +24,10 @@ use Weline\Framework\App\Exception;
  * - 错误处理和重试机制
  * - Token使用量统计
  */
-class AnthropicProvider implements ProviderInterface, ModelListingProviderInterface
+class AnthropicProvider implements ProviderInterface, ModelListingProviderInterface, ProviderConnectionTestInterface
 {
     use ModelListingProviderTrait;
+    use ProviderConnectionTestTrait;
 
     /**
      * 最大重试次数
@@ -49,6 +50,26 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
     public function __construct()
     {
         // 无参数构造函数，用于依赖注入兼容性
+    }
+
+    protected function buildVisionConnectionTestParams(AiModel $model, array $params): array
+    {
+        return [
+            'prompt' => '',
+            'params' => [
+                'messages' => [[
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'text', 'text' => 'Describe this image briefly and reply OK if you can read it.'],
+                        ['type' => 'image', 'source' => [
+                            'type' => 'base64',
+                            'media_type' => 'image/png',
+                            'data' => $this->getConnectionTestImageBase64(),
+                        ]],
+                    ],
+                ]],
+            ],
+        ];
     }
 
     /**

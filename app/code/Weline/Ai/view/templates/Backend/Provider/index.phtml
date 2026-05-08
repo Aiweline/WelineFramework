@@ -897,10 +897,12 @@ $this->assign('providerAdd', $providerAdd);
                 throw new Error('models endpoint returned empty list');
             }
             var options = {};
+            window.__welineProviderTestModelMeta = {};
             var defaultModelCode = data.default_model_code || '';
             data.data.forEach(function(model) {
                 var code = model.code || model.value || '';
                 if (code) options[code] = model.label || model.name || code;
+                if (code) window.__welineProviderTestModelMeta[code] = model;
             });
             if (!defaultModelCode) {
                 var optionKeys = Object.keys(options);
@@ -947,6 +949,9 @@ $this->assign('providerAdd', $providerAdd);
         var tcUrl2 = '<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>';
         var payload = { id: id };
         if (modelCode) payload.model_code = modelCode;
+        var selectedMeta = modelCode && window.__welineProviderTestModelMeta ? window.__welineProviderTestModelMeta[modelCode] : null;
+        if (selectedMeta && selectedMeta.primary_modality) payload.primary_modality = selectedMeta.primary_modality;
+        if (selectedMeta && Array.isArray(selectedMeta.capabilities)) payload.capabilities = selectedMeta.capabilities;
         var tcOpts2 = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
         var req2 = window.Weline.Api.request(tcUrl2, tcOpts2);
         req2.then(function(res) {

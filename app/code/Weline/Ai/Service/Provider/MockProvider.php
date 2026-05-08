@@ -22,8 +22,10 @@ use Weline\Ai\Model\AiModel;
  * - 不调用实际的AI API
  * - 返回模拟数据
  */
-class MockProvider implements ProviderInterface
+class MockProvider implements ProviderInterface, ProviderConnectionTestInterface
 {
+    use ProviderConnectionTestTrait;
+
     /**
      * 生成内容
      * 
