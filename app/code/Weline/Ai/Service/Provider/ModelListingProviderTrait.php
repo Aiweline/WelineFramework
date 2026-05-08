@@ -122,6 +122,7 @@ trait ModelListingProviderTrait
             $baseUrl .= '/v1beta';
         }
         if ($providerCode === 'vectorengine' && $baseUrl !== '') {
+            $baseUrl = str_replace('://api.vectorengine.ai', '://api.vectorengine.cn', $baseUrl);
             foreach (['/chat/completions', '/completions', '/embeddings', '/images/generations', '/models'] as $suffix) {
                 if (str_ends_with($baseUrl, $suffix)) {
                     $baseUrl = substr($baseUrl, 0, -strlen($suffix));
@@ -200,6 +201,7 @@ trait ModelListingProviderTrait
                 'description' => $description,
                 'context_window' => $contextKey !== '' ? (int)($item[$contextKey] ?? 0) : 0,
                 'max_tokens' => $maxTokensKey !== '' ? (int)($item[$maxTokensKey] ?? 0) : 0,
+                'capabilities' => $this->resolveRemoteModelCapabilities($item, $id, $name !== '' ? $name : $id, $description),
                 'primary_modality' => $this->resolveRemoteModelPrimaryModality(
                     $item,
                     $id,
@@ -251,6 +253,22 @@ trait ModelListingProviderTrait
 
         $searchText = strtolower($id . ' ' . $name . ' ' . $description);
         if ($this->modelTextContainsAny($searchText, [
+            'vision',
+            'multimodal',
+            'multi-modal',
+            'image-to-text',
+            'image2text',
+            'qwen-vl',
+            'qwen2-vl',
+            'qwen2.5-vl',
+            'glm-4v',
+            '-vl',
+            '_vl',
+            '/vl',
+        ])) {
+            return AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT;
+        }
+        if ($this->modelTextContainsAny($searchText, [
             'embedding',
             'embeddings',
             'embed',
@@ -275,6 +293,8 @@ trait ModelListingProviderTrait
             'dall-e',
             'imagen',
             'flux',
+            'black-forest-labs',
+            'kontext',
             'stable-diffusion',
             'sdxl',
             'seedream',
@@ -296,6 +316,58 @@ trait ModelListingProviderTrait
         }
 
         return AiModel::normalizePrimaryModality($defaultPrimaryModality);
+    }
+
+    /**
+     * @param array<string,mixed> $item
+     * @return array<int,string>
+     */
+    private function resolveRemoteModelCapabilities(array $item, string $id, string $name, string $description): array
+    {
+        $capabilities = [];
+        foreach (['capabilities', 'features', 'supported_features'] as $key) {
+            $value = $item[$key] ?? null;
+            if (is_array($value)) {
+                array_walk_recursive($value, static function (mixed $item) use (&$capabilities): void {
+                    if (is_scalar($item)) {
+                        $capabilities[] = strtolower(trim((string)$item));
+                    }
+                });
+            } elseif (is_scalar($value)) {
+                $capabilities[] = strtolower(trim((string)$value));
+            }
+        }
+
+        $searchText = strtolower($id . ' ' . $name . ' ' . $description . ' ' . implode(' ', $capabilities));
+        if ($this->modelTextContainsAny($searchText, [
+            'vision',
+            'multimodal',
+            'multi-modal',
+            'image-to-text',
+            'image2text',
+            'qwen-vl',
+            'qwen2-vl',
+            'qwen2.5-vl',
+            'glm-4v',
+            '-vl',
+            '_vl',
+            '/vl',
+        ])) {
+            $capabilities[] = AiModel::CAPABILITY_VISION;
+        }
+
+        if ($this->modelTextContainsAny($searchText, [
+            'image-generation',
+            'text-to-image',
+            'text2image',
+            'flux',
+            'seedream',
+            'stable-diffusion',
+        ])) {
+            $capabilities[] = AiModel::CAPABILITY_IMAGE_OUTPUT;
+        }
+
+        return array_values(array_unique(array_filter($capabilities, static fn(string $item): bool => $item !== '')));
     }
 
     private function normalizeRemoteModelCapabilityValue(mixed $value): string
@@ -330,6 +402,9 @@ trait ModelListingProviderTrait
         }
         if (in_array($value, ['embedding', 'embeddings', 'embed', 'vector', 'rerank', 'reranker'], true)) {
             return AiModel::PRIMARY_MODALITY_EMBEDDING;
+        }
+        if (in_array($value, ['vision', 'multimodal', 'multi-modal', 'image2text', 'image_to_text', 'image-to-text'], true)) {
+            return AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT;
         }
         if (in_array($value, ['text2text', 'text_to_text', 'text-to-text', 'chat', 'completion', 'llm', 'language', 'text'], true)) {
             return AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT;
