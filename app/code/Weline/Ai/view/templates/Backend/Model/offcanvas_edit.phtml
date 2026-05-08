@@ -1462,6 +1462,28 @@ if (!empty($displayConfig)) {
 
                         var resultDiv = document.getElementById('testResult');
                         var resultContent = document.getElementById('testResultContent');
+                        var renderTestImages = function(result) {
+                            var images = Array.isArray(result.images) ? result.images : [];
+                            if (!images.length) {
+                                return '';
+                            }
+                            var escapeAttr = function(value) {
+                                return String(value || '')
+                                    .replace(/&/g, '&amp;')
+                                    .replace(/"/g, '&quot;')
+                                    .replace(/</g, '&lt;')
+                                    .replace(/>/g, '&gt;');
+                            };
+                            var items = images.map(function(image) {
+                                var src = image.url || (image.b64_json ? ('data:' + (image.mime_type || 'image/png') + ';base64,' + image.b64_json) : '');
+                                if (!src) {
+                                    return '';
+                                }
+                                src = escapeAttr(src);
+                                return '<div class="col-6"><a href="' + src + '" target="_blank" rel="noopener"><img src="' + src + '" class="img-fluid rounded border" style="max-height: 220px; width: 100%; object-fit: contain; background: #fff;"></a></div>';
+                            }).join('');
+                            return items ? '<div class="row g-2 mt-2">' + items + '</div>' : '';
+                        };
 
                         if (data && data.data && data.data.results) {
                             var r = data.data.results;
@@ -1469,10 +1491,10 @@ if (!empty($displayConfig)) {
                             var p = r.provider_account || {};
                             var sBadge = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
                             var pBadge = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-                            resultContent.innerHTML = '<div class="row g-2"><div class="col-12"><div class="alert alert-' + (s.success ? 'success' : (s.tested ? 'danger' : 'secondary')) + ' py-1 px-2 mb-2"><small class="fw-bold">自配置</small> ' + sBadge + '<br>' + (s.tested ? ('<small class="text-muted">耗时：</small><code>' + (s.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (s.message || '') + '</div>') : '') + '</div><div class="col-12"><div class="alert alert-' + (p.success ? 'success' : (p.tested ? 'danger' : 'secondary')) + ' py-1 px-2 mb-2"><small class="fw-bold">供应商账户</small> ' + pBadge + (p.account_name ? ' <span class="badge bg-info">' + p.account_name + '</span>' : '') + '<br>' + (p.tested ? ('<small class="text-muted">耗时：</small><code>' + (p.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (p.message || '') + '</div>') : '') + '</div></div>';
+                            resultContent.innerHTML = '<div class="row g-2"><div class="col-12"><div class="alert alert-' + (s.success ? 'success' : (s.tested ? 'danger' : 'secondary')) + ' py-1 px-2 mb-2"><small class="fw-bold">自配置</small> ' + sBadge + '<br>' + (s.tested ? ('<small class="text-muted">耗时：</small><code>' + (s.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (s.message || '') + renderTestImages(s) + '</div>') : '') + '</div><div class="col-12"><div class="alert alert-' + (p.success ? 'success' : (p.tested ? 'danger' : 'secondary')) + ' py-1 px-2 mb-2"><small class="fw-bold">供应商账户</small> ' + pBadge + (p.account_name ? ' <span class="badge bg-info">' + p.account_name + '</span>' : '') + '<br>' + (p.tested ? ('<small class="text-muted">耗时：</small><code>' + (p.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (p.message || '') + renderTestImages(p) + '</div>') : '') + '</div></div>';
                             try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
                         } else if (data.success) {
-                            resultContent.innerHTML = '<div class="alert alert-success py-1 px-2 mb-2"><small><strong>成功!</strong> ' + data.message + '</small></div>';
+                            resultContent.innerHTML = '<div class="alert alert-success py-1 px-2 mb-2"><small><strong>成功!</strong> ' + data.message + '</small>' + renderTestImages(data) + '</div>';
                             try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
                         } else {
                             resultContent.innerHTML = '<div class="alert alert-danger py-1 px-2 mb-2"><small><strong>失败!</strong> ' + data.message + '</small></div>';

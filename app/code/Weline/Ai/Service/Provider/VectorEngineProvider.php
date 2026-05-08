@@ -24,12 +24,16 @@ class VectorEngineProvider extends OpenAiProvider
     {
         $modelCode = (string)$model->getModelCode();
         if (
-            $model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE)
-            || $this->isImageModelCode($modelCode)
+            !$this->isVisionModel($model)
+            && (
+                $model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE)
+                || $this->isImageModelCode($modelCode)
+            )
         ) {
             $imageResult = $this->generateImage($model, $prompt, $params);
             return [
                 'content' => 'image generated: ' . count($imageResult['images'] ?? []),
+                'images' => is_array($imageResult['images'] ?? null) ? $imageResult['images'] : [],
                 'usage' => is_array($imageResult['usage'] ?? null) ? $imageResult['usage'] : [],
                 'model' => (string)($imageResult['model'] ?? $modelCode),
                 'finish_reason' => (string)($imageResult['finish_reason'] ?? 'stop'),
@@ -89,6 +93,87 @@ class VectorEngineProvider extends OpenAiProvider
         return $result;
     }
 
+    public function testConnection(AiModel $model, array $params = []): array
+    {
+        $started = microtime(true);
+        $modelCode = (string)$model->getModelCode();
+        if ($model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_EMBEDDING) || $this->isEmbeddingModelCode($modelCode)) {
+            $result = $this->generate($model, 'VectorEngine embedding connection test', array_replace([
+                'input' => 'VectorEngine embedding connection test',
+                'test_mode' => true,
+                'timeout' => 12,
+            ], $params));
+
+            return [
+                'success' => true,
+                'content' => (string)($result['content'] ?? 'embedding generated'),
+                'response' => (string)($result['content'] ?? 'embedding generated'),
+                'images' => is_array($result['images'] ?? null) ? $result['images'] : [],
+                'duration' => round((microtime(true) - $started) * 1000, 2),
+                'model' => (string)($result['model'] ?? $modelCode),
+                'request_url' => (string)($result['request_url'] ?? ''),
+                'raw' => $result['raw'] ?? $result,
+            ];
+        }
+
+        if ($this->isVisionModel($model)) {
+            $result = $this->generateText($model, '', array_replace([
+                'messages' => [[
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'text', 'text' => 'Describe this image briefly and reply OK if you can read it.'],
+                        ['type' => 'image_url', 'image_url' => ['url' => $this->getVisionTestImageDataUrl()]],
+                    ],
+                ]],
+                'temperature' => 0,
+                'max_tokens' => 64,
+                'test_mode' => true,
+                'timeout' => 20,
+            ], $params));
+
+            $content = trim((string)($result['content'] ?? ''));
+            if ($content === '') {
+                throw new Exception(__('VectorEngine 鍥炬枃妯″瀷娴嬭瘯鍝嶅簲涓虹┖'));
+            }
+
+            return [
+                'success' => true,
+                'content' => $content,
+                'response' => $content,
+                'images' => is_array($result['images'] ?? null) ? $result['images'] : [],
+                'duration' => round((microtime(true) - $started) * 1000, 2),
+                'model' => (string)($result['model'] ?? $modelCode),
+                'request_url' => (string)($result['request_url'] ?? ''),
+                'raw' => $result['raw'] ?? $result,
+            ];
+        }
+
+        if ($model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE) || $this->isImageModelCode($modelCode)) {
+            $result = $this->generateImage($model, 'Create a simple 1:1 test image with the word OK on a clean background.', array_replace([
+                'test_mode' => true,
+                'timeout' => 30,
+                'response_modalities' => ['TEXT', 'IMAGE'],
+            ], $params));
+            $images = is_array($result['images'] ?? null) ? $result['images'] : [];
+            if ($images === []) {
+                throw new Exception('VectorEngine image test returned no image.');
+            }
+
+            return [
+                'success' => true,
+                'content' => 'image generated: ' . $modelCode,
+                'response' => 'image generated: ' . $modelCode,
+                'images' => $images,
+                'duration' => round((microtime(true) - $started) * 1000, 2),
+                'model' => (string)($result['model'] ?? $modelCode),
+                'request_url' => (string)($result['request_url'] ?? ''),
+                'raw' => $result['raw'] ?? $result,
+            ];
+        }
+
+        return parent::testConnection($model, $params);
+    }
+
     public function generateImage(AiModel $model, string $prompt, array $params = []): array
     {
         $config = $this->resolveVectorConfig($model, $params);
@@ -98,14 +183,24 @@ class VectorEngineProvider extends OpenAiProvider
         }
 
         $modelCode = (string)($config['model'] ?? $model->getModelCode());
+        if ($this->isGeminiImageModelCode($modelCode)) {
+            return $this->generateGeminiImage($config, $modelCode, $prompt, $params, $apiKey);
+        }
+
         $payload = [
             'model' => $modelCode,
             'prompt' => $prompt,
             'n' => max(1, (int)($params['n'] ?? $params['count'] ?? 1)),
             'size' => (string)($params['size'] ?? $config['image_size'] ?? $config['size'] ?? '1024x1024'),
         ];
+        $responseFormat = $params['response_format'] ?? $config['response_format'] ?? null;
+        if (is_array($responseFormat)) {
+            $payload['response_format'] = $responseFormat;
+        } elseif (is_scalar($responseFormat) && trim((string)$responseFormat) !== '') {
+            $payload['response_format'] = ['type' => trim((string)$responseFormat)];
+        }
+
         foreach ([
-            'response_format' => $params['response_format'] ?? $config['response_format'] ?? 'url',
             'watermark' => $params['watermark'] ?? $config['watermark'] ?? null,
             'prompt_extend' => $params['prompt_extend'] ?? $config['prompt_extend'] ?? null,
             'negative_prompt' => $params['negative_prompt'] ?? $config['negative_prompt'] ?? null,
@@ -127,6 +222,47 @@ class VectorEngineProvider extends OpenAiProvider
         );
 
         return $this->normalizeVectorImageResponse($response, $modelCode, $payload, $requestUrl);
+    }
+
+    /**
+     * VectorEngine proxies Gemini image models through the Google generateContent shape.
+     *
+     * @param array<string,mixed> $config
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function generateGeminiImage(array $config, string $modelCode, string $prompt, array $params, string $apiKey): array
+    {
+        $payload = [
+            'contents' => [
+                [
+                    'role' => 'user',
+                    'parts' => [
+                        ['text' => $prompt],
+                    ],
+                ],
+            ],
+        ];
+
+        $image = $params['image'] ?? $config['image'] ?? null;
+        if (is_string($image) && trim($image) !== '') {
+            $payload['contents'][0]['parts'][] = $this->buildGeminiInlineImagePart($image);
+        }
+
+        $responseMimeType = (string)($params['response_mime_type'] ?? $config['response_mime_type'] ?? '');
+        if ($responseMimeType !== '') {
+            $payload['generationConfig']['responseMimeType'] = $responseMimeType;
+        }
+
+        $requestUrl = $this->resolveGeminiGenerateContentUrl($config, $modelCode);
+        $response = $this->postJson(
+            $requestUrl,
+            $apiKey,
+            $payload,
+            (int)($params['timeout'] ?? $config['timeout'] ?? 120)
+        );
+
+        return $this->normalizeGeminiImageResponse($response, $modelCode, $payload, $requestUrl);
     }
 
     private function generateText(AiModel $model, string $prompt, array $params = []): array
@@ -251,7 +387,7 @@ class VectorEngineProvider extends OpenAiProvider
     {
         $baseUrl = trim((string)($config['embeddings_api_url'] ?? $config['api_url'] ?? $config['base_url'] ?? ''));
         if ($baseUrl === '') {
-            throw new Exception(__('VectorEngine API 基础 URL 不能为空。'));
+            throw new Exception('VectorEngine API base URL is required.');
         }
         $baseUrl = $this->normalizeVectorOpenAiBaseUrl($baseUrl);
         foreach (['/chat/completions', '/completions', '/embeddings', '/images/generations'] as $suffix) {
@@ -271,7 +407,7 @@ class VectorEngineProvider extends OpenAiProvider
     {
         $baseUrl = trim((string)($config['chat_api_url'] ?? $config['api_url'] ?? $config['base_url'] ?? ''));
         if ($baseUrl === '') {
-            throw new Exception(__('VectorEngine API 基础 URL 不能为空。'));
+            throw new Exception('VectorEngine API base URL is required.');
         }
         $baseUrl = $this->normalizeVectorOpenAiBaseUrl($baseUrl);
         if (!str_ends_with($baseUrl, '/chat/completions')) {
@@ -284,7 +420,7 @@ class VectorEngineProvider extends OpenAiProvider
     {
         $baseUrl = trim((string)($config['image_api_url'] ?? $config['api_url'] ?? $config['base_url'] ?? ''));
         if ($baseUrl === '') {
-            throw new Exception(__('VectorEngine API 基础 URL 不能为空。'));
+            throw new Exception('VectorEngine API base URL is required.');
         }
         $baseUrl = $this->normalizeVectorOpenAiBaseUrl($baseUrl);
         if (!str_ends_with($baseUrl, '/images/generations')) {
@@ -323,6 +459,67 @@ class VectorEngineProvider extends OpenAiProvider
         return false;
     }
 
+    private function isGeminiImageModelCode(string $modelCode): bool
+    {
+        $modelCode = strtolower(trim($modelCode));
+        return str_starts_with($modelCode, 'gemini') || str_starts_with($modelCode, 'gemeni');
+    }
+
+    /**
+     * @return array{inline_data:array{mime_type:string,data:string}}
+     */
+    private function buildGeminiInlineImagePart(string $image): array
+    {
+        $mimeType = 'image/png';
+        $data = trim($image);
+        if (preg_match('#^data:([^;]+);base64,(.+)$#', $data, $matches)) {
+            $mimeType = (string)$matches[1];
+            $data = (string)$matches[2];
+        }
+
+        return [
+            'inline_data' => [
+                'mime_type' => $mimeType,
+                'data' => $data,
+            ],
+        ];
+    }
+
+    private function isVisionModel(AiModel $model): bool
+    {
+        if ($model->hasCapability(AiModel::CAPABILITY_VISION)) {
+            return true;
+        }
+
+        $modelCode = strtolower((string)$model->getModelCode());
+        foreach ([
+            'vision',
+            '-vl',
+            '_vl',
+            '/vl',
+            'vl-',
+            'qwen-vl',
+            'qwen2-vl',
+            'qwen2.5-vl',
+            'glm-4v',
+            'gpt-4o',
+            'gpt-4.1',
+            'claude-3',
+            'omni',
+        ] as $needle) {
+            if (str_contains($modelCode, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function getVisionTestImageDataUrl(): string
+    {
+        return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+    }
+
     private function isEmbeddingModelCode(string $modelCode): bool
     {
         $modelCode = strtolower($modelCode);
@@ -337,6 +534,7 @@ class VectorEngineProvider extends OpenAiProvider
     private function normalizeVectorOpenAiBaseUrl(string $baseUrl): string
     {
         $baseUrl = rtrim(trim($baseUrl), '/');
+        $baseUrl = str_replace('://api.vectorengine.ai', '://api.vectorengine.cn', $baseUrl);
         foreach (['/chat/completions', '/completions', '/embeddings', '/images/generations', '/models'] as $suffix) {
             if (str_ends_with($baseUrl, $suffix)) {
                 $baseUrl = substr($baseUrl, 0, -strlen($suffix));
@@ -347,6 +545,31 @@ class VectorEngineProvider extends OpenAiProvider
             $baseUrl .= '/v1';
         }
         return $baseUrl;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function resolveGeminiGenerateContentUrl(array $config, string $modelCode): string
+    {
+        $baseUrl = trim((string)($config['gemini_api_url'] ?? $config['image_api_url'] ?? $config['api_url'] ?? $config['base_url'] ?? ''));
+        if ($baseUrl === '') {
+            throw new Exception('VectorEngine API base URL is required.');
+        }
+        $baseUrl = rtrim(str_replace('://api.vectorengine.ai', '://api.vectorengine.cn', $baseUrl), '/');
+        foreach (['/chat/completions', '/completions', '/embeddings', '/images/generations', '/models'] as $suffix) {
+            if (str_ends_with($baseUrl, $suffix)) {
+                $baseUrl = substr($baseUrl, 0, -strlen($suffix));
+                break;
+            }
+        }
+        if (preg_match('#/v\d+(?:beta)?$#', $baseUrl)) {
+            $baseUrl = preg_replace('#/v\d+(?:beta)?$#', '/v1beta', $baseUrl) ?: $baseUrl;
+        } else {
+            $baseUrl .= '/v1beta';
+        }
+
+        return rtrim($baseUrl, '/') . '/models/' . rawurlencode($modelCode) . ':generateContent';
     }
 
     /**
@@ -376,6 +599,54 @@ class VectorEngineProvider extends OpenAiProvider
             'images' => $images,
             'usage' => is_array($response['usage'] ?? null) ? $response['usage'] : [],
             'model' => (string)($response['model'] ?? $modelCode),
+            'finish_reason' => 'stop',
+            'request_url' => $requestUrl,
+            'request' => $requestData,
+            'raw' => $response,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $response
+     * @param array<string,mixed> $requestData
+     * @return array<string,mixed>
+     */
+    private function normalizeGeminiImageResponse(array $response, string $modelCode, array $requestData, string $requestUrl): array
+    {
+        $images = [];
+        $textParts = [];
+        foreach (is_array($response['candidates'] ?? null) ? $response['candidates'] : [] as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            $content = is_array($candidate['content'] ?? null) ? $candidate['content'] : [];
+            foreach (is_array($content['parts'] ?? null) ? $content['parts'] : [] as $part) {
+                if (!is_array($part)) {
+                    continue;
+                }
+                $inlineData = is_array($part['inlineData'] ?? null)
+                    ? $part['inlineData']
+                    : (is_array($part['inline_data'] ?? null) ? $part['inline_data'] : []);
+                if ($inlineData !== []) {
+                    $data = (string)($inlineData['data'] ?? '');
+                    if ($data !== '') {
+                        $images[] = [
+                            'b64_json' => $data,
+                            'mime_type' => (string)($inlineData['mimeType'] ?? $inlineData['mime_type'] ?? 'image/png'),
+                        ];
+                    }
+                }
+                if (isset($part['text']) && is_scalar($part['text']) && trim((string)$part['text']) !== '') {
+                    $textParts[] = trim((string)$part['text']);
+                }
+            }
+        }
+
+        return [
+            'images' => $images,
+            'content' => implode("\n", $textParts),
+            'usage' => is_array($response['usageMetadata'] ?? null) ? $response['usageMetadata'] : [],
+            'model' => $modelCode,
             'finish_reason' => 'stop',
             'request_url' => $requestUrl,
             'request' => $requestData,
@@ -432,7 +703,7 @@ class VectorEngineProvider extends OpenAiProvider
             throw new Exception('VectorEngine API returned error (URL: ' . $url . '): ' . $message);
         }
         if (!is_array($decoded)) {
-            throw new Exception(__('VectorEngine API 返回的不是 JSON'));
+            throw new Exception('VectorEngine API returned non-JSON response');
         }
 
         return $decoded;
@@ -487,7 +758,7 @@ class VectorEngineProvider extends OpenAiProvider
         }
         if (!is_array($decoded)) {
             $preview = trim(substr((string)$body, 0, 300));
-            throw new Exception(__('VectorEngine API 返回的不是 JSON') . ($preview !== '' ? (': ' . $preview) : ''));
+            throw new Exception('VectorEngine API returned non-JSON response' . ($preview !== '' ? (': ' . $preview) : ''));
         }
 
         return $decoded;

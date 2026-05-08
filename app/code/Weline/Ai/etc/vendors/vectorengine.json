@@ -1,7 +1,7 @@
 {
     "name": "VectorEngine",
     "code": "vectorengine",
-    "base_url": "https://api.vectorengine.ai/v1",
+    "base_url": "https://api.vectorengine.cn/v1",
     "models_prefix": [
         "ve-",
         "gpt-",
