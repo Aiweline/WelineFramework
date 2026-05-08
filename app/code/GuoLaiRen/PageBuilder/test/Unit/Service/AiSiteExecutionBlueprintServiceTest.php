@@ -13,6 +13,7 @@ use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSelectionResolver;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSnapshotBuilder;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
@@ -1728,6 +1729,103 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertNotSame('', (string)($artifacts['structured']['page_plans'][Page::TYPE_HOME]['page_design_plan']['color_layering'] ?? ''));
         self::assertNotSame('', (string)($artifacts['structured']['page_plans'][Page::TYPE_HOME]['blocks'][0]['design_tags']['color_layering'] ?? ''));
         self::assertContains('timeline reveal', $artifacts['structured']['page_plans'][Page::TYPE_ABOUT]['blocks'][0]['design_tags']['motion'] ?? []);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamUsesReferenceImageInsightsBeforeThemePlanning(): void
+    {
+        $calls = [];
+        $aiService = $this->createAiServiceStreamMock();
+        $aiService->expects(self::never())->method('generate');
+        $aiService->expects(self::exactly(4))
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode = null,
+                string $scenarioCode = '',
+                $locale = null,
+                array $params = []
+            ) use (&$calls): void {
+                $calls[] = [
+                    'prompt' => $prompt,
+                    'scenario' => $scenarioCode,
+                    'params' => $params,
+                ];
+                static $streamCall = 0;
+                $streamCall++;
+                $callback(match ($streamCall) {
+                    1 => $this->buildStageOneRequirementExpansionAiResponse(),
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    4 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
+                    default => $this->buildValidAiPlanResponse(),
+                });
+            });
+
+        $referenceInsightService = new class extends AiSiteReferenceImageInsightService {
+            public int $calls = 0;
+
+            public function analyze(array $scope, string $locale = '', string $scenarioCode = self::DEFAULT_SCENARIO_CODE): array
+            {
+                $this->calls++;
+                return [
+                    'summary' => 'Magazine-like layouts with bold imagery.',
+                    'style_keywords' => ['editorial', 'layered composition'],
+                    'color_palette' => ['#112233', '#F0E0D0'],
+                    'layout_cues' => ['Asymmetric grid with focal hero crop'],
+                    'component_cues' => ['Floating cards with overlap'],
+                    'typography_cues' => ['Bold condensed display headings'],
+                    'do_not_use' => ['flat generic SaaS stock look'],
+                ];
+            }
+
+            public function buildSignature(array $scope): string
+            {
+                return 'reference-sig';
+            }
+        };
+
+        $scope = [
+            'site_title' => 'Reference Guided Stage One',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+            'reference_images' => [[
+                'url' => '/pub/media/page-build/reference/moodboard.png',
+                'name' => 'Moodboard',
+                'mime_type' => 'image/png',
+            ]],
+        ];
+        $websiteProfile = [
+            'site_title' => 'Reference Guided Stage One',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ];
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $aiService,
+            null,
+            null,
+            $referenceInsightService
+        );
+        $artifacts = $service->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
+            'staged_generation' => true,
+        ]);
+
+        self::assertSame(1, $referenceInsightService->calls);
+        self::assertSame(
+            'Magazine-like layouts with bold imagery.',
+            (string)($artifacts['derived_scope_patch']['reference_image_insights']['summary'] ?? '')
+        );
+        self::assertSame(
+            'reference-sig',
+            (string)($artifacts['derived_scope_patch']['reference_image_insights_signature'] ?? '')
+        );
+        self::assertStringContainsString(
+            'Magazine-like layouts with bold imagery.',
+            \implode("\n\n", \array_map(static fn(array $call): string => (string)($call['prompt'] ?? ''), $calls))
+        );
     }
 
     public function testBuildPlanArtifactsByAiStreamReusesStageOneCheckpointWithoutRepeatingAiCalls(): void

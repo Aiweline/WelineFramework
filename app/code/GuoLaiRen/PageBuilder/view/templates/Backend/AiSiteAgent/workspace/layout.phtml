@@ -505,6 +505,85 @@
         object-fit: cover;
         border-radius: .5rem;
     }
+    .pb-ai-brand-assets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .75rem;
+        align-items: flex-start;
+    }
+    .pb-ai-brand-asset-card {
+        min-width: 9.5rem;
+        max-width: 11rem;
+        border: 1px solid rgba(148, 163, 184, .35);
+        border-radius: .9rem;
+        background: #fff;
+        padding: .75rem;
+        transition: box-shadow .24s ease, transform .24s ease, border-color .24s ease;
+    }
+    .pb-ai-brand-asset-card.loading {
+        border-color: rgba(59, 130, 246, .45);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .08);
+    }
+    .pb-ai-brand-asset-card.is-updated {
+        animation: pb-ai-brand-asset-flash 1.1s ease;
+    }
+    .pb-ai-brand-asset-frame {
+        position: relative;
+        width: 100%;
+        height: 5.75rem;
+        border-radius: .75rem;
+        overflow: hidden;
+        background: linear-gradient(135deg, rgba(15, 23, 42, .06), rgba(59, 130, 246, .08));
+        border: 1px solid rgba(148, 163, 184, .25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .pb-ai-brand-asset-frame img {
+        max-width: calc(100% - 1rem);
+        max-height: calc(100% - 1rem);
+        object-fit: contain;
+        display: block;
+    }
+    .pb-ai-brand-asset-placeholder {
+        padding: .5rem;
+        text-align: center;
+        color: #64748b;
+        font-size: .78rem;
+        line-height: 1.3;
+    }
+    .pb-ai-brand-asset-spinner {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, .68);
+        backdrop-filter: blur(1.5px);
+    }
+    .pb-ai-brand-asset-card.loading .pb-ai-brand-asset-spinner {
+        display: flex;
+    }
+    .pb-ai-brand-asset-card.loading .pb-ai-brand-asset-frame::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.42) 50%, rgba(255,255,255,0) 100%);
+        transform: translateX(-100%);
+        animation: pb-ai-brand-asset-sheen 1.15s linear infinite;
+    }
+    .pb-ai-brand-asset-status {
+        min-height: 2.2rem;
+    }
+    @keyframes pb-ai-brand-asset-sheen {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(100%); }
+    }
+    @keyframes pb-ai-brand-asset-flash {
+        0% { transform: translateY(0); box-shadow: 0 0 0 rgba(34, 197, 94, 0); }
+        35% { transform: translateY(-1px); box-shadow: 0 0 0 4px rgba(34, 197, 94, .16); }
+        100% { transform: translateY(0); box-shadow: 0 0 0 rgba(34, 197, 94, 0); }
+    }
 </style>
 <?php if ($guidedUi): ?>
 <script type="application/json" id="pb-ai-guided-scope-defaults"><?= htmlspecialchars((string)\json_encode($guidedScopeDefaults, \JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?></script>
@@ -664,18 +743,30 @@
                             <div class="form-text"><?= htmlspecialchars((string)__('默认已选中当前框架语言，可按需切换'), ENT_QUOTES, 'UTF-8') ?></div>
                         </div>
                         <div class="col-12">
-                            <label class="form-label" for="pb-ai-brief-description"><?= htmlspecialchars((string)__('一句话描述你的网站'), ENT_QUOTES, 'UTF-8') ?></label>
-                            <textarea class="form-control" id="pb-ai-brief-description" rows="3"
-                                      placeholder="@lang{描述网站的主题、风格和主要功能，越详细 AI 生成效果越好}"><?= htmlspecialchars($guidedWorkspaceBrief, ENT_QUOTES, 'UTF-8') ?></textarea>
-                        </div>
-                        <div class="col-12">
-                            <div class="border rounded p-3 bg-light-subtle" id="pb-ai-reference-image-panel">
-                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                    <label class="form-label mb-0" for="pb-ai-reference-image-input"><?= htmlspecialchars((string)__('参考图片'), ENT_QUOTES, 'UTF-8') ?></label>
-                                    <span class="small text-muted" id="pb-ai-reference-image-status"><?= htmlspecialchars((string)__('上传视觉参考，帮助 AI 把握网站风格。'), ENT_QUOTES, 'UTF-8') ?></span>
+                            <div class="border rounded p-3 bg-light-subtle">
+                                <div class="row g-3 align-items-stretch">
+                                    <div class="col-12 col-lg-7">
+                                        <label class="form-label" for="pb-ai-brief-description"><?= htmlspecialchars((string)__('一句话描述你的网站'), ENT_QUOTES, 'UTF-8') ?></label>
+                                        <textarea class="form-control h-100" id="pb-ai-brief-description" rows="6"
+                                                  placeholder="@lang{描述网站的主题、风格和主要功能，越详细 AI 生成效果越好}"><?= htmlspecialchars($guidedWorkspaceBrief, ENT_QUOTES, 'UTF-8') ?></textarea>
+                                    </div>
+                                    <div class="col-12 col-lg-5">
+                                        <div class="border border-2 border-dashed rounded p-3 h-100 bg-body"
+                                             id="pb-ai-reference-image-panel"
+                                             aria-label="<?= htmlspecialchars((string)__('参考图片：支持粘贴/拖拽/点击选择'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                                <label class="form-label mb-0" for="pb-ai-reference-image-input"><?= htmlspecialchars((string)__('参考图片（选填）'), ENT_QUOTES, 'UTF-8') ?></label>
+                                                <span class="small text-muted" id="pb-ai-reference-image-status"><?= htmlspecialchars((string)__('上传视觉参考，帮助 AI 把握网站风格。'), ENT_QUOTES, 'UTF-8') ?></span>
+                                            </div>
+                                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                                <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-reference-image-select-btn"><?= htmlspecialchars((string)__('选择图片'), ENT_QUOTES, 'UTF-8') ?></button>
+                                                <span class="small text-muted"><?= htmlspecialchars((string)__('支持拖拽到虚框或直接粘贴截图（Ctrl+V）'), ENT_QUOTES, 'UTF-8') ?></span>
+                                            </div>
+                                            <input type="file" class="form-control form-control-sm d-none" id="pb-ai-reference-image-input" accept="image/png,image/jpeg,image/webp,image/gif">
+                                            <div class="d-flex flex-wrap gap-2 mt-3" id="pb-ai-reference-image-list" aria-live="polite"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <input type="file" class="form-control form-control-sm" id="pb-ai-reference-image-input" accept="image/png,image/jpeg,image/webp,image/gif">
-                                <div class="d-flex flex-wrap gap-2 mt-3" id="pb-ai-reference-image-list" aria-live="polite"></div>
                             </div>
                         </div>
                         <div class="col-12">
@@ -747,13 +838,34 @@
 
                     <?php if ($websiteProfile !== []): ?>
                     <div class="border rounded p-3 mt-3">
-                        <div class="d-flex align-items-center gap-3 mb-2">
-                            <?php if (!empty($websiteProfile['logo'])): ?>
-                                <img src="<?= htmlspecialchars((string)$websiteProfile['logo'], ENT_QUOTES, 'UTF-8') ?>" alt="" style="height:36px;width:auto;">
-                            <?php endif; ?>
-                            <div>
-                                <div class="fw-semibold"><?= htmlspecialchars((string)($websiteProfile['site_title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-                                <div class="text-muted small"><?= htmlspecialchars((string)($websiteProfile['site_tagline'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="d-flex flex-wrap align-items-start gap-3 mb-2">
+                            <div class="pb-ai-brand-assets">
+                                <div class="pb-ai-brand-asset-card" data-brand-asset-role="logo" data-brand-asset-current-url="<?= htmlspecialchars((string)($websiteProfile['logo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <div class="pb-ai-brand-asset-frame" data-brand-asset-frame>
+                                        <img data-brand-asset-image alt=""<?= !empty($websiteProfile['logo']) ? ' src="' . htmlspecialchars((string)$websiteProfile['logo'], ENT_QUOTES, 'UTF-8') . '"' : ' class="d-none"' ?>>
+                                        <div class="pb-ai-brand-asset-placeholder<?= !empty($websiteProfile['logo']) ? ' d-none' : '' ?>" data-brand-asset-placeholder><?= htmlspecialchars((string)__('Logo will appear here'), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="pb-ai-brand-asset-spinner">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>
+                                        </div>
+                                    </div>
+                                    <div class="small fw-semibold mt-2"><?= htmlspecialchars((string)__('Website Logo'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="small text-muted mt-1 pb-ai-brand-asset-status" data-brand-asset-status><?= htmlspecialchars((string)__('Waiting for AI generation'), ENT_QUOTES, 'UTF-8') ?></div>
+                                </div>
+                                <div class="pb-ai-brand-asset-card" data-brand-asset-role="icon" data-brand-asset-current-url="<?= htmlspecialchars((string)($websiteProfile['icon'] ?? $websiteProfile['favicon'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <div class="pb-ai-brand-asset-frame" data-brand-asset-frame>
+                                        <img data-brand-asset-image alt=""<?= !empty($websiteProfile['icon']) || !empty($websiteProfile['favicon']) ? ' src="' . htmlspecialchars((string)($websiteProfile['icon'] ?? $websiteProfile['favicon'] ?? ''), ENT_QUOTES, 'UTF-8') . '"' : ' class="d-none"' ?>>
+                                        <div class="pb-ai-brand-asset-placeholder<?= !empty($websiteProfile['icon']) || !empty($websiteProfile['favicon']) ? ' d-none' : '' ?>" data-brand-asset-placeholder><?= htmlspecialchars((string)__('Title icon will appear here'), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="pb-ai-brand-asset-spinner">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>
+                                        </div>
+                                    </div>
+                                    <div class="small fw-semibold mt-2"><?= htmlspecialchars((string)__('Website Title Icon'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="small text-muted mt-1 pb-ai-brand-asset-status" data-brand-asset-status><?= htmlspecialchars((string)__('Waiting for AI generation'), ENT_QUOTES, 'UTF-8') ?></div>
+                                </div>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="fw-semibold" data-pb-site-title-preview><?= htmlspecialchars((string)($websiteProfile['site_title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="text-muted small" data-pb-site-tagline-preview><?= htmlspecialchars((string)($websiteProfile['site_tagline'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
                             </div>
                         </div>
                     </div>

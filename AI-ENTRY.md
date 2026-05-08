@@ -80,4 +80,5 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 - Module docs: `dev/ai/diagrams/08-module-docs-index.txt`
 - Framework: `CLAUDE.md`
 - Skills: `dev/ai/skills/_index.md`
+- Agent roster: `dev/ai/agent/README.md`
 - Full guide: `dev/ai/AI-开发与测试指南.md`

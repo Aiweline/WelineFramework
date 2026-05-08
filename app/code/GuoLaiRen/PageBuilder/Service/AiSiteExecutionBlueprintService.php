@@ -29,6 +29,7 @@ final class AiSiteExecutionBlueprintService
         private readonly ?AiService $aiService = null,
         private readonly ?AiResponseJsonParser $responseJsonParser = null,
         private readonly ?AiSiteSkillRegistry $skillRegistry = null,
+        private readonly ?AiSiteReferenceImageInsightService $referenceImageInsightService = null,
     ) {
     }
 
@@ -338,8 +339,45 @@ final class AiSiteExecutionBlueprintService
         $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? ''));
         $contentLocale = $this->resolveStageOneContentLocale($scope, $planLocale);
         $scope = \array_replace($scope, ['content_locale' => $contentLocale]);
+        $onScopeCheckpoint = \is_callable($payload['on_stage1_scope_checkpoint'] ?? null) ? $payload['on_stage1_scope_checkpoint'] : null;
         $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
         $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope);
+        $referenceImages = $this->buildReferenceImagePromptList($scope);
+        if ($referenceImages !== []) {
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '检测到参考图片，正在先执行图片理解并提取风格洞察',
+                8,
+                'reference_image_understanding',
+                'start',
+                ['image_total' => \count($referenceImages)]
+            );
+            $referenceImageInsights = $this->analyzeReferenceImagesByAi($scope, $planLocale, $onChunk);
+            if ($referenceImageInsights !== []) {
+                $scope['reference_image_insights'] = $referenceImageInsights;
+                $referenceImageInsightsSignature = $this->getReferenceImageInsightService()->buildSignature($scope);
+                if ($referenceImageInsightsSignature !== '') {
+                    $scope['reference_image_insights_signature'] = $referenceImageInsightsSignature;
+                }
+                $this->persistStageOneScopeCheckpoint(
+                    $onScopeCheckpoint,
+                    [
+                        'reference_image_insights' => $referenceImageInsights,
+                        'reference_image_insights_signature' => (string)($scope['reference_image_insights_signature'] ?? ''),
+                    ],
+                    'reference_image_understanding',
+                    $pageTypes
+                );
+            }
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '参考图片理解完成，继续生成阶段一方案',
+                10,
+                'reference_image_understanding',
+                'done',
+                ['image_total' => \count($referenceImages)]
+            );
+        }
         $oneLineRequirement = $this->resolveStageOneRequirementSeed(
             $scope,
             $websiteProfile,
@@ -621,6 +659,31 @@ final class AiSiteExecutionBlueprintService
             'retryable_ai_failures' => \array_values($retryableFailures),
             'updated_at' => \date('Y-m-d H:i:s'),
         ]);
+    }
+
+    /**
+     * @param callable(array<string, mixed>):void|null $onScopeCheckpoint
+     * @param array<string, mixed> $scopePatch
+     * @param list<string> $pageTypes
+     */
+    private function persistStageOneScopeCheckpoint(
+        ?callable $onScopeCheckpoint,
+        array $scopePatch,
+        string $step,
+        array $pageTypes
+    ): void
+    {
+        if ($onScopeCheckpoint === null || $scopePatch === []) {
+            return;
+        }
+
+        $scopePatch['plan_generation_progress'] = [
+            'step' => $step,
+            'page_types' => \array_values($pageTypes),
+            'failed_count' => 0,
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+        $onScopeCheckpoint($scopePatch);
     }
 
     /**
@@ -1678,6 +1741,7 @@ final class AiSiteExecutionBlueprintService
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Site summary: ' . ($siteSummary !== '' ? $siteSummary : '-'),
+            'Reference image insights (if any): ' . $this->buildReferenceImageInsightsPromptText($scope),
             'Schema:',
             '{"requirement_expansion":{"original_brief":"string","expanded_brief":"string","planning_summary":"string","site_goal":"string","target_users":["string"],"business_context":"string","content_direction":"string","conversion_strategy":"string","page_strategy":[{"page_type":"string","intent":"string","content_focus":"string","conversion_role":"string"}],"technical_direction":["string"]}}',
             'Hard rules: expanded_brief must be a larger concrete version of the user requirement; page_strategy must cover every selected page type; all values must be customer-visible planning content, not prompt instructions.',
@@ -1716,6 +1780,7 @@ final class AiSiteExecutionBlueprintService
             'Language rule: Header/Footer labels, CTA labels, link labels, media text, and other customer-visible website copy MUST use Website content locale. Do not use Plan locale for visible website copy unless both locales are identical.',
             'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
             'Brief: ' . ($brief !== '' ? $brief : '-'),
+            'Reference image insights (must be honored before theme decisions): ' . $this->buildReferenceImageInsightsPromptText($scope),
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Schema:',
@@ -1766,6 +1831,7 @@ final class AiSiteExecutionBlueprintService
             'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
             'Confirmed requirement expansion (non-negotiable): ' . $requirementExpansion,
             'Shared theme_design (non-negotiable): ' . $themeDesign,
+            'Reference image insights (non-negotiable when present): ' . $this->buildReferenceImageInsightsPromptText($scope),
             'Theme-level page overview for this page (use before choosing blocks): ' . $pageTypeOverview,
             'Confirmed shared Header/Footer blocks (must frame this page when displayed): ' . $sharedComponents,
             'Baseline page shape to improve, keep compatible keys: ' . $baselinePage,
@@ -2788,31 +2854,36 @@ final class AiSiteExecutionBlueprintService
 
     /**
      * @param array<string,mixed> $scope
-     * @return list<array{name:string,url:string,mime_type:string}>
+     * @return list<array{name:string,url:string,path:string,mime_type:string}>
      */
     private function buildReferenceImagePromptList(array $scope): array
     {
-        $images = \is_array($scope['reference_images'] ?? null) ? $scope['reference_images'] : [];
-        $out = [];
-        foreach ($images as $image) {
-            if (!\is_array($image)) {
-                continue;
-            }
-            $url = \trim((string)($image['url'] ?? ''));
-            if ($url === '') {
-                continue;
-            }
-            $out[] = [
-                'name' => \trim((string)($image['name'] ?? 'reference image')),
-                'url' => $url,
-                'mime_type' => \trim((string)($image['mime_type'] ?? '')),
-            ];
-            if (\count($out) >= 6) {
-                break;
-            }
+        return $this->getReferenceImageInsightService()->buildReferenceImagePromptList($scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param callable(string):void|null $onChunk
+     * @return array<string, mixed>
+     */
+    private function analyzeReferenceImagesByAi(array $scope, string $planLocale, ?callable $onChunk = null): array
+    {
+        unset($onChunk);
+        return $this->getReferenceImageInsightService()->analyze($scope, $planLocale);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function buildReferenceImageInsightsPromptText(array $scope): string
+    {
+        $insights = \is_array($scope['reference_image_insights'] ?? null) ? $scope['reference_image_insights'] : [];
+        if ($insights === []) {
+            return '-';
         }
 
-        return $out;
+        $encoded = \json_encode($insights, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        return \is_string($encoded) && $encoded !== '' ? $encoded : '-';
     }
 
     /**
@@ -6674,6 +6745,8 @@ final class AiSiteExecutionBlueprintService
             'site_tagline' => (string)($scope['site_tagline'] ?? $websiteProfile['site_tagline'] ?? ''),
             'theme_style' => $structured['theme_style'] ?? [],
             'palette' => $structured['palette'] ?? [],
+            'reference_image_insights' => \is_array($scope['reference_image_insights'] ?? null) ? $scope['reference_image_insights'] : [],
+            'reference_image_insights_signature' => (string)($scope['reference_image_insights_signature'] ?? ''),
             'theme_design' => $this->extractStageOneThemeDesign(
                 \is_array($structured['shared_plan']['theme_design'] ?? null)
                     ? $structured['shared_plan']['theme_design']
@@ -12182,6 +12255,11 @@ final class AiSiteExecutionBlueprintService
     private function getAiService(): AiService
     {
         return $this->aiService ?? ObjectManager::getInstance(AiService::class);
+    }
+
+    private function getReferenceImageInsightService(): AiSiteReferenceImageInsightService
+    {
+        return $this->referenceImageInsightService ?? ObjectManager::getInstance(AiSiteReferenceImageInsightService::class);
     }
 
     private function isEnglishLocale(string $locale): bool
