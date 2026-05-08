@@ -2,8 +2,6 @@
 
 namespace Weline\I18n\Model;
 
-use Symfony\Component\Intl\Countries;
-use Symfony\Component\Intl\Locales;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -16,6 +14,15 @@ use Weline\I18n\Service\TranslationCollector;
 class I18n
 {
     private const MODULE_COLLECTION_FIBER_LIMIT = 6;
+    private const DEFAULT_LOCALE_CODE = 'zh_Hans_CN';
+    private const FALLBACK_LOCALE_CODES = [
+        self::DEFAULT_LOCALE_CODE,
+        'en_US',
+    ];
+    private const FALLBACK_COUNTRY_CODES = [
+        'CN',
+        'US',
+    ];
 
     private static array $local_words = [];
     private Reader $reader;
@@ -28,47 +35,92 @@ class I18n
         $this->i18nCache = w_cache('i18n');
     }
 
+    public function getLocaleCodes(): array
+    {
+        if ($this->hasSymfonyLocales()) {
+            try {
+                return \Symfony\Component\Intl\Locales::getLocales();
+            } catch (\Throwable) {
+            }
+        }
+
+        return array_values(array_unique(array_merge(
+            self::FALLBACK_LOCALE_CODES,
+            $this->getInstalledLanguagePackCodes()
+        )));
+    }
+
+    public function getLocaleNames(string $displayLocale = 'zh_Hans_CN'): array
+    {
+        if (!$this->hasSymfonyLocales() || !extension_loaded('intl')) {
+            $displayLocale = 'en';
+        }
+
+        if ($this->hasSymfonyLocales()) {
+            try {
+                return \Symfony\Component\Intl\Locales::getNames($displayLocale);
+            } catch (\Throwable) {
+                try {
+                    return \Symfony\Component\Intl\Locales::getNames('en');
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        $names = [];
+        foreach ($this->getLocaleCodes() as $localeCode) {
+            $names[$localeCode] = $this->getLocaleDisplayName($localeCode, $displayLocale);
+        }
+        return $names;
+    }
+
+    protected function hasSymfonyLocales(): bool
+    {
+        return class_exists(\Symfony\Component\Intl\Locales::class);
+    }
+
+    protected function hasSymfonyCountries(): bool
+    {
+        return class_exists(\Symfony\Component\Intl\Countries::class);
+    }
+
     public function getLocalByCode(string $locale_code): string
     {
         if ($data = $this->i18nCache->get($locale_code)) {
             return $data;
         }
-        $locales = Locales::getLocales();
+        $locales = $this->getLocaleCodes();
         foreach ($locales as $locale) {
             if (strtolower($locale_code) === strtolower($locale)) {
                 $this->i18nCache->set($locale_code, $locale);
                 return $locale;
             }
         }
-        $this->i18nCache->set($locale_code, 'zh_Hans_CN');
-        return 'zh_Hans_CN';
+        $this->i18nCache->set($locale_code, self::DEFAULT_LOCALE_CODE);
+        return self::DEFAULT_LOCALE_CODE;
     }
 
     public function getLocals(string $lang_code = 'zh_Hans_CN'): array
     {
         // 未安装 intl 时 Symfony Polyfill 仅支持 en，传 zh_Hans_CN 会抛错，降级为 en
-        if (!extension_loaded('intl')) {
+        if (!$this->hasSymfonyLocales() || !extension_loaded('intl')) {
             $lang_code = 'en';
         }
-        $cache_key = 'getLocals' . $lang_code;
+        $cache_key = 'getLocals' . $lang_code . ($this->hasSymfonyLocales() ? '_intl' : '_fallback');
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
         }
-        $locals = Locales::getNames($lang_code);
+        $locals = $this->getLocaleNames($lang_code);
         $this->i18nCache->set($cache_key, $locals);
         return $locals;
     }
 
     public function getLocaleName(string $locale_code, string $displace_locale_code = 'zh_Hans_CN'): string
     {
-        if (!extension_loaded('intl')) {
+        if (!$this->hasSymfonyLocales() || !extension_loaded('intl')) {
             $displace_locale_code = 'en';
         }
-        $name = $locale_code;
-        if (Locales::exists($locale_code)) {
-            $name = Locales::getName($locale_code, $displace_locale_code);
-        }
-        return $name;
+        return $this->getLocaleDisplayName($locale_code, $displace_locale_code);
     }
 
     public function getLocalesWithFlags(int $width = 24, int $height = 18, string $lang_code = 'zh_Hans_CN', bool $installed = true)
@@ -92,7 +144,7 @@ class I18n
 
         $locals = [];
         $lang_locals = $this->getLocals($lang_code);
-        $allLocales = Locales::getLocales();
+        $allLocales = $this->getLocaleCodes();
         
         foreach ($allLocales as $locale) {
             if ($installed && !in_array($locale, $install_packs)) {
@@ -140,7 +192,7 @@ class I18n
 
         $locals = [];
         $lang_locals = $this->getLocals();
-        $allLocales = Locales::getLocales();
+        $allLocales = $this->getLocaleCodes();
         
         // 收集所有需要获取的国家代码
         $countryCodes = [];
@@ -660,20 +712,20 @@ class I18n
 
     public function getCountry(string $country_code = 'CN'): array
     {
-        if (!Countries::exists($country_code)) {
+        if (!$this->countryExists($country_code)) {
             return [];
         }
 
         return [
             'code' => $country_code,
-            'name' => Countries::getName($country_code),
+            'name' => $this->getCountryDisplayName($country_code),
             'locales' => $this->getLocalesForCountry($country_code)
         ];
     }
 
     private function getLocalesForCountry(string $countryCode): array
     {
-        $locales = Locales::getLocales();
+        $locales = $this->getLocaleCodes();
         $countryLocales = [];
         $countryCode = strtoupper($countryCode);
         
@@ -697,7 +749,117 @@ class I18n
 
     public function localeExists(string $locale_code): bool
     {
-        return Locales::exists($locale_code);
+        return $this->localeCodeExists($locale_code);
+    }
+
+    private function localeCodeExists(string $localeCode): bool
+    {
+        if ($this->hasSymfonyLocales()) {
+            try {
+                return \Symfony\Component\Intl\Locales::exists($localeCode);
+            } catch (\Throwable) {
+            }
+        }
+
+        return in_array($localeCode, $this->getLocaleCodes(), true);
+    }
+
+    private function getLocaleDisplayName(string $localeCode, string $displayLocaleCode = 'zh_Hans_CN'): string
+    {
+        if ($this->hasSymfonyLocales()) {
+            try {
+                if (\Symfony\Component\Intl\Locales::exists($localeCode)) {
+                    return (string)\Symfony\Component\Intl\Locales::getName($localeCode, $displayLocaleCode);
+                }
+            } catch (\Throwable) {
+                try {
+                    return (string)\Symfony\Component\Intl\Locales::getName($localeCode, 'en');
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        if (class_exists(\Locale::class)) {
+            $name = \Locale::getDisplayName(str_replace('_', '-', $localeCode), str_replace('_', '-', $displayLocaleCode));
+            if (is_string($name) && $name !== '') {
+                return $name;
+            }
+        }
+
+        return $localeCode;
+    }
+
+    private function countryExists(string $countryCode): bool
+    {
+        $countryCode = strtoupper($countryCode);
+        if ($this->hasSymfonyCountries()) {
+            try {
+                return \Symfony\Component\Intl\Countries::exists($countryCode);
+            } catch (\Throwable) {
+            }
+        }
+
+        return preg_match('/^[A-Z]{2}$/', $countryCode) === 1;
+    }
+
+    private function getCountryDisplayName(string $countryCode, string $displayLocaleCode = 'en'): string
+    {
+        $countryCode = strtoupper($countryCode);
+        if ($this->hasSymfonyCountries()) {
+            try {
+                return (string)\Symfony\Component\Intl\Countries::getName($countryCode, $displayLocaleCode);
+            } catch (\Throwable) {
+                try {
+                    return (string)\Symfony\Component\Intl\Countries::getName($countryCode, 'en');
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        if (class_exists(\Locale::class)) {
+            $name = \Locale::getDisplayRegion('und_' . $countryCode, str_replace('_', '-', $displayLocaleCode));
+            if (is_string($name) && $name !== '') {
+                return $name;
+            }
+        }
+
+        return $countryCode;
+    }
+
+    private function getFallbackCountryCodes(): array
+    {
+        $countryCodes = self::FALLBACK_COUNTRY_CODES;
+        foreach ($this->getLocaleCodes() as $localeCode) {
+            $countryCode = $this->getCountryCodeFromLocale($localeCode);
+            if ($countryCode) {
+                $countryCodes[] = strtoupper($countryCode);
+            }
+        }
+        return array_values(array_unique($countryCodes));
+    }
+
+    private function getInstalledLanguagePackCodes(): array
+    {
+        $languagePackRoot = Env::path_LANGUAGE_PACK;
+        if (!is_dir($languagePackRoot)) {
+            return [];
+        }
+
+        $separator = defined('DS') ? DS : DIRECTORY_SEPARATOR;
+        $paths = glob($languagePackRoot . '*' . $separator . '*', GLOB_ONLYDIR);
+        if ($paths === false) {
+            return [];
+        }
+
+        $localeCodes = [];
+        foreach ($paths as $path) {
+            $pathParts = explode($separator, $path);
+            $localeCode = (string)array_pop($pathParts);
+            if ($localeCode !== '') {
+                $localeCodes[] = $localeCode;
+            }
+        }
+        return $localeCodes;
     }
 
     public function getLocalsWords(bool $cache = true, ?string $moduleName = null): array
@@ -732,7 +894,7 @@ class I18n
             }
         }
         
-        $locals_names = extension_loaded('intl') ? Locales::getNames() : Locales::getNames('en');
+        $locals_names = $this->getLocaleNames('en');
         if (!isset($locals_words)) {
             $locals_words = [];
         }
@@ -1190,7 +1352,26 @@ class I18n
 
     public function getCountries(string $display_local_code = 'zh_Hans_CN'): array
     {
-        return Countries::getNames($display_local_code);
+        if (!$this->hasSymfonyCountries() || !extension_loaded('intl')) {
+            $display_local_code = 'en';
+        }
+
+        if ($this->hasSymfonyCountries()) {
+            try {
+                return \Symfony\Component\Intl\Countries::getNames($display_local_code);
+            } catch (\Throwable) {
+                try {
+                    return \Symfony\Component\Intl\Countries::getNames('en');
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        $countries = [];
+        foreach ($this->getFallbackCountryCodes() as $countryCode) {
+            $countries[$countryCode] = $this->getCountryDisplayName($countryCode, $display_local_code);
+        }
+        return $countries;
     }
 
     public function getActiveLocalsModel(string $target_local = 'zh_Hans_CN'): Locals
@@ -1215,7 +1396,7 @@ class I18n
 
         try {
             $countryCode = $this->getCountryCodeFromLocale($localeCode);
-            if ($countryCode && Countries::exists($countryCode)) {
+            if ($countryCode && $this->countryExists($countryCode)) {
                 $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
                 $country = $countriesModel->reset()
                     ->where(\Weline\I18n\Model\Countries::schema_fields_CODE, $countryCode)
