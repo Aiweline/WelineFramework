@@ -1079,7 +1079,9 @@ class Model extends BackendController
                             $testedAccount = $testAccount;
                             $results['provider_account']['success'] = true;
                             $results['provider_account']['message'] = __('供应商账户测试成功');
-                            $results['provider_account']['response'] = $testResult['message'] ?? __('连接成功');
+                            // 注意：AccountService::testConnection 会返回真实的测试输出到 response 字段。
+                            // 之前这里误用 message（固定“连接测试成功”），会导致非文生图/非图片模态只看到“连通了”。
+                            $results['provider_account']['response'] = $testResult['response'] ?? $testResult['content'] ?? ($testResult['message'] ?? __('连接成功'));
                             $results['provider_account']['duration'] = $duration;
                             $results['provider_account']['account_name'] = $testAccount->getData('account_name');
                             $results['provider_account']['account_id'] = $testAccount->getId();
