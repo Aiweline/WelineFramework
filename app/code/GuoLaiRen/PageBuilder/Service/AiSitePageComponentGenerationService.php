@@ -3097,6 +3097,17 @@ class AiSitePageComponentGenerationService
     {
         foreach ($this->extractManifestSlots($scope) as $slot) {
             $slotType = \trim((string)($slot['slot_type'] ?? ''));
+            $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+            if ($slotType !== 'logo_icon' || !\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)) {
+                continue;
+            }
+            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($finalUrl !== '') {
+                return $finalUrl;
+            }
+        }
+        foreach ($this->extractManifestSlots($scope) as $slot) {
+            $slotType = \trim((string)($slot['slot_type'] ?? ''));
             if (!\in_array($slotType, ['logo_icon', 'trust_brand_image'], true)) {
                 continue;
             }

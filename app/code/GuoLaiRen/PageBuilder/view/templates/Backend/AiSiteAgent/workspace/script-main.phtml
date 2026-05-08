@@ -1984,6 +1984,7 @@
         if (window.__pbPhase2TaskProgress && typeof window.__pbPhase2TaskProgress.syncFromWorkspaceState === 'function') {
             window.__pbPhase2TaskProgress.syncFromWorkspaceState(workspaceState);
         }
+        syncBrandIdentityPanelsFromWorkspaceState(workspaceState);
         syncAssetPanelFromWorkspaceState(workspaceState);
         syncReferenceImagePanelFromWorkspaceState(workspaceState);
         syncPublishStageEntryFromWorkspaceState(workspaceState);
@@ -2683,6 +2684,14 @@
             : ((scope.asset_manifest && typeof scope.asset_manifest === 'object') ? scope.asset_manifest : {});
     }
 
+    function readWebsiteProfileFromWorkspaceState(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        return (state.website_profile && typeof state.website_profile === 'object')
+            ? state.website_profile
+            : ((scope.website_profile && typeof scope.website_profile === 'object') ? scope.website_profile : {});
+    }
+
     function readAssetSlotValue(slot, keys) {
         for (var i = 0; i < keys.length; i += 1) {
             var key = keys[i];
@@ -2691,6 +2700,136 @@
             }
         }
         return '';
+    }
+
+    function normalizeAssetStatus(status) {
+        return String(status || '').trim().toLowerCase();
+    }
+
+    function slotMatchesIdentityRole(slot, role) {
+        var field = readAssetSlotValue(slot, ['field']).toLowerCase();
+        var kind = readAssetSlotValue(slot, ['kind']).toLowerCase();
+        var slotId = readAssetSlotValue(slot, ['slot_id', 'id', 'key']).toLowerCase();
+        var label = readAssetSlotValue(slot, ['label']).toLowerCase();
+        if (role === 'logo') {
+            return ['logo', 'logo.image', 'brand.logo'].indexOf(field) !== -1
+                || kind === 'website_logo'
+                || slotId.indexOf('website-logo') !== -1
+                || label.indexOf('website logo') !== -1;
+        }
+        if (role === 'icon') {
+            return ['icon', 'favicon', 'site.icon'].indexOf(field) !== -1
+                || kind === 'site_title_icon'
+                || slotId.indexOf('title-icon') !== -1
+                || slotId.indexOf('favicon') !== -1
+                || label.indexOf('title icon') !== -1
+                || label.indexOf('favicon') !== -1;
+        }
+        return false;
+    }
+
+    function resolveIdentityAssetSlot(workspaceState, role) {
+        var slots = normalizeAssetManifestSlots(readAssetManifestFromWorkspaceState(workspaceState));
+        for (var i = 0; i < slots.length; i += 1) {
+            if (slotMatchesIdentityRole(slots[i], role)) {
+                return slots[i];
+            }
+        }
+        return null;
+    }
+
+    function resolveBrandAssetUrl(profile, slot, role) {
+        var slotUrl = readAssetSlotValue(slot, ['final_url', 'url']);
+        if (slotUrl) {
+            return slotUrl;
+        }
+        if (role === 'logo') {
+            return String((profile && profile.logo) || '').trim();
+        }
+        return String((profile && (profile.icon || profile.favicon)) || '').trim();
+    }
+
+    function isIdentityAssetLoading(slot) {
+        var status = normalizeAssetStatus(readAssetSlotValue(slot, ['status', 'queue_status']));
+        return ['queued', 'generating', 'running'].indexOf(status) !== -1;
+    }
+
+    function resolveIdentityAssetStatusText(role, slot, assetUrl) {
+        var status = normalizeAssetStatus(readAssetSlotValue(slot, ['status', 'queue_status']));
+        var error = readAssetSlotValue(slot, ['error_message', 'error']);
+        if (error) {
+            return error;
+        }
+        if (status === 'queued') {
+            return role === 'logo' ? 'Logo generation queued...' : 'Title icon generation queued...';
+        }
+        if (status === 'generating' || status === 'running') {
+            return role === 'logo' ? 'Generating logo...' : 'Generating title icon...';
+        }
+        if (assetUrl) {
+            return role === 'logo' ? 'Logo auto-saved from AI asset slot.' : 'Title icon auto-saved from AI asset slot.';
+        }
+
+        return role === 'logo' ? 'Waiting for AI logo generation.' : 'Waiting for AI title icon generation.';
+    }
+
+    function syncBrandIdentityPanelsFromWorkspaceState(workspaceState) {
+        var profile = readWebsiteProfileFromWorkspaceState(workspaceState);
+        var scope = workspaceState && workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
+        var siteTitle = String((profile.site_title || scope.site_title || '') || '').trim();
+        var siteTagline = String((profile.site_tagline || scope.site_tagline || '') || '').trim();
+        document.querySelectorAll('[data-pb-site-title-preview]').forEach(function (el) {
+            el.textContent = siteTitle;
+        });
+        document.querySelectorAll('[data-pb-site-tagline-preview]').forEach(function (el) {
+            el.textContent = siteTagline;
+        });
+
+        ['logo', 'icon'].forEach(function (role) {
+            var slot = resolveIdentityAssetSlot(workspaceState, role);
+            var assetUrl = resolveBrandAssetUrl(profile, slot, role);
+            var loading = isIdentityAssetLoading(slot);
+            var statusText = resolveIdentityAssetStatusText(role, slot, assetUrl);
+            var hasError = !!readAssetSlotValue(slot, ['error_message', 'error']);
+            document.querySelectorAll('[data-brand-asset-role="' + role + '"]').forEach(function (card) {
+                var image = card.querySelector('[data-brand-asset-image]');
+                var placeholder = card.querySelector('[data-brand-asset-placeholder]');
+                var status = card.querySelector('[data-brand-asset-status]');
+                var previousUrl = String(card.getAttribute('data-brand-asset-current-url') || '');
+                card.classList.toggle('loading', loading);
+                if (status) {
+                    status.textContent = statusText;
+                    status.classList.remove('text-danger', 'text-success', 'text-muted');
+                    status.classList.add(hasError ? 'text-danger' : (assetUrl ? 'text-success' : 'text-muted'));
+                }
+                if (image) {
+                    if (assetUrl) {
+                        if (image.getAttribute('src') !== assetUrl) {
+                            image.setAttribute('src', assetUrl);
+                        }
+                        image.classList.remove('d-none');
+                    } else {
+                        image.removeAttribute('src');
+                        image.classList.add('d-none');
+                    }
+                }
+                if (placeholder) {
+                    placeholder.classList.toggle('d-none', !!assetUrl);
+                    if (!assetUrl) {
+                        placeholder.textContent = role === 'logo' ? 'Logo will appear here' : 'Title icon will appear here';
+                    }
+                }
+                if (assetUrl && assetUrl !== previousUrl) {
+                    card.setAttribute('data-brand-asset-current-url', assetUrl);
+                    card.classList.remove('is-updated');
+                    void card.offsetWidth;
+                    card.classList.add('is-updated');
+                } else if (!assetUrl) {
+                    card.setAttribute('data-brand-asset-current-url', '');
+                    card.classList.remove('is-updated');
+                }
+            });
+        });
     }
 
     function syncAssetPanelFromWorkspaceState(workspaceState) {
@@ -2768,7 +2907,10 @@
             status.textContent = String(images.length) + ' reference image(s) available to the AI.';
         }
         if (!images.length) {
-            list.innerHTML = '<span class="small text-muted">No reference images uploaded.</span>';
+            if (list.querySelector('[data-pb-temp-reference-image="1"]')) {
+                return;
+            }
+            list.innerHTML = '<span class="small text-muted" data-pb-reference-image-empty="1">No reference images uploaded.</span>';
             return;
         }
         list.innerHTML = images.map(function (image) {
@@ -2783,16 +2925,64 @@
 
     function bindReferenceImageUploadLogic() {
         var input = document.getElementById('pb-ai-reference-image-input');
+        var selectButton = document.getElementById('pb-ai-reference-image-select-btn');
         if (!input || input.dataset.pbBound === '1') {
             return;
         }
         input.dataset.pbBound = '1';
-        input.addEventListener('change', function () {
+        var panel = document.getElementById('pb-ai-reference-image-panel');
+
+        function uploadReferenceImageFile(file) {
             var status = document.getElementById('pb-ai-reference-image-status');
-            var file = input.files && input.files[0] ? input.files[0] : null;
             if (!file) {
                 return;
             }
+
+            // 只处理图片。剪贴板/拖拽有时会携带空 type 或非图片条目，这里做个保底过滤。
+            var mime = file.type ? String(file.type) : '';
+            if (mime && mime.indexOf('image/') !== 0) {
+                return;
+            }
+
+            // 先在 UI 里展示一个临时预览（粘贴/拖拽反馈更明显）。
+            // 之后 hydrateWorkspaceFromState() 会用后端返回的 reference_images 覆盖该列表。
+            var list = document.getElementById('pb-ai-reference-image-list');
+            var previewUrl = null;
+            if (list && typeof URL !== 'undefined' && URL && typeof URL.createObjectURL === 'function') {
+                try {
+                    previewUrl = URL.createObjectURL(file);
+                } catch (e) {
+                    previewUrl = null;
+                }
+            }
+            if (list && previewUrl) {
+                var empty = list.querySelector('[data-pb-reference-image-empty="1"]');
+                if (empty) {
+                    empty.remove();
+                }
+                var name = file.name ? String(file.name) : 'pasted image';
+                var card = document.createElement('div');
+                card.className = 'border rounded bg-body p-2';
+                card.style.width = '8.5rem';
+                card.setAttribute('data-pb-temp-reference-image', '1');
+                card.innerHTML = ''
+                    + '<img alt="' + escapeHtml(name) + '" class="d-block w-100 rounded mb-2" style="height:5rem;object-fit:cover;" src="' + escapeHtml(previewUrl) + '">'
+                    + '<div class="small text-truncate" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</div>';
+                list.appendChild(card);
+                var img = card.querySelector('img');
+                if (img) {
+                    img.onload = function () {
+                        if (previewUrl) {
+                            try {
+                                URL.revokeObjectURL(previewUrl);
+                            } catch (e) {
+                                // no-op
+                            }
+                        }
+                    };
+                }
+            }
+
             if (!uploadReferenceImageUrl) {
                 if (status) {
                     status.textContent = 'Reference image upload endpoint is not configured.';
@@ -2800,6 +2990,7 @@
                 input.value = '';
                 return;
             }
+
             if (status) {
                 status.textContent = 'Uploading reference image...';
             }
@@ -2828,7 +3019,107 @@
             }).finally(function () {
                 input.value = '';
             });
+        }
+
+        input.addEventListener('change', function () {
+            var file = input.files && input.files[0] ? input.files[0] : null;
+            uploadReferenceImageFile(file);
         });
+
+        if (selectButton && selectButton.dataset.pbBound !== '1') {
+            selectButton.dataset.pbBound = '1';
+            selectButton.addEventListener('click', function () {
+                if (input && !input.disabled) {
+                    input.click();
+                }
+            });
+        }
+
+        if (panel) {
+            // 拖拽到面板上传
+            panel.addEventListener('dragover', function (event) {
+                if (!event) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                panel.classList.add('border-primary');
+                panel.classList.add('bg-white');
+            });
+            panel.addEventListener('dragleave', function (event) {
+                if (!event) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                panel.classList.remove('border-primary');
+                panel.classList.remove('bg-white');
+            });
+            panel.addEventListener('drop', function (event) {
+                if (!event) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                panel.classList.remove('border-primary');
+                panel.classList.remove('bg-white');
+
+                var files = event.dataTransfer && event.dataTransfer.files ? event.dataTransfer.files : null;
+                if (!files || !files.length) {
+                    return;
+                }
+                var file = null;
+                for (var i = 0; i < files.length; i += 1) {
+                    var candidate = files[i];
+                    if (candidate && candidate.type && String(candidate.type).indexOf('image/') === 0) {
+                        file = candidate;
+                        break;
+                    }
+                }
+                file = file || files[0];
+                uploadReferenceImageFile(file);
+            });
+        }
+
+        // 粘贴剪贴板图片上传
+        document.addEventListener('paste', function (event) {
+            if (!event || !event.clipboardData) {
+                return;
+            }
+            var items = event.clipboardData.items;
+            if (!items || !items.length) {
+                return;
+            }
+
+            var file = null;
+            for (var i = 0; i < items.length; i += 1) {
+                var item = items[i];
+                if (!item || typeof item.type !== 'string') {
+                    continue;
+                }
+                if (item.type.indexOf('image/') !== 0) {
+                    continue;
+                }
+                if (typeof item.getAsFile === 'function') {
+                    file = item.getAsFile();
+                }
+                if (!file && typeof item.getAsBlob === 'function') {
+                    var blob = item.getAsBlob();
+                    if (blob) {
+                        file = (typeof File !== 'undefined')
+                            ? new File([blob], 'reference-image', { type: blob.type || item.type })
+                            : blob;
+                    }
+                }
+                break;
+            }
+
+            if (!file) {
+                return;
+            }
+            event.preventDefault();
+            uploadReferenceImageFile(file);
+        }, true);
     }
 
     function bindAssetPanelLogic() {

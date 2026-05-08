@@ -448,6 +448,8 @@ PageBuilder网站管理,PageBuilder网站管理
 提示：,提示：
 此页面不支持当前语言，以下内容显示为默认语言。,此页面不支持当前语言，以下内容显示为默认语言。
 此页面尚未翻译为当前语言，以下内容显示为默认语言。,此页面尚未翻译为当前语言，以下内容显示为默认语言。
+"队列巡检检测到构建队列已结束，但仍有 %{1}/%{2} 个任务未完成；已回退为 pending，等待系统下一轮调度。","队列巡检检测到构建队列已结束，但仍有 %{1}/%{2} 个任务未完成；已回退为 pending，等待系统下一轮调度。"
+"队列巡检已达到最大自动重试次数 %{1}；当前仍有 %{2}/%{3} 个构建任务未完成，已停止自动重试。","队列巡检已达到最大自动重试次数 %{1}；当前仍有 %{2}/%{3} 个构建任务未完成，已停止自动重试。"
 网站保存后,网站保存后
 新建或更新站点时触发，用于将站点归属到当前后台用户等后续处理。,新建或更新站点时触发，用于将站点归属到当前后台用户等后续处理。
 "快速建站 - 查询可用服务","快速建站 - 查询可用服务"
@@ -722,8 +724,11 @@ Tagline,Tagline
 "Use one short line to clarify positioning, audience, and value.","Use one short line to clarify positioning, audience, and value."
 默认已选中当前框架语言，可按需切换,默认已选中当前框架语言，可按需切换
 一句话描述你的网站,一句话描述你的网站
-参考图片,参考图片
+参考图片：支持粘贴/拖拽/点击选择,参考图片：支持粘贴/拖拽/点击选择
+参考图片（选填）,参考图片（选填）
 "上传视觉参考，帮助 AI 把握网站风格。","上传视觉参考，帮助 AI 把握网站风格。"
+选择图片,选择图片
+支持拖拽到虚框或直接粘贴截图（Ctrl+V）,支持拖拽到虚框或直接粘贴截图（Ctrl+V）
 技能,技能
 未选择自定义技能时，将使用默认技能。,未选择自定义技能时，将使用默认技能。
 新建技能,新建技能
@@ -739,6 +744,11 @@ Tagline,Tagline
 不选择时保持默认行为；已选技能会随需求保存，并参与生成。,不选择时保持默认行为；已选技能会随需求保存，并参与生成。
 需要的页面,需要的页面
 取消选择,取消选择
+"Logo will appear here","Logo will appear here"
+"Website Logo","Website Logo"
+"Waiting for AI generation","Waiting for AI generation"
+"Title icon will appear here","Title icon will appear here"
+"Website Title Icon","Website Title Icon"
 "The form autosaves. Stage 1 runs through the backend queue and this panel keeps showing live status.","The form autosaves. Stage 1 runs through the backend queue and this panel keeps showing live status."
 "Stage 1 uses default skills unless you select custom ones.","Stage 1 uses default skills unless you select custom ones."
 "Stage 1 plan: idle","Stage 1 plan: idle"
@@ -949,12 +959,18 @@ Footer,Footer
 域名尚未就绪，请先等待域名流程完成后再确认建站。,域名尚未就绪，请先等待域名流程完成后再确认建站。
 发布前仍有未完成项：,发布前仍有未完成项：
 发布前检查未通过，请先完成页面与配置。,发布前检查未通过，请先完成页面与配置。
-整理站点需求，生成第一阶段建站方案，并在进入第二阶段前完成确认。,整理站点需求，生成第一阶段建站方案，并在进入第二阶段前完成确认。
-站点名称,站点名称
-默认沿用当前工作台语言，需要时可单独切换。,默认沿用当前工作台语言，需要时可单独切换。
-需求说明,需求说明
-"SEO 标题：","SEO 标题："
-"SEO 描述：","SEO 描述："
+"Stage 1 Plan","Stage 1 Plan"
+"Organize the website requirements, generate the stage-one build plan, and confirm it before entering stage two.","Organize the website requirements, generate the stage-one build plan, and confirm it before entering stage two."
+"Site Title","Site Title"
+"Target Domain","Target Domain"
+"Default Locale","Default Locale"
+"Plan Locale","Plan Locale"
+"Defaults to the current workspace language unless you change it.","Defaults to the current workspace language unless you change it."
+"Brief Description","Brief Description"
+"Page Types","Page Types"
+"Clear Selection","Clear Selection"
+"SEO Title:","SEO Title:"
+"SEO Description:","SEO Description:"
 方案预览,方案预览
 结构化预览,结构化预览
 原始文稿,原始文稿
@@ -2075,6 +2091,7 @@ GDPR,GDPR
 此操作将同时删除,此操作将同时删除
 个子页面！,个子页面！
 此操作不可恢复！,此操作不可恢复！
+站点名称,站点名称
 子页面数量,子页面数量
 此操作将删除该站点及其所有子页面，且不可恢复！,此操作将删除该站点及其所有子页面，且不可恢复！
 确认删除站点,确认删除站点

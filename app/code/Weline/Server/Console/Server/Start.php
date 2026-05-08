@@ -660,27 +660,89 @@ class Start extends CommandAbstract
             }
         }
 
-        // HTTP Redirect 端口被非框架进程占用时：报错退出，不自动切换
-        // HTTP Redirect 端口也是服务的一部分，自动切换会导致 HTTP 入口不一致
-$httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
+        // HTTP Redirect 端口被非框架进程占用时：先展示占用进程详情（PID/名称/命令行），
+        // 在交互式终端询问是否强制结束；用户同意则尝试释放，后续晚判会二次校验；
+        // 用户拒绝或处于非交互模式则按既有方案给出指引并退出，避免误杀宝塔/Nginx 等关键进程。
         $httpRedirectOwner = ($sslEnabled && $httpRedirectPort > 0)
             ? $mainStop->findWelineServerInstanceNameByPort($httpRedirectPort)
             : null;
-        $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
+        $httpRedirectInspect = ($sslEnabled && $httpRedirectPort > 0)
+            ? Processer::inspectPortOccupantWithHistory($httpRedirectPort)
+            : [];
         if ($sslEnabled && $httpRedirectPort > 0
             && ($httpRedirectInspect['in_use'] ?? false)
             && !$this->isFrameworkOwnedHttpRedirectPortOccupant($httpRedirectInspect, $httpRedirectOwner)
         ) {
-            if (($httpRedirectInspect['state'] ?? '') === 'orphan') {
+            $occupantPid = (int) ($httpRedirectInspect['pid'] ?? 0);
+            $occupantState = (string) ($httpRedirectInspect['state'] ?? '');
+            $occupantName = $this->resolvePortOccupantDisplayName(
+                $httpRedirectInspect,
+                $httpRedirectOwner ?? $instanceName
+            );
+            $occupantCmdline = ($occupantPid > 0)
+                ? \trim((string) Processer::getProcessCommandLine($occupantPid))
+                : '';
+
+            if ($occupantState === 'orphan') {
                 $this->printer->error(__('HTTP 重定向端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）', [$httpRedirectPort]));
             } else {
                 $this->printer->error(__('HTTP 重定向端口 %{1} 被非框架进程占用', [$httpRedirectPort]));
             }
-            $this->printer->note('');
-            $this->printer->setup(__('解决方案：'));
-            $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$httpRedirectPort]));
-            $this->printer->note(__('  2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
-            return;
+            $this->printer->note(__('  占用进程：%{1}', [$occupantName]));
+            if ($occupantPid > 0) {
+                $this->printer->note(__('  PID：%{1}', [$occupantPid]));
+            }
+            if ($occupantCmdline !== '') {
+                $this->printer->note(__('  命令行：%{1}', [$occupantCmdline]));
+            }
+
+            $confirmed = false;
+            if ($this->isInteractiveTerminal() && \defined('STDIN')) {
+                $this->printer->warning(__('是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]: ', [$httpRedirectPort]));
+                echo '  > ';
+                $input = \trim((string) @\fgets(STDIN));
+                $confirmed = \in_array(\strtolower($input), ['y', 'yes', '是'], true);
+            }
+
+            if (!$confirmed) {
+                $this->printer->note('');
+                $this->printer->setup(__('解决方案：'));
+                $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$httpRedirectPort]));
+                if ($occupantPid > 0) {
+                    $this->printer->note(__('     - Windows: taskkill /F /PID %{1}', [$occupantPid]));
+                    $this->printer->note(__('     - Linux/macOS: kill -9 %{1}', [$occupantPid]));
+                }
+                $this->printer->note(__('  2. 或使用框架命令释放：php bin/w server:kill-port %{1} -f', [$httpRedirectPort]));
+                $this->printer->note(__('  3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
+                return;
+            }
+
+            $this->printer->note(__('正在强制结束占用端口 %{1} 的进程 (PID: %{2})...', [
+                $httpRedirectPort,
+                $occupantPid > 0 ? (string) $occupantPid : '?',
+            ]));
+            $released = Processer::killProcessByPort($httpRedirectPort);
+            if (!$released) {
+                $released = Processer::forceReleasePort($httpRedirectPort);
+            }
+            if (Processer::isPortInUse($httpRedirectPort)) {
+                $waited = 0;
+                while ($waited < 3000 && Processer::isPortInUse($httpRedirectPort)) {
+                    SchedulerSystem::usleep(300000);
+                    $waited += 300;
+                }
+                $released = !Processer::isPortInUse($httpRedirectPort);
+            }
+            if (Processer::isPortInUse($httpRedirectPort)) {
+                $this->printer->error(__('无法释放端口 %{1}', [$httpRedirectPort]));
+                $this->printer->note(__('提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试', [
+                    $occupantPid > 0 ? (string) $occupantPid : '?',
+                ]));
+                return;
+            }
+
+            $this->printer->success(__('端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动', [$httpRedirectPort]));
+            $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
         }
 
         // Linux/Mac 非 root 绑定特权端口时，自动触发 sudo 密码输入并重启当前命令
@@ -4752,6 +4814,11 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
 
         if ($pid > 0) {
+            $sysInfo = Processer::getProcessInfo($pid);
+            $imageName = \trim((string) ($sysInfo['name'] ?? ''));
+            if (($sysInfo['exists'] ?? false) && $imageName !== '') {
+                return $imageName;
+            }
             return (string) __('PID %{1}', [$pid]);
         }
 

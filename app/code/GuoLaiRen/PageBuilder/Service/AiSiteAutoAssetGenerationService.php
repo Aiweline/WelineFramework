@@ -12,6 +12,7 @@ class AiSiteAutoAssetGenerationService
 
     public function __construct(
         private readonly AiSiteAssetManifestService $manifestService,
+        private readonly ?AiSiteReferenceImageInsightService $referenceImageInsightService = null,
     ) {
     }
 
@@ -25,6 +26,7 @@ class AiSiteAutoAssetGenerationService
      */
     public function prepareBuildAssets(AiSiteAgentSession $session, int $adminId, array $scope, int $limit = self::DEFAULT_LIMIT): array
     {
+        $scope = $this->ensureReferenceImageInsights($scope);
         $manifest = $this->manifestService->syncFromTaskPlan($scope);
         $scope['asset_manifest'] = $manifest;
         $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
@@ -49,6 +51,7 @@ class AiSiteAutoAssetGenerationService
                     $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
                     $scope['asset_manifest'] = $manifest;
                     $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+                    $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
                     $generatedSlots[] = $slotId;
                     continue;
                 }
@@ -97,6 +100,7 @@ class AiSiteAutoAssetGenerationService
                 $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
                 $scope['asset_manifest'] = $manifest;
                 $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+                $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
                 $generatedSlots[] = $slotId;
             } catch (\Throwable $throwable) {
                 $manifest = $this->manifestService->recordError($manifest, $slotId, $throwable->getMessage());
@@ -126,6 +130,108 @@ class AiSiteAutoAssetGenerationService
     private function shouldUseRealImageGeneration(array $scope): bool
     {
         return (int)($scope['enable_real_ai_image_generation'] ?? 0) === 1;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function ensureReferenceImageInsights(array $scope): array
+    {
+        $insights = $this->getReferenceImageInsightService()->analyze($scope, $this->resolveInsightLocale($scope));
+        if ($insights === []) {
+            return $scope;
+        }
+
+        $scope['reference_image_insights'] = $insights;
+        $signature = $this->getReferenceImageInsightService()->buildSignature($scope);
+        if ($signature !== '') {
+            $scope['reference_image_insights_signature'] = $signature;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveInsightLocale(array $scope): string
+    {
+        foreach ([
+            $scope['plan_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $locale = \trim((string)$value);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
+    private function getReferenceImageInsightService(): AiSiteReferenceImageInsightService
+    {
+        return $this->referenceImageInsightService ?? new AiSiteReferenceImageInsightService();
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $slot
+     * @return array<string,mixed>
+     */
+    private function applyIdentityAssetPatchToScope(array $scope, array $slot, string $finalUrl): array
+    {
+        $role = $this->resolveIdentityAssetRole($slot);
+        if ($role === '' || \trim($finalUrl) === '') {
+            return $scope;
+        }
+
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        if ($role === 'logo') {
+            $scope['logo'] = $finalUrl;
+            $websiteProfile['logo'] = $finalUrl;
+        } elseif ($role === 'icon') {
+            $scope['icon'] = $finalUrl;
+            $scope['favicon'] = $finalUrl;
+            $websiteProfile['icon'] = $finalUrl;
+            $websiteProfile['favicon'] = $finalUrl;
+        }
+        $scope['website_profile'] = $websiteProfile;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function resolveIdentityAssetRole(array $slot): string
+    {
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        if (\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)) {
+            return 'logo';
+        }
+        if (\in_array($field, ['icon', 'favicon', 'site.icon'], true)) {
+            return 'icon';
+        }
+
+        $haystack = \strtolower(\implode(' ', [
+            (string)($slot['slot_id'] ?? ''),
+            (string)($slot['label'] ?? ''),
+            (string)($slot['kind'] ?? ''),
+        ]));
+        if (\str_contains($haystack, 'logo')) {
+            return 'logo';
+        }
+        if (\str_contains($haystack, 'icon') || \str_contains($haystack, 'favicon')) {
+            return 'icon';
+        }
+
+        return '';
     }
 
     /**
