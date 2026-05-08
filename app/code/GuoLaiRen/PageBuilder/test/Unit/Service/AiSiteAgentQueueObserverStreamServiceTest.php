@@ -184,11 +184,17 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertTrue((bool)$queued['continue_other_operations']);
     }
 
-    public function testReconcileMapsDoneFamilyStatusesToDoneWithOperationSpecificFallback(): void
+    public function testReconcileMapsTerminalQueueStatusesWithoutFoldingCancelledIntoDone(): void
     {
         $service = $this->service();
 
-        foreach (['done', 'stop', 'cancelled'] as $queueStatus) {
+        foreach ([
+            'done' => 'done',
+            'stop' => 'cancelled',
+            'stopped' => 'cancelled',
+            'cancelled' => 'cancelled',
+            'canceled' => 'cancelled',
+        ] as $queueStatus => $expectedActiveStatus) {
             $result = $service->reconcileActiveOperationWithQueueInfo(
                 [
                     'operation' => 'task_plan',
@@ -201,7 +207,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
                 ['snapshot' => ['status' => $queueStatus]],
                 'task_plan'
             );
-            self::assertSame('done', $result['status'], "queue={$queueStatus} 应映射为 done");
+            self::assertSame($expectedActiveStatus, $result['status'], "queue={$queueStatus} 应映射为 {$expectedActiveStatus}");
             self::assertNotSame('', (string)$result['message'], 'task_plan 兜底 message 非空');
             self::assertFalse((bool)$result['queue_waiting_for_scheduler']);
             self::assertFalse((bool)$result['can_close_stream']);

@@ -34,6 +34,7 @@
     var queueUiStateByStage = {};
     var taskPlanSkillOverrideEnabled = false;
     var taskPlanOverrideSkillCodes = [];
+    var skillManagerEditingCode = '';
     var sortPlanBlocksUrl = <?= \json_encode((string)($sortPlanBlocksUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var mutatePlanBlockUrl = <?= \json_encode((string)($mutatePlanBlockUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var refinePlanPageUrl = <?= \json_encode((string)($refinePlanPageUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -5218,10 +5219,15 @@
             || raw.enabled === false
             || String(raw.status || '').toLowerCase() === 'disabled';
         return {
+            id: Number(raw.id || 0) || 0,
             code: code,
             label: label,
             description: String(raw.description || '').trim(),
+            body: String(raw.body || raw.normalized_body || '').trim(),
             source: String(raw.source || '').trim(),
+            status: String(raw.status || '').trim().toLowerCase() || 'active',
+            localPath: String(raw.local_path || raw.path || '').trim(),
+            exists: raw.exists !== false,
             readonly: raw.readonly === true || String(raw.source || '').trim() !== 'custom_db',
             disabled: disabled
         };
