@@ -390,10 +390,17 @@ class Request extends CommandAbstract
     private function buildUrl(string $path, bool $isBackend, bool $isApiBackend = false, ?int $overridePort = null, ?bool $overrideHttps = null): string
     {
         $env = Env::getInstance();
-        $serverConfig = $env->get('wls') ?? [];
+        $serverConfig = $env->getConfig('wls', []);
+        if (!\is_array($serverConfig)) {
+            $serverConfig = [];
+        }
         
-        // 获取服务器配置（默认 0.0.0.0 监听所有网卡，支持公网访问）
-        $host = $serverConfig['host'] ?? '0.0.0.0';
+        // Resolve a connectable client host; bind-all hosts are not valid request targets.
+        $hostConfig = $serverConfig['host'] ?? '127.0.0.1';
+        $host = \is_scalar($hostConfig) ? (string) $hostConfig : '127.0.0.1';
+        if ($host === '' || $host === '0.0.0.0' || $host === '::') {
+            $host = '127.0.0.1';
+        }
         $port = (int) ($serverConfig['port'] ?? 9981);
         // 命令行 --port/-P 覆盖
         if ($overridePort !== null) {
