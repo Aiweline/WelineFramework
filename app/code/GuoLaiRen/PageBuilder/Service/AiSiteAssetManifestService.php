@@ -213,6 +213,10 @@ final class AiSiteAssetManifestService
         if ($pageType !== '') {
             $parts[] = 'Page type: ' . $pageType;
         }
+        $referenceInsightsPrompt = $this->buildReferenceInsightsPrompt($scope);
+        if ($referenceInsightsPrompt !== '') {
+            $parts[] = $referenceInsightsPrompt;
+        }
 
         return \trim(\implode("\n", $parts));
     }
@@ -225,6 +229,9 @@ final class AiSiteAssetManifestService
     {
         $manifest = $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : []);
         foreach ($this->extractSlotsFromScope($scope) as $slot) {
+            $manifest = $this->upsert($manifest, $slot);
+        }
+        foreach ($this->buildRequiredIdentitySlots($scope) as $slot) {
             $manifest = $this->upsert($manifest, $slot);
         }
 
@@ -363,6 +370,110 @@ final class AiSiteAssetManifestService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function buildRequiredIdentitySlots(array $scope): array
+    {
+        $siteTitle = $this->firstString([
+            $scope['website_profile']['site_title'] ?? null,
+            $scope['site_title'] ?? null,
+        ]);
+        $siteTagline = $this->firstString([
+            $scope['website_profile']['site_tagline'] ?? null,
+            $scope['site_tagline'] ?? null,
+        ]);
+        $briefDescription = $this->firstString([
+            $scope['website_profile']['brief_description'] ?? null,
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+        ]);
+        $brandReference = $siteTitle !== '' ? $siteTitle : ($siteTagline !== '' ? $siteTagline : $briefDescription);
+        if ($brandReference === '') {
+            $brandReference = 'the website brand';
+        }
+        $existingLogo = $this->readExistingIdentityAssetUrl($scope, 'logo');
+        $existingIcon = $this->readExistingIdentityAssetUrl($scope, 'icon');
+
+        $logoBrief = 'Generate the official website logo for "' . $brandReference . '". '
+            . 'Strong constraints: transparent background, production-ready horizontal logo or wordmark, simple brand mark, no mockup, no extra scene, no paragraph text, no watermark, no screenshot frame.';
+        if ($siteTagline !== '') {
+            $logoBrief .= ' Visual direction hint: ' . $siteTagline . '.';
+        }
+        if ($briefDescription !== '') {
+            $logoBrief .= ' Business context: ' . $briefDescription . '.';
+        }
+
+        $iconBrief = 'Generate the website title icon / favicon for "' . $brandReference . '". '
+            . 'Strong constraints: square 1:1 composition, transparent or clean solid background, highly recognizable at 16-64px, one bold symbol or monogram only, no paragraph text, no mockup, no watermark.';
+        if ($siteTagline !== '') {
+            $iconBrief .= ' Style hint: ' . $siteTagline . '.';
+        }
+        if ($briefDescription !== '') {
+            $iconBrief .= ' Business context: ' . $briefDescription . '.';
+        }
+
+        return [
+            [
+                'slot_id' => 'identity:website-logo',
+                'slot_type' => 'logo_icon',
+                'kind' => 'website_logo',
+                'page_type' => 'global',
+                'field' => 'logo',
+                'task_key' => 'shared:header',
+                'section_code' => 'identity',
+                'label' => 'Website Logo',
+                'brief' => $logoBrief,
+                'prompt_brief' => $logoBrief,
+                'source' => $existingLogo !== '' ? 'uploaded' : 'planned',
+                'status' => $existingLogo !== '' ? 'locked' : 'pending',
+                'final_url' => $existingLogo,
+                'locked_by_user' => $existingLogo !== '' ? 1 : 0,
+            ],
+            [
+                'slot_id' => 'identity:site-title-icon',
+                'slot_type' => 'logo_icon',
+                'kind' => 'site_title_icon',
+                'page_type' => 'global',
+                'field' => 'icon',
+                'task_key' => 'shared:header',
+                'section_code' => 'identity',
+                'label' => 'Website Title Icon',
+                'brief' => $iconBrief,
+                'prompt_brief' => $iconBrief,
+                'source' => $existingIcon !== '' ? 'uploaded' : 'planned',
+                'status' => $existingIcon !== '' ? 'locked' : 'pending',
+                'final_url' => $existingIcon,
+                'locked_by_user' => $existingIcon !== '' ? 1 : 0,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function readExistingIdentityAssetUrl(array $scope, string $role): string
+    {
+        $candidates = $role === 'logo'
+            ? [
+                $scope['logo'] ?? null,
+                $scope['website_profile']['logo'] ?? null,
+            ]
+            : [
+                $scope['icon'] ?? null,
+                $scope['favicon'] ?? null,
+                $scope['website_profile']['icon'] ?? null,
+                $scope['website_profile']['favicon'] ?? null,
+            ];
+        $value = $this->firstString($candidates);
+        if ($value === '' || \str_starts_with(\strtolower($value), 'data:image/')) {
+            return '';
+        }
+
+        return $value;
+    }
+
+    /**
      * @param array<string, mixed> $row
      */
     private function resolveSlotType(array $row, string $fallbackKey): string
@@ -492,5 +603,69 @@ final class AiSiteAssetManifestService
         }
 
         return '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function buildReferenceInsightsPrompt(array $scope): string
+    {
+        $insights = \is_array($scope['reference_image_insights'] ?? null) ? $scope['reference_image_insights'] : [];
+        if ($insights === []) {
+            return '';
+        }
+
+        $lines = [];
+        $summary = \trim((string)($insights['summary'] ?? ''));
+        if ($summary !== '') {
+            $lines[] = 'Reference style summary: ' . $summary;
+        }
+        $styleKeywords = $this->normalizePromptList($insights['style_keywords'] ?? []);
+        if ($styleKeywords !== '') {
+            $lines[] = 'Reference style keywords: ' . $styleKeywords;
+        }
+        $colorPalette = $this->normalizePromptList($insights['color_palette'] ?? []);
+        if ($colorPalette !== '') {
+            $lines[] = 'Reference color palette: ' . $colorPalette;
+        }
+        $layoutCues = $this->normalizePromptList($insights['layout_cues'] ?? []);
+        if ($layoutCues !== '') {
+            $lines[] = 'Reference layout cues: ' . $layoutCues;
+        }
+        $componentCues = $this->normalizePromptList($insights['component_cues'] ?? []);
+        if ($componentCues !== '') {
+            $lines[] = 'Reference component cues: ' . $componentCues;
+        }
+        $typographyCues = $this->normalizePromptList($insights['typography_cues'] ?? []);
+        if ($typographyCues !== '') {
+            $lines[] = 'Reference typography cues: ' . $typographyCues;
+        }
+        $forbidden = $this->normalizePromptList($insights['do_not_use'] ?? []);
+        if ($forbidden !== '') {
+            $lines[] = 'Avoid these reference mismatches: ' . $forbidden;
+        }
+
+        return \implode("\n", $lines);
+    }
+
+    private function normalizePromptList(mixed $values): string
+    {
+        if (!\is_array($values)) {
+            return '';
+        }
+
+        $items = [];
+        foreach ($values as $value) {
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $text = \trim((string)$value);
+            if ($text === '' || \in_array($text, $items, true)) {
+                continue;
+            }
+            $items[] = $text;
+        }
+
+        return \implode(', ', $items);
     }
 }
