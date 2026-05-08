@@ -2802,7 +2802,7 @@ PROMPT;
         }
         /** @var AccountService $accountService */
         $accountService = ObjectManager::getInstance(AccountService::class);
-        $providerCode = $accountService->getProviderByModelCode($modelCode);
+        $providerCode = $accountService->getProviderByModel($model);
         if ($providerCode === null) {
             return null;
         }
