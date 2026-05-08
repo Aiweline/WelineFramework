@@ -1,7 +1,7 @@
 ---
 name: WLS运行时工程师-WLS进程稳定
 description: WLS runtime engineer skill for worker lifecycle, reload versus restart decisions, process cleanup, and runtime stability.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -76,4 +76,16 @@ This skill owns WLS process lifecycle, worker stability, reload and restart beha
 - Do not kill ports or processes blindly when lifecycle-aware cleanup is required.
 - Do not introduce blocking calls into runtime-sensitive worker code.
 - Do not leave runtime test instances behind after the session.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

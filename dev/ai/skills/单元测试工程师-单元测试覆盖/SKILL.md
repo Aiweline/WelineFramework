@@ -1,7 +1,7 @@
 ---
 name: 单元测试工程师-单元测试覆盖
 description: Unit test engineer skill for PHPUnit or Pest coverage, service-level assertions, and focused regression protection.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -73,4 +73,16 @@ This skill creates or updates unit tests for WelineFramework code. It focuses on
 - Do not write broad brittle tests when one focused regression test is enough.
 - Do not bury critical assertions in indirect helper chains.
 - Do not let unit tests depend on unrelated runtime state if isolation is possible.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

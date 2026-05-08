@@ -1,7 +1,7 @@
 ---
 name: 框架核心工程师-ORM与数据模型
 description: Framework core engineer skill for ORM conventions, schema annotations, query patterns, and cross-module data access contracts.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -74,4 +74,16 @@ This skill owns Weline ORM behavior, schema declaration rules, query execution c
 - Do not bypass model annotations with direct upgrade-script field mutations.
 - Do not couple modules by directly constructing another module’s model for shared queries.
 - Do not use events for read-style query traffic.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

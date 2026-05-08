@@ -1,7 +1,7 @@
 ---
 name: 业务模块工程师-服务层与业务逻辑
 description: Business module engineer skill for service-layer design, business logic extraction, and module-safe orchestration.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -73,4 +73,16 @@ This skill owns service-layer implementation and business-rule placement inside 
 - Do not bury business-critical logic inside controllers, commands, or templates.
 - Do not introduce raw SQL or framework-invented APIs in service code.
 - Do not change public contracts silently without documenting the impact.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 
