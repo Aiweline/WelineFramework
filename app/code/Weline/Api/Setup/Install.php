@@ -163,10 +163,19 @@ class Install implements InstallInterface
              $apiUser->clear()
                 ->setUsername('admin')
                 ->setEmail('admin@example.com')
-                ->setPassword('admin')
+                ->setPassword(bin2hex(random_bytes(32)))
                 ->autoGenerateApiCredentials()
-                ->setData('created_at', date('Y-m-d H:i:s'))
-                ->setData('updated_at', date('Y-m-d H:i:s'))
+                ->setTokenExpireTime(604800)
+                ->setRefreshTokenExpireTime(2592000)
+                ->setIsEnabled(false)
+                ->setIsDeleted(false)
+                ->setIpWhitelistEnabled(false)
+                ->setAllowedIps([])
+                ->setUserAgentRestrictionEnabled(false)
+                ->setAllowedUserAgents([])
+                ->setSandboxAccount(false)
+                ->setData(ApiUser::schema_fields_created_at, date('Y-m-d H:i:s'))
+                ->setData(ApiUser::schema_fields_updated_at, date('Y-m-d H:i:s'))
                 ->save(); 
          }
     }
