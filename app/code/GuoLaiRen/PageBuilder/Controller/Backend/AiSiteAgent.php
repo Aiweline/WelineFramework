@@ -3417,7 +3417,7 @@ class AiSiteAgent extends BaseController
             'name' => $originalName,
             'uploaded_at' => \date('Y-m-d H:i:s'),
         ];
-        $referenceImages = \is_array($scope['reference_images'] ?? null) ? $scope['reference_images'] : [];
+        $referenceImages = $this->resolveReferenceImagesFromScope($scope);
         $referenceImages[] = $referenceImage;
         $referenceImages = \array_values(\array_slice($referenceImages, -12));
 
@@ -3450,6 +3450,41 @@ class AiSiteAgent extends BaseController
         }
 
         return [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<array<string,mixed>>
+     */
+    private function resolveReferenceImagesFromScope(array $scope): array
+    {
+        $images = \is_array($scope['reference_images'] ?? null)
+            ? $scope['reference_images']
+            : (\is_array($scope['scope']['reference_images'] ?? null) ? $scope['scope']['reference_images'] : []);
+        if ($images === []) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($images as $image) {
+            if (!\is_array($image)) {
+                continue;
+            }
+            $url = \trim((string)($image['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $normalized[] = [
+                'url' => $url,
+                'path' => \trim((string)($image['path'] ?? '')),
+                'mime_type' => \trim((string)($image['mime_type'] ?? '')),
+                'size' => (int)($image['size'] ?? 0),
+                'name' => \trim((string)($image['name'] ?? 'reference-image')),
+                'uploaded_at' => \trim((string)($image['uploaded_at'] ?? '')),
+            ];
+        }
+
+        return \array_values($normalized);
     }
 
     private function buildAiSiteAssetQueueBizKey(int $sessionId, string $slotId): string
@@ -5998,6 +6033,13 @@ class AiSiteAgent extends BaseController
                             $buildPayload['round'] = $requestedRound;
                             $buildPayload['staged_generation'] = true;
                             $buildPayload['stage1_checkpoint'] = \is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : [];
+                            $buildPayload['on_stage1_scope_checkpoint'] = function (array $scopePatch) use ($fresh, $adminId, &$scope): void {
+                                if ($scopePatch === []) {
+                                    return;
+                                }
+                                $scope = \array_replace($scope, $scopePatch);
+                                $this->sessionService->mergeScope($fresh->getId(), $adminId, $scopePatch);
+                            };
                             $buildPayload['on_stage1_checkpoint'] = function (array $checkpoint) use ($fresh, $adminId, &$scope): void {
                                 if ($checkpoint === [] || !\is_array($checkpoint['plan_json'] ?? null)) {
                                     return;
@@ -10176,6 +10218,8 @@ class AiSiteAgent extends BaseController
         $normalized = $this->scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, $this->scopeCompatibilityService->normalizeStage($session->getStage()))
         );
+        $referenceImages = $this->resolveReferenceImagesFromScope($normalized);
+        $normalized['reference_images'] = $referenceImages;
         $normalized = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($normalized);
         $normalized = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $normalized);
         $normalized = $this->hydrateStageOnePlanPayloadFromWorkbench($normalized);
@@ -10523,6 +10567,7 @@ class AiSiteAgent extends BaseController
         $clientVirtualPagesByType = $this->htmlBlocksBuildService->stripServerOnlyVirtualPages($virtualPagesByType);
         $clientScope = $normalized;
         $clientScope['virtual_pages_by_type'] = $clientVirtualPagesByType;
+        $clientScope['reference_images'] = $referenceImages;
         unset($clientScope['_ai_generated_shared_components']);
         if (\is_array($clientScope['shared_components'] ?? null)) {
             foreach ($clientScope['shared_components'] as $region => $component) {
@@ -10616,7 +10661,7 @@ class AiSiteAgent extends BaseController
             'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
             'asset_manifest' => \is_array($normalized['asset_manifest'] ?? null) ? $normalized['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($normalized['verified_assets'] ?? null) ? $normalized['verified_assets'] : [],
-            'reference_images' => \is_array($normalized['reference_images'] ?? null) ? $normalized['reference_images'] : [],
+            'reference_images' => $referenceImages,
             'top_logs' => $topLogs,
             'scope' => $clientScope,
             'events' => $events,
@@ -10939,8 +10984,10 @@ class AiSiteAgent extends BaseController
             'task_plan_generation_progress' => \is_array($state['task_plan_generation_progress'] ?? null) ? $state['task_plan_generation_progress'] : [],
             'task_plan_generation_summary' => \is_array($state['task_plan_generation_summary'] ?? null) ? $state['task_plan_generation_summary'] : [],
             'task_plan_generation_last_error' => \is_array($state['task_plan_generation_last_error'] ?? null) ? $state['task_plan_generation_last_error'] : [],
+            'website_profile' => \is_array($state['website_profile'] ?? null) ? $state['website_profile'] : [],
             'asset_manifest' => \is_array($state['asset_manifest'] ?? null) ? $state['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($state['verified_assets'] ?? null) ? $state['verified_assets'] : [],
+            'reference_images' => \is_array($state['reference_images'] ?? null) ? $state['reference_images'] : [],
             'workspace_entry_queue_notice' => \is_array($state['workspace_entry_queue_notice'] ?? null) ? $state['workspace_entry_queue_notice'] : [],
         ], $this->buildWorkspaceStatusEnvelope($state, 'queue'));
 
@@ -13602,6 +13649,7 @@ class AiSiteAgent extends BaseController
                 [
                     'event_type' => 'build_asset_generation_completed',
                     'generated_slots' => $autoAssetResult['generated_slots'],
+                    'state' => $this->buildAssetIdentityWorkspaceStatePatchFromScope($scope),
                 ]
             );
         }
@@ -13616,6 +13664,7 @@ class AiSiteAgent extends BaseController
                     'event_type' => 'build_asset_generation_failed',
                     'slot_id' => (string)($failedSlot['slot_id'] ?? ''),
                     'message' => (string)($failedSlot['message'] ?? ''),
+                    'state' => $this->buildAssetIdentityWorkspaceStatePatchFromScope($scope),
                 ]
             );
         }
@@ -14370,6 +14419,35 @@ class AiSiteAgent extends BaseController
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildAssetIdentityWorkspaceStatePatchFromScope(array $scope): array
+    {
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $assetManifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : ['version' => 1, 'slots' => []];
+        $verifiedAssets = \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [];
+        $scopePatch = [
+            'website_profile' => $websiteProfile,
+            'asset_manifest' => $assetManifest,
+            'verified_assets' => $verifiedAssets,
+        ];
+        foreach (['logo', 'icon', 'favicon'] as $key) {
+            $value = \trim((string)($scope[$key] ?? ''));
+            if ($value !== '') {
+                $scopePatch[$key] = $value;
+            }
+        }
+
+        return [
+            'website_profile' => $websiteProfile,
+            'asset_manifest' => $assetManifest,
+            'verified_assets' => $verifiedAssets,
+            'scope' => $scopePatch,
+        ];
+    }
+
+    /**
      * @return array{
      *   components:array<string, array{
      *     componentCode:string,
@@ -14848,6 +14926,7 @@ class AiSiteAgent extends BaseController
                 [
                     'event_type' => 'build_asset_generation_completed',
                     'generated_slots' => $autoAssetResult['generated_slots'],
+                    'state' => $this->buildAssetIdentityWorkspaceStatePatchFromScope($scope),
                 ]
             );
         }
@@ -14862,6 +14941,7 @@ class AiSiteAgent extends BaseController
                     'event_type' => 'build_asset_generation_failed',
                     'slot_id' => (string)($failedSlot['slot_id'] ?? ''),
                     'message' => (string)($failedSlot['message'] ?? ''),
+                    'state' => $this->buildAssetIdentityWorkspaceStatePatchFromScope($scope),
                 ]
             );
         }
