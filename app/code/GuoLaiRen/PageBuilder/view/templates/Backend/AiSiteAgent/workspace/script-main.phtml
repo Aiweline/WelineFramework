@@ -5546,6 +5546,123 @@
         status.classList.add(mode === 'error' ? 'text-danger' : (mode === 'success' ? 'text-success' : 'text-muted'));
     }
 
+    function renderSkillAdminList() {
+        var list = document.getElementById('pb-ai-skill-admin-list');
+        if (!list) {
+            return;
+        }
+        list.innerHTML = '';
+        if (needsFormSkillOptions.length === 0) {
+            var empty = document.createElement('div');
+            empty.className = 'list-group-item small text-muted';
+            empty.textContent = <?= \json_encode((string)__('暂无技能，请先新建技能。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            list.appendChild(empty);
+            return;
+        }
+
+        needsFormSkillOptions.forEach(function (option) {
+            var row = document.createElement('div');
+            row.className = 'list-group-item';
+            row.setAttribute('data-skill-admin-code', option.code);
+
+            var top = document.createElement('div');
+            top.className = 'd-flex flex-wrap align-items-center justify-content-between gap-2';
+
+            var meta = document.createElement('div');
+            var title = document.createElement('div');
+            title.className = 'fw-semibold small';
+            title.textContent = option.label;
+            meta.appendChild(title);
+
+            var sub = document.createElement('div');
+            sub.className = 'small text-muted';
+            sub.textContent = option.code + ' · ' + (option.readonly
+                ? <?= \json_encode((string)__('内置技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+                : <?= \json_encode((string)__('自定义技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            if (option.disabled) {
+                sub.textContent += ' · ' + <?= \json_encode((string)__('已停用'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            }
+            meta.appendChild(sub);
+
+            if (option.description) {
+                var desc = document.createElement('div');
+                desc.className = 'small text-muted mt-1';
+                desc.textContent = option.description;
+                meta.appendChild(desc);
+            }
+
+            var actions = document.createElement('div');
+            actions.className = 'd-flex flex-wrap gap-2';
+            if (!option.readonly) {
+                var editBtn = document.createElement('button');
+                editBtn.type = 'button';
+                editBtn.className = 'btn btn-outline-primary btn-sm';
+                editBtn.setAttribute('data-skill-action', 'edit');
+                editBtn.setAttribute('data-code', option.code);
+                editBtn.textContent = <?= \json_encode((string)__('编辑'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+                actions.appendChild(editBtn);
+
+                if (!option.disabled) {
+                    var disableBtn = document.createElement('button');
+                    disableBtn.type = 'button';
+                    disableBtn.className = 'btn btn-outline-danger btn-sm';
+                    disableBtn.setAttribute('data-skill-action', 'disable');
+                    disableBtn.setAttribute('data-code', option.code);
+                    disableBtn.textContent = <?= \json_encode((string)__('停用'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+                    actions.appendChild(disableBtn);
+                }
+            }
+
+            top.appendChild(meta);
+            top.appendChild(actions);
+            row.appendChild(top);
+            list.appendChild(row);
+        });
+    }
+
+    function openSkillAdminPanel() {
+        var panel = document.getElementById('pb-ai-skill-admin-panel');
+        if (panel) {
+            panel.classList.remove('d-none');
+        }
+    }
+
+    function closeSkillEditor() {
+        var manager = document.getElementById('pb-ai-skill-manager-panel');
+        if (manager) {
+            manager.classList.add('d-none');
+        }
+    }
+
+    function openSkillEditor(option) {
+        var manager = document.getElementById('pb-ai-skill-manager-panel');
+        var title = document.getElementById('pb-ai-skill-editor-title');
+        var codeEl = document.getElementById('pb-ai-skill-code');
+        var nameEl = document.getElementById('pb-ai-skill-name');
+        var descriptionEl = document.getElementById('pb-ai-skill-description');
+        var bodyEl = document.getElementById('pb-ai-skill-body');
+        if (!manager || !codeEl || !nameEl || !descriptionEl || !bodyEl) {
+            return;
+        }
+        openSkillAdminPanel();
+        manager.classList.remove('d-none');
+        skillManagerEditingCode = option && option.code ? String(option.code) : '';
+        if (title) {
+            title.textContent = skillManagerEditingCode
+                ? <?= \json_encode((string)__('编辑技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+                : <?= \json_encode((string)__('新建技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        codeEl.value = option && option.code ? String(option.code) : '';
+        nameEl.value = option && option.label ? String(option.label) : '';
+        descriptionEl.value = option && option.description ? String(option.description) : '';
+        bodyEl.value = option && option.body ? String(option.body) : '';
+        codeEl.readOnly = !!(option && option.code);
+        setSkillManagerStatus('', 'muted');
+        if (typeof codeEl.focus === 'function') {
+            (option && option.code ? nameEl : codeEl).focus();
+        }
+    }
+
     function mergeSkillOption(option) {
         if (!option || !option.code) {
             return;
@@ -5564,6 +5681,7 @@
         needsFormSkillOptions.sort(function (a, b) {
             return String(a.code || '').localeCompare(String(b.code || ''));
         });
+        renderSkillAdminList();
     }
 
     function loadNeedsFormSkills() {
@@ -5584,6 +5702,7 @@
         }).then(function (payload) {
             needsFormSkillOptions = normalizeSkillListPayload(payload);
             renderNeedsFormSkillSelection();
+            renderSkillAdminList();
             renderTaskPlanSkillOverrideUi();
             renderGenerationSkillSummaries();
             setSkillStatusText(needsFormSkillOptions.length > 0 ? '可选择一个或多个技能' : '暂无可选技能，保留默认生成行为');
