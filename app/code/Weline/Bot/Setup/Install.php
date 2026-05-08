@@ -20,43 +20,49 @@ class Install implements InstallInterface
     public function setup(Setup $setup, Context $context): void
     {
         // 数据表由 #[Col] 声明式自动创建，这里只添加种子数据
-        $this->createDefaultRole($setup);
-        $this->createBuiltinSkills($setup);
-        $this->registerBotAdapters($setup);
+        $dbSetup = $setup->getDbSetup();
+        $this->createDefaultRole($dbSetup);
+        $this->createBuiltinSkills($dbSetup);
+        $this->registerBotAdapters($dbSetup);
     }
 
     /**
      * 创建默认角色
      */
-    private function createDefaultRole(Setup $setup): void
+    private function createDefaultRole(DbSetup $dbSetup): void
     {
-        $dbSetup = $this->getDbSetup($setup);
         $tableName = $dbSetup->getTable('weline_bot_role');
         
         // 检查是否已有默认角色
-        $connection = $this->getConnection($setup);
-        $existingRole = $connection->query(
-            "SELECT role_id FROM {$tableName} WHERE is_default = 1 LIMIT 1"
-        )->fetch();
+        $connection = $dbSetup->getConnector();
+        $existingRole = $connection->getQuery()
+            ->clearQuery()
+            ->table($tableName)
+            ->where('is_default', 1)
+            ->find('role_id')
+            ->fetch();
         
         if (!$existingRole) {
             // 获取默认模型 ID（安全检查表是否存在）
             $modelId = null;
             try {
-                $modelTable = $dbSetup->getTable('ai_model');
-                // 先检查表是否存在
-                if ($connection->tableExist($modelTable)) {
-                    $defaultModel = $connection->query(
-                        "SELECT id FROM {$modelTable} WHERE is_default = 1 AND is_active = 1 LIMIT 1"
-                    )->fetch();
-                    $modelId = $defaultModel ? (int) $defaultModel['id'] : null;
+                if ($dbSetup->tableExist('ai_model')) {
+                    $modelTable = $dbSetup->getTable('ai_model');
+                    $defaultModelId = $connection->getQuery()
+                        ->clearQuery()
+                        ->table($modelTable)
+                        ->where('is_default', 1)
+                        ->where('is_active', 1)
+                        ->find('id')
+                        ->fetch();
+                    $modelId = $defaultModelId ? (int) $defaultModelId : null;
                 }
             } catch (\Throwable) {
                 // 表不存在，使用 null
             }
 
             $now = time();
-            $this->insert($setup, $tableName, [
+            $this->insertRow($connection, $tableName, [
                 'code' => 'assistant',
                 'name' => 'AI 助手',
                 'system_prompt' => '你是一个智能助手，具备文件操作、Shell执行、网络请求等能力。请根据用户指令安全、高效地完成任务。对于危险操作，请务必先询问用户确认。',
@@ -86,10 +92,10 @@ class Install implements InstallInterface
     /**
      * 创建内置技能
      */
-    private function createBuiltinSkills(Setup $setup): void
+    private function createBuiltinSkills(DbSetup $dbSetup): void
     {
-        $tableName = $this->getDbSetup($setup)->getTable('weline_bot_skill');
-        $connection = $this->getConnection($setup);
+        $tableName = $dbSetup->getTable('weline_bot_skill');
+        $connection = $dbSetup->getConnector();
         $now = time();
         
         $builtinSkills = [
@@ -260,7 +266,7 @@ class Install implements InstallInterface
             if (!$existing) {
                 $skill['created_at'] = $now;
                 $skill['updated_at'] = $now;
-                $this->insert($setup, $tableName, $skill);
+                $this->insertRow($connection, $tableName, $skill);
             }
         }
     }
@@ -268,35 +274,15 @@ class Install implements InstallInterface
     /**
      * 注册 Bot 场景适配器
      */
-    private function getDbSetup(Setup $setup): DbSetup
+    private function registerBotAdapters(DbSetup $dbSetup): void
     {
-        return $setup->getDbSetup();
-    }
-
-    private function getConnection(Setup $setup): ConnectorInterface
-    {
-        return $this->getDbSetup($setup)->getConnector();
-    }
-
-    private function insert(Setup $setup, string $tableName, array $data): void
-    {
-        $this->getConnection($setup)
-            ->getQuery()
-            ->clearQuery()
-            ->table($tableName)
-            ->insert($data)
-            ->fetch();
-    }
-
-    private function registerBotAdapters(Setup $setup): void
-    {
-        $tableName = $this->getDbSetup($setup)->getTable('ai_scenario_adapter');
-        $connection = $this->getConnection($setup);
+        $tableName = $dbSetup->getTable('ai_scenario_adapter');
+        $connection = $dbSetup->getConnector();
         $now = time();
 
         // 检查表是否存在
         try {
-            if (!$connection->tableExist($tableName)) {
+            if (!$dbSetup->tableExist('ai_scenario_adapter')) {
                 // 表不存在，跳过注册（Weline_Ai 可能未安装）
                 return;
             }
@@ -349,8 +335,17 @@ class Install implements InstallInterface
             if (!$existing) {
                 $adapter['created_time'] = $now;
                 $adapter['updated_time'] = $now;
-                $this->insert($setup, $tableName, $adapter);
+                $this->insertRow($connection, $tableName, $adapter);
             }
         }
+    }
+
+    private function insertRow(ConnectorInterface $connection, string $tableName, array $row): void
+    {
+        $connection->getQuery()
+            ->clearQuery()
+            ->table($tableName)
+            ->insert($row)
+            ->fetch();
     }
 }

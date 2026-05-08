@@ -687,6 +687,10 @@ class AiSiteAgentWorkspaceStateHelperService
             return \max(0, \min(100, (int)\round(($completed / $total) * 100)));
         }
 
+        if (\in_array($status, ['failed', 'cancelled', 'stale'], true)) {
+            return 0;
+        }
+
         if ($status === 'done' || !empty($state['can_publish'])) {
             return 100;
         }
