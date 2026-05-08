@@ -6,7 +6,9 @@ namespace WeShop\B2B\Controller\Backend\Company;
 
 use WeShop\B2B\Service\CompanyService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_B2B::company_management_actions', 'B2B company actions', 'mdi mdi-domain-edit', 'Create and update B2B companies', 'WeShop_B2B::company_management')]
 class Save extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Save extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_B2B::company_management_save_post', 'Save B2B company', 'mdi mdi-content-save', 'Save B2B company data')]
     public function post(): string
     {
         $backUrl = (string) $this->request->getParam('back_url', $this->request->getUrlBuilder()->getBackendUrl('*/backend/company'));
@@ -39,6 +42,7 @@ class Save extends BaseController
         }
     }
 
+    #[Acl('WeShop_B2B::company_management_save_index', 'Open B2B company save route', 'mdi mdi-content-save-outline', 'Open B2B company save route')]
     public function index(): string
     {
         return $this->post();
