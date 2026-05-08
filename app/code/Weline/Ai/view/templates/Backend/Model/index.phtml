@@ -1016,9 +1016,9 @@ $currentSearch = $currentSearch ?? '';
                 var p = r.provider_account || {};
                 var sStatus = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
                 var pStatus = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-                var html = '自配置结果：' + sStatus + '\n' + 
+                var html = '自配置结果：' + sStatus + '\n' +
                     (s.tested ? '消息：' + (s.message || '') + '\n耗时：' + (s.duration || 0) + 'ms\n响应：' + ((s.response || '').toString().slice(0,500)) + '\n\n' : '\n') +
-                    '供应商账户结果：' + pStatus + '\n' + 
+                    '供应商账户结果：' + pStatus + '\n' +
                     (p.tested ? '消息：' + (p.message || '') + '\n耗时：' + (p.duration || 0) + 'ms\n账户：' + (p.account_name || '') + '\n响应：' + ((p.response || '').toString().slice(0,500)) : '');
                 var __ok = !!data.success;
                 var __retryName = null;
@@ -1026,9 +1026,13 @@ $currentSearch = $currentSearch ?? '';
                     __retryName = '__retry_test_' + Date.now();
                     window[__retryName] = function() { testModelConnection(modelCode); };
                 }
-                showResultModal(__ok ? 'success' : 'error', '连通测试结果', html, __ok, __retryName);
+                var images = [];
+                if (Array.isArray(s.images)) images = images.concat(s.images);
+                if (Array.isArray(p.images)) images = images.concat(p.images);
+                showResultModal(__ok ? 'success' : 'error', '连通测试结果', html, __ok, __retryName, null, images);
             } else if (data.success) {
-                showResultModal('success', '连通测试成功', data.message || '', true);
+                var images2 = Array.isArray(data.images) ? data.images : [];
+                showResultModal('success', '连通测试成功', data.message || '', true, null, null, images2);
             } else {
                 var fnName = '__retry_test_' + Date.now();
                 window[fnName] = function() { testModelConnection(modelCode); };
@@ -1083,10 +1087,11 @@ $currentSearch = $currentSearch ?? '';
             document.body.removeChild(testModal);
             
             if (data.success) {
-                var message = data.data ? 
-                    data.message + '\n\n响应时间: ' + data.data.duration + 'ms\n响应内容: ' + data.data.response : 
+                var message = data.data ?
+                    data.message + '\n\n响应时间: ' + data.data.duration + 'ms\n响应内容: ' + data.data.response :
                     data.message;
-                showResultModal('success', '自配置连通测试成功', message, true);
+                var imagesSelf = (data.data && Array.isArray(data.data.images)) ? data.data.images : (Array.isArray(data.images) ? data.images : []);
+                showResultModal('success', '自配置连通测试成功', message, true, null, null, imagesSelf);
             } else {
                 var fnName = '__retry_self_' + Date.now();
                 window[fnName] = function() { testSelfConfigConnection(modelCode); };
@@ -1123,8 +1128,40 @@ $currentSearch = $currentSearch ?? '';
         return modal;
     }
 
+    function escapeHtmlForResult(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderTestImagesBlock(images) {
+        if (!Array.isArray(images) || images.length === 0) {
+            return '';
+        }
+        var items = images.map(function(image) {
+            var src = (image && image.url)
+                ? image.url
+                : (image && image.b64_json ? ('data:' + ((image.mime_type) || 'image/png') + ';base64,' + image.b64_json) : '');
+            if (!src) return '';
+            var safeSrc = escapeHtmlForResult(src);
+            var revised = image && image.revised_prompt ? '<div class="small text-muted mt-1">' + escapeHtmlForResult(image.revised_prompt) + '</div>' : '';
+            return '<div class="col-12 col-md-6 mb-2">'
+                + '<a href="' + safeSrc + '" target="_blank" rel="noopener">'
+                + '<img src="' + safeSrc + '" class="img-fluid rounded border" style="max-height: 280px; width: 100%; object-fit: contain; background: #fff;" alt="test image">'
+                + '</a>' + revised + '</div>';
+        }).join('');
+        if (!items) return '';
+        return '<div class="row g-2 mt-3">'
+            + '<div class="col-12 fw-bold mb-1"><i class="mdi mdi-image-multiple me-1"></i><?= __('返回的测试图片') ?></div>'
+            + items
+            + '</div>';
+    }
+
     // 显示结果弹窗
-    function showResultModal(type, title, message, refreshOnClose, retryFnName, retryLabel) {
+    function showResultModal(type, title, message, refreshOnClose, retryFnName, retryLabel, images) {
         retryLabel = retryLabel || '<?= __('重试') ?>';
         var modal = document.createElement('div');
         modal.className = 'modal fade show';
@@ -1135,7 +1172,9 @@ $currentSearch = $currentSearch ?? '';
         }
         var uid = 'retryBtn_' + Date.now();
         var retryButtonHtml = retryFnName ? '<button type="button" class="btn btn-outline-primary" id="' + uid + '">' + retryLabel + '</button>' : '';
-        modal.innerHTML = '<div class="modal-dialog modal-dialog-centered">' +
+        var imagesHtml = renderTestImagesBlock(images);
+        var dialogClass = imagesHtml !== '' ? 'modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable' : 'modal-dialog modal-dialog-centered';
+        modal.innerHTML = '<div class="' + dialogClass + '">' +
             '<div class="modal-content">' +
             '<div class="modal-header">' +
             '<h5 class="modal-title">' +
@@ -1145,10 +1184,11 @@ $currentSearch = $currentSearch ?? '';
             '</div>' +
             '<div class="modal-body">' +
             '<pre style="white-space: pre-wrap; font-size: 14px;">' + message + '</pre>' +
+            imagesHtml +
             '</div>' +
             '<div class="modal-footer">' +
             retryButtonHtml +
-            '<button type="button" class="btn btn-primary" onclick="closeResultModal(this)">确定</button>' +
+            '<button type="button" class="btn btn-primary" onclick="closeResultModal(this)"><?= __('确定') ?></button>' +
             '</div></div></div>';
         document.body.appendChild(modal);
         if (retryFnName && typeof window[retryFnName] === 'function') {

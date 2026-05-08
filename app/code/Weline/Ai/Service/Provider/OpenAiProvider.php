@@ -218,15 +218,21 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $requestData = $this->buildImageGenerationRequest($model, $prompt, $params, $config);
         $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
         $this->applyExecutionTimeLimit($timeout);
+        $requestUrl = $this->resolveImageGenerationUrl($config);
         $response = $this->callApiWithRetry(
-            $this->resolveImageGenerationUrl($config),
+            $requestUrl,
             $apiKey,
             $requestData,
             $proxyInfo,
             $timeout
         );
 
-        return $this->normalizeImageGenerationResponse($response, (string)$requestData['model'], $requestData);
+        return ImageGenerationResponseNormalizer::fromOpenAiImageResponse(
+            $response,
+            (string)$requestData['model'],
+            $requestData,
+            $requestUrl
+        );
     }
 
     /**
@@ -696,63 +702,6 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         return $requestData;
-    }
-
-    /**
-     * @param array<string,mixed> $response
-     * @param array<string,mixed> $requestData
-     * @return array<string,mixed>
-     */
-    private function normalizeImageGenerationResponse(array $response, string $modelCode, array $requestData): array
-    {
-        $images = [];
-        foreach (is_array($response['data'] ?? null) ? $response['data'] : [] as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-
-            $image = [];
-            foreach (['url', 'b64_json', 'revised_prompt'] as $key) {
-                if (isset($item[$key]) && is_scalar($item[$key]) && trim((string)$item[$key]) !== '') {
-                    $image[$key] = (string)$item[$key];
-                }
-            }
-
-            $mimeType = $this->normalizeImageMimeType(
-                (string)($item['mime_type'] ?? ''),
-                (string)($requestData['output_format'] ?? $requestData['response_format'] ?? '')
-            );
-            if ($mimeType !== '') {
-                $image['mime_type'] = $mimeType;
-            }
-
-            if ($image !== []) {
-                $images[] = $image;
-            }
-        }
-
-        return [
-            'images' => $images,
-            'usage' => is_array($response['usage'] ?? null) ? $response['usage'] : [],
-            'model' => (string)($response['model'] ?? $modelCode),
-            'finish_reason' => 'stop',
-            'raw' => $response,
-        ];
-    }
-
-    private function normalizeImageMimeType(string $mimeType, string $format): string
-    {
-        $mimeType = strtolower(trim($mimeType));
-        if ($mimeType !== '') {
-            return $mimeType;
-        }
-
-        $format = strtolower(trim($format));
-        return match ($format) {
-            'jpg', 'jpeg' => 'image/jpeg',
-            'webp' => 'image/webp',
-            default => 'image/png',
-        };
     }
 
     /**

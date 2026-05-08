@@ -218,10 +218,10 @@ class VectorEngineProvider extends OpenAiProvider
             $requestUrl,
             $apiKey,
             $payload,
-            (int)($params['timeout'] ?? $config['timeout'] ?? 120)
+            ProviderTimeoutPolicy::resolveImageGenerationTimeout($params, $config)
         );
 
-        return $this->normalizeVectorImageResponse($response, $modelCode, $payload, $requestUrl);
+        return ImageGenerationResponseNormalizer::fromOpenAiImageResponse($response, $modelCode, $payload, $requestUrl);
     }
 
     /**
@@ -253,16 +253,18 @@ class VectorEngineProvider extends OpenAiProvider
         if ($responseMimeType !== '') {
             $payload['generationConfig']['responseMimeType'] = $responseMimeType;
         }
+        $modalities = $params['response_modalities'] ?? $config['response_modalities'] ?? ['TEXT', 'IMAGE'];
+        $payload['generationConfig']['responseModalities'] = array_values(array_map('strval', is_array($modalities) ? $modalities : [$modalities]));
 
         $requestUrl = $this->resolveGeminiGenerateContentUrl($config, $modelCode);
         $response = $this->postJson(
             $requestUrl,
             $apiKey,
             $payload,
-            (int)($params['timeout'] ?? $config['timeout'] ?? 120)
+            ProviderTimeoutPolicy::resolveImageGenerationTimeout($params, $config)
         );
 
-        return $this->normalizeGeminiImageResponse($response, $modelCode, $payload, $requestUrl);
+        return ImageGenerationResponseNormalizer::fromGeminiGenerateContentResponse($response, $modelCode, $payload, $requestUrl);
     }
 
     private function generateText(AiModel $model, string $prompt, array $params = []): array
@@ -573,88 +575,6 @@ class VectorEngineProvider extends OpenAiProvider
     }
 
     /**
-     * @param array<string,mixed> $response
-     * @param array<string,mixed> $requestData
-     * @return array<string,mixed>
-     */
-    private function normalizeVectorImageResponse(array $response, string $modelCode, array $requestData, string $requestUrl): array
-    {
-        $images = [];
-        foreach (is_array($response['data'] ?? null) ? $response['data'] : [] as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $image = [];
-            foreach (['url', 'b64_json', 'revised_prompt'] as $key) {
-                if (isset($item[$key]) && is_scalar($item[$key]) && trim((string)$item[$key]) !== '') {
-                    $image[$key] = (string)$item[$key];
-                }
-            }
-            if ($image !== []) {
-                $images[] = $image;
-            }
-        }
-
-        return [
-            'images' => $images,
-            'usage' => is_array($response['usage'] ?? null) ? $response['usage'] : [],
-            'model' => (string)($response['model'] ?? $modelCode),
-            'finish_reason' => 'stop',
-            'request_url' => $requestUrl,
-            'request' => $requestData,
-            'raw' => $response,
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $response
-     * @param array<string,mixed> $requestData
-     * @return array<string,mixed>
-     */
-    private function normalizeGeminiImageResponse(array $response, string $modelCode, array $requestData, string $requestUrl): array
-    {
-        $images = [];
-        $textParts = [];
-        foreach (is_array($response['candidates'] ?? null) ? $response['candidates'] : [] as $candidate) {
-            if (!is_array($candidate)) {
-                continue;
-            }
-            $content = is_array($candidate['content'] ?? null) ? $candidate['content'] : [];
-            foreach (is_array($content['parts'] ?? null) ? $content['parts'] : [] as $part) {
-                if (!is_array($part)) {
-                    continue;
-                }
-                $inlineData = is_array($part['inlineData'] ?? null)
-                    ? $part['inlineData']
-                    : (is_array($part['inline_data'] ?? null) ? $part['inline_data'] : []);
-                if ($inlineData !== []) {
-                    $data = (string)($inlineData['data'] ?? '');
-                    if ($data !== '') {
-                        $images[] = [
-                            'b64_json' => $data,
-                            'mime_type' => (string)($inlineData['mimeType'] ?? $inlineData['mime_type'] ?? 'image/png'),
-                        ];
-                    }
-                }
-                if (isset($part['text']) && is_scalar($part['text']) && trim((string)$part['text']) !== '') {
-                    $textParts[] = trim((string)$part['text']);
-                }
-            }
-        }
-
-        return [
-            'images' => $images,
-            'content' => implode("\n", $textParts),
-            'usage' => is_array($response['usageMetadata'] ?? null) ? $response['usageMetadata'] : [],
-            'model' => $modelCode,
-            'finish_reason' => 'stop',
-            'request_url' => $requestUrl,
-            'request' => $requestData,
-            'raw' => $response,
-        ];
-    }
-
-    /**
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
      */
@@ -667,7 +587,7 @@ class VectorEngineProvider extends OpenAiProvider
         $context = stream_context_create([
             'http' => [
                 'method' => 'POST',
-                'timeout' => $timeout,
+                'timeout' => $timeout > 0 ? $timeout : ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT,
                 'ignore_errors' => true,
                 'header' => implode("\r\n", [
                     'Content-Type: application/json',
@@ -734,8 +654,10 @@ class VectorEngineProvider extends OpenAiProvider
                 'Authorization: Bearer ' . $apiKey,
                 'User-Agent: Weline-Ai-VectorEngine/1.0',
             ],
-            CURLOPT_TIMEOUT => max(1, $timeout),
-            CURLOPT_CONNECTTIMEOUT => min(10, max(1, $timeout)),
+            CURLOPT_TIMEOUT => max(0, $timeout),
+            CURLOPT_CONNECTTIMEOUT => $timeout > 0
+                ? min(ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT, max(1, $timeout))
+                : ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
         ]);
