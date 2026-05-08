@@ -25,10 +25,64 @@ trait ProviderConnectionTestTrait
         }
 
         if ($model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_VIDEO)) {
-            if (!method_exists($this, 'testVideoConnection')) {
-                throw new Exception(__('该供应商尚未实现文生视频模型连接测试'));
+            // 优先走供应商专用测试；如果未实现则做兜底生成，确保不会只返回“连接成功”
+            if (method_exists($this, 'testVideoConnection')) {
+                return $this->testVideoConnection($model, $params);
             }
-            return $this->testVideoConnection($model, $params);
+
+            $result = $this->generate(
+                $model,
+                // 兜底让模型返回“视频URL/可下载内容”或明确不可用原因
+                '生成一个 1 秒的测试视频（或返回可下载的 URL）。如果无法生成视频，请返回 "VIDEO_TEST_UNAVAILABLE" 并给出原因。',
+                array_replace([
+                    'temperature' => 0,
+                    'test_mode' => true,
+                    'timeout' => 30,
+                ], $params)
+            );
+
+            $content = trim((string)($result['content'] ?? $result['response'] ?? ''));
+            if ($content === '') {
+                throw new Exception(__('文生视频模型测试响应为空'));
+            }
+
+            return [
+                'success' => true,
+                'content' => $content,
+                'response' => $content,
+                'duration' => round((microtime(true) - $started) * 1000, 2),
+                'model' => (string)($result['model'] ?? $modelCode),
+                'request_url' => (string)($result['request_url'] ?? ''),
+                'raw' => $result['raw'] ?? $result,
+            ];
+        }
+
+        // 文生音乐/音频（当前框架缺少统一的 audio modality 常量时，用模型代码进行兜底识别）
+        if ($this->isAudioMusicConnectionTestModelCode($modelCode)) {
+            $result = $this->generate(
+                $model,
+                '生成一段简短的测试音频（或返回可下载的 URL/数据）。如果无法生成，请返回 "AUDIO_TEST_UNAVAILABLE" 并给出原因。',
+                array_replace([
+                    'temperature' => 0,
+                    'test_mode' => true,
+                    'timeout' => 30,
+                ], $params)
+            );
+
+            $content = trim((string)($result['content'] ?? $result['response'] ?? ''));
+            if ($content === '') {
+                throw new Exception(__('文生音频/音乐模型测试响应为空'));
+            }
+
+            return [
+                'success' => true,
+                'content' => $content,
+                'response' => $content,
+                'duration' => round((microtime(true) - $started) * 1000, 2),
+                'model' => (string)($result['model'] ?? $modelCode),
+                'request_url' => (string)($result['request_url'] ?? ''),
+                'raw' => $result['raw'] ?? $result,
+            ];
         }
 
         if ($model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE)) {
@@ -154,5 +208,16 @@ trait ProviderConnectionTestTrait
     protected function getConnectionTestImageBase64(): string
     {
         return 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+    }
+
+    protected function isAudioMusicConnectionTestModelCode(string $modelCode): bool
+    {
+        $code = strtolower(trim($modelCode));
+        foreach (['audio', 'music', 'song', 'wav', 'mp3', 'm4a', 'ogg', 'flac', 'tts', 'text-to-speech', 'speech', 'sing'] as $needle) {
+            if (str_contains($code, $needle)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
