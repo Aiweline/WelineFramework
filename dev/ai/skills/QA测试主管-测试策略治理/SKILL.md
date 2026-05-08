@@ -1,7 +1,7 @@
 ---
 name: QA测试主管-测试策略治理
 description: QA lead skill for test strategy, coverage planning, risk-based validation design, and cross-role quality governance.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

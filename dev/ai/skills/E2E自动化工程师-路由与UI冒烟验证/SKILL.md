@@ -1,7 +1,7 @@
 ---
 name: E2E自动化工程师-路由与UI冒烟验证
 description: E2E automation engineer skill for route smoke checks, HTTP reachability, and lightweight UI confidence validation.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

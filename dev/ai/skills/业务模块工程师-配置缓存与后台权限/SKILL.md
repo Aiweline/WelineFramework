@@ -1,7 +1,7 @@
 ---
 name: 业务模块工程师-配置缓存与后台权限
 description: Business module engineer skill for env config, cache usage, backend menu wiring, and module-level permission integration.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

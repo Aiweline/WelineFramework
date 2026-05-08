@@ -1,7 +1,7 @@
 ---
 name: 文档知识库工程师-技能索引与知识库
 description: Documentation engineer skill for skill indexing, routing references, migration catalogs, and maintainable repository knowledge structure.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

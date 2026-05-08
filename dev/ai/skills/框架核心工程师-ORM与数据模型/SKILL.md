@@ -1,7 +1,7 @@
 ---
 name: 框架核心工程师-ORM与数据模型
 description: Framework core engineer skill for ORM conventions, schema annotations, query patterns, and cross-module data access contracts.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

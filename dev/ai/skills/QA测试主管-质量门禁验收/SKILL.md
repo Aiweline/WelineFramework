@@ -1,7 +1,7 @@
 ---
 name: QA测试主管-质量门禁验收
 description: QA lead skill for evidence review, gate enforcement, release-readiness assessment, and quality signoff recommendations.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role
