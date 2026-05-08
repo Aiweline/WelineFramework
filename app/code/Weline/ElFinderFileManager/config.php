@@ -2,10 +2,6 @@
 
 namespace Weline\ElFinderFileManager;
 
-use Weline\Framework\Http\Url;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\View\Template;
-
 $app_boostrap_file = __DIR__ . '/../../../bootstrap.php';
 $included = false;
 if (file_exists($app_boostrap_file)) {
@@ -20,30 +16,58 @@ if (!$included) {
     }
 }
 if (!$included) {
-    # 文件找不到
-    die('Bootstrap文件找不到！请确保你是在WelineFramework框架中使用此拓展！');
+    die('Bootstrap file not found. Run this module inside WelineFramework.');
 }
 
-# 软件资源
-if (!function_exists('exec')) {
-    die('exec 方法找不到！请确保PHP没有禁用exec！');
-}
-//dd(ini_get_all());
 $ds = DS;
-$vendor_path = VENDOR_PATH . "studio-42{$ds}elfinder";
+$vendor_path = rtrim(VENDOR_PATH, '\\/') . $ds . "studio-42{$ds}elfinder";
 $target_static_path = __DIR__ . DS . "view{$ds}statics{$ds}";
 if (!is_dir($target_static_path)) {
     mkdir($target_static_path, 0755, true);
 }
 
-# 搬迁文件
-$target_static_dir = __DIR__ . DS . "view{$ds}statics{$ds}";
+if (!is_dir($vendor_path)) {
+    if (function_exists('w_log_warning')) {
+        w_log_warning(
+            'ElFinder vendor assets were not copied because studio-42/elfinder is missing: ' . $vendor_path,
+            [],
+            'elfinder'
+        );
+    }
+    return;
+}
 
-if (!is_dir($target_static_dir)) {
-    mkdir($target_static_dir, 0755, true);
-}
-if (IS_WIN) {
-    exec("xcopy {$vendor_path} {$target_static_path} /E /I /Y /F");
-} else {
-    exec("cp -r {$vendor_path} {$target_static_path} -f");
-}
+$copyDirectory = static function (string $source, string $target) use (&$copyDirectory): void {
+    if (!is_dir($source)) {
+        return;
+    }
+
+    if (!is_dir($target)) {
+        mkdir($target, 0755, true);
+    }
+
+    $iterator = new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
+        \RecursiveIteratorIterator::SELF_FIRST
+    );
+
+    foreach ($iterator as $item) {
+        $relativePath = substr($item->getPathname(), strlen($source));
+        $destinationPath = rtrim($target, '\\/') . $relativePath;
+
+        if ($item->isDir()) {
+            if (!is_dir($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+            continue;
+        }
+
+        $destinationDir = dirname($destinationPath);
+        if (!is_dir($destinationDir)) {
+            mkdir($destinationDir, 0755, true);
+        }
+        copy($item->getPathname(), $destinationPath);
+    }
+};
+
+$copyDirectory($vendor_path, $target_static_path);
