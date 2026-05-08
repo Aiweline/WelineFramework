@@ -26,7 +26,8 @@ use Weline\Framework\Manager\ObjectManager;
 class Group extends \Weline\Framework\Database\Model
 {
     public const schema_table = 'eav_attribute_group';
-    public const schema_primary_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];
+    public const schema_primary_keys = [];
+    public const schema_primary_key = 'group_id';
 
     public const schema_fields_ID = 'group_id';
     public const schema_fields_group_id = 'group_id';
@@ -35,7 +36,7 @@ class Group extends \Weline\Framework\Database\Model
     public const schema_fields_set_id = 'set_id';
     public const schema_fields_eav_entity_id = 'eav_entity_id';
 
-    public array $_unit_primary_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];
+    public array $_unit_primary_keys = ['code', 'eav_entity_id'];
     public array $_index_sort_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];
 
     // 表结构已迁移到 Schema/EavAttributeGroupSchema.php，由 Setup/Install.php 统一管理表创建；此处不再定义 setup/upgrade/install，使用父类空实现。
