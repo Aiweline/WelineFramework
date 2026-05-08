@@ -7,9 +7,10 @@ use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Ai\Model\AiModel;
 use Weline\Framework\App\Exception;
 
-class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterface, ModelListingProviderInterface
+class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterface, ModelListingProviderInterface, ProviderConnectionTestInterface
 {
     use ModelListingProviderTrait;
+    use ProviderConnectionTestTrait;
 
     private const MAX_RETRIES = 3;
     private const RETRY_DELAY = 1;
@@ -118,6 +119,25 @@ class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterf
     public function getSupportedModels(): array
     {
         return VendorConfigManager::getProviderModels($this->getProviderCode());
+    }
+
+    protected function buildVisionConnectionTestParams(AiModel $model, array $params): array
+    {
+        return [
+            'prompt' => '',
+            'params' => [
+                'contents' => [[
+                    'role' => 'user',
+                    'parts' => [
+                        ['text' => 'Describe this image briefly and reply OK if you can read it.'],
+                        ['inlineData' => [
+                            'mimeType' => 'image/png',
+                            'data' => $this->getConnectionTestImageBase64(),
+                        ]],
+                    ],
+                ]],
+            ],
+        ];
     }
 
     private function resolveConfig(AiModel $model, array $params): array
