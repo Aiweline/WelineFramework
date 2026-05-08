@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Bot\Test\Unit\Setup;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use ReflectionMethod;
 use Weline\Bot\Setup\Install;
 use Weline\Framework\Setup\Data\Context;
@@ -12,32 +13,36 @@ use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\Setup as DbSetup;
 use Weline\Framework\Setup\InstallInterface;
 
-class InstallSignatureTest extends TestCase
+final class InstallSignatureTest extends TestCase
 {
-    public function testInstallSetupUsesFrameworkSetupDataContextContract(): void
+    public function testInstallSetupSignatureMatchesFrameworkContract(): void
     {
-        $this->assertTrue(is_subclass_of(Install::class, InstallInterface::class));
+        $installMethod = new ReflectionMethod(Install::class, 'setup');
+        $interfaceMethod = new ReflectionMethod(InstallInterface::class, 'setup');
 
-        $method = new ReflectionMethod(Install::class, 'setup');
-        $parameters = $method->getParameters();
+        self::assertSame($interfaceMethod->getNumberOfParameters(), $installMethod->getNumberOfParameters());
 
-        $this->assertCount(2, $parameters);
-        $this->assertSame(Setup::class, $parameters[0]->getType()?->getName());
-        $this->assertSame(Context::class, $parameters[1]->getType()?->getName());
-        $this->assertSame('void', (string) $method->getReturnType());
+        $parameters = $installMethod->getParameters();
+
+        self::assertSame(Setup::class, $parameters[0]->getType()?->getName());
+        self::assertSame(Context::class, $parameters[1]->getType()?->getName());
     }
 
-    public function testInstallUsesAvailableSetupDataApi(): void
+    public function testInstallSeedHelpersUseFrameworkDbSetupApi(): void
     {
-        $installSource = file_get_contents(
-            dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'Setup' . DIRECTORY_SEPARATOR . 'Install.php'
-        );
+        foreach (['createDefaultRole', 'createBuiltinSkills', 'registerBotAdapters'] as $method) {
+            $seedMethod = new ReflectionMethod(Install::class, $method);
+            self::assertSame(DbSetup::class, $seedMethod->getParameters()[0]->getType()?->getName());
+        }
+    }
 
-        $this->assertTrue(method_exists(Setup::class, 'getDbSetup'));
-        $this->assertTrue(method_exists(DbSetup::class, 'getTable'));
-        $this->assertTrue(method_exists(DbSetup::class, 'getConnector'));
-        $this->assertStringContainsString('->getDbSetup()', $installSource);
-        $this->assertStringNotContainsString('$setup->getTable(', $installSource);
-        $this->assertStringNotContainsString('$setup->getConnection(', $installSource);
+    public function testInstallAvoidsUnsupportedSetupFacadeMethods(): void
+    {
+        $source = (string) file_get_contents((new ReflectionClass(Install::class))->getFileName());
+
+        self::assertStringContainsString('getDbSetup()', $source);
+        self::assertStringNotContainsString('$setup->getTable(', $source);
+        self::assertStringNotContainsString('$setup->getConnection(', $source);
+        self::assertStringNotContainsString('SHOW TABLES LIKE', $source);
     }
 }

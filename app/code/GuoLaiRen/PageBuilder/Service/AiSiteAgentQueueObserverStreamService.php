@@ -82,7 +82,8 @@ class AiSiteAgentQueueObserverStreamService
      * 规则（与原控制器 `reconcileActiveOperationWithQueueInfo` 一致）：
      *  - operation 不匹配 / 非 queued|running / 无 snapshot ⇒ 原样返回；
      *  - snapshot.status = 'error' ⇒ active_operation.status='error'，message 取 process → result_log → i18n 兜底；
-     *  - snapshot.status ∈ {done, stop, cancelled} ⇒ active_operation.status='done'，message 按 operation 分支 i18n 兜底。
+     *  - snapshot.status = 'done' ⇒ active_operation.status='done'，message 按 operation 分支 i18n 兜底。
+     *  - snapshot.status ∈ {stop, stopped, cancelled, canceled} ⇒ active_operation.status='cancelled'，避免被误读为成功完成。
      *
      * @param array<string, mixed> $activeOperation
      * @param array<string, mixed>|null $queueInfo
@@ -96,7 +97,7 @@ class AiSiteAgentQueueObserverStreamService
     ): array {
         if (
             \trim((string)($activeOperation['operation'] ?? '')) !== $operation
-            || !\in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running', 'done', 'error', 'cancelled'], true)
+            || !\in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running', 'done', 'error', 'stop', 'cancelled', 'canceled'], true)
             || !\is_array($queueInfo['snapshot'] ?? null)
         ) {
             return $activeOperation;
@@ -154,8 +155,8 @@ class AiSiteAgentQueueObserverStreamService
             $activeOperation['can_close_stream'] = false;
             $activeOperation['continue_other_operations'] = false;
             $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
-        } elseif (\in_array($queueStatus, ['done', 'stop', 'cancelled'], true)) {
-            $activeOperation['status'] = 'done';
+        } elseif (\in_array($queueStatus, ['done', 'stop', 'stopped', 'cancelled', 'canceled'], true)) {
+            $activeOperation['status'] = $queueStatus === 'done' ? 'done' : 'cancelled';
             $activeOperation['queue_waiting_for_scheduler'] = false;
             $activeOperation['can_close_stream'] = false;
             $activeOperation['continue_other_operations'] = false;
@@ -170,9 +171,15 @@ class AiSiteAgentQueueObserverStreamService
             }
             if (\trim((string)($activeOperation['message'] ?? '')) === '') {
                 $activeOperation['message'] = match ($operation) {
-                    'task_plan' => (string)__('第二阶段任务方案队列已完成。'),
-                    'build' => (string)__('生成主题队列已完成。'),
-                    default => (string)__('阶段一方案队列已完成。'),
+                    'task_plan' => $activeOperation['status'] === 'cancelled'
+                        ? (string)__('第二阶段任务方案队列已取消。')
+                        : (string)__('第二阶段任务方案队列已完成。'),
+                    'build' => $activeOperation['status'] === 'cancelled'
+                        ? (string)__('生成主题队列已取消。')
+                        : (string)__('生成主题队列已完成。'),
+                    default => $activeOperation['status'] === 'cancelled'
+                        ? (string)__('阶段一方案队列已取消。')
+                        : (string)__('阶段一方案队列已完成。'),
                 };
             }
             $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
