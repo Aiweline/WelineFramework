@@ -515,7 +515,12 @@ class Cli extends CliAbstract
                 ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class)->execute();
             } catch (Exception $exception) {
                 $this->printer->error($exception->getMessage());
-                exit();
+                exit(1);
+            }
+            $commands = Env::getCommands();
+            if (empty($commands)) {
+                $this->printer->error('Command registry update failed; please run: php bin/w command:upgrade');
+                exit(1);
             }
 //            exit($this->printer->error('命令系统异常！请完整执行（不能简写）更新模块命令后重试：php bin/w command:upgrade'));
         }

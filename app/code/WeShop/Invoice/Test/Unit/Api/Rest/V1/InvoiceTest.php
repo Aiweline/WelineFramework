@@ -66,10 +66,10 @@ class InvoiceTest extends TestCase
             ->getMock();
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['page', 1, 2],
-            ['page_size', 20, 15],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'page' => 2,
+            'page_size' => 15,
+        ]));
         $this->setProtectedProperty($api, 'request', $request);
 
         $api->expects($this->once())
@@ -162,10 +162,10 @@ class InvoiceTest extends TestCase
             ->getMock();
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['page', 1, 1],
-            ['page_size', 20, 999],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'page' => 1,
+            'page_size' => 999,
+        ]));
         $this->setProtectedProperty($api, 'request', $request);
 
         $api->expects($this->once())
@@ -185,5 +185,15 @@ class InvoiceTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = null): mixed => \array_key_exists($key, $params)
+            ? $params[$key]
+            : $default;
     }
 }
