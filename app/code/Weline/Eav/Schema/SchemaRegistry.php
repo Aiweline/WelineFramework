@@ -148,6 +148,7 @@ class SchemaRegistry
         $fullTableName = $connection->getConfigProvider()->getPrefix() . $tableName;
         
         if ($this->tableExists($connection, $fullTableName)) {
+            $this->insertInitialData($setup, $schema);
             return;
         }
 
@@ -242,7 +243,7 @@ class SchemaRegistry
         }
 
         $query = $connection->getQuery();
-        $query->table($tableName)->select('1');
+        $query->table($tableName);
 
         foreach ($uniqueFields as $field) {
             if (!array_key_exists($field, $row)) {
@@ -252,7 +253,7 @@ class SchemaRegistry
         }
 
         try {
-            return !empty($query->limit(1)->fetch());
+            return !empty($query->limit(1)->select('1')->fetch());
         } catch (\Exception) {
             return false;
         }
