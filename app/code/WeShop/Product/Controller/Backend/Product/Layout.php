@@ -18,10 +18,12 @@ use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductLayout;
 use WeShop\Product\Model\ProductLayoutSchedule;
 use WeShop\Product\Service\ProductLayoutService;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 
+#[Acl('WeShop_Product::product_layout', 'Product layout actions', 'mdi mdi-view-dashboard-edit-outline', 'Manage product layouts', 'WeShop_Product::product')]
 class Layout extends BackendController
 {
     private ProductLayoutService $layoutService;
@@ -37,6 +39,7 @@ class Layout extends BackendController
     /**
      * 产品布局配置页面
      */
+    #[Acl('WeShop_Product::product_layout_index', 'View product layouts', 'mdi mdi-view-dashboard-outline', 'View product layout page')]
     public function index()
     {
         $productId = (int)$this->request->getParam('product_id');
@@ -79,6 +82,7 @@ class Layout extends BackendController
     /**
      * 保存产品布局配置
      */
+    #[Acl('WeShop_Product::product_layout_save', 'Save product layout', 'mdi mdi-content-save', 'Save product layout data')]
     public function save()
     {
         $productId = (int)$this->request->getParam('product_id');
@@ -105,6 +109,7 @@ class Layout extends BackendController
     /**
      * 删除产品布局配置
      */
+    #[Acl('WeShop_Product::product_layout_delete', 'Delete product layout', 'mdi mdi-delete-outline', 'Delete product layout data')]
     public function delete()
     {
         $layoutId = (int)$this->request->getParam('layout_id');
@@ -133,6 +138,7 @@ class Layout extends BackendController
     /**
      * 创建布局计划
      */
+    #[Acl('WeShop_Product::product_layout_schedule_create', 'Create layout schedule', 'mdi mdi-calendar-plus', 'Create product layout schedule')]
     public function createSchedule()
     {
         $productId = (int)$this->request->getParam('product_id');
@@ -198,6 +204,7 @@ class Layout extends BackendController
     /**
      * 编辑布局计划
      */
+    #[Acl('WeShop_Product::product_layout_schedule_edit', 'Edit layout schedule', 'mdi mdi-calendar-edit', 'Edit product layout schedule')]
     public function editSchedule()
     {
         $scheduleId = (int)$this->request->getParam('schedule_id');
@@ -254,6 +261,7 @@ class Layout extends BackendController
     /**
      * 删除布局计划
      */
+    #[Acl('WeShop_Product::product_layout_schedule_delete', 'Delete layout schedule', 'mdi mdi-calendar-remove', 'Delete product layout schedule')]
     public function deleteSchedule()
     {
         $scheduleId = (int)$this->request->getParam('schedule_id');

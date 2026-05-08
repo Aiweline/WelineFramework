@@ -6,7 +6,9 @@ namespace WeShop\Affiliate\Controller\Backend\Affiliate;
 
 use WeShop\Affiliate\Service\AffiliateAdminPageDataService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Affiliate::affiliate_management', 'Affiliate Management', 'mdi mdi-account-tie-outline', 'Manage affiliate records', 'Weline_Backend::marketing_group')]
 class Index extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Index extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Affiliate::affiliate_management_index', 'View affiliates', 'mdi mdi-account-search-outline', 'View affiliate management page')]
     public function index(): string
     {
         $page = max(1, (int) $this->request->getParam('page', 1));

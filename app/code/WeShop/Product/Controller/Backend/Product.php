@@ -20,11 +20,13 @@ use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavEntity;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Admin\Controller\BaseController;
 
+#[Acl('WeShop_Product::product', 'Products', 'mdi mdi-package-variant', 'Manage products', 'WeShop_Product::catalog')]
 class Product extends BaseController
 {
     private \WeShop\Product\Model\Product $product;
@@ -36,6 +38,7 @@ class Product extends BaseController
         $this->product->loadLocalDescription();
     }
 
+    #[Acl('WeShop_Product::product_index', 'View products', 'mdi mdi-package-search-outline', 'View product management page')]
     public function index(): string
     {
         // 明确指定排序字段，使用表别名避免JOIN时的字段歧义
@@ -82,6 +85,7 @@ class Product extends BaseController
         return $this->fetch();
     }
 
+    #[Acl('WeShop_Product::product_search_by', 'Search products', 'mdi mdi-magnify', 'Search product data')]
     public function searchBy(): string
     {
         $field = $this->request->getGet('field');
@@ -99,6 +103,7 @@ class Product extends BaseController
         }
     }
 
+    #[Acl('WeShop_Product::product_check_batch_sku', 'Check product SKUs', 'mdi mdi-barcode-scan', 'Check product SKU availability')]
     public function checkBatchSku()
     {
         $skus = $this->request->getPost('skus');
@@ -123,6 +128,7 @@ class Product extends BaseController
         }
     }
 
+    #[Acl('WeShop_Product::product_get_set_attributes', 'View product set attributes', 'mdi mdi-format-list-bulleted-type', 'View product attribute set attributes')]
     public function getSetAttributes()
     {
         $id = $this->request->getGet('id');
@@ -135,6 +141,7 @@ class Product extends BaseController
         return $this->fetchJson($attributes);
     }
 
+    #[Acl('WeShop_Product::product_get_set_group', 'View product set groups', 'mdi mdi-group', 'View product attribute set groups')]
     public function getSetGroup()
     {
         $id = $this->request->getGet('id');
@@ -146,6 +153,7 @@ class Product extends BaseController
         return $this->fetchJson($groups);
     }
 
+    #[Acl('WeShop_Product::product_get_set_group_attributes', 'View product group attributes', 'mdi mdi-format-list-group', 'View product group attributes')]
     public function getSetGroupAttributes()
     {
         $id = $this->request->getGet('set_id');
@@ -203,6 +211,7 @@ class Product extends BaseController
     /**
      * 获取产品关联信息（子产品数量统计）
      */
+    #[Acl('WeShop_Product::product_get_links_count', 'View linked product count', 'mdi mdi-link-variant', 'View linked product count')]
     public function getLinksCount(): string
     {
         $productId = (int)$this->request->getGet('product_id');
@@ -227,6 +236,7 @@ class Product extends BaseController
     /**
      * 获取子产品列表
      */
+    #[Acl('WeShop_Product::product_get_children', 'View child products', 'mdi mdi-family-tree', 'View product child relation data')]
     public function getChildren(): string
     {
         $productId = (int)$this->request->getGet('product_id');

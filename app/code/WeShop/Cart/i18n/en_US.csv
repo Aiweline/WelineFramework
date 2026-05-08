@@ -20,8 +20,6 @@ Product,Product
 "Item removed from cart","Item removed from cart"
 "Invalid quantity","Invalid quantity"
 "Cart updated","Cart updated"
-"库存不足，当前库存: %1","库存不足，当前库存: %1"
-"添加购物车失败: %1","添加购物车失败: %1"
 购物车ID不能为空,购物车ID不能为空
 已从购物车移除,已从购物车移除
 数量必须大于0,数量必须大于0
@@ -134,7 +132,7 @@ Product,Product
 "Product is unavailable.","Product is unavailable."
 "Please select product options.","Please select product options."
 "The selected product configuration is unavailable.","The selected product configuration is unavailable."
-"Insufficient stock. Available quantity: %1","Insufficient stock. Available quantity: %1"
+"Insufficient stock. Available quantity: %{1}","Insufficient stock. Available quantity: %{1}"
 "Added to cart successfully.","Added to cart successfully."
 "Product options loaded successfully.","Product options loaded successfully."
 "Invalid cart item.","Invalid cart item."
@@ -160,7 +158,7 @@ Cart,Cart
 添加购物车失败,"Failed to add to cart"
 已添加,Added
 "Shopping Cart","Shopping Cart"
-"%1 items in your cart","%1 items in your cart"
+"%{1} items in your cart","%{1} items in your cart"
 Price,Price
 Quantity,Quantity
 Total,Total

@@ -730,7 +730,7 @@ $order = $this->getData('order');
                             <p class="weshop-success-message">
                                 <?= __('Confirmation will be sent to your email address.') ?>
                                 <span class="weshop-success-order-number">
-                                    <?= __('Order #%1', $order['increment_id'] ?? '112-3456789-1234567') ?>
+                                    <?= __('Order #%{1}', $order['increment_id'] ?? '112-3456789-1234567') ?>
                                 </span>
                             </p>
                         </div>
@@ -752,7 +752,7 @@ $order = $this->getData('order');
                                 <div class="weshop-delivery-header">
                                     <div>
                                         <p class="weshop-delivery-date">
-                                            <?= __('Arriving %1', $order['estimated_delivery'] ?? __('Thursday, Oct 24')) ?>
+                                            <?= __('Arriving %{1}', $order['estimated_delivery'] ?? __('Thursday, Oct 24')) ?>
                                         </p>
                                         <p class="weshop-delivery-shipping">
                                             <?= __('Two-Day Shipping') ?>
@@ -772,10 +772,10 @@ $order = $this->getData('order');
                                         <div class="weshop-delivery-item-info">
                                             <h3 class="weshop-delivery-item-name"><?= htmlspecialchars($item['name'] ?? '') ?></h3>
                                             <?php if ($item['option'] ?? null): ?>
-                                                <p class="weshop-delivery-item-option"><?= __('Color: %1', htmlspecialchars($item['option'])) ?></p>
+                                                <p class="weshop-delivery-item-option"><?= __('Color: %{1}', htmlspecialchars((string) $item['option'], ENT_QUOTES)) ?></p>
                                             <?php endif; ?>
                                             <?php if ($item['seller'] ?? null): ?>
-                                                <p class="weshop-delivery-item-seller"><?= __('Sold by: %1', htmlspecialchars($item['seller'])) ?></p>
+                                                <p class="weshop-delivery-item-seller"><?= __('Sold by: %{1}', htmlspecialchars((string) $item['seller'], ENT_QUOTES)) ?></p>
                                             <?php endif; ?>
                                             <div class="weshop-delivery-item-badges">
                                                 <?php if ($item['is_bestseller'] ?? false): ?>
@@ -893,7 +893,7 @@ $order = $this->getData('order');
                                                 <span class="weshop-order-summary-payment-brand">
                                                     <?= htmlspecialchars($order['payment_method_title'] ?? 'Visa') ?>
                                                 </span>
-                                                <?= __('ending in %1', $order['payment_last4'] ?? '1234') ?>
+                                                <?= __('ending in %{1}', $order['payment_last4'] ?? '1234') ?>
                                             </p>
                                         </div>
                                     </div>
