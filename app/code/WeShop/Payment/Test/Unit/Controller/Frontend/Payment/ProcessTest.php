@@ -18,10 +18,10 @@ class ProcessTest extends TestCase
         $request = $this->createMock(Request::class);
         $request->expects($this->exactly(2))
             ->method('getParam')
-            ->willReturnMap([
-                ['order_id', 0],
-                ['payment_method', 'paypal'],
-            ]);
+            ->willReturnCallback($this->requestParams([
+                'order_id' => 0,
+                'payment_method' => 'paypal',
+            ]));
 
         $controller = $this->createController(
             $request,
@@ -43,11 +43,11 @@ class ProcessTest extends TestCase
         $request = $this->createMock(Request::class);
         $request->expects($this->exactly(3))
             ->method('getParam')
-            ->willReturnMap([
-                ['order_id', 91],
-                ['payment_method', 'paypal'],
-                ['payment', ['return_url' => 'https://example.com/payment/return']],
-            ]);
+            ->willReturnCallback($this->requestParams([
+                'order_id' => 91,
+                'payment_method' => 'paypal',
+                'payment' => ['return_url' => 'https://example.com/payment/return'],
+            ]));
 
         $order = new class extends Order {
             public function __construct()
@@ -74,7 +74,7 @@ class ProcessTest extends TestCase
 
         $result = json_decode($controller->index(), true, 512, JSON_THROW_ON_ERROR);
 
-        $this->assertTrue($result['success']);
+        $this->assertTrue($result['success'], (string) ($result['message'] ?? ''));
         $this->assertSame('pending', $result['data']['status']);
         $this->assertSame('https://paypal.test/checkout', $result['data']['redirect_url']);
     }
@@ -108,5 +108,15 @@ class ProcessTest extends TestCase
                 return (string) json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
             }
         };
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = null): mixed => \array_key_exists($key, $params)
+            ? $params[$key]
+            : $default;
     }
 }

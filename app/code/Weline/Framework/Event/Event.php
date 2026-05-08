@@ -72,7 +72,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
                 $eventData->setData($key);
             } elseif (is_array($eventData)) {
                 foreach ($key as $k => $item) {
-                    $eventData[$k] = $value;
+                    $eventData[$k] = $item;
                 }
             } else {
                 $eventData = $value;
