@@ -6,7 +6,9 @@ namespace WeShop\Invoice\Controller\Backend\Invoice;
 
 use WeShop\Invoice\Service\InvoiceAdminPageDataService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Invoice::invoice_management_view', 'Invoice view actions', 'mdi mdi-eye-outline', 'View invoice details', 'WeShop_Invoice::invoice_management')]
 class View extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class View extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Invoice::invoice_management_view_index', 'View invoice detail', 'mdi mdi-eye', 'View invoice detail page')]
     public function index(): string
     {
         $invoiceId = (int) $this->request->getParam('id', 0);

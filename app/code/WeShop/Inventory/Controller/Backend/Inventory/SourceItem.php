@@ -7,7 +7,9 @@ namespace WeShop\Inventory\Controller\Backend\Inventory;
 use WeShop\Inventory\Service\SourceItemAdminPageDataService;
 use WeShop\Inventory\Service\SourceItemManagementService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Inventory::source_item', 'Source Items', 'mdi mdi-package-variant-closed', 'Manage source inventory items', 'WeShop_Inventory::inventory_management')]
 class SourceItem extends BaseController
 {
     public function __construct(
@@ -16,6 +18,7 @@ class SourceItem extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Inventory::source_item_index', 'View source items', 'mdi mdi-package-search-outline', 'View source item management page')]
     public function index(): string
     {
         $page = max(1, (int) $this->request->getParam('page', 1));
@@ -37,6 +40,7 @@ class SourceItem extends BaseController
         return (string) $this->fetchBase('WeShop_Inventory::backend/templates/inventory/source-item/index.phtml');
     }
 
+    #[Acl('WeShop_Inventory::source_item_edit', 'Edit source item', 'mdi mdi-package-variant-closed-edit', 'Edit source item inventory data')]
     public function edit(): string
     {
         $sourceItemId = (int) $this->request->getParam('id', 0);
@@ -81,6 +85,7 @@ class SourceItem extends BaseController
         return (string) $this->fetchBase('WeShop_Inventory::backend/templates/inventory/source-item/form.phtml');
     }
 
+    #[Acl('WeShop_Inventory::source_item_batch_adjust', 'Batch adjust source items', 'mdi mdi-playlist-edit', 'Batch adjust source item inventory data')]
     public function postBatchAdjust(): string
     {
         try {
@@ -101,6 +106,7 @@ class SourceItem extends BaseController
         }
     }
 
+    #[Acl('WeShop_Inventory::source_item_product_stock', 'View product stock', 'mdi mdi-package-search', 'View product source stock data')]
     public function getProductStock(): string
     {
         $productId = (int) $this->request->getParam('product_id', 0);
