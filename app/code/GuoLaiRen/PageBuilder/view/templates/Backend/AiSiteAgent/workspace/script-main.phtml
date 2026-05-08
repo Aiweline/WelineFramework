@@ -13644,13 +13644,25 @@
             return 100;
         }
         if (queueStatus === 'running' || queueStatus === 'processing') {
-            return 60;
+            return 35;
         }
         if (queueStatus === 'pending' || queueStatus === 'queued') {
-            return 45;
+            return 10;
         }
         var fallback = parseInt(String(fallbackPercent || 0), 10) || 0;
         return Math.max(0, Math.min(100, fallback));
+    }
+
+    function resolveQueuedStagePayloadProgressPercent(payload, fallbackPercent) {
+        var data = payload && typeof payload === 'object' ? payload : {};
+        var explicitPercent = parseInt(String(data.progress_percent || data.percent || 0), 10) || 0;
+        if (explicitPercent > 0) {
+            return Math.max(0, Math.min(100, explicitPercent));
+        }
+        if (data.deferred_queue_progress || data.queue_waiting_for_scheduler || data.can_close_stream) {
+            return 10;
+        }
+        return resolveQueueObserverProgressPercent(data, fallbackPercent);
     }
 
     function logQueueObserverDetailLines(terminal, payload, primaryMessage, onBeforeLog) {
@@ -13711,7 +13723,7 @@
                 var progressMsg = String(payload.message);
                 var isAiHintOnly = /AI\s*(提示|建议|草稿|思路)/.test(progressMsg);
                 setPlanModeStatus(progressMsg);
-                setPlanModalProgress(progressMsg, parseInt(String(payload.progress_percent || 60), 10) || 60, false);
+                setPlanModalProgress(progressMsg, resolveQueuedStagePayloadProgressPercent(payload, 35), false);
                 if (!isAiHintOnly && typeof terminal.log === 'function') {
                     markPlanTerminalConnected();
                     terminal.log(progressMsg, 'progress', payload);
@@ -14828,9 +14840,8 @@
                 return;
             }
             var progressMsg = String(payload.message);
-            var pct = parseInt(String(payload.progress_percent || 0), 10) || 0;
             setTaskPlanModeStatus(progressMsg);
-            setTaskPlanModalProgress(progressMsg, pct > 0 ? pct : 50, false);
+            setTaskPlanModalProgress(progressMsg, resolveQueuedStagePayloadProgressPercent(payload, 38), false);
             if (typeof terminal.log === 'function') {
                 terminal.log(progressMsg, 'progress', payload);
             }
@@ -15784,7 +15795,7 @@
                                 }
                             }
                             var confirmNextMessage = (confirmData && confirmData.message) ? String(confirmData.message) : messages.planGenerating;
-                            setPlanModalProgress(confirmNextMessage, 35, false);
+                            setPlanModalProgress(confirmNextMessage, jsonTruthyFlag(confirmData && confirmData.start_sse) ? 10 : 35, false);
                             setPlanRetryButtonVisible(false);
                             toast('success', confirmNextMessage);
                             planStartRequestPending = false;
@@ -15850,7 +15861,7 @@
                 serverDecisionMessage = messages.planRegeneratingByLocale;
             }
             var nextMessage = serverDecisionMessage || ((data && data.message) ? String(data.message) : messages.planGenerating);
-            setPlanModalProgress(nextMessage, 35, false);
+            setPlanModalProgress(nextMessage, (jsonTruthyFlag(data && data.start_sse) && !reuseRunningPlan) ? 10 : 35, false);
             setPlanRetryButtonVisible(false);
             toast('success', nextMessage);
             planStartRequestPending = false;
