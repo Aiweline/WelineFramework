@@ -899,10 +899,27 @@ $this->assign('providerAdd', $providerAdd);
             var options = {};
             window.__welineProviderTestModelMeta = {};
             var defaultModelCode = data.default_model_code || '';
+            var modalityShortMap = {
+                'text2text': '文生文',
+                'text2image': '文生图',
+                'text2video': '文生视频',
+                'image2text': '图生文',
+                'embedding': '向量',
+                'audio2text': '语音转写',
+                'text2audio': '语音合成',
+                'multimodal': '多模态'
+            };
             data.data.forEach(function(model) {
                 var code = model.code || model.value || '';
-                if (code) options[code] = model.label || model.name || code;
-                if (code) window.__welineProviderTestModelMeta[code] = model;
+                if (!code) return;
+                var label = model.label || model.name || code;
+                var modality = String(model.primary_modality || '').toLowerCase();
+                if (modality && label.indexOf('[') === -1) {
+                    var human = modalityShortMap[modality] || modality;
+                    label += '  ·  [' + human + ']';
+                }
+                options[code] = label;
+                window.__welineProviderTestModelMeta[code] = model;
             });
             if (!defaultModelCode) {
                 var optionKeys = Object.keys(options);
@@ -960,27 +977,31 @@ $this->assign('providerAdd', $providerAdd);
             btn.disabled = false;
             document.body.removeChild(testModal);
 
-            if (data.success) {
-                var message = data.model_code ?
-                    data.message + '\n\n使用的测试模型: ' + data.model_code :
-                    data.message;
-                if (data.request_url) message += '\n\n请求地址: ' + data.request_url;
-                showResultModal('success', '连接测试成功', message);
+            var images = Array.isArray(data && data.images) ? data.images : [];
+            if (data && data.success) {
+                var lines = [];
+                if (data.message) lines.push(data.message);
+                if (data.model_code) lines.push('使用的测试模型: ' + data.model_code);
+                if (data.primary_modality) lines.push('模态: ' + data.primary_modality);
+                if (data.duration) lines.push('耗时: ' + data.duration + ' ms');
+                if (data.response) lines.push('响应: ' + String(data.response).slice(0, 500));
+                if (data.request_url) lines.push('请求地址: ' + data.request_url);
+                showResultModal('success', '连接测试成功', lines.join('\n'), images);
                 loadAccounts(currentPage);
             } else {
-                var message = data.model_code ?
-                    '测试失败: ' + data.message + '\n\n尝试使用的模型: ' + data.model_code :
-                    '测试失败: ' + data.message;
-                if (data.request_url) message += '\n\n请求地址: ' + data.request_url;
-                if (data.base_url) message += '\n\n基础 URL: ' + data.base_url;
-                showResultModal('error', '连接测试失败', message);
+                var lines2 = ['测试失败: ' + ((data && data.message) || '未知错误')];
+                if (data && data.model_code) lines2.push('尝试使用的模型: ' + data.model_code);
+                if (data && data.primary_modality) lines2.push('模态: ' + data.primary_modality);
+                if (data && data.request_url) lines2.push('请求地址: ' + data.request_url);
+                if (data && data.base_url) lines2.push('基础 URL: ' + data.base_url);
+                showResultModal('error', '连接测试失败', lines2.join('\n'), []);
             }
         }).catch(function(error) {
             btn.innerHTML = originalHtml;
             btn.disabled = false;
             document.body.removeChild(testModal);
             console.error('Error:', error);
-            showResultModal('error', '连接测试失败', '测试失败: 网络错误');
+            showResultModal('error', '连接测试失败', '测试失败: 网络错误', []);
         });
     }
 
@@ -1018,37 +1039,76 @@ $this->assign('providerAdd', $providerAdd);
         return modal;
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderTestImagesHtml(images) {
+        if (!Array.isArray(images) || images.length === 0) {
+            return '';
+        }
+        var items = images.map(function(image) {
+            var src = (image && image.url)
+                ? image.url
+                : (image && image.b64_json ? ('data:' + ((image.mime_type) || 'image/png') + ';base64,' + image.b64_json) : '');
+            if (!src) {
+                return '';
+            }
+            var safeSrc = escapeHtml(src);
+            var revised = image && image.revised_prompt ? '<div class="small text-muted mt-1">' + escapeHtml(image.revised_prompt) + '</div>' : '';
+            return '<div class="col-12 col-md-6 mb-2">'
+                + '<a href="' + safeSrc + '" target="_blank" rel="noopener">'
+                + '<img src="' + safeSrc + '" class="img-fluid rounded border" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;" alt="test image">'
+                + '</a>' + revised + '</div>';
+        }).join('');
+        if (!items) return '';
+        return '<div class="row g-2 mt-3">'
+            + '<div class="col-12 fw-bold mb-1"><i class="mdi mdi-image-multiple me-1"></i>返回的测试图片</div>'
+            + items
+            + '</div>';
+    }
+
     // 显示结果弹窗
-    function showResultModal(type, title, message) {
+    function showResultModal(type, title, message, images) {
         var modal = document.createElement('div');
         modal.className = 'modal fade show';
         modal.style.display = 'block';
         modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-        
+
         var iconClass = type === 'success' ? 'mdi-check-circle text-success' : 'mdi-alert-circle text-danger';
-        
-        modal.innerHTML = '<div class="modal-dialog modal-dialog-centered">' +
+        var imagesHtml = renderTestImagesHtml(images);
+        var hasImages = imagesHtml !== '';
+        var dialogClass = hasImages ? 'modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable' : 'modal-dialog modal-dialog-centered';
+
+        modal.innerHTML = '<div class="' + dialogClass + '">' +
             '<div class="modal-content">' +
                 '<div class="modal-header">' +
-                    '<h5 class="modal-title">' + title + '</h5>' +
+                    '<h5 class="modal-title">' + escapeHtml(title) + '</h5>' +
                     '<button type="button" class="btn-close" onclick="closeResultModal(this)"></button>' +
                 '</div>' +
-                '<div class="modal-body text-center py-4">' +
-                    '<i class="mdi ' + iconClass + ' mb-3" style="font-size: 3rem;"></i>' +
-                    '<div class="message-content" style="white-space: pre-line; text-align: left; max-height: 300px; overflow-y: auto;">' +
-                        message +
+                '<div class="modal-body py-3">' +
+                    '<div class="text-center mb-3"><i class="mdi ' + iconClass + '" style="font-size: 3rem;"></i></div>' +
+                    '<div class="message-content" style="white-space: pre-line; text-align: left;">' +
+                        escapeHtml(message) +
                     '</div>' +
+                    imagesHtml +
                 '</div>' +
                 '<div class="modal-footer">' +
                     '<button type="button" class="btn btn-primary" onclick="closeResultModal(this)">确定</button>' +
                 '</div>' +
             '</div>' +
         '</div>';
-        
+
         document.body.appendChild(modal);
         return modal;
     }
     window.showResultModal = showResultModal;
+    window.renderTestImagesHtml = renderTestImagesHtml;
 
     // 关闭结果弹窗
     window.closeResultModal = function(button) {
