@@ -15,7 +15,7 @@ const sourceSkillsDir = resolve(process.cwd(), inputDir);
 const stagingRoot = join(scriptDir, ".skills-sh-publish");
 const stagingSkillsDir = join(stagingRoot, "skills");
 const dryRun = cliArgs.includes("--dry-run");
-const tag = process.env.SKILLS_SH_TAG || "weline-skills-v1.1.0";
+const tag = process.env.SKILLS_SH_TAG || "weline-skills-v1.1.1";
 const githubToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
 const skillSlugMap = new Map([
   ["CI发布工程师-CI与发布门禁", "ci-release-gate"],
@@ -30,7 +30,6 @@ const skillSlugMap = new Map([
   ["业务模块工程师-模块开发", "business-module-development"],
   ["业务模块工程师-配置缓存与后台权限", "business-config-cache-acl"],
   ["前端主题工程师-主题模板开发", "frontend-theme-template"],
-  ["通用工程师-国际化与用户提示", "common-i18n-notification"],
   ["前端主题工程师-组件与页面构建", "frontend-component-pagebuilder"],
   ["单元测试工程师-单元测试覆盖", "unit-test-coverage"],
   ["单元测试工程师-测试数据与回归", "unit-test-data-regression"],
@@ -38,13 +37,14 @@ const skillSlugMap = new Map([
   ["安全权限工程师-会话配置与数据保护", "security-session-data"],
   ["技术主管-一级验收与进度追踪", "tech-lead-acceptance-progress"],
   ["技术主管-任务拆分与调度", "tech-lead-task-scheduling"],
-  ["通用工程师-开发规范与代码质量", "common-development-standards"],
   ["文档知识库工程师-技能索引与知识库", "docs-skill-index"],
   ["文档知识库工程师-文档规范与变更记录", "docs-change-records"],
   ["框架核心工程师-ORM与数据模型", "core-orm-model"],
   ["框架核心工程师-命令与代码生成", "core-command-codegen"],
   ["框架核心工程师-框架核心开发", "core-development"],
   ["框架核心工程师-路由事件与扩展", "core-routing-extension"],
+  ["通用工程师-国际化与用户提示", "common-i18n-notification"],
+  ["通用工程师-开发规范与代码质量", "common-development-standards"],
 ]);
 
 function shouldUseColor() {
