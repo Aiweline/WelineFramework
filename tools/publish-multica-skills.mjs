@@ -20,7 +20,7 @@ const publishConcurrency = Number.parseInt(process.env.CLAWHUB_CONCURRENCY || "4
 const changelog = version
   ? `Publish_WelineFramework_Multica_role_skills_${version}`
   : "Publish_WelineFramework_Multica_role_skills";
-const publishVersion = "1.0.0";
+const publishVersion = version || "1.1.0";
 const skillSlugMap = new Map([
   ["CI发布工程师-CI与发布门禁", "ci-release-gate"],
   ["CI发布工程师-环境兼容与命令安全", "ci-env-command-safety"],
