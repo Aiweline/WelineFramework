@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
+use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Queue\Model\Queue;
@@ -62,6 +63,8 @@ class AiSiteAssetQueue implements QueueInterface
         $scopeService = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
         /** @var AiSiteAssetManifestService $manifestService */
         $manifestService = ObjectManager::getInstance(AiSiteAssetManifestService::class);
+        /** @var AiSiteReferenceImageInsightService $referenceImageInsightService */
+        $referenceImageInsightService = ObjectManager::getInstance(AiSiteReferenceImageInsightService::class);
 
         $session = $sessionService->loadByPublicId($publicId, $adminId);
         if (!$session instanceof AiSiteAgentSession) {
@@ -83,6 +86,14 @@ class AiSiteAssetQueue implements QueueInterface
             $scope = $scopeService->normalizeScope(
                 $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
             );
+            $referenceImageInsights = $referenceImageInsightService->analyze($scope, $this->resolveInsightLocale($scope));
+            if ($referenceImageInsights !== []) {
+                $scope['reference_image_insights'] = $referenceImageInsights;
+                $referenceInsightSignature = $referenceImageInsightService->buildSignature($scope);
+                if ($referenceInsightSignature !== '') {
+                    $scope['reference_image_insights_signature'] = $referenceInsightSignature;
+                }
+            }
             $manifest = $manifestService->syncFromTaskPlan($scope);
             $slot = $manifestService->getSlot($manifest, $slotId);
             if ($slot === []) {
@@ -103,10 +114,10 @@ class AiSiteAssetQueue implements QueueInterface
             ]);
 
             $manifest = $manifestService->markGenerating($manifest, $slotId);
-            $sessionService->mergeScope((int)$session->getId(), $adminId, [
+            $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge([
                 'asset_manifest' => $manifest,
                 'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
-            ]);
+            ], $this->buildReferenceImageInsightScopePatch($scope)));
             $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest]);
 
             $sse->sendEvent('asset_generation_progress', [
@@ -157,39 +168,72 @@ class AiSiteAssetQueue implements QueueInterface
                 'revised_prompt' => (string)($image['revised_prompt'] ?? ''),
             ];
             $manifest = $manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
-            $sessionService->mergeScope((int)$session->getId(), $adminId, [
+            $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
+            $successState = [
                 'asset_manifest' => $manifest,
                 'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
-            ]);
+            ] + $this->buildIdentityAssetScopePatch($scope);
+            $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge([
+                'asset_manifest' => $manifest,
+                'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+            ], $this->buildIdentityAssetScopePatch($scope), $this->buildReferenceImageInsightScopePatch($scope)));
 
-            $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest]);
+            $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest, 'state' => $successState]);
             $sse->sendEvent('asset_generation_done', [
                 'slot_id' => $slotId,
                 'final_url' => $finalUrl,
+                'asset_manifest' => $manifest,
+                'website_profile' => \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+                'state' => $successState,
                 'message' => 'Image asset generation completed.',
             ]);
-            $sse->complete(['success' => true, 'slot_id' => $slotId, 'final_url' => $finalUrl]);
+            $sse->complete([
+                'success' => true,
+                'slot_id' => $slotId,
+                'final_url' => $finalUrl,
+                'asset_manifest' => $manifest,
+                'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+                'state' => $successState,
+            ] + $this->buildIdentityAssetScopePatch($scope));
 
             return 'Image asset generation completed: ' . $slotId;
         } catch (\Throwable $throwable) {
             $scope = $scopeService->normalizeScope(
                 $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
             );
+            $referenceImageInsights = $referenceImageInsightService->analyze($scope, $this->resolveInsightLocale($scope));
+            if ($referenceImageInsights !== []) {
+                $scope['reference_image_insights'] = $referenceImageInsights;
+                $referenceInsightSignature = $referenceImageInsightService->buildSignature($scope);
+                if ($referenceInsightSignature !== '') {
+                    $scope['reference_image_insights_signature'] = $referenceInsightSignature;
+                }
+            }
             $manifest = $manifestService->recordError(
                 $manifestService->syncFromTaskPlan($scope),
                 $slotId,
                 $throwable->getMessage()
             );
-            $sessionService->mergeScope((int)$session->getId(), $adminId, [
+            $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge([
                 'asset_manifest' => $manifest,
                 'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
-            ]);
+            ], $this->buildReferenceImageInsightScopePatch($scope)));
+            $errorState = [
+                'asset_manifest' => $manifest,
+                'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+            ] + $this->buildIdentityAssetScopePatch($scope);
             $sse->sendEvent('asset_generation_failed', [
                 'slot_id' => $slotId,
                 'message' => $throwable->getMessage(),
+                'state' => $errorState,
             ]);
-            $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest]);
-            $sse->complete(['success' => false, 'slot_id' => $slotId, 'message' => $throwable->getMessage()]);
+            $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest, 'state' => $errorState]);
+            $sse->complete([
+                'success' => false,
+                'slot_id' => $slotId,
+                'message' => $throwable->getMessage(),
+                'state' => $errorState,
+            ]);
 
             return 'Image asset generation failed and was recorded for retry: ' . $slotId . ' - ' . $throwable->getMessage();
         }
@@ -346,5 +390,120 @@ class AiSiteAssetQueue implements QueueInterface
             'image/webp' => 'webp',
             default => 'png',
         };
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function buildReferenceImageInsightScopePatch(array $scope): array
+    {
+        $patch = [];
+        if (\is_array($scope['reference_image_insights'] ?? null) && $scope['reference_image_insights'] !== []) {
+            $patch['reference_image_insights'] = $scope['reference_image_insights'];
+        }
+        $signature = \trim((string)($scope['reference_image_insights_signature'] ?? ''));
+        if ($signature !== '') {
+            $patch['reference_image_insights_signature'] = $signature;
+        }
+
+        return $patch;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function buildIdentityAssetScopePatch(array $scope): array
+    {
+        $patch = [];
+        if (\is_array($scope['website_profile'] ?? null) && $scope['website_profile'] !== []) {
+            $patch['website_profile'] = $scope['website_profile'];
+        }
+        foreach (['logo', 'icon', 'favicon'] as $key) {
+            $value = \trim((string)($scope[$key] ?? ''));
+            if ($value !== '') {
+                $patch[$key] = $value;
+            }
+        }
+
+        return $patch;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $slot
+     * @return array<string,mixed>
+     */
+    private function applyIdentityAssetPatchToScope(array $scope, array $slot, string $finalUrl): array
+    {
+        $role = $this->resolveIdentityAssetRole($slot);
+        if ($role === '' || \trim($finalUrl) === '') {
+            return $scope;
+        }
+
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        if ($role === 'logo') {
+            $scope['logo'] = $finalUrl;
+            $websiteProfile['logo'] = $finalUrl;
+        } elseif ($role === 'icon') {
+            $scope['icon'] = $finalUrl;
+            $scope['favicon'] = $finalUrl;
+            $websiteProfile['icon'] = $finalUrl;
+            $websiteProfile['favicon'] = $finalUrl;
+        }
+        $scope['website_profile'] = $websiteProfile;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function resolveIdentityAssetRole(array $slot): string
+    {
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        if (\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)) {
+            return 'logo';
+        }
+        if (\in_array($field, ['icon', 'favicon', 'site.icon'], true)) {
+            return 'icon';
+        }
+
+        $haystack = \strtolower(\implode(' ', [
+            (string)($slot['slot_id'] ?? ''),
+            (string)($slot['label'] ?? ''),
+            (string)($slot['kind'] ?? ''),
+        ]));
+        if (\str_contains($haystack, 'logo')) {
+            return 'logo';
+        }
+        if (\str_contains($haystack, 'icon') || \str_contains($haystack, 'favicon')) {
+            return 'icon';
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveInsightLocale(array $scope): string
+    {
+        foreach ([
+            $scope['plan_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $locale = \trim((string)$value);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
     }
 }
