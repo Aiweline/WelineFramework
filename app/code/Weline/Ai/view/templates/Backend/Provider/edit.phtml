@@ -422,9 +422,11 @@
                         throw new Error((data && data.message) || 'models endpoint unavailable');
                     }
                     var options = {};
+                    window.__welineProviderTestModelMeta = {};
                     data.data.forEach(function(model) {
                         var code = model.code || model.value || '';
                         if (code) options[code] = model.label || model.name || code;
+                        if (code) window.__welineProviderTestModelMeta[code] = model;
                     });
                     return Swal.fire({
                         title: '选择测试模型',
@@ -464,6 +466,9 @@
             var url = '<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>';
             var payload = { id: accountId };
             if (modelCode) payload.model_code = modelCode;
+            var selectedMeta = modelCode && window.__welineProviderTestModelMeta ? window.__welineProviderTestModelMeta[modelCode] : null;
+            if (selectedMeta && selectedMeta.primary_modality) payload.primary_modality = selectedMeta.primary_modality;
+            if (selectedMeta && Array.isArray(selectedMeta.capabilities)) payload.capabilities = selectedMeta.capabilities;
             var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
             var req = window.Weline.Api.request(url, opts);
             req.then(function(res) {

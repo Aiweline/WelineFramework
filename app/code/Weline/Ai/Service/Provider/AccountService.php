@@ -107,7 +107,7 @@ class AccountService
      * @param Account $account
      * @return array ['success' => bool, 'message' => string, 'model_code' => string]
      */
-    public function testConnection(Account $account, ?string $overrideModelCode = null): array
+    public function testConnection(Account $account, ?string $overrideModelCode = null, array $options = []): array
     {
         try {
             $providerCode = strtolower(trim((string)$account->getData(Account::schema_fields_PROVIDER_CODE)));
@@ -133,22 +133,35 @@ class AccountService
             
             // 创建临时模型用于测试
             /** @var AiModel $testModel */
-            $probeError = $this->probeProviderAccountError($providerCode, $baseUrl, $apiKeyPlain, $account->getProxyConfig());
-            if ($probeError !== '') {
-                throw new Exception($probeError);
-            }
-
             $testModel = $this->objectManager->make(AiModel::class);
             $modelMeta = $this->findProviderModelMeta($providerInfo, $testModelCode);
+            $primaryModality = $this->resolveTestPrimaryModality($testModelCode, $modelMeta, $options);
+            $runtimeProviderConfig = is_array($options['provider_config'] ?? null) ? $options['provider_config'] : [];
+            if ($providerCode === 'vectorengine') {
+                foreach (['api_url', 'chat_api_url', 'embeddings_api_url', 'image_api_url'] as $urlKey) {
+                    $runtimeProviderConfig[$urlKey] = $baseUrl;
+                }
+            }
             $testModel->setData([
                 AiModel::schema_fields_SUPPLIER => $providerCode,
                 AiModel::schema_fields_MODEL_CODE => $testModelCode,
-                AiModel::schema_fields_PRIMARY_MODALITY => AiModel::normalizePrimaryModality((string)($modelMeta['primary_modality'] ?? '')),
+                AiModel::schema_fields_PRIMARY_MODALITY => $primaryModality,
+                AiModel::schema_fields_CAPABILITIES => json_encode($options['capabilities'] ?? $modelMeta['capabilities'] ?? []),
                 AiModel::schema_fields_CONFIG => json_encode([
                     'api_key' => $apiKeyPlain,
                     'base_url' => $baseUrl,
                     'model' => $testModelCode  // 使用model字段而不是model_id
-                ])
+                ]),
+                AiModel::schema_fields_PROVIDER_CONFIG => json_encode(array_replace(
+                    $runtimeProviderConfig,
+                    [
+                    'api_key' => $apiKeyPlain,
+                    'base_url' => $baseUrl,
+                    'model' => $testModelCode,
+                    'provider_model_code' => $testModelCode,
+                    'account_id' => (int)$account->getId(),
+                    ]
+                ))
             ]);
             if ($account->getId() && (string)$account->getData(Account::schema_fields_BASE_URL) !== $baseUrl) {
                 $account->setData(Account::schema_fields_BASE_URL, $baseUrl);
@@ -167,6 +180,14 @@ class AccountService
                 throw new Exception(__('无法创建供应商实例') . $detail);
             }
             
+            if ($provider instanceof ProviderConnectionTestInterface) {
+                $result = $provider->testConnection($testModel, [
+                    'max_tokens' => 64,
+                    'temperature' => 0,
+                    'test_mode' => true,
+                    'timeout' => $primaryModality === AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE ? 30 : 12
+                ]);
+            } else {
             // 执行测试请求
             $result = $provider->generate($testModel, '请回复"OK"表示连接成功', [
                 'max_tokens' => 64,
@@ -174,8 +195,10 @@ class AccountService
                 'test_mode' => true,
                 'timeout' => 12
             ]);
+            }
             
-            if (!empty($result['content'])) {
+            $testResponseContent = trim((string)($result['content'] ?? $result['response'] ?? ''));
+            if ($testResponseContent !== '') {
                 // 更新连接状态
                 $account->setData(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
                 $account->setData(Account::schema_fields_CONNECTION_TEST_TIME, time());
@@ -264,6 +287,7 @@ class AccountService
             return '';
         }
         if ($providerCode === 'vectorengine') {
+            $baseUrl = str_replace('://api.vectorengine.ai', '://api.vectorengine.cn', $baseUrl);
             foreach (['/chat/completions', '/completions', '/embeddings', '/images/generations', '/models'] as $suffix) {
                 if (str_ends_with($baseUrl, $suffix)) {
                     $baseUrl = substr($baseUrl, 0, -strlen($suffix));
@@ -571,10 +595,59 @@ class AccountService
         return [
             'code' => $modelCode,
             'name' => $modelCode,
-            'primary_modality' => AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT,
+            'primary_modality' => $this->inferPrimaryModalityFromModelCode($modelCode),
             'capabilities' => ['chat'],
             'max_tokens' => 4096,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $modelMeta
+     * @param array<string,mixed> $options
+     */
+    private function resolveTestPrimaryModality(string $modelCode, array $modelMeta, array $options): string
+    {
+        $requested = trim((string)($options['primary_modality'] ?? ''));
+        if ($requested !== '') {
+            return AiModel::normalizePrimaryModality($requested);
+        }
+
+        $metaModality = trim((string)($modelMeta['primary_modality'] ?? ''));
+        if ($metaModality !== '') {
+            return AiModel::normalizePrimaryModality($metaModality);
+        }
+
+        return $this->inferPrimaryModalityFromModelCode($modelCode);
+    }
+
+    private function inferPrimaryModalityFromModelCode(string $modelCode): string
+    {
+        $code = strtolower(trim($modelCode));
+        foreach (['vision', 'multimodal', 'multi-modal', 'image-to-text', 'image2text', '-vl', '_vl', '/vl', 'qwen-vl', 'qwen2-vl', 'qwen2.5-vl', 'glm-4v', 'gpt-4o', 'gpt-4.1', 'claude-3', 'omni'] as $needle) {
+            if (str_contains($code, $needle)) {
+                return AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT;
+            }
+        }
+
+        foreach (['embedding', 'embed', 'bge-', 'gte-', 'e5-', 'rerank', 'vector'] as $needle) {
+            if (str_contains($code, $needle)) {
+                return AiModel::PRIMARY_MODALITY_EMBEDDING;
+            }
+        }
+
+        foreach (['image', 'img', 'dall-e', 'gpt-image', 'imagen', 'flux', 'stable-diffusion', 'sdxl', 'seedream', 'jimeng', 'nano-banana'] as $needle) {
+            if (str_contains($code, $needle)) {
+                return AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE;
+            }
+        }
+
+        foreach (['video', 'wan-', 'veo', 'sora', 'kling'] as $needle) {
+            if (str_contains($code, $needle)) {
+                return AiModel::PRIMARY_MODALITY_TEXT_TO_VIDEO;
+            }
+        }
+
+        return AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT;
     }
 
     /**
@@ -688,12 +761,77 @@ class AccountService
             return true;
         }
 
-        return VendorConfigManager::isModelFromProvider($modelCode, $providerCode);
+        if (VendorConfigManager::isModelFromProvider($modelCode, $providerCode)) {
+            return true;
+        }
+        return $this->supportsRemoteModel($providerCode, $modelCode);
     }
 
     public function getProviderModels(string $providerCode): array
     {
         return VendorConfigManager::getProviderModels($providerCode);
+    }
+
+    private function supportsRemoteModel(string $providerCode, string $modelCode): bool
+    {
+        $provider = $this->getProviderInstance($providerCode);
+        if (!$provider instanceof ModelListingProviderInterface || !$provider->supportsModelsApi()) {
+            return false;
+        }
+
+        $config = VendorConfigManager::getProviderConfig($providerCode);
+        if (!$config) {
+            return false;
+        }
+
+        $modelsApi = $config['models_api'] ?? [];
+        if (!is_array($modelsApi) || empty($modelsApi['path'])) {
+            return false;
+        }
+
+        $account = $this->getAvailableAccount($providerCode);
+        if (!$account || !$account->getId()) {
+            $account = $this->getActiveAccountForSync($providerCode);
+        }
+        if (!$account || !$account->getId()) {
+            return false;
+        }
+
+        $apiKey = trim((string)$account->getDecryptedApiKey());
+        if ($apiKey === '') {
+            return false;
+        }
+
+        $baseUrl = (string)($account->getData(Account::schema_fields_BASE_URL) ?: ($config['base_url'] ?? ''));
+        $modelConfig = array_replace($config, [
+            'provider_code' => $providerCode,
+            'api_key' => $apiKey,
+            'base_url' => $baseUrl,
+            'models_api' => $modelsApi,
+        ]);
+
+        try {
+            $models = $provider->listRemoteModels($modelConfig, [
+                'provider_code' => $providerCode,
+                'models_api' => $modelsApi,
+            ]);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        foreach ($models as $model) {
+            if (!is_array($model)) {
+                continue;
+            }
+            foreach (['code', 'value', 'id', 'model', 'name'] as $field) {
+                $candidate = $model[$field] ?? null;
+                if (is_string($candidate) && trim($candidate) === $modelCode) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
