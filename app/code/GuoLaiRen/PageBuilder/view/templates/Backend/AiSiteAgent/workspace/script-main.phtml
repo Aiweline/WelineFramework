@@ -5710,6 +5710,7 @@
         }).catch(function () {
             needsFormSkillOptions = [];
             renderNeedsFormSkillSelection();
+            renderSkillAdminList();
             renderTaskPlanSkillOverrideUi();
             renderGenerationSkillSummaries();
             setSkillStatusText('技能列表暂不可用，保留默认生成行为');
@@ -5718,13 +5719,47 @@
     }
 
     function resetSkillManagerForm() {
+        skillManagerEditingCode = '';
         ['pb-ai-skill-code', 'pb-ai-skill-name', 'pb-ai-skill-description', 'pb-ai-skill-body'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) {
                 el.value = '';
             }
         });
+        var codeEl = document.getElementById('pb-ai-skill-code');
+        var title = document.getElementById('pb-ai-skill-editor-title');
+        if (codeEl) {
+            codeEl.readOnly = false;
+        }
+        if (title) {
+            title.textContent = <?= \json_encode((string)__('新建技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
         setSkillManagerStatus('', 'muted');
+    }
+
+    function disableCustomSkill(code) {
+        if (!String(skillDisableUrl || '').trim()) {
+            setSkillManagerStatus(<?= \json_encode((string)__('未配置技能停用接口'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
+            return;
+        }
+        setSkillManagerStatus(<?= \json_encode((string)__('正在停用技能...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'muted');
+        postForm(skillDisableUrl, { code: code }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error(String((payload && payload.message) || 'disable skill failed'));
+            }
+            var option = normalizeSkillOption(payload.item || {});
+            if (option) {
+                mergeSkillOption(option);
+            }
+            setNeedsFormSelectedSkillCodes(getNeedsFormSelectedSkillCodes().filter(function (item) {
+                return item !== code;
+            }));
+            renderNeedsFormSkillSelection();
+            autoSaveScope();
+            setSkillManagerStatus(<?= \json_encode((string)__('技能已停用'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'success');
+        }).catch(function (error) {
+            setSkillManagerStatus(error && error.message ? error.message : <?= \json_encode((string)__('停用技能失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
+        });
     }
 
     function saveCustomSkillFromForm() {
