@@ -27,6 +27,11 @@ function resolveSiteBuilderBackendRoot(page, fallbackBackendRoot) {
   const fb = String(fallbackBackendRoot || getBackendRoot()).replace(/\/+$/, '');
   try {
     const u = new URL(page.url());
+    const marker = '/websites/backend/site-builder-agent';
+    const markerIndex = u.pathname.indexOf(marker);
+    if (markerIndex > 0) {
+      return `${u.origin}${u.pathname.slice(0, markerIndex)}`;
+    }
     const m = u.pathname.match(/^(\/[^/]+\/[^/]+\/[^/]+)(?=\/)/);
     if (m) {
       return `${u.origin}${m[1]}`;
@@ -148,22 +153,7 @@ async function mergeWebsitesScope(page, backendRoot, scopePatch) {
 function buildWorkbenchUrl(backendRoot = getBackendRoot(), provider = 'pagebuilder', fakeMode = false) {
   const normalizedBackendRoot = String(backendRoot || getBackendRoot()).replace(/\/+$/, '');
   const base = new URL(`${normalizedBackendRoot}/`);
-  const runtime = getRuntimeInfo();
-  const backendKey = String(runtime.paths?.backend_prefix_path || '')
-    .replace(/^\/+|\/+$/g, '');
-  const segments = base.pathname.split('/').filter(Boolean);
-  const currency = process.env.PLAYWRIGHT_BACKEND_CURRENCY || 'CNY';
-  const lang = process.env.PLAYWRIGHT_BACKEND_LANG || 'zh_Hans_CN';
-
-  let pathPrefix = base.pathname.replace(/\/+$/, '') || '/';
-  // loginAsAdmin → deriveBackendRoot：若后台首页为 /{backendKey}/admin/{ccy}/{lang}/...，
-  // lastIndexOf('/admin') 会截成仅 /{backendKey}，此处补全货币/语言段，否则会出现
-  // /{backendKey}/websites/... 被路由拒绝，Hub 无 #site-agent-description。
-  const isBareBackendKeyOnly = backendKey !== '' && segments.length === 1 && segments[0] === backendKey;
-  if (isBareBackendKeyOnly) {
-    pathPrefix = `/${backendKey}/${currency}/${lang}`;
-  }
-
+  const pathPrefix = base.pathname.replace(/\/+$/, '') || '/';
   const url = new URL(`${base.origin}${pathPrefix}/websites/backend/site-builder-agent/index`);
   url.searchParams.set('provider', provider);
   if (fakeMode) {

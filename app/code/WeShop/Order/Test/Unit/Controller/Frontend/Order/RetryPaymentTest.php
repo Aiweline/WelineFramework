@@ -22,9 +22,9 @@ class RetryPaymentTest extends TestCase
         $orderService->expects($this->never())->method('getRetryPaymentContext');
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['order_id', null, 77],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'order_id' => 77,
+        ]));
 
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())
@@ -61,9 +61,9 @@ class RetryPaymentTest extends TestCase
             ]);
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['order_id', null, 77],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'order_id' => 77,
+        ]));
 
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())
@@ -94,5 +94,15 @@ class RetryPaymentTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = null): mixed => \array_key_exists($key, $params)
+            ? $params[$key]
+            : $default;
     }
 }
