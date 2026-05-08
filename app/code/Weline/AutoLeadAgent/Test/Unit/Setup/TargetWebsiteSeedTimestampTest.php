@@ -66,6 +66,10 @@ final class TargetWebsiteSeedTimestampTest extends TestCase
         $method->setAccessible(true);
         $method->invoke(new Install(), $targetWebsite, $context);
 
+        $source = (string) file_get_contents((new \ReflectionClass(Install::class))->getFileName());
+
+        $this->assertStringContainsString('TargetWebsite::schema_fields_CREATED_AT', $source);
+        $this->assertStringContainsString('TargetWebsite::schema_fields_UPDATED_AT', $source);
         $this->assertSame('created_at', TargetWebsite::schema_fields_CREATED_AT);
         $this->assertSame('updated_at', TargetWebsite::schema_fields_UPDATED_AT);
         $this->assertCount(10, $savedRows);

@@ -1001,6 +1001,15 @@
         }
         var normalized = String(operation || '').toLowerCase();
         var kind = String(eventKind || '').toLowerCase();
+        var queueStatus = readQueueStatusFromPayload(operation, payload);
+        var queueStillWaiting = !!(payload && (payload.deferred_queue_progress || payload.queue_waiting_for_scheduler || payload.can_close_stream))
+            || ['pending', 'queued'].indexOf(queueStatus) !== -1;
+        if (queueStillWaiting) {
+            return normalized === 'plan' ? 10 : 12;
+        }
+        if (queueStatus === 'running' || queueStatus === 'processing') {
+            return normalized === 'plan' ? 35 : 38;
+        }
         if (kind === 'start') {
             return normalized === 'plan' ? 12 : 14;
         }
