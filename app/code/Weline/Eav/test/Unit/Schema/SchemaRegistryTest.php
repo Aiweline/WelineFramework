@@ -14,6 +14,8 @@ use Weline\Eav\Schema\EavAttributeGroupSchema;
 use Weline\Eav\Schema\EavAttributeSchema;
 use Weline\Eav\Schema\EavAttributeOptionSchema;
 use Weline\Framework\Database\AbstractModel;
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Connector;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Setup\Db\ModelSetup;
@@ -208,6 +210,37 @@ class SchemaRegistryTest extends TestCase
                 unlink($dbPath);
             }
         }
+    }
+
+    public function testCreateTableAddsMissingColumnsBeforeIndexesAndSeed(): void
+    {
+        $alter = $this->getMockBuilder(AlterInterface::class)->getMock();
+        $alter->expects($this->once())
+            ->method('forTable')
+            ->with('m_eav_attribute_type', EavAttributeTypeSchema::FIELD_ID)
+            ->willReturnSelf();
+        $alter->expects($this->atLeastOnce())
+            ->method('addColumn')
+            ->willReturnSelf();
+        $alter->expects($this->once())
+            ->method('alter')
+            ->willReturn(true);
+
+        $connector = $this->getMockBuilder(ConnectorInterface::class)->getMock();
+        $connector->method('getTableColumns')->with('m_eav_attribute_type')->willReturn([
+            ['name' => EavAttributeTypeSchema::FIELD_ID],
+        ]);
+        $connector->method('alterTable')->willReturn($alter);
+        $connector->method('getConfigProvider')->willReturn(new ConfigProvider([
+            'type' => 'pgsql',
+            'path' => '',
+            'database' => '',
+            'prefix' => 'm_',
+        ]));
+
+        $method = new \ReflectionMethod(SchemaRegistry::class, 'ensureColumns');
+        $method->setAccessible(true);
+        $method->invoke($this->registry, $connector, 'm_eav_attribute_type', new EavAttributeTypeSchema());
     }
 
     private function createExistingAttributeTypeTable(Connector $connector): void
