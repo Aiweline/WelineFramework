@@ -27,7 +27,8 @@ class Set extends \Weline\Framework\Database\Model
 {
     public const schema_table = 'eav_attribute_set';
     /** @var list<string> */
-    public const schema_primary_keys = ['set_id', 'eav_entity_id', 'code'];
+    public const schema_primary_keys = [];
+    public const schema_primary_key = 'set_id';
 
     public const schema_fields_ID = 'set_id';
     public const schema_fields_SET_ID = 'set_id';
@@ -35,7 +36,7 @@ class Set extends \Weline\Framework\Database\Model
     public const schema_fields_eav_entity_id = 'eav_entity_id';
     public const schema_fields_name = 'name';
 
-    public array $_unit_primary_keys = ['set_id', 'eav_entity_id', 'code'];
+    public array $_unit_primary_keys = ['code', 'eav_entity_id'];
     public array $_index_sort_keys = ['set_id', 'eav_entity_id', 'code'];
 
     // 表结构已迁移到 Schema/EavAttributeSetSchema.php
