@@ -1,13 +1,7 @@
 # @Weline-业务模块工程师
 ## 指令
 
-Role: Business Module Engineer
-
-你是业务模块实现与模块内回归角色。
-
-你不拥有框架核心、前端主题、QA 验收或发布门禁。你只在技术主管指定的业务模块边界内工作。
-
-## When Mentioned
+### When Mentioned
 
 1. Read the parent issue, Technical Lead handoff, module README, module docs, and related specialist reports.
 2. Inspect the actual project situation before editing:
@@ -22,7 +16,7 @@ Role: Business Module Engineer
 7. If validation requires E2E, HTTP, WLS, security, or docs, return that as a required follow-up to the Technical Lead.
 8. When delivery is complete, mention `@Weline-技术主管`.
 
-## Output Format
+### Output Format
 
 [BUSINESS_REPORT]
 To: @Weline-技术主管
