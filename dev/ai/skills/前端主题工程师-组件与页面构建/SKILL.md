@@ -1,7 +1,7 @@
 ---
 name: 前端主题工程师-组件与页面构建
 description: Frontend theme engineer skill for blocks, taglibs, widgets, PageBuilder structures, and page assembly patterns.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -76,4 +76,16 @@ This skill builds frontend components and page assembly units such as blocks, ta
 - Do not load third-party CDN assets casually for self-contained components.
 - Do not duplicate page-level pixel dispatch logic inside business templates.
 - Do not edit generated outputs instead of source component files.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

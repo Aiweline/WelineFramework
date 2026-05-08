@@ -1,7 +1,7 @@
 ---
 name: 框架核心工程师-命令与代码生成
 description: Framework core engineer skill for CLI commands, code generation standards, PHP 8.4 compatibility, and framework-safe scaffolding.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -74,4 +74,16 @@ This skill owns framework-safe command creation, code generation quality, and PH
 - Do not invent helper APIs that are not present in the repository.
 - Do not put complex business rules directly inside console execute methods.
 - Do not build fragile Windows command strings without explicit quoting discipline.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

@@ -1,7 +1,7 @@
 ---
 name: 单元测试工程师-测试数据与回归
 description: Unit test engineer skill for stable fixtures, edge-case data design, and regression-oriented test inputs in WelineFramework.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -72,4 +72,16 @@ This skill designs the data side of unit-level regression protection. It focuses
 - Do not depend on random values or time-sensitive data without control.
 - Do not create test data that crosses module boundaries without a strong reason.
 - Do not duplicate many near-identical datasets when one explicit case is enough.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

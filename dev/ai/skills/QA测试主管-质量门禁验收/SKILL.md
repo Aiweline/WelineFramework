@@ -1,7 +1,7 @@
 ---
 name: QA测试主管-质量门禁验收
 description: QA lead skill for evidence review, gate enforcement, release-readiness assessment, and quality signoff recommendations.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -72,4 +72,16 @@ This skill enforces quality gates on returned work. It reviews test evidence, co
 - Do not downgrade a failed gate into a soft warning without explanation.
 - Do not ignore missing documentation when it is part of the acceptance bar.
 - Do not substitute QA opinion for missing evidence.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

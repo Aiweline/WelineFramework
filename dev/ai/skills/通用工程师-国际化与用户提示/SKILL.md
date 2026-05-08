@@ -1,7 +1,7 @@
 ---
 name: 通用工程师-国际化与用户提示
 description: Shared engineering skill for i18n-compliant user text, translation files, and framework-safe user notification patterns.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -76,4 +76,16 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 - Do not embed PHP into custom-tag attributes for translation.
 - Do not use blocking browser dialogs.
 - Do not treat translation files as optional when visible text changed.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

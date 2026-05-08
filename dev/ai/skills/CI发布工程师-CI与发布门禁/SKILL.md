@@ -1,7 +1,7 @@
 ---
 name: CI发布工程师-CI与发布门禁
 description: CI release engineer skill for validation gating, release-readiness checks, and automation-safe delivery criteria.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -72,4 +72,16 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 - Do not ignore flaky validation prerequisites.
 - Do not bypass missing evidence because a change appears low risk.
 - Do not collapse QA and CI gate responsibilities into one vague signoff.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

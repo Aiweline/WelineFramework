@@ -46,6 +46,13 @@
 - Always use a unique AI test instance name such as `ai-test-{timestamp}`.
 - Always stop the dedicated AI test instance after validation.
 
+## 智能体名录
+
+- 智能体入口：`dev/ai/agent/README.md`
+- 每个智能体文件包含 `指令` 和 `Skill` 两部分。
+- 所有工程智能体都必须加载 `通用工程师-开发规范与代码质量` 作为共识技能。
+- 专业技能按智能体前缀组织，例如 `框架核心工程师-*`、`文档知识库工程师-*`。
+
 ## 目录导航
 
 - `[_index.md](_index.md)`：Multica 路由索引

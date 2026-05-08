@@ -6,6 +6,7 @@
 
 - `skills/`：唯一有效技能源（按场景触发）
 - `skills/_index.md`：唯一技能路由表（Single Source of Truth）
+- `agent/`：智能体 Markdown 名录（指令 + Skill 绑定）
 - `codex/`：任务工作区与过程记录
 - `agents/`：agent 协议与配置
 - `scripts/`：脚本工具
@@ -36,17 +37,25 @@
 
 ---
 
+## 智能体名录
+
+- 入口：`dev/ai/agent/README.md`
+- 每个智能体文件固定包含 `指令` 与 `Skill` 两部分。
+- `Skill` 必须指向 `dev/ai/skills/*/SKILL.md`。
+- 所有工程智能体必须加载 `通用工程师-开发规范与代码质量` 作为共识技能。
+
 ## 技能一览（skills/）
 
-先看 **skill-trigger-reminders**，再按场景只读取命中的技能正文，不要批量读取全部 `skills/*/SKILL.md`。
+先看 `skills/_index.md` 与 `agent/README.md`，再按场景只读取命中的技能正文，不要批量读取全部 `skills/*/SKILL.md`。
 
-- 映射入口：`skills/skill-trigger-reminders/SKILL.md`
+- 智能体名录：`agent/README.md`
 - 完整开发技能映射（唯一索引）：`skills/_index.md`
-- Codex 任务工作区：`skills/codex-task-workspace/SKILL.md`
+- 团队协作流程：`skills/TEAM_WORKFLOW.md`
+- Codex 任务工作区：`codex/`
 
 ## 新增技能
 
-1. 在 `dev/ai/skills/<skill-slug>/SKILL.md` 创建技能，目录名使用小写英文加连字符。
-2. 在 `skills/_index.md` 增加场景关键词映射。
-3. 同步更新 `skills/skill-trigger-reminders/SKILL.md`（如有触发逻辑变化）。
-4. 历史兼容入口 `skills/skill-trigger-reminders/references/development-skill-map.md` 仅保留跳转说明，不再维护表格正文。
+1. 在 `dev/ai/skills/{智能体或角色}-{技能名}/SKILL.md` 创建技能。
+2. 在 `skills/_index.md` 增加角色和场景关键词映射。
+3. 如新增或调整智能体，在 `dev/ai/agent/{智能体}.md` 中更新 `指令` 与 `Skill` 绑定。
+4. 专业技能必须包含 Shared Collaboration Contract，并指向 `通用工程师-开发规范与代码质量`。

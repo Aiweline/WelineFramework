@@ -1,7 +1,7 @@
 ---
 name: WLS运行时工程师-Session与SSE运行时
 description: WLS runtime engineer skill for session isolation, Session Server behavior, and cooperative SSE runtime implementation.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -76,4 +76,16 @@ This skill owns session runtime behavior, session isolation, Session Server inte
 - Do not treat SSE as a plain JSON endpoint.
 - Do not leave streaming loops without explicit completion behavior.
 - Do not use blocking delay functions in long-lived stream loops.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 

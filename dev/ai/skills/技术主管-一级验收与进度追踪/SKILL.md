@@ -1,7 +1,7 @@
 ---
 name: 技术主管-一级验收与进度追踪
 description: Technical Lead skill for first-line acceptance, progress tracking, risk escalation, and evidence review.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Role
@@ -76,4 +76,16 @@ This skill performs first-level acceptance for work returned by specialists. It 
 - Do not accept work with missing evidence on critical paths.
 - Do not hide partial completion behind a generic “done” status.
 - Do not rewrite specialist outputs without preserving their original evidence.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
 
