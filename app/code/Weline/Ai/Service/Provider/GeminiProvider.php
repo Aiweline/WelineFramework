@@ -33,7 +33,7 @@ class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterf
             $this->resolveGenerateContentUrl($config, $modelCode, $apiKey),
             $requestData,
             $this->resolveProxyInfo($model, $config),
-            (int)($params['timeout'] ?? $config['timeout'] ?? 180),
+            ProviderTimeoutPolicy::resolveRequestTimeout($params, $config),
             $apiKey
         );
 
@@ -72,38 +72,21 @@ class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterf
             'generationConfig' => $this->buildGenerationConfig($config, $params, true),
         ];
 
+        $requestUrl = $this->resolveGenerateContentUrl($config, $modelCode, $apiKey);
         $response = $this->requestJson(
-            $this->resolveGenerateContentUrl($config, $modelCode, $apiKey),
+            $requestUrl,
             $requestData,
             $this->resolveProxyInfo($model, $config),
-            (int)($params['timeout'] ?? $config['timeout'] ?? 180),
+            ProviderTimeoutPolicy::resolveImageGenerationTimeout($params, $config),
             $apiKey
         );
 
-        $images = [];
-        foreach ($this->extractParts($response) as $part) {
-            $inlineData = $part['inlineData'] ?? $part['inline_data'] ?? null;
-            if (!is_array($inlineData)) {
-                continue;
-            }
-            $data = trim((string)($inlineData['data'] ?? ''));
-            if ($data === '') {
-                continue;
-            }
-            $images[] = [
-                'b64_json' => $data,
-                'mime_type' => (string)($inlineData['mimeType'] ?? $inlineData['mime_type'] ?? 'image/png'),
-                'revised_prompt' => $this->extractText($response),
-            ];
-        }
-
-        return [
-            'images' => $images,
-            'usage' => $this->normalizeUsage($response['usageMetadata'] ?? []),
-            'model' => $modelCode,
-            'finish_reason' => (string)($response['candidates'][0]['finishReason'] ?? 'stop'),
-            'raw' => $response,
-        ];
+        return ImageGenerationResponseNormalizer::fromGeminiGenerateContentResponse(
+            $response,
+            $modelCode,
+            $requestData,
+            $requestUrl
+        );
     }
 
     public function supports(string $modelCode): bool

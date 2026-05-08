@@ -6,6 +6,8 @@ namespace Weline\Ai\Service\Provider;
 final class ProviderTimeoutPolicy
 {
     public const DEFAULT_REQUEST_TIMEOUT = 900;
+    public const DEFAULT_IMAGE_GENERATION_TIMEOUT = 900;
+    public const MIN_CONFIGURED_IMAGE_GENERATION_TIMEOUT = 120;
     public const EXECUTION_TIME_BUFFER = 10;
     public const DEFAULT_CONNECT_TIMEOUT = 60;
 
@@ -33,6 +35,34 @@ final class ProviderTimeoutPolicy
         }
 
         return self::resolveRequestTimeout($params, $config);
+    }
+
+    public static function resolveImageGenerationTimeout(array $params, array $config): int
+    {
+        if (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout']))) {
+            return 0;
+        }
+
+        foreach (['image_timeout', 'timeout'] as $key) {
+            if (array_key_exists($key, $params)) {
+                return max(0, (int)$params[$key]);
+            }
+        }
+
+        foreach (['image_timeout', 'timeout'] as $key) {
+            if (!array_key_exists($key, $config)) {
+                continue;
+            }
+
+            $timeout = (int)$config[$key];
+            if ($timeout <= 0) {
+                return 0;
+            }
+
+            return max(self::MIN_CONFIGURED_IMAGE_GENERATION_TIMEOUT, $timeout);
+        }
+
+        return self::DEFAULT_IMAGE_GENERATION_TIMEOUT;
     }
 
     private function __construct()

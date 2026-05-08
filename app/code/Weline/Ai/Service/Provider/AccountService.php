@@ -64,6 +64,22 @@ class AccountService
     }
 
     /**
+     * Resolve provider code for a persisted model.
+     *
+     * Prefer the model's saved supplier to avoid ambiguous prefix matching
+     * when multiple OpenAI-compatible providers expose similarly named models.
+     */
+    public function getProviderByModel(AiModel $model): ?string
+    {
+        $supplier = strtolower(trim((string)$model->getData(AiModel::schema_fields_SUPPLIER)));
+        if ($supplier !== '' && VendorConfigManager::isProviderSupported($supplier)) {
+            return $supplier;
+        }
+
+        return $this->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE));
+    }
+
+    /**
      * 获取指定供应商的可用账户
      * 
      * @param string $providerCode
@@ -198,33 +214,32 @@ class AccountService
             }
             
             $testResponseContent = trim((string)($result['content'] ?? $result['response'] ?? ''));
-            if ($testResponseContent !== '') {
-                // 更新连接状态
+            $testImages = is_array($result['images'] ?? null) ? $result['images'] : [];
+            if ($testResponseContent !== '' || $testImages !== []) {
                 $account->setData(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
                 $account->setData(Account::schema_fields_CONNECTION_TEST_TIME, time());
                 $account->setData(Account::schema_fields_CONNECTION_TEST_MESSAGE, __('连接成功'));
                 $account->setData(Account::schema_fields_UPDATED_AT, time());
-                
-                // 保存并记录日志
+
                 $saveResult = $account->save();
-                Env::log('ai_provider_test.log', sprintf('[testConnection][success] account_id=%s provider=%s status=%s save_result=%s', 
-                    (string)$account->getId(), 
-                    $providerCode, 
+                Env::log('ai_provider_test.log', sprintf('[testConnection][success] account_id=%s provider=%s status=%s save_result=%s images=%d',
+                    (string)$account->getId(),
+                    $providerCode,
                     Account::STATUS_SUCCESS,
-                    $saveResult ? 'true' : 'false'
+                    $saveResult ? 'true' : 'false',
+                    count($testImages)
                 ));
-                
-                // 验证保存是否成功
+
                 $account->reset()->load($account->getId());
                 $actualStatus = $account->getData(Account::schema_fields_CONNECTION_STATUS);
                 if ($actualStatus !== Account::STATUS_SUCCESS) {
-                    Env::log('ai_provider_test.log', sprintf('[testConnection][warning] account_id=%s status_not_saved expected=%s actual=%s', 
-                        (string)$account->getId(), 
+                    Env::log('ai_provider_test.log', sprintf('[testConnection][warning] account_id=%s status_not_saved expected=%s actual=%s',
+                        (string)$account->getId(),
                         Account::STATUS_SUCCESS,
                         $actualStatus
                     ));
                 }
-                
+
                 return [
                     'success' => true,
                     'message' => __('连接测试成功'),
@@ -236,7 +251,11 @@ class AccountService
                     'api_key_tail' => $apiKeyTail,
                     'connection_status' => Account::STATUS_SUCCESS,
                     'connection_test_time' => time(),
-                    'connection_test_message' => __('连接成功')
+                    'connection_test_message' => __('连接成功'),
+                    'response' => $testResponseContent,
+                    'duration' => isset($result['duration']) ? (float)$result['duration'] : 0.0,
+                    'primary_modality' => $primaryModality,
+                    'images' => $testImages,
                 ];
             } else {
                 throw new Exception(__('API响应为空'));

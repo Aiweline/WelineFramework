@@ -23,6 +23,7 @@ use Weline\Ai\Service\AgentScanner;
 use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
 use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
+use Weline\Ai\Service\Provider\ImageGenerationResponseNormalizer;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
 use Weline\Ai\Interface\AgentInterface;
@@ -675,30 +676,7 @@ class AiService
      */
     private function normalizeImageGenerationResult(array $result, AiModel $model): array
     {
-        $images = is_array($result['images'] ?? null) ? $result['images'] : [];
-        $normalizedImages = [];
-        foreach ($images as $image) {
-            if (!is_array($image)) {
-                continue;
-            }
-            $normalized = [];
-            foreach (['url', 'b64_json', 'mime_type', 'revised_prompt'] as $key) {
-                if (isset($image[$key]) && is_scalar($image[$key]) && trim((string)$image[$key]) !== '') {
-                    $normalized[$key] = (string)$image[$key];
-                }
-            }
-            if ($normalized !== []) {
-                $normalizedImages[] = $normalized;
-            }
-        }
-
-        return [
-            'images' => $normalizedImages,
-            'usage' => is_array($result['usage'] ?? null) ? $result['usage'] : [],
-            'model' => (string)($result['model'] ?? $model->getModelCode()),
-            'finish_reason' => (string)($result['finish_reason'] ?? 'stop'),
-            'raw' => $result['raw'] ?? null,
-        ];
+        return ImageGenerationResponseNormalizer::normalize($result, (string)$model->getModelCode());
     }
 
     /**
@@ -916,7 +894,7 @@ class AiService
         $usage = [];
         try {
             // 1. 获取供应商代码
-            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+            $providerCode = $this->accountService->getProviderByModel($model);
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
@@ -1066,7 +1044,7 @@ class AiService
         
         try {
             // 1. 获取供应商代码
-            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+            $providerCode = $this->accountService->getProviderByModel($model);
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
@@ -1445,7 +1423,7 @@ class AiService
         }
 
         // 3. 注入供应商账户配置（base_url、api_key、proxy 等）
-        $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+        $providerCode = $this->accountService->getProviderByModel($model);
         Env::log('ai_agent_debug.log', sprintf(
             '[executeAgent] modelCode=%s, providerCode=%s',
             $model->getData(AiModel::schema_fields_MODEL_CODE),
