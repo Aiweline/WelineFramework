@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace WeShop\Search\Test\Unit\Model;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Database\AbstractModel;
 use WeShop\Search\Model\SearchEngineConfig;
 
 class SearchEngineConfigTest extends TestCase
 {
-    public function testSaveConfigSetsRequiredTimestampsOnInsert(): void
+    public function testSaveConfigSetsTimestampsForNewConfig(): void
     {
         $config = new class() extends SearchEngineConfig {
-            public array $savedData = [];
+            public array $savedRows = [];
 
             public function clear(bool $with_query = true): static
             {
@@ -34,51 +35,52 @@ class SearchEngineConfigTest extends TestCase
                 return $this;
             }
 
-            public function fetch(string $model_class = ''): static
+            public function fetch(string $model_class = ''): mixed
             {
-                return $this;
+                return new SearchEngineConfig();
             }
 
-            public function getId(mixed $default = 0)
+            public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
             {
-                return 0;
-            }
-
-            public function save(string|array|bool|\Weline\Framework\Database\AbstractModel $data = [], string|array $sequence = ''): bool|int
-            {
-                $this->savedData = $this->getData();
+                $this->savedRows[] = $this->getData();
 
                 return true;
             }
         };
 
-        $config->saveConfig(SearchEngineConfig::ENGINE_MYSQL, 'default', ['host' => 'localhost'], true, 100);
+        $this->assertTrue($config->saveConfig(
+            SearchEngineConfig::ENGINE_MYSQL,
+            'default',
+            [],
+            true,
+            100
+        ));
 
-        $this->assertSame(SearchEngineConfig::ENGINE_MYSQL, $config->savedData[SearchEngineConfig::schema_fields_ENGINE_TYPE]);
-        $this->assertSame('default', $config->savedData[SearchEngineConfig::schema_fields_SCOPE]);
-        $this->assertArrayHasKey(SearchEngineConfig::schema_fields_CREATED_AT, $config->savedData);
-        $this->assertArrayHasKey(SearchEngineConfig::schema_fields_UPDATED_AT, $config->savedData);
-        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $config->savedData[SearchEngineConfig::schema_fields_CREATED_AT]);
-        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $config->savedData[SearchEngineConfig::schema_fields_UPDATED_AT]);
+        $row = $config->savedRows[0] ?? [];
+        $this->assertSame(SearchEngineConfig::ENGINE_MYSQL, $row[SearchEngineConfig::schema_fields_ENGINE_TYPE] ?? null);
+        $this->assertSame('default', $row[SearchEngineConfig::schema_fields_SCOPE] ?? null);
+        $this->assertSame('[]', $row[SearchEngineConfig::schema_fields_CONFIG_DATA] ?? null);
+        $this->assertSame(1, $row[SearchEngineConfig::schema_fields_IS_ACTIVE] ?? null);
+        $this->assertSame(100, $row[SearchEngineConfig::schema_fields_PRIORITY] ?? null);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', (string) ($row[SearchEngineConfig::schema_fields_CREATED_AT] ?? ''));
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', (string) ($row[SearchEngineConfig::schema_fields_UPDATED_AT] ?? ''));
     }
 
-    public function testSaveConfigSetsUpdatedAtOnExistingConfig(): void
+    public function testSaveConfigUpdatesExistingConfigTimestampWithoutNewInsert(): void
     {
         $existing = new class() extends SearchEngineConfig {
-            public array $savedData = [];
+            public array $savedRows = [];
 
-            public function getId(mixed $default = 0)
+            public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
             {
-                return 12;
-            }
-
-            public function save(string|array|bool|\Weline\Framework\Database\AbstractModel $data = [], string|array $sequence = ''): bool|int
-            {
-                $this->savedData = $this->getData();
+                $this->savedRows[] = $this->getData();
 
                 return true;
             }
         };
+        $existing
+            ->setData(SearchEngineConfig::schema_fields_ID, 7)
+            ->setData(SearchEngineConfig::schema_fields_CREATED_AT, '2026-01-01 00:00:00');
 
         $config = new class($existing) extends SearchEngineConfig {
             public function __construct(private readonly SearchEngineConfig $existing)
@@ -105,18 +107,31 @@ class SearchEngineConfigTest extends TestCase
                 return $this;
             }
 
-            public function fetch(string $model_class = ''): SearchEngineConfig
+            public function fetch(string $model_class = ''): mixed
             {
                 return $this->existing;
             }
+
+            public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
+            {
+                self::fail('Existing config path should save the fetched record, not insert a new row.');
+            }
         };
 
-        $config->saveConfig(SearchEngineConfig::ENGINE_OPENSEARCH, 'default', ['hosts' => ['127.0.0.1']], false, 50);
+        $this->assertTrue($config->saveConfig(
+            SearchEngineConfig::ENGINE_OPENSEARCH,
+            'default',
+            ['host' => 'http://127.0.0.1'],
+            false,
+            50
+        ));
 
-        $this->assertSame(0, $existing->savedData[SearchEngineConfig::schema_fields_IS_ACTIVE]);
-        $this->assertSame(50, $existing->savedData[SearchEngineConfig::schema_fields_PRIORITY]);
-        $this->assertArrayHasKey(SearchEngineConfig::schema_fields_UPDATED_AT, $existing->savedData);
-        $this->assertArrayNotHasKey(SearchEngineConfig::schema_fields_CREATED_AT, $existing->savedData);
-        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $existing->savedData[SearchEngineConfig::schema_fields_UPDATED_AT]);
+        $row = $existing->savedRows[0] ?? [];
+        $this->assertSame(7, $row[SearchEngineConfig::schema_fields_ID] ?? null);
+        $this->assertSame('2026-01-01 00:00:00', $row[SearchEngineConfig::schema_fields_CREATED_AT] ?? null);
+        $this->assertSame('{"host":"http:\/\/127.0.0.1"}', $row[SearchEngineConfig::schema_fields_CONFIG_DATA] ?? null);
+        $this->assertSame(0, $row[SearchEngineConfig::schema_fields_IS_ACTIVE] ?? null);
+        $this->assertSame(50, $row[SearchEngineConfig::schema_fields_PRIORITY] ?? null);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', (string) ($row[SearchEngineConfig::schema_fields_UPDATED_AT] ?? ''));
     }
 }
