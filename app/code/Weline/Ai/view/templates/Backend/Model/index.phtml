@@ -228,6 +228,15 @@ $currentSearch = $currentSearch ?? '';
                                         </td>
                                         <td>
                                             <span class="badge bg-info"><?= $model['vendor'] ?? '' ?></span>
+                                            <?php if (!empty($model['provider_account_name']) || !empty($model['provider_account_id'])): ?>
+                                                <div class="small text-muted mt-1">
+                                                    <?php $accountName = (string)($model['provider_account_name'] ?: __('未命名账户')); ?>
+                                                    <?= htmlspecialchars($accountName, ENT_QUOTES) ?>
+                                                    <?php if (!empty($model['provider_account_id'])): ?>
+                                                        #<?= (int)$model['provider_account_id'] ?>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endif; ?>
                                             <?php if (!empty($model['is_custom_model'])): ?>
                                                 <span class="badge bg-warning text-dark ms-1" title="<?= __('自定义模型') ?>">
                                                     <lang>自定义</lang>

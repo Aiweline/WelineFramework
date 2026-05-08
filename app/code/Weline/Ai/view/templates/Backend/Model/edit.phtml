@@ -1071,6 +1071,28 @@ if (!empty($displayConfig)) {
             
             var resultDiv = document.getElementById('testResult');
             var resultContent = document.getElementById('testResultContent');
+            var renderTestImages = function(result) {
+                var images = Array.isArray(result.images) ? result.images : [];
+                if (!images.length) {
+                    return '';
+                }
+                var escapeAttr = function(value) {
+                    return String(value || '')
+                        .replace(/&/g, '&amp;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                };
+                var items = images.map(function(image) {
+                    var src = image.url || (image.b64_json ? ('data:' + (image.mime_type || 'image/png') + ';base64,' + image.b64_json) : '');
+                    if (!src) {
+                        return '';
+                    }
+                    src = escapeAttr(src);
+                    return '<div class="col-sm-6 col-lg-4"><a href="' + src + '" target="_blank" rel="noopener"><img src="' + src + '" class="img-fluid rounded border" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;"></a></div>';
+                }).join('');
+                return items ? '<div class="row g-2 mt-2">' + items + '</div>' : '';
+            };
             
             if (data && data.data && data.data.results) {
                 var r = data.data.results;
@@ -1081,9 +1103,9 @@ if (!empty($displayConfig)) {
                     : '';
                 var sBadge = s.tested ? (s.success ? '<span class="badge bg-success"><?= __('成功') ?></span>' : '<span class="badge bg-danger"><?= __('失败') ?></span>') : '<span class="badge bg-secondary"><?= __('未测') ?></span>';
                 var pBadge = p.tested ? (p.success ? '<span class="badge bg-success"><?= __('成功') ?></span>' : '<span class="badge bg-danger"><?= __('失败') ?></span>') : '<span class="badge bg-secondary"><?= __('未测') ?></span>';
-                resultContent.innerHTML = '<div class="row g-2"><div class="col-12"><div class="alert alert-' + (s.success ? 'success' : (s.tested ? 'danger' : 'secondary')) + ' py-2 px-3 mb-2"><strong>自配置</strong> ' + sBadge + '<br>' + (s.tested ? ('<small class="text-muted">耗时：</small><code>' + (s.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (s.message || '') + '<br><div class="alert alert-light mb-0" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' + (s.response || '') + '</div>') : '') + '</div></div><div class="col-12"><div class="alert alert-' + (p.success ? 'success' : (p.tested ? 'danger' : 'secondary')) + ' py-2 px-3 mb-2"><strong>供应商账户</strong> ' + pBadge + (p.account_name ? ' <span class="badge bg-info">' + p.account_name + '</span>' : '') + '<br>' + (p.tested ? ('<small class="text-muted">耗时：</small><code>' + (p.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (p.message || '') + '<br><div class="alert alert-light mb-0" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' + (p.response || '') + '</div>' + pTrace) : '') + '</div></div></div>';
+                resultContent.innerHTML = '<div class="row g-2"><div class="col-12"><div class="alert alert-' + (s.success ? 'success' : (s.tested ? 'danger' : 'secondary')) + ' py-2 px-3 mb-2"><strong>自配置</strong> ' + sBadge + '<br>' + (s.tested ? ('<small class="text-muted">耗时：</small><code>' + (s.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (s.message || '') + '<br><div class="alert alert-light mb-0" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' + (s.response || '') + '</div>' + renderTestImages(s)) : '') + '</div></div><div class="col-12"><div class="alert alert-' + (p.success ? 'success' : (p.tested ? 'danger' : 'secondary')) + ' py-2 px-3 mb-2"><strong>供应商账户</strong> ' + pBadge + (p.account_name ? ' <span class="badge bg-info">' + p.account_name + '</span>' : '') + '<br>' + (p.tested ? ('<small class="text-muted">耗时：</small><code>' + (p.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (p.message || '') + '<br><div class="alert alert-light mb-0" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' + (p.response || '') + '</div>' + renderTestImages(p) + pTrace) : '') + '</div></div></div>';
             } else if (data.success) {
-                resultContent.innerHTML = '<div class="alert alert-success"><strong><?= __('测试成功') ?>!</strong> ' + data.message + '</div>';
+                resultContent.innerHTML = '<div class="alert alert-success"><strong><?= __('测试成功') ?>!</strong> ' + data.message + renderTestImages(data) + '</div>';
             } else {
                 resultContent.innerHTML = '<div class="alert alert-danger"><strong><?= __('测试失败') ?>!</strong> ' + data.message + '</div>' + (data.error ? '<div class="alert alert-warning"><small>' + data.error + '</small></div>' : '');
             }

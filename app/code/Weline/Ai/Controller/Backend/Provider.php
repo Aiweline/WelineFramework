@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Controller\Backend;
 
 use Weline\Admin\Controller\BaseController;
+use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Service\Provider\AccountService;
@@ -48,6 +49,7 @@ class Provider extends BaseController
             return '';
         }
         if ($this->normalizeProviderCode($providerCode) === 'vectorengine') {
+            $baseUrl = str_replace('://api.vectorengine.ai', '://api.vectorengine.cn', $baseUrl);
             foreach (['/chat/completions', '/completions', '/embeddings', '/images/generations', '/models'] as $suffix) {
                 if (str_ends_with($baseUrl, $suffix)) {
                     $baseUrl = substr($baseUrl, 0, -strlen($suffix));
@@ -59,6 +61,28 @@ class Provider extends BaseController
             }
         }
         return $baseUrl;
+    }
+
+    private function normalizeAccountBaseUrlForOutput(array $accountData): array
+    {
+        if (array_key_exists('base_url', $accountData)) {
+            $accountData['base_url'] = $this->normalizeProviderBaseUrl(
+                (string)($accountData['provider_code'] ?? ''),
+                (string)$accountData['base_url']
+            );
+        }
+        return $accountData;
+    }
+
+    private function normalizeAccountModelBaseUrl(Account $account): void
+    {
+        $account->setData(
+            Account::schema_fields_BASE_URL,
+            $this->normalizeProviderBaseUrl(
+                (string)$account->getData(Account::schema_fields_PROVIDER_CODE),
+                (string)$account->getData(Account::schema_fields_BASE_URL)
+            )
+        );
     }
 
     /**
@@ -129,6 +153,7 @@ class Provider extends BaseController
                     $accountData['connection_status'] = $accountData['connection_status'] ?? 'pending';
                     $accountData['created_at'] = $accountData['created_at'] ?? time();
                     $accountData['provider_code'] = $this->normalizeProviderCode((string)($accountData['provider_code'] ?? ''));
+                    $accountData = $this->normalizeAccountBaseUrlForOutput($accountData);
                     
                     // 格式化数据
                     $accountData['provider_name'] = $this->accountService->getSupportedProviders()[$accountData['provider_code']]['name'] ?? $accountData['provider_code'];
@@ -447,6 +472,8 @@ class Provider extends BaseController
             $account = ObjectManager::getInstance(Account::class)->load($id);
             if (!$account->getId()) {
                 $account = null;
+            } else {
+                $this->normalizeAccountModelBaseUrl($account);
             }
         }
         $this->assign('account', $account);
@@ -482,6 +509,7 @@ class Provider extends BaseController
             }
 
             $this->assign('title', __('编辑供应商账户'));
+            $this->normalizeAccountModelBaseUrl($account);
             $this->assign('providers', $this->accountService->getSupportedProviders());
             $this->assign('account', $account);
             return $this->fetch();
@@ -665,7 +693,11 @@ class Provider extends BaseController
             }
 
             $testModelCode = trim((string)($data['model_code'] ?? $this->request->getParam('model_code') ?? ''));
-            $result = $this->accountService->testConnection($account, $testModelCode !== '' ? $testModelCode : null);
+            $result = $this->accountService->testConnection(
+                $account,
+                $testModelCode !== '' ? $testModelCode : null,
+                $this->buildConnectionTestOptions($data)
+            );
             
             // 测试完成后，重新加载账户以获取最新状态
             $account->reset()->load($id);
@@ -731,7 +763,11 @@ class Provider extends BaseController
             }
             
             $testModelCode = trim((string)($data['model_code'] ?? ''));
-            $result = $this->accountService->testConnection($tempAccount, $testModelCode !== '' ? $testModelCode : null);
+            $result = $this->accountService->testConnection(
+                $tempAccount,
+                $testModelCode !== '' ? $testModelCode : null,
+                $this->buildConnectionTestOptions($data)
+            );
             
             return $this->fetchJson($result);
         } catch (\Exception $e) {
@@ -740,6 +776,27 @@ class Provider extends BaseController
                 'message' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    private function buildConnectionTestOptions(array $data): array
+    {
+        $options = [];
+        $primaryModality = trim((string)($data['primary_modality'] ?? ''));
+        if ($primaryModality !== '') {
+            $options['primary_modality'] = AiModel::normalizePrimaryModality($primaryModality);
+        }
+        if (is_array($data['capabilities'] ?? null)) {
+            $options['capabilities'] = $data['capabilities'];
+        }
+        if (is_array($data['provider_config'] ?? null)) {
+            $options['provider_config'] = $data['provider_config'];
+        }
+
+        return $options;
     }
 
     /**
@@ -845,7 +902,7 @@ class Provider extends BaseController
                 ]);
             }
             
-            $accountData = $account->getData();
+            $accountData = $this->normalizeAccountBaseUrlForOutput($account->getData());
             // 安全处理：不返回明文API Key，仅返回掩码
             if (!empty($accountData['api_key'])) {
                 $len = strlen((string)$accountData['api_key']);
@@ -905,7 +962,7 @@ class Provider extends BaseController
                 ]);
             }
 
-            $accountData = $account->getData();
+            $accountData = $this->normalizeAccountBaseUrlForOutput($account->getData());
             // 安全处理：不返回明文API Key，仅返回掩码
             if (!empty($accountData['api_key'])) {
                 $len = strlen((string)$accountData['api_key']);
