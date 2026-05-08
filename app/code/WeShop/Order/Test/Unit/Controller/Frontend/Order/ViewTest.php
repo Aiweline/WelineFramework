@@ -60,9 +60,9 @@ class ViewTest extends TestCase
             ->getMock();
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['id', null, 42],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'id' => 42,
+        ]));
         $this->setProtectedProperty($controller, 'request', $request);
 
         $controller->expects($this->never())->method('redirect');
@@ -86,9 +86,9 @@ class ViewTest extends TestCase
             ->willThrowException(new \RuntimeException('Order not found.'));
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['id', null, 404],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'id' => 404,
+        ]));
 
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())
@@ -126,9 +126,9 @@ class ViewTest extends TestCase
             ->willThrowException(new \Exception('Unexpected failure.'));
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['id', null, 405],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'id' => 405,
+        ]));
 
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())
@@ -178,5 +178,15 @@ class ViewTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = null): mixed => \array_key_exists($key, $params)
+            ? $params[$key]
+            : $default;
     }
 }

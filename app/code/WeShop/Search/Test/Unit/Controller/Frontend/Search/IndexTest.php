@@ -14,16 +14,13 @@ class IndexTest extends TestCase
     public function testIndexAssignsSearchPageData(): void
     {
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['q', null, ' travel bag '],
-            ['page', null, '2'],
-            ['page_size', null, '12'],
-            ['category_id', null, null],
-            ['price_min', null, null],
-            ['price_max', null, null],
-            ['order_by', null, 'price'],
-            ['order_dir', null, 'asc'],
-        ]);
+        $request->method('getParam')->willReturnCallback($this->requestParams([
+            'q' => ' travel bag ',
+            'page' => '2',
+            'page_size' => '12',
+            'order_by' => 'price',
+            'order_dir' => 'asc',
+        ]));
 
         $pageDataService = $this->createMock(SearchPageDataService::class);
         $pageDataService->expects($this->once())
@@ -56,5 +53,13 @@ class IndexTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function requestParams(array $params): \Closure
+    {
+        return static fn(string $key, mixed $default = ''): mixed => $params[$key] ?? $default;
     }
 }
