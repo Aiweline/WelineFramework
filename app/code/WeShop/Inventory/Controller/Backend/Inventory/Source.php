@@ -7,7 +7,9 @@ namespace WeShop\Inventory\Controller\Backend\Inventory;
 use WeShop\Inventory\Service\SourceAdminPageDataService;
 use WeShop\Inventory\Service\SourceManagementService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Inventory::source', 'Sources', 'mdi mdi-warehouse', 'Manage inventory sources', 'WeShop_Inventory::inventory_management')]
 class Source extends BaseController
 {
     public function __construct(
@@ -16,6 +18,7 @@ class Source extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Inventory::source_index', 'View inventory sources', 'mdi mdi-warehouse', 'View inventory source management page')]
     public function index(): string
     {
         $page = max(1, (int) $this->request->getParam('page', 1));
@@ -34,6 +37,7 @@ class Source extends BaseController
         return (string) $this->fetchBase('WeShop_Inventory::backend/templates/inventory/source/index.phtml');
     }
 
+    #[Acl('WeShop_Inventory::source_add', 'Add inventory source', 'mdi mdi-plus-box-outline', 'Add inventory source data')]
     public function add(): string
     {
         $sourceIndexUrl = (string) $this->request->getUrlBuilder()->getBackendUrl('*/backend/inventory/source');
@@ -61,6 +65,7 @@ class Source extends BaseController
         return (string) $this->fetchBase('WeShop_Inventory::backend/templates/inventory/source/form.phtml');
     }
 
+    #[Acl('WeShop_Inventory::source_edit', 'Edit inventory source', 'mdi mdi-pencil-outline', 'Edit inventory source data')]
     public function edit(): string
     {
         $sourceId = (int) $this->request->getParam('id', 0);
@@ -100,11 +105,13 @@ class Source extends BaseController
         return (string) $this->fetchBase('WeShop_Inventory::backend/templates/inventory/source/form.phtml');
     }
 
+    #[Acl('WeShop_Inventory::source_delete_post', 'Delete inventory source', 'mdi mdi-delete-outline', 'Delete inventory source data')]
     public function postDelete(): string
     {
         return $this->deleteAction();
     }
 
+    #[Acl('WeShop_Inventory::source_delete_get', 'Open inventory source delete route', 'mdi mdi-delete-outline', 'Open inventory source delete route')]
     public function getDelete(): string
     {
         // Keep GET compatibility for existing links while delegating to a single deletion flow.

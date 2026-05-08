@@ -126,7 +126,7 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                 <div>
                     <h1 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($category['name'] ?? __('Products')) ?></h1>
                     <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1 filter-result-count products-count">
-                        <?= __('Showing %1 products', count($products)) ?>
+                        <?= __('Showing %{1} products', count($products)) ?>
                     </p>
                 </div>
                 <div class="flex items-center gap-4">

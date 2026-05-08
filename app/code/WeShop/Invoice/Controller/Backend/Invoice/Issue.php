@@ -6,7 +6,9 @@ namespace WeShop\Invoice\Controller\Backend\Invoice;
 
 use WeShop\Invoice\Service\InvoiceService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Invoice::invoice_management_actions', 'Invoice actions', 'mdi mdi-file-document-edit-outline', 'Issue invoices', 'WeShop_Invoice::invoice_management')]
 class Issue extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Issue extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Invoice::invoice_management_issue_post', 'Issue invoice', 'mdi mdi-file-document-plus-outline', 'Issue invoice data')]
     public function post(): string
     {
         $backUrl = (string) $this->request->getParam('back_url', $this->getUrl('*/backend/invoice'));
@@ -37,6 +40,7 @@ class Issue extends BaseController
         }
     }
 
+    #[Acl('WeShop_Invoice::invoice_management_issue_index', 'Open invoice issue route', 'mdi mdi-file-document-plus', 'Open invoice issue route')]
     public function index(): string
     {
         return $this->post();
