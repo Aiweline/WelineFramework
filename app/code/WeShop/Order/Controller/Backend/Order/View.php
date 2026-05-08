@@ -6,7 +6,9 @@ namespace WeShop\Order\Controller\Backend\Order;
 
 use WeShop\Order\Service\OrderAdminPageDataService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_Order::order_management_view', 'Order view actions', 'mdi mdi-eye-outline', 'View order details', 'WeShop_Order::order_management')]
 class View extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class View extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_Order::order_management_view_index', 'View order detail', 'mdi mdi-eye', 'View order detail page')]
     public function index(): string
     {
         $orderId = (int) $this->request->getParam('id', 0);

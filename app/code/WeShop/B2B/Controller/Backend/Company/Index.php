@@ -6,7 +6,9 @@ namespace WeShop\B2B\Controller\Backend\Company;
 
 use WeShop\B2B\Service\CompanyAdminPageDataService;
 use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Acl\Acl;
 
+#[Acl('WeShop_B2B::company_management', 'B2B Companies', 'mdi mdi-domain', 'Manage B2B companies', 'Weline_Backend::customer_group')]
 class Index extends BaseController
 {
     public function __construct(
@@ -14,6 +16,7 @@ class Index extends BaseController
     ) {
     }
 
+    #[Acl('WeShop_B2B::company_management_index', 'View B2B companies', 'mdi mdi-domain-search', 'View B2B company management page')]
     public function index(): string
     {
         $page = max(1, (int) $this->request->getParam('page', 1));
