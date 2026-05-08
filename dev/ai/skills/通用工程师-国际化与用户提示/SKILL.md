@@ -1,7 +1,7 @@
 ---
 name: 通用工程师-国际化与用户提示
 description: Shared engineering skill for i18n-compliant user text, translation files, and framework-safe user notification patterns.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

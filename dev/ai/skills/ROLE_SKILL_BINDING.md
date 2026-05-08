@@ -1,6 +1,6 @@
 # Role Skill Binding
 
-本文档记录旧技能到新角色技能的主要映射关系，帮助后续维护者追踪迁移来源。
+本文档记录旧技能到新角色技能的主要映射关系，帮助维护者追踪迁移来源。
 
 ## 技术主管
 
@@ -89,4 +89,3 @@
 - `documentation-standards` -> `文档知识库工程师-文档规范与变更记录`
 - `dev/ai/skills/_index.md` -> `文档知识库工程师-技能索引与知识库`
 - `weline-framework-skill-router` -> `文档知识库工程师-技能索引与知识库`
-

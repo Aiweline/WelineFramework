@@ -4,19 +4,18 @@
 
 ## 设计目标
 
-- 将原有按技术主题组织的技能，重构为按团队角色组织的技能。
-- 每个技能目录都可被 Multica 独立导入。
+- 将原有按技术主题组织的技能重构为按团队角色组织的技能。
+- 每个技能目录都可以被 Multica 独立导入。
 - 保留 WelineFramework 的开发约束、阅读顺序、验证规则和文档边界。
-- 让技术主管、专项工程师、QA、CI、文档角色之间的协作边界更清晰。
-- 将开发规范、代码质量、国际化和用户提示等跨角色规则沉淀为通用工程师技能。
-- 旧的专题技能目录已移除，`dev/ai/skills/` 现在只保留角色化技能和共享说明文件。
+- 明确技术主管、专项工程师、QA、CI、文档角色之间的协作边界。
+- 将开发规范、代码质量、国际化与用户提示等跨角色规则沉淀为 `通用工程师-开发规范与代码质量`。
 
 ## 导入规则
 
-- 目录格式固定为 `dev/ai/skills/{角色}-{技能名}/SKILL.md`
-- 目录名与 `SKILL.md` frontmatter 中的 `name` 必须完全一致
-- 技能名使用中文
-- `SKILL.md` 正文使用英文，便于 Multica 路由与复用
+- 目录格式固定为 `dev/ai/skills/{角色}-{技能名}/SKILL.md`。
+- 目录名必须与 `SKILL.md` frontmatter 中的 `name` 完全一致。
+- 技能名使用中文。
+- `SKILL.md` 正文使用英文，便于 Multica 路由与复用。
 
 ## 先读顺序
 
@@ -24,18 +23,18 @@
 2. `dev/ai/diagrams/00-INDEX.txt`
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. `CLAUDE.md`
-5. 本目录中的角色技能
+5. 当前目录下命中的角色技能
 6. Source code as the last resort
 
 ## 共享约束
 
 - Do not edit `generated/` directly.
 - Do not use `routes.xml`.
-- Do not use JavaScript `alert`, `confirm`, or `prompt`.
+- Do not use JavaScript `alert` / `confirm` / `prompt`.
 - Do not hardcode user-facing text.
-- Use i18n for user-facing text.
+- Use i18n for visible text.
 - Do not add `declare(strict_types=1)` inside `.phtml`.
-- Do not use `sleep`, `die`, or `exit` in WLS runtime-sensitive paths.
+- Do not use `sleep` / `die` / `exit` in WLS runtime-sensitive paths.
 - Do not write detailed fix reports to the repository root.
 - Write fix reports in the related module `doc/` directory.
 - Update module README after bug fixes.
@@ -49,7 +48,7 @@
 ## 智能体名录
 
 - 智能体入口：`dev/ai/agent/README.md`
-- 每个智能体文件包含 `指令` 和 `Skill` 两部分。
+- 每个智能体文件包含“指令”和“Skill”两部分。
 - 所有工程智能体都必须加载 `通用工程师-开发规范与代码质量` 作为共识技能。
 - 专业技能按智能体前缀组织，例如 `框架核心工程师-*`、`文档知识库工程师-*`。
 
@@ -58,16 +57,14 @@
 - `[_index.md](_index.md)`：Multica 路由索引
 - `[ROLE_SKILL_BINDING.md](ROLE_SKILL_BINDING.md)`：角色与原技能映射
 - `[TEAM_WORKFLOW.md](TEAM_WORKFLOW.md)`：团队协作流程
-- `[MIGRATION_REPORT.md](MIGRATION_REPORT.md)`：迁移说明与缺失源记录
+- `[MIGRATION_REPORT.md](MIGRATION_REPORT.md)`：迁移说明与来源记录
 
 ## ClawHub Publish
 
-发布脚本位置：
+- 发布脚本：`tools/publish-multica-skills.mjs`
+- Skills.sh 发布脚本：`tools/publish-skills-sh.mjs`
 
-- `tools/publish-multica-skills.mjs`
-- `tools/publish-skills-sh.mjs`
-
-本地半自动发布到 ClawHub：
+本地发布到 ClawHub：
 
 1. `npx clawhub login`
 2. `node tools/publish-multica-skills.mjs --dry-run`
@@ -76,38 +73,14 @@
 本地发布到 Skills.sh：
 
 1. 安装 GitHub CLI：`gh`
-   Windows 快速安装：`winget install --id GitHub.cli -e --source winget`
 2. `gh auth login --web`
 3. `node tools/publish-skills-sh.mjs --dry-run`
 4. `node tools/publish-skills-sh.mjs`
 
-Skills.sh 发布脚本默认源目录仍是 `dev/ai/skills`。运行时会自动生成 `tools/.skills-sh-publish/skills/{english-slug}/SKILL.md` 临时目录，再调用 GitHub skill publisher，因为该 publisher 对中文目录名和直接传 `dev/ai/skills` 的兼容性不好。ClawHub 发布脚本仍直接发布 `dev/ai/skills`。
+Skills.sh 发布脚本会自动生成 `tools/.skills-sh-publish/skills/{english-slug}/SKILL.md` 临时目录，再调用 GitHub skill publisher。ClawHub 发布脚本仍直接发布 `dev/ai/skills`。
 
-如果 Windows 本地没有安装 `gh`，`tools/publish-skills-sh.mjs` 会在交互式终端询问是否通过 `winget` 安装。安装后如果还没有登录，脚本会自动启动 `gh auth login --web` 的浏览器认证流程。
-如果 `winget` 提示 GitHub CLI 已安装但当前终端找不到 `gh`，脚本会刷新 Windows PATH 并重试；必要时关闭并重新打开 PowerShell。
-该脚本的命令执行、错误着色、URL 着色和交互式登录行为与 ClawHub 发布脚本保持一致。
+CI 自动发布：
 
-CI 全自动发布到 ClawHub：
-
-- 配置 `CLAWHUB_TOKEN`
-- 可选配置 `CLAWHUB_OWNER`
-- GitHub Actions 工作流：`.github/workflows/publish-multica-skills.yml`
-
-CI 发布到 Skills.sh：
-
-- 使用 GitHub Actions 内置 `GH_TOKEN`，也支持 `GITHUB_TOKEN`
-- 默认发布 tag：`v1.0.${{ github.run_number }}`
-- 可通过 `SKILLS_SH_TAG` 覆盖发布 tag
-
-脚本默认目录就是 `dev/ai/skills`，只有在你明确要发布别的目录时，才需要额外传目录参数。
-
-运行脚本时如果缺少登录态或 token，脚本会直接输出下一步操作指南。
-
-ClawHub 对新 skill 有发布频率限制。当前限制为每小时最多 5 个新 skill。脚本会逐个发布本仓库的技能目录；如果触发限制，等待 ClawHub 重置窗口后再次运行 `node tools/publish-multica-skills.mjs` 即可继续。
-
-如果 ClawHub 返回 `Version already exists`，脚本会跳过该 skill 并继续发布后续 skill。这表示对应版本已经发布过，不是登录错误。
-
-脚本会显式传入每个中文 skill 对应的英文 slug，避免 ClawHub CLI 对中文名称推断失败并返回 `--slug required`。
-脚本会并发检查/发布 skill，默认并发数为 `4`；可通过 `CLAWHUB_CONCURRENCY` 调整，最高限制为 `8`。
-
-发布脚本生成的 manifest 文件位于 `tools/clawhub-skill-manifest.json`。
+- ClawHub：配置 `CLAWHUB_TOKEN`，可选 `CLAWHUB_OWNER`。
+- Skills.sh：使用 `GH_TOKEN` 或 `GITHUB_TOKEN`。
+- 当前默认 Skills.sh tag：`weline-skills-v1.1.1`。

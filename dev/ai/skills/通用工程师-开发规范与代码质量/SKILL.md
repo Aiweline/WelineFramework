@@ -1,7 +1,7 @@
 ---
 name: 通用工程师-开发规范与代码质量
 description: Shared engineering skill for Weline development standards, safe change boundaries, code quality, documentation duties, and validation evidence.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role
@@ -57,7 +57,7 @@ This shared skill owns baseline development standards for all WelineFramework en
 - Do not use `routes.xml`.
 - Do not alter schema through generated files or direct `Setup/Upgrade.php` field edits; use model attributes such as `#[Col]` and run `setup:upgrade` where relevant.
 - Do not use JavaScript `alert`, `confirm`, or `prompt`.
-- Do not hardcode user-facing text; use i18n such as `__('text')`, `<lang>text</lang>`, or the correct framework-safe form.
+- Do not hardcode user-facing text; use i18n such as `__("text")`, `<lang>text</lang>`, or the correct framework-safe form.
 - Do not add `declare(strict_types=1)` inside `.phtml` files.
 - Do not use `sleep`, `die`, or `exit` inside WLS runtime-sensitive code.
 - Do not write detailed fix reports to the repository root.
@@ -71,7 +71,6 @@ This shared skill owns baseline development standards for all WelineFramework en
 - Do not pollute global state.
 - Keep module boundaries intact.
 - Provide unit test and E2E or HTTP validation evidence where relevant.
-
 
 # Team Collaboration Rules
 
@@ -176,7 +175,6 @@ Use this format:
   - 具体下一步
 ```
 
-
 # Inputs Required
 
 - The task goal, affected module or framework area, and expected behavior.
@@ -212,6 +210,3 @@ Use this format:
 - Do not replace specialist role skills; this skill sets shared standards and routes work to specialists.
 - Do not expand the task scope beyond the requested behavior without explicit technical reason.
 - Do not use broad rewrites where a narrow patch can solve the issue.
-- Do not treat validation as optional when behavior changes.
-- Do not leave repository-root fix reports or unmanaged temporary artifacts.
-- Do not override Technical Director decisions or second-level acceptance responsibilities.

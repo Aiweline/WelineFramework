@@ -1,7 +1,7 @@
 ---
 name: 安全权限工程师-会话配置与数据保护
 description: Security engineer skill for session configuration, area isolation, sensitive-state handling, and data-protection boundaries.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

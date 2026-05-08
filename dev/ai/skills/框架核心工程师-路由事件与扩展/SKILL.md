@@ -1,7 +1,7 @@
 ---
 name: 框架核心工程师-路由事件与扩展
 description: Framework core engineer skill for routing, events, hooks, extends, and extension-point contract design.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

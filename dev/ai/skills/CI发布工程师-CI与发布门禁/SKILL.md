@@ -1,7 +1,7 @@
 ---
 name: CI发布工程师-CI与发布门禁
 description: CI release engineer skill for validation gating, release-readiness checks, and automation-safe delivery criteria.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role

@@ -1,7 +1,7 @@
 ---
 name: 技术主管-一级验收与进度追踪
 description: Technical Lead skill for first-line acceptance, progress tracking, risk escalation, and evidence review.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Role
