@@ -12,7 +12,7 @@
     var latestWorkspaceState = initialWorkspaceState;
     var initialWorkspaceStateHydrated = false;
     var hasGeneratedPages = <?= \json_encode($displayPagesByType !== [], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var isOperationRunning = <?= \json_encode(\in_array($activeOperationStatus, ['queued', 'running'], true), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var isOperationRunning = <?= \json_encode(\in_array($activeOperationStatus, ['pending', 'queued', 'running', 'processing'], true), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentActiveOperationState = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     /** 服务端返回的已选页面类型列表（前端无状态时用作勾选回退）。 */
     var serverPageTypesFallback = <?= \json_encode(\array_values(\is_array($selectedPageTypesSafe) ? $selectedPageTypesSafe : []), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -360,6 +360,11 @@
         return !!lastPhaseTwoTaskPlanPresent || !!hasVirtualThemePlanState || !!taskPlanConfirmedState;
     }
 
+    function hasConfirmedPhaseTwoPlanForBuild() {
+        return !!taskPlanConfirmedState
+            && (!!lastPhaseTwoTaskPlanPresent || !!hasVirtualThemePlanState || hasTaskPlanDraft());
+    }
+
     function getTaskPlanStageEntryDecision() {
         return taskPlanStageEntryDecision && typeof taskPlanStageEntryDecision === 'object'
             ? taskPlanStageEntryDecision
@@ -407,6 +412,10 @@
 
     function isQueueStatusRunningForUi(status) {
         return ['pending', 'queued', 'running', 'processing'].indexOf(normalizeQueueStatusForPrompt(status)) !== -1;
+    }
+
+    function isQueueStatusTerminalForUi(status) {
+        return ['done', 'success', 'finished', 'complete', 'completed', 'error', 'failed', 'cancelled', 'canceled', 'stop'].indexOf(normalizeQueueStatusForPrompt(status)) !== -1;
     }
 
     function readQueueStatusForPrompt(queueInfo) {
@@ -474,6 +483,12 @@
             ? state.task_plan_queue_info
             : {};
         var taskPlanQueueStatus = readQueueStatusForPrompt(state.task_plan_queue_info);
+        var queueSnapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+            ? queueInfo.snapshot
+            : {};
+        if (isQueueStatusTerminalForUi(taskPlanQueueStatus) || Number(queueSnapshot.finished || 0) === 1) {
+            return false;
+        }
         if (isQueueStatusBlockingTaskPlanPrompt(taskPlanQueueStatus)) {
             return true;
         }
@@ -483,9 +498,6 @@
         if (!!queueInfo.queue_waiting_for_scheduler || !!queueInfo.can_close_stream) {
             return true;
         }
-        var queueSnapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
-            ? queueInfo.snapshot
-            : {};
         if (
             Number(queueInfo.queue_id || queueSnapshot.queue_id || 0) > 0
             && Number(queueSnapshot.finished || 0) === 0
@@ -737,6 +749,16 @@
         return ['saving', 'queued', 'waiting', 'running'].indexOf(name) !== -1;
     }
 
+    function isPhaseTwoOwnQueueBusy() {
+        if (!!taskPlanStartRequestInFlight || !!taskPlanSseRunning) {
+            return true;
+        }
+        if (hasConfirmedPhaseTwoPlanForBuild()) {
+            return false;
+        }
+        return isTaskPlanQueueOperationRunning() || isQueueUiStateBusy('task_plan');
+    }
+
     function pickQueueInfoForUiState(stage, source) {
         var normalizedStage = normalizeQueueUiStage(stage);
         var payload = source && typeof source === 'object' ? source : {};
@@ -808,6 +830,7 @@
         var payloadMatchesStage = payloadOperation === '' || queueUiOperationMatchesStage(normalizedStage, payloadOperation);
         var nestedOperation = String(nestedData.operation || '').trim();
         var nestedMatchesStage = nestedOperation === '' || queueUiOperationMatchesStage(normalizedStage, nestedOperation);
+        var queueStatus = readQueueStatusForPrompt(queueInfo);
         var status = (payloadMatchesStage ? (payload.status
             || payload.queue_status
             || payload.job_status) : '')
@@ -823,6 +846,12 @@
             || queueInfo.status
             || queueInfo.queue_status
             || '';
+        if (isQueueStatusTerminalForUi(queueStatus) && !isQueueStatusTerminalForUi(status)) {
+            status = queueStatus;
+        }
+        if (!isQueueStatusTerminalForUi(status) && Number(snapshot.finished || 0) === 1) {
+            status = queueStatus || 'completed';
+        }
         var stateName = payload.state
             ? normalizeQueueUiStateName(payload.state, queueInfo)
             : normalizeQueueUiStateName(status, queueInfo);
@@ -963,6 +992,120 @@
             total += countRetryableAiFailureBucket(bucket[key]);
         });
         return total;
+    }
+
+    function getRetryableAiFailureItems(workspaceState, operation) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var normalizedOperation = String(operation || '').trim();
+        var items = [];
+
+        function appendFromLedger(ledger) {
+            if (!ledger || typeof ledger !== 'object') {
+                return;
+            }
+            if (Array.isArray(ledger)) {
+                ledger.forEach(function (item) {
+                    if (item && typeof item === 'object') {
+                        if (normalizedOperation === '' || String(item.operation || '').trim() === normalizedOperation) {
+                            items.push(item);
+                        }
+                    }
+                });
+                return;
+            }
+            if (normalizedOperation !== '' && ledger[normalizedOperation] && typeof ledger[normalizedOperation] === 'object') {
+                var bucketItems = ledger[normalizedOperation].items;
+                if (Array.isArray(bucketItems)) {
+                    bucketItems.forEach(function (item) { if (item && typeof item === 'object') { items.push(item); } });
+                } else if (bucketItems && typeof bucketItems === 'object') {
+                    Object.keys(bucketItems).forEach(function (key) {
+                        if (bucketItems[key] && typeof bucketItems[key] === 'object') {
+                            items.push(bucketItems[key]);
+                        }
+                    });
+                }
+                return;
+            }
+            if (normalizedOperation === '') {
+                Object.keys(ledger).forEach(function (key) {
+                    appendFromLedger(ledger[key]);
+                });
+                return;
+            }
+            if (ledger.items) {
+                if (Array.isArray(ledger.items)) {
+                    ledger.items.forEach(function (item) {
+                        if (item && typeof item === 'object') {
+                            if (normalizedOperation === '' || String(item.operation || '').trim() === normalizedOperation) {
+                                items.push(item);
+                            }
+                        }
+                    });
+                } else if (typeof ledger.items === 'object') {
+                    Object.keys(ledger.items).forEach(function (key) {
+                        var item = ledger.items[key];
+                        if (item && typeof item === 'object') {
+                            if (normalizedOperation === '' || String(item.operation || '').trim() === normalizedOperation) {
+                                items.push(item);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        appendFromLedger(state.retryable_ai_failures);
+        appendFromLedger(scope.retryable_ai_failures);
+
+        var seen = {};
+        return items.filter(function (item, index) {
+            var key = String(item.item_key || item.key || index);
+            var operationKey = String(item.operation || normalizedOperation || '');
+            var fingerprint = operationKey + ':' + key;
+            if (seen[fingerprint]) {
+                return false;
+            }
+            seen[fingerprint] = true;
+            return true;
+        });
+    }
+
+    function renderTaskPlanRetryableFailureItems(workspaceState) {
+        var panel = document.getElementById('pb-ai-task-plan-retryable-failures-panel');
+        var list = document.getElementById('pb-ai-task-plan-retryable-failures-list');
+        if (!panel || !list) {
+            return;
+        }
+        var items = getRetryableAiFailureItems(workspaceState, 'task_plan');
+        if (!items.length) {
+            panel.classList.add('d-none');
+            list.innerHTML = '';
+            return;
+        }
+        list.innerHTML = items.map(function (item, index) {
+            var label = String(item.label || item.title || item.page_label || item.item_key || ('Item ' + String(index + 1))).trim();
+            var message = String(item.message || item.error_message || item.error || '').trim();
+            var taskKeys = Array.isArray(item.task_keys) ? item.task_keys.filter(Boolean) : [];
+            var meta = [];
+            if (item.page_label) {
+                meta.push(String(item.page_label));
+            }
+            if (item.retry_scope) {
+                meta.push(String(item.retry_scope));
+            }
+            if (taskKeys.length) {
+                meta.push('tasks: ' + taskKeys.join(', '));
+            }
+            return '<div class="border rounded bg-body px-2 py-2">'
+                + '<div class="fw-semibold text-dark">' + escapeHtml(label) + '</div>'
+                + (message !== '' ? '<div class="text-muted mt-1">' + escapeHtml(message) + '</div>' : '')
+                + (meta.length ? '<div class="small text-muted mt-1">' + escapeHtml(meta.join(' | ')) + '</div>' : '')
+                + '</div>';
+        }).join('');
+        panel.classList.remove('d-none');
     }
 
     function getRetryableAiFailureCount(workspaceState, operation) {
@@ -1116,7 +1259,7 @@
             return !!planStartRequestPending || !!planSseRunning || hasAnyRunningQueueForUi();
         }
         if (normalizedOperation === 'task_plan') {
-            return !!taskPlanStartRequestInFlight || !!taskPlanSseRunning || hasAnyRunningQueueForUi();
+            return isPhaseTwoOwnQueueBusy();
         }
         if (normalizedOperation === 'build') {
             return isBuildActionLocked(workspaceState) || isPublishRepairOperationLocked();
@@ -1165,6 +1308,7 @@
         if (panel) {
             panel.classList.toggle('d-none', visibleCount <= 0);
         }
+        renderTaskPlanRetryableFailureItems(state);
     }
 
     function syncRetryableAiFailureActionGuards(workspaceState) {
@@ -1392,11 +1536,22 @@
         return isQueueStatusRunningForUi(readQueueStatusForPrompt(queueInfo));
     }
 
+    function hasBuildOperationRunningForUi(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var active = state && typeof state === 'object' && state.active_operation && typeof state.active_operation === 'object'
+            ? state.active_operation
+            : {};
+        var operation = String(active.operation || '').trim().toLowerCase();
+        return (operation === 'build' && isQueueStatusRunningForUi(active.status))
+            || hasBuildQueueRunningForUi(state);
+    }
+
     function isBuildActionLocked(workspaceState) {
         return !!buildStartupPending
             || isThemeBuildGenerationRunning()
-            || hasBuildQueueRunningForUi(workspaceState)
-            || hasAnyRunningQueueForUi()
+            || hasBuildOperationRunningForUi(workspaceState)
             || isQueueUiStateBusy('build');
     }
 
@@ -6242,6 +6397,7 @@
 
     function resetBuildStartUi() {
         setRunVirtualThemeButtonsDisabled(false);
+        syncTaskPlanBuildButtonState();
         syncPublishRepairButtonDisabledState();
     }
 
@@ -6371,6 +6527,32 @@
     function setPreviewFrameUrl(url) {
         var frame = document.getElementById('pb-ai-visual-preview-frame');
         if (!frame || !url) {
+            return;
+        }
+        var normalizedTarget = '';
+        var normalizedCurrent = '';
+        try {
+            var targetUrl = new URL(String(url), window.location.href);
+            targetUrl.searchParams.delete('_pb_pv');
+            normalizedTarget = targetUrl.toString();
+        } catch (e0) {
+            normalizedTarget = String(url).replace(/([?&])_pb_pv=[^&#]*(&?)/g, function (match, prefix, suffix) {
+                return prefix === '?' && suffix ? '?' : (suffix && suffix !== '&' ? suffix : '');
+            }).replace(/[?&]$/, '');
+        }
+        try {
+            var currentSrc = String(frame.getAttribute('src') || '');
+            if (currentSrc) {
+                var currentUrl = new URL(currentSrc, window.location.href);
+                currentUrl.searchParams.delete('_pb_pv');
+                normalizedCurrent = currentUrl.toString();
+            }
+        } catch (e1) {
+            normalizedCurrent = String(frame.getAttribute('src') || '').replace(/([?&])_pb_pv=[^&#]*(&?)/g, function (match, prefix, suffix) {
+                return prefix === '?' && suffix ? '?' : (suffix && suffix !== '&' ? suffix : '');
+            }).replace(/[?&]$/, '');
+        }
+        if (normalizedCurrent !== '' && normalizedCurrent === normalizedTarget) {
             return;
         }
         clearVisualPreviewErrorOverlay();
@@ -9283,6 +9465,10 @@
                 if (targetTab) {
                     switchPreviewByTab(targetTab);
                 }
+                return;
+            }
+            if (payload.type === 'pb-ai-workspace-preview' && String(payload.action || '') === 'request-ai-generate') {
+                handleEmbeddedPreviewGenerateRequest(String(payload.page_type || ''));
             }
         });
     }
@@ -14379,7 +14565,7 @@
             : {};
         var operation = String(active.operation || '').toLowerCase();
         var status = String(active.status || '').toLowerCase();
-        return operation === 'build' && (status === 'queued' || status === 'running');
+        return operation === 'build' && isQueueStatusRunningForUi(status);
     }
 
     function hasBuildTaskActivity() {
@@ -14734,7 +14920,7 @@
     }
 
     function applyTaskPlanEditingLockFromActiveOperation() {
-        var locked = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || isQueueUiStateBusy('task_plan');
+        var locked = isThemeBuildGenerationRunning() || isPhaseTwoOwnQueueBusy();
         [
             'pb-ai-task-plan-mode-refine',
             'pb-ai-task-plan-mode-rebuild',
@@ -15652,13 +15838,14 @@
         }, { updateStatus: false });
         if (confirmBtn) {
             confirmBtn.disabled = isThemeBuildGenerationRunning()
-                || hasAnyRunningQueueForUi()
+                || isPhaseTwoOwnQueueBusy()
                 || !enableConfirm;
         }
         if (buildBtn) {
+            var canStartBuildFlow = hasPhaseOnePlanReadyForTaskPlan();
             buildBtn.disabled = isBuildActionLocked()
                 || hasRetryableAiFailures(null, 'plan')
-                || !taskPlanConfirmedState;
+                || !canStartBuildFlow;
         }
         syncTaskPlanRegenerateButtonVisibility();
         applyTaskPlanEditingLockFromActiveOperation();
@@ -15669,9 +15856,10 @@
         if (!buildBtn) {
             return;
         }
+        var canStartBuildFlow = hasPhaseOnePlanReadyForTaskPlan();
         buildBtn.disabled = isBuildActionLocked()
             || hasRetryableAiFailures(null, 'plan')
-            || !taskPlanConfirmedState;
+            || !canStartBuildFlow;
     }
 
     function hideTaskPlanGenerationModal() {
@@ -15940,11 +16128,19 @@
             if (data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
             }
+            var taskPlanDeferredQueueProgress = !!(
+                data
+                && (
+                    data.deferred_queue_progress
+                    || data.queue_waiting_for_scheduler
+                    || data.can_close_stream
+                )
+            );
             renderQueueUiState('task_plan', Object.assign({
-                state: jsonTruthyFlag(data && data.start_sse) ? 'queued' : 'completed',
+                state: (jsonTruthyFlag(data && data.start_sse) || taskPlanDeferredQueueProgress) ? 'queued' : 'completed',
                 message: (data && data.message) ? String(data.message) : messages.taskPlanGenerating
             }, data || {}), { updateStatus: false });
-            if (jsonTruthyFlag(data && data.start_sse)) {
+            if (jsonTruthyFlag(data && data.start_sse) || taskPlanDeferredQueueProgress) {
                 setTaskPlanModalProgress((data && data.message) ? String(data.message) : messages.taskPlanGenerating, 28, false);
                 if (!(window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'task_plan'))) {
                     startTaskPlanSseFromStartRequest();
@@ -16313,8 +16509,12 @@
             startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, opts);
             return;
         }
-        if (!lastPhaseOnePlanPresent) {
+        if (!hasPhaseOnePlanReadyForTaskPlan()) {
             toast('warning', messages.phaseOnePlanMissingForTaskPlan);
+            return;
+        }
+        if (hasConfirmedPhaseTwoPlanForBuild()) {
+            startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, opts);
             return;
         }
         // 确认态不是终态：第二阶段方案允许持续编辑，构建前始终优先使用当前草案链路。
@@ -16348,7 +16548,7 @@
             toast('warning', messages.noPageType);
             return;
         }
-        if (!lastPhaseOnePlanPresent) {
+        if (!hasPhaseOnePlanReadyForTaskPlan()) {
             toast('warning', messages.phaseOnePlanMissingForTaskPlan);
             return;
         }
@@ -16472,7 +16672,9 @@
         if (startBuildSiteBtn && startBuildSiteBtn.dataset.pbBound !== '1') {
             startBuildSiteBtn.dataset.pbBound = '1';
             startBuildSiteBtn.addEventListener('click', function () {
-                if (!guardRetryableAiFailuresBeforeProgress(null)) {
+                var selectedTypes = selectedPageTypes();
+                var retryGuardOperation = hasConfirmedPhaseTwoPlanForBuild() ? 'build' : null;
+                if (!guardRetryableAiFailuresBeforeProgress(retryGuardOperation)) {
                     syncTaskPlanBuildButtonState();
                     return;
                 }
@@ -16481,7 +16683,7 @@
                     syncTaskPlanBuildButtonState();
                     return;
                 }
-                ensureTaskPlanConfirmedBeforeBuild(currentPlanTriggerButton, currentPlanSelection, {});
+                ensureTaskPlanConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});
             });
         }
         syncTaskPlanBuildButtonState();
@@ -16682,8 +16884,8 @@
         var active = currentActiveOperationState && typeof currentActiveOperationState === 'object'
             ? currentActiveOperationState
             : {};
-        var activeStatus = String(active.status || '').toLowerCase();
-        var isActiveRunning = (activeStatus === 'queued' || activeStatus === 'running');
+        var activeStatus = String(active.status || '').trim().toLowerCase();
+        var isActiveRunning = ['pending', 'queued', 'running', 'processing'].indexOf(activeStatus) !== -1;
         if (isActiveRunning && String(active.execution_token || '').trim() !== '') {
             if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
                 var payload = Object.assign({ success: true }, active);
@@ -17294,23 +17496,6 @@
         toast(level === 'error' ? 'error' : (level === 'success' ? 'success' : 'warning'), message);
     }
 
-    if (!window.__pbAiEmbeddedPreviewMessageBound) {
-        window.__pbAiEmbeddedPreviewMessageBound = true;
-        window.addEventListener('message', function (event) {
-            if (!event || !event.data || typeof event.data !== 'object') {
-                return;
-            }
-            if (event.origin !== window.location.origin) {
-                return;
-            }
-            if (event.data.type !== 'pb-ai-workspace-preview' || event.data.action !== 'request-ai-generate') {
-                return;
-            }
-            var incomingPageType = String(event.data.page_type || '').trim();
-            handleEmbeddedPreviewGenerateRequest(incomingPageType);
-        });
-    }
-
     if (initialWorkspaceState && typeof initialWorkspaceState === 'object') {
         hydrateInitialWorkspaceStateOnce();
         showWorkspaceEntryQueueNotice(initialWorkspaceState);
@@ -17318,6 +17503,13 @@
     bindAssetPanelLogic();
     bindReferenceImageUploadLogic();
     syncReferenceImagePanelFromWorkspaceState(initialWorkspaceState);
-    bindPublishStageLogic();
+    var bootStage = String(currentStageCode || currentWorkspaceStage || '').trim().toLowerCase();
+    if (bootStage === 'visual_edit') {
+        bindVisualEditStageLogic();
+    } else if (bootStage === 'publish') {
+        bindPublishStageLogic();
+    } else {
+        bindPlanStageLogic();
+    }
 })();
 </script>
