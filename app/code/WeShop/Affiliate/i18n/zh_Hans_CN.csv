@@ -2,71 +2,71 @@
 "Affiliate not found.",未找到推荐人。
 "Affiliate deleted successfully.",推荐人删除成功。
 "Failed to delete affiliate.",删除推荐人失败。
-"Affiliate Management","推荐管理"
-"Affiliate saved.","推荐账户已保存。"
-"Affiliate save failed.","推荐账户保存失败。"
+"Affiliate Management",推荐管理
+"Affiliate saved.",推荐账户已保存。
+"Affiliate save failed.",推荐账户保存失败。
 "Affiliate Details",推荐人详情
-"Please log in to continue.","请先登录。"
+"Please log in to continue.",请先登录。
 "Affiliate page hooks","推荐页面 Hook"
-"Inject storefront content above the affiliate dashboard page.","在前台推荐仪表盘页面上方注入内容。"
+"Inject storefront content above the affiliate dashboard page.",在前台推荐仪表盘页面上方注入内容。
 "Affiliate summary hooks","推荐摘要 Hook"
-"Inject storefront content below the affiliate summary card.","在推荐摘要卡片下方注入内容。"
+"Inject storefront content below the affiliate summary card.",在推荐摘要卡片下方注入内容。
 "Customer ID is required.",必须提供客户ID
 Active,启用
 Disabled,禁用
-"Unsupported affiliate status.","不支持的推荐账户状态。"
+"Unsupported affiliate status.",不支持的推荐账户状态。
 "Commission rate must be between 0 and 1.","佣金比例必须在 0 到 1 之间。"
-"Affiliate record not found.","未找到推荐记录。"
+"Affiliate record not found.",未找到推荐记录。
 "Customer ID or affiliate ID is required.","必须提供客户 ID 或推荐 ID。"
-"Review, filter, and adjust affiliate accounts created by marketing partners.","查看、筛选并调整营销合作伙伴创建的推荐账户。"
+"Review, filter, and adjust affiliate accounts created by marketing partners.",查看、筛选并调整营销合作伙伴创建的推荐账户。
 "Page %d of %d, %d affiliates found","第 %d 页，共 %d 页，找到 %d 个推荐账户"
 "Total Affiliates",推荐人总数
-"Total Commission","总佣金"
-"Edit Affiliate Account","编辑推荐账户"
-"Create Affiliate Account","创建推荐账户"
+"Total Commission",总佣金
+"Edit Affiliate Account",编辑推荐账户
+"Create Affiliate Account",创建推荐账户
 "Customer ID","客户 ID"
 "Customer ID cannot be changed after creation.",客户ID创建后无法更改。
-"Referral Code","推荐码"
+"Referral Code",推荐码
 "Auto-generated referral code.",自动生成的推荐码。
 "Commission Rate",佣金比例
 "Enter a decimal between 0 and 1 to represent the commission percentage.","输入 0 到 1 之间的小数表示佣金百分比。"
 Status,状态
-"Paid Commission","已付佣金"
+"Paid Commission",已付佣金
 Pending,待处理
 "Update Affiliate",更新推荐人
 "Create Affiliate","Create Affiliate"
 "Cancel Edit",取消编辑
-"All statuses","全部状态"
+"All statuses",全部状态
 "Apply Filters","Apply Filters"
 Reset,Reset
 "Affiliate ID","推荐 ID"
 Total,总计
 Paid,已付
-"Created At","创建时间"
+"Created At",创建时间
 Actions,操作
 View,查看
 Edit,编辑
 "Affiliate pagination",推荐人分页
 Previous,上一页
 Next,下一页
-"No affiliate accounts found.","未找到推荐账户。"
-"Use the form to create the first affiliate or adjust filters to find existing accounts.","使用表单创建第一个推荐账户，或调整筛选条件查找已有账户。"
+"No affiliate accounts found.",未找到推荐账户。
+"Use the form to create the first affiliate or adjust filters to find existing accounts.",使用表单创建第一个推荐账户，或调整筛选条件查找已有账户。
 "View and manage affiliate account information.",查看和管理推荐人账户信息。
 "Back to List",返回列表
 "Affiliate Information","Affiliate Information"
 Copy,复制
 "Share this code with partners to track referrals.",与合作伙伴分享此代码以追踪推荐。
-"Save Changes","保存更改"
+"Save Changes",保存更改
 "Referral Link",推荐链接
 "Copy Link",复制链接
 "Account Status",账户状态
-"Updated At","更新时间"
+"Updated At",更新时间
 "Commission Summary",佣金摘要
 "Payment Progress",支付进度
 "Referral code copied!",推荐码已复制！
 "Referral link copied!",推荐链接已复制！
 Growth,Growth
 "Affiliate Center","Affiliate Center"
-"Open Center","打开中心"
-"Share links and track commission","分享链接并跟踪佣金"
+"Open Center",打开中心
+"Share links and track commission",分享链接并跟踪佣金
 "Use your referral code to invite new customers and monitor earned, paid, and pending commissions.",使用您的推荐码邀请新客户并监控已赚取、已支付和待处理的佣金。
