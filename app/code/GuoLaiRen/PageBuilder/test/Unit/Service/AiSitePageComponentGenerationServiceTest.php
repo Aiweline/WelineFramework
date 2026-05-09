@@ -822,6 +822,9 @@ HTML,
         self::assertStringContainsString('Customer-intent lock', $prompt);
         self::assertStringContainsString('Interaction/effects requirement', $prompt);
         self::assertStringContainsString('Do not leave css_extra empty', $prompt);
+        self::assertStringContainsString('HTML structure contract', $prompt);
+        self::assertStringContainsString('html fragment rule', $prompt);
+        self::assertStringContainsString('no-overlap structure rule', $prompt);
         self::assertStringContainsString('stage2 language rule', $prompt);
         self::assertStringContainsString('rewrite any planned text that is not in the website content language', $prompt);
     }
@@ -956,6 +959,48 @@ HTML,
         self::assertStringContainsString('stage2-context-hash', $prompt);
         self::assertStringContainsString('Measured premium trust', $prompt);
         self::assertStringContainsString('Compact trust navigation', $prompt);
+    }
+
+    public function testTaskPlanPromptDoesNotTreatPlaceholderManifestAsVerifiedAsset(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $placeholderUrl = '/pub/media/page-build/demo/ai-generated/home-hero-old.svg';
+        $task = [
+            'task_key' => 'page:home_page:content/home-page-hero',
+            'plan_context' => [
+                'page_goal' => 'Explain the offer clearly.',
+                'block_goal' => 'Drive CTA clicks.',
+            ],
+            'task_script' => [
+                'story_goal' => 'Create a credible conversion hero.',
+            ],
+        ];
+        $scope = [
+            'asset_manifest' => [
+                'slots' => [
+                    'home:hero' => [
+                        'slot_id' => 'home:hero',
+                        'slot_type' => 'hero_image',
+                        'source' => 'generated',
+                        'status' => 'done',
+                        'final_url' => $placeholderUrl,
+                        'variants' => [[
+                            'url' => $placeholderUrl,
+                            'mode' => 'placeholder',
+                            'model' => 'placeholder',
+                            'placeholder' => 1,
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $prompt = (function (array $taskPlanTask, string $contextLabel, array $scope): string {
+            return $this->buildTaskPlanPromptAddon($taskPlanTask, $contextLabel, $scope);
+        })->call($service, $task, 'section', $scope);
+
+        self::assertStringContainsString('verified_assets: []', $prompt);
+        self::assertStringNotContainsString($placeholderUrl, $prompt);
     }
 
     public function testSectionPromptIgnoresUnconfirmedTaskPlanDrafts(): void
@@ -1234,7 +1279,7 @@ HTML,
             'extra_fields' => '',
             'php_variables' => '',
             'css_extra' => $css,
-            'html_content' => '<div class="pb-rich-0 pb-rich-sentinel"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/></svg><h2>AI Plugin Hub</h2><p>Browse trusted AI tools with clear fit, proof points, and fast download paths.</p></div>',
+            'html_content' => '<div class="pb-rich-0 pb-rich-sentinel"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/></svg><h2>Teenipiya APK Rewards</h2><p>Compare safe download paths, payout records, and support options before installing.</p></div>',
             'js_content' => '',
         ];
 
@@ -1244,6 +1289,30 @@ HTML,
 
         self::assertGreaterThan(1800, \strlen((string)($validated['css_extra'] ?? '')));
         self::assertStringContainsString('pb-rich-sentinel', (string)($validated['css_extra'] ?? ''));
+    }
+
+    public function testVirtualThemeComponentPolicyRejectsMalformedHtmlStructure(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-privacy-card { display:grid; gap:18px; padding:28px; border-radius:24px; background:linear-gradient(135deg,#111827,#f59e0b); }',
+            'html_content' => '<div class="pb-privacy-card</div></div><section><h2>Privacy proof</h2><p>Clear policy details for every visitor.</p></section>',
+            'js_content' => '',
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('AI component HTML structure invalid');
+
+        (function (array $payload, string $region): array {
+            return $this->ensureAiPayloadValid($payload, $region);
+        })->call($service, $payload, 'content');
     }
 
     public function testVirtualThemeComponentPolicyAllowsVisitorFormPlaceholderAttributes(): void
@@ -1636,22 +1705,20 @@ HTML,
         self::assertStringNotContainsString('Built from plan', \json_encode($config, \JSON_UNESCAPED_UNICODE));
     }
 
-    public function testCleanAiHtmlFragmentRepairsUnclosedHtmlTags(): void
+    public function testCleanAiHtmlFragmentRejectsMalformedHtmlStructure(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
         );
 
-        $cleaned = (function (string $html): string {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('AI component HTML structure invalid');
+
+        (function (string $html): string {
             return $this->cleanAiHtmlFragment($html);
         })->call(
             $service,
             '<section class="stage"><div class="copy"><h2>Title</h2><p>Readable body</section></span>'
-        );
-
-        self::assertSame(
-            '<section class="stage"><div class="copy"><h2>Title</h2><p>Readable body</p></div></section>',
-            $cleaned
         );
     }
 

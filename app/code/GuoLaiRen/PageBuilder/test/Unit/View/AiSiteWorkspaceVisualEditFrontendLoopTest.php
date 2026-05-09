@@ -184,15 +184,17 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("|| getActivePreviewPageType()", $payloadBody);
     }
 
-    public function testVisualPreviewFrameUsesFixedDeviceViewportHeightInsteadOfDocumentScrollHeight(): void
+    public function testVisualPreviewFrameUsesAdaptiveHeightWithoutDirectDocumentScrollHeight(): void
     {
         $script = $this->workspaceScript();
         $syncBody = $this->extractFunctionBody($script, 'syncVisualPreviewFrameHeight');
 
         self::assertStringNotContainsString('function measureVisualPreviewDocumentHeight', $script);
-        self::assertStringContainsString('var fixedHeight = getPreviewDeviceMinHeight();', $syncBody);
-        self::assertStringContainsString("frame.style.minHeight = fixedHeight + 'px';", $syncBody);
-        self::assertStringContainsString("frame.style.height = fixedHeight + 'px';", $syncBody);
+        self::assertStringContainsString('var minHeight = getPreviewDeviceMinHeight();', $syncBody);
+        self::assertStringContainsString('var contentHeight = resolveVisualPreviewFrameContentHeight(frame);', $syncBody);
+        self::assertStringContainsString('var nextHeight = Math.max(minHeight, contentHeight || 0);', $syncBody);
+        self::assertStringContainsString("frame.style.minHeight = minHeight + 'px';", $syncBody);
+        self::assertStringContainsString("frame.style.height = nextHeight + 'px';", $syncBody);
         self::assertStringNotContainsString('scrollHeight', $syncBody);
         self::assertStringNotContainsString('clientHeight', $syncBody);
     }
@@ -286,14 +288,58 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         );
     }
 
+    public function testWorkspaceBootBindsCurrentStageActions(): void
+    {
+        $script = $this->workspaceScript();
+        $definition = \strpos($script, 'function bindVisualEditStageLogic()');
+        $boot = \strpos($script, "var bootStage = String(currentStageCode || currentWorkspaceStage || '').trim().toLowerCase();");
+
+        self::assertIsInt($definition);
+        self::assertIsInt($boot);
+        self::assertLessThan($boot, $definition, 'Stage binding must run after visual-edit handlers are defined.');
+        self::assertStringContainsString("if (bootStage === 'visual_edit')", $script);
+        self::assertStringContainsString("['pending', 'queued', 'running', 'processing']", $script);
+        self::assertStringContainsString('bindVisualEditStageLogic();', \substr($script, $boot));
+        self::assertStringContainsString('bindPlanStageLogic();', \substr($script, $boot));
+        self::assertStringContainsString('bindPublishStageLogic();', \substr($script, $boot));
+    }
+
     public function testConfirmedTaskPlanButtonUsesResumeAwareBuildFlow(): void
     {
         $script = $this->workspaceScript();
         $bindBody = $this->extractFunctionBody($script, 'bindPlanStageLogic');
 
         self::assertStringContainsString("var confirmTaskPlanBtn = document.getElementById('pb-ai-confirm-task-plan');", $bindBody);
-        self::assertStringContainsString('ensureTaskPlanConfirmedBeforeBuild(currentPlanTriggerButton, currentPlanSelection, {});', $bindBody);
+        self::assertStringContainsString('var selectedTypes = selectedPageTypes();', $bindBody);
+        self::assertStringContainsString('ensureTaskPlanConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});', $bindBody);
         self::assertStringNotContainsString('confirmCurrentTaskPlanAndMaybeBuild(currentPlanTriggerButton, currentPlanSelection);', $bindBody);
+
+        $resumeBody = $this->extractFunctionBody($script, 'startOrObserveBuildFromVisualEditEntry');
+        self::assertStringContainsString("['pending', 'queued', 'running', 'processing'].indexOf(activeStatus) !== -1", $resumeBody);
+    }
+
+    public function testQueuedOperationSseKeepsObserverOpenWhileWaitingForScheduler(): void
+    {
+        $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($controller);
+        $body = $this->extractFunctionBody($controller, 'handleOperationSse');
+
+        self::assertStringContainsString("['pending', 'queued', 'running', 'processing']", $body);
+        self::assertStringContainsString('!$this->shouldKeepQueuedObserverStreamOpen($operation)', $body);
+        self::assertStringNotContainsString('$queueWaitingForScheduler || !$this->shouldKeepQueuedObserverStreamOpen($operation)', $body);
+    }
+
+    public function testRuntimeStartsSseWhenStreamParametersArePresentDespiteQueueWaitHints(): void
+    {
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+        $startBody = $this->extractFunctionBody($runtime, 'startFromResponse');
+        $observeBody = $this->extractFunctionBody($runtime, 'observeExistingDraftOperationOnLoad');
+
+        self::assertStringContainsString('var hasObservableStreamStart = !!(executionToken && streamUrl);', $startBody);
+        self::assertStringContainsString('var shouldDeferToQueuePoll = !hasObservableStreamStart && !!(', $startBody);
+        self::assertStringContainsString("['queued', 'pending', 'running', 'processing'].indexOf(status) === -1", $observeBody);
+        self::assertStringNotContainsString('!!active.queue_waiting_for_scheduler || !!active.can_close_stream', $observeBody);
     }
 
     public function testRetryableAiFailuresExposeManualContinueButtonsForAllStages(): void

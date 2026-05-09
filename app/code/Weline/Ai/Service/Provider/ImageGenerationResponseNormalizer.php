@@ -147,6 +147,11 @@ final class ImageGenerationResponseNormalizer
                 $normalized[$key] = (string)$image[$key];
             }
         }
+        if (!empty($normalized['url']) && preg_match('#^data:([^;]+);base64,(.+)$#s', (string)$normalized['url'], $matches) === 1) {
+            $normalized['b64_json'] = preg_replace('/\s+/', '', (string)$matches[2]) ?? (string)$matches[2];
+            $normalized['mime_type'] = strtolower(trim((string)$matches[1])) ?: 'image/png';
+            unset($normalized['url']);
+        }
         foreach (['base64', 'b64', 'image_base64', 'data'] as $key) {
             if (!empty($normalized['b64_json']) || !isset($image[$key]) || !is_scalar($image[$key])) {
                 continue;
@@ -157,7 +162,7 @@ final class ImageGenerationResponseNormalizer
             }
         }
 
-        $mimeType = '';
+        $mimeType = (string)($normalized['mime_type'] ?? '');
         foreach (['mime_type', 'mimeType'] as $key) {
             if (isset($image[$key]) && is_scalar($image[$key])) {
                 $mimeType = strtolower(trim((string)$image[$key]));
