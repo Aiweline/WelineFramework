@@ -2025,12 +2025,106 @@ class AiSitePageComponentGenerationService
         $html = \preg_replace('/<div([^>]*class="[^"]*(?:eyebrow|subtitle|kicker|badge)[^"]*"[^>]*)>\s*(首页|主页|关于我们|关于|Home|About|About Us)\s*<\/div>/iu', '', $html) ?? $html;
         $html = \preg_replace('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', '', $html) ?? $html;
         $html = \preg_replace('/(?:核心卖点|功能特性|把首页[^。！？.!?]{0,80}放出来|值得点击|页面类型|内容块)/u', '', $html) ?? $html;
+        $this->assertGeneratedHtmlFragmentWellFormed($html);
         $html = $this->repairHtmlFragmentTagBalance($html);
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
         $html = \trim($html);
 
         return $this->clipText($html, 5000);
+    }
+
+    private function assertGeneratedHtmlFragmentWellFormed(string $html): void
+    {
+        $reason = $this->detectMalformedGeneratedHtmlReason($html);
+        if ($reason !== null) {
+            throw new \RuntimeException('AI component HTML structure invalid: ' . $reason);
+        }
+    }
+
+    private function detectMalformedGeneratedHtmlReason(string $html): ?string
+    {
+        $html = \trim($html);
+        if ($html === '') {
+            return null;
+        }
+
+        $voidTags = \array_fill_keys([
+            'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+            'link', 'meta', 'param', 'source', 'track', 'wbr',
+        ], true);
+        $tagCount = \preg_match_all('/<\s*\/?\s*([a-z][a-z0-9:-]*)\b[^>]*(?:>|$)/iu', $html, $matches, \PREG_SET_ORDER);
+        if ($tagCount === false || $tagCount === 0) {
+            return null;
+        }
+
+        $stack = [];
+        foreach ($matches as $match) {
+            $tagText = (string)($match[0] ?? '');
+            $tagName = \strtolower((string)($match[1] ?? ''));
+            if ($tagName === '') {
+                continue;
+            }
+            $tagReason = $this->detectMalformedHtmlTagTokenReason($tagText);
+            if ($tagReason !== null) {
+                return $tagReason . ' near <' . $tagName . '>';
+            }
+            if (\preg_match('/^<\s*\/\s*/', $tagText) === 1) {
+                $last = \array_pop($stack);
+                if ($last === null) {
+                    return 'orphan closing tag </' . $tagName . '>';
+                }
+                if ($last !== $tagName) {
+                    return 'crossed closing tag </' . $tagName . '> while <' . $last . '> is still open';
+                }
+                continue;
+            }
+            if (isset($voidTags[$tagName]) || \preg_match('/\/\s*>$/', $tagText) === 1) {
+                continue;
+            }
+            $stack[] = $tagName;
+        }
+
+        if ($stack !== []) {
+            return 'unclosed tag <' . (string)\end($stack) . '>';
+        }
+
+        return null;
+    }
+
+    private function detectMalformedHtmlTagTokenReason(string $tagText): ?string
+    {
+        $tagText = \trim($tagText);
+        if ($tagText === '') {
+            return null;
+        }
+        if (!\str_ends_with($tagText, '>')) {
+            return 'unterminated tag';
+        }
+
+        $quote = '';
+        $length = \strlen($tagText);
+        for ($index = 1; $index < $length - 1; $index++) {
+            $char = $tagText[$index];
+            if ($quote !== '') {
+                if ($char === $quote && ($index === 0 || $tagText[$index - 1] !== '\\')) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                continue;
+            }
+            if ($char === '<') {
+                return 'nested tag marker inside an opening tag';
+            }
+        }
+        if ($quote !== '') {
+            return 'unclosed attribute quote';
+        }
+
+        return null;
     }
 
     private function repairHtmlFragmentTagBalance(string $html): string
@@ -2524,6 +2618,7 @@ class AiSitePageComponentGenerationService
             '- Do not output analysis, reasoning_content, markdown, code fences, comments, or explanatory prose.',
             '- Keep exact JSON field names required by this task; do not rename keys.',
             '- Ensure all JSON string values are properly escaped and syntactically valid.',
+            '- HTML string fields must be well-formed fragments: balanced tags, closed attribute quotes, no orphan closing tags, and no framework wrapper leakage.',
         ];
         if ($retry) {
             $guard[] = 'RECOVERY MODE: previous stream ended without usable final JSON. Return the final JSON object immediately.';
@@ -3070,12 +3165,54 @@ class AiSitePageComponentGenerationService
                 continue;
             }
             $finalUrl = \trim((string)($slot['final_url'] ?? ''));
-            if ($finalUrl !== '') {
+            if ($finalUrl !== '' && !$this->isPlaceholderAssetSlot($slot)) {
                 $assets[(string)($slot['slot_id'] ?? $slotId)] = $finalUrl;
             }
         }
 
         return $assets;
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function isPlaceholderAssetSlot(array $slot): bool
+    {
+        $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+        foreach (\is_array($slot['variants'] ?? null) ? $slot['variants'] : [] as $variant) {
+            if (!\is_array($variant)) {
+                continue;
+            }
+            $isPlaceholder = (int)($variant['placeholder'] ?? 0) === 1;
+            foreach (['mode', 'model', 'source'] as $key) {
+                $isPlaceholder = $isPlaceholder
+                    || \strtolower(\trim((string)($variant[$key] ?? ''))) === 'placeholder';
+            }
+            if ($isPlaceholder && ($finalUrl === '' || $this->assetVariantReferencesFinalUrl($variant, $finalUrl))) {
+                return true;
+            }
+        }
+
+        $source = \strtolower(\trim((string)($slot['source'] ?? '')));
+        $lowerFinalUrl = \strtolower($finalUrl);
+        return $source === 'generated'
+            && \str_contains($lowerFinalUrl, '/ai-generated/')
+            && \str_ends_with($lowerFinalUrl, '.svg');
+    }
+
+    /**
+     * @param array<string,mixed> $variant
+     */
+    private function assetVariantReferencesFinalUrl(array $variant, string $finalUrl): bool
+    {
+        $finalUrl = \trim($finalUrl);
+        foreach (['url', 'final_url'] as $key) {
+            if (\trim((string)($variant[$key] ?? '')) === $finalUrl) {
+                return true;
+            }
+        }
+        $path = \trim((string)($variant['path'] ?? ''));
+        return $path !== '' && '/' . \ltrim(\str_replace('\\', '/', $path), '/') === $finalUrl;
     }
 
     /**
@@ -3858,6 +3995,8 @@ class AiSitePageComponentGenerationService
             . "- Customer-intent lock: the final HTML/CSS must visibly match the user's actual business/game/service scenario through motifs, labels, CTA affordances, proof details, and interaction behavior; do not generate a category-neutral section.\n"
             . "- Interaction/effects requirement: implement at least one friendly visible hover/focus/reveal/ambient effect with CSS transition/transform/animation plus a reduced-motion-safe fallback when motion is used; do not describe effects without CSS.\n"
             . "- Color quality requirement: define explicit readable background/text/CTA/focus pairings; dark surfaces require light foregrounds, and neighboring blocks must differ by surface depth, divider, texture, or layout rhythm.\n"
+            . "- HTML structure contract: every HTML field must be a valid fragment with a component-owned root wrapper, closed attribute quotes, and balanced tags. Never emit framework wrappers like `.pb-ai-html-block`, never close a `div/section/article` that was not opened inside the same field, and never concatenate neighboring blocks into one field.\n"
+            . "- Layout safety contract: keep content in normal document flow. Do not use negative margins, fixed heights, or absolute positioning to pull sections over each other; decorative absolute elements must stay inside a relative root and cannot affect block boundaries.\n"
             . "- Do not leave css_extra empty when visual polish depends on it; the page preview should show the styling without a designer adding anything later.\n"
             . $scopeRule
             . "- Before returning, silently self-audit: if the preview would still read as pale background + ordinary cards + small default buttons, rewrite the composition and CSS.\n"
@@ -4800,6 +4939,8 @@ class AiSitePageComponentGenerationService
             . "- design execution rule: apply page_design_plan.color_layering and section_flow before local block styling; this block must contrast with adjacent blocks through surfaces/cards/gradients/dividers/illustration while staying inside the confirmed palette.\n"
             . "- contrast execution rule: convert palette tokens into readable role pairs; dark surfaces must use light foregrounds, light surfaces must use dark foregrounds, and CTA/focus states must remain legible.\n"
             . "- hierarchy execution rule: do not reuse the same full-bleed primary/accent background for every block; vary surface elevation, background texture, dividers, spacing rhythm, or visual motif per block.\n"
+            . "- html fragment rule: output only this block's inner visitor content in html_content/html_extra. Use one component-owned root wrapper, close every quote/tag, and do not include `pb-ai-html-block`, neighboring `<section>` wrappers, or orphan closing tags from previous/next blocks.\n"
+            . "- no-overlap structure rule: do not rely on negative margins, fixed container heights, or absolute-positioned content for the main flow. Cards, proof strips, grids, and CTA rows must consume normal layout space with padding/gap/margin inside the block.\n"
             . "- stage2 language rule: treat stage-2 planned text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
             . "- anti-copy rule: never paste stage-2 observation/planning sentences directly into html_content. Rewrite phrases like \"访客看到...\", \"用户看到...\", \"从而产生...\", \"信任感增强\", \"知道如何...\", \"Visitors see...\", or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
             . $stage3LocaleRule

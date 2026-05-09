@@ -2,19 +2,37 @@
 /**
  * @var \Weline\Framework\View\Template $this
  * @var string $title
- * @var list<array{public_id: string, stage: string, publish_status: string, website_id: int, virtual_theme_id: int, update_time: string}> $recent_sessions
+ * @var list<array{
+ *     public_id: string,
+ *     stage: string,
+ *     publish_status: string,
+ *     website_id: int,
+ *     virtual_theme_id: int,
+ *     update_time: string,
+ *     workspace_status?: string,
+ *     active_operation_status?: string,
+ *     can_publish?: bool,
+ *     preview_full_url?: string,
+ *     visual_preview_url?: string,
+ *     visual_edit_url?: string
+ * }> $recent_sessions
  */
+
 $recent_sessions = $this->getData('recent_sessions') ?? [];
 $createUrl = $this->getBackendUrl('*/backend/ai-site-agent/post-create-session');
 $deleteSessionUrl = $this->getBackendUrl('*/backend/ai-site-agent/post-delete-workspace');
-$workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
+$workbenchHomeUrl = (string)($this->getData('workbench_home_url') ?? '');
+$showAllSessions = (bool)($this->getData('show_all_sessions') ?? false);
+$showAllToggleUrl = $showAllSessions
+    ? $this->getBackendUrl('*/backend/ai-site-agent/index')
+    : $this->getBackendUrl('*/backend/ai-site-agent/index', ['show' => 'all']);
 ?>
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0">
                 <i class="mdi mdi-robot-outline me-1"></i>
-                <?= htmlspecialchars((string) ($this->getData('title') ?? __('AI 建站工作台')), ENT_QUOTES, 'UTF-8') ?>
+                <?= htmlspecialchars((string)($this->getData('title') ?? __('AI 建站工作台')), ENT_QUOTES, 'UTF-8') ?>
             </h4>
             <?php if ($workbenchHomeUrl !== '') { ?>
                 <div class="mt-3 mt-sm-0">
@@ -39,7 +57,7 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
             </div>
             <div class="card-body">
                 <p class="text-muted mb-0">
-                    <lang>本工作台使用 PageBuilder 持久化会话（scope、阶段、站点与虚拟主题关联）。域名购买与一键建站仍可使用「AI 建站工作台」或网站管理的新建站点入口；此处聚焦可恢复的 AI 建站流水线。</lang>
+                    <lang>本工作台用于恢复和继续 AI 建站会话。域名购买与一键建站仍可从网站工作台进入，这里主要聚焦最近会话、后台构建、快速审核与发布入口。</lang>
                 </p>
             </div>
         </div>
@@ -78,7 +96,7 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                 </h5>
             </div>
             <div class="card-body">
-                <p class="text-muted small mb-3"><lang>创建后将跳转到工作台，可在后续迭代中接入简报、域名与虚拟主题步骤。</lang></p>
+                <p class="text-muted small mb-3"><lang>创建后会直接进入工作台，可继续完善站点信息、构建、审核和发布流程。</lang></p>
                 <button type="button" class="btn btn-primary" id="pb-ai-site-create">
                     <i class="mdi mdi-creation me-1"></i>
                     <lang>创建会话</lang>
@@ -93,18 +111,19 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                     <i class="mdi mdi-history me-1"></i>
                     <lang>最近会话</lang>
                 </h5>
-                <div class="d-flex align-items-center gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-info" id="pb-ai-session-show-all-plan">
+                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                    <a class="btn btn-sm btn-outline-info" id="pb-ai-session-show-all-plan" href="<?= htmlspecialchars($showAllToggleUrl, ENT_QUOTES, 'UTF-8') ?>">
                         <i class="mdi mdi-view-grid-plus-outline me-1"></i>
-                        <lang>全部显示（二期规划）</lang>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="pb-ai-session-select-all">
-                        <lang>全选</lang>
-                    </button>
+                        <?= htmlspecialchars($showAllSessions ? __('收起') : __('全部显示（二期规划）'), ENT_QUOTES, 'UTF-8') ?>
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="pb-ai-session-select-all"><?= htmlspecialchars((string)__('全选'), ENT_QUOTES, 'UTF-8') ?></button>
                     <button type="button" class="btn btn-sm btn-outline-danger" id="pb-ai-session-batch-delete" disabled>
                         <i class="mdi mdi-delete-sweep-outline me-1"></i>
                         <lang>批量删除</lang>
                     </button>
+                    <span class="text-muted small d-none" id="pb-ai-session-selected-hint">
+                        <?= htmlspecialchars((string)__('已选择'), ENT_QUOTES, 'UTF-8') ?> <strong id="pb-ai-session-selected-count">0</strong>
+                    </span>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -127,73 +146,78 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                             </thead>
                             <tbody>
                             <?php foreach ($recent_sessions as $row) {
-                                $pid = (string) ($row['public_id'] ?? '');
+                                $pid = (string)($row['public_id'] ?? '');
                                 $ws = $this->getBackendUrl('*/backend/ai-site-agent/workspace', ['public_id' => $pid]);
                                 $wsBackend = $this->getBackendUrl('*/backend/ai-site-agent/workspace', ['public_id' => $pid]);
-                                $wsPreview = $this->getBackendUrl('*/backend/ai-site-agent/workspace-preview', ['public_id' => $pid]);
                                 $wsPublish = $this->getBackendUrl('*/backend/ai-site-agent/workspace', ['public_id' => $pid, 'stage' => 'publish']);
                                 $stage = (string)($row['stage'] ?? '');
                                 $publishStatus = (string)($row['publish_status'] ?? '');
+                                $workspaceStatus = (string)($row['workspace_status'] ?? '');
+                                $activeStatus = (string)($row['active_operation_status'] ?? '');
+                                $previewFullUrl = trim((string)($row['preview_full_url'] ?? ''));
+                                $visualPreviewUrl = trim((string)($row['visual_preview_url'] ?? ''));
+                                $visualEditUrl = trim((string)($row['visual_edit_url'] ?? ''));
+                                $wsPreview = $previewFullUrl !== '' ? $previewFullUrl : ($visualPreviewUrl !== '' ? $visualPreviewUrl : $this->getBackendUrl('*/backend/ai-site-agent/workspace-preview', ['public_id' => $pid]));
                                 $isSiteReady = (int)($row['website_id'] ?? 0) > 0 && (int)($row['virtual_theme_id'] ?? 0) > 0;
+                                $isQueueRunning = in_array($activeStatus, ['queued', 'running'], true);
+                                $isQueueError = $activeStatus === 'error';
+                                $isCanPublish = $workspaceStatus === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+                                $isPublished = $workspaceStatus === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED
+                                    || $publishStatus === \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED;
+                                $isPublishReady = !empty($row['can_publish']) || $isCanPublish || $isPublished;
                                 $isWaitingPublish = $stage === \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_PUBLISH
                                     && $publishStatus === \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::PUBLISH_STATUS_DRAFT;
-                                $canUseReadyActions = $isSiteReady && $isWaitingPublish;
+                                $canUseReadyActions = $isSiteReady && ($isPublishReady || $isWaitingPublish);
                                 $disabledReason = !$isSiteReady
                                     ? (string)__('站点尚未就绪，请等待系统完成站点准备后再操作。')
-                                    : (string)__('当前会话尚未进入“等待发布”状态，请先完成前置阶段。');
-                                $backendModeGateMessage = $disabledReason . "\n\n" . (string)__('后台模式：第一阶段、第二阶段（方案和任务生成）全部走后端 cron 定时任务执行。跑完后会显示「快速审核」（可查看站点预览和阶段性方案），确认后即可发布。');
-                                $quickReviewGateMessage = $disabledReason . "\n\n" . (string)__('快速审核：可查看站点预览和阶段性方案，确认无误后即可进入发布。');
-                                $previewGateMessage = $disabledReason . "\n\n" . (string)__('预览：用于预览站点当前效果。');
+                                    : (string)__('当前会话尚未进入等待发布状态，请先完成前置阶段。');
+                                $backendModeGateMessage = $disabledReason . "\n\n" . (string)__('后台模式：阶段一与阶段二由后端 cron 自动执行，完成后可快速审核并发布。');
+                                $quickReviewGateMessage = $disabledReason . "\n\n" . (string)__('快速审核：可查看站点预览和阶段性方案，确认后即可进入发布。');
+                                $previewGateMessage = $disabledReason . "\n\n" . (string)__('预览：用于查看当前站点效果。');
                                 $publishGateMessage = $disabledReason . "\n\n" . (string)__('发布：请先完成快速审核并确认，再执行发布。');
+                                $editHref = $visualEditUrl !== '' ? $visualEditUrl : $ws;
+                                $quickReviewHref = $isPublishReady ? $wsPublish : $ws;
                                 ?>
                                 <tr>
                                     <td>
                                         <input type="checkbox" class="form-check-input pb-ai-session-check" value="<?= htmlspecialchars($pid, ENT_QUOTES, 'UTF-8') ?>" aria-label="select session">
                                     </td>
-                                    <td class="font-monospace small"><?= htmlspecialchars(\substr($pid, 0, 12) . '…', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><code><?= htmlspecialchars((string) ($row['stage'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></td>
+                                    <td class="font-monospace small"><?= htmlspecialchars(substr($pid, 0, 12) . '...', ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><code><?= htmlspecialchars((string)($row['stage'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></td>
                                     <td>
                                         <?php
-                                        $activeStatus = (string)($row['active_operation_status'] ?? '');
-                                        $workspaceStatus = (string)($row['workspace_status'] ?? '');
-                                        $isQueueRunning = \in_array($activeStatus, ['queued', 'running'], true);
-                                        $isQueueError = $activeStatus === 'error';
-                                        $isCanPublish = $workspaceStatus === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
                                         if ($isQueueRunning) {
                                             echo '<span class="badge bg-warning text-dark" title="队列正在运行中，请等待完成。"><i class="mdi mdi-loading mdi-spin me-1"></i>队列中</span>';
                                         } elseif ($isQueueError) {
                                             echo '<span class="badge bg-danger" title="队列执行出错。"><i class="mdi mdi-alert-circle me-1"></i>队列失败</span>';
-                                        } elseif ($isCanPublish) {
+                                        } elseif ($isCanPublish || $isPublished) {
                                             echo '<span class="badge bg-success" title="构建已完成，可以发布。"><i class="mdi mdi-check-circle me-1"></i>可发布</span>';
                                         } else {
                                             echo '<span class="badge bg-secondary">空闲</span>';
                                         }
                                         ?>
                                     </td>
-                                    <td class="small text-muted"><?= htmlspecialchars((string) ($row['update_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td class="small text-muted"><?= htmlspecialchars((string)($row['update_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                                     <td class="text-end">
                                         <div class="d-flex flex-wrap justify-content-end gap-1">
-                                            <?php
-                                            $isSiteReady = (int)($row['website_id'] ?? 0) > 0 && (int)($row['virtual_theme_id'] ?? 0) > 0;
-                                            $isQueueRunningBtn = \in_array($activeStatus, ['queued', 'running'], true);
-                                            ?>
                                             <a class="btn btn-sm btn-outline-primary"
                                                href="<?= htmlspecialchars($ws, ENT_QUOTES, 'UTF-8') ?>"
                                                title="打开会话工作区，查看和继续建站流程。">
                                                 <i class="mdi mdi-arrow-right-bold me-1"></i><?= htmlspecialchars(__('打开会话'), ENT_QUOTES, 'UTF-8') ?>
                                             </a>
-                                            <?php if ($isSiteReady && !$isQueueRunningBtn) { ?>
+                                            <?php if ($isSiteReady && !$isQueueRunning) { ?>
                                                 <a class="btn btn-sm btn-soft-info"
-                                                   href="<?= htmlspecialchars($ws, ENT_QUOTES, 'UTF-8') ?>"
+                                                   href="<?= htmlspecialchars($editHref, ENT_QUOTES, 'UTF-8') ?>"
                                                    title="前往可视化编辑器，直接编辑网站内容。">
                                                     <i class="mdi mdi-pencil-outline me-1"></i>编辑网站
                                                 </a>
-                                            <?php } elseif ($isQueueRunningBtn) { ?>
+                                            <?php } elseif ($isQueueRunning) { ?>
                                                 <span class="btn btn-sm btn-outline-secondary opacity-50" title="队列运行中，请等待完成后编辑。" disabled>
                                                     <i class="mdi mdi-pencil-outline me-1"></i>编辑网站
                                                 </span>
-                                            <?php }
-                                            if ($canUseReadyActions) { ?>
+                                            <?php } ?>
+
+                                            <?php if ($canUseReadyActions) { ?>
                                                 <a class="btn btn-sm btn-soft-primary"
                                                    href="<?= htmlspecialchars($wsBackend, ENT_QUOTES, 'UTF-8') ?>"
                                                    title="<?= htmlspecialchars(__('后台模式：阶段一与阶段二由后端 cron 自动执行，完成后可快速审核并发布。'), ENT_QUOTES, 'UTF-8') ?>">
@@ -211,7 +235,7 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
 
                                             <?php if ($canUseReadyActions) { ?>
                                                 <a class="btn btn-sm btn-outline-primary"
-                                                   href="<?= htmlspecialchars($ws, ENT_QUOTES, 'UTF-8') ?>"
+                                                   href="<?= htmlspecialchars($quickReviewHref, ENT_QUOTES, 'UTF-8') ?>"
                                                    title="<?= htmlspecialchars(__('快速审核：查看站点预览与阶段性方案，确认后即可进入发布。'), ENT_QUOTES, 'UTF-8') ?>">
                                                     <lang>快速审核</lang>
                                                 </a>
@@ -285,9 +309,12 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
     var createBtn = document.getElementById('pb-ai-site-create');
     var msgBox = document.getElementById('pb-ai-site-msg');
     var selectAllBtn = document.getElementById('pb-ai-session-select-all');
-    var showAllPlanBtn = document.getElementById('pb-ai-session-show-all-plan');
     var checkAllEl = document.getElementById('pb-ai-session-check-all');
     var batchDeleteBtn = document.getElementById('pb-ai-session-batch-delete');
+    var selectedHint = document.getElementById('pb-ai-session-selected-hint');
+    var selectedCountEl = document.getElementById('pb-ai-session-selected-count');
+    var selectAllLabel = <?= json_encode(__('全选'), JSON_THROW_ON_ERROR) ?>;
+    var clearAllLabel = <?= json_encode(__('取消全选'), JSON_THROW_ON_ERROR) ?>;
 
     function showErr(msg) {
         if (window.BackendToast && typeof window.BackendToast.error === 'function') {
@@ -296,17 +323,6 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
             msgBox.textContent = msg;
             msgBox.classList.remove('d-none');
         }
-    }
-
-    if (showAllPlanBtn) {
-        showAllPlanBtn.addEventListener('click', function () {
-            var msg = <?= json_encode(__('二期规划中：后续将支持完整状态视图（含全量阶段、详细任务、审核结论、发布结果）的一键展示。当前请先使用“后台模式 → 快速审核 → 发布”流程。'), JSON_THROW_ON_ERROR) ?>;
-            if (window.BackendToast && typeof window.BackendToast.info === 'function') {
-                window.BackendToast.info(msg);
-                return;
-            }
-            showSuccess(msg);
-        });
     }
 
     function showSuccess(msg) {
@@ -344,6 +360,15 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
         var checks = getSessionChecks();
         var selected = checks.filter(function (item) { return !!item.checked; }).length;
         batchDeleteBtn.disabled = selected === 0;
+        if (selectedHint) {
+            selectedHint.classList.toggle('d-none', selected === 0);
+        }
+        if (selectedCountEl) {
+            selectedCountEl.textContent = String(selected);
+        }
+        if (selectAllBtn) {
+            selectAllBtn.textContent = selected === checks.length && checks.length > 0 ? clearAllLabel : selectAllLabel;
+        }
         if (checkAllEl) {
             checkAllEl.checked = checks.length > 0 && selected === checks.length;
             checkAllEl.indeterminate = selected > 0 && selected < checks.length;
@@ -364,7 +389,10 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
 
     if (createBtn) {
         createBtn.addEventListener('click', function () {
-            if (msgBox) { msgBox.classList.add('d-none'); msgBox.textContent = ''; }
+            if (msgBox) {
+                msgBox.classList.add('d-none');
+                msgBox.textContent = '';
+            }
             createBtn.disabled = true;
             fetch(<?= json_encode($createUrl, JSON_THROW_ON_ERROR) ?>, {
                 method: 'POST',

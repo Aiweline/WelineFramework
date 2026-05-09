@@ -416,8 +416,15 @@ function createPagebuilderSessionViaPhp(initialScope = {}) {
   const phpCode = `
 require 'app/bootstrap.php';
 $service = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteAgentSessionService::class);
+$user = clone \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\Weline\\Backend\\Model\\BackendUser::class);
+$username = getenv('PLAYWRIGHT_ADMIN_USERNAME') ?: 'admin';
+$user->reset()->where('username', $username)->find()->fetch();
+$adminId = (int)$user->getId();
+if ($adminId <= 0) {
+    $adminId = 1;
+}
 $scope = json_decode('${phpScope}', true);
-$session = $service->createSession(1, is_array($scope) ? $scope : []);
+$session = $service->createSession($adminId, is_array($scope) ? $scope : []);
 echo json_encode([
   'success' => true,
   'public_id' => $session->getPublicId(),
@@ -467,7 +474,14 @@ $scopeCompatibilityService = \\Weline\\Framework\\Manager\\ObjectManager::getIns
 $profileService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteProfileGenerationService::class);
 $executionService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteExecutionBlueprintService::class);
 $publicId = json_decode('${phpPublicId}', true);
-$session = $sessionService->loadByPublicId(is_string($publicId) ? $publicId : '', 1);
+$user = clone \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\Weline\\Backend\\Model\\BackendUser::class);
+$username = getenv('PLAYWRIGHT_ADMIN_USERNAME') ?: 'admin';
+$user->reset()->where('username', $username)->find()->fetch();
+$adminId = (int)$user->getId();
+if ($adminId <= 0) {
+    $adminId = 1;
+}
+$session = $sessionService->loadByPublicId(is_string($publicId) ? $publicId : '', $adminId);
 if (!$session) {
     throw new RuntimeException('PageBuilder session not found for plan draft seed.');
 }
@@ -493,8 +507,8 @@ $scopePatch = array_replace(
         'plan_confirmed' => 0,
     ]
 );
-$sessionService->mergeScope($session->getId(), 1, $scopePatch);
-$fresh = $sessionService->loadById($session->getId(), 1) ?? $session;
+$sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
+$fresh = $sessionService->loadById($session->getId(), $adminId) ?? $session;
 $freshScope = $scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
 echo json_encode([
     'success' => true,
@@ -522,7 +536,14 @@ require 'app/bootstrap.php';
 $sessionService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteAgentSessionService::class);
 $scopeCompatibilityService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteScopeCompatibilityService::class);
 $publicId = json_decode('${phpPublicId}', true);
-$session = $sessionService->loadByPublicId(is_string($publicId) ? $publicId : '', 1);
+$user = clone \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\Weline\\Backend\\Model\\BackendUser::class);
+$username = getenv('PLAYWRIGHT_ADMIN_USERNAME') ?: 'admin';
+$user->reset()->where('username', $username)->find()->fetch();
+$adminId = (int)$user->getId();
+if ($adminId <= 0) {
+    $adminId = 1;
+}
+$session = $sessionService->loadByPublicId(is_string($publicId) ? $publicId : '', $adminId);
 if (!$session) {
     throw new RuntimeException('PageBuilder session not found for plan confirm seed.');
 }
@@ -537,8 +558,8 @@ $patch = [
     'execution_blueprint_confirmed_signature' => (string)($draft['signature'] ?? ''),
     'plan_confirmed' => 1,
 ];
-$sessionService->mergeScope($session->getId(), 1, $patch);
-$fresh = $sessionService->loadById($session->getId(), 1) ?? $session;
+$sessionService->mergeScope($session->getId(), $adminId, $patch);
+$fresh = $sessionService->loadById($session->getId(), $adminId) ?? $session;
 $freshScope = $scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
 echo json_encode([
     'success' => true,
@@ -568,12 +589,19 @@ $sessionService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\Guo
 $scopeCompatibilityService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteScopeCompatibilityService::class);
 $publicId = json_decode('${phpPublicId}', true);
 $scopePatch = json_decode('${phpScopePatch}', true);
-$session = $sessionService->loadByPublicId(is_string($publicId) ? $publicId : '', 1);
+$user = clone \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\Weline\\Backend\\Model\\BackendUser::class);
+$username = getenv('PLAYWRIGHT_ADMIN_USERNAME') ?: 'admin';
+$user->reset()->where('username', $username)->find()->fetch();
+$adminId = (int)$user->getId();
+if ($adminId <= 0) {
+    $adminId = 1;
+}
+$session = $sessionService->loadByPublicId(is_string($publicId) ? $publicId : '', $adminId);
 if (!$session) {
     throw new RuntimeException('PageBuilder session not found for scope seed.');
 }
-$sessionService->mergeScope($session->getId(), 1, is_array($scopePatch) ? $scopePatch : []);
-$fresh = $sessionService->loadById($session->getId(), 1) ?? $session;
+$sessionService->mergeScope($session->getId(), $adminId, is_array($scopePatch) ? $scopePatch : []);
+$fresh = $sessionService->loadById($session->getId(), $adminId) ?? $session;
 $freshScope = $scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
 $compactScope = [];
 foreach (['website_profile', 'execution_blueprint', 'execution_blueprint_draft', 'plan_structured', 'plan_markdown', 'task_plan_structured', 'task_plan_markdown', 'virtual_theme_plan'] as $key) {
@@ -918,6 +946,7 @@ function prepareSmallPagebuilderTaskPlanDraftViaPhp(publicId, scopePatch = {}) {
     success: Boolean(merged && merged.success),
     public_id: publicId,
     task_plan_markdown: markdown,
+    task_plan_structured: structured,
     scope: merged && merged.scope ? merged.scope : {},
   };
 }
@@ -927,17 +956,26 @@ function confirmSmallPagebuilderTaskPlanViaPhp(publicId, scopePatch = {}) {
   if (!(seeded && seeded.success)) {
     return seeded;
   }
+  const confirmedStructured = seeded.task_plan_structured && typeof seeded.task_plan_structured === 'object'
+    ? seeded.task_plan_structured
+    : {};
+  const confirmedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const confirmedSignature = String(confirmedStructured.signature || '');
   const merged = mergePagebuilderScopeViaPhp(publicId, {
     ...(scopePatch && typeof scopePatch === 'object' ? scopePatch : {}),
+    task_plan_structured: confirmedStructured,
+    task_plan_markdown: String(seeded.task_plan_markdown || ''),
     task_plan_confirmed: 1,
-    task_plan_confirmed_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    task_plan_confirmed_at: confirmedAt,
     virtual_theme_plan: {
       ...(seeded.scope && seeded.scope.virtual_theme_plan && typeof seeded.scope.virtual_theme_plan === 'object'
         ? seeded.scope.virtual_theme_plan
         : {}),
-      confirmed: seeded.scope && seeded.scope.task_plan_structured ? seeded.scope.task_plan_structured : {},
+      confirmed: confirmedStructured,
       confirmed_markdown: String(seeded.task_plan_markdown || ''),
-      confirmed_generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      confirmed_at: confirmedAt,
+      confirmed_signature: confirmedSignature,
+      plan_signature: confirmedSignature,
     },
   });
   return {
@@ -2006,7 +2044,10 @@ function buildSameOriginBackendUrl(page, route) {
       throw new Error('non-http page url');
     }
   } catch (error) {
-    base = new URL(String(runtime.proxy?.origin || runtime.runtime?.target_origin || 'https://127.0.0.1'));
+    const fallbackOrigin = process.env.PLAYWRIGHT_DISABLE_PROXY === '1'
+      ? runtime.runtime?.target_origin
+      : (runtime.proxy?.origin || runtime.runtime?.target_origin);
+    base = new URL(String(fallbackOrigin || 'https://127.0.0.1'));
   }
   return new URL(`${backendPrefix}/${normalizedRoute}`, `${base.origin}/`).toString();
 }
@@ -5495,7 +5536,9 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       const builtState = await waitForPagebuilderStateData(
         page,
         stateUrl,
-        (data) => Number(data.draft_website_id || 0) > 0 && (Number(data.virtual_theme_id || 0) > 0 || String(data.workspace_track || '') === 'html_blocks'),
+        (data) => Number(data.draft_website_id || 0) > 0
+          && (Number(data.virtual_theme_id || 0) > 0 || String(data.workspace_track || '') === 'html_blocks')
+          && (Boolean(data.can_publish) || String(data.workspace_status || '') === 'can_publish'),
         LONG_WORKSPACE_TIMEOUT
       );
       expect(Number(builtState.draft_website_id || 0)).toBeGreaterThan(0);
@@ -5503,6 +5546,12 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       // Step 4: 鍙戝竷
       const publishStart = await startPagebuilderPublishByUrl(page, workspaceUrl, { confirm_visual_theme: '1' });
       expect(String(publishStart.stream_url || '').trim()).toBeTruthy();
+      await consumePagebuilderOperationStreamIfPresent(
+        page,
+        workspaceUrl,
+        publishStart,
+        'publish-stream'
+      );
 
       const publishedState = await waitForPagebuilderStateData(
         page,

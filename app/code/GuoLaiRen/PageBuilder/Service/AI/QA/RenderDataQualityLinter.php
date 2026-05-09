@@ -80,6 +80,16 @@ final class RenderDataQualityLinter
                         $path
                     );
                 }
+                $htmlStructureReason = $this->detectBlockMalformedHtmlStructureReason($block);
+                if ($htmlStructureReason !== null) {
+                    $findings[] = $this->finding(
+                        'error',
+                        'design',
+                        'design.malformed_html_structure',
+                        'Section HTML has malformed tags or unbalanced structure: ' . $htmlStructureReason,
+                        $path
+                    );
+                }
             }
         }
 
@@ -214,6 +224,130 @@ final class RenderDataQualityLinter
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function detectBlockMalformedHtmlStructureReason(array $block): ?string
+    {
+        foreach ($this->extractBlockHtmlFields($block) as $html) {
+            $reason = $this->detectMalformedHtmlStructureReason($html);
+            if ($reason !== null) {
+                return $reason;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return list<string>
+     */
+    private function extractBlockHtmlFields(array $block): array
+    {
+        $fields = [];
+        foreach (['html', 'html_content', 'html_extra', 'html_extra_column'] as $key) {
+            if (\is_string($block[$key] ?? null) && \trim((string)$block[$key]) !== '') {
+                $fields[] = (string)$block[$key];
+            }
+        }
+        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
+        foreach (['html', 'html_content', 'html_extra', 'html_extra_column'] as $key) {
+            if (\is_string($config[$key] ?? null) && \trim((string)$config[$key]) !== '') {
+                $fields[] = (string)$config[$key];
+            }
+        }
+
+        return $fields;
+    }
+
+    private function detectMalformedHtmlStructureReason(string $html): ?string
+    {
+        $html = \trim($html);
+        if ($html === '') {
+            return null;
+        }
+        $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
+
+        $voidTags = \array_fill_keys([
+            'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+            'link', 'meta', 'param', 'source', 'track', 'wbr',
+        ], true);
+        $tagCount = \preg_match_all('/<\s*\/?\s*([a-z][a-z0-9:-]*)\b[^>]*(?:>|$)/iu', $html, $matches, \PREG_SET_ORDER);
+        if ($tagCount === false || $tagCount === 0) {
+            return null;
+        }
+
+        $stack = [];
+        foreach ($matches as $match) {
+            $tagText = (string)($match[0] ?? '');
+            $tagName = \strtolower((string)($match[1] ?? ''));
+            if ($tagName === '') {
+                continue;
+            }
+            $tagReason = $this->detectMalformedTagTokenReason($tagText);
+            if ($tagReason !== null) {
+                return $tagReason . ' near <' . $tagName . '>';
+            }
+            if (\preg_match('/^<\s*\/\s*/', $tagText) === 1) {
+                $last = \array_pop($stack);
+                if ($last === null) {
+                    return 'orphan closing tag </' . $tagName . '>';
+                }
+                if ($last !== $tagName) {
+                    return 'crossed closing tag </' . $tagName . '> while <' . $last . '> is still open';
+                }
+                continue;
+            }
+            if (isset($voidTags[$tagName]) || \preg_match('/\/\s*>$/', $tagText) === 1) {
+                continue;
+            }
+            $stack[] = $tagName;
+        }
+
+        if ($stack !== []) {
+            return 'unclosed tag <' . (string)\end($stack) . '>';
+        }
+
+        return null;
+    }
+
+    private function detectMalformedTagTokenReason(string $tagText): ?string
+    {
+        $tagText = \trim($tagText);
+        if ($tagText === '') {
+            return null;
+        }
+        if (!\str_ends_with($tagText, '>')) {
+            return 'unterminated tag';
+        }
+
+        $quote = '';
+        $length = \strlen($tagText);
+        for ($index = 1; $index < $length - 1; $index++) {
+            $char = $tagText[$index];
+            if ($quote !== '') {
+                if ($char === $quote && ($index === 0 || $tagText[$index - 1] !== '\\')) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                continue;
+            }
+            if ($char === '<') {
+                return 'nested tag marker inside an opening tag';
+            }
+        }
+        if ($quote !== '') {
+            return 'unclosed attribute quote';
+        }
+
+        return null;
     }
 
     /**

@@ -1826,6 +1826,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'Magazine-like layouts with bold imagery.',
             \implode("\n\n", \array_map(static fn(array $call): string => (string)($call['prompt'] ?? ''), $calls))
         );
+        self::assertReferenceStyleContextCarried($artifacts['plan_json']['theme_design'] ?? null);
+        self::assertReferenceStyleContextCarried($artifacts['structured']['shared_plan']['theme_design'] ?? null);
+        self::assertReferenceStyleContextCarried($artifacts['execution_blueprint']['theme_context_snapshot'] ?? null);
+        self::assertReferenceStyleContextCarried($artifacts['execution_blueprint']['shared_prompt_context']['theme_design'] ?? null);
+        self::assertReferenceStyleContextCarried($artifacts['plan_workbench']['stage1']['theme_context_snapshot'] ?? null);
     }
 
     public function testBuildPlanArtifactsByAiStreamReusesStageOneCheckpointWithoutRepeatingAiCalls(): void
@@ -2591,6 +2596,31 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 self::assertNotSame('', \trim((string)$value), 'theme_design.' . $field . '[' . $index . '] must not be empty.');
             }
         }
+        if (isset($themeDesign['reference_style_context']) && $themeDesign['reference_style_context'] !== []) {
+            self::assertIsArray($themeDesign['reference_style_context']);
+            foreach (['summary', 'style_keywords', 'color_palette', 'layout_cues', 'component_cues', 'typography_cues', 'do_not_use', 'implementation_rule'] as $field) {
+                self::assertArrayHasKey($field, $themeDesign['reference_style_context']);
+            }
+        }
+    }
+
+    private static function assertReferenceStyleContextCarried(mixed $themeDesign): void
+    {
+        self::assertStageOneThemeDesignSchema($themeDesign);
+        $referenceStyleContext = $themeDesign['reference_style_context'] ?? null;
+        self::assertIsArray($referenceStyleContext);
+        self::assertSame('Magazine-like layouts with bold imagery.', (string)($referenceStyleContext['summary'] ?? ''));
+        self::assertContains('editorial', $referenceStyleContext['style_keywords'] ?? []);
+        self::assertContains('#112233', $referenceStyleContext['color_palette'] ?? []);
+        self::assertContains('Asymmetric grid with focal hero crop', $referenceStyleContext['layout_cues'] ?? []);
+        self::assertContains('Floating cards with overlap', $referenceStyleContext['component_cues'] ?? []);
+        self::assertContains('Bold condensed display headings', $referenceStyleContext['typography_cues'] ?? []);
+        self::assertContains('flat generic SaaS stock look', $referenceStyleContext['do_not_use'] ?? []);
+        self::assertContains('Asymmetric grid with focal hero crop', $themeDesign['visual_keywords'] ?? []);
+        self::assertContains('flat generic SaaS stock look', $themeDesign['forbidden_styles'] ?? []);
+        self::assertStringContainsString('Asymmetric grid with focal hero crop', (string)($themeDesign['art_direction']['layout_motif'] ?? ''));
+        self::assertStringContainsString('Floating cards with overlap', (string)($themeDesign['art_direction']['surface_treatment'] ?? ''));
+        self::assertStringContainsString('Bold condensed display headings', (string)($themeDesign['typography_spacing_radius']['font_family'] ?? ''));
     }
 
     private static function findQueueJobByType(mixed $jobs, string $jobType): ?array

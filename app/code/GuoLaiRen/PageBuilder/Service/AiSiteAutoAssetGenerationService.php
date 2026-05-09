@@ -13,6 +13,7 @@ class AiSiteAutoAssetGenerationService
     public function __construct(
         private readonly AiSiteAssetManifestService $manifestService,
         private readonly ?AiSiteReferenceImageInsightService $referenceImageInsightService = null,
+        private readonly mixed $imageGenerator = null,
     ) {
     }
 
@@ -28,6 +29,13 @@ class AiSiteAutoAssetGenerationService
     {
         $scope = $this->ensureReferenceImageInsights($scope);
         $manifest = $this->manifestService->syncFromTaskPlan($scope);
+        if (!$this->shouldUsePlaceholderFallback($scope)) {
+            $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
+            $manifest = $this->manifestService->discardPlaceholderGeneratedAssets($manifest);
+            if ($placeholderUrls !== []) {
+                $scope = $this->clearPlaceholderIdentityAssetsFromScope($scope, $placeholderUrls);
+            }
+        }
         $scope['asset_manifest'] = $manifest;
         $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
 
@@ -46,7 +54,7 @@ class AiSiteAutoAssetGenerationService
                 }
 
                 $manifest = $this->manifestService->markGenerating($manifest, $slotId);
-                if (!$this->shouldUseRealImageGeneration($scope)) {
+                if ($this->shouldUsePlaceholderFallback($scope)) {
                     [$finalUrl, $variant] = $this->writePlaceholderAsset($scope, $session, $slotId, $slot, $prompt);
                     $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
                     $scope['asset_manifest'] = $manifest;
@@ -56,21 +64,7 @@ class AiSiteAutoAssetGenerationService
                     continue;
                 }
 
-                $result = \w_query('ai', 'generateImage', [
-                    'prompt' => $prompt,
-                    'scenario_code' => 'pagebuilder_ai_site_assets',
-                    'params' => [
-                        'disable_conversation_history' => true,
-                        'disable_conversation_persist' => true,
-                        'is_backend' => true,
-                        'user_id' => $adminId,
-                        'slot_id' => $slotId,
-                        'size' => '1024x1024',
-                    ],
-                ]);
-                if (!\is_array($result)) {
-                    throw new \RuntimeException('Image generation returned invalid result.');
-                }
+                $result = $this->generateImage($prompt, $adminId, $slotId);
 
                 $image = $this->firstGeneratedImage($result);
                 [$bytes, $mimeType] = $this->resolveImageBytes($image);
@@ -78,7 +72,7 @@ class AiSiteAutoAssetGenerationService
                     throw new \RuntimeException('Image generation returned empty image bytes.');
                 }
 
-                $relativePath = $this->buildTargetPath($scope, $session, $slotId);
+                $relativePath = $this->buildTargetPath($scope, $session, $slotId, $bytes, $mimeType);
                 $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
                 $directory = \dirname($absolutePath);
                 if (!\is_dir($directory) && !\mkdir($directory, 0755, true) && !\is_dir($directory)) {
@@ -121,15 +115,46 @@ class AiSiteAutoAssetGenerationService
     }
 
     /**
-     * Text-to-image is not enabled by default in the workbench yet. Keep build
-     * resumable by writing local placeholders, and opt into real generation only
-     * when the scope explicitly asks for it.
+     * Placeholder image files are an explicit operator fallback only. Normal
+     * build flow must call the text-to-image model or expose a visible failure.
      *
      * @param array<string,mixed> $scope
      */
-    private function shouldUseRealImageGeneration(array $scope): bool
+    private function shouldUsePlaceholderFallback(array $scope): bool
     {
-        return (int)($scope['enable_real_ai_image_generation'] ?? 0) === 1;
+        return (int)($scope['allow_placeholder_image_assets'] ?? 0) === 1;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function generateImage(string $prompt, int $adminId, string $slotId): array
+    {
+        if ($this->imageGenerator !== null) {
+            if (!\is_callable($this->imageGenerator)) {
+                throw new \RuntimeException('Image generator callback is not callable.');
+            }
+            $result = ($this->imageGenerator)($prompt, $adminId, $slotId);
+        } else {
+            $result = \w_query('ai', 'generateImage', [
+                'prompt' => $prompt,
+                'scenario_code' => 'pagebuilder_ai_site_assets',
+                'params' => [
+                    'disable_conversation_history' => true,
+                    'disable_conversation_persist' => true,
+                    'is_backend' => true,
+                    'user_id' => $adminId,
+                    'slot_id' => $slotId,
+                    'size' => '1024x1024',
+                ],
+            ]);
+        }
+
+        if (!\is_array($result)) {
+            throw new \RuntimeException('Image generation returned invalid result.');
+        }
+
+        return $result;
     }
 
     /**
@@ -177,6 +202,36 @@ class AiSiteAutoAssetGenerationService
     private function getReferenceImageInsightService(): AiSiteReferenceImageInsightService
     {
         return $this->referenceImageInsightService ?? new AiSiteReferenceImageInsightService();
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param list<string> $placeholderUrls
+     * @return array<string,mixed>
+     */
+    private function clearPlaceholderIdentityAssetsFromScope(array $scope, array $placeholderUrls): array
+    {
+        $urlMap = \array_fill_keys($placeholderUrls, true);
+        foreach (['logo', 'icon', 'favicon'] as $key) {
+            $value = \trim((string)($scope[$key] ?? ''));
+            if ($value !== '' && isset($urlMap[$value])) {
+                unset($scope[$key]);
+            }
+        }
+
+        $hasWebsiteProfile = \is_array($scope['website_profile'] ?? null);
+        $websiteProfile = $hasWebsiteProfile ? $scope['website_profile'] : [];
+        foreach (['logo', 'icon', 'favicon'] as $key) {
+            $value = \trim((string)($websiteProfile[$key] ?? ''));
+            if ($value !== '' && isset($urlMap[$value])) {
+                unset($websiteProfile[$key]);
+            }
+        }
+        if ($hasWebsiteProfile) {
+            $scope['website_profile'] = $websiteProfile;
+        }
+
+        return $scope;
     }
 
     /**
@@ -375,6 +430,13 @@ class AiSiteAutoAssetGenerationService
 
         $url = \trim((string)($image['url'] ?? ''));
         if ($url !== '') {
+            if (\preg_match('#^data:([^;]+);base64,(.+)$#s', $url, $matches) === 1) {
+                $bytes = \base64_decode(\preg_replace('/\s+/', '', (string)$matches[2]) ?? '', true);
+                if ($bytes === false) {
+                    throw new \RuntimeException('Image generation returned invalid data URL payload.');
+                }
+                return [$bytes, \strtolower((string)$matches[1]) ?: $mimeType];
+            }
             return [$this->downloadImageUrl($url), $mimeType];
         }
 
@@ -412,13 +474,30 @@ class AiSiteAutoAssetGenerationService
     /**
      * @param array<string,mixed> $scope
      */
-    private function buildTargetPath(array $scope, AiSiteAgentSession $session, string $slotId): string
+    private function buildTargetPath(
+        array $scope,
+        AiSiteAgentSession $session,
+        string $slotId,
+        string $bytes,
+        string $mimeType
+    ): string
     {
         $handle = $this->resolveTargetHandle($scope, $session);
         $safeSlot = $this->sanitizePathSegment($slotId);
-        $hash = \substr(\sha1($slotId . ':' . $session->getPublicId()), 0, 12);
+        $hash = \substr(\sha1($slotId . ':' . $session->getPublicId() . ':' . $bytes), 0, 12);
+        $extension = $this->extensionForMimeType($mimeType);
 
-        return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlot . '-' . $hash . '.webp';
+        return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlot . '-' . $hash . '.' . $extension;
+    }
+
+    private function extensionForMimeType(string $mimeType): string
+    {
+        $mimeType = \strtolower(\trim($mimeType));
+        return match ($mimeType) {
+            'image/jpeg', 'image/jpg' => 'jpg',
+            'image/webp' => 'webp',
+            default => 'png',
+        };
     }
 
     /**

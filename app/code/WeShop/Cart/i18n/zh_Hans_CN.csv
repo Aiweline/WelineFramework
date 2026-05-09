@@ -132,7 +132,7 @@ Product,商品
 "Product is unavailable.",商品当前不可用。
 "Please select product options.",请选择商品规格。
 "The selected product configuration is unavailable.",所选商品规格当前不可用。
-"Insufficient stock. Available quantity: %{1}","库存不足。可用数量：%{1}"
+"Insufficient stock. Available quantity: %{1}",库存不足。可用数量：%{1}
 "Added to cart successfully.",成功加入购物车。
 "Product options loaded successfully.",商品规格加载成功。
 "Invalid cart item.",无效的购物车项。

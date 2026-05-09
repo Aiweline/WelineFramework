@@ -34,7 +34,7 @@ Redirect,Redirect
 "Payment method is required.","Payment method is required."
 "2. Payment Method","2. Payment Method"
 "No payment methods are available for the current checkout context.","No payment methods are available for the current checkout context."
-"Payment flow: %{1}","支付流程：%{1}"
+"Payment flow: %{1}",支付流程：%{1}
 "Complete this payment flow after confirming the order.","Complete this payment flow after confirming the order."
 "No shipping methods are available for the current checkout context.","No shipping methods are available for the current checkout context."
 "Retry Payment","Retry Payment"
@@ -58,7 +58,7 @@ and,and
 "Privacy Policy","Privacy Policy"
 "Place Order","Place Order"
 "Order Summary","Order Summary"
-"Qty: %{1}","数量：%{1}"
+"Qty: %{1}",数量：%{1}
 Subtotal,Subtotal
 Shipping,Shipping
 Tax,Tax
