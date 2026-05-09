@@ -91,8 +91,11 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 throw new \RuntimeException('会话不存在或无权访问。');
             }
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
+            $queuedScope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
             $hasQueuedTaskPlanMutation = $this->hasQueuedTaskPlanMutationRequest($content);
-            $hasQueuedTaskPlanResume = $this->hasQueuedTaskPlanResumeRequest($content);
+            $hasQueuedTaskPlanResume = $this->hasQueuedTaskPlanResumeRequest($content, $queuedScope);
             $guard = $this->guardTaskPlanQueueExecution(
                 $sessionService,
                 $scopeService,
@@ -457,18 +460,69 @@ class AiSiteTaskPlanQueue implements QueueInterface
     /**
      * @param array<string, mixed> $content
      */
-    private function hasQueuedTaskPlanResumeRequest(array $content): bool
+    private function hasQueuedTaskPlanResumeRequest(array $content, array $scope = []): bool
     {
         $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
         $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
         $request = \array_replace(
+            \is_array($scope['_task_plan_sse_request'] ?? null) ? $scope['_task_plan_sse_request'] : [],
             \is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : [],
             \is_array($content['_task_plan_sse_request'] ?? null) ? $content['_task_plan_sse_request'] : [],
             \is_array($details['_task_plan_sse_request'] ?? null) ? $details['_task_plan_sse_request'] : []
         );
         $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
 
-        return $promptMode === 'resume_task_plan';
+        if ($promptMode === 'resume_task_plan') {
+            return true;
+        }
+
+        return $this->hasTaskPlanRetryableFailureHints($scope, $scopePatch, $content, $details, $request);
+    }
+
+    /**
+     * @param array<string, mixed> ...$sources
+     */
+    private function hasTaskPlanRetryableFailureHints(array ...$sources): bool
+    {
+        foreach ($sources as $source) {
+            $ledger = \is_array($source['retryable_ai_failures'] ?? null) ? $source['retryable_ai_failures'] : [];
+            if ($ledger !== [] && $this->hasTaskPlanRetryableFailuresInLedger($ledger)) {
+                return true;
+            }
+
+            $summary = \is_array($source['retryable_ai_failure_summary'] ?? null) ? $source['retryable_ai_failure_summary'] : [];
+            $ops = \is_array($summary['operations'] ?? null) ? $summary['operations'] : [];
+            if ((int)($ops['task_plan'] ?? 0) > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $ledger
+     */
+    private function hasTaskPlanRetryableFailuresInLedger(array $ledger): bool
+    {
+        $taskPlanBucket = \is_array($ledger['task_plan'] ?? null) ? $ledger['task_plan'] : [];
+        $taskPlanItems = \is_array($taskPlanBucket['items'] ?? null) ? $taskPlanBucket['items'] : [];
+        if ($taskPlanItems !== []) {
+            return true;
+        }
+
+        if (\array_is_list($ledger)) {
+            foreach ($ledger as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                if (\trim((string)($item['operation'] ?? '')) === 'task_plan') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -513,6 +567,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
         $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
         $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
         $request = \array_replace(
+            \is_array($scope['_task_plan_sse_request'] ?? null) ? $scope['_task_plan_sse_request'] : [],
             \is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : [],
             \is_array($content['_task_plan_sse_request'] ?? null) ? $content['_task_plan_sse_request'] : [],
             \is_array($details['_task_plan_sse_request'] ?? null) ? $details['_task_plan_sse_request'] : []
