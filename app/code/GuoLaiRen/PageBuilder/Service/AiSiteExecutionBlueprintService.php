@@ -1784,8 +1784,9 @@ final class AiSiteExecutionBlueprintService
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Schema:',
-            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"must copy at least one exact noun/action phrase from Brief or Instruction and explain why the shared theme fits it"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
+            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","reference_style_context":{"summary":"string","style_keywords":["string"],"color_palette":["#hex"],"layout_cues":["string"],"component_cues":["string"],"typography_cues":["string"],"do_not_use":["string"],"implementation_rule":"string"},"art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"must copy at least one exact noun/action phrase from Brief or Instruction and explain why the shared theme fits it"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
             'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; page_type_overviews must cover every selected page type with page role, content focus, theme color application, section layering hint, interaction intent, and differentiation note; these overviews are conceptual page planning only, not block lists; theme_design.selection_reason must copy at least one exact noun/action phrase from Brief or Instruction and explain why the theme fits that one-line requirement; keep output compact.',
+            'Reference-image carryover rule: if Reference image insights are not "-", theme_design.reference_style_context MUST copy/adapt those insights and theme_design.style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, and forbidden_styles MUST visibly use them. Do not merely mention reference images as inspiration.',
             'Visual quality bar: theme_design.style_signature and art_direction are mandatory. They must describe a polished, customer-fit visual identity that a frontend generator can execute, including composition motif, background/texture system, surface treatment, detail language, and motion restraint.',
             'Customer-fit rule: do not default to a blue SaaS gradient, plain white cards, generic Inter/Roboto/system-font hierarchy, or centered hero plus three-card grid unless the user brief specifically asks for that look.',
             'Beauty rule: make the final website feel designed for a paying client. Select deliberate typography, layered backgrounds, tactile CTA states, inline SVG/CSS visual motifs, spacing/radius rhythm, and mobile composition that match the brief.',
@@ -1838,6 +1839,7 @@ final class AiSiteExecutionBlueprintService
             'Page design planning rules:',
             '- First create page_design_plan, then derive blocks from it. Blocks must not be chosen directly from theme_design alone.',
             '- page_design_plan must translate theme_design.style_signature and art_direction into this page: composition motif, background system, surface treatment, detail language, and motion restraint.',
+            '- If theme_design.reference_style_context exists, page_design_plan must carry those reference-image cues into this page as adapted layout, palette, component, typography, and forbidden-style decisions.',
             '- page_design_plan.color_layering must name which theme colors are used for page background, alternating section surfaces, cards/panels, text, and CTA/accent states.',
             '- Prevent monotone pages: never make the entire page one flat background color unless the page_design_plan explicitly adds layered surfaces, cards, dividers, gradients, illustrations, or contrast bands.',
             '- page_design_plan.section_flow must describe the visual rhythm across 2-3 blocks: opening impact, middle information/proof layer, and closing action or reassurance layer.',
@@ -2887,6 +2889,124 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildReferenceStyleContext(array $scope): array
+    {
+        $insights = \is_array($scope['reference_image_insights'] ?? null) ? $scope['reference_image_insights'] : [];
+        if ($insights === []) {
+            return [];
+        }
+
+        return [
+            'summary' => \trim((string)($insights['summary'] ?? '')),
+            'style_keywords' => $this->normalizeStringList($insights['style_keywords'] ?? []),
+            'color_palette' => $this->normalizeStringList($insights['color_palette'] ?? []),
+            'layout_cues' => $this->normalizeStringList($insights['layout_cues'] ?? []),
+            'component_cues' => $this->normalizeStringList($insights['component_cues'] ?? []),
+            'typography_cues' => $this->normalizeStringList($insights['typography_cues'] ?? []),
+            'do_not_use' => $this->normalizeStringList($insights['do_not_use'] ?? []),
+            'implementation_rule' => 'Carry these reference-image cues into theme_design, page_type_overviews, shared_prompt_context, and later page/block style plans; adapt them to the brief instead of copying the image pixel-for-pixel.',
+            'signature' => \trim((string)($scope['reference_image_insights_signature'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $themeDesign
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function applyReferenceImageInsightsToThemeDesign(array $themeDesign, array $scope): array
+    {
+        $referenceStyleContext = $this->buildReferenceStyleContext($scope);
+        if ($referenceStyleContext === []) {
+            return $themeDesign;
+        }
+
+        $existingReferenceContext = \is_array($themeDesign['reference_style_context'] ?? null)
+            ? $themeDesign['reference_style_context']
+            : [];
+        $themeDesign['reference_style_context'] = $this->mergeReferenceStyleContext(
+            $referenceStyleContext,
+            $existingReferenceContext
+        );
+        $themeDesign['visual_keywords'] = \array_values(\array_unique(\array_merge(
+            $this->normalizeStringList($themeDesign['visual_keywords'] ?? []),
+            $this->normalizeStringList($referenceStyleContext['style_keywords'] ?? []),
+            $this->normalizeStringList($referenceStyleContext['layout_cues'] ?? [])
+        )));
+        $themeDesign['forbidden_styles'] = \array_values(\array_unique(\array_merge(
+            $this->normalizeStringList($themeDesign['forbidden_styles'] ?? []),
+            $this->normalizeStringList($referenceStyleContext['do_not_use'] ?? [])
+        )));
+
+        $artDirection = \is_array($themeDesign['art_direction'] ?? null) ? $themeDesign['art_direction'] : [];
+        $summary = \trim((string)($referenceStyleContext['summary'] ?? ''));
+        $layoutCue = $this->firstNonEmptyString($this->normalizeStringList($referenceStyleContext['layout_cues'] ?? []));
+        $componentCue = $this->firstNonEmptyString($this->normalizeStringList($referenceStyleContext['component_cues'] ?? []));
+        $typographyCue = $this->firstNonEmptyString($this->normalizeStringList($referenceStyleContext['typography_cues'] ?? []));
+        if ($summary !== '' && !\str_contains((string)($themeDesign['selection_reason'] ?? ''), $summary)) {
+            $baseReason = \trim((string)($themeDesign['selection_reason'] ?? ''));
+            $themeDesign['selection_reason'] = ($baseReason !== '' ? $baseReason . ' ' : '')
+                . 'Reference image cue: ' . $summary;
+        }
+        if ($layoutCue !== '') {
+            $artDirection['layout_motif'] = $this->appendReferenceCue((string)($artDirection['layout_motif'] ?? ''), $layoutCue);
+        }
+        if ($componentCue !== '') {
+            $artDirection['surface_treatment'] = $this->appendReferenceCue((string)($artDirection['surface_treatment'] ?? ''), $componentCue);
+            $artDirection['visual_detail_rule'] = $this->appendReferenceCue((string)($artDirection['visual_detail_rule'] ?? ''), $componentCue);
+        }
+        if ($typographyCue !== '') {
+            $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+            $typography['font_family'] = $this->appendReferenceCue((string)($typography['font_family'] ?? ''), $typographyCue);
+            $themeDesign['typography_spacing_radius'] = $typography;
+        }
+        $themeDesign['art_direction'] = $artDirection;
+
+        return $themeDesign;
+    }
+
+    /**
+     * @param array<string, mixed> $referenceStyleContext
+     * @param array<string, mixed> $existingReferenceContext
+     * @return array<string, mixed>
+     */
+    private function mergeReferenceStyleContext(array $referenceStyleContext, array $existingReferenceContext): array
+    {
+        $merged = $referenceStyleContext;
+        foreach (['summary', 'implementation_rule', 'signature'] as $field) {
+            $existing = \trim((string)($existingReferenceContext[$field] ?? ''));
+            if ($existing !== '') {
+                $merged[$field] = $existing;
+            }
+        }
+        foreach (['style_keywords', 'color_palette', 'layout_cues', 'component_cues', 'typography_cues', 'do_not_use'] as $field) {
+            $merged[$field] = \array_values(\array_unique(\array_merge(
+                $this->normalizeStringList($referenceStyleContext[$field] ?? []),
+                $this->normalizeStringList($existingReferenceContext[$field] ?? [])
+            )));
+        }
+
+        return $merged;
+    }
+
+    private function appendReferenceCue(string $base, string $cue): string
+    {
+        $base = \trim($base);
+        $cue = \trim($cue);
+        if ($cue === '' || \mb_stripos($base, $cue) !== false) {
+            return $base;
+        }
+        if ($base === '') {
+            return $cue;
+        }
+
+        return $base . '; reference cue: ' . $cue;
+    }
+
+    /**
      * 鏍规嵁閫夋嫨鐨勯〉闈㈢被鍨嬪姩鎬佺敓鎴?Markdown 妯℃澘
      *
      * @param list<string> $pageTypes
@@ -3155,6 +3275,7 @@ final class AiSiteExecutionBlueprintService
         $themeDesign = \is_array($planJson['theme_design'] ?? null)
             ? $this->extractStageOneThemeDesign($planJson['theme_design'])
             : $this->extractStageOneThemeDesign(\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []);
+        $themeDesign = $this->applyReferenceImageInsightsToThemeDesign($themeDesign, $scope);
         $themeContextSnapshot = $this->mergeStageOneThemeDesignIntoSnapshot(
             \is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : [],
             $themeDesign
@@ -6740,7 +6861,7 @@ final class AiSiteExecutionBlueprintService
         array $structured,
         array $executionBlueprint
     ): array {
-        return [
+        $themeDesign = [
             'site_title' => (string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? ''),
             'site_tagline' => (string)($scope['site_tagline'] ?? $websiteProfile['site_tagline'] ?? ''),
             'theme_style' => $structured['theme_style'] ?? [],
@@ -6762,6 +6883,13 @@ final class AiSiteExecutionBlueprintService
             ),
             'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? ''),
         ];
+
+        $themeDesign['theme_design'] = $this->applyReferenceImageInsightsToThemeDesign(
+            \is_array($themeDesign['theme_design'] ?? null) ? $themeDesign['theme_design'] : [],
+            $scope
+        );
+
+        return $themeDesign;
     }
 
     /**
@@ -6851,7 +6979,7 @@ final class AiSiteExecutionBlueprintService
             : ($requirementReference !== '' ? $requirementReference : '建立清晰可信、可转化的站点视觉与内容骨架。');
         $visualTone = \trim((string)($themeStyle['visual_tone'] ?? '专业、清晰、可转化'));
 
-        return [
+        $themeDesign = [
             'theme_purpose' => $themePurpose,
             'style_signature' => (string)($themeStyle['style_signature'] ?? (($themeStyle['name'] ?? 'Theme') . ' visual identity')),
             'art_direction' => [
@@ -6895,6 +7023,8 @@ final class AiSiteExecutionBlueprintService
                 ? '围绕用户需求“' . $this->clipText($requirementReference, 120) . '”，选择该主题以优先保证可读信息结构、明确 CTA 和可执行内容落地。'
                 : '选择该主题以优先保证可读信息结构、明确 CTA 和可执行内容落地。',
         ];
+
+        return $this->applyReferenceImageInsightsToThemeDesign($themeDesign, $scope);
     }
 
     /**
@@ -6934,6 +7064,20 @@ final class AiSiteExecutionBlueprintService
         $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
         $visualKeywords = \is_array($themeDesign['visual_keywords'] ?? null) ? $themeDesign['visual_keywords'] : [];
         $forbiddenStyles = \is_array($themeDesign['forbidden_styles'] ?? null) ? $themeDesign['forbidden_styles'] : [];
+        $referenceStyleContext = \is_array($themeDesign['reference_style_context'] ?? null) ? $themeDesign['reference_style_context'] : [];
+        if ($referenceStyleContext !== []) {
+            $referenceStyleContext = [
+                'summary' => \trim((string)($referenceStyleContext['summary'] ?? '')),
+                'style_keywords' => $this->normalizeStringList($referenceStyleContext['style_keywords'] ?? []),
+                'color_palette' => $this->normalizeStringList($referenceStyleContext['color_palette'] ?? []),
+                'layout_cues' => $this->normalizeStringList($referenceStyleContext['layout_cues'] ?? []),
+                'component_cues' => $this->normalizeStringList($referenceStyleContext['component_cues'] ?? []),
+                'typography_cues' => $this->normalizeStringList($referenceStyleContext['typography_cues'] ?? []),
+                'do_not_use' => $this->normalizeStringList($referenceStyleContext['do_not_use'] ?? []),
+                'implementation_rule' => \trim((string)($referenceStyleContext['implementation_rule'] ?? '')),
+                'signature' => \trim((string)($referenceStyleContext['signature'] ?? '')),
+            ];
+        }
         $styleSignature = \trim((string)($themeDesign['style_signature'] ?? $themeDesign['visual_identity'] ?? $themeDesign['design_signature'] ?? ''));
         if ($styleSignature === '') {
             $styleSignature = \trim((string)($themeDesign['theme_purpose'] ?? $themeDesign['site_positioning'] ?? 'brief-led polished visual identity'));
@@ -6949,6 +7093,7 @@ final class AiSiteExecutionBlueprintService
         return [
             'theme_purpose' => (string)($themeDesign['theme_purpose'] ?? $themeDesign['site_positioning'] ?? ''),
             'style_signature' => $styleSignature,
+            'reference_style_context' => $referenceStyleContext,
             'art_direction' => $artDirection,
             'color_scheme' => $colorScheme,
             'typography_spacing_radius' => $typography,

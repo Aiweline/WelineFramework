@@ -281,6 +281,13 @@ class AiSiteAssetQueue implements QueueInterface
 
         $url = \trim((string)($image['url'] ?? ''));
         if ($url !== '') {
+            if (\preg_match('#^data:([^;]+);base64,(.+)$#s', $url, $matches) === 1) {
+                $bytes = \base64_decode(\preg_replace('/\s+/', '', (string)$matches[2]) ?? '', true);
+                if ($bytes === false) {
+                    throw new \RuntimeException('Image generation returned invalid data URL payload.');
+                }
+                return [$bytes, \strtolower((string)$matches[1]) ?: $mimeType];
+            }
             return [$this->downloadImageUrl($url), $mimeType];
         }
 
