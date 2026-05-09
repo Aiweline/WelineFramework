@@ -210,13 +210,15 @@ class AiSiteAgent extends BaseController
     {
         $startedAt = \microtime(true);
         $workbenchHomeUrl = $this->url->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => 'pagebuilder']);
+        $showAll = (string)$this->request->getGet('show', '') === 'all';
 
         $adminId = (int)$this->getLoginUserId();
-        $recent = $adminId > 0 ? $this->sessionService->listRecentSessionsForAdmin($adminId, 30) : [];
+        $recent = $adminId > 0 ? $this->sessionService->listRecentSessionsForAdmin($adminId, $showAll ? 200 : 30) : [];
 
         $this->assign('title', __('PageBuilder AI 建站工作台'));
         $this->assign('recent_sessions', $recent);
         $this->assign('workbench_home_url', $workbenchHomeUrl);
+        $this->assign('show_all_sessions', $showAll);
 
         $html = $this->fetch();
         $this->logHotPathStage('index.total', $startedAt, [
@@ -3046,6 +3048,7 @@ class AiSiteAgent extends BaseController
         if ($session === null) {
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
+
         $error = '';
         $scopePatch = $this->getRequestJsonObject('scope_patch', $error);
         if ($error !== '') {
@@ -7396,7 +7399,7 @@ class AiSiteAgent extends BaseController
             return;
         }
 
-        if ($this->supportsBackgroundOperation($operation) && !\in_array($status, ['queued', 'running'], true)) {
+        if ($this->supportsBackgroundOperation($operation) && !\in_array($status, ['pending', 'queued', 'running', 'processing'], true)) {
             $terminalQueueRow = $this->findAiSiteOperationQueueRow(
                 $session,
                 $operation,
@@ -7404,6 +7407,9 @@ class AiSiteAgent extends BaseController
             );
             if (\is_array($terminalQueueRow) && \trim((string)($terminalQueueRow['status'] ?? '')) === 'done') {
                 $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
+                if ((bool)($observed['deferred_queue_progress'] ?? false)) {
+                    return;
+                }
                 if (!(bool)($observed['success'] ?? true)) {
                     $sse->sendError(
                         (string)($observed['message'] ?? 'Operation failed.'),
@@ -7422,7 +7428,7 @@ class AiSiteAgent extends BaseController
             }
         }
 
-        if ($this->supportsBackgroundOperation($operation) && \in_array($status, ['queued', 'running'], true)) {
+        if ($this->supportsBackgroundOperation($operation) && \in_array($status, ['pending', 'queued', 'running', 'processing'], true)) {
             $queueRow = $this->findAiSiteOperationQueueRow(
                 $session,
                 $operation,
@@ -7545,8 +7551,11 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $operation,
                 $executionToken,
-                $queueWaitingForScheduler || !$this->shouldKeepQueuedObserverStreamOpen($operation)
+                !$this->shouldKeepQueuedObserverStreamOpen($operation)
             );
+            if ($queueWaitingForScheduler && (bool)($observed['deferred_queue_progress'] ?? false)) {
+                return;
+            }
             if (!(bool)($observed['success'] ?? true)) {
                 $sse->sendError(
                     (string)($observed['message'] ?? 'Operation failed.'),
@@ -7954,7 +7963,7 @@ class AiSiteAgent extends BaseController
             if (!$this->isObservedOperationStillRunning($activeOperation, $operation, $executionToken, $queueRow)) {
                 $loopQueueStatus = \trim((string)($queueRow['status'] ?? ''));
                 // 只要队列仍在 pending/queued/running，就继续保持观察连接，避免过早 done。
-                if (!\in_array($loopQueueStatus, ['pending', 'queued', 'running'], true)) {
+                if (!\in_array($loopQueueStatus, ['pending', 'queued', 'running', 'processing'], true)) {
                     break;
                 }
             }
@@ -8032,11 +8041,11 @@ class AiSiteAgent extends BaseController
         }
         $status = \trim((string)($activeOperation['status'] ?? ''));
 
-        $activeInProgress = \in_array($status, ['queued', 'running'], true);
+        $activeInProgress = \in_array($status, ['pending', 'queued', 'running', 'processing'], true);
         $queueInProgress = $this->isObservedQueueInProgress($queueRow);
         $queueTerminal = $this->isObservedQueueTerminal($queueRow);
         $success = !$timedOut
-            && !\in_array($status, ['error', 'cancelled', 'queued', 'running'], true)
+            && !\in_array($status, ['error', 'cancelled', 'pending', 'queued', 'running', 'processing'], true)
             && !$queueInProgress;
         if ($queueStatus === 'done' && $queueTerminal) {
             $success = true;
@@ -8114,8 +8123,8 @@ class AiSiteAgent extends BaseController
 
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         if (
-            \in_array($activeStatus, ['queued', 'running'], true)
-            || !\in_array($queueStatus, ['pending', 'queued', 'running'], true)
+            \in_array($activeStatus, ['pending', 'queued', 'running', 'processing'], true)
+            || !\in_array($queueStatus, ['pending', 'queued', 'running', 'processing'], true)
         ) {
             return [$fresh, $scope, $activeOperation, $queueRow, $queueStatus];
         }
@@ -8169,7 +8178,7 @@ class AiSiteAgent extends BaseController
             return false;
         }
 
-        return \in_array($activeStatus, ['queued', 'running'], true)
+        return \in_array($activeStatus, ['pending', 'queued', 'running', 'processing'], true)
             || $this->isObservedQueueInProgress($queueRow);
     }
 
@@ -8200,7 +8209,7 @@ class AiSiteAgent extends BaseController
             return false;
         }
         $status = \trim((string)($queueRow['status'] ?? ''));
-        return \in_array($status, ['pending', 'queued', 'running'], true);
+        return \in_array($status, ['pending', 'queued', 'running', 'processing'], true);
     }
 
     /**
@@ -12485,11 +12494,13 @@ class AiSiteAgent extends BaseController
             return [];
         }
         $status = \trim((string)($operationState['status'] ?? ''));
-        if (!\in_array($status, ['pending', 'queued', 'running'], true)) {
+        if (!\in_array($status, ['pending', 'queued', 'running', 'processing'], true)) {
             return [];
         }
         if ($status === 'pending') {
             $status = 'queued';
+        } elseif ($status === 'processing') {
+            $status = 'running';
         }
 
         $queueId = (int)($operationState['queue_id'] ?? 0);
@@ -13080,6 +13091,17 @@ class AiSiteAgent extends BaseController
             $content['_force_rebuild'] = 1;
         }
         $content = $this->applyOperationDetailsToPayload($content, $operationDetails);
+        if ($operation === 'task_plan') {
+            $taskPlanRequest = \is_array($scopePatch['_task_plan_sse_request'] ?? null)
+                ? $scopePatch['_task_plan_sse_request']
+                : (\is_array($operationDetails['_task_plan_sse_request'] ?? null) ? $operationDetails['_task_plan_sse_request'] : []);
+            if ($taskPlanRequest !== []) {
+                $content['_task_plan_sse_request'] = $taskPlanRequest;
+                $content['prompt_mode'] = \trim((string)($taskPlanRequest['prompt_mode'] ?? ''));
+                $content['target_scope'] = \trim((string)($taskPlanRequest['target_scope'] ?? ''));
+                $content['round'] = (int)($taskPlanRequest['round'] ?? 1);
+            }
+        }
         if (\in_array($operation, ['build', 'block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
             $content['scope_patch'] = $scopePatch;
         }
@@ -13088,7 +13110,7 @@ class AiSiteAgent extends BaseController
         $bizKey = $this->buildAiSiteQueueBizKey((int)$session->getId(), $operation);
         $reusableQueueRow = $this->findAiSiteOperationQueueRow($session, $operation);
         $reuseFailureMessage = '';
-        if (\is_array($reusableQueueRow) && $reusableQueueRow !== [] && $this->shouldReuseAiSiteQueueRow($reusableQueueRow, $preserveRunningQueueRow)) {
+        if (\is_array($reusableQueueRow) && $reusableQueueRow !== [] && $this->shouldReuseAiSiteQueueRow($reusableQueueRow, $preserveRunningQueueRow, $operation, $scopePatch, $operationDetails)) {
             $reusableQueueId = (int)($reusableQueueRow['queue_id'] ?? $reusableQueueRow['id'] ?? 0);
             $updated = w_query('queue', 'update', [
                 'queue_id' => $reusableQueueId,
@@ -13151,21 +13173,42 @@ class AiSiteAgent extends BaseController
      *
      * @param array<string, mixed> $queueRow
      */
-    private function shouldReuseAiSiteQueueRow(array $queueRow, bool $preserveRunningQueueRow = false): bool
+    private function shouldReuseAiSiteQueueRow(
+        array $queueRow,
+        bool $preserveRunningQueueRow = false,
+        string $operation = '',
+        array $scopePatch = [],
+        array $operationDetails = []
+    ): bool
     {
         if ((int)($queueRow['queue_id'] ?? 0) <= 0) {
             return false;
         }
 
-        $status = \trim((string)($queueRow['status'] ?? ''));
-        if ($status === 'error') {
-            return false;
+        $status = \strtolower(\trim((string)($queueRow['status'] ?? '')));
+        if (\in_array($status, ['error', 'failed', 'fail'], true)) {
+            return $operation === 'task_plan'
+                && $this->isTaskPlanRetryQueueRequest($scopePatch, $operationDetails);
         }
         if ($preserveRunningQueueRow && $status === 'running') {
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * @param array<string, mixed> $scopePatch
+     * @param array<string, mixed> $operationDetails
+     */
+    private function isTaskPlanRetryQueueRequest(array $scopePatch, array $operationDetails): bool
+    {
+        $request = \array_replace(
+            \is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : [],
+            \is_array($operationDetails['_task_plan_sse_request'] ?? null) ? $operationDetails['_task_plan_sse_request'] : []
+        );
+
+        return \trim((string)($request['prompt_mode'] ?? '')) === 'resume_task_plan';
     }
 
     /**
