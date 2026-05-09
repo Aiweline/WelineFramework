@@ -1157,21 +1157,25 @@ class AiService
     private function logUsage(AiModel $model, array $usage, array $params = []): void
     {
         try {
+            $promptTokens = (int)($usage['prompt_tokens'] ?? 0);
+            $completionTokens = (int)($usage['completion_tokens'] ?? 0);
+            $totalTokens = (int)($usage['total_tokens'] ?? ($promptTokens + $completionTokens));
+            $inputCost = $promptTokens * (float)$model->getData('token_price_input') / 1000;
+            $outputCost = $completionTokens * (float)$model->getData('token_price_output') / 1000;
+
             $this->usageLog->reset();
             $this->usageLog->setData([
-                'model_code' => $model->getModelCode(),
-                'vendor' => $model->getVendor(),
-                'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
-                'completion_tokens' => $usage['completion_tokens'] ?? 0,
-                'total_tokens' => $usage['total_tokens'] ?? 0,
-                'input_cost' => ($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') / 1000,
-                'output_cost' => ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output') / 1000,
-                'total_cost' => (($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') + 
-                               ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output')) / 1000,
-                'scenario_code' => $params['scenario_code'] ?? null,
-                'locale' => $params['locale'] ?? null,
-                'user_id' => $params['user_id'] ?? 0,
-                'created_time' => time(),
+                AiUsageLog::schema_fields_MODEL_CODE => $model->getModelCode(),
+                AiUsageLog::schema_fields_REQUEST_DATA => json_encode([
+                    'vendor' => $model->getVendor(),
+                    'scenario_code' => $params['scenario_code'] ?? null,
+                    'locale' => $params['locale'] ?? null,
+                    'user_id' => $params['user_id'] ?? 0,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                AiUsageLog::schema_fields_TOTAL_TOKENS => $totalTokens,
+                AiUsageLog::schema_fields_TOTAL_COST => $inputCost + $outputCost,
+                AiUsageLog::schema_fields_STATUS => AiUsageLog::STATUS_SUCCESS,
+                AiUsageLog::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
             ]);
             $this->usageLog->save();
         } catch (\Exception $e) {
@@ -1371,17 +1375,22 @@ class AiService
         /** @var AiUsageLog $usageLog */
         $usageLog = ObjectManager::getInstance(AiUsageLog::class);
         $usageLog->setData([
-            'model_id' => $model->getId(),
-            'model_code' => $model->getModelCode(),
-            'user_id' => $userId,
-            'is_backend' => $isBackend ? 1 : 0,
-            'input_tokens' => $inputTokens,
-            'output_tokens' => $outputTokens,
-            'total_tokens' => $inputTokens + $outputTokens,
-            'cost' => $cost,
-            'prompt_length' => strlen($prompt),
-            'response_length' => strlen($response),
-            'created_at' => date('Y-m-d H:i:s')
+            AiUsageLog::schema_fields_MODEL_CODE => $model->getModelCode(),
+            AiUsageLog::schema_fields_REQUEST_DATA => json_encode([
+                'model_id' => $model->getId(),
+                'user_id' => $userId,
+                'is_backend' => $isBackend ? 1 : 0,
+                'input_tokens' => $inputTokens,
+                'prompt_length' => strlen($prompt),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            AiUsageLog::schema_fields_RESPONSE_DATA => json_encode([
+                'output_tokens' => $outputTokens,
+                'response_length' => strlen($response),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            AiUsageLog::schema_fields_TOTAL_TOKENS => $inputTokens + $outputTokens,
+            AiUsageLog::schema_fields_TOTAL_COST => $cost,
+            AiUsageLog::schema_fields_STATUS => AiUsageLog::STATUS_SUCCESS,
+            AiUsageLog::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
         ]);
         $usageLog->save();
     }

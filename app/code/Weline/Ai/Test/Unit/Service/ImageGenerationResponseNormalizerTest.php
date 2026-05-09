@@ -59,4 +59,18 @@ class ImageGenerationResponseNormalizerTest extends TestCase
         $this->assertSame('gpt-image-1', $result['model']);
         $this->assertSame('https://example.test/images/generations', $result['request_url']);
     }
+
+    public function testOpenAiImageResponseConvertsDataUrlToBase64Payload(): void
+    {
+        $result = ImageGenerationResponseNormalizer::fromOpenAiImageResponse([
+            'data' => [[
+                'url' => 'data:image/jpeg;base64,' . \base64_encode('jpeg-bytes'),
+            ]],
+            'model' => 'image-model',
+        ], 'image-model', [], 'https://example.test/images/generations');
+
+        $this->assertSame(\base64_encode('jpeg-bytes'), $result['images'][0]['b64_json'] ?? null);
+        $this->assertSame('image/jpeg', $result['images'][0]['mime_type'] ?? null);
+        $this->assertArrayNotHasKey('url', $result['images'][0] ?? []);
+    }
 }
