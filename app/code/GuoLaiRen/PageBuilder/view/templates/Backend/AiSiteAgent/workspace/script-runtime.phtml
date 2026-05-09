@@ -1086,6 +1086,99 @@
         ).trim().toLowerCase();
     }
 
+    function collectRetryableFailureItemsFromPayload(operation, payload) {
+        var normalizedOperation = String(operation || '').trim();
+        var containers = [];
+        if (payload && typeof payload === 'object') {
+            containers.push(payload);
+            if (payload.state && typeof payload.state === 'object') {
+                containers.push(payload.state);
+            }
+            if (payload.data && typeof payload.data === 'object') {
+                containers.push(payload.data);
+            }
+            if (payload.scope && typeof payload.scope === 'object') {
+                containers.push(payload.scope);
+            }
+        }
+        var items = [];
+
+        function appendFromLedger(ledger) {
+            if (!ledger || typeof ledger !== 'object') {
+                return;
+            }
+            if (Array.isArray(ledger)) {
+                ledger.forEach(function (item) {
+                    if (item && typeof item === 'object') {
+                        if (normalizedOperation === '' || String(item.operation || '').trim() === normalizedOperation) {
+                            items.push(item);
+                        }
+                    }
+                });
+                return;
+            }
+            if (normalizedOperation !== '' && ledger[normalizedOperation] && typeof ledger[normalizedOperation] === 'object') {
+                appendFromLedger(ledger[normalizedOperation].items || ledger[normalizedOperation]);
+                return;
+            }
+            if (ledger.items) {
+                appendFromLedger(ledger.items);
+            }
+        }
+
+        containers.forEach(function (container) {
+            appendFromLedger(container.retryable_ai_failures);
+            if (container.scope && typeof container.scope === 'object') {
+                appendFromLedger(container.scope.retryable_ai_failures);
+            }
+        });
+
+        var seen = {};
+        return items.filter(function (item, index) {
+            var key = String(item.item_key || item.key || index);
+            var op = String(item.operation || normalizedOperation || '');
+            var fingerprint = op + ':' + key;
+            if (seen[fingerprint]) {
+                return false;
+            }
+            seen[fingerprint] = true;
+            return true;
+        });
+    }
+
+    function buildRetryableFailureDetailLines(operation, payload) {
+        var items = collectRetryableFailureItemsFromPayload(operation, payload);
+        if (!items.length) {
+            return [];
+        }
+        var lines = [];
+        for (var i = 0; i < items.length; i += 1) {
+            var item = items[i] || {};
+            var label = String(item.label || item.title || item.page_label || item.item_key || ('Item ' + String(i + 1))).trim();
+            var message = String(item.message || item.error_message || item.error || '').trim();
+            var taskKeys = Array.isArray(item.task_keys) ? item.task_keys.filter(Boolean) : [];
+            var meta = [];
+            if (item.page_label) {
+                meta.push(String(item.page_label));
+            }
+            if (item.retry_scope) {
+                meta.push(String(item.retry_scope));
+            }
+            if (taskKeys.length) {
+                meta.push('tasks: ' + taskKeys.join(', '));
+            }
+            var line = '失败项 ' + String(i + 1) + ': ' + label;
+            if (message !== '') {
+                line += ' | ' + message;
+            }
+            if (meta.length) {
+                line += ' | ' + meta.join(' | ');
+            }
+            lines.push(line);
+        }
+        return lines;
+    }
+
     function scheduleReloadAfterQueueCompleted(operation, payload, eventKind) {
         var normalizedOperation = String(operation || '').toLowerCase();
         var status = readQueueStatusFromPayload(operation, payload);
@@ -1167,6 +1260,12 @@
                 }
             } else if (message !== '') {
                 binding.terminal.log(message, level, payload || {});
+            }
+            var failureDetailLines = buildRetryableFailureDetailLines(operation, payload || {});
+            if (failureDetailLines.length) {
+                for (var fi = 0; fi < failureDetailLines.length; fi += 1) {
+                    binding.terminal.log(failureDetailLines[fi], level === 'error' ? 'error' : 'warning', payload || {});
+                }
             }
             if (eventKind === 'warning' && observerBg && typeof binding.terminal.setStatus === 'function') {
                 startObserverSyncTerminalPulse(binding.terminal);
@@ -2587,6 +2686,40 @@
         var lastServerError = '';
         var transportErrorSnapshotProbeStarted = false;
         var source = null;
+        function handleTransportErrorSnapshotFallback() {
+            if (settled || transportErrorSnapshotProbeStarted) {
+                return true;
+            }
+            transportErrorSnapshotProbeStarted = true;
+            settled = true;
+            closeOperationSource(source);
+            var fallbackMessage = 'Operation stream disconnected; syncing queue state from workspace snapshot.';
+            logOperationToWorkspaceTerminal('transport_error_snapshot_fallback', {
+                operation: operation,
+                message: fallbackMessage
+            }, 'warning', fallbackMessage);
+            fetchWorkspaceSnapshotState().then(function (workspaceState) {
+                if (workspaceState && typeof workspaceState === 'object' && syncDeferredQueueWorkspaceState(operation, workspaceState)) {
+                    return;
+                }
+                startDeferredQueueStatePoll(operation);
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+            }).catch(function () {
+                startDeferredQueueStatePoll(operation);
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+            });
+            return true;
+        }
 
         runningSourceStartTimer = window.setTimeout(function () {
             runningSourceStartTimer = null;
@@ -2623,8 +2756,13 @@
                 stopObserverSyncTerminalPulse();
                 var payload = parsePayload(event);
                 var parsedMessage = payload && payload.message ? String(payload.message) : '';
-                if (!parsedMessage && event && typeof event.data === 'string' && String(event.data).trim() !== '') {
+                var hasServerErrorData = !!(event && typeof event.data === 'string' && String(event.data).trim() !== '');
+                if (!parsedMessage && hasServerErrorData) {
                     parsedMessage = String(event.data).trim();
+                }
+                if (!hasServerErrorData && !parsedMessage) {
+                    handleTransportErrorSnapshotFallback();
+                    return;
                 }
                 lastServerError = normalizeToastMessage(parsedMessage || <?= \json_encode((string)__('操作执行失败（服务端返回错误事件）'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
                 var failureMessage = resolveQueueFailureMessage(payload, operation) || lastServerError;
@@ -2972,13 +3110,20 @@
             if (settled) {
                 return;
             }
-            settled = true;
             var payload = parsePayload(event);
-            closeOperationSource(source);
-            scheduleReloadAfterQueueCompleted(operation, payload, 'done');
             var queueStatusOnDone = readQueueStatusFromPayload(operation, payload);
             var queueCompletedOnDone = ['done', 'complete', 'completed'].indexOf(String(queueStatusOnDone || '').toLowerCase()) !== -1;
-            if (!queueCompletedOnDone && (!payload || payload.success !== false)) {
+            var deferredQueueProgress = !!(
+                payload
+                && (
+                    payload.deferred_queue_progress
+                    || payload.queue_waiting_for_scheduler
+                    || payload.can_close_stream
+                )
+            );
+            if (!queueCompletedOnDone && (!payload || payload.success !== false) && deferredQueueProgress) {
+                settled = true;
+                closeOperationSource(source);
                 if (payload && payload.state && typeof payload.state === 'object') {
                     hydrateWorkspaceFromState(payload.state);
                     updateTaskSummaryFromState(payload.state);
@@ -2987,6 +3132,13 @@
                 var continueMessage = (payload && payload.message)
                     ? String(payload.message)
                     : <?= \json_encode((string)__('队列尚未完成，继续同步后台执行进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                syncQueuedStageUi(operation, 'progress', Object.assign({}, payload || {}, {
+                    message: continueMessage,
+                    queue_status: queueStatusOnDone || 'queued',
+                    deferred_queue_progress: true,
+                    queue_waiting_for_scheduler: true,
+                    can_close_stream: true
+                }), { level: 'info' });
                 logOperationToWorkspaceTerminal('done', payload, 'info', continueMessage);
                 var continueTerminal = null;
                 var continueBind = resolveQueuedStageUiBinding(operation);
@@ -3007,6 +3159,9 @@
                 }
                 return;
             }
+            settled = true;
+            closeOperationSource(source);
+            scheduleReloadAfterQueueCompleted(operation, payload, 'done');
 
             var success = !payload || payload.success !== false;
             var normalizedDonePayload = Object.assign({}, payload || {}, {
@@ -3216,37 +3371,7 @@
                 offerRetryForFailedOperation(operation, failurePayload);
                 return;
             }
-            if (transportErrorSnapshotProbeStarted) {
-                return;
-            }
-            transportErrorSnapshotProbeStarted = true;
-            settled = true;
-            closeOperationSource(source);
-            var fallbackMessage = 'Operation stream disconnected; syncing queue state from workspace snapshot.';
-            logOperationToWorkspaceTerminal('transport_error_snapshot_fallback', {
-                operation: operation,
-                message: fallbackMessage
-            }, 'warning', fallbackMessage);
-            fetchWorkspaceSnapshotState().then(function (workspaceState) {
-                if (workspaceState && typeof workspaceState === 'object' && syncDeferredQueueWorkspaceState(operation, workspaceState)) {
-                    return;
-                }
-                startDeferredQueueStatePoll(operation);
-                if (typeof enableNavigationAfterOperation === 'function') {
-                    enableNavigationAfterOperation();
-                }
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
-            }).catch(function () {
-                startDeferredQueueStatePoll(operation);
-                if (typeof enableNavigationAfterOperation === 'function') {
-                    enableNavigationAfterOperation();
-                }
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
-            });
+            handleTransportErrorSnapshotFallback();
         };
 
         }, PB_SSE_CONNECT_DELAY_MS);
@@ -3296,6 +3421,29 @@
         var executionToken = normalized.executionToken;
         var operation = normalized.operation;
         var streamUrl = normalized.streamUrl;
+        var hasObservableStreamStart = !!(executionToken && streamUrl);
+        var shouldDeferToQueuePoll = !hasObservableStreamStart && !!(
+            payload
+            && (
+                payload.deferred_queue_progress
+                || payload.queue_waiting_for_scheduler
+                || payload.can_close_stream
+                || (payload.active_operation && typeof payload.active_operation === 'object' && (
+                    payload.active_operation.queue_waiting_for_scheduler
+                    || payload.active_operation.can_close_stream
+                ))
+            )
+        );
+        if (shouldDeferToQueuePoll) {
+            syncQueuedStageUi(operation, 'progress', Object.assign({}, payload || {}, {
+                message: String((payload && payload.message) || <?= \json_encode((string)__('队列任务已提交，正在等待系统调度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>),
+                deferred_queue_progress: true,
+                queue_waiting_for_scheduler: true,
+                can_close_stream: true
+            }), { level: 'info' });
+            startDeferredQueueStatePoll(operation || fallbackOperation || 'build');
+            return true;
+        }
         if (!executionToken || !streamUrl) {
             var missing = [];
             if (!executionToken) {
@@ -3318,7 +3466,7 @@
         var active = activeOperation && typeof activeOperation === 'object' ? activeOperation : {};
         var operation = String(active.operation || '').trim();
         var status = String(active.status || '').toLowerCase();
-        if (!operation || (status !== 'queued' && status !== 'running')) {
+        if (!operation || ['queued', 'pending', 'running', 'processing'].indexOf(status) === -1) {
             return;
         }
         if (operation !== 'plan' && operation !== 'task_plan' && operation !== 'build') {

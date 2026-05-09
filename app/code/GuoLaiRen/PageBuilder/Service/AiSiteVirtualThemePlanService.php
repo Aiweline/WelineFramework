@@ -19,6 +19,8 @@ final class AiSiteVirtualThemePlanService
     private const BLOCK_TASK_SCHEMA_VERSION = 'stage2-block-task-v1';
     private const STAGE_TWO_LOCAL_REGEN_MAX_ROUNDS = 3;
     private const STAGE_TWO_LOCAL_REGEN_BATCH_BLOCKS = 5;
+    private const TASK_PLAN_PROMPT_SOFT_CHAR_LIMIT = 22000;
+    private const TASK_PLAN_PROMPT_HARD_CHAR_LIMIT = 16000;
     /**
      * 阶段二 batch 级断点续生成 checkpoint 落 scope 的字段名。
      * 与 PlanQueue 的 `_plan_generation_checkpoint` 形态对齐：
@@ -339,7 +341,11 @@ final class AiSiteVirtualThemePlanService
         }
 
         $ai = $this->getAiService();
-        $concurrency = \max(1, \count($fanoutBatches));
+        $retryFailedBatchIds = \array_values(\array_filter(\array_map(
+            'strval',
+            \is_array($scope['_task_plan_retry_failed_batches'] ?? null) ? $scope['_task_plan_retry_failed_batches'] : []
+        )));
+        $concurrency = $retryFailedBatchIds !== [] ? 1 : \max(1, \count($fanoutBatches));
         if (\count($fanoutBatches) <= 1 || !($ai instanceof AiService) || !$ai->supportsCooperativeConcurrency($concurrency)) {
             $decodedByBatchId = [];
             foreach ($fanoutBatches as $fanoutBatch) {
@@ -359,7 +365,7 @@ final class AiSiteVirtualThemePlanService
                             $instruction,
                             $targetScope
                         ),
-                        $this->resolveTaskPlanBatchMaxTokens($batch),
+                        $this->resolveTaskPlanBatchMaxTokens($batch, $scope),
                         $chunkCallback,
                         $heartbeatCallback
                     );
@@ -395,7 +401,7 @@ final class AiSiteVirtualThemePlanService
                 $instruction,
                 $targetScope
             );
-            $maxTokens = $this->resolveTaskPlanBatchMaxTokens($batch);
+            $maxTokens = $this->resolveTaskPlanBatchMaxTokens($batch, $scope);
             $tasks[$batchId] = function (array $sessionParams) use ($scope, $prompt, $maxTokens, $heartbeatCallback, $assembledStructured, $batch, $batchIndex, $progressCallback, $totalBatches, $completedBatches): array {
                 $decoded = $this->requestTaskPlanJsonFromAi(
                     $scope,
@@ -803,11 +809,52 @@ final class AiSiteVirtualThemePlanService
     /**
      * @param array<string, mixed> $batch
      */
-    private function resolveTaskPlanBatchMaxTokens(array $batch): int
+    private function resolveTaskPlanBatchMaxTokens(array $batch, array $scope = []): int
     {
+        if ($this->isTaskPlanRetryFailedBatch($scope, $batch)) {
+            return \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []) <= 1 ? 3600 : 4800;
+        }
         // Thinking-mode models can consume completion budget on reasoning tokens.
         // Keep single-task batches above the previous floor to reduce half-truncated JSON.
         return \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []) <= 1 ? 6200 : 8192;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $batch
+     */
+    private function isTaskPlanRetryFailedBatch(array $scope, array $batch): bool
+    {
+        $batchId = $this->buildTaskPlanBatchId($batch);
+        $retryBatchIds = \array_values(\array_filter(\array_map(
+            'strval',
+            \is_array($scope['_task_plan_retry_failed_batches'] ?? null) ? $scope['_task_plan_retry_failed_batches'] : []
+        )));
+
+        return $batchId !== '' && \in_array($batchId, $retryBatchIds, true);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<string>
+     */
+    private function resolveRetryableTaskPlanBatchIds(array $scope): array
+    {
+        $items = \is_array($scope['retryable_ai_failures']['task_plan']['items'] ?? null)
+            ? $scope['retryable_ai_failures']['task_plan']['items']
+            : [];
+        $batchIds = [];
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $batchId = \trim((string)($item['batch_id'] ?? $item['item_key'] ?? ''));
+            if ($batchId !== '' && !\in_array($batchId, $batchIds, true)) {
+                $batchIds[] = $batchId;
+            }
+        }
+
+        return $batchIds;
     }
 
     /**
@@ -823,18 +870,28 @@ final class AiSiteVirtualThemePlanService
         string $instruction = '',
         string $targetScope = ''
     ): string {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $stage1TaskCues = \is_array($structured['stage1_task_cues'] ?? null) ? $structured['stage1_task_cues'] : [];
         $planLocale = \trim((string)($scope['plan_locale'] ?? ($scope['plan_workbench']['plan_locale'] ?? '')));
         $defaultLocale = \trim((string)($scope['default_locale'] ?? ''));
         $contentLocale = $this->resolveStageTwoPromptContentLocale($scope);
-        $pageCoverage = \is_array($scope['page_coverage'] ?? null) ? $scope['page_coverage'] : [];
         $pageType = $batch['type'] === 'page' ? (string)$batch['key'] : '';
 
         $userBriefBatch = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? ($scope['plan_workbench']['stage1']['request_summary']['raw_requirement'] ?? '')));
         $oneLineRequirementBatch = $userBriefBatch !== '' ? $userBriefBatch : ($instruction !== '' ? $instruction : '-');
 
-        $batchContext = $this->buildTaskPlanBatchPromptContext($scope, $structured, $batch, $pageType);
+        $isRetryFailedBatch = $this->isTaskPlanRetryFailedBatch($scope, $batch);
+        $promptProfile = $this->buildTaskPlanPromptCompressionProfile($isRetryFailedBatch ? 'aggressive' : 'normal');
+        $batchContext = $this->buildTaskPlanBatchPromptContext($scope, $structured, $batch, $pageType, $promptProfile);
+        $batchContextJson = \json_encode($batchContext, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+        if (\strlen($batchContextJson) > 8000 && !$isRetryFailedBatch) {
+            $promptProfile = $this->buildTaskPlanPromptCompressionProfile('compressed');
+            $batchContext = $this->buildTaskPlanBatchPromptContext($scope, $structured, $batch, $pageType, $promptProfile);
+            $batchContextJson = \json_encode($batchContext, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+        }
+        if (\strlen($batchContextJson) > 12000) {
+            $promptProfile = $this->buildTaskPlanPromptCompressionProfile('aggressive');
+            $batchContext = $this->buildTaskPlanBatchPromptContext($scope, $structured, $batch, $pageType, $promptProfile);
+            $batchContextJson = \json_encode($batchContext, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+        }
         $lines = [
             'You are PageBuilder AI planner for stage-2 virtual theme task planning of a real website (batched call).',
             'PRIMARY GOAL: For this ONE batch, expand the confirmed stage-1 theme and block plan into one or more CONCRETE EXECUTABLE frontend component tasks.',
@@ -864,11 +921,13 @@ final class AiSiteVirtualThemePlanService
             'Preserve the provided task order.',
             'Treat this as a customer-visible implementation plan: every text field must read like final task content, not prompt guidance.',
             'Compact context for this batch only:',
-            \json_encode($batchContext, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}',
+            $batchContextJson,
         ];
-        \array_push($lines, ...$this->buildFrontendDesignSkillPromptGuide($batch, $scope));
+        if (!empty($promptProfile['include_skill_guide'])) {
+            \array_push($lines, ...$this->buildFrontendDesignSkillPromptGuide($batch, $scope));
+        }
         if ($instruction !== '') {
-            $lines[] = 'User instruction: ' . $instruction;
+            $lines[] = 'User instruction: ' . $this->excerptText($instruction, (int)($promptProfile['instruction_max'] ?? 240));
         }
         if ($targetScope !== '') {
             $lines[] = 'Target scope: ' . $targetScope;
@@ -886,9 +945,11 @@ final class AiSiteVirtualThemePlanService
             $lines[] = 'Do not output page_tasks or a full virtual_theme_plan wrapper.';
             $lines[] = 'For shared batch, generate only shared header/footer task details. Header and footer belong to group_key "shared" and are designed for parallel generation before page blocks.';
             $lines[] = 'Shared task skeleton:';
-            $lines[] = \json_encode($this->compactTaskPlanPromptTasks($sharedTasks), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
-            $lines[] = 'Compact shared JSON example to imitate (shape only; replace values with this batch context):';
-            $lines[] = \json_encode($this->buildSharedTaskPlanPromptExample($batch), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+            $lines[] = \json_encode($this->compactTaskPlanPromptTasks($sharedTasks, $promptProfile), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
+            if (!empty($promptProfile['include_examples'])) {
+                $lines[] = 'Compact shared JSON example to imitate (shape only; replace values with this batch context):';
+                $lines[] = \json_encode($this->buildSharedTaskPlanPromptExample($batch), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+            }
             $lines[] = 'Each returned shared_tasks[] item MUST include planning_reason explaining why this shared block structure, fields, navigation/link choices, style rules, and responsive behavior fit the confirmed stage-1 shared cues.';
             $lines[] = 'Use the matching stage-1 shared cue reason/implementation_detail for shared_tasks[].planning_reason; never leave planning_reason blank or replace it with a generic shared-component rationale.';
         } else {
@@ -899,9 +960,11 @@ final class AiSiteVirtualThemePlanService
             $lines[] = 'Do not output shared_tasks or a full virtual_theme_plan wrapper.';
             $lines[] = 'For page batch, generate only tasks for page_type "' . $pageType . '". The task tree must make page ownership and block ownership clear: page_type, page_key, block_key, section_code, sort_order, dependencies.';
             $lines[] = 'Page task skeleton:';
-            $lines[] = \json_encode($this->compactTaskPlanPromptTasks($pageTasks), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
-            $lines[] = 'Compact page JSON example to imitate (shape only; replace values with this batch context):';
-            $lines[] = \json_encode($this->buildPageTaskPlanPromptExample($pageType, $batch), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+            $lines[] = \json_encode($this->compactTaskPlanPromptTasks($pageTasks, $promptProfile), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
+            if (!empty($promptProfile['include_examples'])) {
+                $lines[] = 'Compact page JSON example to imitate (shape only; replace values with this batch context):';
+                $lines[] = \json_encode($this->buildPageTaskPlanPromptExample($pageType, $batch), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+            }
             $lines[] = 'Each stage-2 block task MUST ground task_goal/content_plan/style_plan/planning_reason in its stage-1 cue fields: block_goal, realtime_content, page_design_plan, page_flow_role, style_direction, reason.';
         }
 
@@ -917,6 +980,12 @@ final class AiSiteVirtualThemePlanService
 
         $lines[] = 'Filtered build_blueprint tasks for this batch:';
         $lines[] = \json_encode($this->filterBuildBlueprintForTaskKeys($buildBlueprint, $batch['task_keys']), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+        if ($isRetryFailedBatch) {
+            $lines[] = 'Retry mode hard rules: return only the missing failed batch, keep all ids/sort/dependencies from skeleton, fill concise executable details, and do not expand surrounding page context.';
+            $lines[] = 'Required fields: group_key, page_type, page_key, block_key, section_code, sort_order, dependencies, fanout_group, queue_job_key, status="done", attempt_no, plan_context, implementation_contract, task_script, field_content_requirements, block_task, result_ref.';
+            $lines[] = 'Use concrete final website copy in content_locale/default_locale. Do not use internal IDs as visible copy. Output strict JSON only.';
+            return \implode("\n", $lines);
+        }
         $lines[] = 'Hard rules:';
         $lines[] = '- This is stage 2: convert stage-1 page blocks into executable frontend-component tasks. Do not create a new marketing plan.';
         $lines[] = '- The final plan is assembled by shared group + page groups. Shared group contains header/footer and is parallelizable. Each page_type group contains its own block tasks and is parallelizable after shared dependencies.';
@@ -1108,18 +1177,100 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function buildTaskPlanPromptCompressionProfile(string $mode): array
+    {
+        if ($mode === 'aggressive') {
+            return [
+                'site_brief_max' => 180,
+                'theme_max_items' => 4,
+                'theme_max_text' => 90,
+                'rules_max_items' => 4,
+                'rules_max_text' => 90,
+                'page_design_max_items' => 4,
+                'page_design_max_text' => 120,
+                'task_plan_context_max_items' => 8,
+                'task_plan_context_max_text' => 120,
+                'cue_goal_max' => 140,
+                'cue_design_max_items' => 4,
+                'cue_design_max_text' => 120,
+                'cue_realtime_max_items' => 5,
+                'cue_realtime_max_text' => 110,
+                'cue_style_max' => 140,
+                'cue_reason_max' => 180,
+                'cue_editable_fields_max' => 6,
+                'include_examples' => false,
+                'include_skill_guide' => false,
+                'instruction_max' => 180,
+                'compression_notice' => true,
+                'retry_failed_batch' => true,
+            ];
+        }
+        if ($mode === 'compressed') {
+            return [
+                'site_brief_max' => 260,
+                'theme_max_items' => 6,
+                'theme_max_text' => 120,
+                'rules_max_items' => 5,
+                'rules_max_text' => 120,
+                'page_design_max_items' => 6,
+                'page_design_max_text' => 160,
+                'task_plan_context_max_items' => 10,
+                'task_plan_context_max_text' => 160,
+                'cue_goal_max' => 200,
+                'cue_design_max_items' => 6,
+                'cue_design_max_text' => 160,
+                'cue_realtime_max_items' => 7,
+                'cue_realtime_max_text' => 140,
+                'cue_style_max' => 180,
+                'cue_reason_max' => 220,
+                'cue_editable_fields_max' => 8,
+                'include_examples' => false,
+                'include_skill_guide' => true,
+                'instruction_max' => 220,
+                'compression_notice' => true,
+            ];
+        }
+
+        return [
+            'site_brief_max' => 480,
+            'theme_max_items' => 8,
+            'theme_max_text' => 180,
+            'rules_max_items' => 6,
+            'rules_max_text' => 180,
+            'page_design_max_items' => 10,
+            'page_design_max_text' => 260,
+            'task_plan_context_max_items' => 12,
+            'task_plan_context_max_text' => 220,
+            'cue_goal_max' => 260,
+            'cue_design_max_items' => 8,
+            'cue_design_max_text' => 220,
+            'cue_realtime_max_items' => 10,
+            'cue_realtime_max_text' => 180,
+            'cue_style_max' => 260,
+            'cue_reason_max' => 320,
+            'cue_editable_fields_max' => 12,
+            'include_examples' => true,
+            'include_skill_guide' => true,
+            'instruction_max' => 280,
+            'compression_notice' => false,
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $structured
      * @param array<string, mixed> $batch
      * @return array<string, mixed>
      */
-    private function buildTaskPlanBatchPromptContext(array $scope, array $structured, array $batch, string $pageType): array
+    private function buildTaskPlanBatchPromptContext(array $scope, array $structured, array $batch, string $pageType, array $profile = []): array
     {
         $taskKeys = \array_values(\array_filter(\array_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
         $taskKeyMap = \array_fill_keys($taskKeys, true);
         $stage1TaskCues = \is_array($structured['stage1_task_cues'] ?? null) ? $structured['stage1_task_cues'] : [];
         $styleTokens = \is_array($structured['style_tokens'] ?? null) ? $structured['style_tokens'] : [];
         $contentRules = \is_array($structured['content_rules'] ?? null) ? $structured['content_rules'] : [];
-        $pageDesignPlan = $pageType !== '' ? $this->resolveStageTwoPageDesignPlanForPrompt($scope, $structured, $pageType) : [];
+        $pageDesignPlan = $pageType !== '' ? $this->resolveStageTwoPageDesignPlanForPrompt($scope, $structured, $pageType, $profile) : [];
 
         $relevantCues = [];
         $cueBucket = ($batch['type'] ?? '') === 'shared'
@@ -1129,24 +1280,24 @@ final class AiSiteVirtualThemePlanService
             if (!isset($taskKeyMap[(string)$taskKey]) || !\is_array($cue)) {
                 continue;
             }
-            $relevantCues[(string)$taskKey] = $this->compactStageTwoCueForPrompt($cue);
+            $relevantCues[(string)$taskKey] = $this->compactStageTwoCueForPrompt($cue, $profile);
         }
 
         return [
             'site' => [
                 'title' => (string)($scope['site_title'] ?? ''),
                 'tagline' => (string)($scope['site_tagline'] ?? ''),
-                'brief' => $this->excerptText((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''), 480),
+                'brief' => $this->excerptText((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''), (int)($profile['site_brief_max'] ?? 480)),
                 'plan_locale' => (string)($scope['plan_locale'] ?? ''),
                 'default_locale' => (string)($scope['default_locale'] ?? ''),
                 'content_locale' => $this->resolveStageTwoContentLocale($scope),
             ],
             'theme' => [
-                'palette' => \is_array($styleTokens['palette'] ?? null) ? $this->compactPromptMap($styleTokens['palette'], 8, 180) : [],
-                'theme_style' => \is_array($styleTokens['theme_style'] ?? null) ? $this->compactPromptMap($styleTokens['theme_style'], 8, 180) : [],
-                'seo_strategy' => \is_array($contentRules['seo_strategy'] ?? null) ? $this->compactPromptMap($contentRules['seo_strategy'], 6, 180) : [],
-                'navigation_plan' => \is_array($contentRules['navigation_plan'] ?? null) ? $this->compactPromptMap($contentRules['navigation_plan'], 6, 180) : [],
-                'footer_plan' => \is_array($contentRules['footer_plan'] ?? null) ? $this->compactPromptMap($contentRules['footer_plan'], 6, 180) : [],
+                'palette' => \is_array($styleTokens['palette'] ?? null) ? $this->compactPromptMap($styleTokens['palette'], (int)($profile['theme_max_items'] ?? 8), (int)($profile['theme_max_text'] ?? 180)) : [],
+                'theme_style' => \is_array($styleTokens['theme_style'] ?? null) ? $this->compactPromptMap($styleTokens['theme_style'], (int)($profile['theme_max_items'] ?? 8), (int)($profile['theme_max_text'] ?? 180)) : [],
+                'seo_strategy' => \is_array($contentRules['seo_strategy'] ?? null) ? $this->compactPromptMap($contentRules['seo_strategy'], (int)($profile['rules_max_items'] ?? 6), (int)($profile['rules_max_text'] ?? 180)) : [],
+                'navigation_plan' => \is_array($contentRules['navigation_plan'] ?? null) ? $this->compactPromptMap($contentRules['navigation_plan'], (int)($profile['rules_max_items'] ?? 6), (int)($profile['rules_max_text'] ?? 180)) : [],
+                'footer_plan' => \is_array($contentRules['footer_plan'] ?? null) ? $this->compactPromptMap($contentRules['footer_plan'], (int)($profile['rules_max_items'] ?? 6), (int)($profile['rules_max_text'] ?? 180)) : [],
             ],
             'batch' => [
                 'type' => (string)($batch['type'] ?? ''),
@@ -1167,7 +1318,7 @@ final class AiSiteVirtualThemePlanService
      * @param list<array<string, mixed>> $tasks
      * @return list<array<string, mixed>>
      */
-    private function compactTaskPlanPromptTasks(array $tasks): array
+    private function compactTaskPlanPromptTasks(array $tasks, array $profile = []): array
     {
         $compact = [];
         foreach ($tasks as $task) {
@@ -1186,7 +1337,7 @@ final class AiSiteVirtualThemePlanService
                 'label' => (string)($task['label'] ?? ''),
                 'sort_order' => (int)($task['sort_order'] ?? 0),
                 'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
-                'plan_context' => $this->compactPromptMap($planContext, 12, 220),
+                'plan_context' => $this->compactPromptMap($planContext, (int)($profile['task_plan_context_max_items'] ?? 12), (int)($profile['task_plan_context_max_text'] ?? 220)),
                 'runtime_context' => [
                     'fanout_group' => (string)($runtime['fanout_group'] ?? ''),
                     'fanout_job_key' => (string)($runtime['fanout_job_key'] ?? ''),
@@ -1202,21 +1353,21 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $cue
      * @return array<string, mixed>
      */
-    private function compactStageTwoCueForPrompt(array $cue): array
+    private function compactStageTwoCueForPrompt(array $cue, array $profile = []): array
     {
         return [
             'task_key' => (string)($cue['task_key'] ?? ''),
             'page_type' => (string)($cue['page_type'] ?? ''),
             'block_key' => (string)($cue['block_key'] ?? $cue['source_block_key'] ?? ''),
             'section_code' => (string)($cue['section_code'] ?? $cue['component_kind'] ?? ''),
-            'block_goal' => $this->excerptText((string)($cue['block_goal'] ?? $cue['stage1_goal'] ?? $cue['goal'] ?? ''), 260),
-            'page_design_plan' => \is_array($cue['page_design_plan'] ?? null) ? $this->compactPromptMap($cue['page_design_plan'], 8, 220) : [],
+            'block_goal' => $this->excerptText((string)($cue['block_goal'] ?? $cue['stage1_goal'] ?? $cue['goal'] ?? ''), (int)($profile['cue_goal_max'] ?? 260)),
+            'page_design_plan' => \is_array($cue['page_design_plan'] ?? null) ? $this->compactPromptMap($cue['page_design_plan'], (int)($profile['cue_design_max_items'] ?? 8), (int)($profile['cue_design_max_text'] ?? 220)) : [],
             'page_flow_role' => $this->excerptText((string)($cue['page_flow_role'] ?? ''), 80),
-            'realtime_content' => \is_array($cue['realtime_content'] ?? null) ? $this->compactPromptMap($cue['realtime_content'], 10, 180) : [],
-            'style_direction' => $this->excerptText((string)($cue['style_direction'] ?? ''), 260),
+            'realtime_content' => \is_array($cue['realtime_content'] ?? null) ? $this->compactPromptMap($cue['realtime_content'], (int)($profile['cue_realtime_max_items'] ?? 10), (int)($profile['cue_realtime_max_text'] ?? 180)) : [],
+            'style_direction' => $this->excerptText((string)($cue['style_direction'] ?? ''), (int)($profile['cue_style_max'] ?? 260)),
             'design_tags' => \is_array($cue['design_tags'] ?? null) ? $this->compactPromptMap($cue['design_tags'], 8, 140) : [],
-            'reason' => $this->excerptText((string)($cue['reason'] ?? $cue['implementation_detail'] ?? ''), 320),
-            'editable_fields' => \array_values(\array_slice(\array_filter(\array_map('strval', \is_array($cue['editable_fields'] ?? null) ? $cue['editable_fields'] : [])), 0, 12)),
+            'reason' => $this->excerptText((string)($cue['reason'] ?? $cue['implementation_detail'] ?? ''), (int)($profile['cue_reason_max'] ?? 320)),
+            'editable_fields' => \array_values(\array_slice(\array_filter(\array_map('strval', \is_array($cue['editable_fields'] ?? null) ? $cue['editable_fields'] : [])), 0, (int)($profile['cue_editable_fields_max'] ?? 12))),
         ];
     }
 
@@ -1225,7 +1376,7 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $structured
      * @return array<string, mixed>
      */
-    private function resolveStageTwoPageDesignPlanForPrompt(array $scope, array $structured, string $pageType): array
+    private function resolveStageTwoPageDesignPlanForPrompt(array $scope, array $structured, string $pageType, array $profile = []): array
     {
         $confirmedPlanBook = $this->resolveConfirmedStageOnePlanBook($scope);
         $candidates = [
@@ -1240,7 +1391,7 @@ final class AiSiteVirtualThemePlanService
         ];
         foreach ($candidates as $candidate) {
             if (\is_array($candidate) && $candidate !== []) {
-                return $this->compactPromptMap($candidate, 10, 260);
+                return $this->compactPromptMap($candidate, (int)($profile['page_design_max_items'] ?? 10), (int)($profile['page_design_max_text'] ?? 260));
             }
         }
 
@@ -3042,11 +3193,8 @@ final class AiSiteVirtualThemePlanService
         $resumeCompletedBatchIds = \array_values(\array_filter(\array_map('strval', \is_array($resumeState['completed_batch_ids'] ?? null) ? $resumeState['completed_batch_ids'] : [])));
         $resumePendingBatchIds = \array_values(\array_filter(\array_map('strval', \is_array($resumeState['pending_batch_ids'] ?? null) ? $resumeState['pending_batch_ids'] : [])));
 
-        $retryableTaskPlanItems = \is_array($scope['retryable_ai_failures']['task_plan']['items'] ?? null)
-            ? $scope['retryable_ai_failures']['task_plan']['items']
-            : [];
-        $forcePlanDerivedBaseline = (int)($scope['_stage2_deterministic_placeholder_mode'] ?? 0) === 1
-            || $retryableTaskPlanItems !== [];
+        $retryableTaskPlanBatchIds = $this->resolveRetryableTaskPlanBatchIds($scope);
+        $forcePlanDerivedBaseline = (int)($scope['_stage2_deterministic_placeholder_mode'] ?? 0) === 1;
         if ((int)($scope['fake_mode'] ?? 0) === 1 || $forcePlanDerivedBaseline) {
             $deterministic = $this->buildDeterministicTaskPlanStructured($structured);
             $deterministic = $this->applyReadableDeterministicTaskPlanContent($deterministic);
@@ -3078,7 +3226,7 @@ final class AiSiteVirtualThemePlanService
             ];
         }
 
-        if ($resumeCompletedBatchIds !== [] && $resumePendingBatchIds === []) {
+        if ($retryableTaskPlanBatchIds === [] && $resumeCompletedBatchIds !== [] && $resumePendingBatchIds === []) {
             $structured = $this->sanitizePromptLikeTaskPlanStructured($structured);
             $structured = $this->applyBlockTaskSchemaToStructured($structured);
             $this->assertAiTaskPlanIsContentful($structured);
@@ -3108,15 +3256,21 @@ final class AiSiteVirtualThemePlanService
             ];
         }
 
+        $taskPlanAiScope = $retryableTaskPlanBatchIds !== []
+            ? \array_replace($scope, ['_task_plan_retry_failed_batches' => $retryableTaskPlanBatchIds])
+            : $scope;
+        $selectedBatchIds = $retryableTaskPlanBatchIds !== []
+            ? $retryableTaskPlanBatchIds
+            : ($resumeCompletedBatchIds !== [] ? $resumePendingBatchIds : null);
         $aiTaskPlan = $this->buildTaskPlanArtifactsByAi(
-            $scope,
+            $taskPlanAiScope,
             $buildBlueprint,
             $structured,
             $virtualThemePlan,
             $chunkCallback,
             $heartbeatCallback,
             $progressCallback,
-            $resumeCompletedBatchIds !== [] ? $resumePendingBatchIds : null,
+            $selectedBatchIds,
             $onCheckpoint
         );
         $retryableAiFailures = \is_array($aiTaskPlan['retryable_ai_failures'] ?? null)

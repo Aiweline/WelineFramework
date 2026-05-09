@@ -1275,7 +1275,21 @@ SQL;
     }
 
     /**
-     * @return list<array{public_id: string, stage: string, publish_status: string, website_id: int, virtual_theme_id: int, update_time: string}>
+     * @return list<array{
+     *   public_id: string,
+     *   stage: string,
+     *   publish_status: string,
+     *   website_id: int,
+     *   virtual_theme_id: int,
+     *   update_time: string,
+     *   workspace_status: string,
+     *   active_operation_status: string,
+     *   active_operation_queue_id: int,
+     *   can_publish: bool,
+     *   preview_full_url: string,
+     *   visual_preview_url: string,
+     *   visual_edit_url: string
+     * }>
      */
     public function listRecentSessionsForAdmin(int $adminUserId, int $limit = 20): array
     {
@@ -1327,6 +1341,10 @@ SQL;
                 'workspace_status' => $workspaceStatus,
                 'active_operation_status' => $activeStatus,
                 'active_operation_queue_id' => (int)($activeOp['queue_id'] ?? 0),
+                'can_publish' => !empty($scope['can_publish']),
+                'preview_full_url' => \trim((string)($scope['preview_full_url'] ?? '')),
+                'visual_preview_url' => \trim((string)($scope['visual_preview_url'] ?? '')),
+                'visual_edit_url' => \trim((string)($scope['visual_edit_url'] ?? '')),
             ];
         }
         return $out;

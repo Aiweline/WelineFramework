@@ -1,0 +1,8 @@
+<?php
+/**
+ * 兼容入口：历史代码或缓存仍可能 fetch('workspace-safe')。
+ * 实际渲染与 workspace.phtml 一致（通过模块路径解析，避免 tpl 目录下相对路径问题）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+echo $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace.phtml');

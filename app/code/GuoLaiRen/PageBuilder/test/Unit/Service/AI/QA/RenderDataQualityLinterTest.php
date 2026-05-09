@@ -74,4 +74,37 @@ final class RenderDataQualityLinterTest extends TestCase
 
         self::assertSame([], $findings);
     }
+
+    public function testLintFlagsMalformedHtmlStructure(): void
+    {
+        $findings = (new RenderDataQualityLinter())->lint([
+            'payload' => [
+                'page_type_layouts' => [
+                    'privacy' => [
+                        'title' => 'Privacy Policy',
+                        'description' => 'Clear policy details for every visitor.',
+                        'h1' => 'Privacy Policy',
+                        'content' => [
+                            [
+                                'code' => 'privacy-details',
+                                'component' => 'content/privacy-policy',
+                                'html' => '<div class="pb-content-privacy-policy-policy-details-card</div></div><section><h2>Privacy proof</h2><p>Clear policy details.</p></section>',
+                                'design_tags' => ['visual' => ['policy card']],
+                            ],
+                        ],
+                    ],
+                ],
+                'materialized_pages_by_type' => [
+                    'privacy' => [
+                        'seo_title' => 'Teenipiya Privacy Policy',
+                        'seo_description' => 'Review how Teenipiya explains privacy, safety, and policy details for visitors.',
+                        'h1' => 'Teenipiya Privacy Policy',
+                    ],
+                ],
+            ],
+        ]);
+
+        $rules = \array_map(static fn(array $finding): string => (string)$finding['rule'], $findings);
+        self::assertContains('design.malformed_html_structure', $rules);
+    }
 }

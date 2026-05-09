@@ -183,6 +183,64 @@ final class AiSiteAssetManifestService
     }
 
     /**
+     * @param array<string, mixed> $manifest
+     * @return array<string, mixed>
+     */
+    public function discardPlaceholderGeneratedAssets(array $manifest): array
+    {
+        $normalized = $this->normalize($manifest);
+        $changed = false;
+        foreach (($normalized['slots'] ?? []) as $slotId => $slot) {
+            if (!\is_array($slot) || (int)($slot['locked_by_user'] ?? 0) === 1) {
+                continue;
+            }
+            if (!$this->slotHasPlaceholderGeneratedAsset($slot)) {
+                continue;
+            }
+            $variants = [];
+            foreach (\is_array($slot['variants'] ?? null) ? $slot['variants'] : [] as $variant) {
+                if (!\is_array($variant) || $this->isPlaceholderVariant($variant)) {
+                    continue;
+                }
+                $variants[] = $variant;
+            }
+            $slot['final_url'] = '';
+            $slot['source'] = 'planned';
+            $slot['status'] = 'pending';
+            $slot['variants'] = $variants;
+            $slot['error_message'] = '';
+            $slot['updated_at'] = \date('Y-m-d H:i:s');
+            $normalized['slots'][(string)$slotId] = $this->normalizeSlot($slot, (string)$slotId) ?: $slot;
+            $changed = true;
+        }
+        if ($changed) {
+            $normalized['updated_at'] = \date('Y-m-d H:i:s');
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @return list<string>
+     */
+    public function extractPlaceholderAssetUrls(array $manifest): array
+    {
+        $urls = [];
+        foreach (($this->normalize($manifest)['slots'] ?? []) as $slot) {
+            if (!\is_array($slot) || !$this->slotHasPlaceholderGeneratedAsset($slot)) {
+                continue;
+            }
+            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($finalUrl !== '' && !\in_array($finalUrl, $urls, true)) {
+                $urls[] = $finalUrl;
+            }
+        }
+
+        return $urls;
+    }
+
+    /**
      * @param array<string, mixed> $slot
      * @param array<string, mixed> $scope
      */
@@ -250,7 +308,7 @@ final class AiSiteAssetManifestService
                 continue;
             }
             $finalUrl = \trim((string)($slot['final_url'] ?? ''));
-            if ($finalUrl !== '') {
+            if ($finalUrl !== '' && !$this->slotHasPlaceholderGeneratedAsset($slot)) {
                 $verified[(string)$slotId] = $finalUrl;
             }
         }
@@ -585,6 +643,61 @@ final class AiSiteAssetManifestService
         $slotId = \trim($slotId, '-_:.');
 
         return $slotId;
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function slotHasPlaceholderGeneratedAsset(array $slot): bool
+    {
+        $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+        foreach (\is_array($slot['variants'] ?? null) ? $slot['variants'] : [] as $variant) {
+            if (
+                \is_array($variant)
+                && $this->isPlaceholderVariant($variant)
+                && ($finalUrl === '' || $this->variantReferencesFinalUrl($variant, $finalUrl))
+            ) {
+                return true;
+            }
+        }
+
+        $source = \strtolower(\trim((string)($slot['source'] ?? '')));
+        $lowerFinalUrl = \strtolower($finalUrl);
+        return $source === 'generated'
+            && \str_contains($lowerFinalUrl, '/ai-generated/')
+            && \str_ends_with($lowerFinalUrl, '.svg');
+    }
+
+    /**
+     * @param array<string,mixed> $variant
+     */
+    private function isPlaceholderVariant(array $variant): bool
+    {
+        if ((int)($variant['placeholder'] ?? 0) === 1) {
+            return true;
+        }
+        foreach (['mode', 'model', 'source'] as $key) {
+            if (\strtolower(\trim((string)($variant[$key] ?? ''))) === 'placeholder') {
+                return true;
+            }
+        }
+
+        return \str_contains((string)($variant['revised_prompt'] ?? ''), 'Text-to-image is not connected yet');
+    }
+
+    /**
+     * @param array<string,mixed> $variant
+     */
+    private function variantReferencesFinalUrl(array $variant, string $finalUrl): bool
+    {
+        $finalUrl = \trim($finalUrl);
+        foreach (['url', 'final_url'] as $key) {
+            if (\trim((string)($variant[$key] ?? '')) === $finalUrl) {
+                return true;
+            }
+        }
+        $path = \trim((string)($variant['path'] ?? ''));
+        return $path !== '' && '/' . \ltrim(\str_replace('\\', '/', $path), '/') === $finalUrl;
     }
 
     /**
