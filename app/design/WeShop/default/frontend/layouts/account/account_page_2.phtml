@@ -3,6 +3,10 @@
  * Layout: customer account page 2 compatibility alias.
  */
 $meta = $this->getData('meta') ?? [];
+/* theme.frontend.layouts.account 可能全局关闭顶栏；与前台首页一致保留 header/footer */
+$meta['showHeader'] = true;
+$meta['showFooter'] = true;
+$this->assign('meta', $meta);
 ?>
 <!DOCTYPE html>
 <html class="light" lang="<?= $this->getLocale() ?>">
