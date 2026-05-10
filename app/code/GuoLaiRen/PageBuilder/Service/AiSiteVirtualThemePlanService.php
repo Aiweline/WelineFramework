@@ -10,6 +10,7 @@ use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\LegacyContractAdapter;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\BlockRecipeRegistry;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -42,7 +43,19 @@ final class AiSiteVirtualThemePlanService
     public function __construct(
         private readonly ?AiService $aiService = null,
         private readonly ?AiSiteSkillRegistry $skillRegistry = null,
+        private readonly ?AiSiteAssetManifestService $assetManifestService = null,
+        private readonly ?BlockRecipeRegistry $blockRecipeRegistry = null,
     ) {
+    }
+
+    private function getAssetManifestService(): AiSiteAssetManifestService
+    {
+        return $this->assetManifestService ?? ObjectManager::getInstance(AiSiteAssetManifestService::class);
+    }
+
+    private function getBlockRecipeRegistry(): BlockRecipeRegistry
+    {
+        return $this->blockRecipeRegistry ?? ObjectManager::getInstance(BlockRecipeRegistry::class);
     }
 
     private function getSkillRegistry(): AiSiteSkillRegistry
@@ -984,6 +997,8 @@ final class AiSiteVirtualThemePlanService
             $lines[] = 'Retry mode hard rules: return only the missing failed batch, keep all ids/sort/dependencies from skeleton, fill concise executable details, and do not expand surrounding page context.';
             $lines[] = 'Required fields: group_key, page_type, page_key, block_key, section_code, sort_order, dependencies, fanout_group, queue_job_key, status="done", attempt_no, plan_context, implementation_contract, task_script, field_content_requirements, block_task, result_ref.';
             $lines[] = 'Use concrete final website copy in content_locale/default_locale. Do not use internal IDs as visible copy. Output strict JSON only.';
+            $lines = $this->appendStageTwoSourceTruthAssetRecipePromptLines($lines, $scope, $batch);
+
             return \implode("\n", $lines);
         }
         $lines[] = 'Hard rules:';
@@ -1024,7 +1039,52 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Batch self-check: each returned task must quote at least one concrete stage-1 cue (goal/content/style/reason) inside task_goal/content_plan/style_plan/planning_reason; rewrite if any cue is missing.';
         $lines[] = '- Final audit (silently before output): drop or rewrite any task that fails the above checks.';
 
+        $lines = $this->appendStageTwoSourceTruthAssetRecipePromptLines($lines, $scope, $batch);
+
         return \implode("\n", $lines);
+    }
+
+    /**
+     * @param array<int|string, mixed> $lines
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $batch
+     * @return array<int|string, mixed>
+     */
+    private function appendStageTwoSourceTruthAssetRecipePromptLines(array $lines, array $scope, array $batch): array
+    {
+        $pageType = $batch['type'] === 'page' ? (string)$batch['key'] : '';
+        $blockKey = (string)($batch['block_key'] ?? '');
+        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        $allowedAssets = $this->getAssetManifestService()->forBlock($manifest, $pageType, $blockKey);
+        $recipePageType = $pageType !== '' ? $pageType : 'home_page';
+        $recipeContext = $this->getBlockRecipeRegistry()->getPromptContext($blockKey, $recipePageType);
+
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        $factTexts = [];
+        foreach (\is_array($sourceTruth['must_include_facts'] ?? null) ? $sourceTruth['must_include_facts'] : [] as $f) {
+            if (\is_array($f) && \trim((string)($f['text'] ?? '')) !== '') {
+                $factTexts[] = [
+                    'id' => (string)($f['id'] ?? ''),
+                    'text' => (string)($f['text'] ?? ''),
+                ];
+            }
+        }
+
+        $lines[] = 'SourceTruthContract facts for context: '
+            . \json_encode($factTexts, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        $lines[] = 'This block must address at least one SourceTruthContract fact. Cite which fact_id(s) this block fulfills.';
+        $lines[] = 'Do not compress unrelated facts into one vague block.';
+        $lines[] = 'Allowed image manifest slots for this page/block (respect slot_id and max_usage): '
+            . \json_encode($allowedAssets, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        $lines[] = 'Banner/block recipe catalog (allowed_recipes shape): '
+            . \json_encode($recipeContext, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        $lines[] = 'Choose one recipe from the allowed_recipes list above when it fits the block.';
+        $lines[] = 'Fill every required_slot with visible content using the Website content locale.';
+        $lines[] = 'Map every CTA-related slot to a concrete download/install action label when the brief implies APK/app.';
+        $lines[] = 'Use theme tokens for colors, radii, fonts — do not invent new CSS values.';
+        $lines[] = 'State which recipe key was chosen under block_task.block_visual_contract.chosen_recipe_key (add this object if missing).';
+
+        return $lines;
     }
 
     /**

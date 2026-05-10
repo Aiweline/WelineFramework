@@ -9,6 +9,7 @@
 
 namespace Weline\Theme\Observer;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
@@ -323,6 +324,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                     if (!$template->getData('title') && !empty($requestCache->layoutParamsRequestCache[$paramsCacheKey]['title'])) {
                         $template->assign('title', $requestCache->layoutParamsRequestCache[$paramsCacheKey]['title']);
                     }
+                    $this->logThemeLayoutResolved($eventData, (string)$fileName, (string)$resolvedLayoutPath, (string)$fileName, $controller);
                     return;
                 }
 
@@ -418,9 +420,17 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if (!$template->getData('title') && !empty($metaData['title'])) {
                     $template->assign('title', $metaData['title']);
                 }
+                $this->logThemeLayoutResolved(
+                    $eventData,
+                    (string)$contentTemplateFileName,
+                    (string)$resolvedLayoutPath,
+                    (string)$fileName,
+                    $controller
+                );
             }
             // 如果布局模板不存在，保持原路径（回退机制），但布局信息已设置到 theme 对象中
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            $this->logThemeLayoutResolveException($e, $eventData, $fileName, $controller);
             // 如果出现异常，至少设置基本的主题数据（包括主题对象和默认布局信息）
             // 确保模板可以正常使用主题数据
             if (empty($layoutType)) {
@@ -437,13 +447,85 @@ class ControllerFetchFileBefore implements ObserverInterface
                 'theme' => $theme, // 主题对象本身，供模板直接使用
             ];
             $template->setData('theme', $themeData);
-            
+
+            if (!isset($scope)) {
+                $scope = $this->themeContext->resolveCurrentScope($area);
+            }
             // 性能极客模式：在事件中统一读取所有CSS颜色变量，转换为colors数组，供所有模板直接使用
             $colors = self::loadThemeColors($area, $scope, $theme);
             $template->setData('colors', $colors);
             
             // 保持原路径，不影响原有功能
             return;
+        }
+    }
+
+    /**
+     * deploy=dev 时记录本次请求解析到的布局，便于对照「实际命中的 layout」与 header/footer 链路。
+     */
+    private function logThemeLayoutResolved(
+        DataObject $eventData,
+        string $contentTemplate,
+        string $layoutTemplate,
+        string $fileName,
+        mixed $controller
+    ): void {
+        if (!$this->isThemeLayoutDebugEnabled()) {
+            return;
+        }
+        $uri = '';
+        try {
+            $req = ObjectManager::getInstance(Request::class);
+            $uri = (string)($req->getServer('REQUEST_URI') ?? $req->getUri() ?? '');
+        } catch (\Throwable) {
+        }
+        $payload = [
+            'uri' => $uri,
+            'controller' => is_object($controller) ? $controller::class : (is_string($controller) ? $controller : ''),
+            'layoutType' => (string)$eventData->getData('layoutType'),
+            'layoutOption' => (string)($eventData->getData('layoutOption') ?? ''),
+            'contentTemplate' => $contentTemplate,
+            'layoutTemplate' => $layoutTemplate,
+            'fileName' => $fileName,
+        ];
+        try {
+            Env::getInstance()->getLogger()?->debug('[Theme Layout Resolve]', $payload);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function logThemeLayoutResolveException(\Throwable $e, DataObject $eventData, mixed $fileName, mixed $controller): void
+    {
+        if (!$this->isThemeLayoutDebugEnabled()) {
+            return;
+        }
+        $uri = '';
+        try {
+            $req = ObjectManager::getInstance(Request::class);
+            $uri = (string)($req->getServer('REQUEST_URI') ?? $req->getUri() ?? '');
+        } catch (\Throwable) {
+        }
+        try {
+            Env::getInstance()->getLogger()?->warning('[Theme Layout Resolve Failed]', [
+                'uri' => $uri,
+                'controller' => is_object($controller) ? $controller::class : (is_string($controller) ? $controller : ''),
+                'layoutType' => $eventData->getData('layoutType'),
+                'fileName' => $fileName,
+                'exception' => $e->getMessage(),
+            ]);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function isThemeLayoutDebugEnabled(): bool
+    {
+        if (defined('ENV_TEST') && constant('ENV_TEST')) {
+            return false;
+        }
+        try {
+            return (Env::system('deploy') ?? '') === 'dev';
+        } catch (\Throwable) {
+            return false;
         }
     }
 

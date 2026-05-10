@@ -20,7 +20,7 @@ class ForgotPasswordTest extends TestCase
         $property->setAccessible(true);
 
         $this->assertSame(
-            'account_auth',
+            'account.auth',
             $property->getValue(new ForgotPassword(
                 $this->createMock(CustomerSession::class),
                 $this->createMock(PasswordResetService::class)
@@ -43,7 +43,7 @@ class ForgotPasswordTest extends TestCase
         $controller->method('getRequest')->willReturn($request);
         $controller->method('getUrl')->willReturnCallback(static fn (string $route): string => $route);
         $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(7))->method('assign')->willReturnSelf();
+        $controller->expects($this->exactly(5))->method('assign')->willReturnSelf();
         $controller->expects($this->once())->method('fetch')->willReturn('page');
 
         $this->assertSame('page', $controller->index());

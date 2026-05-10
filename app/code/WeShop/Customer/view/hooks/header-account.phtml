@@ -11,11 +11,12 @@ use Weline\Framework\Session\SessionFactory;
 // 获取 CustomerSession
 $session = SessionFactory::getInstance()->createFrontendSession();
 
-// 获取前端URL（使用模板的 getUrl 方法更安全）
-$frontendUrl = $this->getUrl('');
 $apiUrlBuilder = $this->request->getUrlBuilder();
 $unpaidOrdersCountApiUrl = $apiUrlBuilder->getApiUrl('weshop_order/rest/v1/order/unpaid-count', [], false);
 $unpaidOrdersListApiUrl = $apiUrlBuilder->getApiUrl('weshop_order/rest/v1/order/unpaid-list', [], false);
+$retryPaymentUrlTemplate = $this->getUrl('weshop/order/retry-payment', ['order_id' => '__ORDER_ID__']);
+$amountLabel = (string) __('金额：');
+$continuePaymentLabel = (string) __('继续支付');
 
 // 检查是否登录
 $isLoggedIn = $session->isLoggedIn();
@@ -29,7 +30,7 @@ if ($isLoggedIn) {
 
 <?php if ($isLoggedIn && $customer): ?>
     <!-- 已登录状态：显示用户信息 -->
-    <a href="<?= $frontendUrl ?>weshop/customer/account/index" 
+    <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" 
        class="action-link header-account-link" 
        title="<?= __('我的账户') ?>" 
        aria-label="<?= __('我的账户') ?>"
@@ -47,11 +48,11 @@ if ($isLoggedIn) {
     <!-- 账户下拉菜单 -->
     <div class="account-dropdown" id="account-dropdown">
         <div class="dropdown-content">
-            <a href="<?= $frontendUrl ?>weshop/customer/account/index" class="dropdown-item">
+            <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="dropdown-item">
                 <span class="material-symbols-outlined">account_circle</span>
                 <?= __('我的账户') ?>
             </a>
-            <a href="<?= $frontendUrl ?>weshop/order/list" class="dropdown-item">
+            <a href="<?= $this->getUrl('weshop/order/list') ?>" class="dropdown-item">
                 <span class="material-symbols-outlined">receipt_long</span>
                 <?= __('我的订单') ?>
                 <!-- 未支付订单提示 -->
@@ -59,12 +60,12 @@ if ($isLoggedIn) {
                     <span class="indicator-count" id="indicator-count">0</span>
                 </span>
             </a>
-            <a href="<?= $frontendUrl ?>weshop/wishlist" class="dropdown-item">
+            <a href="<?= $this->getUrl('weshop/wishlist') ?>" class="dropdown-item">
                 <span class="material-symbols-outlined">favorite</span>
                 <?= __('我的收藏') ?>
             </a>
             <div class="dropdown-divider"></div>
-            <a href="<?= $frontendUrl ?>weshop/customer/account/logout" class="dropdown-item">
+            <a href="<?= $this->getUrl('weshop/customer/account/logout') ?>" class="dropdown-item">
                 <span class="material-symbols-outlined">logout</span>
                 <?= __('退出登录') ?>
             </a>
@@ -79,7 +80,7 @@ if ($isLoggedIn) {
                 <!-- 订单列表将通过JavaScript异步加载 -->
             </div>
             <div class="unpaid-orders-footer">
-                <a href="<?= $frontendUrl ?>weshop/order/list" class="view-all-orders-link">
+                <a href="<?= $this->getUrl('weshop/order/list') ?>" class="view-all-orders-link">
                     <?= __('查看全部订单') ?>
                 </a>
             </div>
@@ -88,6 +89,10 @@ if ($isLoggedIn) {
     
     <script>
         (function() {
+            const retryPaymentUrlTemplate = <?= json_encode($retryPaymentUrlTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+            const amountLabel = <?= json_encode($amountLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+            const continuePaymentLabel = <?= json_encode($continuePaymentLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+
             // 异步加载未支付订单数量
             function loadUnpaidOrdersCount() {
                 fetch('<?= $unpaidOrdersCountApiUrl ?>')
@@ -133,7 +138,7 @@ if ($isLoggedIn) {
                             
                             if (listContainer && section) {
                                 // 清空现有内容
-                                listContainer.innerHTML = '';
+                                listContainer.replaceChildren();
                                 
                                 // 显示最多3条订单
                                 const displayOrders = orders.slice(0, 3);
@@ -141,15 +146,27 @@ if ($isLoggedIn) {
                                 displayOrders.forEach(order => {
                                     const orderItem = document.createElement('div');
                                     orderItem.className = 'unpaid-order-item';
-                                    orderItem.innerHTML = `
-                                        <div class="order-item-info">
-                                            <span class="order-item-number">${order.increment_id}</span>
-                                            <span class="order-item-amount"><?= __('金额：') ?>${formatPrice(order.total)}</span>
-                                        </div>
-                                        <a href="<?= $frontendUrl ?>weshop/order/retry-payment?order_id=${order.order_id}" class="retry-payment-link">
-                                            <?= __('继续支付') ?>
-                                        </a>
-                                    `;
+
+                                    const info = document.createElement('div');
+                                    info.className = 'order-item-info';
+
+                                    const number = document.createElement('span');
+                                    number.className = 'order-item-number';
+                                    number.textContent = String(order.increment_id || order.order_id || '');
+
+                                    const amount = document.createElement('span');
+                                    amount.className = 'order-item-amount';
+                                    amount.textContent = amountLabel + formatPrice(order.total);
+
+                                    const retryLink = document.createElement('a');
+                                    retryLink.className = 'retry-payment-link';
+                                    retryLink.href = retryPaymentUrlTemplate.replace('__ORDER_ID__', encodeURIComponent(String(order.order_id || '')));
+                                    retryLink.textContent = continuePaymentLabel;
+
+                                    info.appendChild(number);
+                                    info.appendChild(amount);
+                                    orderItem.appendChild(info);
+                                    orderItem.appendChild(retryLink);
                                     listContainer.appendChild(orderItem);
                                 });
                                 
@@ -360,7 +377,7 @@ if ($isLoggedIn) {
     </style>
 <?php else: ?>
     <!-- 未登录状态：显示登录链接 -->
-    <a href="<?= $frontendUrl ?>weshop/customer/account/login" 
+    <a href="<?= $this->getUrl('weshop/customer/account/login') ?>" 
        class="action-link" 
        title="<?= __('账户') ?>" 
        aria-label="<?= __('账户及心愿单') ?>">

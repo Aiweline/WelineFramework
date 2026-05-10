@@ -662,6 +662,8 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'retryable_ai_failures'", $commonKeysSource);
         self::assertStringContainsString("'retryable_ai_failure_count'", $commonKeysSource);
         self::assertStringContainsString("'next_stage_blocked_by_ai_failures'", $commonKeysSource);
+        self::assertStringContainsString("'source_truth_contract'", $commonKeysSource);
+        self::assertStringContainsString("'asset_manifest_hash'", $commonKeysSource);
 
         $planKeysSource = $this->extractConstantArraySource($source, 'PLAN_STAGE_SCOPE_KEYS');
         $visualEditKeysSource = $this->extractConstantArraySource($source, 'VISUAL_EDIT_STAGE_SCOPE_KEYS');
@@ -681,9 +683,12 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString('$hasQueuedPlanMutation || $hasQueuedPlanResume', $planExecuteSource);
         self::assertStringContainsString("return \$promptMode === 'resume_plan';", $planQueueSource);
 
-        self::assertStringContainsString('hasQueuedTaskPlanResumeRequest($content)', $taskPlanExecuteSource);
+        self::assertStringContainsString(
+            'hasQueuedTaskPlanResumeRequest($content, $queuedScope)',
+            $taskPlanExecuteSource
+        );
         self::assertStringContainsString('$hasQueuedTaskPlanMutation || $hasQueuedTaskPlanResume', $taskPlanExecuteSource);
-        self::assertStringContainsString("return \$promptMode === 'resume_task_plan';", $taskPlanQueueSource);
+        self::assertStringContainsString("if (\$promptMode === 'resume_task_plan')", $taskPlanQueueSource);
     }
 
     public function testImageAssetQueueRecordsSlotErrorWithoutThrowingWholeQueue(): void

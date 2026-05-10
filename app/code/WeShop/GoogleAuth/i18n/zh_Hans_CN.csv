@@ -38,6 +38,7 @@
 "Google auth is not configured.","Google 认证未配置。"
 "Unsupported Google auth mode: %{1}","不支持的 Google 认证模式：%{1}"
 "Sign in with Google","使用 Google 登录"
+或,或
 "Google Sign-In","Google 登录"
 "Connected Account",已连接账户
 "Google auth is not configured yet.","Google 认证尚未配置。"

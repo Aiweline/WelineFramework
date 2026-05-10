@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Observer;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -42,6 +44,8 @@ class ControllerFetchFileAfter implements ObserverInterface
         $layoutType = (string)$eventData->getData('layoutType');
         $contentTemplate = (string)$eventData->getData('contentTemplate');
         $layoutTemplate = (string)($eventData->getData('layoutTemplate') ?: $eventData->getData('fileName'));
+        $fileName = (string)$eventData->getData('fileName');
+        $layoutOption = (string)($eventData->getData('layoutOption') ?? '');
         if ($layoutType === '' || $contentTemplate === '' || $layoutTemplate === '') {
             return;
         }
@@ -60,9 +64,143 @@ class ControllerFetchFileAfter implements ObserverInterface
 
             $eventData->setData('content', $renderedHtml);
             $eventData->setData('fileName', $finalLayoutTemplate);
-        } catch (\Throwable) {
-            // Keep original event content when wrapping fails.
+        } catch (\Throwable $e) {
+            $this->reportLayoutWrapFailure(
+                $layoutType,
+                $layoutOption,
+                $contentTemplate,
+                $layoutTemplate,
+                $fileName,
+                $e
+            );
+            // deploy≠dev 时保留原始 event content；deploy=dev 时由 reportLayoutWrapFailure 重新抛出
         }
+    }
+
+    /**
+     * 布局包装失败时写日志、响应头；deploy=dev 时抛出以便本地立刻发现。
+     */
+    private function reportLayoutWrapFailure(
+        string $layoutType,
+        string $layoutOption,
+        string $contentTemplate,
+        string $layoutTemplate,
+        string $fileName,
+        \Throwable $e
+    ): void {
+        $uri = '';
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            $uri = (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? '');
+            if ($this->shouldEmitLayoutWrapResponseHeaders()) {
+                $response = $request->getResponse();
+                $response->setHeader('X-Weline-Layout-Wrap-Failed', '1');
+                $response->setHeader('X-Weline-Layout-Type', $layoutType);
+                if ($layoutOption !== '') {
+                    $response->setHeader('X-Weline-Layout-Option', $layoutOption);
+                }
+                $response->setHeader('X-Weline-Layout-Template', $layoutTemplate);
+                $response->setHeader('X-Weline-Content-Template', $contentTemplate);
+                $response->setHeader('X-Weline-File-Name', $fileName);
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            Env::getInstance()->getLogger()?->error('[Theme Layout Wrap Failed]', [
+                'uri' => $uri,
+                'layoutType' => $layoutType,
+                'layoutOption' => $layoutOption,
+                'contentTemplate' => $contentTemplate,
+                'layoutTemplate' => $layoutTemplate,
+                'fileName' => $fileName,
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        } catch (\Throwable) {
+        }
+
+        if ($this->shouldRethrowLayoutWrapFailure()) {
+            throw $e;
+        }
+    }
+
+    private function shouldRethrowLayoutWrapFailure(): bool
+    {
+        if (defined('ENV_TEST') && constant('ENV_TEST')) {
+            return false;
+        }
+        try {
+            return (Env::system('deploy') ?? '') === 'dev';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /** deploy=dev 或 dev.theme_layout_wrap_response_headers=true（PHPUnit 永不输出） */
+    private function shouldEmitLayoutWrapResponseHeaders(): bool
+    {
+        if (defined('ENV_TEST') && constant('ENV_TEST')) {
+            return false;
+        }
+        try {
+            if (Env::getInstance()->getConfig('dev.theme_layout_wrap_response_headers', false)) {
+                return true;
+            }
+            return (Env::system('deploy') ?? '') === 'dev';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * 将控制器 assign 到 Template 根上的变量并入 meta，便于布局层 {{meta.xxx}} 与根变量同源。
+     */
+    private function mergeTemplateRootAssignsIntoMeta(Template $template, array $metaData): array
+    {
+        $skip = [
+            'meta',
+            'theme',
+            'colors',
+            'layout',
+            'child_html',
+            'contentTemplate',
+            'layoutTemplate',
+            'fileName',
+            'contentRenderKey',
+            'controller',
+            'request',
+            'req',
+            'session',
+            'eventsManager',
+            'viewCache',
+            'taglib',
+            'compile_dir',
+            'template_dir',
+            'statics_dir',
+            'view_dir',
+        ];
+        try {
+            $all = $template->getData('');
+            if (!is_array($all)) {
+                return $metaData;
+            }
+            foreach ($all as $key => $value) {
+                if (!is_string($key) || str_starts_with($key, '__')) {
+                    continue;
+                }
+                if (in_array($key, $skip, true)) {
+                    continue;
+                }
+                if ($value instanceof Request || $value instanceof PcController) {
+                    continue;
+                }
+                $metaData[$key] = $value;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $metaData;
     }
 
     private function renderContentTemplate(Template $template, string $contentTemplate, string $fallbackContent): string
@@ -188,6 +326,7 @@ class ControllerFetchFileAfter implements ObserverInterface
             unset($metaData['contentRenderKey']);
             $metaData['content'] = $contentHtml;
         }
+        $metaData = $this->mergeTemplateRootAssignsIntoMeta($template, $metaData);
         $template->setData('meta', $metaData);
 
         $childHtml = $template->getData('child_html');
