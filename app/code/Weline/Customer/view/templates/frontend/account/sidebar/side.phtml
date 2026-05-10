@@ -1,25 +1,5 @@
 <?php
-$themeTemplate = null;
-try {
-    $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
-    $theme = $themeContext->resolveTheme('frontend');
-    if ($theme && $theme->getId()) {
-        $candidate = rtrim((string)$theme->getPath(), '\\/') . DIRECTORY_SEPARATOR
-            . 'Weline' . DIRECTORY_SEPARATOR . 'Customer' . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR
-            . 'templates' . DIRECTORY_SEPARATOR . 'frontend' . DIRECTORY_SEPARATOR . 'account' . DIRECTORY_SEPARATOR
-            . 'sidebar' . DIRECTORY_SEPARATOR . 'side.phtml';
-        if (is_file($candidate) && realpath($candidate) !== __FILE__) {
-            $themeTemplate = $candidate;
-        }
-    }
-} catch (\Throwable) {
-}
-
-if ($themeTemplate) {
-    include $themeTemplate;
-    return;
-}
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
 /**@var \Weline\Customer\Model\Customer $user */
 $avatar = $user->getAvatar();
 $username = $user->getUsername();

@@ -89,5 +89,7 @@ class CustomerProfileServiceTest extends TestCase
         $this->assertSame('$2y$10$legacy-hash-value', $profile->savedData[CustomerProfile::schema_fields_PASSWORD] ?? null);
         $this->assertSame('ada@example.com', $profile->savedData[CustomerProfile::schema_fields_EMAIL] ?? null);
         $this->assertSame('Ada', $profile->savedData[CustomerProfile::schema_fields_FIRST_NAME] ?? null);
+        $this->assertArrayHasKey(CustomerProfile::schema_fields_CREATED_AT, $profile->savedData);
+        $this->assertNotEmpty($profile->savedData[CustomerProfile::schema_fields_CREATED_AT] ?? '');
     }
 }

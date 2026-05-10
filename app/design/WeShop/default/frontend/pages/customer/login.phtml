@@ -20,6 +20,10 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? '');
                 <p class="text-text-secondary-light dark:text-text-secondary-dark mt-2"><?= __('Sign in to your account') ?></p>
             </div>
 
+            <div class="auth-form__flash wf-system-messages mb-5" aria-live="polite">
+                <template>Weline_Component::message.phtml</template>
+            </div>
+
             <form action="<?= $this->getUrl('weshop/customer/account/login') ?>" method="post" class="space-y-6">
                 <?= $this->getFormKey() ?>
                 <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>">

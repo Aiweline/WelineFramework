@@ -54,6 +54,10 @@
     function isRuntimePublishBlockingAiOperation(operation) {
         return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
     }
+    function isRuntimeVisualRefreshOperation(operation) {
+        var op = String(operation || '').trim().toLowerCase();
+        return isRuntimePublishBlockingAiOperation(op) || op === 'image_asset';
+    }
     function resolveRuntimeQueueInfoKey(operation) {
         var op = String(operation || '').trim().toLowerCase();
         if (op === 'task_plan') {
@@ -239,7 +243,7 @@
             : {};
         var activeOperationName = String(active.operation || op || '').trim().toLowerCase();
         var activeStatus = normalizeTerminalOperationStatus(active.status || '');
-        if (activeStatus && (activeOperationName === 'task_plan' || activeOperationName === 'plan' || isRuntimePublishBlockingAiOperation(activeOperationName))) {
+        if (activeStatus && (activeOperationName === 'task_plan' || activeOperationName === 'plan' || isRuntimeVisualRefreshOperation(activeOperationName))) {
             return Object.assign({}, active, {
                 operation: activeOperationName,
                 status: activeStatus,
@@ -307,6 +311,16 @@
             if (typeof previewBridge.resetBuildStartUi === 'function') {
                 previewBridge.resetBuildStartUi();
             }
+            if (typeof enableNavigationAfterOperation === 'function') {
+                enableNavigationAfterOperation();
+            }
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
+            refreshEmbeddedPreviewFrame(650);
+            return;
+        }
+        if (op === 'image_asset') {
             if (typeof enableNavigationAfterOperation === 'function') {
                 enableNavigationAfterOperation();
             }
@@ -2609,6 +2623,28 @@
         renderStageStatusCard('build', normalizeStageStatusPresentation('build', state));
     }
 
+    /**
+     * 队列守卫「跳过重复生成」等会以 success=false + terminal_status=stop 结束 SSE；
+     * 与致命失败区分，避免把工作区 active_operation 篡改成 error。
+     */
+    function isPlanningQueueSoftTerminalStop(payload, queueStatusOnDone, normalizedDoneOperation) {
+        var op = String(normalizedDoneOperation || '').trim().toLowerCase();
+        if (op !== 'plan' && op !== 'task_plan') {
+            return false;
+        }
+        var terminal = String((payload && payload.terminal_status) || '').trim().toLowerCase();
+        var queueSt = String(queueStatusOnDone || '').trim().toLowerCase();
+        if (terminal === 'stop' || terminal === 'stopped' || queueSt === 'stop') {
+            return true;
+        }
+        return op === 'task_plan'
+            && !!payload
+            && typeof payload.task_plan_queue_skip === 'object'
+            && payload.task_plan_queue_skip !== null
+            && !Array.isArray(payload.task_plan_queue_skip)
+            && Object.keys(payload.task_plan_queue_skip).length > 0;
+    }
+
     var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
     workspaceApiRef.clearBlockStreamingState = clearBlockStreamingState;
     workspaceApiRef.fetchWorkspaceSnapshotState = fetchWorkspaceSnapshotState;
@@ -3051,6 +3087,60 @@
             );
         });
 
+        function handleAssetGenerationStreamEvent(event, eventName) {
+            var payload = parsePayload(event);
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            if (payload.state && typeof payload.state === 'object') {
+                hydrateWorkspaceFromState(payload.state);
+                updateTaskSummaryFromState(payload.state);
+            } else if (payload.asset_manifest && typeof payload.asset_manifest === 'object') {
+                hydrateWorkspaceFromState({
+                    asset_manifest: payload.asset_manifest,
+                    scope: { asset_manifest: payload.asset_manifest }
+                });
+            }
+            updateTaskSummaryFromState(payload);
+            var level = eventName === 'asset_generation_failed' ? 'error' : (eventName === 'asset_generation_done' ? 'done' : 'progress');
+            var message = String(payload.message || '');
+            if (!message) {
+                message = eventName === 'asset_generation_done'
+                    ? 'Image asset generation completed.'
+                    : (eventName === 'asset_generation_failed' ? 'Image asset generation failed.' : 'Image asset generation updated.');
+            }
+            logOperationToWorkspaceTerminal(eventName, payload, level, message);
+            if (eventName === 'asset_generation_failed') {
+                toast('error', message);
+                return;
+            }
+            if (eventName === 'asset_generation_done') {
+                toast('success', message);
+                refreshEmbeddedPreviewFrame(650);
+                if (typeof previewBridge.bindEmbeddedPreviewFrameBridge === 'function') {
+                    window.setTimeout(function () {
+                        previewBridge.bindEmbeddedPreviewFrameBridge();
+                    }, 900);
+                }
+            }
+        }
+
+        source.addEventListener('asset_generation_started', function (event) {
+            handleAssetGenerationStreamEvent(event, 'asset_generation_started');
+        });
+        source.addEventListener('asset_manifest_updated', function (event) {
+            handleAssetGenerationStreamEvent(event, 'asset_manifest_updated');
+        });
+        source.addEventListener('asset_generation_progress', function (event) {
+            handleAssetGenerationStreamEvent(event, 'asset_generation_progress');
+        });
+        source.addEventListener('asset_generation_done', function (event) {
+            handleAssetGenerationStreamEvent(event, 'asset_generation_done');
+        });
+        source.addEventListener('asset_generation_failed', function (event) {
+            handleAssetGenerationStreamEvent(event, 'asset_generation_failed');
+        });
+
         source.addEventListener('task_completed', function (event) {
             var payload = parsePayload(event);
             if (!payload || typeof payload !== 'object') {
@@ -3169,7 +3259,69 @@
             });
             var normalizedDoneOperation = String(normalizedDonePayload.operation || '');
             if (success && (normalizedDoneOperation === 'plan' || normalizedDoneOperation === 'task_plan')) {
+                if (normalizedDoneOperation === 'task_plan') {
+                    var partialRetryReq = parseInt(String((payload && payload.partial_retry_required) || 0), 10) || 0;
+                    var retryableAiCount = parseInt(String((payload && payload.retryable_ai_failure_count) || 0), 10) || 0;
+                    var failureMode = String((payload && payload.failure_mode) || '').trim().toLowerCase();
+                    var taskPlanSkip = payload && payload.task_plan_queue_skip && typeof payload.task_plan_queue_skip === 'object'
+                        && !Array.isArray(payload.task_plan_queue_skip)
+                        && Object.keys(payload.task_plan_queue_skip).length > 0;
+                    if (partialRetryReq > 0 || retryableAiCount > 0 || failureMode === 'partial_retry_required' || taskPlanSkip) {
+                        startDeferredQueueStatePoll('task_plan');
+                    }
+                    var terminalStatusEarly = String((payload && payload.terminal_status) || '').trim().toLowerCase();
+                    var queueStatusEarly = String(queueStatusOnDone || '').trim().toLowerCase();
+                    if (queueStatusEarly === 'stop' || terminalStatusEarly === 'stop' || terminalStatusEarly === 'stopped') {
+                        startDeferredQueueStatePoll('task_plan');
+                    }
+                }
                 finishOperation(normalizedDonePayload);
+            }
+            if (!success && isPlanningQueueSoftTerminalStop(payload, queueStatusOnDone, normalizedDoneOperation)) {
+                var softMsgRaw = resolveQueueFailureMessage(normalizedDonePayload, normalizedDoneOperation)
+                    || String((payload && payload.message) || '')
+                    || '';
+                var softMsg = softMsgRaw !== '' ? normalizeToastMessage(softMsgRaw) : '';
+                if (payload && payload.state && typeof payload.state === 'object') {
+                    hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
+                    updateStageStatusSummary(payload.state);
+                } else {
+                    updateTaskSummaryFromState(payload);
+                    updateStageStatusSummary(payload);
+                }
+                if (softMsg) {
+                    toast('warning', softMsg);
+                }
+                syncQueuedStageUi(operation, 'warning', Object.assign({}, payload || {}, {
+                    message: softMsg || softMsgRaw,
+                    terminal_status: String((payload && payload.terminal_status) || ''),
+                    queue_status: String(queueStatusOnDone || '')
+                }), { level: 'warning' });
+                logOperationToWorkspaceTerminal(
+                    'done',
+                    payload,
+                    'warning',
+                    softMsg || softMsgRaw || <?= \json_encode((string)__('操作已中断'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                );
+                if (normalizedDoneOperation === 'task_plan') {
+                    startDeferredQueueStatePoll('task_plan');
+                }
+                if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.syncTaskPlanSseRunningFromWorkspaceState === 'function') {
+                    try {
+                        window.__pbWorkspaceApi.syncTaskPlanSseRunningFromWorkspaceState(payload.state || payload || {});
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+                finishOperation(normalizedDonePayload);
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+                return;
             }
             if (!success) {
                 var failureMessage = resolveQueueFailureMessage(normalizedDonePayload, normalizedDoneOperation) || lastServerError || <?= \json_encode((string)__('工作区操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
@@ -3292,6 +3444,20 @@
                 clearBlockStreamingState();
                 if (typeof previewBridge.resetBuildStartUi === 'function') {
                     previewBridge.resetBuildStartUi();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+                refreshEmbeddedPreviewFrame(650);
+                return;
+            }
+            if (String(operation || '') === 'image_asset' || normalizedDoneOperation === 'image_asset') {
+                if (payload && payload.state) {
+                    hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
+                }
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
                 }
                 if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                     previewBridge.resumeWorkspaceStream();
@@ -3469,7 +3635,7 @@
         if (!operation || ['queued', 'pending', 'running', 'processing'].indexOf(status) === -1) {
             return;
         }
-        if (operation !== 'plan' && operation !== 'task_plan' && operation !== 'build') {
+        if (operation !== 'plan' && operation !== 'task_plan' && operation !== 'build' && operation !== 'image_asset') {
             return;
         }
         var hasExecutionToken = !!String(active.execution_token || '').trim();

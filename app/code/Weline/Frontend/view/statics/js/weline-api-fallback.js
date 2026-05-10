@@ -26,6 +26,18 @@
                 });
             }
             return r.text().then(function (t) {
+                var trimmed = (t || '').trim();
+                if (
+                    trimmed.length > 0 &&
+                    ((trimmed.charAt(0) === '{' && trimmed.charAt(trimmed.length - 1) === '}') ||
+                        (trimmed.charAt(0) === '[' && trimmed.charAt(trimmed.length - 1) === ']'))
+                ) {
+                    try {
+                        return { ok: r.ok, status: r.status, statusText: r.statusText || '', data: JSON.parse(t) };
+                    } catch (e) {
+                        /* fall through */
+                    }
+                }
                 return { ok: r.ok, status: r.status, statusText: r.statusText || '', data: t };
             });
         });

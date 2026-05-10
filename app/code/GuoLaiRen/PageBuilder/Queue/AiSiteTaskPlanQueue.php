@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
+use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
 use Weline\Ai\Service\AiRuntimeContext;
@@ -108,9 +109,10 @@ class AiSiteTaskPlanQueue implements QueueInterface
             if (!($guard['ok'] ?? false)) {
                 $message = (string)($guard['message'] ?? 'Stage-two task-plan queue stopped.');
                 $this->appendQueueLifecycleLine($queue, $message);
-                if ((string)($guard['terminal_status'] ?? '') === Queue::status_done) {
+                $terminal = (string)($guard['terminal_status'] ?? '');
+                if ($terminal === Queue::status_done) {
                     $this->markQueueDone($queue, $message);
-                } else {
+                } elseif ($terminal !== '') {
                     $this->markQueueStopped($queue, $message);
                 }
 
@@ -365,10 +367,24 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 ));
             }
 
+            /** @var AiSiteBuildTaskService $buildTaskService */
+            $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
+            $repairedScope = $buildTaskService->clearBuildPrerequisiteFailureState(\array_replace($scope, [
+                'task_plan_markdown' => $taskPlanMarkdown,
+                'task_plan_generated_at' => $taskPlanGeneratedAt,
+                'task_plan_summary' => $summary,
+            ]));
             $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
                 'task_plan_markdown' => $taskPlanMarkdown,
                 'task_plan_generated_at' => $taskPlanGeneratedAt,
                 'task_plan_summary' => $summary,
+                'retryable_ai_failures' => \is_array($repairedScope['retryable_ai_failures'] ?? null) ? $repairedScope['retryable_ai_failures'] : [],
+                'retryable_ai_failure_count' => (int)($repairedScope['retryable_ai_failure_count'] ?? 0),
+                'next_stage_blocked_by_ai_failures' => (int)($repairedScope['next_stage_blocked_by_ai_failures'] ?? 0),
+                'latest_build_failed' => (int)($repairedScope['latest_build_failed'] ?? 0),
+                'latest_build_failure' => \is_array($repairedScope['latest_build_failure'] ?? null) ? $repairedScope['latest_build_failure'] : [],
+                'publish_blocked_by_latest_ai_failure' => (int)($repairedScope['publish_blocked_by_latest_ai_failure'] ?? 0),
+                'publish_blocked_reason' => (string)($repairedScope['publish_blocked_reason'] ?? ''),
             ]);
 
             $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
@@ -385,6 +401,18 @@ class AiSiteTaskPlanQueue implements QueueInterface
         }
 
         if ($draft !== [] && $draftMarkdown !== '') {
+            /** @var AiSiteBuildTaskService $buildTaskService */
+            $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
+            $clearedScope = $buildTaskService->clearBuildPrerequisiteFailureState($scope);
+            $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
+                'retryable_ai_failures' => \is_array($clearedScope['retryable_ai_failures'] ?? null) ? $clearedScope['retryable_ai_failures'] : [],
+                'retryable_ai_failure_count' => (int)($clearedScope['retryable_ai_failure_count'] ?? 0),
+                'next_stage_blocked_by_ai_failures' => (int)($clearedScope['next_stage_blocked_by_ai_failures'] ?? 0),
+                'latest_build_failed' => (int)($clearedScope['latest_build_failed'] ?? 0),
+                'latest_build_failure' => \is_array($clearedScope['latest_build_failure'] ?? null) ? $clearedScope['latest_build_failure'] : [],
+                'publish_blocked_by_latest_ai_failure' => (int)($clearedScope['publish_blocked_by_latest_ai_failure'] ?? 0),
+                'publish_blocked_reason' => (string)($clearedScope['publish_blocked_reason'] ?? ''),
+            ]);
             if ($sse instanceof QueueDbWriter) {
                 $this->queueTrace($sse, '草案校验通过：virtual_theme_plan.draft + draft_markdown 均存在');
             }
@@ -547,6 +575,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
         $patch = [
             '_task_plan_sse_request' => $request,
             'task_plan_generation_last_error' => [],
+            '_task_plan_queue_skip' => [],
         ];
         if (\in_array((string)($request['prompt_mode'] ?? ''), ['mutate_task_plan_task', 'refine_task_plan', 'rebuild_task_plan'], true)) {
             $patch['task_plan_confirmed'] = 0;
@@ -720,6 +749,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 'forced_by_queue_run' => 1,
             ],
             '_task_plan_rebuild_in_progress' => 1,
+            '_task_plan_queue_skip' => [],
         ]));
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
@@ -742,14 +772,52 @@ class AiSiteTaskPlanQueue implements QueueInterface
             $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
 
-        if (!$forceRebuild && !$allowExistingTaskPlan && $this->scopeHasPersistedStageTwoTaskPlan($scope)) {
-            $message = 'Stage-two task plan already exists; queue skipped duplicate generation. Use task/block refine or force rebuild to run again.';
-            $this->persistTaskPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message, $executionToken, true);
-
-            return ['ok' => false, 'message' => $message, 'terminal_status' => Queue::status_done];
+        if ($forceRebuild || $allowExistingTaskPlan || !$this->scopeHasPersistedStageTwoTaskPlan($scope)) {
+            return ['ok' => true];
         }
 
-        return ['ok' => true];
+        /** @var AiSiteBuildTaskService $buildTaskService */
+        $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
+        if (
+            $buildTaskService->hasRetryableAiFailures($scope, 'task_plan')
+            || $this->scopeHasTaskPlanCheckpointFailures($scope)
+            || $this->scopeHasTaskPlanRetryFailedBatches($scope)
+        ) {
+            return ['ok' => true];
+        }
+
+        $message = 'Stage-two task plan already exists; queue skipped duplicate generation. Use task/block refine or force rebuild to run again.';
+        // 非「成功完成」：markQueueStopped + 保留 last_error，避免前端把未执行误判为 done
+        $this->persistTaskPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message, $executionToken, false);
+
+        return ['ok' => false, 'message' => $message, 'terminal_status' => Queue::status_stop];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function scopeHasTaskPlanCheckpointFailures(array $scope): bool
+    {
+        $checkpoint = \is_array($scope[AiSiteVirtualThemePlanService::TASK_PLAN_CHECKPOINT_SCOPE_KEY] ?? null)
+            ? $scope[AiSiteVirtualThemePlanService::TASK_PLAN_CHECKPOINT_SCOPE_KEY]
+            : [];
+        $failedBatchIds = \is_array($checkpoint['failed_batch_ids'] ?? null) ? $checkpoint['failed_batch_ids'] : [];
+
+        return $failedBatchIds !== [];
+    }
+
+    /**
+     * Scope carries explicit retry batch ids between SSE rounds (see AiSiteVirtualThemePlanService).
+     *
+     * @param array<string, mixed> $scope
+     */
+    private function scopeHasTaskPlanRetryFailedBatches(array $scope): bool
+    {
+        $ids = \is_array($scope['_task_plan_retry_failed_batches'] ?? null)
+            ? $scope['_task_plan_retry_failed_batches']
+            : [];
+
+        return $ids !== [];
     }
 
     /**
@@ -757,37 +825,16 @@ class AiSiteTaskPlanQueue implements QueueInterface
      */
     private function scopeHasPersistedStageTwoTaskPlan(array $scope): bool
     {
-        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
-            return true;
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        if ($draft !== [] || $confirmed !== []) {
-            return true;
-        }
-
-        foreach (['draft_markdown', 'confirmed_markdown', 'confirmed_at', 'confirmed_signature', 'plan_signature'] as $key) {
-            if (\trim((string)($virtualThemePlan[$key] ?? '')) !== '') {
-                return true;
-            }
-        }
-        if (\trim((string)($scope['task_plan_markdown'] ?? '')) !== '') {
-            return true;
-        }
-        if (\is_array($scope['task_plan_structured'] ?? null) && $scope['task_plan_structured'] !== []) {
-            return true;
-        }
-        if (\is_array($scope['task_plan_directory_tree'] ?? null) && $scope['task_plan_directory_tree'] !== []) {
-            return true;
-        }
-
         $summary = \is_array($scope['task_plan_summary'] ?? null) ? $scope['task_plan_summary'] : [];
-
-        return ((int)($summary['page_task_count'] ?? 0)) > 0
+        if (((int)($summary['page_task_count'] ?? 0)) > 0
             || ((int)($summary['shared_task_count'] ?? 0)) > 0
-            || \trim((string)($summary['signature'] ?? '')) !== '';
+            || \trim((string)($summary['signature'] ?? '')) !== '') {
+            return true;
+        }
+
+        /** @var AiSiteBuildTaskService $buildTaskService */
+        $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
+        return $buildTaskService->hasAnyPersistedTaskPlan($scope);
     }
 
     /**
@@ -829,9 +876,17 @@ class AiSiteTaskPlanQueue implements QueueInterface
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
         if ($skipAsDone) {
             $scope['task_plan_generation_last_error'] = [];
+            unset($scope['_task_plan_queue_skip']);
         } else {
             $scope['task_plan_generation_last_error'] = [
                 'message' => $message,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+            $scope['_task_plan_queue_skip'] = [
+                'reason' => 'duplicate_persisted_task_plan',
+                'queue_status' => Queue::status_stop,
+                'message' => $message,
+                'execution_token' => $executionToken,
                 'updated_at' => \date('Y-m-d H:i:s'),
             ];
         }

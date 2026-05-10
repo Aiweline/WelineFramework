@@ -305,6 +305,11 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     line-height: 1.7;
 }
 
+.motor-login-flash.wf-system-messages {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
 .motor-login-form {
     display: flex;
     flex-direction: column;
@@ -437,6 +442,22 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     color: var(--motor-text-main);
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.14);
+}
+
+.motor-password-toggle-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+}
+
+.motor-password-toggle-icon .motor-pwd-svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+.motor-password-toggle-icon .motor-pwd-svg[hidden] {
+    display: none;
 }
 
 .motor-remember {
@@ -798,6 +819,10 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
                 </div>
             </header>
 
+            <div class="motor-login-flash wf-system-messages" aria-live="polite">
+                <template>Weline_Component::message.phtml</template>
+            </div>
+
             <form id="loginForm" class="motor-login-form" action="/customer/account/login" method="post">
                 <?= $this->getFormKey('/customer/account/login') ?>
                 <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>" />
@@ -853,7 +878,10 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
                             aria-label="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>"
                             title="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>"
                         >
-                            <i class="fa fa-eye"></i>
+                            <span class="motor-password-toggle-icon" aria-hidden="true">
+                                <svg class="motor-pwd-svg motor-pwd-svg--show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <svg class="motor-pwd-svg motor-pwd-svg--hide" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                            </span>
                         </button>
                     </div>
                 </div>
@@ -925,7 +953,7 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     var usernameInput = document.getElementById('username');
     var passwordInput = document.getElementById('password');
     var togglePasswordBtn = document.getElementById('togglePassword');
-    var togglePasswordIcon = togglePasswordBtn ? togglePasswordBtn.querySelector('i') : null;
+    var togglePasswordIconWrap = togglePasswordBtn ? togglePasswordBtn.querySelector('.motor-password-toggle-icon') : null;
     var defaultLoginText = loginText ? loginText.textContent : '';
     var showPasswordText = <?= json_encode((string) __('显示密码'), JSON_UNESCAPED_UNICODE) ?>;
     var hidePasswordText = <?= json_encode((string) __('隐藏密码'), JSON_UNESCAPED_UNICODE) ?>;
@@ -988,14 +1016,26 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     }
 
     function setPasswordVisible(visible) {
-        if (!passwordInput || !togglePasswordBtn || !togglePasswordIcon) {
+        if (!passwordInput || !togglePasswordBtn) {
             return;
         }
 
         passwordInput.type = visible ? 'text' : 'password';
         togglePasswordBtn.setAttribute('aria-label', visible ? hidePasswordText : showPasswordText);
         togglePasswordBtn.setAttribute('title', visible ? hidePasswordText : showPasswordText);
-        togglePasswordIcon.className = visible ? 'fa fa-eye-slash' : 'fa fa-eye';
+        if (togglePasswordIconWrap) {
+            var svgShow = togglePasswordIconWrap.querySelector('.motor-pwd-svg--show');
+            var svgHide = togglePasswordIconWrap.querySelector('.motor-pwd-svg--hide');
+            if (svgShow && svgHide) {
+                if (visible) {
+                    svgShow.setAttribute('hidden', 'hidden');
+                    svgHide.removeAttribute('hidden');
+                } else {
+                    svgShow.removeAttribute('hidden');
+                    svgHide.setAttribute('hidden', 'hidden');
+                }
+            }
+        }
     }
 
     if (togglePasswordBtn) {
@@ -1010,6 +1050,46 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
 
     if (passwordInput) {
         passwordInput.addEventListener('input', clearError);
+    }
+
+    function normalizeLoginPayload(raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+            if (
+                typeof raw.success !== 'undefined' ||
+                typeof raw.redirect !== 'undefined' ||
+                raw.status === 'authenticated' ||
+                raw.status === 'challenge_required'
+            ) {
+                return raw;
+            }
+            if (raw.data && typeof raw.data === 'object') {
+                return normalizeLoginPayload(raw.data);
+            }
+        }
+        if (typeof raw === 'string') {
+            var t = raw.trim();
+            if (t.charAt(0) === '{' || t.charAt(0) === '[') {
+                try {
+                    return normalizeLoginPayload(JSON.parse(t));
+                } catch (e) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    function isLoginSuccessPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return false;
+        }
+        if (payload.success === true || payload.success === 'true') {
+            return true;
+        }
+        return payload.status === 'authenticated';
     }
 
     form.addEventListener('submit', function(event) {
@@ -1040,20 +1120,25 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
 
         window.Weline.Api.request('/customer/account/login', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: serialized
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json, text/javascript, */*;q=0.01'
+            },
+            body: serialized,
+            credentials: 'same-origin'
         })
         .then(function(response) {
-            var data = response.data;
+            var data = normalizeLoginPayload(response.data);
 
-            if (response.ok && data && data.success) {
+            if (response.ok && isLoginSuccessPayload(data)) {
                 loginBtn.classList.remove('is-loading');
                 loginBtn.classList.add('is-success');
                 loginText.textContent = <?= json_encode((string) __('登录成功！'), JSON_UNESCAPED_UNICODE) ?>;
                 loginText.style.visibility = 'visible';
 
                 setTimeout(function() {
-                    window.location.href = data.redirect || '/customer/account';
+                    window.location.href = (data && data.redirect) || '/customer/account';
                 }, 700);
 
                 return;
@@ -1062,7 +1147,12 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
             handleError((data && data.message) || defaultErrorText);
         })
         .catch(function(error) {
-            var message = (error && error.response && error.response.data && error.response.data.message) || (error && error.message) || requestErrorText;
+            var errData = error && error.response ? error.response.data : null;
+            var parsed = normalizeLoginPayload(errData);
+            var message = (parsed && parsed.message) ||
+                (errData && typeof errData === 'object' && errData.message) ||
+                (error && error.message) ||
+                requestErrorText;
             handleError(message);
         });
     });

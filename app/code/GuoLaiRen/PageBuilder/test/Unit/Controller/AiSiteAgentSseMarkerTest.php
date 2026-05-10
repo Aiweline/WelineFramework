@@ -103,7 +103,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertTrue((bool)$isActive->invoke($controller, ['active_operation' => ['status' => 'running']]));
         self::assertFalse((bool)$isActive->invoke($controller, ['active_operation' => ['status' => 'done']]));
 
-        foreach (['done', 'error', 'cancelled'] as $status) {
+        foreach (['done', 'error', 'cancelled', 'stop', 'stopped'] as $status) {
             self::assertTrue(
                 (bool)$isTerminal->invoke($controller, ['active_operation' => ['status' => $status]]),
                 $status . ' must close the workspace SSE stream once an active operation reaches a terminal state.'
@@ -127,6 +127,14 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame('error', $errorPayload['terminal_status']);
         self::assertFalse((bool)$errorPayload['success']);
         self::assertSame(43, $errorPayload['last_event_id']);
+
+        $stopPayload = $buildPayload->invoke($controller, [
+            'public_id' => 'pb-terminal-test',
+            'active_operation' => ['status' => 'stop', 'message' => 'queue skipped'],
+        ], 44);
+        self::assertSame('stop', $stopPayload['terminal_status']);
+        self::assertFalse((bool)$stopPayload['success']);
+        self::assertSame('queue skipped', $stopPayload['message']);
     }
 
     public function testObservedQueueErrorStatusWithoutFinishedStillTerminatesObserver(): void
@@ -162,6 +170,20 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('resolveQueueFailureMessage(normalizedDonePayload, normalizedDoneOperation)', $source);
         self::assertStringContainsString('hydrateWorkspaceFromState(normalizedDonePayload.state)', $source);
         self::assertStringContainsString('updateStageStatusSummary(normalizedDonePayload.state)', $source);
+    }
+
+    public function testRuntimePollsTaskPlanWhenTerminalPayloadIncludesQueueSkip(): void
+    {
+        $source = \file_get_contents(
+            \dirname(__DIR__, 3) . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml'
+        );
+        self::assertIsString($source);
+        self::assertStringContainsString('task_plan_queue_skip', $source);
+        self::assertStringContainsString('startDeferredQueueStatePoll(\'task_plan\')', $source);
+        self::assertStringContainsString('taskPlanSkip', $source);
+        self::assertStringContainsString('isPlanningQueueSoftTerminalStop', $source);
+        self::assertStringContainsString('toast(\'warning\'', $source);
+        self::assertStringContainsString('syncTaskPlanSseRunningFromWorkspaceState', $source);
     }
 
     public function testBlockConfigReplacementOnlyTouchesSelectedPageBlock(): void

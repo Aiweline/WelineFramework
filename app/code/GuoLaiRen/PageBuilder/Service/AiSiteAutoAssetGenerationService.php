@@ -95,6 +95,7 @@ class AiSiteAutoAssetGenerationService
                 $scope['asset_manifest'] = $manifest;
                 $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
                 $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
+                $scope = $this->clearAssetImageGenerationFailureForSlot($scope, $slotId);
                 $generatedSlots[] = $slotId;
             } catch (\Throwable $throwable) {
                 $manifest = $this->manifestService->recordError($manifest, $slotId, $throwable->getMessage());
@@ -107,6 +108,8 @@ class AiSiteAutoAssetGenerationService
             }
         }
 
+        $scope = $this->recordAssetImageGenerationFailures($scope, $failedSlots);
+
         return [
             'scope' => $scope,
             'generated_slots' => $generatedSlots,
@@ -118,11 +121,18 @@ class AiSiteAutoAssetGenerationService
      * Placeholder image files are an explicit operator fallback only. Normal
      * build flow must call the text-to-image model or expose a visible failure.
      *
+     * Fake_mode 是 e2e/test 会话的契约：不能调真实的 image API（避免昂贵或不稳定的依赖）。
+     * 强行契约要求此场景必须沿用第一阶段已落地的 verified_assets，并对剩余孤儿 slot 用占位写盘
+     * 回退，而非冒险触发真实图像生成超时把整个构建拖死。
+     *
      * @param array<string,mixed> $scope
      */
     private function shouldUsePlaceholderFallback(array $scope): bool
     {
-        return (int)($scope['allow_placeholder_image_assets'] ?? 0) === 1;
+        if ((int)($scope['allow_placeholder_image_assets'] ?? 0) === 1) {
+            return true;
+        }
+        return (int)($scope['fake_mode'] ?? 0) === 1;
     }
 
     /**
@@ -202,6 +212,75 @@ class AiSiteAutoAssetGenerationService
     private function getReferenceImageInsightService(): AiSiteReferenceImageInsightService
     {
         return $this->referenceImageInsightService ?? new AiSiteReferenceImageInsightService();
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param list<array{slot_id:string,message:string}> $failedSlots
+     * @return array<string,mixed>
+     */
+    private function recordAssetImageGenerationFailures(array $scope, array $failedSlots): array
+    {
+        if ($failedSlots === []) {
+            return $scope;
+        }
+
+        $trail = \is_array($scope['asset_image_generation_failures'] ?? null)
+            ? $scope['asset_image_generation_failures']
+            : [];
+        $stamp = \date('Y-m-d H:i:s');
+        foreach ($failedSlots as $failure) {
+            $slotId = \trim((string)($failure['slot_id'] ?? ''));
+            if ($slotId === '') {
+                continue;
+            }
+            $trail = $this->filterAssetImageGenerationFailures($trail, $slotId);
+            $trail[] = [
+                'slot_id' => $slotId,
+                'message' => (string)($failure['message'] ?? ''),
+                'updated_at' => $stamp,
+            ];
+        }
+        $scope['asset_image_generation_failures'] = \array_values($trail);
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function clearAssetImageGenerationFailureForSlot(array $scope, string $slotId): array
+    {
+        $slotId = \trim($slotId);
+        if ($slotId === '') {
+            return $scope;
+        }
+        $trail = \is_array($scope['asset_image_generation_failures'] ?? null)
+            ? $scope['asset_image_generation_failures']
+            : [];
+        $scope['asset_image_generation_failures'] = $this->filterAssetImageGenerationFailures($trail, $slotId);
+
+        return $scope;
+    }
+
+    /**
+     * @param list<mixed> $trail
+     * @return list<mixed>
+     */
+    private function filterAssetImageGenerationFailures(array $trail, string $slotId): array
+    {
+        $slotId = \trim($slotId);
+        if ($slotId === '') {
+            return \array_values($trail);
+        }
+
+        return \array_values(\array_filter($trail, static function (mixed $row) use ($slotId): bool {
+            if (!\is_array($row)) {
+                return true;
+            }
+            return \trim((string)($row['slot_id'] ?? $row['slotId'] ?? '')) !== $slotId;
+        }));
     }
 
     /**
@@ -357,14 +436,15 @@ class AiSiteAutoAssetGenerationService
     {
         $slots = \array_values(\array_filter(
             \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [],
-            static function ($slot): bool {
+            function ($slot): bool {
                 if (!\is_array($slot)) {
                     return false;
                 }
                 if ((int)($slot['locked_by_user'] ?? 0) === 1) {
                     return false;
                 }
-                if (\trim((string)($slot['final_url'] ?? '')) !== '') {
+                $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+                if ($finalUrl !== '' && !$this->slotNeedsRealImageRetry($slot)) {
                     return false;
                 }
                 return true;
@@ -395,6 +475,34 @@ class AiSiteAutoAssetGenerationService
         });
 
         return \array_slice($slots, 0, \max(0, $limit));
+    }
+
+    /**
+     * Placeholder assets are resumable build artifacts, not terminal success.
+     *
+     * @param array<string,mixed> $slot
+     */
+    private function slotNeedsRealImageRetry(array $slot): bool
+    {
+        foreach (\is_array($slot['variants'] ?? null) ? $slot['variants'] : [] as $variant) {
+            if (!\is_array($variant)) {
+                continue;
+            }
+            if ((int)($variant['placeholder'] ?? 0) === 1) {
+                return true;
+            }
+            foreach (['mode', 'model', 'source'] as $key) {
+                if (\strtolower(\trim((string)($variant[$key] ?? ''))) === 'placeholder') {
+                    return true;
+                }
+            }
+        }
+
+        $source = \strtolower(\trim((string)($slot['source'] ?? '')));
+        $finalUrl = \strtolower(\trim((string)($slot['final_url'] ?? '')));
+        return $source === 'generated'
+            && \str_contains($finalUrl, '/ai-generated/')
+            && \str_ends_with($finalUrl, '.svg');
     }
 
     /**

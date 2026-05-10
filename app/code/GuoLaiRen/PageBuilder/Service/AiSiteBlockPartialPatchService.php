@@ -25,6 +25,7 @@ class AiSiteBlockPartialPatchService
         private readonly ?AiSiteScopeCompatibilityService $scopeCompatibilityService = null,
         private readonly ?AiSiteBuildTaskService $buildTaskService = null,
         private readonly ?AiSiteHtmlBlocksBuildService $htmlBlocksBuildService = null,
+        private readonly ?AiSiteVirtualThemeService $virtualThemeService = null,
         private readonly ?AiResponseJsonParser $jsonParser = null,
         private readonly ?AiService $aiService = null,
         private readonly ?Page $pageModel = null,
@@ -65,6 +66,33 @@ class AiSiteBlockPartialPatchService
         $blockId = \trim($blockId);
         if ($pageType === '' || $blockId === '') {
             return $this->error('INVALID_PARAMS', 'Missing page_type or block_id.');
+        }
+
+        $sharedRegion = $this->resolveSharedComponentRegionForBlockId($pageType, $blockId);
+        if ($sharedRegion !== '') {
+            $sharedBlock = $this->buildSharedComponentBlockFromScope($scope, $sharedRegion, $blockId);
+            if ($sharedBlock !== null) {
+                $actualBlockId = \trim((string)($sharedBlock['block_id'] ?? $blockId));
+                $componentCode = $this->resolveBlockComponentCode($sharedBlock);
+
+                return [
+                    'success' => true,
+                    'source' => 'shared_components.' . $sharedRegion,
+                    'page_type' => $pageType,
+                    'block_id' => $actualBlockId,
+                    'requested_block_id' => $blockId,
+                    'component_code' => $componentCode,
+                    'index' => 0,
+                    'block' => $sharedBlock,
+                    'type' => (string)($sharedBlock['type'] ?? ''),
+                    'config' => \is_array($sharedBlock['config'] ?? null) ? $sharedBlock['config'] : [],
+                    'html' => (string)($sharedBlock['html'] ?? ''),
+                    'field_schema' => \is_array($sharedBlock['field_schema'] ?? null) ? $sharedBlock['field_schema'] : [],
+                    'template_metadata' => $this->extractTemplateMetadata($sharedBlock),
+                    'page_context' => $this->buildPageContext($scope, $pageType),
+                    'layout_context' => $this->buildLayoutContext($scope, $pageType, $componentCode, $actualBlockId),
+                ];
+            }
         }
 
         $virtualPages = $this->buildTargetVirtualPagesByType($scope, $pageType);
@@ -210,6 +238,45 @@ class AiSiteBlockPartialPatchService
                 'top_keys' => $validation['top_keys'],
                 'errors' => $renderValidation['errors'],
             ]);
+        }
+
+        $sharedRegion = $this->resolveSharedComponentRegionForBlockId(
+            $pageType,
+            (string)($read['component_code'] ?? $read['block_id'] ?? $blockId)
+        );
+        if ($sharedRegion !== '') {
+            $createdAt = \date('Y-m-d H:i:s');
+            $beforeBlock = $currentBlock;
+            $scope = $this->syncSharedComponentReplacement($scope, $sharedRegion, $candidate);
+            $scope['preview_page_type'] = $pageType;
+            $scope['build_summary'] = \array_replace(
+                \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
+                ['task_summary' => $this->safeSummarize($scope)]
+            );
+            $scope['block_patch_history'] = $this->appendPatchHistory(
+                \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
+                $pageType,
+                (string)($candidate['block_id'] ?? $blockId),
+                $beforeBlock,
+                $candidate,
+                $metadata,
+                $createdAt
+            );
+            $this->persistSharedComponentReplacement($scope, $sharedRegion, $candidate);
+
+            return [
+                'success' => true,
+                'page_type' => $pageType,
+                'block_id' => (string)($candidate['block_id'] ?? $blockId),
+                'component_code' => $this->resolveBlockComponentCode($candidate),
+                'source' => (string)($read['source'] ?? 'shared_components.' . $sharedRegion),
+                'scope' => $scope,
+                'before_block' => $beforeBlock,
+                'after_block' => $candidate,
+                'change_summary' => \trim((string)($metadata['change_summary'] ?? '')),
+                'changed_fields' => $this->normalizeChangedFields($metadata['changed_fields'] ?? []),
+                'reason' => \trim((string)($metadata['reason'] ?? '')),
+            ];
         }
 
         $virtualPages = $this->buildTargetVirtualPagesPreservingScope($scope, $pageType);
@@ -486,6 +553,125 @@ class AiSiteBlockPartialPatchService
         }
 
         return $existing;
+    }
+
+    private function resolveSharedComponentRegionForBlockId(string $pageType, string $blockId): string
+    {
+        $blockId = \trim($blockId);
+        if ($blockId === '') {
+            return '';
+        }
+
+        $normalizedBlockId = $blockId;
+        if (\str_starts_with($normalizedBlockId, 'content/')) {
+            $normalizedBlockId = \substr($normalizedBlockId, \strlen('content/'));
+        }
+
+        $pageSlug = \str_replace('_', '-', \trim($pageType));
+        if (
+            $blockId === 'header/ai-site-header'
+            || $normalizedBlockId === 'header-ai-site-header'
+            || ($pageSlug !== '' && $normalizedBlockId === $pageSlug . '-site-header')
+            || \str_ends_with($normalizedBlockId, '-site-header')
+        ) {
+            return 'header';
+        }
+        if (
+            $blockId === 'footer/ai-site-footer'
+            || $normalizedBlockId === 'footer-ai-site-footer'
+            || ($pageSlug !== '' && $normalizedBlockId === $pageSlug . '-site-footer')
+            || \str_ends_with($normalizedBlockId, '-site-footer')
+        ) {
+            return 'footer';
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>|null
+     */
+    private function buildSharedComponentBlockFromScope(array $scope, string $region, string $requestedBlockId): ?array
+    {
+        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+        $component = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
+        if ($component === []) {
+            return null;
+        }
+
+        $componentCode = \trim((string)($component['code'] ?? ($region === 'header' ? 'header/ai-site-header' : 'footer/ai-site-footer')));
+        $defaultConfig = \is_array($component['default_config'] ?? null) ? $component['default_config'] : [];
+        $phtml = \trim((string)($component['phtml'] ?? ''));
+        $html = \trim((string)($component['html'] ?? ''));
+        if ($html === '') {
+            foreach (['html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'] as $field) {
+                $candidate = \trim((string)($defaultConfig[$field] ?? ''));
+                if ($candidate !== '') {
+                    $html = $candidate;
+                    break;
+                }
+            }
+        }
+
+        return [
+            'block_id' => $componentCode !== '' ? $componentCode : $requestedBlockId,
+            'type' => 'ai_generated_shared_' . $region,
+            'component_code' => $componentCode,
+            'config' => $defaultConfig,
+            'html' => $html,
+            'field_schema' => [],
+            self::META_COMPONENT_CODE => $componentCode,
+            self::META_REGION => $region,
+            self::META_TEMPLATE_PHTML => $phtml,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $candidate
+     * @return array<string, mixed>
+     */
+    private function syncSharedComponentReplacement(array $scope, string $region, array $candidate): array
+    {
+        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+        $existing = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
+        $componentCode = \trim((string)($candidate[self::META_COMPONENT_CODE] ?? $candidate['component_code'] ?? $candidate['block_id'] ?? $existing['code'] ?? ''));
+        $sharedComponents[$region] = \array_replace($existing, [
+            'code' => $componentCode !== '' ? $componentCode : ($region === 'header' ? 'header/ai-site-header' : 'footer/ai-site-footer'),
+            'name' => (string)($existing['name'] ?? ($region === 'header' ? 'AI Site Header' : 'AI Site Footer')),
+            'region' => $region,
+            'phtml' => (string)($candidate[self::META_TEMPLATE_PHTML] ?? $existing['phtml'] ?? ''),
+            'html' => (string)($candidate['html'] ?? $existing['html'] ?? ''),
+            'default_config' => \is_array($candidate['config'] ?? null)
+                ? $candidate['config']
+                : (\is_array($existing['default_config'] ?? null) ? $existing['default_config'] : []),
+        ]);
+        $scope['shared_components'] = $sharedComponents;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $candidate
+     */
+    private function persistSharedComponentReplacement(array $scope, string $region, array $candidate): void
+    {
+        $themeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($themeId <= 0) {
+            return;
+        }
+        if ($this->virtualThemeService === null) {
+            return;
+        }
+        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+        $component = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
+        if ($component === []) {
+            return;
+        }
+
+        $this->virtualThemeService->saveGeneratedSharedComponent($themeId, $component);
     }
 
     /**

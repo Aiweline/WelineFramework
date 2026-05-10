@@ -907,18 +907,31 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         );
     }
 
-    public function testOperationSseReturnsCheckpointForQueuedSchedulerWaitInsteadOfLongObserverStream(): void
+    public function testOperationSseKeepsQueuedObserverStreamOpenForLongRunningQueueOperations(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
         $body = $this->extractControllerMethodSource($source, 'handleOperationSse');
         $observer = $this->extractControllerMethodSource($source, 'observeDuplicateOperationStream');
 
         self::assertStringContainsString(
-            '$queueWaitingForScheduler || !$this->shouldKeepQueuedObserverStreamOpen($operation)',
+            '!$this->shouldKeepQueuedObserverStreamOpen($operation)',
+            $body
+        );
+        self::assertStringContainsString(
+            "if (\$queueWaitingForScheduler && (bool)(\$observed['deferred_queue_progress'] ?? false))",
             $body
         );
         self::assertStringContainsString("'queue_waiting_for_scheduler' => \$queueWaitingForScheduler", $body);
         self::assertStringNotContainsString("\$operation === 'plan'", $observer);
+    }
+
+    public function testEnsureTaskPlanQueueContentPromptModeHandlesRetryFailedBatchScope(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $body = $this->extractControllerMethodSource($source, 'ensureTaskPlanQueueContentPromptMode');
+
+        self::assertStringContainsString('_task_plan_retry_failed_batches', $body);
+        self::assertStringContainsString("'resume_task_plan'", $body);
     }
 
     /**

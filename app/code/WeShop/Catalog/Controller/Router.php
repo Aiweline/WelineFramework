@@ -110,16 +110,11 @@ class Router implements RouterInterface
         }
         
         // 2. 检查跨请求缓存（文件缓存或Redis缓存）
-        // 注意：由于支持suffix匹配，缓存键需要基于原始handle，但查询逻辑会尝试匹配完整路径
-        // 暂时跳过缓存，直接查询数据库，确保能够匹配完整路径的handle
-        // TODO: 优化缓存策略，支持suffix匹配
+        // 缓存键基于handle的hash，支持精确命中
         $crossRequestCacheKey = self::CACHE_KEY_PREFIX . md5($categoryHandle);
-        $cachedResult = boolval(self::getCrossRequestCache()->get($crossRequestCacheKey));
-        
-        // 暂时跳过缓存，直接查询数据库（因为需要支持suffix匹配）
-        if ($cachedResult) {
-            // 缓存命中，更新静态缓存并返回
-            $exists = (bool)$cachedResult;
+        $cachedResult = self::getCrossRequestCache()->get($crossRequestCacheKey);
+        if ($cachedResult !== null) {
+            $exists = (bool) $cachedResult;
             self::$urlKeyCache[$categoryHandle] = $exists;
             return $exists;
         }

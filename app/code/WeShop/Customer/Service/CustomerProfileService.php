@@ -44,6 +44,9 @@ class CustomerProfileService
         $now = date('Y-m-d H:i:s');
         $enabled = in_array((string) ($profileData['status'] ?? 'active'), ['active', 'enabled', '1'], true) ? 1 : 0;
 
+        // Capture before assigning synthetic PK (auth user id === customer_id); otherwise getId() becomes truthy and created_at is skipped on INSERT.
+        $isNewProfile = !$profile->getId();
+
         if (!$profile->getId()) {
             $profile->setData(CustomerProfile::schema_fields_ID, (int) $authUser->getId());
         }
@@ -60,7 +63,7 @@ class CustomerProfileService
             $profile->setData(CustomerProfile::schema_fields_PASSWORD, $authPasswordHash);
         }
 
-        if (!$profile->getId()) {
+        if ($isNewProfile) {
             $profile->setData(CustomerProfile::schema_fields_CREATED_AT, $now);
         }
 

@@ -138,11 +138,116 @@ class FedEx implements ShippingProviderInterface
     
     public function createShipment(array $orderData): array
     {
-        // 简化实现
-        return [
-            'success' => true,
-            'tracking_number' => 'FEDEX' . time(),
-        ];
+        try {
+            $accessToken = $this->getAccessToken();
+            if (!$accessToken) {
+                return [
+                    'success' => false,
+                    'message' => (string) __('Failed to obtain FedEx access token.'),
+                ];
+            }
+
+            $baseUrl = $this->sandbox
+                ? 'https://apis-sandbox.fedex.com'
+                : 'https://apis.fedex.com';
+
+            $totalWeight = 0;
+            $items = $orderData['items'] ?? [];
+            foreach ($items as $item) {
+                $totalWeight += (float) ($item['weight'] ?? 0) * (int) ($item['qty'] ?? 1);
+            }
+
+            $shippingAddress = $orderData['shipping_address'] ?? $orderData['address'] ?? [];
+            $requestData = [
+                'labelResponseOptions' => 'LABEL',
+                'requestedShipment' => [
+                    'shipper' => [
+                        'contact' => [
+                            'personName' => Env::getInstance()->getConfig('shipping.origin.contact_name', ''),
+                            'phoneNumber' => Env::getInstance()->getConfig('shipping.origin.phone', ''),
+                        ],
+                        'address' => [
+                            'streetLines' => [Env::getInstance()->getConfig('shipping.origin.street', '')],
+                            'city' => Env::getInstance()->getConfig('shipping.origin.city', ''),
+                            'countryCode' => Env::getInstance()->getConfig('shipping.origin.country', 'CN'),
+                            'postalCode' => Env::getInstance()->getConfig('shipping.origin.postcode', ''),
+                        ],
+                    ],
+                    'recipients' => [
+                        [
+                            'contact' => [
+                                'personName' => ($shippingAddress['name'] ?? $shippingAddress['firstname'] . ' ' . ($shippingAddress['lastname'] ?? '')),
+                                'phoneNumber' => $shippingAddress['telephone'] ?? '',
+                            ],
+                            'address' => [
+                                'streetLines' => [($shippingAddress['street'][0] ?? $shippingAddress['street'] ?? '')],
+                                'city' => $shippingAddress['city'] ?? '',
+                                'countryCode' => $shippingAddress['country_id'] ?? $shippingAddress['country'] ?? '',
+                                'postalCode' => $shippingAddress['postcode'] ?? '',
+                            ],
+                        ],
+                    ],
+                    'pickupType' => 'USE_SCHEDULED_PICKUP',
+                    'serviceType' => $orderData['shipping_method_code'] ?? 'FEDEX_GROUND',
+                    'packagingType' => 'YOUR_PACKAGING',
+                    'totalWeight' => max(1, (int) ceil($totalWeight)),
+                    'shippingChargesPayment' => [
+                        'paymentType' => 'SENDER',
+                    ],
+                    'labelSpecification' => [
+                        'imageType' => 'PDF',
+                        'labelStockType' => 'PAPER_4X6',
+                    ],
+                    'requestedPackageLineItems' => [
+                        [
+                            'weight' => [
+                                'units' => 'KG',
+                                'value' => max(1, (int) ceil($totalWeight)),
+                            ],
+                        ],
+                    ],
+                ],
+                'accountNumber' => [
+                    'value' => Env::getInstance()->getConfig('shipping.fedex.account_number', ''),
+                ],
+            ];
+
+            $response = $this->httpPost(
+                $baseUrl . '/ship/v1/shipments',
+                json_encode($requestData),
+                ['Authorization: Bearer ' . $accessToken]
+            );
+
+            $result = json_decode($response, true);
+
+            if (!empty($result['output']['transactionShipments'][0]['masterTrackingNumber'])) {
+                $trackingNumber = $result['output']['transactionShipments'][0]['masterTrackingNumber'];
+                return [
+                    'success' => true,
+                    'tracking_number' => $trackingNumber,
+                    'label_url' => $result['output']['transactionShipments'][0]['pieceResponses'][0]['packageDocuments'][0]['url'] ?? null,
+                ];
+            }
+
+            w_log_error('FedEx shipment creation returned unexpected response', [
+                'response' => $result,
+            ], 'weshop_shipping');
+
+            return [
+                'success' => false,
+                'message' => (string) __('FedEx shipment creation failed: unexpected API response.'),
+            ];
+        } catch (\Exception $e) {
+            w_log_error('FedEx shipment creation failed', [
+                'error' => $e->getMessage(),
+                'order_data' => $orderData,
+            ], 'weshop_shipping');
+
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
     }
 
     public function createShipping(array $orderData): string
@@ -157,12 +262,93 @@ class FedEx implements ShippingProviderInterface
     
     public function trackShipment(string $trackingNumber): array
     {
-        // 简化实现
-        return [
-            'tracking_number' => $trackingNumber,
-            'status' => 'in_transit',
-            'events' => [],
-        ];
+        try {
+            $accessToken = $this->getAccessToken();
+            if (!$accessToken) {
+                return [
+                    'tracking_number' => $trackingNumber,
+                    'status' => 'unknown',
+                    'events' => [],
+                    'error' => (string) __('Failed to obtain FedEx access token.'),
+                ];
+            }
+
+            $baseUrl = $this->sandbox
+                ? 'https://apis-sandbox.fedex.com'
+                : 'https://apis.fedex.com';
+
+            $requestData = [
+                'includeDetailedScans' => true,
+                'trackingInfo' => [
+                    [
+                        'trackingNumberInfo' => [
+                            'trackingNumber' => $trackingNumber,
+                        ],
+                    ],
+                ],
+            ];
+
+            $response = $this->httpPost(
+                $baseUrl . '/track/v1/trackingnumbers',
+                json_encode($requestData),
+                ['Authorization: Bearer ' . $accessToken]
+            );
+
+            $result = json_decode($response, true);
+
+            if (!empty($result['output']['completeTrackResults'][0]['trackResults'][0])) {
+                $trackResult = $result['output']['completeTrackResults'][0]['trackResults'][0];
+                $events = [];
+                if (!empty($trackResult['scanEvents'])) {
+                    foreach ($trackResult['scanEvents'] as $scan) {
+                        $events[] = [
+                            'timestamp' => $scan['date'] ?? '',
+                            'status' => $scan['derivedStatus'] ?? $scan['eventDescription'] ?? '',
+                            'location' => $scan['scanLocation']['city'] ?? '',
+                            'description' => $scan['eventDescription'] ?? '',
+                        ];
+                    }
+                }
+
+                $statusMap = [
+                    'DELIVERED' => 'delivered',
+                    'OUT_FOR_DELIVERY' => 'out_for_delivery',
+                    'IN_TRANSIT' => 'in_transit',
+                    'PICKED_UP' => 'picked_up',
+                    'CANCELLED' => 'cancelled',
+                    'EXCEPTION' => 'exception',
+                ];
+                $derived = $trackResult['latestStatusDetail']['code'] ?? 'IN_TRANSIT';
+                $status = $statusMap[$derived] ?? 'in_transit';
+
+                return [
+                    'tracking_number' => $trackingNumber,
+                    'status' => $status,
+                    'status_detail' => $derived,
+                    'estimated_delivery' => $trackResult['dateAndTimes'][0]['dateTime'] ?? null,
+                    'events' => $events,
+                ];
+            }
+
+            return [
+                'tracking_number' => $trackingNumber,
+                'status' => 'unknown',
+                'events' => [],
+                'error' => (string) __('Unable to retrieve tracking information.'),
+            ];
+        } catch (\Exception $e) {
+            w_log_error('FedEx tracking lookup failed', [
+                'tracking_number' => $trackingNumber,
+                'error' => $e->getMessage(),
+            ], 'weshop_shipping');
+
+            return [
+                'tracking_number' => $trackingNumber,
+                'status' => 'unknown',
+                'events' => [],
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 
     public function trackShipping(string $trackingNumber): array

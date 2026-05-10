@@ -10,8 +10,8 @@
 "Compare item ID is required.","缺少对比项 ID。"
 "Compare item could not be removed.",无法移除该对比项。
 "Removed from compare.",已从对比中移除。
-"Customer #%1","Customer #%1"
-"Product #%1","Product #%1"
+"Customer #%{1}","Customer #%{1}"
+"Product #%{1}","Product #%{1}"
 "In stock",有货
 "Out of stock",缺货
 "Side-by-Side Decisions",并排决策
@@ -21,7 +21,7 @@
 "Add products from category and product pages to build a side-by-side shortlist inside your account center.",从类目页和商品详情页加入商品，在账户中心形成并排对比清单。
 "Add to Compare",加入对比
 "Review and manage customer product comparison records.",查看和管理客户商品对比记录。
-"Page %d of %d, %d compare records found","第 %d 页，共 %d 页，找到 %d 条对比记录"
+"Page %{1} of %{2}, %{3} compare records found","第 %{1} 页，共 %{2} 页，找到 %{3} 条对比记录"
 "Total Compare Records",对比记录总数
 "Unique Customers",独立客户数
 "Unique Products",独立商品数
@@ -35,8 +35,8 @@ Product,商品
 SKU,SKU
 "Added At",添加时间
 Actions,操作
-"ID: %1","ID: %1"
-"Compare Record #%1","Compare Record #%1"
+"ID: %{1}","ID: %{1}"
+"Compare Record #%{1}","Compare Record #%{1}"
 Delete,删除
 "Compare pagination",对比分页
 Previous,上一页
@@ -52,7 +52,7 @@ Next,下一页
 "Fresh picks chosen around what you are comparing now.","Fresh picks chosen around what you are comparing now."
 "Compare Board","Compare Board"
 "Products In Focus","Products In Focus"
-"SKU: %1","SKU: %1"
+"SKU: %{1}","SKU: %{1}"
 "Add to Cart","Add to Cart"
 "View Product","View Product"
 Remove,Remove

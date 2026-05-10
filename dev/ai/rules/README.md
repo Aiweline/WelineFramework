@@ -9,3 +9,5 @@
 - `CLAUDE.md`
 - `dev/ai/global-constraints.md`
 - `dev/ai/skills/_index.md`
+
+仍保留于本目录的 **Cursor `alwaysApply` 规则**：见各 `.mdc`（例如 `view-template-taglibs.mdc` 视图标签约定）。

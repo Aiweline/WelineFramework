@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <!-- 分类管理 - 归入 WeShop 目录管理 -->
+    <menu source="WeShop_Catalog::catalog_management" name="weshop_catalog_management" title="Catalog Categories"
+          action="*/backend/catalog"
+          parent="WeShop_Product::catalog"
+          icon="mdi mdi-folder-outline"
+          order="30"/>
+</menus>

@@ -12,6 +12,7 @@ use WeShop\Filters\Service\FilterService;
 use WeShop\Filters\Service\FilterUrlService;
 use WeShop\Search\Api\SearchBrowseEngineInterface;
 use WeShop\Search\Api\SearchEngineInterface;
+use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Search\Model\SearchHistory;
 use Weline\Eav\Service\AttributeFilterService;
 use Weline\Framework\Manager\ObjectManager;
@@ -160,7 +161,13 @@ class SearchService
 
     private function getCurrentUserId(): ?int
     {
-        return null;
+        try {
+            $customerContext = ObjectManager::getInstance(CustomerContextInterface::class);
+            $userId = $customerContext->getUserId();
+            return $userId !== null ? (int) $userId : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

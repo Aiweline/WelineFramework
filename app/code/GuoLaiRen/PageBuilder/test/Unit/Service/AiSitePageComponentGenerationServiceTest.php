@@ -185,7 +185,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertNotSame('', trim((string)$artifact['phtml']));
         self::assertNotSame('', trim((string)$artifact['html']));
         self::assertStringContainsString('AI Plugin Hub', $artifact['html']);
-        self::assertStringContainsString('Featured', $artifact['html']);
+        self::assertStringContainsString('ai-site-fallback-stage', $artifact['html']);
         self::assertStringNotContainsString('Built from plan', $artifact['html']);
     }
 
@@ -411,7 +411,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertSame('content', $artifact['region']);
         self::assertNotSame('', trim((string)$artifact['phtml']));
         self::assertNotSame('', trim((string)$artifact['html']));
-        self::assertStringContainsString('Featured', $artifact['html']);
+        self::assertStringContainsString('ai-site-fallback-stage', $artifact['html']);
         self::assertStringNotContainsString('Built from plan', $artifact['html']);
     }
 
@@ -1705,6 +1705,56 @@ HTML,
         self::assertStringNotContainsString('Built from plan', \json_encode($config, \JSON_UNESCAPED_UNICODE));
     }
 
+    public function testFallbackSectionPlanUsesDistinctCtaCopyAndVariant(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $copy = [
+            'title' => 'Welcome to Royal Teen Patti',
+            'body' => 'A readable launch section for players who want safe download guidance.',
+            'cjk' => false,
+        ];
+
+        $plan = (function (array $defaultConfig, array $renderContext, string $prompt, array $copy): array {
+            return $this->buildFallbackSectionPlan($defaultConfig, $renderContext, $prompt, $copy);
+        })->call($service, [
+            'content.cta_text' => 'Download Now',
+            'contract.stage1_samples' => \json_encode(['Trusted APK access', 'Fast onboarding', 'Visible support'], \JSON_UNESCAPED_UNICODE),
+        ], [], 'Create a download CTA block with one primary action.', $copy);
+
+        self::assertSame('cta', $plan['variant']);
+        self::assertSame('Download Now', $plan['title']);
+        self::assertNotSame($copy['body'], $plan['body']);
+        self::assertNotEmpty($plan['proof_points']);
+    }
+
+    public function testFallbackSectionPlanDerivesFeatureLayoutCopy(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $copy = [
+            'title' => 'Welcome to Royal Teen Patti',
+            'body' => 'A readable launch section for players who want safe download guidance.',
+            'cjk' => false,
+        ];
+
+        $plan = (function (array $defaultConfig, array $renderContext, string $prompt, array $copy): array {
+            return $this->buildFallbackSectionPlan($defaultConfig, $renderContext, $prompt, $copy);
+        })->call($service, [
+            'section_title' => 'Why players choose this lobby',
+            'section_intro' => 'Break the value into clean cards instead of stacking repeated hero copy.',
+        ], [], 'Render a features card section with trust signals.', $copy);
+
+        self::assertSame('features', $plan['variant']);
+        self::assertSame('Why players choose this lobby', $plan['title']);
+        self::assertStringContainsString('clean cards', $plan['body']);
+        self::assertSame('See the strengths', $plan['callout_title']);
+    }
+
     public function testCleanAiHtmlFragmentRejectsMalformedHtmlStructure(): void
     {
         $service = new AiSitePageComponentGenerationService(
@@ -1714,12 +1764,789 @@ HTML,
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('AI component HTML structure invalid');
 
+        // 错位闭合标签会先被 repairHtmlFragmentTagBalance 纠正；
+        // 这里用「标签内属性引号未闭合」这类无法在栈平衡阶段自动修复的错误，仍会触发断言失败。
         (function (string $html): string {
             return $this->cleanAiHtmlFragment($html);
         })->call(
             $service,
-            '<section class="stage"><div class="copy"><h2>Title</h2><p>Readable body</section></span>'
+            '<section class="stage"><div aria-label="unclosed-quote-never-closes-before-next-tag><p>Readable body</p></div></section>'
         );
+    }
+
+    /**
+     * 强行契约：cleanAiHtmlFragment 不得动 <img src=...> 等属性中合法包含
+     * "home_page" / "page:home_page:..." 的 URL；只允许从可见文本中剥离这些 planning 关键字。
+     * 修复前的实现会把 URL 中的 `home_page` 吞掉，造成 <img> 404。
+     */
+    public function testCleanAiHtmlFragmentPreservesPlanningKeywordsInsideAttributesButStripsThemFromVisibleText(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $verified = [
+            'page:home_page:content-home-page-hero' =>
+                '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg',
+        ];
+
+        $clean = (function (string $html, array $verified): string {
+            return $this->cleanAiHtmlFragment($html, $verified);
+        })->call(
+            $service,
+            '<section><h2>Welcome</h2>'
+            . '<img class="ai-site-visual-image" '
+            . 'src="/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg" '
+            . 'data-pb-ai-asset-slot="page:home_page:content-home-page-hero" alt="Home Hero">'
+            . '<p>Just visible body text. plan_locale runtime_context home_page</p>'
+            . '</section>',
+            $verified
+        );
+
+        // 属性值（src / data-pb-ai-asset-slot）必须保留 home_page 与 page:home_page:... 原貌
+        self::assertStringContainsString(
+            'src="/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg"',
+            $clean
+        );
+        self::assertStringContainsString(
+            'data-pb-ai-asset-slot="page:home_page:content-home-page-hero"',
+            $clean
+        );
+
+        // 可见文本里的 plan_locale / runtime_context / home_page 仍应被清理
+        self::assertStringNotContainsString('plan_locale', $clean);
+        self::assertStringNotContainsString('runtime_context', $clean);
+        self::assertStringNotContainsString('Just visible body text. plan_locale runtime_context home_page', $clean);
+        self::assertStringContainsString('Just visible body text.', $clean);
+    }
+
+    /**
+     * 强行契约：泄漏校验只检"可见文本"——属性中合法的 URL / slot id 必须放行。
+     */
+    public function testDetectHardGeneratedSectionHtmlPolicyViolationAllowsLegalKeywordsInAttributes(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $html = '<section><h2>Welcome home</h2>'
+            . '<img class="ai-site-visual-image" '
+            . 'src="/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg" '
+            . 'data-pb-ai-asset-slot="page:home_page:content-home-page-hero" alt="Home Hero">'
+            . '<p>Trust the journey, choose the path.</p></section>';
+
+        $reason = (function (string $html): ?string {
+            return $this->detectHardGeneratedSectionHtmlPolicyViolation($html);
+        })->call($service, $html);
+
+        self::assertNull(
+            $reason,
+            'Hard policy must allow page-scoped slot ids and asset URLs containing home_page in attributes.'
+        );
+    }
+
+    /**
+     * 强行契约：可见文本仍触发 internal task identifiers leaked。
+     */
+    public function testDetectHardGeneratedSectionHtmlPolicyViolationStillRejectsLeakInVisibleText(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $html = '<section><h2>Welcome</h2><p>page:home_page:content-home-page-hero leaked here.</p></section>';
+
+        $reason = (function (string $html): ?string {
+            return $this->detectHardGeneratedSectionHtmlPolicyViolation($html);
+        })->call($service, $html);
+
+        self::assertSame('internal task identifiers leaked', $reason);
+    }
+
+    /**
+     * 强行契约：hero/banner 轮播 JS 受控放行；其它情况一律清空 js_content。
+     */
+    public function testIsAllowedComponentInlineJsAllowsHeroCarouselJsButRejectsOthers(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $heroAiData = [
+            'html_content' => '<div class="ai-site-hero"><div class="ai-site-hero-track"></div></div>',
+        ];
+        $heroJs = 'const slides=Array.from(component.querySelectorAll(".ai-site-hero-slide"));'
+            . 'if(slides.length>1){let idx=0;setInterval(function(){idx=(idx+1)%slides.length;'
+            . 'slides.forEach(function(s,i){s.setAttribute("aria-hidden",i===idx?"false":"true");});},5000);}';
+
+        $allowed = (function (string $js, array $aiData): bool {
+            return $this->isAllowedComponentInlineJs($js, $aiData);
+        })->call($service, $heroJs, $heroAiData);
+        self::assertTrue($allowed, 'Hero carousel JS that only touches local component DOM must be allowed.');
+
+        // 非 hero 容器的 JS 一律拒绝。
+        $cardAiData = [
+            'html_content' => '<div class="ai-site-card-grid"><article class="ai-site-card"></article></div>',
+        ];
+        $rejected = (function (string $js, array $aiData): bool {
+            return $this->isAllowedComponentInlineJs($js, $aiData);
+        })->call($service, $heroJs, $cardAiData);
+        self::assertFalse(
+            $rejected,
+            'Non-hero containers must keep js_content empty even if JS itself is harmless.'
+        );
+
+        // 危险 JS（含 fetch/eval/innerHTML）必须被拒绝。
+        $dangerousJs = 'fetch("/api/leak").then(r=>r.json());component.innerHTML="x";';
+        $rejected2 = (function (string $js, array $aiData): bool {
+            return $this->isAllowedComponentInlineJs($js, $aiData);
+        })->call($service, $dangerousJs, $heroAiData);
+        self::assertFalse(
+            $rejected2,
+            'Dangerous JS (fetch/innerHTML) must be rejected even on hero containers.'
+        );
+
+        // 没有 component 句柄 → 拒绝。
+        $globalJs = 'document.querySelectorAll(".x").forEach(e=>e.classList.add("y"));';
+        $rejected3 = (function (string $js, array $aiData): bool {
+            return $this->isAllowedComponentInlineJs($js, $aiData);
+        })->call($service, $globalJs, $heroAiData);
+        self::assertFalse(
+            $rejected3,
+            'JS that does not scope to local component handle must be rejected.'
+        );
+    }
+
+    public function testDetectLowQualityGeneratedSectionHtmlReasonAllowsLegalKeywordsInAttributes(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $html = '<section class="ai-site-hero">'
+            . '<img class="ai-site-visual-image" '
+            . 'src="/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg" '
+            . 'data-pb-ai-asset-slot="page:home_page:content-home-page-hero" alt="Home Hero">'
+            . '<h2>Welcome to the launch lobby</h2>'
+            . '<p>Find the safest path to start, sign up, and play with confidence today.</p></section>';
+
+        $reason = (function (string $html): ?string {
+            return $this->detectLowQualityGeneratedSectionHtmlReason($html);
+        })->call($service, $html);
+
+        self::assertNull(
+            $reason,
+            'Low-quality detector must allow page-scoped slot ids in attributes.'
+        );
+    }
+
+    /**
+     * 强行契约：URL 路径中的 content/home-page-hero、page:home_page:content-...
+     * 在属性中合法存在，但作为可见文本（如 <p>） 必须被剥离。
+     */
+    public function testCleanAiHtmlFragmentPreservesPathLikeKeywordsInsideHrefButStripsFromText(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $clean = (function (string $html): string {
+            return $this->cleanAiHtmlFragment($html);
+        })->call(
+            $service,
+            '<section><a href="/pub/static/content/home-page-hero/icon.svg">View hero icon</a>'
+            . '<p>Reference: content/home-page-hero is the section code.</p>'
+            . '</section>'
+        );
+
+        self::assertStringContainsString(
+            'href="/pub/static/content/home-page-hero/icon.svg"',
+            $clean
+        );
+        self::assertStringNotContainsString('Reference: content/home-page-hero is the section code.', $clean);
+        self::assertStringContainsString('Reference: ', $clean);
+    }
+
+    public function testStubAiPayloadInheritsVerifiedAssetImageInsteadOfPlaceholderSvg(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $defaultConfig = [
+            'content.title' => 'Home Hero',
+            'content.description' => 'Anchor the home story with a confirmed visual.',
+            'content.cta_text' => 'Start now',
+            'visual.image_url' => '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg',
+            'visual.image_alt' => 'Home Hero visual for the page',
+            'runtime.section_template' => 'hero',
+            'runtime.section_page_type' => 'home_page',
+            'runtime.section_code' => 'content/home-page-hero',
+            'runtime.section_image_url' => '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg',
+            'runtime.section_image_alt' => 'Home Hero visual for the page',
+            'runtime.section_image_slot_id' => 'page:home_page:content-home-page-hero',
+        ];
+        $renderContext = [
+            '_content_locale' => 'en_US',
+        ];
+
+        $payload = (function (string $region, string $prompt, array $defaultConfig, array $renderContext): array {
+            return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
+        })->call($service, 'content', 'Stage-2 task: Home Hero', $defaultConfig, $renderContext);
+
+        $html = (string)($payload['html_content'] ?? '');
+        // 强行契约：hero variant 使用 banner 形式，<img> 仍带 ai-site-visual-image 兼容类，
+        // 并保留 verified asset URL + slot id 元数据。
+        self::assertStringContainsString('ai-site-hero--has-photo', $html);
+        self::assertStringContainsString('ai-site-visual-image', $html);
+        self::assertStringContainsString('src="/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg"', $html);
+        self::assertStringContainsString('data-pb-ai-image-role="generated-asset"', $html);
+        self::assertStringContainsString('data-pb-ai-asset-slot="page:home_page:content-home-page-hero"', $html);
+        self::assertStringNotContainsString('Close the page with a compact summary', $html, 'Hero variant must not fall back to cta demo copy when section template is hero.');
+        self::assertStringNotContainsString('<svg class="ai-site-svg-visual"', $html, 'Verified image must replace placeholder SVG visual when contract image is available.');
+    }
+
+    /**
+     * 强行契约：hero/banner stub 必须输出 banner 风格 + 多 slide 自动轮播结构，
+     * 不再退化为通用的"卡片网格 + 视觉面板"。
+     */
+    public function testStubAiPayloadHeroVariantOutputsBannerCarouselStructure(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $defaultConfig = [
+            'content.title' => 'Home Hero',
+            'content.description' => 'Anchor the home story with a confirmed visual.',
+            'content.cta_text' => 'Start now',
+            'visual.image_url' => '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg',
+            'visual.image_alt' => 'Home Hero visual for the page',
+            'runtime.section_template' => 'hero',
+            'runtime.section_page_type' => 'home_page',
+            'runtime.section_code' => 'content/home-page-hero',
+            'runtime.section_image_url' => '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg',
+            'runtime.section_image_alt' => 'Home Hero visual for the page',
+            'runtime.section_image_slot_id' => 'page:home_page:content-home-page-hero',
+            'contract.stage1_samples' => \json_encode([
+                'Trusted designs',
+                'Reliable delivery',
+                'Style-first picks',
+            ], \JSON_UNESCAPED_UNICODE),
+        ];
+        $renderContext = ['_content_locale' => 'en_US'];
+
+        $payload = (function (string $region, string $prompt, array $defaultConfig, array $renderContext): array {
+            return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
+        })->call($service, 'content', 'Stage-2 task: Home Hero', $defaultConfig, $renderContext);
+
+        $html = (string)($payload['html_content'] ?? '');
+        $css = (string)($payload['css_extra'] ?? '');
+        $js = (string)($payload['js_content'] ?? '');
+
+        // banner 容器 + 至少 2 张 slide；有规划图时打上融合用修饰类
+        self::assertMatchesRegularExpression('/class="ai-site-hero(?:\s+ai-site-hero--has-photo)?"/', $html);
+        self::assertStringContainsString('ai-site-hero--has-photo', $html);
+        self::assertMatchesRegularExpression('/data-slide-index="0"/', $html);
+        self::assertMatchesRegularExpression('/data-slide-index="1"/', $html);
+        // 轮播指示点
+        self::assertStringContainsString('class="ai-site-hero-dots"', $html);
+        self::assertStringContainsString('class="ai-site-hero-dot is-active"', $html);
+        // CTA 必须存在且使用 sectionPlan 中 next-action 文案
+        self::assertStringContainsString('class="ai-site-hero-cta"', $html);
+        self::assertStringContainsString('Start now', $html);
+        // 不再使用旧的卡片网格结构
+        self::assertStringNotContainsString('ai-site-card-grid', $html);
+        self::assertStringNotContainsString('ai-site-card-grid', $css);
+        // CSS 含 hero 动画/布局类；有图时使用 :not(...) / --has-photo 分离渐变底板与色谱融合遮罩，避免撞色
+        self::assertStringContainsString('.ai-site-hero-slide', $css);
+        self::assertStringContainsString('.ai-site-hero-cta', $css);
+        self::assertStringContainsString('.ai-site-hero:not(.ai-site-hero--has-photo)', $css);
+        self::assertStringContainsString('.ai-site-hero--has-photo:after', $css);
+        // JS 含轮播控制器
+        self::assertStringContainsString('setInterval', $js);
+        self::assertStringContainsString('aria-hidden', $js);
+    }
+
+    /**
+     * 强行契约：features/cta 等非 hero 变体仍保留卡片网格 + 视觉面板组合。
+     */
+    public function testStubAiPayloadFeaturesVariantStillUsesCardGridLayout(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $defaultConfig = [
+            'content.title' => 'Why people choose us',
+            'content.description' => 'Three highlights worth a second look.',
+            'visual.image_url' => '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-features-xyz.jpg',
+            'runtime.section_template' => 'features',
+            'runtime.section_page_type' => 'home_page',
+            'runtime.section_code' => 'content/home-page-features',
+            'runtime.section_image_url' => '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-features-xyz.jpg',
+            'runtime.section_image_slot_id' => 'page:home_page:content-home-page-features',
+        ];
+        $renderContext = ['_content_locale' => 'en_US'];
+
+        $payload = (function (string $region, string $prompt, array $defaultConfig, array $renderContext): array {
+            return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
+        })->call($service, 'content', 'Stage-2 task: Features', $defaultConfig, $renderContext);
+
+        $html = (string)($payload['html_content'] ?? '');
+        $css = (string)($payload['css_extra'] ?? '');
+        self::assertStringContainsString('ai-site-card-grid', $html);
+        self::assertStringContainsString('.ai-site-card-grid', $css);
+        self::assertStringNotContainsString('class="ai-site-hero"', $html);
+        self::assertStringNotContainsString('ai-site-hero-dots', $html);
+    }
+
+    public function testBuildSectionDefaultConfigPrefersVerifiedAssetOverPlaceholderSlot(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $placeholderUrl = '/pub/media/page-build/example/ai-generated/home-hero-placeholder.svg';
+        $verifiedUrl = '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-verified.jpg';
+
+        $scope = [
+            'asset_manifest' => [
+                'slots' => [
+                    'page:home_page:hero' => [
+                        'slot_id' => 'page:home_page:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home_page',
+                        'final_url' => $placeholderUrl,
+                        'status' => 'done',
+                        'variants' => [[
+                            'url' => $placeholderUrl,
+                            'mode' => 'placeholder',
+                            'placeholder' => 1,
+                        ]],
+                    ],
+                    'page:home_page:content-home-page-hero' => [
+                        'slot_id' => 'page:home_page:content-home-page-hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home_page',
+                        'final_url' => $verifiedUrl,
+                        'status' => 'done',
+                        'variants' => [[
+                            'url' => $verifiedUrl,
+                            'mode' => 'auto_build',
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $config = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): array {
+            return $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Home Hero',
+                'template' => 'hero',
+                'config' => [],
+            ],
+            [
+                'page_title' => 'Hero asset priority',
+                'page_label' => 'Home',
+            ],
+            [
+                'site_title' => 'Hero asset priority',
+            ],
+            $scope
+        );
+
+        self::assertSame($verifiedUrl, (string)($config['visual.image_url'] ?? ''));
+        self::assertSame($verifiedUrl, (string)($config['runtime.section_image_url'] ?? ''));
+        self::assertSame('page:home_page:content-home-page-hero', (string)($config['runtime.section_image_slot_id'] ?? ''));
+    }
+
+    public function testResolveSectionAssetUrlPrefersPageScopedSlotOverLegacyKeywordHit(): void
+    {
+        // 真实场景复现：stage1 留下了 slot_id=5、page_type='' 的 legacy slot，
+        // 其 brief 文本里包含 "Hero visual brief..." 会匹配到关键字 "hero"，
+        // 但 stage2 已经为 home_page 落地了精确的 page-scoped slot
+        // (slot_id=page:home_page:content-home-page-hero)。
+        // resolveSectionAssetUrl 必须优先返回精确匹配的 page-scoped slot，
+        // 不得被 legacy slot（即便其元数据偶然命中关键字）抢占。
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $legacyUrl = '/pub/media/page-build/example/ai-generated/5-legacy-stage1.jpg';
+        $pageScopedUrl = '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-stage2.jpg';
+
+        $scope = [
+            'asset_manifest' => [
+                'slots' => [
+                    '5' => [
+                        'slot_id' => '5',
+                        'slot_type' => 'hero_image',
+                        'page_type' => '',
+                        'block_key' => '',
+                        'task_key' => '',
+                        'field' => 'image',
+                        'label' => '5',
+                        'brief' => 'Hero visual brief: confirm the page promise on the first screen.',
+                        'final_url' => $legacyUrl,
+                        'variants' => [[
+                            'url' => $legacyUrl,
+                            'mode' => 'auto_build',
+                        ]],
+                    ],
+                    'page:home_page:content-home-page-hero' => [
+                        'slot_id' => 'page:home_page:content-home-page-hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home_page',
+                        'block_key' => 'content/home-page-hero',
+                        'task_key' => 'page:home_page:content/home-page-hero',
+                        'field' => 'image',
+                        'label' => 'Home Hero',
+                        'brief' => 'Home Hero visual that illustrates the block promise.',
+                        'final_url' => $pageScopedUrl,
+                        'variants' => [[
+                            'url' => $pageScopedUrl,
+                            'mode' => 'auto_build',
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $resolved = (function (string $pageType, array $section, array $scope): string {
+            return $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Home Hero',
+                'template' => 'hero',
+            ],
+            $scope
+        );
+
+        self::assertSame($pageScopedUrl, $resolved, 'page-scoped slot 必须优先于含 hero 关键字的 legacy slot 被返回。');
+    }
+
+    public function testResolveSectionAssetUrlFallsBackToLegacySlotOnlyWhenPageScopedAbsent(): void
+    {
+        // 当 stage2 没有 page-scoped slot，仅有 stage1 legacy slot 时，
+        // 仍需回退到 legacy slot，但只有在前面所有更精确的查找都 miss 时才允许。
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $legacyUrl = '/pub/media/page-build/example/ai-generated/legacy-only.jpg';
+        $scope = [
+            'asset_manifest' => [
+                'slots' => [
+                    '5' => [
+                        'slot_id' => '5',
+                        'slot_type' => 'hero_image',
+                        'page_type' => '',
+                        'brief' => 'Hero visual brief for legacy fallback.',
+                        'final_url' => $legacyUrl,
+                        'variants' => [[
+                            'url' => $legacyUrl,
+                            'mode' => 'auto_build',
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $resolved = (function (string $pageType, array $section, array $scope): string {
+            return $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Home Hero',
+                'template' => 'hero',
+            ],
+            $scope
+        );
+
+        self::assertSame($legacyUrl, $resolved, '没有 page-scoped slot 时应回退到 legacy slot。');
+    }
+
+    public function testResolveSectionAssetUrlPrefersCodeBasedSlotIdOverKeyBasedSlotId(): void
+    {
+        // 真实场景复现：blueprint 偶尔会给 section.key 复用通用 token（如把 about-page-story 的 key 设为 highlights）
+        // 因此 expectedSlotIds 同时含有 page:about_page:content-about-page-story（基于 code）
+        // 和 page:about_page:highlights（基于 key）。两者均为 REAL 时，必须优先返回 code-based 的精确 slot。
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $codeBasedUrl = '/pub/media/page-build/example/ai-generated/page-about_page-content-about-page-story.jpg';
+        $keyBasedUrl = '/pub/media/page-build/example/ai-generated/page-about_page-highlights.jpg';
+
+        // 注意 slot 顺序：key-based 排在前面，模拟真实 manifest 的非 specificity 顺序。
+        $scope = [
+            'asset_manifest' => [
+                'slots' => [
+                    'page:about_page:highlights' => [
+                        'slot_id' => 'page:about_page:highlights',
+                        'slot_type' => 'trust_brand_image',
+                        'page_type' => 'about_page',
+                        'block_key' => 'highlights',
+                        'final_url' => $keyBasedUrl,
+                        'variants' => [[
+                            'url' => $keyBasedUrl,
+                            'mode' => 'auto_build',
+                        ]],
+                    ],
+                    'page:about_page:content-about-page-story' => [
+                        'slot_id' => 'page:about_page:content-about-page-story',
+                        'slot_type' => 'trust_brand_image',
+                        'page_type' => 'about_page',
+                        'block_key' => 'content/about-page-story',
+                        'final_url' => $codeBasedUrl,
+                        'variants' => [[
+                            'url' => $codeBasedUrl,
+                            'mode' => 'auto_build',
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $resolved = (function (string $pageType, array $section, array $scope): string {
+            return $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        })->call(
+            $service,
+            'about_page',
+            [
+                'code' => 'content/about-page-story',
+                'key' => 'highlights',
+                'name' => '品牌与团队',
+                'template' => 'story',
+            ],
+            $scope
+        );
+
+        self::assertSame($codeBasedUrl, $resolved, 'code-based 精确匹配 (page:about_page:content-about-page-story) 必须优先于 key-based slot。');
+    }
+
+    public function testResolveSectionAssetUrlPrefersRealLegacyOverPlaceholderPageScoped(): void
+    {
+        // 强行契约：当 stage2 只生成了占位 page-scoped slot，
+        // 但 stage1 已经留下真实 legacy slot 时，必须优先继承真实图片。
+        // 用户原话："反而用了占位图，这个要处理。"
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $legacyRealUrl = '/pub/media/page-build/example/ai-generated/details-real-stage1.jpg';
+        $pageScopedPlaceholderUrl = '/pub/media/page-build/example/ai-generated/page-home_page-details-placeholder.svg';
+
+        $scope = [
+            'asset_manifest' => [
+                'slots' => [
+                    'page:home_page:details' => [
+                        'slot_id' => 'page:home_page:details',
+                        'slot_type' => 'trust_brand_image',
+                        'page_type' => 'home_page',
+                        'block_key' => 'details',
+                        'final_url' => $pageScopedPlaceholderUrl,
+                        'variants' => [[
+                            'url' => $pageScopedPlaceholderUrl,
+                            'mode' => 'placeholder',
+                            'placeholder' => 1,
+                        ]],
+                    ],
+                    'details' => [
+                        'slot_id' => 'details',
+                        'slot_type' => 'trust_brand_image',
+                        'page_type' => '',
+                        'block_key' => 'details',
+                        'brief' => 'Turn the page goal into clear on-screen content (details copy seed).',
+                        'final_url' => $legacyRealUrl,
+                        'variants' => [[
+                            'url' => $legacyRealUrl,
+                            'mode' => 'auto_build',
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $resolved = (function (string $pageType, array $section, array $scope): string {
+            return $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-details',
+                'key' => 'details',
+                'name' => '转化路径',
+                'template' => 'details',
+            ],
+            $scope
+        );
+
+        self::assertSame($legacyRealUrl, $resolved, 'stage1 真实 legacy 图必须优先于 stage2 占位 page-scoped slot。');
+    }
+
+    public function testResolveSectionAssetUrlIgnoresPlaceholderSlotWhenRealSlotExists(): void
+    {
+        // 当同时存在 placeholder 与 real 的 page-scoped slot 时，
+        // 必须优先返回非占位真实图片。
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $placeholderUrl = '/pub/media/page-build/example/ai-generated/page-home_page-hero-placeholder.svg';
+        $realUrl = '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero.jpg';
+
+        $scope = [
+            'asset_manifest' => [
+                'slots' => [
+                    'page:home_page:hero' => [
+                        'slot_id' => 'page:home_page:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home_page',
+                        'final_url' => $placeholderUrl,
+                        'variants' => [[
+                            'url' => $placeholderUrl,
+                            'mode' => 'placeholder',
+                            'placeholder' => 1,
+                        ]],
+                    ],
+                    'page:home_page:content-home-page-hero' => [
+                        'slot_id' => 'page:home_page:content-home-page-hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home_page',
+                        'final_url' => $realUrl,
+                        'variants' => [[
+                            'url' => $realUrl,
+                            'mode' => 'auto_build',
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $resolved = (function (string $pageType, array $section, array $scope): string {
+            return $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Home Hero',
+                'template' => 'hero',
+            ],
+            $scope
+        );
+
+        self::assertSame($realUrl, $resolved, '真实图片必须优先于占位 SVG 被返回。');
+    }
+
+    public function testProductionFallbackPayloadInheritsVerifiedAssetImage(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $defaultConfig = [
+            'content.title' => 'About Hero',
+            'content.description' => 'Tell the brand story with a verified hero photo.',
+            'visual.image_url' => '/pub/media/page-build/example/ai-generated/page-about_page-content-about-page-hero-deadbeef.jpg',
+            'visual.image_alt' => 'About Hero visual',
+            'runtime.section_template' => 'hero',
+            'runtime.section_page_type' => 'about_page',
+            'runtime.section_code' => 'content/about-page-hero',
+            'runtime.section_image_url' => '/pub/media/page-build/example/ai-generated/page-about_page-content-about-page-hero-deadbeef.jpg',
+            'runtime.section_image_alt' => 'About Hero visual',
+            'runtime.section_image_slot_id' => 'page:about_page:content-about-page-hero',
+        ];
+
+        $payload = (function (string $region, string $prompt, array $defaultConfig, array $renderContext): array {
+            return $this->buildProductionFallbackAiPayload($region, $prompt, $defaultConfig, $renderContext);
+        })->call($service, 'content', 'Production fallback: About Hero', $defaultConfig, ['_content_locale' => 'en_US']);
+
+        $html = (string)($payload['html_content'] ?? '');
+        self::assertStringContainsString('<img class="ai-site-visual-image"', $html);
+        self::assertStringContainsString('data-pb-ai-asset-slot="page:about_page:content-about-page-hero"', $html);
+        self::assertStringContainsString('ai-site-fallback-art--image', $html);
+        self::assertStringNotContainsString('<svg viewBox="0 0 520 360"', $html, 'Production fallback must not draw placeholder SVG when verified asset URL is provided.');
+    }
+
+    public function testFallbackSectionPlanRespectsSectionTemplateOverKeywordSignals(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $copy = [
+            'title' => 'Home Hero',
+            'body' => 'Anchor the home story with a confirmed visual.',
+            'cjk' => false,
+        ];
+
+        // 即使 prompt/defaultConfig 含有触发 cta 关键字（primary_cta、Start now），
+        // 只要 runtime.section_template 已声明 hero，变体必须保持 hero。
+        $plan = (function (array $defaultConfig, array $renderContext, string $prompt, array $copy): array {
+            return $this->buildFallbackSectionPlan($defaultConfig, $renderContext, $prompt, $copy);
+        })->call($service, [
+            'runtime.section_template' => 'hero',
+            'content.cta_text' => 'Start now',
+            'content.cta_url' => '#contact',
+        ], [], 'Stage-2 task: cta_plan primary_cta=Start now', $copy);
+
+        self::assertSame('hero', $plan['variant']);
+        self::assertSame('Home Hero', $plan['title']);
+        self::assertSame($copy['body'], $plan['body']);
+    }
+
+    public function testApplyTaskPlanContentPlanDefaultsAdoptsContentCopyAndCtaPlan(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $defaultConfig = [
+            'content.title' => '',
+            'content.description' => '',
+            'cta.text' => '',
+            'cta.url' => '',
+        ];
+        $taskPlanTask = [
+            'task_script' => [],
+            'block_task' => [
+                'content_plan' => [
+                    'content_copy' => [
+                        ['field' => 'headline', 'copy' => 'Home Hero'],
+                        ['field' => 'description', 'copy' => 'A confirmed stage-1 hero summary visitors can trust.'],
+                    ],
+                    'cta_plan' => [
+                        ['label' => 'Start now', 'target' => '#contact'],
+                    ],
+                ],
+            ],
+        ];
+
+        $config = (function (array $defaultConfig, array $taskPlanTask, string $locale): array {
+            return $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask, $locale);
+        })->call($service, $defaultConfig, $taskPlanTask, 'en_US');
+
+        self::assertSame('Home Hero', $config['content.title'] ?? null);
+        self::assertSame('A confirmed stage-1 hero summary visitors can trust.', $config['content.description'] ?? null);
+        self::assertSame('Start now', $config['cta.text'] ?? null);
+        self::assertSame('#contact', $config['cta.url'] ?? null);
     }
 
     public function testVirtualThemeComponentPolicyRejectsPlanningObservationCopy(): void

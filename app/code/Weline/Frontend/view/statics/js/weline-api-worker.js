@@ -86,7 +86,8 @@ function buildRequestInit(options) {
 }
 
 async function parseBody(response, contentType) {
-    if (typeof contentType === 'string' && contentType.indexOf('application/json') !== -1) {
+    const ct = typeof contentType === 'string' ? contentType.toLowerCase() : '';
+    if (ct.indexOf('application/json') !== -1) {
         try {
             return await response.json();
         } catch (error) {
@@ -97,11 +98,25 @@ async function parseBody(response, contentType) {
         }
     }
 
-    if (TEXT_MIME_REGEXP.test(contentType)) {
-        return await response.text();
+    const text = await response.text();
+    const trimmed = text.trim();
+    if (
+        trimmed.length > 0 &&
+        ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']')))
+    ) {
+        try {
+            return JSON.parse(text);
+        } catch (error) {
+            /* 非 JSON 文本，按原文返回 */
+        }
     }
 
-    return null;
+    if (TEXT_MIME_REGEXP.test(ct) || ct === '') {
+        return text;
+    }
+
+    return text;
 }
 
 function collectHeaders(responseHeaders) {

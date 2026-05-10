@@ -481,9 +481,13 @@ class PageLayout extends Model
         $contentComponents = $this->getContentComponents();
         $normalizedContent = [];
         
+        $styleCode = $this->getStyleCode();
+
         foreach ($contentComponents as $comp) {
+            $code = $comp['component'] ?? $comp['code'] ?? '';
             $normalizedContent[] = [
-                'code' => $comp['component'] ?? $comp['code'] ?? '',
+                'code' => $code,
+                'name' => $this->resolveComponentName($code, $comp['from_template'] ?? '', $styleCode),
                 'enabled' => $comp['enabled'] ?? true,
                 'config' => $comp['config'] ?? [],
                 'instance_id' => $comp['id'] ?? $comp['instance_id'] ?? '',
@@ -546,5 +550,55 @@ class PageLayout extends Model
         }
         
         return $this;
+    }
+
+    /**
+     * 获取关联页面的模板代码
+     */
+    private function getStyleCode(): string
+    {
+        try {
+            $pageId = (int)$this->getData(self::schema_fields_PAGE_ID);
+            if ($pageId <= 0) {
+                return '';
+            }
+            $page = \Weline\Framework\Manager\ObjectManager::getInstance(Page::class);
+            $page->load($pageId);
+            if (!$page->getId()) {
+                return '';
+            }
+            $pageService = \Weline\Framework\Manager\ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\PageService::class);
+            return $pageService->getStyleCode($page);
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
+    /**
+     * 解析组件显示名称
+     */
+    private function resolveComponentName(string $code, string $fromTemplate, string $styleCode): string
+    {
+        if (empty($code)) {
+            return '';
+        }
+        try {
+            $resolver = \GuoLaiRen\PageBuilder\Service\Component\ComponentResolver::getInstance();
+            $lookupStyle = $fromTemplate !== '' ? $fromTemplate : $styleCode;
+            $name = $resolver->getComponentName($code, $lookupStyle);
+            if ($name !== '' && $name !== $code) {
+                return $name;
+            }
+            // 回退：使用原始模板代码查找
+            if ($fromTemplate !== '' && $fromTemplate !== $styleCode) {
+                $name = $resolver->getComponentName($code, $styleCode);
+                if ($name !== '' && $name !== $code) {
+                    return $name;
+                }
+            }
+            return $code;
+        } catch (\Throwable $e) {
+            return $code;
+        }
     }
 }
