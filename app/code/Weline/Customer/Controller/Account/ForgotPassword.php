@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Customer\Controller\Account;
 
 use WeShop\Customer\Service\PasswordResetService;
-use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\View\Template;
 
 class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
@@ -39,9 +38,6 @@ class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
         $this->assign('login_url', '/customer/account/login');
         $this->assign('register_url', '/customer/account/register');
         $this->assign('title', $resetRecord ? __('Reset Password') : __('Forgot Password'));
-
-        $this->assign('error_message', MessageManager::get_error_message());
-        $this->assign('success_message', MessageManager::get_success_message());
 
         return $this->fetch('Weline_Customer::templates/frontend/account/forgot-password.phtml');
     }

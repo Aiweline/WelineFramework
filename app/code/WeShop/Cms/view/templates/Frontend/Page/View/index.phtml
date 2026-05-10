@@ -1,0 +1,28 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$page = $this->getData('page') ?? [];
+$title = htmlspecialchars((string) ($page['title'] ?? ''), ENT_QUOTES);
+$contentHeading = htmlspecialchars((string) ($page['content_heading'] ?? ''), ENT_QUOTES);
+$content = (string) ($page['content'] ?? '');
+?>
+<div class="cms-page-wrapper py-4">
+    <div class="container">
+        <div class="cms-page-content">
+            <?php if ($contentHeading !== ''): ?>
+                <h1 class="cms-page-heading mb-4"><?= $contentHeading ?></h1>
+            <?php elseif ($title !== ''): ?>
+                <h1 class="cms-page-heading mb-4"><?= $title ?></h1>
+            <?php endif; ?>
+
+            <?php if ($content !== ''): ?>
+                <div class="cms-page-body">
+                    <?= $content ?>
+                </div>
+            <?php else: ?>
+                <div class="cms-page-empty text-center py-5">
+                    <p class="text-muted"><?= __('No content available for this page.') ?></p>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

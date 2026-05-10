@@ -1,0 +1,180 @@
+<!--
+布局：个人中心 - 仪表盘（dashboard）
+
+与首页一致：Partials 加载前台 Header/Footer，meta.showHeader / meta.showFooter 控制显隐；
+中部为面包屑 + 侧栏 + 主内容（结构与 account/default 中部相同）。
+
+字段
+@meta.name {default="个人中心仪表盘",name="个人中心仪表盘",description="个人中心仪表盘布局"}
+@meta.description {default="Partials 顶栏底栏与首页同源 + 账户侧栏主内容",name="描述",description="顶栏底栏与首页一致"}
+@preview.login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="个人中心需登录"}
+@login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="个人中心需登录"}
+@param.title {default="个人中心",name="页面标题",description="页面标题"}
+@param.content {default="",name="主要内容（HTML字符串）",description="主要内容"}
+@param.sidebar {default="",name="侧边栏内容（HTML字符串）",description="侧边栏 HTML"}
+@param.sidebarCollapsed {default=false,name="侧边栏是否折叠",description="侧边栏折叠"}
+@param.class {default="",name="额外CSS类",description="额外 CSS 类"}
+@param.showHeader {default=true,name="是否显示header",description="是否显示顶栏（与首页布局一致）"}
+@param.showFooter {default=true,name="是否显示footer",description="是否显示底栏（与首页布局一致）"}
+@param.layout.leftsider {default=1,option={0:不显示,1:显示},name="显示左侧栏",description="侧栏"}
+@param.layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="右侧栏"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta
+-->
+<?php
+$meta = $this->getData('meta') ?? [];
+// 与分类页等布局一致：未配置时默认展示前台 Partials 顶栏/底栏（与首页同源）
+$showHeader = $meta['showHeader'] ?? $this->getData('showHeader') ?? true;
+$showFooter = $meta['showFooter'] ?? $this->getData('showFooter') ?? true;
+$meta['showHeader'] = $showHeader;
+$meta['showFooter'] = $showFooter;
+$this->assign('meta', $meta);
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+    <style>
+        .account-dashboard-layout .weline-page-wrapper {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .account-dashboard-layout .weline-main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--color-bg-secondary);
+        }
+        .account-dashboard {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--color-bg-secondary);
+        }
+        .account-dashboard__breadcrumb {
+            background: var(--color-bg-primary);
+            border-bottom: 1px solid var(--color-border-light);
+        }
+        .account-dashboard__body {
+            flex: 1;
+            display: flex;
+            max-width: var(--container-max-width, 1400px);
+            margin: 0 auto;
+            width: 100%;
+            padding: var(--spacing-xl, 2rem) var(--spacing-md, 1rem);
+            gap: var(--spacing-xl, 2rem);
+        }
+        .account-sidebar {
+            width: var(--sidebar-width, 280px);
+            flex-shrink: 0;
+            background: var(--color-bg-primary);
+            border-radius: var(--radius-lg, 12px);
+            box-shadow: var(--shadow-sm);
+            padding: var(--spacing-lg, 1.5rem);
+            height: fit-content;
+            position: sticky;
+            top: var(--spacing-lg, 1.5rem);
+            transition: all 0.3s ease;
+        }
+        .account-sidebar.collapsed {
+            width: var(--sidebar-collapsed-width, 80px);
+            padding: var(--spacing-md, 1rem);
+        }
+        .account-sidebar.collapsed .account-sidebar__nav-text,
+        .account-sidebar.collapsed .account-sidebar__user-info {
+            display: none;
+        }
+        .account-main {
+            flex: 1;
+            min-width: 0;
+        }
+        .account-main-content {
+            background: var(--color-bg-primary);
+            border-radius: var(--radius-lg, 12px);
+            box-shadow: var(--shadow-sm);
+            padding: var(--spacing-xl, 2rem);
+            min-height: 60vh;
+        }
+        @media (max-width: 1024px) {
+            .account-dashboard__body {
+                flex-direction: column;
+                padding: var(--spacing-md, 1rem);
+                gap: var(--spacing-md, 1rem);
+            }
+            .account-sidebar {
+                width: 100%;
+                position: static;
+                border-radius: var(--radius-md, 8px);
+            }
+            .account-sidebar.collapsed {
+                width: 100%;
+            }
+        }
+        @media (max-width: 640px) {
+            .account-main-content {
+                padding: var(--spacing-md, 1rem);
+                border-radius: var(--radius-md, 8px);
+            }
+        }
+    </style>
+</head>
+<body class="account-dashboard-layout">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::body-start</w:hook>
+
+    <div class="weline-page-wrapper">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::account::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <div class="account-dashboard__breadcrumb">
+                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::account::breadcrumb-before</w:hook>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+                <w:hook>Weline_Theme::frontend::layouts::account::breadcrumb-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+            </div>
+
+            <div class="account-dashboard <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-dashboard" data-layout="account_dashboard">
+                <if condition="meta.sidebar">
+                    <w:hook>Weline_Theme::frontend::layouts::account::sidebar-before</w:hook>
+                    <aside class="account-sidebar <?= !empty($meta['sidebarCollapsed']) ? 'collapsed' : '' ?>">
+                        {{meta.sidebar}}
+                    </aside>
+                    <w:hook>Weline_Theme::frontend::layouts::account::sidebar-after</w:hook>
+                </if>
+
+                <div class="account-main">
+                    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::account::content-before</w:hook>
+                    <main class="account-main-content" id="account-main-content" data-layout="account_main_content">
+                        {{meta.content}}
+                    </main>
+                    <w:hook>Weline_Theme::frontend::layouts::account::content-after</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+                </div>
+            </div>
+        </div>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop"/>
+            <w:hook>Weline_Theme::frontend::layouts::account::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>

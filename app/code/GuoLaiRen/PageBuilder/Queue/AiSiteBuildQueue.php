@@ -154,6 +154,10 @@ class AiSiteBuildQueue implements QueueInterface
                     $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 }
                 $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
+                if ($forceRebuild) {
+                    $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
+                    $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope);
+                }
                 $normalizedScope = $buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
                 $scopeChanged = $normalizedScope !== $confirmedScope;
                 $scope = $normalizedScope;
@@ -167,7 +171,7 @@ class AiSiteBuildQueue implements QueueInterface
                 $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
                 $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
             }
-            if ((int)($scope['task_plan_confirmed'] ?? 0) !== 1) {
+            if (!$buildTaskService->hasConfirmedTaskPlanForBuild($scope)) {
                 throw new \RuntimeException('请先确认第二阶段任务方案，再开始执行构建。');
             }
 
@@ -218,6 +222,18 @@ class AiSiteBuildQueue implements QueueInterface
             // 让单页/单 section 的续生成可在不依赖 -f 的前提下成立。
             // controller 入口 runHtmlBlocksBuildOperationV3 也有兜底 reset，这里属于双层防御。
             if ($operation === 'build') {
+                $resumeScope = $scopeService->normalizeScope(
+                    $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
+                if ($forceRebuild) {
+                    $resetScope = $buildTaskService->clearBuildArtifactsForRegeneration($resumeScope);
+                    $resetScope = $buildTaskService->resetBuildTasksToPendingForRebuild($resetScope);
+                    if ($resetScope !== $resumeScope) {
+                        $sessionService->replaceScope((int)$session->getId(), $adminId, $resetScope);
+                        $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+                        $this->queueTrace($sse, '强制重新生成：已在执行前清空旧构建产物并重置全部构建任务。');
+                    }
+                }
                 $resumeScope = $scopeService->normalizeScope(
                     $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
                 );
@@ -578,10 +594,37 @@ class AiSiteBuildQueue implements QueueInterface
             \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
             $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
         );
+        $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
         $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope);
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
             'build_blueprint' => \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [],
             'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
+            'virtual_pages_by_type' => [],
+            'pagebuilder_pages_by_type' => [],
+            'materialized_pages_by_type' => [],
+            'page_type_layouts' => [],
+            'pending_generation_page_types' => [],
+            'build_summary' => [],
+            'build_task_summary' => [],
+            'build_workbench' => [],
+            'build_contracts' => [],
+            'render_data_contract' => [],
+            'qa_report_contract' => [],
+            'publish_verification' => [],
+            'pre_publish_visual_urls' => [],
+            'preview_full_url' => '',
+            'visual_preview_url' => '',
+            'visual_edit_url' => '',
+            'can_publish' => 0,
+            'site_ready' => 0,
+            'latest_build_failed' => 0,
+            'latest_build_failure' => [],
+            'publish_blocked_by_latest_ai_failure' => 0,
+            'publish_blocked_reason' => '',
+            'retryable_ai_failures' => \is_array($scope['retryable_ai_failures'] ?? null) ? $scope['retryable_ai_failures'] : [],
+            'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
+            'next_stage_blocked_by_ai_failures' => (int)($scope['next_stage_blocked_by_ai_failures'] ?? 0),
+            '_build_regeneration' => \is_array($scope['_build_regeneration'] ?? null) ? $scope['_build_regeneration'] : [],
             '_queue_force_build' => [
                 'active' => 1,
                 'at' => \date('Y-m-d H:i:s'),
@@ -598,6 +641,10 @@ class AiSiteBuildQueue implements QueueInterface
                 '_queue_force_build' => [
                     'active' => 0,
                     'consumed_at' => \date('Y-m-d H:i:s'),
+                ],
+                '_build_regeneration' => [
+                    'active' => 0,
+                    'finished_at' => \date('Y-m-d H:i:s'),
                 ],
             ]);
         } catch (\Throwable) {

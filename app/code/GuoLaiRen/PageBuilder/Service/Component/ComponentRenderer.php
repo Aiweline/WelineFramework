@@ -155,9 +155,14 @@ class ComponentRenderer
             
             // 可视化编辑模式下添加包装器
             if ($visualMode) {
+                $componentName = $this->getComponentResolver()->getComponentName(
+                    $componentCode,
+                    $actualStyleCode
+                );
                 $componentHtml = $this->wrapForVisualEditor(
                     $componentHtml,
                     $componentCode,
+                    $componentName,
                     $instanceId,
                     $region,
                     $index,
@@ -297,6 +302,7 @@ class ComponentRenderer
     private function wrapForVisualEditor(
         string $html,
         string $componentCode,
+        string $componentName,
         string $instanceId,
         string $region,
         int $index,
@@ -304,23 +310,24 @@ class ComponentRenderer
         bool $hasChildren = false
     ): string {
         $escapedCode = htmlspecialchars($componentCode);
+        $escapedName = htmlspecialchars($componentName ?: $componentCode);
         $escapedInstanceId = htmlspecialchars($instanceId);
         $escapedRegion = htmlspecialchars($region);
         $escapedStyleCode = htmlspecialchars($styleCode);
         $hasChildrenAttr = $hasChildren ? 'true' : 'false';
-        
+
         return <<<HTML
-<div class="vb-component pb-component" 
+<div class="vb-component pb-component"
      data-instance-id="{$escapedInstanceId}"
-     data-component="{$escapedCode}" 
-     data-region="{$escapedRegion}" 
-     data-index="{$index}" 
+     data-component="{$escapedCode}"
+     data-region="{$escapedRegion}"
+     data-index="{$index}"
      data-style-code="{$escapedStyleCode}"
      data-has-children="{$hasChildrenAttr}">
     <div class="vb-component-header">
         <span class="vb-component-name">
             <i class="mdi mdi-drag component-drag-handle"></i>
-            {$escapedCode}
+            {$escapedName}
         </span>
         <div class="vb-component-actions">
             <button class="btn btn-sm btn-link" onclick="VB.editComponent('{$escapedInstanceId}')">

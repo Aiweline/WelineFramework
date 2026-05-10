@@ -132,6 +132,16 @@ class BaseController extends FrontendController
             'qa' => "qa/qa_page_{$variant}",
             'review' => "review/review_page_{$variant}",
             'rma' => "rma/rma_page_{$variant}",
+            // New layout types for controllers using non-standard layoutType values
+            'category' => "product_list/product_listing_page_{$variant}",
+            'compliance' => "compliance/compliance_page_{$variant}",
+            'invoice' => "account/account_page_{$variant}",
+            'membership' => "account/account_page_{$variant}",
+            'order' => "account/account_page_{$variant}",
+            'search' => "product_list/product_listing_page_{$variant}",
+            'page' => "page/page_{$variant}",
+            'social_share' => "social/social_share_page_{$variant}",
+            'subscription' => "account/account_page_{$variant}",
         ];
 
         $layoutPath = $layoutPathMap[$layoutType] ?? null;

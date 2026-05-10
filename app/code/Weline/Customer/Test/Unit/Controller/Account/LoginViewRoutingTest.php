@@ -24,7 +24,7 @@ class LoginViewRoutingTest extends TestCase
             ->method('isLoggedIn')
             ->willReturn(false);
         $assignCalls = 0;
-        $controller->expects($this->exactly(4))
+        $controller->expects($this->exactly(2))
             ->method('assign')
             ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): Login {
                 if ($assignCalls === 0) {
@@ -33,12 +33,6 @@ class LoginViewRoutingTest extends TestCase
                 } elseif ($assignCalls === 1) {
                     TestCase::assertSame('title', $key);
                     TestCase::assertNotSame('', (string) $value);
-                } elseif ($assignCalls === 2) {
-                    TestCase::assertSame('error_message', $key);
-                    TestCase::assertNull($value);
-                } elseif ($assignCalls === 3) {
-                    TestCase::assertSame('success_message', $key);
-                    TestCase::assertNull($value);
                 }
                 $assignCalls++;
                 return $controller;

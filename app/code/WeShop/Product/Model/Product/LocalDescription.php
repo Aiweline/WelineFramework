@@ -2,18 +2,26 @@
 
 namespace WeShop\Product\Model\Product;
 
+use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\I18n\LocalModel;
 use WeShop\Product\Model\Product;
 
 class LocalDescription extends LocalModel
 {
     public const indexer = 'product_local_description';
+    #[Col(type: 'int', nullable: false, comment: '产品ID')]
     public const schema_fields_ID = Product::schema_fields_ID;
+    #[Col(type: 'varchar', length: 150, nullable: true, comment: '名称')]
     public const schema_fields_NAME = Product::schema_fields_name;
+    #[Col(type: 'text', nullable: true, comment: '描述')]
     public const schema_fields_DESCRIPTION = Product::schema_fields_description;
+    #[Col(type: 'text', nullable: true, comment: '简短描述')]
     public const schema_fields_SHORT_DESCRIPTION = Product::schema_fields_short_description;
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Meta名称')]
     public const schema_fields_META_NAME = Product::schema_fields_meta_name;
+    #[Col(type: 'text', nullable: true, comment: 'Meta描述')]
     public const schema_fields_META_DESCRIPTION = Product::schema_fields_meta_description;
+    #[Col(type: 'text', nullable: true, comment: 'Meta关键词')]
     public const schema_fields_META_KEYWORDS = Product::schema_fields_meta_keywords;
 
     /**
