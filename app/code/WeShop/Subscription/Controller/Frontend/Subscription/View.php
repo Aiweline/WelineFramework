@@ -10,6 +10,8 @@ use WeShop\Subscription\Service\SubscriptionDetailPageDataService;
 
 class View extends BaseController
 {
+    private const CONTENT_TEMPLATE = 'WeShop_Subscription::templates/Frontend/Subscription/View/index.phtml';
+
     protected ?string $layoutType = 'subscription';
 
     public function __construct(
@@ -44,6 +46,6 @@ class View extends BaseController
         }
 
         $this->assign('title', __('Subscription Details'));
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }
