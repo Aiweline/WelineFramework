@@ -18,6 +18,32 @@ class LayoutPathResolver
 
     public static function resolveLayoutTemplate(string $layoutPath, WelineTheme $theme, string $area): ?string
     {
+        $resolved = self::resolveLayoutTemplateOnce($layoutPath, $theme, $area);
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
+        // 例如 account.dashboard：若未命中 dashboard.phtml，则回退 account.default（模块内仍有完整页面骨架）
+        $normalized = str_replace('\\', '/', $layoutPath);
+        if (preg_match('#^theme/([^/]+)/layouts/([^/]+)/([^/.]+)\.phtml$#', $normalized, $m)) {
+            $areaFromPath = $m[1];
+            $group = $m[2];
+            $optionBase = $m[3];
+            if ($optionBase !== '' && $optionBase !== 'default') {
+                $fallbackPath = 'theme' . DS . $areaFromPath . DS . 'layouts' . DS . $group . DS . 'default.phtml';
+
+                return self::resolveLayoutTemplateOnce($fallbackPath, $theme, $area);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 解析单层布局路径；主题链无可用文件时仍回退 Weline_Theme 模块下的默认文件，避免 layoutTemplate 为空导致整页不套布局。
+     */
+    private static function resolveLayoutTemplateOnce(string $layoutPath, WelineTheme $theme, string $area): ?string
+    {
         $defaultPath = self::getDefaultLayoutPath($layoutPath, $area);
         if (!$defaultPath || !is_file($defaultPath)) {
             return null;
@@ -34,6 +60,10 @@ class LayoutPathResolver
             if (is_file($defaultPath)) {
                 return self::toWelineThemeModulePath($layoutPath);
             }
+        }
+
+        if (is_file($defaultPath)) {
+            return self::toWelineThemeModulePath($layoutPath);
         }
 
         return null;

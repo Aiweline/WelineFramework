@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller\Account;
 
+use Weline\Customer\Service\CustomerAccountService;
 use Weline\Framework\Manager\MessageManager;
-use WeShop\Customer\Service\CustomerAccountService;
 use Weline\Framework\View\Template;
 
 /**
- * Public storefront registration bridge backed by the WeShop customer account service.
+ * Public storefront registration for core customer accounts.
  */
 class Register extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account_auth';
+    protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         private readonly Template $template,
@@ -77,8 +77,8 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
                 'first_name' => $firstName,
                 'last_name' => $lastName,
             ]);
-            $this->customerAccountService->login($result['auth_user']);
-            MessageManager::success(__('Registration succeeded. Welcome to WeShop.'));
+            $this->customerAccountService->loginCustomer($result['customer']);
+            MessageManager::success(__('Registration succeeded. Welcome.'));
             return (string) $this->redirect('/customer/account');
         } catch (\Throwable $throwable) {
             MessageManager::error($throwable->getMessage());
