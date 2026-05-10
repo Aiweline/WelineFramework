@@ -27,6 +27,7 @@ class AiSiteAgentSessionService
         'active_operation',
         'active_operations',
         'asset_manifest',
+        'asset_manifest_hash',
         'block_patch_history',
         'brief_description',
         'build_contracts',
@@ -76,6 +77,8 @@ class AiSiteAgentSessionService
         'selected_website_id',
         'site_profile_manual',
         'site_ready',
+        'source_truth_contract',
+        'source_truth_contract_hash',
         'site_tagline',
         'site_title',
         'target_domain',
@@ -567,6 +570,10 @@ class AiSiteAgentSessionService
         $merged = \array_replace($scope, $patch);
         if (\is_array($scope['virtual_theme_plan'] ?? null) && \is_array($patch['virtual_theme_plan'] ?? null)) {
             $merged['virtual_theme_plan'] = \array_replace($scope['virtual_theme_plan'], $patch['virtual_theme_plan']);
+        }
+        if (\array_key_exists('asset_manifest', $patch)) {
+            $manifest = \is_array($merged['asset_manifest'] ?? null) ? $merged['asset_manifest'] : [];
+            $merged['asset_manifest_hash'] = \sha1((string)\json_encode($manifest, \JSON_UNESCAPED_UNICODE));
         }
 
         return $merged;

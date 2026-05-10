@@ -1,31 +1,67 @@
 <!--
 布局：account/auth - 登录/注册等认证页面
-兼容 layoutType=account.auth 的路径解析，与 account_auth/default 结构一致
+兼容 layoutType=account.auth 的路径解析；顶栏底栏与首页同源（Theme Partials）。
+
+字段
+@meta.name {default="账号认证布局",name="账号认证布局",description="登录注册等认证页布局"}
+@meta.description {default="Partials 顶栏底栏与首页一致",name="描述",description="顶栏底栏与首页一致"}
+@preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="认证页通常不需要已登录"}
+@param.title {default="登录",name="页面标题",description="页面标题"}
+@param.content {default="",name="主要内容",description="认证表单等内容"}
+@param.class {default="",name="额外CSS类",description="根节点额外 class"}
+@param.showHeader {default=true,name="是否显示header",description="是否显示顶栏"}
+@param.showFooter {default=true,name="是否显示footer",description="是否显示底栏"}
+@param.showSearch {default=true,name="顶栏搜索",description="顶栏是否展示搜索（Partials）"}
+@param.showUserMenu {default=true,name="用户菜单",description="顶栏是否展示用户菜单（Partials）"}
+
+参数由 ControllerFetchFileBefore Observer 合并进 meta
 -->
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
-    <!-- 与 account_auth/default 一致：认证表单留白、Flash、密码可见性切换按钮 -->
     <theme:css>Weline_Theme::theme/frontend/assets/css/auth-form-wflash.css</theme:css>
 </head>
-<body>
-    @template(Weline_Frontend::templates/public/header.phtml)
-    
-    <main class="account-auth-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth-content" data-layout="account_auth_content">
-        <div class="auth-container">
-            <if condition="meta.content">
-                {{meta.content}}
-                <elseif condition="content"/>
-                {{content}}
-                <elseif condition="meta.contentTemplate"/>
-                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
-            </if>
+<body class="account-auth-layout">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::body-start</w:hook>
+
+    <div class="weline-page-wrapper">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::account::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <main class="account-auth-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth-content" data-layout="account_auth_content">
+                <div class="auth-container">
+                    <if condition="meta.content">
+                        {{meta.content}}
+                        <elseif condition="content"/>
+                        {{content}}
+                        <elseif condition="meta.contentTemplate"/>
+                        <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                    </if>
+                </div>
+            </main>
         </div>
-    </main>
-    
-    @template(Weline_Frontend::templates/public/footer.phtml)
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::account::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>

@@ -20,6 +20,10 @@
  if (!defined('DEV')) {
      define('DEV', true);
  }
+ // PHPUnit / CLI 测试请求：与 Observer 中不重抛 layout 异常等逻辑对齐（勿与非测试入口混淆）
+ if (!defined('ENV_TEST')) {
+     define('ENV_TEST', true);
+ }
  // Keep PHPUnit translations stable regardless of local default language.
  $_SERVER['WELINE_USER_LANG'] = $_SERVER['WELINE_USER_LANG'] ?? 'en_US';
  $_COOKIE['WELINE_USER_LANG'] = $_COOKIE['WELINE_USER_LANG'] ?? 'en_US';

@@ -1,0 +1,20 @@
+<?php
+/**
+ * 账户首页「订阅 / 周期性方案」分区（嵌入 Weline_Customer account/index）
+ *
+ * Hook：Weline_Customer::frontend::account::index::subscriptions
+ *
+ * @hook-priority 160
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+?>
+<section class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('订阅') ?></p>
+            <h3 class="mt-2 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('管理周期性订阅方案') ?></h3>
+        </div>
+        <a href="<?= $this->getUrl('subscription') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('前往') ?></a>
+    </div>
+</section>

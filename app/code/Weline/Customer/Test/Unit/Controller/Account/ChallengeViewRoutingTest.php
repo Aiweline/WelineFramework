@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace Weline\Customer\Test\Unit\Controller\Account;
 
 use PHPUnit\Framework\TestCase;
-use WeShop\Auth\Model\PendingAuthChallenge;
-use WeShop\Customer\Service\CustomerWebAuthService;
+use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Customer\Controller\Account\Challenge;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
@@ -16,11 +15,11 @@ class ChallengeViewRoutingTest extends TestCase
 {
     public function testGetIndexRedirectsWhenTokenIsMissing(): void
     {
-        $service = $this->createMock(CustomerWebAuthService::class);
-        $service->expects($this->never())->method('getChallenge');
+        $handler = $this->createMock(CustomerLoginChallengeHandlerInterface::class);
+        $handler->expects($this->never())->method('getChallengeExpiresAt');
 
         $controller = $this->getMockBuilder(Challenge::class)
-            ->setConstructorArgs([$this->createMock(Template::class), $service])
+            ->setConstructorArgs([$this->createMock(Template::class), $handler])
             ->onlyMethods(['redirect', 'getMessageManager'])
             ->getMock();
 
@@ -38,17 +37,11 @@ class ChallengeViewRoutingTest extends TestCase
 
     public function testGetIndexUsesChallengeTemplateWhenChallengeExists(): void
     {
-        $challenge = $this->getMockBuilder(PendingAuthChallenge::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getData'])
-            ->getMock();
-        $challenge->method('getData')->with(PendingAuthChallenge::schema_fields_EXPIRES_AT)->willReturn(1730000000);
-
-        $service = $this->createMock(CustomerWebAuthService::class);
-        $service->expects($this->once())->method('getChallenge')->with('token-123')->willReturn($challenge);
+        $handler = $this->createMock(CustomerLoginChallengeHandlerInterface::class);
+        $handler->expects($this->once())->method('getChallengeExpiresAt')->with('token-123')->willReturn(1730000000);
 
         $controller = $this->getMockBuilder(Challenge::class)
-            ->setConstructorArgs([$this->createMock(Template::class), $service])
+            ->setConstructorArgs([$this->createMock(Template::class), $handler])
             ->onlyMethods(['assign', 'fetch', 'redirect'])
             ->getMock();
         $assignCalls = 0;

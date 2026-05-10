@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller\Account;
 
-use WeShop\Customer\Service\PasswordResetService;
+use Weline\Customer\Service\PasswordResetService;
 use Weline\Framework\View\Template;
 
 class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account_auth';
+    protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         private readonly Template $template,

@@ -10,7 +10,7 @@ use WeShop\Frontend\Controller\BaseController;
 
 class ForgotPassword extends BaseController
 {
-    protected ?string $layoutType = 'account_auth';
+    protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         private readonly CustomerSession $customerSession,

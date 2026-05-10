@@ -313,12 +313,17 @@ class AiSiteReferenceImageInsightService
             'Reference images in order:',
             \implode("\n", $imageLines),
             'Schema:',
-            '{"reference_image_insights":{"summary":"string","style_keywords":["string"],"color_palette":["#hex"],"layout_cues":["string"],"component_cues":["string"],"typography_cues":["string"],"do_not_use":["string"],"per_image":[{"name":"string","url":"string","style_tags":["string"],"dominant_colors":["#hex"],"layout_notes":["string"],"ui_notes":["string"]}]}}',
+            '{"reference_image_insights":{"summary":"string","style_keywords":["string"],"color_palette":["#hex"],"layout_cues":["string"],"component_cues":["string"],"typography_cues":["string"],"do_not_use":["string"],"per_image":[{"name":"string","url":"string","style_tags":["string"],"dominant_colors":["#hex"],"layout_notes":["string"],"ui_notes":["string"]}],"visual_contract":{"hero_composition":{"nav":"string","headline":"string","media":"string","side_cards":"string","background":"string"},"cta_rule":{"primary_color":"string","label_intent":"string","must_be_above_fold":true},"asset_usage_rule":{"reference_image_role":"style_reference_only|hero_reference","max_same_image_usage":1,"forbid_repeated_raw_screenshot":true},"forbidden_visuals":["string"]}}}',
             'Rules:',
             '- per_image length must match reference image count and order.',
             '- style_keywords 4-10 concise items.',
             '- color_palette 3-8 hex colors.',
             '- focus on concrete visual implementation cues for website style planning and image generation.',
+            '- visual_contract is a structured, executable visual constraint. Each field describes what MUST be preserved from the reference image into the final design.',
+            '- hero_composition describes the above-fold layout structure.',
+            '- cta_rule describes button color, label intent, and placement constraint.',
+            '- asset_usage_rule describes how the reference image assets should be used.',
+            '- forbidden_visuals lists visual patterns from the reference that MUST NOT be copied.',
         ]);
     }
 
@@ -619,6 +624,8 @@ class AiSiteReferenceImageInsightService
             return [];
         }
 
+        $visualContract = \is_array($insights['visual_contract'] ?? null) ? $insights['visual_contract'] : [];
+
         return [
             'summary' => \trim((string)($insights['summary'] ?? '')),
             'style_keywords' => $this->normalizeStringList($insights['style_keywords'] ?? [], 10),
@@ -628,6 +635,32 @@ class AiSiteReferenceImageInsightService
             'typography_cues' => $this->normalizeStringList($insights['typography_cues'] ?? [], 8),
             'do_not_use' => $this->normalizeStringList($insights['do_not_use'] ?? [], 8),
             'per_image' => $this->normalizePerImageInsights($insights['per_image'] ?? [], $images),
+            'visual_contract' => $visualContract === [] ? [] : [
+                'hero_composition' => \is_array($visualContract['hero_composition'] ?? null)
+                    ? [
+                        'nav' => \trim((string)($visualContract['hero_composition']['nav'] ?? '')),
+                        'headline' => \trim((string)($visualContract['hero_composition']['headline'] ?? '')),
+                        'media' => \trim((string)($visualContract['hero_composition']['media'] ?? '')),
+                        'side_cards' => \trim((string)($visualContract['hero_composition']['side_cards'] ?? '')),
+                        'background' => \trim((string)($visualContract['hero_composition']['background'] ?? '')),
+                    ]
+                    : [],
+                'cta_rule' => \is_array($visualContract['cta_rule'] ?? null)
+                    ? [
+                        'primary_color' => \trim((string)($visualContract['cta_rule']['primary_color'] ?? '')),
+                        'label_intent' => \trim((string)($visualContract['cta_rule']['label_intent'] ?? '')),
+                        'must_be_above_fold' => (bool)($visualContract['cta_rule']['must_be_above_fold'] ?? true),
+                    ]
+                    : [],
+                'asset_usage_rule' => \is_array($visualContract['asset_usage_rule'] ?? null)
+                    ? [
+                        'reference_image_role' => \trim((string)($visualContract['asset_usage_rule']['reference_image_role'] ?? 'style_reference_only')),
+                        'max_same_image_usage' => (int)($visualContract['asset_usage_rule']['max_same_image_usage'] ?? 1),
+                        'forbid_repeated_raw_screenshot' => (bool)($visualContract['asset_usage_rule']['forbid_repeated_raw_screenshot'] ?? true),
+                    ]
+                    : [],
+                'forbidden_visuals' => $this->normalizeStringList($visualContract['forbidden_visuals'] ?? [], 6),
+            ],
         ];
     }
 

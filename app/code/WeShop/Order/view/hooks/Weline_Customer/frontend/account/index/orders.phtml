@@ -1,14 +1,12 @@
 <?php
 /**
- * 订单列表Hook
- * 
- * 在账户布局的内容之后显示订单列表
- * 支持支付失败订单的继续支付和作废功能
- * Hook名称：Weline_Theme::frontend::layouts::account::content-after
- * 
- * @hook-priority 150      Hook优先级：150（composer位置默认优先级）
- * @hook-sort-order 0      Hook排序顺序：0（默认值）
- * @hook-solo false        Hook独享：false（不独占）
+ * 账户首页「我的订单」分区（嵌入 Weline_Customer account/index.phtml 的 orders-section）
+ *
+ * Hook：Weline_Customer::frontend::account::index::orders
+ *
+ * @hook-priority 150
+ * @hook-sort-order 0
+ * @hook-solo false
  */
 
 use Weline\Framework\Session\SessionFactory;
@@ -184,9 +182,9 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
 </div>
 
 <style>
-    /* 订单列表样式 */
+    /* 订单列表样式（嵌入账户首页分区，无需与上文留白） */
     .weshop-account-orders {
-        margin-top: 2rem;
+        margin-top: 0;
     }
     
     .weshop-unpaid-orders-alert {

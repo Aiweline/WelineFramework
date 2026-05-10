@@ -204,6 +204,72 @@ final class ContractQaReportBuilder
     }
 
     /**
+     * @param array<string, mixed> $args
+     * @return list<array<string, mixed>>
+     */
+    public function buildContentQualityFindings(array $args): array
+    {
+        $findings = [];
+
+        foreach (\is_array($args['missing_facts'] ?? null) ? $args['missing_facts'] : [] as $factId => $factText) {
+            $findings[] = $this->finding(
+                'error',
+                'content_quality',
+                $args['contract_type'] ?? 'source_truth',
+                "Missing must-include fact [{$factId}]: {$factText}",
+                'content_quality.missing_must_include_fact'
+            );
+        }
+
+        foreach (\is_array($args['missing_blocks'] ?? null) ? $args['missing_blocks'] : [] as $blockKey) {
+            $blockKey = (string)$blockKey;
+            $findings[] = $this->finding(
+                'error',
+                'content_quality',
+                $args['contract_type'] ?? 'page_contract',
+                "Missing required block: {$blockKey}",
+                'content_quality.missing_required_block'
+            );
+        }
+
+        if (!empty($args['fallback_used'])) {
+            $findings[] = $this->finding(
+                'warning',
+                'content_quality',
+                $args['contract_type'] ?? 'execution',
+                'Stage-1 fallback plan was used. Content quality may be degraded.',
+                'content_quality.fallback_plan_used'
+            );
+        }
+
+        if (!empty($args['visual_contract_unused'])) {
+            foreach (\is_array($args['visual_contract_unused']) ? $args['visual_contract_unused'] : [] as $item) {
+                $item = (string)$item;
+                $findings[] = $this->finding(
+                    'warning',
+                    'content_quality',
+                    $args['contract_type'] ?? 'page_contract',
+                    "Visual contract item not used in any block: {$item}",
+                    'content_quality.visual_contract_not_used'
+                );
+            }
+        }
+
+        foreach (\is_array($args['forbidden_visuals_hit'] ?? null) ? $args['forbidden_visuals_hit'] : [] as $hit) {
+            $hit = (string)$hit;
+            $findings[] = $this->finding(
+                'error',
+                'content_quality',
+                $args['contract_type'] ?? 'theme_design',
+                "Forbidden visual pattern detected: {$hit}",
+                'content_quality.forbidden_visuals_violation'
+            );
+        }
+
+        return $findings;
+    }
+
+    /**
      * @param list<array<string, mixed>> $findings
      * @return array<string, int>
      */
