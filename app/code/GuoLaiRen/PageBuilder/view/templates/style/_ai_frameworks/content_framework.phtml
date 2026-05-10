@@ -104,53 +104,298 @@ try {
     --section-bg: <?= htmlspecialchars($bgColor) ?>;
     --section-text: <?= htmlspecialchars($textColor) ?>;
     --section-heading: <?= htmlspecialchars($titleColor) ?>;
-    --section-muted: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 70%, transparent);
+    --section-muted: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 60%, transparent);
     --section-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 12%, transparent);
+    --section-shadow: 0 4px 24px rgba(0,0,0,0.06);
+    --section-radius: 12px;
 
     background: <?= $bgStyle ?>;
     color: var(--section-text);
     padding: <?= $paddingTop ?>px 24px <?= $paddingBottom ?>px;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    position: relative;
+    overflow: hidden;
+}
+
+/* ===== 背景质感：纯色底时添加微噪点纹理 + 装饰光晕 ===== */
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse at 20% 50%, color-mix(in srgb, var(--section-primary) 5%, transparent) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, color-mix(in srgb, var(--section-primary) 3%, transparent) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+    pointer-events: none;
+    z-index: 0;
+    mix-blend-mode: overlay;
 }
 
 #<?= $componentId ?> .<?= $cls ?>-container {
     max-width: <?= $maxWidth ?>;
     margin: 0 auto;
     text-align: <?= htmlspecialchars($textAlign) ?>;
+    position: relative;
+    z-index: 1;
+}
+
+@keyframes <?= $cls ?>-fade-in-up {
+    from { opacity: 0; transform: translateY(30px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 #<?= $componentId ?> .<?= $cls ?>-header {
     margin-bottom: 48px;
 }
 
+/* ===== 副标题：胶囊徽章 + 装饰 ===== */
 #<?= $componentId ?> .<?= $cls ?>-subtitle {
-    font-size: 0.875rem;
-    font-weight: 600;
+    display: inline-block;
+    font-size: 0.8125rem;
+    font-weight: 700;
     color: var(--section-primary);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 12px;
+    letter-spacing: 0.12em;
+    margin-bottom: 16px;
+    padding: 6px 18px;
+    border-radius: 100px;
+    background: color-mix(in srgb, var(--section-primary) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--section-primary) 20%, transparent);
+    backdrop-filter: blur(4px);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
 }
 
+#<?= $componentId ?> .<?= $cls ?>-subtitle:hover {
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--section-primary) 20%, transparent);
+    transform: translateY(-1px);
+}
+
+/* ===== 标题：丰富效果 ===== */
 #<?= $componentId ?> .<?= $cls ?>-title {
-    font-size: clamp(1.875rem, 4vw, 2.75rem);
-    font-weight: 700;
+    font-size: clamp(2rem, 4.5vw, 3.25rem);
+    font-weight: 800;
     color: var(--section-heading);
-    margin: 0 0 16px 0;
-    line-height: 1.2;
-    letter-spacing: -0.025em;
+    margin: 0 0 20px 0;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--section-heading) 0%, color-mix(in srgb, var(--section-heading) 60%, var(--section-primary)) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    position: relative;
 }
 
+#<?= $componentId ?> .<?= $cls ?>-title::after {
+    content: '';
+    display: block;
+    width: 80px;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--section-primary), color-mix(in srgb, var(--section-primary) 20%, transparent));
+    margin: <?= $textAlign === 'center' ? '20px auto 0' : '20px 0 0' ?>;
+}
+
+#<?= $componentId ?>[style*="text-align: left"] .<?= $cls ?>-title::after,
+#<?= $componentId ?> .<?= $cls ?>-container[style*="text-align: left"] .<?= $cls ?>-title::after {
+    margin: 20px 0 0;
+}
+
+/* ===== 描述文本 ===== */
 #<?= $componentId ?> .<?= $cls ?>-description {
     font-size: 1.125rem;
-    line-height: 1.75;
-    max-width: 680px;
+    line-height: 1.85;
+    max-width: 640px;
     margin: 0 auto;
     color: var(--section-muted);
+    font-weight: 400;
 }
 
+/* ===== 图片响应式：所有图片最大不超过容器宽度 ===== */
+#<?= $componentId ?> img,
+#<?= $componentId ?> video {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ===== 默认内容区 ===== */
 #<?= $componentId ?> .<?= $cls ?>-body {
-    /* AI 内容区域 */
+    position: relative;
+    z-index: 1;
+}
+
+/* ===== 丰富文字色彩 (utility) ===== */
+#<?= $componentId ?> .<?= $cls ?>-gradient-text {
+    background: linear-gradient(135deg, var(--section-heading), var(--section-primary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-accent-text {
+    color: var(--section-primary);
+    font-weight: 600;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-highlight {
+    background: color-mix(in srgb, var(--section-primary) 15%, transparent);
+    padding: 0 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+/* ===== 图片包裹器 + 蒙版 ===== */
+#<?= $componentId ?> .<?= $cls ?>-image-wrap {
+    position: relative;
+    border-radius: calc(var(--section-radius) * 1.2);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-image-wrap:hover {
+    box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+    transform: translateY(-2px);
+}
+
+#<?= $componentId ?> .<?= $cls ?>-image-wrap img,
+#<?= $componentId ?> .<?= $cls ?>-image-wrap video {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* 图片边缘渐变蒙版 */
+#<?= $componentId ?> .<?= $cls ?>-image-mask {
+    position: relative;
+    border-radius: calc(var(--section-radius) * 1.2);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-image-mask:hover {
+    box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+    transform: translateY(-2px);
+}
+
+#<?= $componentId ?> .<?= $cls ?>-image-mask::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--section-bg) 50%, transparent) 0%,
+        transparent 30%,
+        transparent 70%,
+        color-mix(in srgb, var(--section-bg) 50%, transparent) 100%
+    );
+    pointer-events: none;
+    border-radius: inherit;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-image-mask img,
+#<?= $componentId ?> .<?= $cls ?>-image-mask video {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ===== 卡片增强 ===== */
+#<?= $componentId ?> .<?= $cls ?>-card {
+    background: var(--section-bg);
+    border-radius: var(--section-radius);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05), 0 1px 4px rgba(0,0,0,0.04);
+    transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
+    border: 1px solid var(--section-border);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-card:hover {
+    box-shadow: 0 12px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.05);
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--section-primary) 20%, transparent);
+}
+
+/* 玻璃卡片 */
+#<?= $componentId ?> .<?= $cls ?>-glass {
+    background: color-mix(in srgb, var(--section-bg) 60%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, var(--section-border) 60%, transparent);
+    border-radius: var(--section-radius);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-glass:hover {
+    box-shadow: 0 16px 48px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+/* ===== 装饰线 ===== */
+#<?= $componentId ?> .<?= $cls ?>-divider {
+    height: 4px;
+    width: 60px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--section-primary), color-mix(in srgb, var(--section-primary) 20%, transparent));
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-divider-left {
+    height: 4px;
+    width: 60px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--section-primary), color-mix(in srgb, var(--section-primary) 20%, transparent));
+}
+
+/* ===== 背景装饰光晕 ===== */
+#<?= $componentId ?> .<?= $cls ?>-blob {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--section-primary) 10%, transparent) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ===== 链接美化 ===== */
+#<?= $componentId ?> a:not([class]) {
+    color: var(--section-primary);
+    text-decoration: none;
+    font-weight: 500;
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+#<?= $componentId ?> a:not([class])::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 1.5px;
+    background: var(--section-primary);
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.3s ease;
+}
+
+#<?= $componentId ?> a:not([class]):hover {
+    color: color-mix(in srgb, var(--section-primary) 80%, black);
+}
+
+#<?= $componentId ?> a:not([class]):hover::after {
+    transform: scaleX(1);
+    transform-origin: left;
 }
 
 {{CSS_EXTRA}}
@@ -159,15 +404,35 @@ try {
     #<?= $componentId ?> {
         padding: <?= max(48, (int)($paddingTop * 0.6)) ?>px 20px <?= max(48, (int)($paddingBottom * 0.6)) ?>px;
     }
-    
+
     #<?= $componentId ?> .<?= $cls ?>-header {
-        margin-bottom: 36px;
+        margin-bottom: 32px;
     }
-    
+
+    #<?= $componentId ?> .<?= $cls ?>-title {
+        font-size: clamp(1.5rem, 6vw, 2rem);
+    }
+
+    #<?= $componentId ?> .<?= $cls ?>-title::after {
+        width: 60px;
+    }
+
     #<?= $componentId ?> .<?= $cls ?>-description {
         font-size: 1rem;
     }
-    
+
+    /* 图片响应式：移动端缩小阴影和圆角 */
+    #<?= $componentId ?> .<?= $cls ?>-image-wrap,
+    #<?= $componentId ?> .<?= $cls ?>-image-mask {
+        border-radius: calc(var(--section-radius) * 0.7);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+
+    /* 卡片响应式：移动端减少内边距 */
+    #<?= $componentId ?> .<?= $cls ?>-card {
+        padding: 16px;
+    }
+
     {{CSS_RESPONSIVE}}
 }
 </style>

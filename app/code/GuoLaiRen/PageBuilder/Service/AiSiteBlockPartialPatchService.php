@@ -328,7 +328,17 @@ class AiSiteBlockPartialPatchService
         $virtualPages[$pageType] = $virtualPage;
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope = $this->syncPageBuilderScopeAiLayout($scope, $pageType, $blocks, $createdAt);
-        $this->persistMaterializedPageAiLayoutBlocks($scope, $pageType, $blocks, $createdAt);
+        // 微调编辑期间只存到虚拟主题（scope/session），不落盘到具体页面。
+        // 发布时 publish flow 会将虚拟主题中的 block 拷贝到具体页面。
+        // 这里即使没有 materialized page_id 也不报错，编辑数据已安全保存在 session scope 中。
+        $pageId = $this->resolveMaterializedPageId($scope, $pageType);
+        if ($pageId > 0) {
+            try {
+                $this->persistMaterializedPageAiLayoutBlocks($scope, $pageType, $blocks, $createdAt);
+            } catch (\Throwable) {
+                // 静默跳过：微调编辑期间不因持久化失败而打断用户操作
+            }
+        }
         $scope['preview_page_type'] = $pageType;
         $scope['build_summary'] = \array_replace(
             \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
