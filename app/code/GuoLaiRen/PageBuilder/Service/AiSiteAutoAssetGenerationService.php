@@ -29,12 +29,11 @@ class AiSiteAutoAssetGenerationService
     {
         $scope = $this->ensureReferenceImageInsights($scope);
         $manifest = $this->manifestService->syncFromTaskPlan($scope);
-        if (!$this->shouldUsePlaceholderFallback($scope)) {
-            $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
-            $manifest = $this->manifestService->discardPlaceholderGeneratedAssets($manifest);
-            if ($placeholderUrls !== []) {
-                $scope = $this->clearPlaceholderIdentityAssetsFromScope($scope, $placeholderUrls);
-            }
+        // 无论何种模式，都清理旧的占位图，留空等待真实 AI 图片生成
+        $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
+        $manifest = $this->manifestService->discardPlaceholderGeneratedAssets($manifest);
+        if ($placeholderUrls !== []) {
+            $scope = $this->clearPlaceholderIdentityAssetsFromScope($scope, $placeholderUrls);
         }
         $scope['asset_manifest'] = $manifest;
         $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
@@ -47,6 +46,11 @@ class AiSiteAutoAssetGenerationService
                 continue;
             }
 
+            // 不生成占位图，留空等待真实 AI 图片生成
+            if ($this->shouldUsePlaceholderFallback($scope)) {
+                continue;
+            }
+
             try {
                 $prompt = $this->manifestService->buildPrompt($slot, $scope);
                 if ($prompt === '') {
@@ -54,15 +58,6 @@ class AiSiteAutoAssetGenerationService
                 }
 
                 $manifest = $this->manifestService->markGenerating($manifest, $slotId);
-                if ($this->shouldUsePlaceholderFallback($scope)) {
-                    [$finalUrl, $variant] = $this->writePlaceholderAsset($scope, $session, $slotId, $slot, $prompt);
-                    $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
-                    $scope['asset_manifest'] = $manifest;
-                    $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
-                    $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
-                    $generatedSlots[] = $slotId;
-                    continue;
-                }
 
                 $result = $this->generateImage($prompt, $adminId, $slotId);
 
