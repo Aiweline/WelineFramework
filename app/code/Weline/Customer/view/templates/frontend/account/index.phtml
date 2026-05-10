@@ -1,25 +1,5 @@
 <?php
-$themeTemplate = null;
-try {
-    $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
-    $theme = $themeContext->resolveTheme('frontend');
-    if ($theme && $theme->getId()) {
-        $candidate = rtrim((string)$theme->getPath(), '\\/') . DIRECTORY_SEPARATOR
-            . 'Weline' . DIRECTORY_SEPARATOR . 'Customer' . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR
-            . 'templates' . DIRECTORY_SEPARATOR . 'frontend' . DIRECTORY_SEPARATOR . 'account' . DIRECTORY_SEPARATOR
-            . 'index.phtml';
-        if (is_file($candidate) && realpath($candidate) !== __FILE__) {
-            $themeTemplate = $candidate;
-        }
-    }
-} catch (\Throwable) {
-}
-
-if ($themeTemplate) {
-    include $themeTemplate;
-    return;
-}
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
 /**@var \Weline\Customer\Model\Customer $user */
 $avatar = $user->getAvatar();
 $username = $user->getUsername();
@@ -31,21 +11,25 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     <!-- 个人资料头部 -->
     <header class="account-index__header">
         <div class="account-index__avatar">
-            <?php if ($avatar): ?>
+            <notempty name="avatar">
                 <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="account-index__avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="account-index__avatar-fallback" id="avatarFallback"><?= $avatarInitial ?></div>
-            <?php else: ?>
-                <div class="account-index__avatar-fallback"><?= $avatarInitial ?></div>
-            <?php endif; ?>
+                <div class="account-index__avatar-fallback" id="avatarFallback"><var>avatarInitial</var></div>
+            </notempty>
         </div>
         <div class="account-index__user-info">
-            <h1 class="account-index__username"><?= htmlspecialchars($username) ?></h1>
-            <?php if ($email): ?>
+            <h1 class="account-index__username"><var>username</var></h1>
+            <notempty name="email">
                 <p class="account-index__email">
-                    <i class="ri-mail-line"></i> <?= htmlspecialchars($email) ?>
+                    <i class="ri-mail-line"></i> <notempty name="email"><var>email</var></notempty>
                 </p>
-            <?php endif; ?>
+            </notempty>
             <p class="account-index__welcome"><lang>欢迎回来！您可以在这里管理您的账户信息</lang></p>
+        </div>
+        <div class="account-index__header-actions">
+            <a class="account-index__logout" href="/customer/account/logout">
+                <i class="ri-logout-box-line" aria-hidden="true"></i>
+                <span><lang>退出登录</lang></span>
+            </a>
         </div>
     </header>
 
@@ -53,7 +37,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     <div class="account-index__section" id="profile-section">
         <div class="account-card">
             <header class="account-card__header">
-                <h2 class="account-card__title"><?= __('个人资料') ?></h2>
+                <h2 class="account-card__title"><lang>个人资料</lang></h2>
             </header>
             <div class="account-card__body">
                 <div class="account-card__alert account-card__alert--success d-none" id="profileSuccessMsg"></div>
@@ -62,44 +46,44 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                 <form id="profileForm" class="account-form">
                     <div class="account-form__row">
                         <div class="account-form__group">
-                            <label for="username" class="account-form__label"><?= __('用户名') ?></label>
+                            <label for="username" class="account-form__label"><lang>用户名</lang></label>
                             <input type="text" class="account-form__input" id="username"
                                    value="<?= htmlspecialchars($user->getUsername()) ?>" disabled>
-                            <span class="account-form__hint"><?= __('用户名不可修改') ?></span>
+                            <span class="account-form__hint"><lang>用户名不可修改</lang></span>
                         </div>
 
                         <div class="account-form__group">
-                            <label for="userId" class="account-form__label"><?= __('用户ID') ?></label>
+                            <label for="userId" class="account-form__label"><lang>用户ID</lang></label>
                             <input type="text" class="account-form__input" id="userId"
                                    value="<?= $user->getId() ?>" disabled>
                         </div>
                     </div>
 
                     <div class="account-form__group">
-                        <label for="avatar" class="account-form__label"><?= __('头像URL') ?></label>
+                        <label for="avatar" class="account-form__label"><lang>头像URL</lang></label>
                         <div class="account-form__input-group">
                             <input type="url" class="account-form__input" id="avatar" name="avatar"
                                    value="<?= htmlspecialchars($user->getAvatar() ?: '') ?>"
                                    placeholder="https://example.com/avatar.jpg">
                             <button type="button" class="account-form__btn account-form__btn--outline" id="previewAvatarBtn">
-                                <i class="ri-eye-line"></i> <?= __('预览') ?>
+                                <i class="ri-eye-line"></i> <lang>预览</lang>
                             </button>
                         </div>
-                        <span class="account-form__hint"><?= __('输入头像图片的完整URL地址') ?></span>
+                        <span class="account-form__hint"><lang>输入头像图片的完整URL地址</lang></span>
                     </div>
 
                     <?php if ($email): ?>
                     <div class="account-form__group">
-                        <label for="email" class="account-form__label"><?= __('邮箱') ?></label>
+                        <label for="email" class="account-form__label"><lang>邮箱</lang></label>
                         <input type="email" class="account-form__input" id="email"
                                value="<?= htmlspecialchars($email) ?>" disabled>
-                        <span class="account-form__hint"><?= __('邮箱不可修改') ?></span>
+                        <span class="account-form__hint"><lang>邮箱不可修改</lang></span>
                     </div>
                     <?php endif; ?>
 
                     <div class="account-form__actions">
                         <button type="submit" class="account-form__btn account-form__btn--primary">
-                            <i class="ri-save-line"></i> <?= __('保存更改') ?>
+                            <i class="ri-save-line"></i> <lang>保存更改</lang>
                         </button>
                     </div>
                 </form>
@@ -111,7 +95,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     <div class="account-index__section d-none" id="security-section">
         <div class="account-card">
             <header class="account-card__header">
-                <h2 class="account-card__title"><?= __('修改密码') ?></h2>
+                <h2 class="account-card__title"><lang>修改密码</lang></h2>
             </header>
             <div class="account-card__body">
                 <div class="account-card__alert account-card__alert--success d-none" id="securitySuccessMsg"></div>
@@ -119,31 +103,31 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
                 <form id="securityForm" class="account-form">
                     <div class="account-form__group">
-                        <label for="old_password" class="account-form__label"><?= __('原密码') ?></label>
+                        <label for="old_password" class="account-form__label"><lang>原密码</lang></label>
                         <input type="password" class="account-form__input" id="old_password" name="old_password"
-                               placeholder="<?= __('请输入原密码') ?>" required>
-                        <span class="account-form__hint"><?= __('请输入当前密码以验证身份') ?></span>
+                               placeholder="@lang{'请输入原密码'}" required>
+                        <span class="account-form__hint"><lang>请输入当前密码以验证身份</lang></span>
                     </div>
 
                     <div class="account-form__row">
                         <div class="account-form__group">
-                            <label for="new_password" class="account-form__label"><?= __('新密码') ?></label>
+                            <label for="new_password" class="account-form__label"><lang>新密码</lang></label>
                             <input type="password" class="account-form__input" id="new_password" name="new_password"
-                                   placeholder="<?= __('至少6位字符') ?>" minlength="6">
-                            <span class="account-form__hint"><?= __('建议使用字母、数字和特殊字符组合') ?></span>
+                                   placeholder="@lang{'至少6位字符'}" minlength="6">
+                            <span class="account-form__hint"><lang>建议使用字母、数字和特殊字符组合</lang></span>
                         </div>
 
                         <div class="account-form__group">
-                            <label for="confirm_password" class="account-form__label"><?= __('确认新密码') ?></label>
+                            <label for="confirm_password" class="account-form__label"><lang>确认新密码</lang></label>
                             <input type="password" class="account-form__input" id="confirm_password" name="confirm_password"
-                                   placeholder="<?= __('再次输入新密码') ?>" minlength="6">
-                            <span class="account-form__hint"><?= __('再次输入新密码以确认') ?></span>
+                                   placeholder="@lang{'再次输入新密码'}" minlength="6">
+                            <span class="account-form__hint"><lang>再次输入新密码以确认</lang></span>
                         </div>
                     </div>
 
                     <div class="account-form__actions">
                         <button type="submit" class="account-form__btn account-form__btn--primary">
-                            <i class="ri-lock-password-line"></i> <?= __('修改密码') ?>
+                            <i class="ri-lock-password-line"></i> <lang>修改密码</lang>
                         </button>
                     </div>
                 </form>
@@ -155,17 +139,31 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     <div class="account-index__section d-none" id="login-info-section">
         <div class="account-card">
             <header class="account-card__header">
-                <h2 class="account-card__title"><?= __('登录信息') ?></h2>
+                <h2 class="account-card__title"><lang>登录信息</lang></h2>
             </header>
             <div class="account-card__body">
                 <div class="account-info-grid">
                     <div class="account-info-item">
-                        <label class="account-info-item__label"><?= __('最后登录IP') ?></label>
-                        <div class="account-info-item__value"><?= $user->getLoginIp() ?: '<lang>未知</lang>' ?></div>
+                        <label class="account-info-item__label"><lang>最后登录IP</lang></label>
+                        <div class="account-info-item__value">
+                            <?php $loginIp = $user->getLoginIp(); ?>
+                            <?php if ($loginIp): ?>
+                                <?= htmlspecialchars($loginIp) ?>
+                            <?php else: ?>
+                                <lang>未知</lang>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="account-info-item">
-                        <label class="account-info-item__label">Session ID</label>
-                        <div class="account-info-item__value"><?= $user->getSessionId() ?: '<lang>未知</lang>' ?></div>
+                        <label class="account-info-item__label"><lang>会话ID</lang></label>
+                        <div class="account-info-item__value">
+                            <?php $sessionId = $user->getSessionId(); ?>
+                            <?php if ($sessionId): ?>
+                                <?= htmlspecialchars($user->getSessionId()) ?>
+                            <?php else: ?>
+                                <lang>未知</lang>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -184,10 +182,52 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     display: flex;
     align-items: center;
     gap: 1.5rem;
+    flex-wrap: wrap;
     padding: var(--ai-gutter);
     background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
     border-radius: var(--ai-border-radius);
     margin-bottom: var(--ai-gutter);
+}
+
+.account-index__header-actions {
+    margin-inline-start: auto;
+    flex-shrink: 0;
+}
+
+.account-index__logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: var(--color-text-dark);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: var(--ai-transition);
+}
+
+.account-index__logout:hover {
+    background: rgba(255, 255, 255, 0.35);
+    color: var(--color-text-dark);
+}
+
+.account-index__logout i {
+    font-size: 1.125rem;
+}
+
+@media (max-width: 480px) {
+    .account-index__header-actions {
+        width: 100%;
+        margin-inline-start: 0;
+    }
+
+    .account-index__logout {
+        justify-content: center;
+        width: 100%;
+    }
 }
 
 .account-index__avatar {

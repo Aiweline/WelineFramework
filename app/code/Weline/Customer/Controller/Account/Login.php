@@ -10,7 +10,6 @@ use Weline\Customer\Model\CustomerToken;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 
@@ -24,7 +23,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 {
     private Template $template;
 
-    protected ?string $layoutType = 'account_auth';
+    protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         Template $template,
@@ -51,9 +50,6 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
         $this->assign('redirect_url', $redirectUrl);
         $this->assign('title', __('Sign In'));
-
-        $this->assign('error_message', MessageManager::get_error_message());
-        $this->assign('success_message', MessageManager::get_success_message());
 
         return $this->fetch('Weline_Customer::templates/frontend/account/login.phtml');
     }

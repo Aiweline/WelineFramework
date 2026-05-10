@@ -70,6 +70,7 @@ class AiSiteAgentSessionService
         'reference_images',
         'retryable_ai_failure_count',
         'retryable_ai_failures',
+        'partial_retry_required',
         'selected_domain',
         'selected_skill_codes',
         'selected_website_id',
@@ -142,14 +143,21 @@ class AiSiteAgentSessionService
         'task_plan_structured',
         'task_plan_summary',
         'asset_manifest',
+        'asset_image_generation_failures',
         'qa_report_contract',
         'render_data_contract',
         'verified_assets',
         'virtual_theme_plan',
         '_ai_generated_shared_components',
         '_queue_force_build',
+        // 强行契约：build 强制重建标记必须随 scope 一同 load/save，否则
+        // isGeneratedArtifactAvailableForTask 会因看不到 active=1 而把 task 当做已完成，导致无任何
+        // 实际渲染的「Page layout has no rendered sections」假性失败。
+        '_build_regeneration',
         '_task_plan_rebuild_in_progress',
         '_task_plan_sse_request',
+        '_task_plan_queue_skip',
+        '_task_plan_retry_failed_batches',
     ];
 
     public function __construct(

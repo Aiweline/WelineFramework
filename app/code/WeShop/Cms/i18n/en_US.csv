@@ -1,0 +1,32 @@
+"CMS Page Management","CMS Page Management"
+"CMS page saved successfully.","CMS page saved successfully."
+"CMS page save failed.","CMS page save failed."
+"CMS page deleted successfully.","CMS page deleted successfully."
+"CMS page delete failed.","CMS page delete failed."
+"CMS page not found.","CMS page not found."
+"Page title is required.","Page title is required."
+"Page identifier is required.","Page identifier is required."
+"Page identifier already exists. Please use a different one.","Page identifier already exists. Please use a different one."
+"Invalid page ID.","Invalid page ID."
+"Page not found.","Page not found."
+Title,Title
+Identifier,Identifier
+Status,Status
+"Content Heading","Content Heading"
+Content,Content
+"Meta Title","Meta Title"
+"Meta Description","Meta Description"
+"Meta Keywords","Meta Keywords"
+"Page Layout","Page Layout"
+"Sort Order","Sort Order"
+Enabled,Enabled
+Disabled,Disabled
+"Create New Page","Create New Page"
+"Edit Page","Edit Page"
+"Save Page","Save Page"
+Delete,Delete
+Search,Search
+"Are you sure you want to delete this page?","Are you sure you want to delete this page?"
+"Back to list","Back to list"
+Actions,Actions
+"Content Management","Content Management"

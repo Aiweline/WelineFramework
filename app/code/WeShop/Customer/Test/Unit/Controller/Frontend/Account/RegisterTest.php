@@ -47,7 +47,9 @@ class RegisterTest extends TestCase
                 $assigned[$key] = $value;
                 return $controller;
             });
-        $controller->expects($this->once())->method('fetch')->willReturn('page');
+        $controller->expects($this->once())->method('fetch')
+            ->with('WeShop_Frontend::templates/frontend/customer/account/register.phtml')
+            ->willReturn('page');
 
         $this->assertSame('page', $controller->index());
         $this->assertSame('weshop/customer/account/login', $assigned['login_url']);

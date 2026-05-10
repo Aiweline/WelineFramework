@@ -52,15 +52,13 @@ class ChallengeViewRoutingTest extends TestCase
             ->onlyMethods(['assign', 'fetch', 'redirect'])
             ->getMock();
         $assignCalls = 0;
-        $controller->expects($this->exactly(5))
+        $controller->expects($this->exactly(3))
             ->method('assign')
             ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): Challenge {
                 $expectedKeys = [
                     'challenge_token',
                     'expires_at',
                     'title',
-                    'error_message',
-                    'success_message',
                 ];
                 TestCase::assertSame($expectedKeys[$assignCalls], $key);
                 $assignCalls++;

@@ -723,8 +723,6 @@ Component,Component
 目标域名（必填）,目标域名（必填）
 根据站点名称与描述推荐域名并填入,根据站点名称与描述推荐域名并填入
 "AI 推荐","AI 推荐"
-Tagline,Tagline
-"Use one short line to clarify positioning, audience, and value.","Use one short line to clarify positioning, audience, and value."
 默认已选中当前框架语言，可按需切换,"The current framework language is selected by default and can be changed as needed."
 一句话描述你的网站,"Describe your website in one sentence"
 参考图片：支持粘贴/拖拽/点击选择,参考图片：支持粘贴/拖拽/点击选择
@@ -738,6 +736,7 @@ Tagline,Tagline
 新建技能,"New skill"
 可编辑自定义技能，内置技能只读。,可编辑自定义技能，内置技能只读。
 刷新,刷新
+收起管理,收起管理
 技能编码,"Skill code"
 技能名称,"Skill name"
 例如：品牌文案风格,"For example: Brand copy style"
@@ -885,6 +884,15 @@ Pending,Pending
 例如：把这一屏改成更强调下载转化、首屏信任感和行动按钮的表达。,例如：把这一屏改成更强调下载转化、首屏信任感和行动按钮的表达。
 编辑区块字段,编辑区块字段
 保存并刷新当前块,保存并刷新当前块
+"Regenerate image","Regenerate image"
+Close,Close
+"Current image","Current image"
+"Current image preview is unavailable.","Current image preview is unavailable."
+"Describe how this image should change","Describe how this image should change"
+"Example: keep the same composition, but make it warmer and add more premium gold lighting.","Example: keep the same composition, but make it warmer and add more premium gold lighting."
+"Only the selected image will be regenerated.","Only the selected image will be regenerated."
+Cancel,Cancel
+"Start regeneration","Start regeneration"
 正在等待区块操作启动…,正在等待区块操作启动…
 确认重建,确认重建
 重新请求重试,重新请求重试
@@ -957,6 +965,7 @@ Footer,Footer
 页面已更新，可提前编辑：,页面已更新，可提前编辑：
 任务已完成,任务已完成
 队列尚未完成，继续同步后台执行进度。,队列尚未完成，继续同步后台执行进度。
+操作已中断,"Operation stopped"
 工作区操作执行失败,工作区操作执行失败
 队列任务已提交，正在等待系统调度。,队列任务已提交，正在等待系统调度。
 "操作已创建但缺少 SSE 参数","操作已创建但缺少 SSE 参数"
@@ -1005,7 +1014,8 @@ Footer,Footer
 查看第二阶段任务方案,查看第二阶段任务方案
 生成第二阶段任务方案,生成第二阶段任务方案
 任务规划生成中…,任务规划生成中…
-尚未生成第二阶段任务方案。,尚未生成第二阶段任务方案。
+第二阶段任务方案已确认。,第二阶段任务方案已确认。
+第二阶段任务方案待确认。,第二阶段任务方案待确认。
 本阶段会把第一阶段已确认的建站方案拆解为可执行的页面与区块任务清单。微调只修改指定范围，重建会生成全量新方案；确认后才能进入构建。,本阶段会把第一阶段已确认的建站方案拆解为可执行的页面与区块任务清单。微调只修改指定范围，重建会生成全量新方案；确认后才能进入构建。
 第二阶段基于已确认方案自动拆解任务；确认任务方案后可手动点击“构建网站”进入后台构建。,第二阶段基于已确认方案自动拆解任务；确认任务方案后可手动点击“构建网站”进入后台构建。
 第二阶段技能策略,第二阶段技能策略
@@ -1037,6 +1047,7 @@ iPad,iPad
 当前仍可继续预览和编辑；当虚拟主题构建完成后，这里会直接提供进入第三阶段的按钮。,当前仍可继续预览和编辑；当虚拟主题构建完成后，这里会直接提供进入第三阶段的按钮。
 阶段三,阶段三
 构建网站,构建网站
+重新生成,重新生成
 进入第三阶段确认发布,进入第三阶段确认发布
 已生成页面,已生成页面
 当前还没有可用的可视化预览地址，请先完成虚拟主题构建。,当前还没有可用的可视化预览地址，请先完成虚拟主题构建。
@@ -1767,7 +1778,6 @@ AI生成组件,AI生成组件
 可复制，便于调试,可复制，便于调试
 复制草稿内容,复制草稿内容
 重新描述,重新描述
-重新生成,重新生成
 保存组件,保存组件
 下一步（微调）,下一步（微调）
 微调日志,微调日志

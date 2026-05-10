@@ -11,6 +11,7 @@ use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
 use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
+use GuoLaiRen\PageBuilder\Service\AI\QA\RenderDataQualityLinter;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Php\FiberTaskRunner;
@@ -994,17 +995,21 @@ class AiSitePageComponentGenerationService
             'description' => $safeDescription !== '' ? $safeDescription : ($name !== '' ? $name : $componentCode),
         ];
         $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
+        $aiData = $this->enforceContractHeroImageUrlsInAiPayload($aiData, $region, $defaultConfig);
         $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets);
         $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
         if ((bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)) {
+            $html = (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? '');
+            $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html);
+
             return [
                 'code' => $componentCode,
                 'name' => $name,
                 'region' => $region,
                 'phtml' => $phtml,
-                'html' => (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? ''),
+                'html' => $html,
                 'default_config' => $persistedConfig,
                 'ai_data' => $aiData,
             ];
@@ -1018,6 +1023,7 @@ class AiSitePageComponentGenerationService
         $html = $this->renderTemplateToHtml($phtml, $persistedConfig, $renderContext);
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
+        $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html);
 
         return [
             'code' => $componentCode,
@@ -1183,6 +1189,43 @@ class AiSitePageComponentGenerationService
             $renderContext,
             (string)($renderContext['_content_locale'] ?? '')
         );
+        $sectionPlan = $this->buildFallbackSectionPlan($defaultConfig, $renderContext, $prompt, $copy);
+        $surfaceStyle = $this->buildFallbackSurfaceStyle($sectionPlan, $defaultConfig);
+        // 强行契约：先尝试使用第一阶段已落地的真实图片（slot.final_url），保证生成的网站真正"带着规划好的图片"。
+        $visualPanel = $this->buildContractVisualPanel(
+            $defaultConfig,
+            (string)$sectionPlan['title'],
+            '#2563eb',
+            '#06b6d4',
+            '#f59e0b'
+        );
+
+        $artClass = 'ai-site-fallback-art' . ($visualPanel['has_image'] ? ' ai-site-fallback-art--image' : '');
+        $artInner = $visualPanel['has_image']
+            ? $visualPanel['html']
+            : '<svg viewBox="0 0 520 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars((string)$sectionPlan['title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"><rect width="520" height="360" rx="34" fill="#0f172a"/><circle cx="96" cy="92" r="72" fill="#38bdf8" opacity=".38"/><circle cx="426" cy="264" r="104" fill="#f59e0b" opacity=".34"/><path d="M68 248 C144 160 228 294 310 202 C372 134 430 150 474 104" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".86"/><rect x="68" y="68" width="162" height="74" rx="24" fill="#fff" opacity=".88"/><rect x="258" y="82" width="188" height="24" rx="12" fill="#fff" opacity=".78"/><rect x="258" y="128" width="132" height="18" rx="9" fill="#fff" opacity=".46"/><rect x="72" y="224" width="112" height="72" rx="22" fill="#fff" opacity=".20"/><rect x="214" y="204" width="112" height="92" rx="22" fill="#fff" opacity=".26"/><rect x="356" y="224" width="92" height="72" rx="22" fill="#fff" opacity=".20"/></svg>';
+
+        return [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId { --ai-site-fallback-gap:22px; }'
+                . "\n" . '#componentId .ai-site-fallback-stage { position:relative; overflow:hidden; display:grid; grid-template-columns:minmax(0,1.04fr) minmax(280px,.96fr); gap:30px; align-items:center; padding:34px; border-radius:32px; border:1px solid color-mix(in srgb,var(--section-primary,#2563eb) 22%,transparent); background:' . $surfaceStyle['stage_background'] . '; box-shadow:0 28px 80px rgba(15,23,42,.14); }'
+                . "\n" . '#componentId .ai-site-fallback-stage:before { content:""; position:absolute; inset:auto -12% -38% 22%; height:56%; background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--section-primary,#2563eb) 16%,transparent) 0 2px,transparent 2px 12px); opacity:.36; transform:rotate(-4deg); }'
+                . "\n" . '#componentId .ai-site-fallback-copy, #componentId .ai-site-fallback-art { position:relative; z-index:1; }'
+                . "\n" . '#componentId .ai-site-fallback-copy strong { display:block; max-width:12ch; font-size:clamp(28px,4.5vw,58px); line-height:1.02; letter-spacing:-.05em; color:' . $surfaceStyle['heading_color'] . '; }'
+                . "\n" . '#componentId .ai-site-fallback-copy p { margin:16px 0 0; max-width:58ch; color:var(--section-text,#334155); font-size:clamp(15px,1.3vw,18px); }'
+                . "\n" . '#componentId .ai-site-fallback-kicker { display:inline-flex; margin-bottom:16px; padding:7px 12px; border-radius:999px; background:color-mix(in srgb,var(--section-primary,#2563eb) 12%,white); color:var(--section-primary,#2563eb); font-weight:700; font-size:12px; letter-spacing:.12em; text-transform:uppercase; }'
+                . "\n" . '#componentId .ai-site-fallback-proof { display:flex; flex-wrap:wrap; gap:10px; margin-top:22px; } #componentId .ai-site-fallback-proof span { padding:10px 12px; border-radius:14px; background:rgba(255,255,255,.74); border:1px solid rgba(255,255,255,.72); box-shadow:0 12px 30px rgba(15,23,42,.09); color:var(--section-heading,#0f172a); font-weight:700; }'
+                . "\n" . '#componentId .ai-site-fallback-art { position:relative; min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(145deg,var(--section-primary,#2563eb),var(--section-secondary,#06b6d4)); } #componentId .ai-site-fallback-art svg { width:100%; height:100%; display:block; }'
+                . "\n" . '#componentId .ai-site-fallback-art--image { background:color-mix(in srgb,var(--section-primary,#2563eb) 18%,#0f172a); }'
+                . "\n" . '#componentId .ai-site-fallback-art--image:after { content:""; position:absolute; inset:0; background:linear-gradient(155deg,color-mix(in srgb,var(--section-primary,#2563eb) 22%,rgba(15,23,42,.72)) 0%,rgba(15,23,42,.10) 50%,color-mix(in srgb,var(--section-accent,#f59e0b) 18%,rgba(15,23,42,.74)) 100%); pointer-events:none; }'
+                . "\n" . '#componentId .ai-site-fallback-art .ai-site-visual-image { width:100%; height:100%; min-height:260px; display:block; object-fit:cover; object-position:center; transition:transform .8s ease; }'
+                . "\n" . '#componentId .ai-site-fallback-art--image:hover .ai-site-visual-image { transform:scale(1.04); }'
+                . "\n" . '#componentId .ai-site-fallback-callout { position:relative; padding:18px 20px; border-radius:20px; background:' . $surfaceStyle['callout_background'] . '; color:' . $surfaceStyle['callout_color'] . '; box-shadow:0 20px 48px rgba(15,23,42,.18); }',
+            'css_responsive' => '#componentId .ai-site-fallback-stage { grid-template-columns:1fr; padding:24px; } #componentId .ai-site-fallback-copy strong { max-width:12ch; }',
+            'html_content' => '<div class="ai-site-fallback-stage"><div class="ai-site-fallback-copy"><span class="ai-site-fallback-kicker">' . \htmlspecialchars((string)$sectionPlan['eyebrow'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><strong>' . \htmlspecialchars((string)$sectionPlan['title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars((string)$sectionPlan['body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><div class="ai-site-fallback-proof">' . $this->buildFallbackProofHtml((array)$sectionPlan['proof_points']) . '</div></div><div class="' . $artClass . '">' . $artInner . '</div></div><div class="ai-site-fallback-callout"><p>' . \htmlspecialchars((string)$sectionPlan['callout_title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><p>' . \htmlspecialchars((string)$sectionPlan['callout_body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
+            'js_content' => '',
+        ];
         $title = $copy['title'];
         $body = $copy['body'];
         $cjk = $copy['cjk'];
@@ -1226,6 +1269,194 @@ class AiSitePageComponentGenerationService
             'html_content' => '<div class="ai-site-fallback-stage"><div class="ai-site-fallback-copy"><span class="ai-site-fallback-kicker">' . \htmlspecialchars($eyebrow, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><div class="ai-site-fallback-proof"><span>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><span>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span></div></div><div class="ai-site-fallback-art"><svg viewBox="0 0 520 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"><rect width="520" height="360" rx="34" fill="#0f172a"/><circle cx="96" cy="92" r="72" fill="#38bdf8" opacity=".38"/><circle cx="426" cy="264" r="104" fill="#f59e0b" opacity=".34"/><path d="M68 248 C144 160 228 294 310 202 C372 134 430 150 474 104" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".86"/><rect x="68" y="68" width="162" height="74" rx="24" fill="#fff" opacity=".88"/><rect x="258" y="82" width="188" height="24" rx="12" fill="#fff" opacity=".78"/><rect x="258" y="128" width="132" height="18" rx="9" fill="#fff" opacity=".46"/><rect x="72" y="224" width="112" height="72" rx="22" fill="#fff" opacity=".20"/><rect x="214" y="204" width="112" height="92" rx="22" fill="#fff" opacity=".26"/><rect x="356" y="224" width="92" height="72" rx="22" fill="#fff" opacity=".20"/></svg></div></div><div class="ai-site-fallback-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><p>' . \htmlspecialchars($secondaryBody . ' ' . $trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
             'js_content' => '',
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @param array{title:string,body:string,cjk:bool} $copy
+     * @return array<string,mixed>
+     */
+    private function buildFallbackSectionPlan(array $defaultConfig, array $renderContext, string $prompt, array $copy): array
+    {
+        $cjk = (bool)($copy['cjk'] ?? false);
+        $samples = $this->decodeConfigStringList($defaultConfig['contract.stage1_samples'] ?? null);
+        $variant = $this->detectFallbackSectionVariant($defaultConfig, $renderContext, $prompt);
+        $siteTitle = $this->pickFallbackConfigCopy($defaultConfig, ['site_title', 'brand.name', 'logo.text', 'content.site_title'], 48);
+        $primaryAction = $this->pickFallbackConfigCopy($defaultConfig, ['content.cta_text', 'cta_text', 'button.text', 'primary_cta', 'content.primary_cta'], 36);
+        if ($primaryAction === '') {
+            $primaryAction = $cjk ? '立即开始' : 'Get started';
+        }
+        $proofPoints = \array_slice($samples, 0, 3);
+        if ($proofPoints === []) {
+            $proofPoints = $cjk
+                ? ['重点一目了然', '结构清晰可读', '操作入口明确']
+                : ['Clear hierarchy', 'Readable spacing', 'Focused action'];
+        }
+
+        $plan = [
+            'variant' => $variant,
+            'eyebrow' => $this->pickFallbackConfigCopy($defaultConfig, ['content.eyebrow', 'eyebrow', 'badge', 'kicker'], 48),
+            'title' => $copy['title'],
+            'body' => $copy['body'],
+            'proof_points' => $proofPoints,
+            'callout_title' => $cjk ? '继续下一步' : 'Continue clearly',
+            'callout_body' => $cjk ? '按页面节奏查看重点、理解价值，再进入下一步操作。' : 'Review the essentials, understand the value, and move into the next action without friction.',
+            'card_title_primary' => $cjk ? '重点内容' : 'Key message',
+            'card_body_primary' => $copy['body'],
+            'card_title_secondary' => $cjk ? '下一步动作' : 'Next action',
+            'card_body_secondary' => $primaryAction,
+            'card_title_tertiary' => $cjk ? '信任说明' : 'Trust signal',
+            'card_body_tertiary' => $cjk ? '让访客快速看懂承诺、证明和入口。' : 'Help visitors see the promise, proof, and path forward quickly.',
+        ];
+
+        if ($plan['eyebrow'] === '') {
+            $plan['eyebrow'] = match ($variant) {
+                'features' => $cjk ? '核心亮点' : 'Highlights',
+                'checklist' => $cjk ? '操作步骤' : 'How it works',
+                'cta' => $cjk ? '立即行动' : 'Ready to act',
+                default => $cjk ? '精选内容' : 'Featured',
+            };
+        }
+
+        switch ($variant) {
+            case 'features':
+                $plan['title'] = $this->pickFallbackConfigCopy($defaultConfig, ['content.section_title', 'section_title', 'features.title'], 72);
+                if ($plan['title'] === '') {
+                    $plan['title'] = $cjk
+                        ? (($siteTitle !== '' ? $siteTitle : '这个页面') . '的核心亮点')
+                        : (($siteTitle !== '' ? $siteTitle : 'This page') . ' highlights');
+                }
+                $plan['body'] = $this->pickFallbackConfigCopy($defaultConfig, ['content.section_intro', 'section_intro', 'features.description'], 180);
+                if ($plan['body'] === '') {
+                    $plan['body'] = $cjk
+                        ? '用更清晰的卡片层级展示卖点、差异点和信任信息，避免所有内容挤成同一种视觉。'
+                        : 'Use clearer card hierarchy to separate benefits, differentiators, and trust details instead of stacking everything into one repeated treatment.';
+                }
+                $plan['callout_title'] = $cjk ? '继续查看亮点' : 'See the strengths';
+                $plan['callout_body'] = $cjk ? '每张卡片只承载一个重点，让访客能扫读后迅速理解价值。' : 'Each card carries one clear idea so visitors can scan and understand the value quickly.';
+                break;
+            case 'checklist':
+                $plan['title'] = $cjk ? '三步看懂并开始操作' : 'Three clear steps to begin';
+                $plan['body'] = $cjk
+                    ? '把流程、条件和风险提示拆开排版，让访客不必在一大段文案里寻找下一步。'
+                    : 'Separate the process, conditions, and reassurance so visitors do not need to hunt for the next action inside one long paragraph.';
+                $plan['card_title_primary'] = $cjk ? '步骤顺序' : 'Ordered steps';
+                $plan['card_body_primary'] = $cjk ? '按先后顺序呈现关键动作。' : 'Show the key actions in a clear sequence.';
+                $plan['card_title_secondary'] = $cjk ? '阅读负担低' : 'Low reading load';
+                $plan['card_body_secondary'] = $cjk ? '每一步只保留必要信息。' : 'Keep each step focused on one necessary piece of information.';
+                $plan['card_title_tertiary'] = $cjk ? '动作明确' : 'Action stays clear';
+                $plan['card_body_tertiary'] = $primaryAction;
+                break;
+            case 'cta':
+                $plan['title'] = $primaryAction;
+                $plan['body'] = $cjk
+                    ? '把价值总结、信任提示和主按钮收口到同一块区域，形成明确的行动终点。'
+                    : 'Close the page with a compact summary, trust reassurance, and one primary action so the visitor has a clear endpoint.';
+                $plan['proof_points'] = \array_slice($proofPoints, 0, 2);
+                $plan['callout_title'] = $cjk ? '现在就继续' : 'Move forward now';
+                $plan['callout_body'] = $cjk ? '让按钮、辅助说明和背景层次共同强调这一处主动作。' : 'Use the button, supporting note, and contrast layer to keep the primary action unmistakable.';
+                break;
+            default:
+                break;
+        }
+
+        return $plan;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function detectFallbackSectionVariant(array $defaultConfig, array $renderContext, string $prompt): string
+    {
+        // 强行契约：当 runtime.section_template 已由蓝图给出（hero/cta/features/checklist）时，
+        // 直接尊重该模板，避免关键字命中导致 hero 段被误判成 cta（出现 "Close the page with a compact summary..." 占位文案）。
+        $template = \strtolower(\trim((string)($defaultConfig['runtime.section_template'] ?? '')));
+        $allowedFromTemplate = match ($template) {
+            'hero', 'banner' => 'hero',
+            'cta' => 'cta',
+            'checklist' => 'checklist',
+            'features' => 'features',
+            default => '',
+        };
+        if ($allowedFromTemplate !== '') {
+            return $allowedFromTemplate;
+        }
+
+        $signals = \strtolower(\json_encode([$defaultConfig, $renderContext, $prompt], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '');
+        if (\preg_match('/download|cta|contact|checkout|install|start now|primary_cta/', $signals) === 1) {
+            return 'cta';
+        }
+        if (\preg_match('/checklist|step|process|how[-_ ]to|guide|policy|faq|terms|privacy/', $signals) === 1) {
+            return 'checklist';
+        }
+        // Do NOT match bare "card" — briefs like "card games / poker club" must not collapse the hero into a card-grid features stub.
+        if (\preg_match('/feature|highlight|benefit|advantage|proof|trust|value/', $signals) === 1) {
+            return 'features';
+        }
+
+        return 'hero';
+    }
+
+    /**
+     * @param array<string,mixed> $sectionPlan
+     * @param array<string,mixed> $defaultConfig
+     * @return array{stage_background:string,heading_color:string,callout_background:string,callout_color:string}
+     */
+    private function buildFallbackSurfaceStyle(array $sectionPlan, array $defaultConfig): array
+    {
+        $tokens = \array_values(\array_filter(
+            $this->decodeConfigStringList($defaultConfig['contract.theme_tokens'] ?? null),
+            static fn(string $token): bool => \preg_match('/^#[0-9a-f]{6}$/i', $token) === 1
+        ));
+        $primary = $tokens[0] ?? '#2563eb';
+        $secondary = $tokens[1] ?? '#06b6d4';
+        $accent = $tokens[2] ?? '#f59e0b';
+
+        return match ((string)($sectionPlan['variant'] ?? 'hero')) {
+            'features' => [
+                'stage_background' => 'linear-gradient(180deg,#ffffff 0%,color-mix(in srgb,' . $secondary . ' 8%,#ffffff) 100%)',
+                'heading_color' => '#0f172a',
+                'callout_background' => 'linear-gradient(135deg,#0f172a,color-mix(in srgb,' . $primary . ' 34%,#0f172a))',
+                'callout_color' => '#ffffff',
+            ],
+            'checklist' => [
+                'stage_background' => 'linear-gradient(180deg,color-mix(in srgb,' . $accent . ' 10%,#ffffff) 0%,#ffffff 100%)',
+                'heading_color' => '#0f172a',
+                'callout_background' => '#0f172a',
+                'callout_color' => '#ffffff',
+            ],
+            'cta' => [
+                'stage_background' => 'linear-gradient(135deg,color-mix(in srgb,' . $primary . ' 14%,#ffffff),color-mix(in srgb,' . $accent . ' 12%,#ffffff))',
+                'heading_color' => '#0f172a',
+                'callout_background' => 'linear-gradient(135deg,#0f172a,color-mix(in srgb,' . $accent . ' 28%,#0f172a))',
+                'callout_color' => '#ffffff',
+            ],
+            default => [
+                'stage_background' => 'radial-gradient(circle at 12% 8%,color-mix(in srgb,' . $accent . ' 26%,transparent),transparent 32%),linear-gradient(135deg,color-mix(in srgb,' . $primary . ' 12%,white),color-mix(in srgb,' . $secondary . ' 10%,white))',
+                'heading_color' => '#0f172a',
+                'callout_background' => '#0f172a',
+                'callout_color' => '#ffffff',
+            ],
+        };
+    }
+
+    /**
+     * @param list<string> $items
+     */
+    private function buildFallbackProofHtml(array $items): string
+    {
+        $html = '';
+        foreach ($items as $item) {
+            $item = \trim((string)$item);
+            if ($item === '') {
+                continue;
+            }
+            $html .= '<span>' . \htmlspecialchars($item, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span>';
+        }
+
+        return $html;
     }
 
     /**
@@ -1543,7 +1774,10 @@ class AiSitePageComponentGenerationService
     {
         $aiData['extra_fields'] = '';
         $aiData['php_variables'] = '';
-        $aiData['js_content'] = '';
+        // 强行契约：默认清空 js_content；仅当本组件是 hero/banner 轮播这类必须有 JS 才能完成
+        // 体验的场景，并且 JS 内容是受控的（仅引用 component 局部 DOM、无 eval / 外部资源 / fetch）才放行。
+        $existingJs = (string)($aiData['js_content'] ?? '');
+        $aiData['js_content'] = $this->isAllowedComponentInlineJs($existingJs, $aiData) ? $existingJs : '';
 
         foreach (['css_extra', 'css_responsive', 'css_content'] as $cssKey) {
             if (!\is_string($aiData[$cssKey] ?? null)) {
@@ -1598,7 +1832,7 @@ class AiSitePageComponentGenerationService
             return 1200;
         }
 
-        return $region === 'content' ? 2800 : 2000;
+        return $region === 'content' ? 3600 : 2000;
     }
 
     private function normalizeVirtualThemeCssForValidation(string $css, int $limit): string
@@ -1636,7 +1870,7 @@ class AiSitePageComponentGenerationService
             : \substr($css, 0, \max(1, $limit));
         $lastClose = \strrpos($slice, '}');
         if ($lastClose === false) {
-            return '';
+            return \trim($this->balanceCssBraces($slice));
         }
 
         return \trim(\substr($slice, 0, $lastClose + 1));
@@ -2023,15 +2257,149 @@ class AiSitePageComponentGenerationService
         $html = \preg_replace('/<(h[1-6]|p|li|span|div)\b[^>]*>\s*(?:使用|补充|确保|必须|应当|请|返回|不要|保持|包含|列出|提供|生成)\b[^<]{0,360}<\/\1>/u', '', $html) ?? $html;
         $html = \preg_replace('/@(?:component|fields)_(?:start|end)\b/i', '', $html) ?? $html;
         $html = \preg_replace('/<div([^>]*class="[^"]*(?:eyebrow|subtitle|kicker|badge)[^"]*"[^>]*)>\s*(首页|主页|关于我们|关于|Home|About|About Us)\s*<\/div>/iu', '', $html) ?? $html;
-        $html = \preg_replace('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', '', $html) ?? $html;
+        // 强行契约：planning 关键字（home_page/about_page/page:.../content/...）只能从可见文本剥离，
+        // 不能动 HTML 属性（src/href/srcset/data-* 等），否则 `/pub/.../page-home_page-content-home-page-hero-...jpg`
+        // 这种合法 URL 中的 `home_page` 会被吞掉，导致 <img> 显示成 broken。
+        $html = $this->stripPlanningKeywordsFromVisibleText($html);
         $html = \preg_replace('/(?:核心卖点|功能特性|把首页[^。！？.!?]{0,80}放出来|值得点击|页面类型|内容块)/u', '', $html) ?? $html;
-        $this->assertGeneratedHtmlFragmentWellFormed($html);
         $html = $this->repairHtmlFragmentTagBalance($html);
+        $this->assertGeneratedHtmlFragmentWellFormed($html);
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
         $html = \trim($html);
+        // 禁止使用纯 mb/byte 裁剪：超长 HTML 在中间截断会破坏标签闭环，repair 也难救。
+        $html = $this->clipHtmlFragmentPreservingIntegrity($html, 5000);
+        $html = $this->repairHtmlFragmentTagBalance(\trim($html));
+        $this->assertGeneratedHtmlFragmentWellFormed($html);
 
-        return $this->clipText($html, 5000);
+        return \trim($html);
+    }
+
+    /**
+     * 强行契约：组件内联 JS 白名单——只放行 hero/banner 轮播这类受控 JS。
+     *
+     * 必须满足：
+     *  - HTML 含 `class="ai-site-hero"` 这一已知轮播容器（其它结构一律不需要 JS）。
+     *  - JS 仅引用 `component.querySelector*`、`addEventListener`、`setInterval`、`classList`、
+     *    `setAttribute("aria-hidden", ...)` 等局部 DOM 操作。
+     *  - JS 不得包含 `eval(`、`Function(`、`fetch(`、`XMLHttpRequest`、`document.write`、
+     *    `import(`、`<script`、`document.body`、`window.location` 等高风险结构。
+     *
+     * @param array<string,mixed> $aiData
+     */
+    private function isAllowedComponentInlineJs(string $js, array $aiData): bool
+    {
+        $js = \trim($js);
+        if ($js === '' || \strlen($js) < 5) {
+            return false;
+        }
+        $html = (string)($aiData['html_content'] ?? '');
+        $isHeroBanner = \str_contains($html, 'class="ai-site-hero"');
+        if (!$isHeroBanner) {
+            return false;
+        }
+        // 高风险关键字一律拒绝。注意 JS 大小写敏感：`function(` 是字面量（安全），
+        // `Function(` 是构造器（危险），因此对这一类标识符使用大小写敏感匹配。
+        $forbiddenCaseSensitive = [
+            'Function(',
+        ];
+        foreach ($forbiddenCaseSensitive as $needle) {
+            if (\strpos($js, $needle) !== false) {
+                return false;
+            }
+        }
+        $forbidden = [
+            'eval(',
+            'fetch(',
+            'XMLHttpRequest',
+            'document.write',
+            'document.body',
+            'document.head',
+            'window.location',
+            'window.open',
+            'import(',
+            '<script',
+            '</script',
+            'innerHTML',
+            'outerHTML',
+            'insertAdjacentHTML',
+            '__proto__',
+            'document.cookie',
+            'localStorage',
+            'sessionStorage',
+            'navigator.',
+            'history.',
+            'top.location',
+            'parent.location',
+        ];
+        foreach ($forbidden as $needle) {
+            if (\stripos($js, $needle) !== false) {
+                return false;
+            }
+        }
+        // 必须在 component 局部范围内操作 DOM；如果 JS 完全不引用 component 这个局部句柄，
+        // 风险更高（可能影响整页 DOM），统一拒绝。
+        if (\strpos($js, 'component') === false) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 提取 HTML 中"访客可见文本"——剥掉所有标签（包括属性），只保留 `>...<` 之间的内容。
+     * 用于泄漏检测，避免把 src/href/data-* 中的合法 URL / slot id 误判为 leak。
+     */
+    private function extractVisibleHtmlText(string $html): string
+    {
+        if ($html === '') {
+            return '';
+        }
+        // 直接 strip_tags 已能去掉所有标签（含属性），剩下的就是访客可读文本。
+        $plain = \strip_tags($html);
+        $plain = \preg_replace('/\s+/u', ' ', $plain) ?? $plain;
+
+        return \trim($plain);
+    }
+
+    /**
+     * 强行契约：仅在 HTML 文本节点（标签之外）剥离 planning 关键字，保留属性值/标签原貌。
+     *
+     * 旧实现使用全局正则一次性剥离 home_page / about_page / content/... / page:...，
+     * 但这些 token 经常合法地出现在 <img src="/pub/.../page-home_page-content-home-page-hero-...jpg">
+     * 这类资产 URL、CSS class、data-pb-ai-asset-slot 属性中，被错误吞掉后会让图片 404、broken。
+     *
+     * 这里改成"分段处理"：标签整段保留，仅在 `>...<` 之间的文本片段上跑该剥离正则。
+     */
+    private function stripPlanningKeywordsFromVisibleText(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+        $pattern = '/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu';
+
+        // 使用 preg_split 按 HTML 标签切片：奇数下标是标签，偶数下标是文本节点。
+        // PREG_SPLIT_DELIM_CAPTURE 让分隔符（标签）保留在结果中。
+        $parts = \preg_split('/(<[^>]+>)/u', $html, -1, \PREG_SPLIT_DELIM_CAPTURE);
+        if (!\is_array($parts)) {
+            return $html;
+        }
+
+        $out = '';
+        foreach ($parts as $idx => $part) {
+            if ($part === '') {
+                continue;
+            }
+            $isTag = ($idx % 2 === 1) || (\strlen($part) > 0 && $part[0] === '<');
+            if ($isTag) {
+                $out .= $part;
+                continue;
+            }
+            $clean = \preg_replace($pattern, '', $part);
+            $out .= ($clean ?? $part);
+        }
+
+        return $out;
     }
 
     private function assertGeneratedHtmlFragmentWellFormed(string $html): void
@@ -2192,6 +2560,45 @@ class AiSitePageComponentGenerationService
         return $result;
     }
 
+    /**
+     * AI 超长 HTML 若用字节/字符硬性截断会破坏标签闭环；末尾裁到最近一次完整标签结束边界后再跑一次 repair。
+     */
+    private function clipHtmlFragmentPreservingIntegrity(string $html, int $limit): string
+    {
+        if ($limit <= 32 || \trim($html) === '') {
+            return \trim($html);
+        }
+
+        $len = \function_exists('mb_strlen') ? \mb_strlen($html, 'UTF-8') : \strlen($html);
+        if ($len <= $limit) {
+            return $html;
+        }
+
+        $slice = \function_exists('mb_substr')
+            ? \mb_substr($html, 0, \max(24, $limit - 24), 'UTF-8')
+            : \substr($html, 0, \max(24, $limit - 24));
+        $lastGt = false;
+        if (\function_exists('mb_strlen') && \function_exists('mb_strrpos')) {
+            $ofs = \mb_strrpos($slice, '>', 0, 'UTF-8');
+            $lastGt = ($ofs !== false && $ofs >= 24);
+            if ($lastGt) {
+                $slice = \mb_substr($slice, 0, $ofs + 1, 'UTF-8');
+            }
+        } else {
+            $ofs = \strrpos($slice, '>');
+            $lastGt = ($ofs !== false && $ofs >= 24);
+            if ($lastGt) {
+                $slice = \substr($slice, 0, $ofs + 1);
+            }
+        }
+
+        return $lastGt ? \trim($slice) : \trim(
+            \function_exists('mb_substr')
+                ? \mb_substr($html, 0, \max(1, $limit - 24), 'UTF-8')
+                : \substr($html, 0, \max(1, $limit - 24))
+        );
+    }
+
     private function stripPhpFragmentsFromHtml(string $html): string
     {
         if ($html === '') {
@@ -2221,10 +2628,15 @@ class AiSitePageComponentGenerationService
         }
 
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
-        if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|Use concrete|Present key terms|provide download CTA|Provide category|filter tabs|visually distinct|Visible CTA path|Trust content|Responsive cards|proof points|visual hierarchy|launch-ready content|Immediately capture|Instantly communicate|Immediately inform|Capture immediate attention|Introduce Teenipiya|\$[a-z_][a-z0-9_]*|=>|===|优先沿用|输出必须|字段样例|提示词|直接产出可上屏|生成页面方案/iu', $trimmed) === 1) {
+        // 强行契约：泄漏检测只看"可见文本"——属性中的合法 URL/slot id（如
+        //   src="/pub/.../page-home_page-content-home-page-hero-xxx.jpg"
+        //   data-pb-ai-asset-slot="page:home_page:content-home-page-hero"
+        // 不应触发"internal task identifiers leaked"，否则会让所有真实图像 build 全失败。
+        $visibleText = $this->extractVisibleHtmlText($trimmed);
+        if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|Use concrete|Present key terms|provide download CTA|Provide category|filter tabs|visually distinct|Visible CTA path|Trust content|Responsive cards|proof points|visual hierarchy|launch-ready content|Immediately capture|Instantly communicate|Immediately inform|Capture immediate attention|Introduce Teenipiya|\$[a-z_][a-z0-9_]*|=>|===|优先沿用|输出必须|字段样例|提示词|直接产出可上屏|生成页面方案/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
         }
-        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $trimmed) === 1) {
+        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
             return 'internal task identifiers leaked';
         }
         if ($this->containsPlanningObservationCopy($plain)) {
@@ -2245,12 +2657,14 @@ class AiSitePageComponentGenerationService
         if ($plain === '' || \mb_strlen($plain) < 18) {
             return 'insufficient visitor-facing text';
         }
+        // 同上：仅在可见文本上做 leak 检测，避免 src/href/data-* 中的合法 URL/slot id 被误判。
+        $visibleText = $this->extractVisibleHtmlText($trimmed);
 
-        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|Use concrete|Present key terms|provide download CTA|优先沿用|输出必须|字段样例|提示词|直接产出可上屏|生成页面方案/iu', $trimmed) === 1) {
+        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|Use concrete|Present key terms|provide download CTA|优先沿用|输出必须|字段样例|提示词|直接产出可上屏|生成页面方案/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
         }
 
-        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $trimmed) === 1) {
+        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
             return 'internal task identifiers leaked';
         }
 
@@ -2347,6 +2761,150 @@ class AiSitePageComponentGenerationService
         }
 
         return \array_values(\array_unique($urls));
+    }
+
+    /**
+     * Stage-3 偶有 hero 大图未接上（空 src）、或整块高饱和渐变底板压在照片边上产生“主题色 vs 画面色”撞色。
+     * 对已写入 runtime.section_image_* 的规划 URL：补齐 `.ai-site-hero--has-photo`、重写首帧背景图标签，并 prepend 色谱融合的底板/遮罩 CSS。
+     *
+     * @param array<string, mixed> $aiData
+     * @param array<string, mixed> $defaultConfig
+     * @return array<string, mixed>
+     */
+    private function enforceContractHeroImageUrlsInAiPayload(array $aiData, string $region, array $defaultConfig): array
+    {
+        if ($region !== 'content') {
+            return $aiData;
+        }
+        $template = \strtolower(\trim((string)($defaultConfig['runtime.section_template'] ?? '')));
+        $html = (string)($aiData['html_content'] ?? '');
+        if ($html === '' || !\preg_match('/\bai-site-hero\b/i', $html)) {
+            return $aiData;
+        }
+        if ($template !== '' && !\in_array($template, ['hero', 'banner'], true)) {
+            return $aiData;
+        }
+
+        $imageUrl = '';
+        foreach (['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url'] as $key) {
+            $candidate = \trim((string)($defaultConfig[$key] ?? ''));
+            if ($candidate !== '') {
+                $imageUrl = $candidate;
+                break;
+            }
+        }
+        if ($imageUrl === '') {
+            return $aiData;
+        }
+
+        $heroDivPatched = false;
+        $html = \preg_replace_callback(
+            '/<div\b[^>]*>/iu',
+            function (array $matches) use (&$heroDivPatched): string {
+                $tag = $matches[0];
+                if ($heroDivPatched) {
+                    return $tag;
+                }
+                if (!\preg_match('/\bai-site-hero\b/i', $tag) || \preg_match('/\bai-site-hero--has-photo\b/i', $tag)) {
+                    return $tag;
+                }
+
+                $heroDivPatched = true;
+                if (\preg_match('/\bclass=(["\'])([\s\S]*?)\1/u', $tag, $cm) !== 1) {
+                    return $tag;
+                }
+                $quote = (string)$cm[1];
+                $list = \trim((string)($cm[2] ?? ''));
+
+                return \str_replace(
+                    'class=' . $quote . $list . $quote,
+                    'class=' . $quote . \trim($list . ' ai-site-hero--has-photo') . $quote,
+                    $tag
+                );
+            },
+            $html,
+        );
+        $html = \is_string($html) ? $html : (string)($aiData['html_content'] ?? '');
+
+        $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? $defaultConfig['visual.image_slot_id'] ?? ''));
+        $escapedUrl = \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $alt = $this->sanitizeVisibleCopy((string)(
+            $defaultConfig['runtime.section_image_alt']
+            ?? $defaultConfig['visual.image_alt']
+            ?? $defaultConfig['image.alt']
+            ?? $defaultConfig['content.title']
+            ?? ''
+        ));
+        if ($alt === '') {
+            $alt = 'Hero';
+        }
+        $escapedAlt = \htmlspecialchars($alt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+
+        $slotPieces = ['data-pb-ai-image-role="generated-asset"'];
+        if ($slotId !== '') {
+            $slotPieces[] = 'data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
+        }
+        $slotAttr = \implode(' ', $slotPieces);
+
+        $heroImgTag = '<img class="ai-site-hero-image ai-site-visual-image" loading="eager" decoding="async"'
+            . ' src="' . $escapedUrl . '" alt="' . $escapedAlt . '" ' . $slotAttr . '>';
+
+        $imgMatched = false;
+        $html = \preg_replace_callback(
+            '/<img\b[^>]*\bai-site-hero-image\b[^>]*>/iu',
+            function (array $matches) use (&$imgMatched, $heroImgTag): string {
+                if ($imgMatched) {
+                    return $matches[0];
+                }
+                $imgMatched = true;
+
+                return $heroImgTag;
+            },
+            $html,
+            -1
+        );
+
+        $htmlFinal = \is_string($html) ? $html : '';
+        if (!$imgMatched && $htmlFinal !== '') {
+            $injected = \preg_replace(
+                '/(<div\b[^>]*\bclass=["\'][^"\']*\bai-site-hero\b[^"\']*["\'][^>]*>)/iu',
+                '$1' . $heroImgTag,
+                $htmlFinal,
+                1,
+            );
+            $htmlFinal = \is_string($injected) ? $injected : $htmlFinal;
+        }
+
+        $themeTokens = $this->decodeConfigStringList($defaultConfig['contract.theme_tokens'] ?? null);
+        $primary = $themeTokens[0] ?? '#2563eb';
+        $secondary = $themeTokens[1] ?? '#06b6d4';
+        $accent = $themeTokens[2] ?? '#f59e0b';
+
+        $aiData['html_content'] = $htmlFinal;
+        $aiData['css_extra'] = $this->buildAiHeroPhotoFusionCssSnippet($primary, $secondary, $accent) . (string)($aiData['css_extra'] ?? '');
+
+        return $aiData;
+    }
+
+    private function buildAiHeroPhotoFusionCssSnippet(string $primaryHex, string $secondaryHex, string $accentHex): string
+    {
+        $norm = static function (string $hex, string $fallback): string {
+            $candidate = \trim($hex);
+
+            return \preg_match('/^#[0-9a-f]{6}$/i', $candidate) === 1 ? $candidate : $fallback;
+        };
+
+        $p = $norm($primaryHex, '#2563eb');
+        $s = $norm($secondaryHex, '#06b6d4');
+        $a = $norm($accentHex, '#f59e0b');
+
+        return '#componentId .ai-site-hero--has-photo{background:none;background-color:color-mix(in srgb,' . $p . ' 22%,#0f172a);color:#fff;}'
+            . "\n"
+            . '#componentId .ai-site-hero--has-photo:after{background:linear-gradient(165deg,'
+            . 'color-mix(in srgb,' . $p . ' 26%,rgba(15,23,42,.74)) 0%,'
+            . 'color-mix(in srgb,' . $s . ' 14%,rgba(15,23,42,.26)) 46%,'
+            . 'color-mix(in srgb,' . $a . ' 22%,rgba(15,23,42,.82)) 100%);}'
+            . "\n";
     }
 
     /**
@@ -2683,6 +3241,7 @@ class AiSitePageComponentGenerationService
             $renderContext,
             (string)($renderContext['_content_locale'] ?? '')
         );
+        $sectionPlan = $this->buildFallbackSectionPlan($defaultConfig, $renderContext, $prompt, $copy);
         $title = $copy['title'];
         $body = $copy['body'];
         $cjk = $copy['cjk'];
@@ -2712,7 +3271,15 @@ class AiSitePageComponentGenerationService
         $stageOnePanel = $stageOneHtml !== ''
             ? '<div class="ai-site-highlight-proof"><strong>' . ($cjk ? '核心亮点' : 'Highlights') . '</strong><ul>' . $stageOneHtml . '</ul></div>'
             : '';
-        $inlineVisualSvg = '<svg class="ai-site-svg-visual" viewBox="0 0 520 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . ' visual system"><defs><linearGradient id="aiSiteContractGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="' . \htmlspecialchars($contractPrimary, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/><stop offset="52%" stop-color="' . \htmlspecialchars($contractSecondary, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/><stop offset="100%" stop-color="' . \htmlspecialchars($contractAccent, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/></linearGradient></defs><rect width="520" height="320" rx="34" fill="url(#aiSiteContractGradient)"/><circle cx="112" cy="88" r="58" fill="#fff" opacity=".22"/><circle cx="418" cy="232" r="92" fill="#fff" opacity=".16"/><path d="M64 224 C142 136 226 264 308 174 C374 102 430 130 474 78" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".88"/><rect x="64" y="58" width="160" height="68" rx="22" fill="#fff" opacity=".82"/><rect x="256" y="70" width="188" height="24" rx="12" fill="#fff" opacity=".72"/><rect x="256" y="112" width="118" height="18" rx="9" fill="#fff" opacity=".48"/><rect x="72" y="216" width="112" height="58" rx="20" fill="#fff" opacity=".22"/><rect x="214" y="196" width="112" height="78" rx="20" fill="#fff" opacity=".28"/><rect x="356" y="216" width="92" height="58" rx="20" fill="#fff" opacity=".22"/></svg>';
+        // 强行契约：当第一阶段已经为该 section 生成真实图片时，stub/fallback 必须用真图，
+        // 而不是再退化成占位 SVG。`buildContractVisualPanel` 会优先用 verified_assets 的 final_url。
+        $visualPanel = $this->buildContractVisualPanel(
+            $defaultConfig,
+            $title,
+            $contractPrimary,
+            $contractSecondary,
+            $contractAccent
+        );
 
         return match ($region) {
             'header' => [
@@ -2735,31 +3302,333 @@ class AiSitePageComponentGenerationService
                 'footer_extra_text' => $cjk ? '页面内容可持续维护' : 'Content can be maintained after publishing',
                 'js_content' => '',
             ],
-            default => [
-                'extra_fields' => '',
-                'php_variables' => '',
-                'css_extra' => '#componentId { --ai-site-contract-primary:' . $contractPrimary . '; --ai-site-contract-secondary:' . $contractSecondary . '; --ai-site-contract-accent:' . $contractAccent . '; }'
-                    . "\n" . '#componentId .ai-site-visual-wrap { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,.82fr); gap:22px; align-items:stretch; }'
-                    . "\n" . '#componentId .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }'
-                    . "\n" . '#componentId .ai-site-card { padding:20px; border-radius:20px; border:1px solid var(--section-border); background:rgba(255,255,255,0.72); text-align:left; box-shadow:0 16px 42px rgba(15,23,42,.10); transition:transform .22s ease, box-shadow .22s ease; }'
-                    . "\n" . '#componentId .ai-site-card:hover { transform:translateY(-4px); box-shadow:0 22px 54px rgba(15,23,42,.16); }'
-                    . "\n" . '#componentId .ai-site-visual-panel { min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(135deg,var(--ai-site-contract-primary),var(--ai-site-contract-secondary),var(--ai-site-contract-accent)); }'
-                    . "\n" . '#componentId .ai-site-svg-visual { width:100%; height:100%; display:block; animation:aiSiteVisualFloat 7s ease-in-out infinite alternate; }'
-                    . "\n" . '#componentId .ai-site-highlight-proof { margin-top:16px; padding:18px 20px; border-radius:20px; background:rgba(255,255,255,.78); border:1px solid var(--section-border); text-align:left; box-shadow:0 14px 36px rgba(15,23,42,.09); }'
-                    . "\n" . '#componentId .ai-site-highlight-proof ul { margin:10px 0 0; padding-left:20px; display:grid; gap:8px; }'
-                    . "\n" . '#componentId .ai-site-callout { margin-top:16px; padding:18px 20px; border-radius:18px; background:color-mix(in srgb,var(--section-primary) 10%,white); color:var(--section-heading); text-align:left; }'
-                    . "\n" . '@keyframes aiSiteVisualFloat { from { transform:translateY(0) scale(1); } to { transform:translateY(-10px) scale(1.02); } }',
-                'css_responsive' => '#componentId .ai-site-visual-wrap { grid-template-columns:1fr; } #componentId .ai-site-card-grid { grid-template-columns:1fr; }',
-                'html_content' => '<div class="ai-site-card-grid">'
-                    . '<article class="ai-site-card"><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
-                    . '<article class="ai-site-card"><strong>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($secondaryBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
-                    . '<article class="ai-site-card"><strong>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
-                    . '</div>'
-                    . '<div class="ai-site-visual-wrap"><div>' . $stageOnePanel . '</div><div class="ai-site-visual-panel">' . $inlineVisualSvg . '</div></div>'
-                    . '<div class="ai-site-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
-                'js_content' => '',
-            ],
+            default => $this->buildStubAiContentPayload(
+                $sectionPlan,
+                $copy,
+                $defaultConfig,
+                $visualPanel,
+                $stageOnePanel,
+                $stageOneSamples,
+                $contractPrimary,
+                $contractSecondary,
+                $contractAccent
+            ),
         };
+    }
+
+    /**
+     * 强行契约：根据 section variant 分发不同的 stub 渲染。
+     * - hero/banner → 大图背景 + 标题/CTA 居中覆盖 + slide 自动轮播；
+     * - 其他 → 卡片网格 + 视觉面板。
+     *
+     * @param array<string,mixed> $sectionPlan
+     * @param array{title:string,body:string,cjk:bool} $copy
+     * @param array<string,mixed> $defaultConfig
+     * @param array{html:string,has_image:bool,image_url:string} $visualPanel
+     * @param list<string> $stageOneSamples
+     * @return array<string,mixed>
+     */
+    private function buildStubAiContentPayload(
+        array $sectionPlan,
+        array $copy,
+        array $defaultConfig,
+        array $visualPanel,
+        string $stageOnePanel,
+        array $stageOneSamples,
+        string $contractPrimary,
+        string $contractSecondary,
+        string $contractAccent
+    ): array {
+        $variant = (string)($sectionPlan['variant'] ?? 'hero');
+        if ($variant === 'hero' || $variant === 'banner') {
+            return $this->buildStubHeroBannerPayload(
+                $sectionPlan,
+                $copy,
+                $defaultConfig,
+                $visualPanel,
+                $stageOneSamples,
+                $contractPrimary,
+                $contractSecondary,
+                $contractAccent
+            );
+        }
+
+        return [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId { --ai-site-contract-primary:' . $contractPrimary . '; --ai-site-contract-secondary:' . $contractSecondary . '; --ai-site-contract-accent:' . $contractAccent . '; }'
+                . "\n" . '#componentId .ai-site-visual-wrap { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,.82fr); gap:22px; align-items:stretch; }'
+                . "\n" . '#componentId .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }'
+                . "\n" . '#componentId .ai-site-card { padding:20px; border-radius:20px; border:1px solid var(--section-border); background:rgba(255,255,255,0.72); text-align:left; box-shadow:0 16px 42px rgba(15,23,42,.10); transition:transform .22s ease, box-shadow .22s ease; }'
+                . "\n" . '#componentId .ai-site-card:hover { transform:translateY(-4px); box-shadow:0 22px 54px rgba(15,23,42,.16); }'
+                . "\n" . '#componentId .ai-site-visual-panel { position:relative; min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(135deg,var(--ai-site-contract-primary),var(--ai-site-contract-secondary),var(--ai-site-contract-accent)); }'
+                . "\n" . '#componentId .ai-site-visual-panel--image { background:color-mix(in srgb,var(--ai-site-contract-primary) 18%,#0f172a); }'
+                . "\n" . '#componentId .ai-site-visual-panel--image:after { content:""; position:absolute; inset:0; background:linear-gradient(155deg,color-mix(in srgb,var(--ai-site-contract-primary) 22%,rgba(15,23,42,.70)) 0%,rgba(15,23,42,.10) 50%,color-mix(in srgb,var(--ai-site-contract-accent) 18%,rgba(15,23,42,.76)) 100%); pointer-events:none; }'
+                . "\n" . '#componentId .ai-site-svg-visual { width:100%; height:100%; display:block; animation:aiSiteVisualFloat 7s ease-in-out infinite alternate; }'
+                . "\n" . '#componentId .ai-site-visual-image { width:100%; height:100%; min-height:260px; display:block; object-fit:cover; object-position:center; transition:transform .8s ease; }'
+                . "\n" . '#componentId .ai-site-visual-panel--image:hover .ai-site-visual-image { transform:scale(1.04); }'
+                . "\n" . '#componentId .ai-site-highlight-proof { margin-top:16px; padding:18px 20px; border-radius:20px; background:rgba(255,255,255,.78); border:1px solid var(--section-border); text-align:left; box-shadow:0 14px 36px rgba(15,23,42,.09); }'
+                . "\n" . '#componentId .ai-site-highlight-proof ul { margin:10px 0 0; padding-left:20px; display:grid; gap:8px; }'
+                . "\n" . '#componentId .ai-site-callout { margin-top:16px; padding:18px 20px; border-radius:18px; background:color-mix(in srgb,var(--section-primary) 10%,white); color:var(--section-heading); text-align:left; }'
+                . "\n" . '@keyframes aiSiteVisualFloat { from { transform:translateY(0) scale(1); } to { transform:translateY(-10px) scale(1.02); } }',
+            'css_responsive' => '#componentId .ai-site-visual-wrap { grid-template-columns:1fr; } #componentId .ai-site-card-grid { grid-template-columns:1fr; }',
+            'html_content' => '<div class="ai-site-card-grid">'
+                . '<article class="ai-site-card"><strong>' . \htmlspecialchars((string)$sectionPlan['title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars((string)$sectionPlan['body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                . '<article class="ai-site-card"><strong>' . \htmlspecialchars((string)$sectionPlan['card_title_primary'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars((string)$sectionPlan['card_body_primary'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                . '<article class="ai-site-card"><strong>' . \htmlspecialchars((string)$sectionPlan['card_title_secondary'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars((string)$sectionPlan['card_body_secondary'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                . '</div>'
+                . '<div class="ai-site-visual-wrap"><div>' . $stageOnePanel . '</div><div class="ai-site-visual-panel' . ($visualPanel['has_image'] ? ' ai-site-visual-panel--image' : '') . '">' . $visualPanel['html'] . '</div></div>'
+                . '<div class="ai-site-callout"><p>' . \htmlspecialchars((string)$sectionPlan['callout_body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * 强行契约：hero/banner stub 必须是真正的"banner"——大图全宽背景、覆盖式标题/CTA、
+     * 多 slide 自动轮播；不再退化为通用卡片网格。
+     *
+     * 即使 stage1 只生成单张主图，这里也通过 `proof_points` 派生多 slide 内容（每个 slide
+     * 复用同一张 hero 图但展示不同标题/亮点），形成视觉上的轮播节奏。
+     *
+     * @param array<string,mixed> $sectionPlan
+     * @param array{title:string,body:string,cjk:bool} $copy
+     * @param array<string,mixed> $defaultConfig
+     * @param array{html:string,has_image:bool,image_url:string} $visualPanel
+     * @param list<string> $stageOneSamples
+     * @return array<string,mixed>
+     */
+    private function buildStubHeroBannerPayload(
+        array $sectionPlan,
+        array $copy,
+        array $defaultConfig,
+        array $visualPanel,
+        array $stageOneSamples,
+        string $contractPrimary,
+        string $contractSecondary,
+        string $contractAccent
+    ): array {
+        $cjk = (bool)($copy['cjk'] ?? false);
+        $title = (string)$sectionPlan['title'];
+        $body = (string)$sectionPlan['body'];
+        $eyebrow = (string)$sectionPlan['eyebrow'];
+        $primaryAction = (string)$sectionPlan['card_body_secondary'];
+        if ($primaryAction === '') {
+            $primaryAction = $cjk ? '立即开始' : 'Get started';
+        }
+        $primaryActionHref = $this->pickFallbackConfigCopy($defaultConfig, [
+            'cta.url',
+            'content.cta_url',
+            'button.url',
+        ], 200);
+        if ($primaryActionHref === '' || \str_starts_with($primaryActionHref, '#') === false) {
+            $primaryActionHref = '#';
+        }
+
+        // 派生 slide：第一张用 sectionPlan 主标题/正文；后续 slide 用 proof_points / stage1 samples 形成轮播节奏。
+        $slides = [];
+        $slides[] = [
+            'eyebrow' => $eyebrow,
+            'title' => $title,
+            'body' => $body,
+        ];
+        $proofPoints = \is_array($sectionPlan['proof_points'] ?? null) ? $sectionPlan['proof_points'] : [];
+        foreach ($proofPoints as $idx => $point) {
+            $point = \trim((string)$point);
+            if ($point === '' || $idx > 2) {
+                continue;
+            }
+            $slides[] = [
+                'eyebrow' => $cjk ? '亮点 ' . ($idx + 1) : 'Highlight ' . ($idx + 1),
+                'title' => $point,
+                'body' => $stageOneSamples[$idx + 1] ?? $body,
+            ];
+        }
+        if (\count($slides) < 2) {
+            // 无足够轮播素材时使用 sectionPlan 衍生第二张，避免 carousel 只剩一张滑块。
+            $slides[] = [
+                'eyebrow' => (string)$sectionPlan['card_title_primary'],
+                'title' => (string)$sectionPlan['card_title_secondary'],
+                'body' => (string)$sectionPlan['card_body_secondary'],
+            ];
+        }
+
+        $slidesHtml = '';
+        $slideCount = \count($slides);
+        foreach ($slides as $i => $slide) {
+            $slidesHtml .= '<article class="ai-site-hero-slide" data-slide-index="' . $i . '" aria-hidden="' . ($i === 0 ? 'false' : 'true') . '">'
+                . ($slide['eyebrow'] !== '' ? '<span class="ai-site-hero-eyebrow">' . \htmlspecialchars((string)$slide['eyebrow'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span>' : '')
+                . '<h2 class="ai-site-hero-title">' . \htmlspecialchars((string)$slide['title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</h2>'
+                . '<p class="ai-site-hero-body">' . \htmlspecialchars((string)$slide['body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p>'
+                . '<a class="ai-site-hero-cta" href="' . \htmlspecialchars($primaryActionHref, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">' . \htmlspecialchars($primaryAction, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</a>'
+                . '</article>';
+        }
+
+        $dotsHtml = '';
+        for ($i = 0; $i < $slideCount; $i++) {
+            $dotsHtml .= '<button type="button" class="ai-site-hero-dot' . ($i === 0 ? ' is-active' : '') . '" data-slide-target="' . $i . '" aria-label="' . ($cjk ? '第 ' . ($i + 1) . ' 帧' : 'Slide ' . ($i + 1)) . '"></button>';
+        }
+
+        // 优先使用第一阶段已落地的 verified_asset 真实图片；没有真图则用渐变色。
+        $hasImage = (bool)$visualPanel['has_image'];
+        $imageUrl = (string)$visualPanel['image_url'];
+        // slot id 是属性值（不是访客可见文本），不能用 sanitizeVisibleCopy 处理，
+        // 否则 `page:home_page:content-...` 这类合法 slot id 会被规划关键字正则吞掉。
+        $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? ''));
+        $imageAlt = $this->sanitizeVisibleCopy((string)(
+            $defaultConfig['runtime.section_image_alt']
+            ?? $defaultConfig['visual.image_alt']
+            ?? $defaultConfig['image.alt']
+            ?? $title
+        ));
+        if ($imageAlt === '') {
+            $imageAlt = $title;
+        }
+        $bgLayer = '';
+        $heroFusionClass = '';
+        if ($hasImage && $slotId !== '') {
+            $bgLayer .= '<img class="ai-site-hero-image ai-site-visual-image" loading="eager" decoding="async"'
+                . ' src="' . \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                . ' alt="' . \htmlspecialchars($imageAlt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                . ' data-pb-ai-image-role="generated-asset"'
+                . ' data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">';
+            $heroFusionClass = ' ai-site-hero--has-photo';
+        } elseif ($hasImage) {
+            $bgLayer .= '<img class="ai-site-hero-image ai-site-visual-image" loading="eager" decoding="async"'
+                . ' src="' . \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                . ' alt="' . \htmlspecialchars($imageAlt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                . ' data-pb-ai-image-role="generated-asset">';
+            $heroFusionClass = ' ai-site-hero--has-photo';
+        }
+
+        $cssExtra = '#componentId { --ai-site-hero-primary:' . $contractPrimary . '; --ai-site-hero-secondary:' . $contractSecondary . '; --ai-site-hero-accent:' . $contractAccent . '; padding:0 !important; }'
+            . "\n" . '#componentId .ai-site-hero { position:relative; overflow:hidden; min-height:clamp(360px,52vh,560px); border-radius:0; isolation:isolate; color:#fff; }'
+            . "\n" . '#componentId .ai-site-hero:not(.ai-site-hero--has-photo) { background:linear-gradient(135deg,var(--ai-site-hero-primary),var(--ai-site-hero-secondary) 60%,var(--ai-site-hero-accent)); }'
+            . "\n" . '#componentId .ai-site-hero--has-photo { background:none; background-color:color-mix(in srgb,var(--ai-site-hero-primary) 22%,#0f172a); }'
+            . "\n" . '#componentId .ai-site-hero-image { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; z-index:0; filter:saturate(1.06) contrast(1.02); }'
+            . "\n" . '#componentId .ai-site-hero:not(.ai-site-hero--has-photo):after { content:""; position:absolute; inset:0; background:linear-gradient(135deg,rgba(15,23,42,.55) 0%,rgba(15,23,42,.30) 50%,rgba(15,23,42,.65) 100%); z-index:1; pointer-events:none; }'
+            . "\n" . '#componentId .ai-site-hero--has-photo:after { content:""; position:absolute; inset:0; background:linear-gradient(165deg,color-mix(in srgb,var(--ai-site-hero-primary) 26%,rgba(15,23,42,.74)) 0%,color-mix(in srgb,var(--ai-site-hero-secondary) 14%,rgba(15,23,42,.26)) 46%,color-mix(in srgb,var(--ai-site-hero-accent) 22%,rgba(15,23,42,.82)) 100%); z-index:1; pointer-events:none; }'
+            . "\n" . '#componentId .ai-site-hero-track { position:relative; z-index:2; display:grid; grid-template-areas:"slide"; min-height:inherit; padding:clamp(48px,8vw,96px) clamp(24px,6vw,72px); }'
+            . "\n" . '#componentId .ai-site-hero-slide { grid-area:slide; max-width:760px; align-self:center; opacity:0; transform:translateX(24px); transition:opacity .9s ease, transform .9s ease; pointer-events:none; }'
+            . "\n" . '#componentId .ai-site-hero-slide[aria-hidden="false"] { opacity:1; transform:translateX(0); pointer-events:auto; }'
+            . "\n" . '#componentId .ai-site-hero-eyebrow { display:inline-block; padding:6px 14px; margin-bottom:18px; border-radius:999px; background:rgba(255,255,255,.18); backdrop-filter:blur(8px); font-size:13px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }'
+            . "\n" . '#componentId .ai-site-hero-title { margin:0 0 18px; font-size:clamp(36px,5vw,64px); line-height:1.05; letter-spacing:-.02em; font-weight:800; color:#fff; }'
+            . "\n" . '#componentId .ai-site-hero-body { margin:0 0 28px; max-width:62ch; font-size:clamp(16px,1.4vw,20px); line-height:1.6; color:rgba(255,255,255,.92); }'
+            . "\n" . '#componentId .ai-site-hero-cta { display:inline-flex; align-items:center; gap:8px; padding:14px 28px; border-radius:999px; background:var(--ai-site-hero-accent,#f59e0b); color:#0f172a; font-weight:800; text-decoration:none; box-shadow:0 18px 44px rgba(15,23,42,.32); transition:transform .22s ease, box-shadow .22s ease; }'
+            . "\n" . '#componentId .ai-site-hero-cta:hover { transform:translateY(-2px); box-shadow:0 22px 54px rgba(15,23,42,.40); }'
+            . "\n" . '#componentId .ai-site-hero-dots { position:absolute; left:0; right:0; bottom:24px; z-index:3; display:flex; justify-content:center; gap:10px; }'
+            . "\n" . '#componentId .ai-site-hero-dot { width:32px; height:4px; padding:0; border:none; border-radius:999px; background:rgba(255,255,255,.36); cursor:pointer; transition:background .22s ease, transform .22s ease; }'
+            . "\n" . '#componentId .ai-site-hero-dot:hover { background:rgba(255,255,255,.7); }'
+            . "\n" . '#componentId .ai-site-hero-dot.is-active { background:#fff; transform:scaleX(1.4); }';
+
+        $jsContent = 'const slides=Array.from(component.querySelectorAll(".ai-site-hero-slide"));'
+            . 'const dots=Array.from(component.querySelectorAll(".ai-site-hero-dot"));'
+            . 'if(slides.length>1){'
+            . 'let idx=0;let timer=null;'
+            . 'const show=function(next){'
+            . 'idx=(next+slides.length)%slides.length;'
+            . 'slides.forEach(function(s,i){s.setAttribute("aria-hidden",i===idx?"false":"true");});'
+            . 'dots.forEach(function(d,i){d.classList.toggle("is-active",i===idx);});'
+            . '};'
+            . 'const start=function(){timer=setInterval(function(){show(idx+1);},5200);};'
+            . 'const stop=function(){if(timer){clearInterval(timer);timer=null;}};'
+            . 'dots.forEach(function(d,i){d.addEventListener("click",function(){show(i);stop();start();});});'
+            . 'component.addEventListener("mouseenter",stop);component.addEventListener("mouseleave",start);'
+            . 'start();'
+            . '}';
+
+        return [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => $cssExtra,
+            'css_responsive' => '#componentId .ai-site-hero { min-height:clamp(320px,68vh,520px); } #componentId .ai-site-hero-track { padding:48px 24px; }',
+            'html_content' => '<div class="ai-site-hero' . $heroFusionClass . '">'
+                . $bgLayer
+                . '<div class="ai-site-hero-track">' . $slidesHtml . '</div>'
+                . ($slideCount > 1 ? '<div class="ai-site-hero-dots" role="tablist">' . $dotsHtml . '</div>' : '')
+                . '</div>',
+            'js_content' => $jsContent,
+        ];
+    }
+
+    /**
+     * 强行契约视觉面板：优先使用第一阶段已落地的 verified_asset 真实图片；
+     * 没有真图时退回内联 SVG 视觉，但 SVG 永远不应该取代已规划好的真图。
+     *
+     * @param array<string,mixed> $defaultConfig
+     * @return array{html:string,has_image:bool,image_url:string}
+     */
+    private function buildContractVisualPanel(
+        array $defaultConfig,
+        string $titleForAlt,
+        string $contractPrimary,
+        string $contractSecondary,
+        string $contractAccent
+    ): array {
+        $imageUrl = '';
+        foreach (['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url'] as $candidateKey) {
+            $value = \trim((string)($defaultConfig[$candidateKey] ?? ''));
+            if ($value !== '') {
+                $imageUrl = $value;
+                break;
+            }
+        }
+
+        if ($imageUrl !== '') {
+            $alt = $this->sanitizeVisibleCopy((string)(
+                $defaultConfig['runtime.section_image_alt']
+                ?? $defaultConfig['visual.image_alt']
+                ?? $defaultConfig['image.alt']
+                ?? $titleForAlt
+                ?? ''
+            ));
+            if ($alt === '') {
+                $alt = $titleForAlt !== '' ? $titleForAlt : 'Section visual';
+            }
+            $slotId = \trim((string)(
+                $defaultConfig['runtime.section_image_slot_id']
+                ?? $defaultConfig['visual.image_slot_id']
+                ?? ''
+            ));
+            $slotAttr = $slotId !== ''
+                ? ' data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                : '';
+
+            $html = '<img class="ai-site-visual-image" loading="lazy" decoding="async"'
+                . ' src="' . \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                . ' alt="' . \htmlspecialchars($alt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                . ' data-pb-ai-image-role="generated-asset"' . $slotAttr . '>';
+
+            return [
+                'html' => $html,
+                'has_image' => true,
+                'image_url' => $imageUrl,
+            ];
+        }
+
+        $svg = '<svg class="ai-site-svg-visual" viewBox="0 0 520 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="'
+            . \htmlspecialchars($titleForAlt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . ' visual system">'
+            . '<defs><linearGradient id="aiSiteContractGradient" x1="0" y1="0" x2="1" y2="1">'
+            . '<stop offset="0%" stop-color="' . \htmlspecialchars($contractPrimary, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/>'
+            . '<stop offset="52%" stop-color="' . \htmlspecialchars($contractSecondary, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/>'
+            . '<stop offset="100%" stop-color="' . \htmlspecialchars($contractAccent, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"/>'
+            . '</linearGradient></defs>'
+            . '<rect width="520" height="320" rx="34" fill="url(#aiSiteContractGradient)"/>'
+            . '<circle cx="112" cy="88" r="58" fill="#fff" opacity=".22"/>'
+            . '<circle cx="418" cy="232" r="92" fill="#fff" opacity=".16"/>'
+            . '<path d="M64 224 C142 136 226 264 308 174 C374 102 430 130 474 78" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".88"/>'
+            . '<rect x="64" y="58" width="160" height="68" rx="22" fill="#fff" opacity=".82"/>'
+            . '<rect x="256" y="70" width="188" height="24" rx="12" fill="#fff" opacity=".72"/>'
+            . '<rect x="256" y="112" width="118" height="18" rx="9" fill="#fff" opacity=".48"/>'
+            . '<rect x="72" y="216" width="112" height="58" rx="20" fill="#fff" opacity=".22"/>'
+            . '<rect x="214" y="196" width="112" height="78" rx="20" fill="#fff" opacity=".28"/>'
+            . '<rect x="356" y="216" width="92" height="58" rx="20" fill="#fff" opacity=".22"/>'
+            . '</svg>';
+
+        return [
+            'html' => $svg,
+            'has_image' => false,
+            'image_url' => '',
+        ];
     }
 
     private function extractStubTitleFromPrompt(string $summary, string $region): string
@@ -3258,6 +4127,20 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * 强行契约：解析 section 应当继承的图片 URL。
+     *
+     * 设计原则（用户要求"不能让 build 用占位图当 stage1 已经有真实图"）：
+     *   1. 真实图片永远优先于占位图。
+     *   2. 在"都是真实"或"都是占位"内部，再按 page_type 精确度排序：
+     *      a. slot_id 与 section 之 page+code 精确匹配（如 `page:home_page:content-home-page-hero`）。
+     *      b. 同 page_type 下、slot_type 命中且 slot_id/block_key/task_key 含 section 关键字。
+     *      c. 同 page_type 下、slot_type 命中的首个 slot。
+     *      d. legacy（page_type==''）+ 关键字命中（haystack 含 brief/label，因 stage1 散标 slot 信息常在 brief）。
+     *      e. legacy + slot_type 命中的首个 slot。
+     *
+     * 这样既避免被关键字匹配错的 legacy slot 抢占（如 slot_id=5、brief 含 "hero"），
+     * 也不会让仅有占位图的 page-scoped slot 排挤掉 stage1 已落地的真实 legacy 资产。
+     *
      * @param array<string,mixed> $section
      * @param array<string,mixed> $scope
      */
@@ -3276,28 +4159,140 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        $preferredTypes = (string)($section['template'] ?? '') === 'hero'
+        $templateKey = \strtolower(\trim((string)($section['template'] ?? '')));
+        $isHeroLikeTemplate = \in_array($templateKey, ['hero', 'banner'], true);
+        $preferredTypes = $isHeroLikeTemplate
             ? ['hero_image', 'section_image', 'trust_brand_image']
             : ['section_image', 'trust_brand_image', 'hero_image'];
 
         $slots = $this->extractManifestSlots($scope);
+
+        // 按 specificity 排序的 expectedSlotIds：code 比 key 更具体（如 content/about-page-story
+        // 对应 page:about_page:content-about-page-story 优先于 page:about_page:highlights，
+        // 因为 blueprint 有时会给 section.key 复用 highlights/details 这类共用 token）。
+        $sectionCode = \strtolower(\trim((string)($section['code'] ?? '')));
+        $sectionKey = \strtolower(\trim((string)($section['key'] ?? '')));
+        $expectedSlotIdsOrdered = [];
+        $appendExpectedId = static function (string $candidate) use (&$expectedSlotIdsOrdered): void {
+            if ($candidate === '' || \in_array($candidate, $expectedSlotIdsOrdered, true)) {
+                return;
+            }
+            $expectedSlotIdsOrdered[] = $candidate;
+        };
+        if ($sectionCode !== '') {
+            $normalizedCode = \str_replace('/', '-', $sectionCode);
+            $appendExpectedId("page:{$pageType}:{$normalizedCode}");
+            $appendExpectedId("page:{$pageType}:{$sectionCode}");
+        }
+        if ($sectionKey !== '') {
+            $normalizedKey = \str_replace('/', '-', $sectionKey);
+            $appendExpectedId("page:{$pageType}:{$normalizedKey}");
+            $appendExpectedId("page:{$pageType}:{$sectionKey}");
+        }
+
+        $slotsByExactId = [];
+        foreach ($slots as $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
+            if ($slotId === '') {
+                continue;
+            }
+            $slotsByExactId[$slotId] = $slot;
+        }
+
+        // 按 verifiedOnly 切两个外层 pass：先尝试只挑非占位图，全部 miss 后再放宽到占位图。
+        // 关键字匹配（无论 scoped 还是 legacy）必须排在"任意 slot_type 命中"之前，
+        // 否则 page-scoped 但语义不相关的 slot（如 page:home_page:cta）会抢占
+        // 与 section 真正同名的 legacy slot（如 details）。
+        foreach ([true, false] as $verifiedOnly) {
+            // (a) slot_id 精确匹配 page-scoped 标识，按 specificity 顺序匹配（code 优先于 key）。
+            foreach ($expectedSlotIdsOrdered as $expectedId) {
+                $slot = $slotsByExactId[$expectedId] ?? null;
+                if (!\is_array($slot)) {
+                    continue;
+                }
+                $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+                if ($finalUrl === '') {
+                    continue;
+                }
+                if ($verifiedOnly && $this->isManifestSlotPlaceholder($slot)) {
+                    continue;
+                }
+                return $finalUrl;
+            }
+
+            // (b) 同 page_type 下 + 关键字命中。
+            $matched = $this->findSlotByKeywordsScoped($slots, $candidates, $preferredTypes, $pageType, true, $verifiedOnly);
+            if ($matched !== '') {
+                return $matched;
+            }
+
+            // (c) legacy（page_type==''）+ 关键字命中（haystack 加入 brief/label，因 stage1 散标 slot 信息常在 brief）。
+            $matched = $this->findSlotByKeywordsScoped($slots, $candidates, $preferredTypes, $pageType, false, $verifiedOnly, true);
+            if ($matched !== '') {
+                return $matched;
+            }
+
+            // (d) 跨 page_type 的关键字匹配（兜底）：stage1 有时会把 legacy slot 错标到另一个 page_type
+            // （例如 slot_id=details 被标为 about_page），但其语义 (slot_id/block_key/brief 含 "details")
+            // 仍是 home_page details 的最佳替代。在已穷尽同 page_type 的 keyword 匹配后启用。
+            $matched = $this->findSlotByKeywordsAcrossPageTypes($slots, $candidates, $preferredTypes, $verifiedOnly);
+            if ($matched !== '') {
+                return $matched;
+            }
+
+            // (e) 同 page_type 下任意 slot_type 命中（兜底；只在所有 keyword 匹配全 miss 后才会到这）。
+            $matched = $this->findFirstScopedSlot($slots, $preferredTypes, $pageType, true, $verifiedOnly);
+            if ($matched !== '') {
+                return $matched;
+            }
+
+            // (f) legacy 范围内首个 slot_type 命中。
+            $matched = $this->findFirstScopedSlot($slots, $preferredTypes, $pageType, false, $verifiedOnly);
+            if ($matched !== '') {
+                return $matched;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 跨 page_type 的关键字匹配：仅在 page-scoped 与 legacy keyword 匹配全 miss 后启用。
+     * 用于救活那些被 stage1 错误地打到了非当前 page_type 的 legacy slot（如 details→about_page）。
+     *
+     * @param list<array<string,mixed>> $slots
+     * @param array<string,bool>        $candidates
+     * @param list<string>              $preferredTypes
+     */
+    private function findSlotByKeywordsAcrossPageTypes(
+        array $slots,
+        array $candidates,
+        array $preferredTypes,
+        bool $verifiedOnly
+    ): string {
+        if ($candidates === []) {
+            return '';
+        }
         foreach ($preferredTypes as $preferredType) {
             foreach ($slots as $slot) {
+                if (!\is_array($slot)) {
+                    continue;
+                }
                 $slotType = \trim((string)($slot['slot_type'] ?? ''));
                 $finalUrl = \trim((string)($slot['final_url'] ?? ''));
                 if ($slotType !== $preferredType || $finalUrl === '') {
                     continue;
                 }
-                $slotPageType = \trim((string)($slot['page_type'] ?? ''));
-                if ($slotPageType !== '' && $slotPageType !== $pageType) {
+                if ($verifiedOnly && $this->isManifestSlotPlaceholder($slot)) {
                     continue;
                 }
                 $haystack = \strtolower(\implode(' ', [
                     (string)($slot['slot_id'] ?? ''),
                     (string)($slot['block_key'] ?? ''),
                     (string)($slot['task_key'] ?? ''),
-                    (string)($slot['label'] ?? ''),
-                    (string)($slot['brief'] ?? ''),
                 ]));
                 foreach (\array_keys($candidates) as $needle) {
                     if ($needle !== '' && \str_contains($haystack, $needle)) {
@@ -3306,19 +4301,138 @@ class AiSitePageComponentGenerationService
                 }
             }
         }
+        return '';
+    }
 
+    /**
+     * 在指定 page_type 范围内，按候选关键字命中 slot。
+     *
+     * @param list<array<string,mixed>> $slots
+     * @param array<string,bool>        $candidates
+     * @param list<string>              $preferredTypes
+     */
+    private function findSlotByKeywordsScoped(
+        array $slots,
+        array $candidates,
+        array $preferredTypes,
+        string $pageType,
+        bool $requireSamePageType,
+        bool $verifiedOnly,
+        bool $includeBriefInHaystack = false
+    ): string {
+        if ($candidates === []) {
+            return '';
+        }
         foreach ($preferredTypes as $preferredType) {
             foreach ($slots as $slot) {
+                if (!\is_array($slot)) {
+                    continue;
+                }
                 $slotType = \trim((string)($slot['slot_type'] ?? ''));
                 $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+                if ($slotType !== $preferredType || $finalUrl === '') {
+                    continue;
+                }
+                if ($verifiedOnly && $this->isManifestSlotPlaceholder($slot)) {
+                    continue;
+                }
                 $slotPageType = \trim((string)($slot['page_type'] ?? ''));
-                if ($slotType === $preferredType && $finalUrl !== '' && ($slotPageType === '' || $slotPageType === $pageType)) {
-                    return $finalUrl;
+                if ($requireSamePageType) {
+                    if ($slotPageType !== $pageType) {
+                        continue;
+                    }
+                } elseif ($slotPageType !== '') {
+                    continue;
+                }
+                $haystackParts = [
+                    (string)($slot['slot_id'] ?? ''),
+                    (string)($slot['block_key'] ?? ''),
+                    (string)($slot['task_key'] ?? ''),
+                ];
+                if ($includeBriefInHaystack) {
+                    $haystackParts[] = (string)($slot['label'] ?? '');
+                    $haystackParts[] = (string)($slot['brief'] ?? '');
+                }
+                $haystack = \strtolower(\implode(' ', $haystackParts));
+                foreach (\array_keys($candidates) as $needle) {
+                    if ($needle !== '' && \str_contains($haystack, $needle)) {
+                        return $finalUrl;
+                    }
                 }
             }
         }
-
         return '';
+    }
+
+    /**
+     * 在指定 page_type 范围内，返回首个 slot_type 命中的 slot final_url（不依赖关键字匹配）。
+     *
+     * @param list<array<string,mixed>> $slots
+     * @param list<string>              $preferredTypes
+     */
+    private function findFirstScopedSlot(
+        array $slots,
+        array $preferredTypes,
+        string $pageType,
+        bool $requireSamePageType,
+        bool $verifiedOnly
+    ): string {
+        foreach ($preferredTypes as $preferredType) {
+            foreach ($slots as $slot) {
+                if (!\is_array($slot)) {
+                    continue;
+                }
+                $slotType = \trim((string)($slot['slot_type'] ?? ''));
+                $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+                if ($slotType !== $preferredType || $finalUrl === '') {
+                    continue;
+                }
+                if ($verifiedOnly && $this->isManifestSlotPlaceholder($slot)) {
+                    continue;
+                }
+                $slotPageType = \trim((string)($slot['page_type'] ?? ''));
+                if ($requireSamePageType) {
+                    if ($slotPageType !== $pageType) {
+                        continue;
+                    }
+                } elseif ($slotPageType !== '') {
+                    continue;
+                }
+                return $finalUrl;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * 判断 manifest slot 是否仅有占位变体（fake_mode/手动 placeholder fallback 写盘的 SVG）。
+     *
+     * @param array<string,mixed> $slot
+     */
+    private function isManifestSlotPlaceholder(array $slot): bool
+    {
+        $variants = \is_array($slot['variants'] ?? null) ? $slot['variants'] : [];
+        if ($variants === []) {
+            return false;
+        }
+        foreach ($variants as $variant) {
+            if (!\is_array($variant)) {
+                continue;
+            }
+            if ((int)($variant['placeholder'] ?? 0) === 1) {
+                continue;
+            }
+            $mode = \strtolower(\trim((string)($variant['mode'] ?? '')));
+            if ($mode === 'placeholder') {
+                continue;
+            }
+            $url = \strtolower(\trim((string)($variant['url'] ?? '')));
+            if ($url !== '' && (\str_ends_with($url, '.svg') || \str_contains($url, '/placeholder'))) {
+                continue;
+            }
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -3770,6 +4884,11 @@ class AiSitePageComponentGenerationService
     private function buildSectionGenerationPrompt(string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): string
     {
         $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        $brief = $this->pickString(
+            $websiteProfile['brief_description'] ?? null,
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null
+        );
         $siteSummary = $this->filterVisibleCopyForLocale(
             $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope),
             $locale
@@ -3791,8 +4910,14 @@ class AiSitePageComponentGenerationService
             $locale
         );
         $sectionTemplate = (string)($section['template'] ?? 'hero');
+        $rawConfig = \is_array($section['config'] ?? null) ? $section['config'] : [];
+        // Strip planning/observation language from section config values before they
+        // become "Suggested section config" in the prompt. Stage-1 AI often writes
+        // planning sentences like "Visitors see the game lobby" into config fields,
+        // which the stage-3 AI then blindly renders as visible content.
+        $cleanedConfig = $this->filterPlanningLanguageFromConfig($rawConfig);
         $sectionConfig = \json_encode(
-            $this->filterPromptArrayForLocale(\is_array($section['config'] ?? null) ? $section['config'] : [], $locale),
+            $this->filterPromptArrayForLocale($cleanedConfig, $locale),
             \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT
         );
         $refinement = $this->resolveSectionRefinement($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
@@ -3821,6 +4946,7 @@ class AiSitePageComponentGenerationService
             . "Section role: {$sectionKey}\n"
             . "Suggested structure: {$sectionTemplate}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
+            . ($brief !== '' ? "Customer brief (HARD CONTRACT — all content must fit this business): {$brief}\n" : '')
             . "Page guidance: {$pageInstruction}\n"
             . "Suggested section config: {$sectionConfig}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
@@ -3868,6 +4994,7 @@ class AiSitePageComponentGenerationService
             . "- Page hierarchy: do not make the section one flat theme-color slab. Use palette roles, surface elevation, dividers, texture, cards, or spacing to distinguish this block from adjacent blocks.\n"
             . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use component-specific classes shaped like pb-{component-code}-{element}, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync.\n"
             . "- Images: never output broken image placeholders. If no verified asset URL is provided, create the visual directly with inline SVG or CSS shapes inside html_content; do not use empty src, example.com, placeholder services, or unverified .jpg/.png/.webp URLs.\n"
+            . "- AI image editability: when using a verified text-to-image asset URL in <img src> or CSS url(), put data-pb-ai-asset-slot=\"<slot_id>\" and data-pb-ai-image-role=\"generated-asset\" on the exact image/background element so the visual editor can regenerate only that image.\n"
             . "- js_content: MUST be an empty string for this virtual-theme build.\n";
     }
 
@@ -3961,7 +5088,17 @@ class AiSitePageComponentGenerationService
         $contract = $this->resolveThemeContract($scope);
         $palette = \is_array($contract['palette'] ?? null) ? $contract['palette'] : [];
         if ($palette === []) {
-            return '';
+            // Minimum viable visual contract fallback: never let the AI generate without any
+            // style direction. The fallback palette from resolveThemeContract covers this case,
+            // but as a safety net this injects the style reference as an explicit contract.
+            $styleCode = $this->resolvePromptStyleCode($scope, 'home');
+            $styleDirection = $this->describeStyleDirection($styleCode);
+            return "Visual contract (style reference — full palette not available, use this as design mandate):\n"
+                . "- style_reference: {$styleCode}\n"
+                . "- style_direction: {$styleDirection}\n"
+                . "- IMPORTANT: Build a coherent CSS palette from this style direction. Do not invent unrelated colors.\n"
+                . "- Maintain readable contrast between text and background at all times.\n"
+                . "- Do not make every block the same full-bleed primary/accent color. Vary surfaces, cards, and spacing.\n";
         }
         $themeContext = \is_array($contract['raw_context'] ?? null) ? $contract['raw_context'] : [];
 
@@ -4092,7 +5229,42 @@ class AiSitePageComponentGenerationService
             }
         }
 
+        // Hard fallback: derive minimum palette from style_code when all cascade sources fail.
+        // Without this, the AI generates with zero visual direction, causing wild style drift.
+        $styleCode = $this->resolvePromptStyleCode($scope, 'home');
+        $fallbackPalette = $this->deriveFallbackPaletteFromStyleCode($styleCode);
+        if ($fallbackPalette !== []) {
+            return [
+                'name' => $styleCode,
+                'visual_tone' => $this->describeStyleDirection($styleCode),
+                'font_family' => 'system-ui, -apple-system, sans-serif',
+                'palette' => $fallbackPalette,
+                'style_signature' => $styleCode,
+                'art_direction' => [],
+                'raw_context' => [],
+            ];
+        }
+
         return [];
+    }
+
+    /**
+     * Hard fallback: derive a minimum 5-token palette from the style code when no theme
+     * contract was found in any cascade source. This prevents the AI from inventing random
+     * colors that clash with the overall site direction.
+     *
+     * @return array<string,string> palette tokens (primary, secondary, accent, surface, text)
+     */
+    private function deriveFallbackPaletteFromStyleCode(string $styleCode): array
+    {
+        return match ($styleCode) {
+            'fintech-hub' => ['primary' => '#1a1a2e', 'secondary' => '#16213e', 'accent' => '#e94560', 'surface' => '#1a1a2e', 'text' => '#eaeaea'],
+            'saas-starter' => ['primary' => '#2563eb', 'secondary' => '#1e40af', 'accent' => '#f59e0b', 'surface' => '#ffffff', 'text' => '#111827'],
+            'fitness-pro' => ['primary' => '#111827', 'secondary' => '#1f2937', 'accent' => '#f97316', 'surface' => '#18181b', 'text' => '#fafafa'],
+            'sattaking', 'poker-arena', 'ludo-empire', 'rummy-royal' => ['primary' => '#0f0c29', 'secondary' => '#302b63', 'accent' => '#ff6b35', 'surface' => '#0d0d0d', 'text' => '#f0f0f0'],
+            'tpmst' => ['primary' => '#1e293b', 'secondary' => '#334155', 'accent' => '#0ea5e9', 'surface' => '#f8fafc', 'text' => '#0f172a'],
+            default => ['primary' => '#1e293b', 'secondary' => '#475569', 'accent' => '#3b82f6', 'surface' => '#f8fafc', 'text' => '#0f172a'],
+        };
     }
 
     /**
@@ -4419,11 +5591,16 @@ class AiSitePageComponentGenerationService
             $navTextLines[] = \trim((string)($item['title'] ?? '')) . '=>' . \trim((string)($item['url'] ?? '#'));
         }
 
+        $profileLogo = \trim((string)($websiteProfile['logo'] ?? ''));
+        $logoAssetUrl = $this->resolveHeaderAssetUrl($scope);
+        // Manifest / queued logo assets must beat stale profile.logo placeholders — otherwise AI-generated marks never surface on preview even after asset stages finish.
+        $effectiveLogo = $logoAssetUrl !== '' ? $logoAssetUrl : $profileLogo;
+
         $defaultConfig = [
             'logo.display' => 'yes',
             'logo.text' => $siteDisplayName,
-            'logo.image' => (string)($websiteProfile['logo'] ?? ''),
-            'logo.url' => (string)($websiteProfile['logo'] ?? ''),
+            'logo.image' => $effectiveLogo,
+            'logo.url' => $effectiveLogo,
             'navigation.display' => 'yes',
             'navigation.items' => \implode("\n", $navTextLines),
             'nav_items' => \array_map(static fn(array $item): array => [
@@ -4434,15 +5611,6 @@ class AiSitePageComponentGenerationService
             'cta.text' => $this->resolvePrimaryCtaText($scope),
             'cta.url' => '#contact',
         ];
-        $logoAssetUrl = $this->resolveHeaderAssetUrl($scope);
-        if ($logoAssetUrl !== '') {
-            if (\trim((string)($defaultConfig['logo.image'] ?? '')) === '') {
-                $defaultConfig['logo.image'] = $logoAssetUrl;
-            }
-            if (\trim((string)($defaultConfig['logo.url'] ?? '')) === '') {
-                $defaultConfig['logo.url'] = $logoAssetUrl;
-            }
-        }
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'header'));
 
         return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'header'), $locale);
@@ -4560,11 +5728,14 @@ class AiSitePageComponentGenerationService
             $blueprint['ai_description'] ?? null
         ), $locale);
 
+        $sectionTpl = \strtolower(\trim((string)($section['template'] ?? '')));
+        $isHeroSectionTpl = \in_array($sectionTpl, ['hero', 'banner'], true);
+
         $bgType = 'color';
         $bgColor = '#ffffff';
-        if ((string)($section['template'] ?? '') === 'hero') {
+        if ($isHeroSectionTpl) {
             $bgType = 'gradient';
-        } elseif ((string)($section['template'] ?? '') === 'cta') {
+        } elseif ($sectionTpl === 'cta') {
             $bgColor = '#0f172a';
         }
 
@@ -4573,13 +5744,13 @@ class AiSitePageComponentGenerationService
             'content.subtitle' => $subtitle,
             'content.description' => $description,
             'layout.container_width' => '1200',
-            'layout.padding_top' => (string)(((string)($section['template'] ?? '') === 'hero') ? 96 : 72),
-            'layout.padding_bottom' => (string)(((string)($section['template'] ?? '') === 'cta') ? 96 : 72),
-            'layout.text_align' => ((string)($section['template'] ?? '') === 'checklist') ? 'left' : 'center',
+            'layout.padding_top' => (string)($isHeroSectionTpl ? 96 : 72),
+            'layout.padding_bottom' => (string)($sectionTpl === 'cta' ? 96 : 72),
+            'layout.text_align' => ($sectionTpl === 'checklist') ? 'left' : 'center',
             'style.bg_type' => $bgType,
             'style.bg_color' => $bgColor,
-            'style.text_color' => ((string)($section['template'] ?? '') === 'cta') ? '#e2e8f0' : '#334155',
-            'style.title_color' => ((string)($section['template'] ?? '') === 'cta') ? '#ffffff' : '#0f172a',
+            'style.text_color' => ($sectionTpl === 'cta') ? '#e2e8f0' : '#334155',
+            'style.title_color' => ($sectionTpl === 'cta') ? '#ffffff' : '#0f172a',
             'style.accent_color' => '#2563eb',
         ];
         $stageOneSamples = $this->collectStageOneVisibleSamplesForPage($scope, $pageType);
@@ -4594,11 +5765,18 @@ class AiSitePageComponentGenerationService
             $defaultConfig['contract.theme_tokens'] = \implode(' ', \array_slice($themeTokens, 0, 8));
         }
         $sectionImageUrl = $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        $sectionImageSlotId = '';
+        $sectionImageAlt = $title !== '' ? $title : (string)($section['name'] ?? 'Section image');
         if ($sectionImageUrl !== '') {
             $defaultConfig['visual.image_url'] = $sectionImageUrl;
-            $defaultConfig['visual.image_alt'] = $title !== '' ? $title : (string)($section['name'] ?? 'Section image');
+            $defaultConfig['visual.image_alt'] = $sectionImageAlt;
             $defaultConfig['image.url'] = $sectionImageUrl;
             $defaultConfig['media.image_url'] = $sectionImageUrl;
+            $sectionImageSlotId = $this->resolveSectionAssetSlotId($scope, $sectionImageUrl);
+            if ($sectionImageSlotId === '') {
+                // 默认按 page:{page_type}:{code}（slash → dash）派生 slot_id，便于前端可视化编辑追踪。
+                $sectionImageSlotId = 'page:' . $pageType . ':' . \str_replace('/', '-', (string)($section['code'] ?? ''));
+            }
         }
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'content'));
 
@@ -4609,7 +5787,44 @@ class AiSitePageComponentGenerationService
             (string)($section['key'] ?? '')
         );
 
-        return $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask, $locale);
+        $defaultConfig = $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask, $locale);
+
+        // 强行契约：把当前 section 的模板/页面/资产等元信息写入 runtime.* 内部键，
+        // stub/fallback 用它直接命中正确变体并真正使用 verified_assets，而不是退化为占位 SVG。
+        // runtime.* 前缀会在 stripInternalComponentConfig 中被剔除，不会污染最终保存的组件配置。
+        $defaultConfig['runtime.section_template'] = (string)($section['template'] ?? '');
+        $defaultConfig['runtime.section_page_type'] = $pageType;
+        $defaultConfig['runtime.section_code'] = (string)($section['code'] ?? '');
+        $defaultConfig['runtime.section_key'] = (string)($section['key'] ?? '');
+        if ($sectionImageUrl !== '') {
+            $defaultConfig['runtime.section_image_url'] = $sectionImageUrl;
+            $defaultConfig['runtime.section_image_alt'] = $sectionImageAlt;
+            $defaultConfig['runtime.section_image_slot_id'] = $sectionImageSlotId;
+        }
+
+        return $defaultConfig;
+    }
+
+    /**
+     * 反向查找：用 final_url 找回 manifest 中的 slot_id。
+     * @param array<string,mixed> $scope
+     */
+    private function resolveSectionAssetSlotId(array $scope, string $finalUrl): string
+    {
+        $finalUrl = \trim($finalUrl);
+        if ($finalUrl === '') {
+            return '';
+        }
+        foreach ($this->extractManifestSlots($scope) as $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            if (\trim((string)($slot['final_url'] ?? '')) === $finalUrl) {
+                return \trim((string)($slot['slot_id'] ?? ''));
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -4858,7 +6073,30 @@ class AiSitePageComponentGenerationService
     private function buildTaskPlanPromptAddon(array $taskPlanTask, string $contextLabel, array $scope = []): string
     {
         if ($taskPlanTask === []) {
-            return '';
+            // Fallback: inject scope-level content context when no stage2 task plan exists.
+            // Without this, the AI prompt has zero content direction and generates generic
+            // or irrelevant content (e.g., stock-photo white students for an Indian gaming site).
+            $brief = $this->pickString(
+                $scope['website_profile']['brief_description'] ?? null,
+                $scope['brief_description'] ?? null,
+                $scope['user_description'] ?? null
+            );
+            $themeContext = \is_array($scope['execution_blueprint']['theme_context_snapshot'] ?? null)
+                ? $scope['execution_blueprint']['theme_context_snapshot']
+                : (\is_array($scope['plan_workbench']['confirmed']['theme_context_snapshot'] ?? null)
+                    ? $scope['plan_workbench']['confirmed']['theme_context_snapshot']
+                    : []);
+            $sharedPromptContext = \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null)
+                ? $scope['execution_blueprint']['shared_prompt_context']
+                : (\is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null)
+                    ? $scope['plan_workbench']['confirmed']['shared_prompt_context']
+                    : []);
+            return "Stage-2 task context for this {$contextLabel} (fallback from scope — follow the customer brief strictly):\n"
+                . "- customer_brief: {$brief}\n"
+                . "- IMPORTANT: All generated content MUST serve this customer brief exactly. Do NOT invent unrelated generic content.\n"
+                . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
+                . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 5000) . "\n"
+                . "- anti-copy rule: never paste stage-1 observation/planning sentences directly into html_content. Rewrite phrases like \"Visitors see...\", \"访客看到...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n";
         }
 
         $planContext = \is_array($taskPlanTask['plan_context'] ?? null) ? $taskPlanTask['plan_context'] : [];
@@ -4913,6 +6151,7 @@ class AiSitePageComponentGenerationService
         $verifiedAssetRule = $verifiedAssets !== []
             ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 3000) . "\n"
                 . "- verified asset rule: use only these exact final_url values for real <img src> or CSS url(); if none match the needed slot, render an inline SVG/CSS fallback instead.\n"
+                . "- verified asset editability rule: every real <img> or CSS-background element that uses a verified final_url must include data-pb-ai-asset-slot=\"<matching slot_id>\" and data-pb-ai-image-role=\"generated-asset\" on that exact element. For CSS backgrounds, apply the attributes to the element carrying the background-image.\n"
             : "- verified_assets: []\n- verified asset rule: no verified real image URL is available, so render visual media as inline SVG/CSS and do not invent image URLs.\n";
 
         return "Stage-2 task context for this {$contextLabel}:\n"
@@ -5012,6 +6251,11 @@ class AiSitePageComponentGenerationService
             $defaultConfig['content.title'] = $this->clipText($storyGoal, 72);
         }
 
+        // 强行契约：将 stage-2 block_task.content_plan.content_copy / cta_plan 优先回填进 defaultConfig，
+        // 避免 stub/fallback 因仅依赖 field_content_requirements.sample 而把 task 真正规划好的视觉文案当成"未指定"漏掉。
+        // 必须在 visibleSummary 兜底前完成，否则 description 会被 content_copy 拼接出的概要覆盖单一 description 字段。
+        $defaultConfig = $this->applyTaskPlanContentPlanDefaults($defaultConfig, $blockTask);
+
         $visibleSummary = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext);
         if ($visibleSummary !== '' && \trim((string)($defaultConfig['content.description'] ?? '')) === '') {
             $defaultConfig['content.description'] = $this->clipText($visibleSummary, 180);
@@ -5020,6 +6264,99 @@ class AiSitePageComponentGenerationService
         return $this->sanitizeDefaultConfigVisibleCopy(
             $this->applyTaskPlanDataContractDefaults($defaultConfig, $taskPlanTask)
         );
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $blockTask
+     * @return array<string,mixed>
+     */
+    private function applyTaskPlanContentPlanDefaults(array $defaultConfig, array $blockTask): array
+    {
+        $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
+        if ($contentPlan === []) {
+            return $defaultConfig;
+        }
+
+        $copyRows = \is_array($contentPlan['content_copy'] ?? null) ? $contentPlan['content_copy'] : [];
+        foreach ($copyRows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $field = $this->normalizeTaskPlanRequirementField($row['field'] ?? '');
+            $copy = $this->sanitizeVisibleCopy((string)($row['copy'] ?? $row['sample'] ?? $row['default'] ?? ''));
+            if ($field === '' || $copy === '') {
+                continue;
+            }
+
+            $candidateKeys = match (true) {
+                \str_contains($field, 'brand'),
+                \str_contains($field, 'platform'),
+                \str_contains($field, 'site_title'),
+                \str_contains($field, 'logo_text') => ['logo.text', 'brand.name'],
+                \str_contains($field, 'title'),
+                \str_contains($field, 'headline'),
+                \str_contains($field, '标题'),
+                \str_contains($field, '標題') => ['content.title'],
+                \str_contains($field, 'subtitle'),
+                \str_contains($field, 'eyebrow'),
+                \str_contains($field, 'tagline'),
+                \str_contains($field, 'slogan') => ['content.subtitle'],
+                \str_contains($field, 'description'),
+                \str_contains($field, 'body'),
+                \str_contains($field, 'text'),
+                \str_contains($field, '简介'),
+                \str_contains($field, '说明'),
+                \str_contains($field, '内容'),
+                \str_contains($field, '文案') => ['content.description', 'brand.description'],
+                \str_contains($field, 'button_text'),
+                \str_contains($field, 'cta_label'),
+                \str_contains($field, 'cta_text'),
+                \str_contains($field, 'cta'),
+                \str_contains($field, 'primary_cta'),
+                \str_contains($field, '按钮') => ['cta.text', 'content.cta_text'],
+                default => [],
+            };
+            foreach ($candidateKeys as $candidateKey) {
+                if (!\array_key_exists($candidateKey, $defaultConfig)) {
+                    $defaultConfig[$candidateKey] = $copy;
+                    continue;
+                }
+                $current = \trim((string)$defaultConfig[$candidateKey]);
+                if ($current === '') {
+                    $defaultConfig[$candidateKey] = $copy;
+                }
+            }
+        }
+
+        $ctaRows = \is_array($contentPlan['cta_plan'] ?? null) ? $contentPlan['cta_plan'] : [];
+        foreach ($ctaRows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $label = $this->sanitizeVisibleCopy((string)($row['label'] ?? $row['text'] ?? ''));
+            $href = \trim((string)($row['target'] ?? $row['href'] ?? $row['url'] ?? ''));
+            if ($label !== '') {
+                foreach (['cta.text', 'content.cta_text'] as $candidateKey) {
+                    if (!\array_key_exists($candidateKey, $defaultConfig) || \trim((string)$defaultConfig[$candidateKey]) === '') {
+                        $defaultConfig[$candidateKey] = $label;
+                    }
+                }
+            }
+            if ($href !== '') {
+                foreach (['cta.url', 'content.cta_url'] as $candidateKey) {
+                    if (!\array_key_exists($candidateKey, $defaultConfig) || \trim((string)$defaultConfig[$candidateKey]) === '') {
+                        $defaultConfig[$candidateKey] = $href;
+                    }
+                }
+            }
+            // 仅取首个有效 cta（否则会被多个 cta 覆盖）。
+            if ($label !== '' || $href !== '') {
+                break;
+            }
+        }
+
+        return $defaultConfig;
     }
 
     /**
@@ -5477,6 +6814,30 @@ class AiSitePageComponentGenerationService
         }
 
         return false;
+    }
+
+    /**
+     * Walk a section config array and strip planning/observation language from all
+     * leaf string values. This prevents stage-1 blueprint planning text from leaking
+     * into the prompt as "Suggested section config" — where the AI would then treat
+     * it as finished copy.
+     *
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function filterPlanningLanguageFromConfig(array $config): array
+    {
+        foreach ($config as $key => $value) {
+            if (\is_string($value)) {
+                if ($this->containsPlanningObservationCopy($value)) {
+                    // Replace with a clean marker instead of the planning sentence
+                    $config[$key] = '[content to be written in target locale]';
+                }
+            } elseif (\is_array($value)) {
+                $config[$key] = $this->filterPlanningLanguageFromConfig($value);
+            }
+        }
+        return $config;
     }
 
     /**
@@ -6116,6 +7477,33 @@ class AiSitePageComponentGenerationService
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($visibleHtml)));
         if ($plain !== '' && $this->hasMeaningfulCjkContent($plain)) {
             throw new \RuntimeException('Rendered component visible copy does not match website content locale.');
+        }
+    }
+
+    private function assertRenderedHtmlPassesBuildQualityGate(string $componentCode, string $html): void
+    {
+        if (\trim($html) === '') {
+            return;
+        }
+        $contract = [
+            'payload' => [
+                'page_type_layouts' => [
+                    '_component_build' => [
+                        'content' => [
+                            [
+                                'code' => $componentCode,
+                                'html' => $html,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        foreach ((new RenderDataQualityLinter())->lint($contract) as $finding) {
+            if (($finding['severity'] ?? '') !== 'error') {
+                continue;
+            }
+            throw new \RuntimeException(\trim((string)($finding['message'] ?? 'Component HTML failed render-data quality gate.')));
         }
     }
 

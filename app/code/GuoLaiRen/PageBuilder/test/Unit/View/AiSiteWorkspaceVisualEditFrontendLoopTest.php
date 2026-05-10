@@ -87,6 +87,145 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('openBlockEditorModal(payload);', $messageBody);
     }
 
+    public function testVisualPreviewImagesCanStartSingleAssetRegeneration(): void
+    {
+        $script = $this->workspaceScript();
+        $bridgeBody = $this->extractFunctionBody($script, 'bindEmbeddedPreviewFrameBridge');
+        $submitBody = $this->extractFunctionBody($script, 'submitImageRegenerateModal');
+
+        self::assertStringContainsString('bindEmbeddedPreviewImageRegeneration(doc, wrapperSelector);', $bridgeBody);
+        self::assertStringContainsString('data-pb-ai-asset-slot', $script);
+        self::assertStringContainsString('data-pb-ai-image-role', $script);
+        self::assertStringContainsString('current_url: String(imageRegenerateState.current_url_raw', $submitBody);
+        self::assertStringContainsString('block_id: String(imageRegenerateState.block_id', $submitBody);
+        self::assertStringContainsString('component_code: String(imageRegenerateState.component_code', $submitBody);
+        self::assertStringContainsString("window.PbAiOperationRunner.startFromResponse(data, 'image_asset')", $submitBody);
+
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+        self::assertStringContainsString("source.addEventListener('asset_generation_done'", $runtime);
+        self::assertStringContainsString("operation !== 'image_asset'", $runtime);
+
+        $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($controller);
+        self::assertStringContainsString("'image_asset'], true", $controller);
+        self::assertStringContainsString('\'stream_url\' => $streamUrl', $controller);
+    }
+
+    public function testSkillManagementDoesNotHideTheSkillSelectionAreaWhenListIsEmpty(): void
+    {
+        $layout = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
+        self::assertIsString($layout);
+        self::assertStringContainsString('id="pb-ai-skill-option-list"', $layout);
+        self::assertStringContainsString('id="pb-ai-skill-admin-close-btn"', $layout);
+
+        $script = $this->workspaceScript();
+        $renderStart = \strrpos($script, 'function renderNeedsFormSkillSelection()');
+        $loadStart = \strrpos($script, 'function loadNeedsFormSkills()');
+        $managerStart = \strrpos($script, 'function initNeedsFormSkillManager(');
+        $resolveStart = \strrpos($script, 'function resolveSelectedSkillCodesFromWorkspaceState(');
+        $persistStart = \strrpos($script, 'function persistNeedsFormSkillSelection(');
+        self::assertIsInt($renderStart, 'runtime renderNeedsFormSkillSelection must exist outside legacy comments.');
+        self::assertIsInt($loadStart, 'runtime loadNeedsFormSkills must exist outside legacy comments.');
+        self::assertIsInt($managerStart, 'runtime initNeedsFormSkillManager must exist outside legacy comments.');
+        self::assertIsInt($resolveStart, 'selected skill hydration helper must exist.');
+        self::assertIsInt($persistStart, 'selected skill immediate persist helper must exist.');
+        $renderBody = $this->extractFunctionBody(\substr($script, $renderStart), 'renderNeedsFormSkillSelection');
+        $loadBody = $this->extractFunctionBody(\substr($script, $loadStart), 'loadNeedsFormSkills');
+        $managerBody = $this->extractFunctionBody(\substr($script, $managerStart), 'initNeedsFormSkillManager');
+        $resolveBody = $this->extractFunctionBody(\substr($script, $resolveStart), 'resolveSelectedSkillCodesFromWorkspaceState');
+        $persistBody = $this->extractFunctionBody(\substr($script, $persistStart), 'persistNeedsFormSkillSelection');
+
+        self::assertStringContainsString("optionList.classList.remove('d-none');", $renderBody);
+        self::assertStringNotContainsString("optionList.classList.add('d-none');", $renderBody);
+        self::assertStringContainsString('暂无可选技能，可继续使用默认技能', $renderBody);
+        self::assertStringContainsString('return postForm(skillListUrl, {})', $loadBody);
+        self::assertStringNotContainsString("method: 'GET'", $loadBody);
+        self::assertStringContainsString("document.getElementById('pb-ai-skill-admin-close-btn')", $managerBody);
+        self::assertStringContainsString('adminCloseBtn.addEventListener', $managerBody);
+        self::assertStringContainsString('state.selected_skill_codes', $resolveBody);
+        self::assertStringContainsString('scope.selected_skill_codes', $resolveBody);
+        self::assertStringContainsString('scope.plan_workbench.confirmed.contract_context', $resolveBody);
+        self::assertStringContainsString('resolveSelectedSkillCodesFromWorkspaceState(workspaceState, getNeedsFormSelectedSkillCodes())', $script);
+        self::assertStringContainsString("postNeedsFormScopePatch({ selected_skill_codes: selectedCodes })", $persistBody);
+        self::assertStringContainsString('patchGuidedScopeDefaults({ selected_skill_codes: selectedCodes })', $persistBody);
+        self::assertStringContainsString('persistNeedsFormSkillSelection(current);', $script);
+        self::assertStringContainsString('persistNeedsFormSkillSelection(getNeedsFormSelectedSkillCodes());', $script);
+    }
+
+    public function testWorkspacePreviewToolbarKeepsHoverVisibilityAndHidesSharedRegionSorting(): void
+    {
+        $script = $this->workspaceScript();
+        $body = $this->extractFunctionBody($script, 'ensureWrapperActionButtons');
+
+        self::assertStringContainsString("var region = String(wrapper.getAttribute('data-region') || '').trim().toLowerCase();", $body);
+        self::assertStringContainsString("var isContentRegion = region === '' || region === 'content';", $body);
+        self::assertStringContainsString("actions = document.createElement('div');", $body);
+        self::assertStringContainsString("actions.className = 'component-actions';", $body);
+        self::assertStringContainsString("refineBtn = document.createElement('button');", $body);
+        self::assertStringContainsString("editBtn = document.createElement('button');", $body);
+        self::assertStringContainsString("actions.querySelectorAll('[data-pb-action=\"move-up\"], [data-pb-action=\"move-down\"]')", $body);
+        self::assertStringContainsString("button.classList.add('d-none');", $body);
+
+        $renderService = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
+        self::assertIsString($renderService);
+        self::assertStringContainsString('.component-actions.pb-actions-visible', $renderService);
+        self::assertStringContainsString('.tpmst-component-wrapper[data-region="header"] .component-actions', $renderService);
+        self::assertStringContainsString('[data-pb-action="move-up"]', $renderService);
+    }
+
+    public function testBuildStageExposesFullRebuildActionAndBindsItToSchemeRebuildFlow(): void
+    {
+        $layout = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml');
+        self::assertIsString($layout);
+        self::assertStringContainsString('id="pb-ai-rebuild-build-stage"', $layout);
+
+        $script = $this->workspaceScript();
+        $bindBody = $this->extractFunctionBody($script, 'bindPlanStageLogic');
+        self::assertStringContainsString("var rebuildBuildStageBtn = document.getElementById('pb-ai-rebuild-build-stage');", $bindBody);
+        self::assertStringContainsString("rebuildBuildStageBtn.dataset.pbPlanGenerationLockBypass = '1';", $bindBody);
+        self::assertStringContainsString('startFullBuildRebuild(this, selectedTypes, { allowTaskPlanRetry: false });', $bindBody);
+
+        $rebuildBody = $this->extractFunctionBody($script, 'startFullBuildRebuild');
+        self::assertStringContainsString('forceBuildRebuild: true', $rebuildBody);
+
+        $buildBody = $this->extractFunctionBody($script, 'pbAiConfirmGenerateThemeContinue');
+        self::assertStringContainsString('if (opts.forceBuildRebuild === true) {', $buildBody);
+        self::assertStringContainsString("requestPayload._force_rebuild = '1';", $buildBody);
+    }
+
+    public function testConfirmPlanButtonChecksOnlyPhaseOneQueueState(): void
+    {
+        $script = $this->workspaceScript();
+        $body = $this->extractFunctionBody($script, 'isPhaseOneQueueUnfinished');
+
+        self::assertStringContainsString("queueUiOperationMatchesStage('plan', active.operation)", $body);
+        self::assertStringContainsString('readQueueStatusForPrompt(state.plan_queue_info)', $body);
+        self::assertStringNotContainsString('state.task_plan_queue_info', $body);
+        self::assertStringNotContainsString('state.build_queue_info', $body);
+        self::assertStringNotContainsString('hasAnyRunningQueueForUi()', $body);
+    }
+
+    public function testConfirmedTaskPlanUsesConfirmedSnapshotAndHidesConfirmButton(): void
+    {
+        $script = $this->workspaceScript();
+
+        $hydrateBody = $this->extractFunctionBody($script, 'hydrateWorkspaceFromState');
+        self::assertStringContainsString('var taskPlanConfirmedFlag = !!workspaceState.task_plan_confirmed', $hydrateBody);
+        self::assertStringContainsString('? (taskPlanConfirmedMarkdown !== \'\' ? taskPlanConfirmedMarkdown : taskPlanDraftMarkdown)', $hydrateBody);
+        self::assertStringContainsString('? (hasNonEmptyPlanArtifact(taskPlanConfirmedStructured) ? taskPlanConfirmedStructured : taskPlanDraftStructured)', $hydrateBody);
+
+        $cachedBody = $this->extractFunctionBody($script, 'applyCachedTaskPlanToPanel');
+        self::assertStringContainsString('var preferredMarkdown = taskPlanConfirmedState', $cachedBody);
+        self::assertStringContainsString('cp.confirmed_markdown || cp.markdown', $cachedBody);
+        self::assertStringContainsString('cp.confirmed_structured', $cachedBody);
+        self::assertStringContainsString('taskPlanConfirmedState ? messages.taskPlanConfirmSaved : messages.taskPlanGenerated', $cachedBody);
+
+        $confirmBody = $this->extractFunctionBody($script, 'syncTaskPlanConfirmButtonState');
+        self::assertStringContainsString('!taskPlanConfirmedState', $confirmBody);
+        self::assertStringContainsString("confirmBtn.classList.toggle('d-none', !!taskPlanConfirmedState);", $confirmBody);
+    }
+
     public function testBlockRefineUsesQueuedPartialPatchBeforeLegacySseFallback(): void
     {
         $script = $this->workspaceScript();
@@ -379,6 +518,31 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("if (normalizedOperation === 'build') {", $countBody);
         self::assertStringContainsString('state.latest_build_failed,', $countBody);
         self::assertStringContainsString('state.publish_blocked_by_latest_ai_failure,', $countBody);
+    }
+
+    public function testStartBuildSiteGuardsPlanTaskPlanThenBuildRetryFailures(): void
+    {
+        $script = $this->workspaceScript();
+        $bindBody = $this->extractFunctionBody($script, 'bindPlanStageLogic');
+        $idx = \strpos($bindBody, "document.getElementById('pb-ai-start-build-site')");
+        self::assertNotFalse($idx, 'start build button binding missing');
+        $snippet = \substr($bindBody, $idx, 900);
+
+        self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('plan')", $snippet);
+        self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('task_plan')", $snippet);
+        self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('build')", $snippet);
+    }
+
+    public function testHydrateWorkspaceSyncsTaskPlanSseRunningFromTerminalState(): void
+    {
+        $script = $this->workspaceScript();
+        $hydrateBody = $this->extractFunctionBody($script, 'hydrateWorkspaceFromState');
+        self::assertStringContainsString('syncTaskPlanSseRunningFromWorkspaceState(workspaceState)', $hydrateBody);
+        self::assertStringContainsString('function syncTaskPlanSseRunningFromWorkspaceState', $script);
+        self::assertStringContainsString(
+            'syncTaskPlanSseRunningFromWorkspaceState = syncTaskPlanSseRunningFromWorkspaceState',
+            $script
+        );
     }
 
     public function testPublishStageStillKeepsPublishControlsAfterRemovingAiQualityRepairEntry(): void

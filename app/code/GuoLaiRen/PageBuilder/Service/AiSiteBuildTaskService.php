@@ -263,6 +263,58 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function clearBuildArtifactsForRegeneration(array $scope): array
+    {
+        foreach ([
+            'virtual_pages_by_type',
+            'pagebuilder_pages_by_type',
+            'materialized_pages_by_type',
+            'page_type_layouts',
+            'pending_generation_page_types',
+            'build_summary',
+            'build_task_summary',
+            'build_workbench',
+            'build_contracts',
+            'render_data_contract',
+            'qa_report_contract',
+            'publish_verification',
+            'pre_publish_visual_urls',
+        ] as $key) {
+            $scope[$key] = [];
+        }
+
+        foreach ([
+            'can_publish',
+            'site_ready',
+            'latest_build_failed',
+            'publish_blocked_by_latest_ai_failure',
+        ] as $key) {
+            $scope[$key] = 0;
+        }
+
+        foreach ([
+            'publish_blocked_reason',
+            'preview_full_url',
+            'visual_preview_url',
+            'visual_edit_url',
+        ] as $key) {
+            $scope[$key] = '';
+        }
+        $scope['latest_build_failure'] = [];
+
+        $scope = $this->clearRetryableAiFailures($scope, 'build');
+        $scope['_build_regeneration'] = [
+            'active' => 1,
+            'started_at' => \date('Y-m-d H:i:s'),
+        ];
+
+        return $scope;
+    }
+
+    /**
      * A confirmed stage-two plan is the durable build contract. The top-level
      * task_plan_confirmed flag is a denormalized UI/cache hint and can be stale
      * after an older task-plan queue finishes.
@@ -284,6 +336,43 @@ class AiSiteBuildTaskService
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
 
         return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    public function hasAnyPersistedTaskPlan(array $scope): bool
+    {
+        if ($this->hasConfirmedTaskPlanForBuild($scope)) {
+            return true;
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        foreach (['draft', 'confirmed'] as $key) {
+            if (\is_array($virtualThemePlan[$key] ?? null) && $virtualThemePlan[$key] !== []) {
+                return true;
+            }
+        }
+        foreach (['draft_markdown', 'confirmed_markdown', 'confirmed_at', 'confirmed_signature', 'plan_signature'] as $key) {
+            if (\trim((string)($virtualThemePlan[$key] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        if (\trim((string)($scope['task_plan_markdown'] ?? '')) !== '') {
+            return true;
+        }
+        if (\is_array($scope['task_plan_structured'] ?? null) && $scope['task_plan_structured'] !== []) {
+            return true;
+        }
+        if (\is_array($scope['task_plan_directory_tree'] ?? null) && $scope['task_plan_directory_tree'] !== []) {
+            return true;
+        }
+
+        $summary = \is_array($scope['task_plan_summary'] ?? null) ? $scope['task_plan_summary'] : [];
+        return ((int)($summary['page_task_count'] ?? 0)) > 0
+            || ((int)($summary['shared_task_count'] ?? 0)) > 0
+            || \trim((string)($summary['signature'] ?? '')) !== '';
     }
 
     /**
@@ -663,6 +752,40 @@ class AiSiteBuildTaskService
                     'source_block_key' => $blockKey,
                 ];
                 $taskKey = 'page:' . $pageType . ':' . $blockKey;
+                // Carry rich stage1 block context into the fallback task so the AI prompt
+                // has content direction, theme constraints, and field contracts — without
+                // this, stage1_execution_blueprint tasks are context-blind and the AI
+                // generates generic/irrelevant content (e.g., white students for an Indian
+                // gaming site).
+                $blockGoal = (string)($block['goal'] ?? $block['implementation_detail'] ?? '');
+                $blockReason = (string)($block['reason'] ?? $block['why'] ?? '');
+                $blockStyleDirection = (string)($block['style_direction'] ?? '');
+                $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+                // 内联 field_plan → field_content_requirements，避免单独私有方法在合并/缓存不一致时出现 undefined method
+                $fieldContentRequirements = [];
+                foreach ($fieldPlan as $fieldRow) {
+                    if (!\is_array($fieldRow)) {
+                        continue;
+                    }
+                    $fieldKey = \trim((string)($fieldRow['field'] ?? ''));
+                    $sampleRaw = \trim((string)($fieldRow['sample'] ?? ''));
+                    if ($fieldKey === '' && $sampleRaw === '') {
+                        continue;
+                    }
+                    $fieldContentRequirements[] = [
+                        'field' => $fieldKey !== '' ? $fieldKey : 'content',
+                        'sample' => $this->stripPlanningLanguage($sampleRaw),
+                        'reason' => (string)($fieldRow['reason'] ?? $fieldRow['requirement'] ?? ''),
+                    ];
+                }
+                $execThemeContext = \is_array($executionBlueprint['theme_context_snapshot'] ?? null)
+                    ? $executionBlueprint['theme_context_snapshot']
+                    : (\is_array($scope['plan_workbench']['confirmed']['theme_context_snapshot'] ?? null)
+                        ? $scope['plan_workbench']['confirmed']['theme_context_snapshot']
+                        : []);
+                $execSharedPromptContext = \is_array($executionBlueprint['shared_prompt_context'] ?? null)
+                    ? $executionBlueprint['shared_prompt_context']
+                    : [];
                 $tasks[] = [
                     'task_key' => $taskKey,
                     'task_type' => 'page_section',
@@ -678,6 +801,39 @@ class AiSiteBuildTaskService
                     'dependencies' => ['shared:header', 'shared:footer'],
                     'source_block_key' => $blockKey,
                     'stage1_context_hash' => (string)($block['context_hash'] ?? ''),
+                    'plan_context' => [
+                        'stage1_theme_summary' => $blockStyleDirection,
+                        'stage1_block_goal' => $blockGoal,
+                        'stage1_block_content' => $this->firstStageBlockDescription($block),
+                        'stage1_style_direction' => $blockStyleDirection,
+                        'source_page_type' => $pageType,
+                        'source_block_key' => $blockKey,
+                        'page_flow_role' => $this->firstStageBlockTitle($block, $blockKey),
+                        'page_goal' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),
+                        'block_goal' => $blockGoal,
+                    ],
+                    'task_script' => [
+                        'component_type' => 'section',
+                        'story_goal' => $blockGoal,
+                        'content_fill_rule' => 'Fill with visitor-facing content matching the customer brief. Rewrite any planning/observation sentences into finished marketing copy.',
+                        'data_contract' => [
+                            'title' => 'string',
+                            'description' => 'string',
+                            'cta' => 'object',
+                        ],
+                        'field_content_requirements' => $fieldContentRequirements,
+                    ],
+                    'block_task' => [
+                        'task_goal' => $blockGoal,
+                        'content_plan' => $this->extractContentPlanFromStageOneBlock($block),
+                        'style_plan' => $this->extractStylePlanFromStageOneBlock($block),
+                        'planning_reason' => $blockReason,
+                    ],
+                    'runtime_context' => [
+                        'theme_context_snapshot' => $execThemeContext,
+                        'shared_prompt_context' => $execSharedPromptContext,
+                        'content_locale' => (string)($scope['website_profile']['content_locale'] ?? $scope['default_locale'] ?? ''),
+                    ],
                 ];
             }
             if ($sections === []) {
@@ -750,13 +906,15 @@ class AiSiteBuildTaskService
             }
             $sample = \trim((string)($field['sample'] ?? ''));
             if ($sample !== '') {
-                return $sample;
+                $cleaned = $this->stripPlanningLanguage($sample);
+                return $cleaned !== '' ? $cleaned : $fallback;
             }
         }
         $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
         foreach ([$realtimeContent['headline'] ?? null, $block['title'] ?? null, $fallback] as $value) {
             if (\is_scalar($value) && \trim((string)$value) !== '') {
-                return \trim((string)$value);
+                $cleaned = $this->stripPlanningLanguage(\trim((string)$value));
+                return $cleaned !== '' ? $cleaned : $fallback;
             }
         }
 
@@ -778,18 +936,28 @@ class AiSiteBuildTaskService
             }
             $sample = \trim((string)($field['sample'] ?? ''));
             if ($sample !== '') {
-                return $sample;
+                $cleaned = $this->stripPlanningLanguage($sample);
+                if ($cleaned !== '') {
+                    return $cleaned;
+                }
+                // fall through: pure planning language, try next candidate
             }
         }
         $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
         foreach (\is_array($realtimeContent['supporting_copy'] ?? null) ? $realtimeContent['supporting_copy'] : [] as $copy) {
             if (\is_scalar($copy) && \trim((string)$copy) !== '') {
-                return \trim((string)$copy);
+                $cleaned = $this->stripPlanningLanguage(\trim((string)$copy));
+                if ($cleaned !== '') {
+                    return $cleaned;
+                }
             }
         }
         foreach ([$block['content'] ?? null, $block['implementation_detail'] ?? null] as $value) {
             if (\is_scalar($value) && \trim((string)$value) !== '') {
-                return \trim((string)$value);
+                $cleaned = $this->stripPlanningLanguage(\trim((string)$value));
+                if ($cleaned !== '') {
+                    return $cleaned;
+                }
             }
         }
 
@@ -802,6 +970,107 @@ class AiSiteBuildTaskService
         $value = \preg_replace('/[^a-z0-9]+/i', '-', $value) ?? $value;
         $value = \trim($value, '-');
         return $value !== '' ? $value : 'section';
+    }
+
+    /**
+     * Strip planning/observation language from stage1 block text so it doesn't leak
+     * into AI prompts as "suggested content" or visible copy.
+     *
+     * Stage-1 AI often writes sentences like "Visitors see the game lobby" or
+     * "Provide clear trust points" — these are planning intent, not copy.
+     */
+    private function stripPlanningLanguage(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+        $patterns = [
+            '/^(Visitors\s+see|Visitor\s+sees|Visitors\s+can|Visitors\s+will|Visitors\s+are|访客看到|用户看到)\s+/iu' => '',
+            '/^(Provide|Show|Display|List|Present|Output)\s+(the\s+)?(visitor\s+)?/iu' => '',
+            '/^(The|This|A)\s+(visitor|customer|user)\s+/iu' => '',
+            '/\s*(从而产生|产生|信任感增强|知道如何).*/u' => '',
+            '/\s+(before\s+publishing|reviewable\s+page\s+content).*$/iu' => '',
+            '/^(优先沿用|输出必须是|直接产出|字段样例).*/u' => '',
+        ];
+        foreach ($patterns as $pattern => $replacement) {
+            $value = \preg_replace($pattern, $replacement, \trim($value));
+        }
+        return \trim($value);
+    }
+
+    /**
+     * Extract a content plan from a stage-1 execution blueprint block.
+     * Pulls from realtime_content (headline, supporting_copy, ctas) and
+     * implementation_detail.
+     *
+     * @param array<string,mixed> $block
+     * @return array<string,mixed>
+     */
+    private function extractContentPlanFromStageOneBlock(array $block): array
+    {
+        $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
+        $plan = [];
+        $headline = \trim((string)($realtime['headline'] ?? ''));
+        if ($headline !== '') {
+            $plan['title'] = $this->stripPlanningLanguage($headline);
+        }
+        $supporting = [];
+        foreach (\is_array($realtime['supporting_copy'] ?? null) ? $realtime['supporting_copy'] : [] as $copy) {
+            $cleaned = $this->stripPlanningLanguage(\trim((string)$copy));
+            if ($cleaned !== '') {
+                $supporting[] = $cleaned;
+            }
+        }
+        if ($supporting !== []) {
+            $plan['body_copy'] = $supporting;
+        }
+        $ctas = [];
+        foreach (\is_array($realtime['ctas'] ?? null) ? $realtime['ctas'] : [] as $cta) {
+            if (\is_array($cta)) {
+                $ctaText = \trim((string)($cta['text'] ?? $cta['label'] ?? ''));
+                if ($ctaText !== '') {
+                    $ctas[] = $this->stripPlanningLanguage($ctaText);
+                }
+            }
+        }
+        if ($ctas !== []) {
+            $plan['ctas'] = $ctas;
+        }
+        $impl = $this->stripPlanningLanguage(\trim((string)($block['implementation_detail'] ?? '')));
+        if ($impl !== '' && $impl !== $block['goal'] ?? '') {
+            $plan['implementation_notes'] = $impl;
+        }
+        return $plan;
+    }
+
+    /**
+     * Extract a style plan from a stage-1 execution blueprint block.
+     * Pulls from design_tags, style_direction, and color-related fields.
+     *
+     * @param array<string,mixed> $block
+     * @return array<string,mixed>
+     */
+    private function extractStylePlanFromStageOneBlock(array $block): array
+    {
+        $plan = [];
+        $styleDirection = \trim((string)($block['style_direction'] ?? ''));
+        if ($styleDirection !== '') {
+            $plan['style_direction'] = $styleDirection;
+        }
+        $designTags = \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [];
+        if ($designTags !== []) {
+            $plan['design_tags'] = $designTags;
+        }
+        $pageDesignPlan = \is_array($block['page_design_plan'] ?? null) ? $block['page_design_plan'] : [];
+        if ($pageDesignPlan !== []) {
+            $plan['page_design_plan'] = $pageDesignPlan;
+        }
+        $pageFlowRole = \trim((string)($block['page_flow_role'] ?? ''));
+        if ($pageFlowRole !== '') {
+            $plan['page_flow_role'] = $pageFlowRole;
+        }
+        return $plan;
     }
 
     /**
@@ -1924,6 +2193,16 @@ class AiSiteBuildTaskService
             ? $buildContracts[ContractType::TYPE_RENDER_DATA]
             : [];
         $contentQualityFindings = (new RenderDataQualityLinter())->lint($contract);
+        foreach ($contentQualityFindings as $finding) {
+            if (($finding['severity'] ?? '') === 'error') {
+                $detail = \trim((string)($finding['message'] ?? ''));
+                throw new \RuntimeException(
+                    $detail !== ''
+                        ? $detail
+                        : 'Build render data failed RenderDataQualityLinter structural gate.'
+                );
+            }
+        }
         $qaReportContract = (new ContractQaReportBuilder())->build(
             [ContractType::TYPE_RENDER_DATA => $contract],
             [
@@ -2153,6 +2432,18 @@ class AiSiteBuildTaskService
     public function clearRetryableAiFailures(array $scope, string $operation): array
     {
         return $this->replaceRetryableAiFailures($scope, $operation, []);
+    }
+
+    /**
+     * 二阶段任务方案已成功生成后，清理“请先确认第二阶段任务方案再构建”这一类旧的构建前置错误。
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function clearBuildPrerequisiteFailureState(array $scope): array
+    {
+        $scope = $this->clearRetryableAiFailures($scope, 'build');
+        return $this->clearLatestBuildFailureState($scope);
     }
 
     /**
@@ -2682,6 +2973,11 @@ class AiSiteBuildTaskService
      */
     private function isGeneratedArtifactAvailableForTask(array $scope, array $task): bool
     {
+        $regeneration = \is_array($scope['_build_regeneration'] ?? null) ? $scope['_build_regeneration'] : [];
+        if ((int)($regeneration['active'] ?? 0) === 1) {
+            return false;
+        }
+
         $taskType = \trim((string)($task['task_type'] ?? ''));
         if ($taskType === 'shared_component') {
             $region = \trim((string)($task['region'] ?? ''));

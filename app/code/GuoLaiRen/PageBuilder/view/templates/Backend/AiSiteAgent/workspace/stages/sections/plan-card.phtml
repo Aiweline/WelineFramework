@@ -11,10 +11,6 @@
                 <input class="form-control" id="pb-ai-site-title" type="text" value="<?= htmlspecialchars($guidedWorkspaceSiteTitle, ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-12">
-                <label class="form-label" for="pb-ai-site-tagline"><?= htmlspecialchars((string)__('Tagline'), ENT_QUOTES, 'UTF-8') ?></label>
-                <input class="form-control" id="pb-ai-site-tagline" type="text" value="<?= htmlspecialchars((string)($websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-            </div>
-            <div class="col-12">
                 <label class="form-label" for="pb-ai-target-domain-summary"><?= htmlspecialchars((string)__('Target Domain'), ENT_QUOTES, 'UTF-8') ?></label>
                 <input class="form-control pb-ai-target-domain-sync" id="pb-ai-target-domain-summary" type="text" value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="example.local.test">
             </div>
@@ -93,7 +89,6 @@
                 </div>
                 <div class="min-w-0">
                     <div class="fw-semibold" data-pb-site-title-preview><?= htmlspecialchars((string)($websiteProfile['site_title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-                    <div class="text-muted small" data-pb-site-tagline-preview><?= htmlspecialchars((string)($websiteProfile['site_tagline'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
             </div>
             <div class="small text-muted"><?= htmlspecialchars((string)__('SEO Title: '), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars((string)($websiteProfile['seo']['meta_title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>

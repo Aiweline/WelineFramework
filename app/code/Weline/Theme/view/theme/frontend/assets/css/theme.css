@@ -1,8 +1,9 @@
 /**
- * 主题通用样式
- * 
- * 只包含通用的、基础的样式
- * 布局特定的样式应该在 layouts/{layoutType}/{layoutOption}.css 中
+ * 主题通用样式（默认主题入口，与 theme.js 同级）
+ *
+ * 只包含通用的、基础的样式。
+ * 布局特定样式：layouts/{layoutType}/{layoutOption}.css。
+ * 认证页版面留白与 .auth-form Flash：assets/css/auth-form-wflash.css（account_auth 按需加载）。
  */
 
 /* ========== 基础页面结构 ========== */

@@ -68,6 +68,10 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                 </div>
             </header>
 
+            <div class="motor-auth-flash wf-system-messages" aria-live="polite">
+                <template>Weline_Component::message.phtml</template>
+            </div>
+
             <div id="registerError" class="motor-auth-alert" hidden>
                 <i class="fa fa-exclamation-circle"></i>
                 <p id="registerErrorText"></p>
