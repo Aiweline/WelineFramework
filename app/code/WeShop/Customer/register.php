@@ -15,5 +15,5 @@ Register::register(
     __DIR__,
     '1.0.0',
     '<a href="https://bbs.aiweline.com">WeShop客户模块</a>',
-    ['Weline_Framework', 'Weline_Backend', 'Weline_Frontend', 'Weline_I18n', 'Weline_Currency']
+    ['Weline_Framework', 'Weline_Backend', 'Weline_Frontend', 'Weline_I18n', 'Weline_Currency', 'Weline_SystemConfig', 'Weline_Customer']
 );

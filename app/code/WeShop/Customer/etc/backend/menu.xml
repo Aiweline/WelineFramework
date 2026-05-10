@@ -9,6 +9,11 @@
          icon="mdi mdi-account-group-outline"
          order="30">
         
+        <!-- 登录桥接（SystemConfig，非 env） -->
+        <menu source="WeShop_Customer::customer_auth_bridge" name="weshop_customer_auth_bridge" title="登录桥接" action="/*/backend/customer/auth-bridge"
+             icon="mdi mdi-bridge"
+             order="5"/>
+
         <!-- 客户列表 -->
         <menu source="WeShop_Customer::customer_list" name="weshop_customer_list" title="客户列表" action="/*/backend/customer"
              icon="mdi mdi-account-multiple-outline"

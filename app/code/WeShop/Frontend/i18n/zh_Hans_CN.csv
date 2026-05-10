@@ -1,30 +1,39 @@
-"Header account","顶部账户"
-"Header categories menu","顶部分类菜单"
-"Header currency switcher","顶部货币切换"
-"Header language switcher","顶部语言切换"
-"Header mini cart","顶部迷你购物车"
-"Header search after","顶部搜索后"
-"Header search before","顶部搜索前"
-"Header search suggestions after","顶部搜索建议后"
-"Header search suggestions before","顶部搜索建议前"
-"Homepage content after","首页内容后"
-"Inject account-related UI into the storefront header.","将账户相关UI注入店铺顶部。"
-"Inject category navigation items into the storefront header menu.","将分类导航项注入店铺顶部菜单。"
-"Inject content after the storefront homepage main content block.","将内容注入店铺首页主内容块之后。"
-"Inject markup after the storefront header search input.","将标记注入店铺顶部搜索输入之后。"
-"Inject markup after the storefront header search suggestions list.","将标记注入店铺顶部搜索建议列表之后。"
-"Inject markup before the storefront header search input.","将标记注入店铺顶部搜索输入之前。"
-"Inject markup before the storefront header search suggestions list.","将标记注入店铺顶部搜索建议列表之前。"
-"Inject the currency switcher into the storefront header.","将货币切换器注入店铺顶部。"
-"Inject the language switcher into the storefront header.","将语言切换器注入店铺顶部。"
-"Login succeeded.","登录成功。"
-"Please complete two-factor verification to finish sign in.","请完成双因素验证以完成登录。"
-"Render the mini-cart entry inside the storefront header.","在店铺顶部渲染迷你购物车入口。"
-WeShop,WeShop
-"超值优惠等你来","超值优惠等你来"
+﻿WeShop,WeShop
 登录,登录
-"发现最新潮流","发现最新潮流"
-品质保证,品质保证
-首页,首页
-限时特惠,限时特惠
+邮箱和密码不能为空,邮箱和密码不能为空
+"Please complete two-factor verification to finish sign in.",请完成双因素验证以完成登录。
+"Login succeeded.",登录成功。
 新品上市,新品上市
+发现最新潮流,发现最新潮流
+限时特惠,限时特惠
+超值优惠等你来,超值优惠等你来
+品质保证,品质保证
+正品保障，放心购物,正品保障，放心购物
+首页,首页
+"Header categories menu",顶部分类菜单
+"Inject category navigation items into the storefront header menu.",将分类导航项注入店铺顶部菜单。
+"Header search before",顶部搜索前
+"Inject markup before the storefront header search input.",将标记注入店铺顶部搜索输入之前。
+"Header search after",顶部搜索后
+"Inject markup after the storefront header search input.",将标记注入店铺顶部搜索输入之后。
+"Header search suggestions before",顶部搜索建议前
+"Inject markup before the storefront header search suggestions list.",将标记注入店铺顶部搜索建议列表之前。
+"Header search suggestions after",顶部搜索建议后
+"Inject markup after the storefront header search suggestions list.",将标记注入店铺顶部搜索建议列表之后。
+"Header account",顶部账户
+"Inject account-related UI into the storefront header.",将账户相关UI注入店铺顶部。
+"Header language switcher",顶部语言切换
+"Inject the language switcher into the storefront header.",将语言切换器注入店铺顶部。
+"Header currency switcher",顶部货币切换
+"Inject the currency switcher into the storefront header.",将货币切换器注入店铺顶部。
+"Header mini cart",顶部迷你购物车
+"Render the mini-cart entry inside the storefront header.",在店铺顶部渲染迷你购物车入口。
+"Homepage content after",首页内容后
+"Inject content after the storefront homepage main content block.",将内容注入店铺首页主内容块之后。
+"Summer Sale: Up to 50% Off","Summer Sale: Up to 50% Off"
+"Find the best deals on your favorite summer items and refresh your space.","Find the best deals on your favorite summer items and refresh your space."
+"Shop Now","Shop Now"
+"Deals of the Day","Deals of the Day"
+"View All","View All"
+OFF,OFF
+"Shop by Category","Shop by Category"

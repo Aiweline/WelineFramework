@@ -39,10 +39,21 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         $user = $this->getLoginUser();
         // 设置用户数据
         $this->assign('user', $user);
-        
+
         $sidebar = $this->template('Weline_Customer::templates/frontend/account/sidebar/side.phtml');
         $this->assign('sidebar', $sidebar);
-        
+
+        $existingMeta = $this->getData('meta');
+        if (!is_array($existingMeta)) {
+            $existingMeta = [];
+        }
+        $this->assign('meta', array_merge($existingMeta, [
+            'user' => $user,
+            'sidebar' => $sidebar,
+            'showHeader' => true,
+            'showFooter' => true,
+        ]));
+
         return $this->fetch('Weline_Customer::templates/frontend/account/index.phtml');
     }
 

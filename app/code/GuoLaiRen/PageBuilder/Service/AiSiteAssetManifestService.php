@@ -13,6 +13,8 @@ final class AiSiteAssetManifestService
         'logo_icon',
     ];
 
+    private const MAX_USAGE_DEFAULT = 1;
+
     /**
      * @param array<string, mixed> $manifest
      * @return array<string, mixed>
@@ -993,7 +995,74 @@ final class AiSiteAssetManifestService
             'error_message' => \trim((string)($slot['error_message'] ?? '')),
             'execution_token' => \trim((string)($slot['execution_token'] ?? '')),
             'updated_at' => \trim((string)($slot['updated_at'] ?? '')),
+            'allowed_pages' => \is_array($slot['allowed_pages'] ?? null) ? $slot['allowed_pages'] : ['*'],
+            'allowed_blocks' => \is_array($slot['allowed_blocks'] ?? null) ? $slot['allowed_blocks'] : ['*'],
+            'max_usage' => (int)($slot['max_usage'] ?? self::MAX_USAGE_DEFAULT),
+            'reuse_policy' => \trim((string)($slot['reuse_policy'] ?? 'do_not_repeat_raw_image')),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @return list<array<string, mixed>>
+     */
+    public function forBlock(array $manifest, string $pageType, string $blockKey): array
+    {
+        $normalized = $this->normalize($manifest);
+        $allowed = [];
+        foreach ($normalized['slots'] ?? [] as $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $allowedPages = \is_array($slot['allowed_pages'] ?? null) ? $slot['allowed_pages'] : ['*'];
+            if (!\in_array('*', $allowedPages, true) && !\in_array($pageType, $allowedPages, true)) {
+                continue;
+            }
+            $allowedBlocks = \is_array($slot['allowed_blocks'] ?? null) ? $slot['allowed_blocks'] : ['*'];
+            if (!\in_array('*', $allowedBlocks, true) && !\in_array($blockKey, $allowedBlocks, true)) {
+                continue;
+            }
+            $allowed[] = $slot;
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @param list<string> $usedAssetIds
+     * @return list<string>
+     */
+    public function validateBlockUsage(array $manifest, string $blockKey, array $usedAssetIds): array
+    {
+        $violations = [];
+        $counts = [];
+        foreach ($usedAssetIds as $id) {
+            $id = (string)$id;
+            if ($id === '') {
+                continue;
+            }
+            $counts[$id] = ($counts[$id] ?? 0) + 1;
+        }
+        $normalized = $this->normalize($manifest);
+        foreach ($counts as $assetId => $usageCount) {
+            $slot = null;
+            foreach ($normalized['slots'] ?? [] as $s) {
+                if (\is_array($s) && ($s['slot_id'] ?? '') === $assetId) {
+                    $slot = $s;
+                    break;
+                }
+            }
+            if ($slot === null) {
+                continue;
+            }
+            $maxUsage = (int)($slot['max_usage'] ?? self::MAX_USAGE_DEFAULT);
+            if ($usageCount > $maxUsage) {
+                $violations[] = "{$assetId}: used {$usageCount} times, max {$maxUsage}";
+            }
+        }
+
+        return $violations;
     }
 
     /**

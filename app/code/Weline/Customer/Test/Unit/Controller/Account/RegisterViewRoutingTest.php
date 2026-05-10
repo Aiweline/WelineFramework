@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace Weline\Customer\Test\Unit\Controller\Account;
 
 use PHPUnit\Framework\TestCase;
-use WeShop\Customer\Service\CustomerAccountService;
+use Weline\Customer\Service\CustomerAccountService;
 use Weline\Customer\Controller\Account\Register;
 use Weline\Framework\Http\Request;
-use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\View\Template;
 use Weline\Customer\Model\Customer as AuthCustomer;
 
@@ -56,13 +55,10 @@ class RegisterViewRoutingTest extends TestCase
 
         $controller = $this->getMockBuilder(Register::class)
             ->setConstructorArgs([$this->createMock(Template::class), $service])
-            ->onlyMethods(['isLoggedIn', 'redirect', 'getMessageManager'])
+            ->onlyMethods(['isLoggedIn', 'redirect'])
             ->getMock();
         $controller->expects($this->once())->method('isLoggedIn')->willReturn(false);
 
-        $messageManager = $this->createMock(MessageManager::class);
-        $messageManager->expects($this->once())->method('addError');
-        $controller->expects($this->once())->method('getMessageManager')->willReturn($messageManager);
         $controller->expects($this->once())->method('redirect')->with('/customer/account/register')->willReturn('redirected');
 
         $request = $this->createMock(Request::class);
@@ -92,18 +88,15 @@ class RegisterViewRoutingTest extends TestCase
                 'first_name' => 'Ada',
                 'last_name' => 'Lovelace',
             ])
-            ->willReturn(['auth_user' => $authUser]);
-        $service->expects($this->once())->method('login')->with($authUser);
+            ->willReturn(['customer' => $authUser]);
+        $service->expects($this->once())->method('loginCustomer')->with($authUser);
 
         $controller = $this->getMockBuilder(Register::class)
             ->setConstructorArgs([$this->createMock(Template::class), $service])
-            ->onlyMethods(['isLoggedIn', 'redirect', 'getMessageManager'])
+            ->onlyMethods(['isLoggedIn', 'redirect'])
             ->getMock();
         $controller->expects($this->once())->method('isLoggedIn')->willReturn(false);
 
-        $messageManager = $this->createMock(MessageManager::class);
-        $messageManager->expects($this->once())->method('addSuccess');
-        $controller->expects($this->once())->method('getMessageManager')->willReturn($messageManager);
         $controller->expects($this->once())->method('redirect')->with('/customer/account')->willReturn('account');
 
         $request = $this->createMock(Request::class);

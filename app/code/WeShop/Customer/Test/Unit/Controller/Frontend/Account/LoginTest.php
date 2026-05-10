@@ -20,7 +20,7 @@ class LoginTest extends TestCase
         $property->setAccessible(true);
 
         $this->assertSame(
-            'account_auth',
+            'account.auth',
             $property->getValue(new Login(
                 $this->createMock(CustomerSession::class),
                 $this->createMock(CustomerWebAuthService::class)
