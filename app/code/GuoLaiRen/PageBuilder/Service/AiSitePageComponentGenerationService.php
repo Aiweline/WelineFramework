@@ -13,6 +13,7 @@ use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use GuoLaiRen\PageBuilder\Service\AI\QA\RenderDataQualityLinter;
 use Weline\Ai\Service\AiService;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Runtime\RequestContext;
@@ -315,11 +316,9 @@ class AiSitePageComponentGenerationService
         ));
         $known = [];
         foreach ($sections as $section) {
-            foreach (['code', 'key', 'source_block_key'] as $field) {
-                $value = \trim((string)($section[$field] ?? ''));
-                if ($value !== '') {
-                    $known[$value] = true;
-                }
+            $value = \trim((string)($section['code'] ?? ''));
+            if ($value !== '') {
+                $known[$value] = true;
             }
         }
 
@@ -340,7 +339,10 @@ class AiSitePageComponentGenerationService
 
             $sectionKey = \trim((string)($task['section_key'] ?? ''));
             $sectionKey = $sectionKey !== '' ? $sectionKey : ($blockKey !== '' ? $blockKey : $sectionCode);
-            if (isset($known[$sectionCode]) || isset($known[$sectionKey])) {
+            // 只按归一化后的 sectionCode 去重（如 content/home_page-hero），
+            // 不按 sectionKey 去重——task plan 的 sectionKey（如 'hero'）必然与蓝图基段 key 重叠，
+            // 按 key 去重会把 task plan 规划的全部额外段都丢掉，导致生成数量远少于计划。
+            if (isset($known[$sectionCode])) {
                 continue;
             }
 
@@ -373,9 +375,6 @@ class AiSitePageComponentGenerationService
                 'source_block_key' => $blockKey !== '' ? $blockKey : $sectionKey,
             ];
             $known[$sectionCode] = true;
-            if ($sectionKey !== '') {
-                $known[$sectionKey] = true;
-            }
         }
 
         \usort($sections, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
@@ -830,9 +829,19 @@ class AiSitePageComponentGenerationService
     /**
      * No application-level cap: the caller decides the task set size.
      */
+    /**
+     * 限制出站 HTTP 并发，避免任务数较多时对 DeepSeek 等 API 全开连接导致排队/限速，
+     * 长时间无吞吐触发 OpenAiProvider 中 cURL LOW_SPEED 中止（「Less than 1 bytes/sec…」）。
+     *
+     * 配置：{@see Env::get()} 键 `pagebuilder.ai_site.max_http_concurrency`（默认 4，有效范围 1–32）。
+     */
     private function resolveConcurrency(int $taskCount): int
     {
-        return \max(1, $taskCount);
+        $taskCount = \max(1, $taskCount);
+        $maxConcurrent = (int) Env::get('pagebuilder.ai_site.max_http_concurrency', 4);
+        $maxConcurrent = \max(1, \min(32, $maxConcurrent));
+
+        return \min($taskCount, $maxConcurrent);
     }
 
     /**
@@ -996,6 +1005,26 @@ class AiSitePageComponentGenerationService
         ];
         $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
         $aiData = $this->enforceContractHeroImageUrlsInAiPayload($aiData, $region, $defaultConfig);
+        $aiData = $this->enforceContractAllSectionImageUrlsInAiPayload($aiData, $region, $defaultConfig);
+        // 强制契约：有 verified_assets 时 HTML 必须引用至少一个真实图片 URL
+        if ($verifiedAssets !== []) {
+            $htmlToCheck = (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? '');
+            if ($htmlToCheck !== '' && !\str_contains($htmlToCheck, 'data-pb-ai-image-role="generated-asset"')) {
+                $anyUrlReferenced = false;
+                foreach ($verifiedAssets as $assetUrl) {
+                    if (\str_contains($htmlToCheck, \trim((string)$assetUrl))) {
+                        $anyUrlReferenced = true;
+                        break;
+                    }
+                }
+                if (!$anyUrlReferenced) {
+                    throw new \RuntimeException(
+                        'AI generated block skipped real images: verified assets exist but none referenced in html_content.'
+                        . ' Assets: ' . \implode(', ', \array_slice($verifiedAssets, 0, 3))
+                    );
+                }
+            }
+        }
         $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets);
         $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig);
 
@@ -1219,8 +1248,7 @@ class AiSitePageComponentGenerationService
                 . "\n" . '#componentId .ai-site-fallback-art { position:relative; min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(145deg,var(--section-primary,#2563eb),var(--section-secondary,#06b6d4)); } #componentId .ai-site-fallback-art svg { width:100%; height:100%; display:block; }'
                 . "\n" . '#componentId .ai-site-fallback-art--image { background:color-mix(in srgb,var(--section-primary,#2563eb) 18%,#0f172a); }'
                 . "\n" . '#componentId .ai-site-fallback-art--image:after { content:""; position:absolute; inset:0; background:linear-gradient(155deg,color-mix(in srgb,var(--section-primary,#2563eb) 22%,rgba(15,23,42,.72)) 0%,rgba(15,23,42,.10) 50%,color-mix(in srgb,var(--section-accent,#f59e0b) 18%,rgba(15,23,42,.74)) 100%); pointer-events:none; }'
-                . "\n" . '#componentId .ai-site-fallback-art .ai-site-visual-image { width:100%; height:100%; min-height:260px; display:block; object-fit:cover; object-position:center; transition:transform .8s ease; }'
-                . "\n" . '#componentId .ai-site-fallback-art--image:hover .ai-site-visual-image { transform:scale(1.04); }'
+                . "\n" . '#componentId .ai-site-fallback-art .ai-site-visual-image { width:100%; height:100%; min-height:260px; display:block; object-fit:cover; object-position:center; }'
                 . "\n" . '#componentId .ai-site-fallback-callout { position:relative; padding:18px 20px; border-radius:20px; background:' . $surfaceStyle['callout_background'] . '; color:' . $surfaceStyle['callout_color'] . '; box-shadow:0 20px 48px rgba(15,23,42,.18); }',
             'css_responsive' => '#componentId .ai-site-fallback-stage { grid-template-columns:1fr; padding:24px; } #componentId .ai-site-fallback-copy strong { max-width:12ch; }',
             'html_content' => '<div class="ai-site-fallback-stage"><div class="ai-site-fallback-copy"><span class="ai-site-fallback-kicker">' . \htmlspecialchars((string)$sectionPlan['eyebrow'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><strong>' . \htmlspecialchars((string)$sectionPlan['title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars((string)$sectionPlan['body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><div class="ai-site-fallback-proof">' . $this->buildFallbackProofHtml((array)$sectionPlan['proof_points']) . '</div></div><div class="' . $artClass . '">' . $artInner . '</div></div><div class="ai-site-fallback-callout"><p>' . \htmlspecialchars((string)$sectionPlan['callout_title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><p>' . \htmlspecialchars((string)$sectionPlan['callout_body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
@@ -2908,6 +2936,117 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * 通用 section 图片强制性注入：对于所有非 hero 的 section，如果 defaultConfig 中有 section_image_url
+     * 但 AI 生成的 html_content 没有引用该 URL，则强制将占位 SVG/CSS 替换为真实图片。
+     *
+     * 核心原则：一旦生成了图片就必须使用，不能浪费。禁止占位图，必须用真实图片嵌入插槽。
+     */
+    private function enforceContractAllSectionImageUrlsInAiPayload(array $aiData, string $region, array $defaultConfig): array
+    {
+        if ($region !== 'content') {
+            return $aiData;
+        }
+        $html = (string)($aiData['html_content'] ?? '');
+        if ($html === '') {
+            return $aiData;
+        }
+
+        // 如果 AI 已经有图片标签包含了 verified_assets 的数据属性，说明已自行处理，跳过
+        if (\str_contains($html, 'data-pb-ai-image-role="generated-asset"')) {
+            return $aiData;
+        }
+
+        $imageUrl = '';
+        $slotId = '';
+        foreach (['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url'] as $key) {
+            $candidate = \trim((string)($defaultConfig[$key] ?? ''));
+            if ($candidate !== '') {
+                $imageUrl = $candidate;
+                break;
+            }
+        }
+        if ($imageUrl === '') {
+            return $aiData;
+        }
+
+        // 如果 HTML 已经引用了该图片 URL（src 或 CSS url），不重复注入
+        $escapedImageUrl = \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        if (\str_contains($html, $escapedImageUrl)) {
+            return $aiData;
+        }
+
+        $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? $defaultConfig['visual.image_slot_id'] ?? ''));
+        $alt = \htmlspecialchars(
+            $this->sanitizeVisibleCopy((string)(
+                $defaultConfig['runtime.section_image_alt']
+                ?? $defaultConfig['visual.image_alt']
+                ?? $defaultConfig['image.alt']
+                ?? $defaultConfig['content.title']
+                ?? 'Section image'
+            )),
+            \ENT_QUOTES | \ENT_SUBSTITUTE,
+            'UTF-8'
+        );
+        $slotAttr = $slotId !== ''
+            ? ' data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+            : '';
+        $imgTag = '<img src="' . $escapedImageUrl . '" alt="' . $alt . '"'
+            . ' loading="lazy" decoding="async"'
+            . ' style="width:100%;height:auto;max-width:100%;display:block;object-fit:cover;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.08);"'
+            . ' data-pb-ai-image-role="generated-asset"' . $slotAttr . '>';
+
+        // 策略 1：查找 SVG 占位容器（.ai-site-fallback-art, .ai-site-visual-panel, svg 父容器等），替换其内容
+        $placeholderPatterns = [
+            '/<div[^>]*\bai-site-fallback-art\b[^>]*>.*?<\/div>\s*<div[^>]*\bai-site-fallback-copy\b/is',
+            '/<div[^>]*\bai-site-visual-panel\b[^>]*>.*?<\/div>/is',
+            '/<div[^>]*\bai-site-fallback-art\b[^>]*>.*?<\/div>/is',
+            '/<figure[^>]*>.*?<svg\b.*?<\/svg>.*?<\/figure>/is',
+            '/<div[^>]*\bclass=["\'][^"\']*\bsvg-wrapper\b[^"\']*["\'][^>]*>.*?<\/div>/is',
+        ];
+        $replaced = false;
+        foreach ($placeholderPatterns as $pattern) {
+            $replacement = '<div class="ai-section-image-replaced" style="margin:16px 0;">' . $imgTag . '</div>';
+            $count = 0;
+            $html = \preg_replace($pattern, $replacement, $html, 1, $count);
+            if ($count > 0) {
+                $replaced = true;
+                break;
+            }
+        }
+
+        // 策略 2：如未替换任何占位，查找第一个 <svg> 元素，将其整个父容器替换为图片
+        if (!$replaced && \preg_match('/<svg\b[^>]*>.*?<\/svg>/is', $html) === 1) {
+            $html = \preg_replace(
+                '/<div[^>]*>\s*<svg\b[^>]*>.*?<\/svg>\s*<\/div>/is',
+                '<div class="ai-section-image-replaced" style="margin:16px 0;">' . $imgTag . '</div>',
+                $html,
+                1,
+                $count
+            );
+            $replaced = $count > 0;
+        }
+
+        // 策略 3：没有任何 SVG 可替换，在末尾追加
+        if (!$replaced) {
+            $finalImgTag = '<div class="ai-section-image-wrapper" style="margin-top:20px;border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.08);">'
+                . $imgTag . '</div>';
+            $injected = \preg_replace(
+                '/(<\/[a-z]+>\s*)$/iu',
+                $finalImgTag . '$1',
+                \trim($html),
+                1
+            );
+            if (\is_string($injected) && $injected !== '') {
+                $html = $injected;
+                $replaced = true;
+            }
+        }
+
+        $aiData['html_content'] = $html;
+        return $aiData;
+    }
+
+    /**
      * @param list<string> $verifiedAssets
      */
     private function isVerifiedAssetUrl(string $src, array $verifiedAssets): bool
@@ -3364,13 +3503,11 @@ class AiSitePageComponentGenerationService
                 . "\n" . '#componentId .ai-site-visual-panel { position:relative; min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(135deg,var(--ai-site-contract-primary),var(--ai-site-contract-secondary),var(--ai-site-contract-accent)); }'
                 . "\n" . '#componentId .ai-site-visual-panel--image { background:color-mix(in srgb,var(--ai-site-contract-primary) 18%,#0f172a); }'
                 . "\n" . '#componentId .ai-site-visual-panel--image:after { content:""; position:absolute; inset:0; background:linear-gradient(155deg,color-mix(in srgb,var(--ai-site-contract-primary) 22%,rgba(15,23,42,.70)) 0%,rgba(15,23,42,.10) 50%,color-mix(in srgb,var(--ai-site-contract-accent) 18%,rgba(15,23,42,.76)) 100%); pointer-events:none; }'
-                . "\n" . '#componentId .ai-site-svg-visual { width:100%; height:100%; display:block; animation:aiSiteVisualFloat 7s ease-in-out infinite alternate; }'
-                . "\n" . '#componentId .ai-site-visual-image { width:100%; height:100%; min-height:260px; display:block; object-fit:cover; object-position:center; transition:transform .8s ease; }'
-                . "\n" . '#componentId .ai-site-visual-panel--image:hover .ai-site-visual-image { transform:scale(1.04); }'
+                . "\n" . '#componentId .ai-site-svg-visual { width:100%; height:100%; display:block; }'
+                . "\n" . '#componentId .ai-site-visual-image { width:100%; height:100%; min-height:260px; display:block; object-fit:cover; object-position:center; }'
                 . "\n" . '#componentId .ai-site-highlight-proof { margin-top:16px; padding:18px 20px; border-radius:20px; background:rgba(255,255,255,.78); border:1px solid var(--section-border); text-align:left; box-shadow:0 14px 36px rgba(15,23,42,.09); }'
                 . "\n" . '#componentId .ai-site-highlight-proof ul { margin:10px 0 0; padding-left:20px; display:grid; gap:8px; }'
-                . "\n" . '#componentId .ai-site-callout { margin-top:16px; padding:18px 20px; border-radius:18px; background:color-mix(in srgb,var(--section-primary) 10%,white); color:var(--section-heading); text-align:left; }'
-                . "\n" . '@keyframes aiSiteVisualFloat { from { transform:translateY(0) scale(1); } to { transform:translateY(-10px) scale(1.02); } }',
+                . "\n" . '#componentId .ai-site-callout { margin-top:16px; padding:18px 20px; border-radius:18px; background:color-mix(in srgb,var(--section-primary) 10%,white); color:var(--section-heading); text-align:left; }',
             'css_responsive' => '#componentId .ai-site-visual-wrap { grid-template-columns:1fr; } #componentId .ai-site-card-grid { grid-template-columns:1fr; }',
             'html_content' => '<div class="ai-site-card-grid">'
                 . '<article class="ai-site-card"><strong>' . \htmlspecialchars((string)$sectionPlan['title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars((string)$sectionPlan['body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
@@ -4819,8 +4956,9 @@ class AiSitePageComponentGenerationService
             . "4. Navigation must be compatible with real page links and the provided navigation data.\n"
             . "5. Keep the structure practical: logo area, navigation, optional CTA, mobile-friendly behavior.\n"
             . "6. Style should be inspired by the reference theme, but do not mention the theme name in visible copy.\n"
-            . "7. The framework already provides fields/config/nav/CTA. Set extra_fields, php_variables, html_extra, and js_content to empty strings unless explicitly required.\n"
-            . "8. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars.\n"
+            . "7. CSS EFFECTS REQUIRED: the header must have visible depth — subtle shadow on the nav bar, hover underline animation on nav links, transition on CTA with shadow lift. Every interactive element (nav-link, CTA, logo, toggle) must have a non-zero hover/focus style.\n"
+            . "8. The framework already provides fields/config/nav/CTA. Set extra_fields, php_variables, html_extra, and js_content to empty strings unless explicitly required.\n"
+            . "9. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -4874,7 +5012,8 @@ class AiSitePageComponentGenerationService
             . "5. Footer links should be compatible with real page nav logic and the provided link groups.\n"
             . "6. Footer completeness contract (hard requirement): render at least 3 visible link labels in html_extra_column/html_extra, include at least one support/contact entry, and include at least one legal/compliance entry. Do not return empty link groups.\n"
             . "7. Footer visibility contract (hard requirement): never hide or collapse the footer by default (no display:none, visibility:hidden, opacity:0, height:0, off-canvas positioning, or clipped-to-zero wrappers).\n"
-            . "8. Style should follow the reference theme direction without naming the theme in visible text.\n"
+            . "8. CSS EFFECTS REQUIRED: the footer must have visible depth — a top border/shadow separator from the page body, hover lift on social icons with shadow, hover underline animation on link items, and transition effects on any interactive element. Grouped link columns should have heading separation.\n"
+            . "9. Style should follow the reference theme direction without naming the theme in visible text.\n"
             . "9. The framework already provides brand/link/social/copyright fields. Set extra_fields, php_variables, and js_content to empty strings unless explicitly required.\n"
             . "10. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars and footer_extra_text as one short visitor-facing sentence.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.\n"
@@ -4944,6 +5083,7 @@ class AiSitePageComponentGenerationService
             . "Page type: " . $pageLabel . " ({$pageType})\n"
             . "Section name: {$sectionName}\n"
             . "Section role: {$sectionKey}\n"
+            . ($sectionTemplate === 'hero' ? "BANNER MODULE RULE: this is a hero/banner section. It MUST be FULL-WIDTH (container_width=full) with a background IMAGE covering the entire section. Set bg_type to 'image' and use the planned hero_image URL when available. Add a dark gradient overlay over the background image so text remains readable. Content overlay is centered above the image.\n" : '')
             . "Suggested structure: {$sectionTemplate}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . ($brief !== '' ? "Customer brief (HARD CONTRACT — all content must fit this business): {$brief}\n" : '')
@@ -4963,16 +5103,21 @@ class AiSitePageComponentGenerationService
             . "2. Write finished visitor-facing copy. Do not expose internal prompts, briefs, requirement wording, or phrases such as 'page focus' and 'site summary'.\n"
             . "3. The section must be meaningfully different for its page type and role; home, about, contact, policy, and blog sections should not read the same.\n"
             . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
-            . "5. Art direction is mandatory: do not output a flat one-color strip. Start from the provided page_design_plan/page_flow_role when present, then give this block a clear foreground/background relationship, card or panel layering, hover/focus states, and at least one inline SVG or CSS visual when no real asset is supplied.\n"
-            . "6. Do not repeat the framework title/description in the body as empty h1/h2/p tags. The body must add useful content such as cards, trust points, game tiles, proof points, or CTA support.\n"
-            . "7. Preserve page-level color layering: this block must have its own surface/contrast role and must not make the whole page feel like one solid theme color.\n"
-            . "8. Implement like a UI/interaction designer handoff: section-specific visual hierarchy, spatial rhythm, motion restraint, hover/focus states, and mobile stacking must be visible in html_content/css_extra.\n"
-            . "9. Accessibility contrast gate: before returning, inspect every visible text/link/button/chip against its immediate background; rewrite CSS if any foreground/background pair is low-contrast.\n"
-            . "10. HTML closure gate: html_content must be a balanced fragment with all non-void tags closed; invalid nesting or stray closing tags are build-breaking failures.\n"
-            . "11. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
-            . "12. Return valid JSON only. No markdown. No explanation. Keep html_content under 2400 chars and css_extra under 2600 chars.\n"
-            . "13. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
-            . "14. If real blog data variables are provided, prefer them over invented articles or categories.\n"
+            . "5. CSS EFFECTS REQUIRED ON ALL BLOCKS (DO NOT SKIP): every block — title, subtitle, description, card, image, CTA, list, divider, icon — MUST have at least two visible CSS effects from: gradient text on headings, card hover lift with shadow, pill/badge style subtitles, decorative underlines on titles with gradient, border or background transitions, backdrop-filter glass effect, inline SVG/CSS decorations, or fade-in animation. Flat unstyled blocks are invalid unless the user EXPLICITLY indicated 'no effects', 'minimal', or 'clean' in the refine instruction.\n"
+            . "6. NO SOLID/FLAT BACKGROUNDS: every section must have a subtle gradient, radial light bloom, noise texture, or patterned overlay on its background. A plain hex color (#fff, #f8f9fa, etc.) as the sole background is forbidden. Use at minimum a two-stop gradient or a radial glow behind the content area.\n"
+            . "7. CONTRAST GATE (HARD REQUIREMENT): never pair a light background with light text or a dark background with dark text. Every text/button/link must have WCAG AA minimum contrast against its immediate background. Use color-mix() to derive readable foregrounds automatically where possible.\n"
+            . "8. TYPOGRAPHY STANDARDS: set letter-spacing on uppercase text (0.06-0.12em), use clamp() for heading sizes, set generous line-height (1.6-1.85 for body, 1.1-1.3 for headings), and use a max-width on paragraph text (55-70ch) to prevent overly long lines.\n"
+            . "9. NO INFINITE IMAGE SCALING: do not add transform:scale() to any image or media element on hover or in animation. Use box-shadow, translateY, brightness filter, or border transitions for hover effects instead. Scale transforms on images cause cropping/overflow issues.\n"
+            . "10. RESPONSIVE IMAGES REQUIRED: every img tag MUST have max-width:100% and height:auto via inline style or CSS class. Images inside flex/grid containers must not overflow on small screens. Use object-fit:cover + object-position:center for decorative/bg images. Add mobile-specific media query adjustments for image border-radius and shadow at 768px breakpoint.\n"
+            . "11. Do not repeat the framework title/description in the body as empty h1/h2/p tags. The body must add useful content such as cards, trust points, game tiles, proof points, or CTA support.\n"
+            . "12. Preserve page-level color layering: this block must have its own surface/contrast role and must not make the whole page feel like one solid theme color.\n"
+            . "13. Implement like a UI/interaction designer handoff: section-specific visual hierarchy, spatial rhythm, motion restraint, hover/focus states, and mobile stacking must be visible in html_content/css_extra.\n"
+            . "14. Accessibility contrast gate: before returning, inspect every visible text/link/button/chip against its immediate background; rewrite CSS if any foreground/background pair is low-contrast.\n"
+            . "15. HTML closure gate: html_content must be a balanced fragment with all non-void tags closed; invalid nesting or stray closing tags are build-breaking failures.\n"
+            . "16. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
+            . "17. Return valid JSON only. No markdown. No explanation. Keep html_content under 2400 chars and css_extra under 2600 chars.\n"
+            . "18. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
+            . "19. If real blog data variables are provided, prefer them over invented articles or categories.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
 
@@ -5129,11 +5274,14 @@ class AiSitePageComponentGenerationService
             . "- Design from the customer brief plus theme style_signature/art_direction when present; the style reference is scaffolding, not permission to reuse a fixed look.\n"
             . "- Avoid one-size-fits-all layouts: no plain centered hero plus three generic cards, no flat one-color strip, no default Inter/Roboto/Arial/system-font look, no purple-on-white AI template unless explicitly requested.\n"
             . "- Spend CSS budget on visible quality: scoped CSS variables, clamp typography, layered gradients, texture/noise via CSS, asymmetric composition, decorative borders, inline SVG/CSS motifs, tactile CTA hover/focus states, and mobile-specific rhythm.\n"
+            . "- Shadow/depth effects required: use box-shadow, drop-shadow, or CSS filters to create visual depth on cards, images, and interactive elements. At minimum, implement a subtle card shadow with a hover lift (transition: box-shadow 0.3s ease, transform 0.3s ease). Do not leave interactive surfaces flat.\n"
+            . "- Richer text colors: do not rely on just one heading color and one body color. Use accent-colored spans, gradient text (via background-clip), highlighted/inline marks, and color-mix() to create typographic hierarchy and visual rhythm in headings and key phrases.\n"
             . "- Customer-intent lock: the final HTML/CSS must visibly match the user's actual business/game/service scenario through motifs, labels, CTA affordances, proof details, and interaction behavior; do not generate a category-neutral section.\n"
             . "- Interaction/effects requirement: implement at least one friendly visible hover/focus/reveal/ambient effect with CSS transition/transform/animation plus a reduced-motion-safe fallback when motion is used; do not describe effects without CSS.\n"
             . "- Color quality requirement: define explicit readable background/text/CTA/focus pairings; dark surfaces require light foregrounds, and neighboring blocks must differ by surface depth, divider, texture, or layout rhythm.\n"
             . "- HTML structure contract: every HTML field must be a valid fragment with a component-owned root wrapper, closed attribute quotes, and balanced tags. Never emit framework wrappers like `.pb-ai-html-block`, never close a `div/section/article` that was not opened inside the same field, and never concatenate neighboring blocks into one field.\n"
             . "- Layout safety contract: keep content in normal document flow. Do not use negative margins, fixed heights, or absolute positioning to pull sections over each other; decorative absolute elements must stay inside a relative root and cannot affect block boundaries.\n"
+            . "- Image/media integration: when placing images inside the section, wrap them in a container with rounded corners, subtle box-shadow, and a gradient overlay mask at top/bottom edges so the image blends naturally into the page background instead of feeling cut off. Add hover lift where appropriate.\n"
             . "- Do not leave css_extra empty when visual polish depends on it; the page preview should show the styling without a designer adding anything later.\n"
             . $scopeRule
             . "- Before returning, silently self-audit: if the preview would still read as pale background + ordinary cards + small default buttons, rewrite the composition and CSS.\n"
@@ -6091,11 +6239,20 @@ class AiSitePageComponentGenerationService
                 : (\is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null)
                     ? $scope['plan_workbench']['confirmed']['shared_prompt_context']
                     : []);
+            $verifiedAssets = \is_array($scope['verified_assets'] ?? null)
+                ? $scope['verified_assets']
+                : $this->extractVerifiedAssetsFromManifest($scope);
+            $verifiedAssetRule = $verifiedAssets !== []
+                ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 3000) . "\n"
+                    . "- HARD CONTRACT: every verified_asset URL MUST be used as <img src> or CSS url() in this section's output. Do not skip any. If a slot_id matches this section, the corresponding image must appear in html_content. This is NOT optional — unused generated images waste API tokens.\n"
+                    . "- Inject attribute data-pb-ai-asset-slot=\"<slot_id>\" on every element using a verified asset URL.\n"
+                : "- verified_assets: []\n";
             return "Stage-2 task context for this {$contextLabel} (fallback from scope — follow the customer brief strictly):\n"
                 . "- customer_brief: {$brief}\n"
                 . "- IMPORTANT: All generated content MUST serve this customer brief exactly. Do NOT invent unrelated generic content.\n"
                 . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
                 . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 5000) . "\n"
+                . $verifiedAssetRule
                 . "- anti-copy rule: never paste stage-1 observation/planning sentences directly into html_content. Rewrite phrases like \"Visitors see...\", \"访客看到...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n";
         }
 
@@ -6150,8 +6307,10 @@ class AiSitePageComponentGenerationService
         }
         $verifiedAssetRule = $verifiedAssets !== []
             ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 3000) . "\n"
-                . "- verified asset rule: use only these exact final_url values for real <img src> or CSS url(); if none match the needed slot, render an inline SVG/CSS fallback instead.\n"
-                . "- verified asset editability rule: every real <img> or CSS-background element that uses a verified final_url must include data-pb-ai-asset-slot=\"<matching slot_id>\" and data-pb-ai-image-role=\"generated-asset\" on that exact element. For CSS backgrounds, apply the attributes to the element carrying the background-image.\n"
+                . "- HARD CONTRACT — every verified_asset URL MUST appear as <img src> or CSS background-image in html_content. Do not skip any. Unused generated images waste API tokens.\n"
+                . "- Rules: use the exact final_url value; match the asset by slot_id context. If no asset_matches this section, render an inline SVG/CSS fallback.\n"
+                . "- Inject attribute data-pb-ai-asset-slot=\"<slot_id>\" on every element using a verified asset URL.\n"
+                . "- Inject attribute data-pb-ai-image-role=\"generated-asset\" on every element using a verified asset URL.\n"
             : "- verified_assets: []\n- verified asset rule: no verified real image URL is available, so render visual media as inline SVG/CSS and do not invent image URLs.\n";
 
         return "Stage-2 task context for this {$contextLabel}:\n"
@@ -7485,6 +7644,17 @@ class AiSitePageComponentGenerationService
         if (\trim($html) === '') {
             return;
         }
+        // 标签闭合校验：检测非自闭合标签是否缺少闭标签
+        $unclosedTags = $this->detectUnclosedHtmlTags($html);
+        if ($unclosedTags !== []) {
+            throw new \RuntimeException(
+                'Generated HTML has unclosed tags: ' . \implode(', ', \array_map(
+                    static fn(string $tag, int $count): string => "{$tag}(x{$count})",
+                    \array_keys($unclosedTags),
+                    $unclosedTags
+                ))
+            );
+        }
         $contract = [
             'payload' => [
                 'page_type_layouts' => [
@@ -7505,6 +7675,59 @@ class AiSitePageComponentGenerationService
             }
             throw new \RuntimeException(\trim((string)($finding['message'] ?? 'Component HTML failed render-data quality gate.')));
         }
+    }
+
+    /**
+     * 检测 HTML 片段中未闭合的标签（忽略 void 元素和自闭合标签）。
+     *
+     * @return array<string,int> tagName => openCount
+     */
+    private function detectUnclosedHtmlTags(string $html): array
+    {
+        $voidTags = \array_fill_keys([
+            'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+            'link', 'meta', 'param', 'source', 'track', 'wbr',
+        ], true);
+        $matchCount = \preg_match_all('/<\s*\/?\s*([a-z][a-z0-9:-]*)\b[^>]*>/i', $html, $matches, \PREG_OFFSET_CAPTURE);
+        if ($matchCount === false || $matchCount === 0) {
+            return [];
+        }
+
+        $stack = [];
+        foreach ($matches[0] as $index => $match) {
+            $tagText = (string)$match[0];
+            $tagName = \strtolower((string)($matches[1][$index][0] ?? ''));
+            if ($tagName === '') {
+                continue;
+            }
+            // 闭标签
+            if (\preg_match('/^<\s*\/\s*/', $tagText) === 1) {
+                for ($stackIndex = \count($stack) - 1; $stackIndex >= 0; $stackIndex--) {
+                    if ($stack[$stackIndex] === $tagName) {
+                        \array_splice($stack, $stackIndex, 1);
+                        break;
+                    }
+                }
+                continue;
+            }
+            // void 元素或自闭合标签
+            if (isset($voidTags[$tagName]) || \preg_match('/\/\s*>$/', $tagText) === 1) {
+                continue;
+            }
+            $stack[] = $tagName;
+        }
+
+        if ($stack === []) {
+            return [];
+        }
+
+        $unclosed = [];
+        foreach ($stack as $tag) {
+            $unclosed[$tag] = ($unclosed[$tag] ?? 0) + 1;
+        }
+        \ksort($unclosed);
+
+        return $unclosed;
     }
 
     /**

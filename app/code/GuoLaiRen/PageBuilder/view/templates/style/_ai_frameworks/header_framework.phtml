@@ -118,6 +118,7 @@ try {
     color: var(--header-text);
     position: relative;
     z-index: 1000;
+    box-shadow: 0 1px 0 var(--header-border), 0 4px 20px rgba(0,0,0,0.04);
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
@@ -204,12 +205,13 @@ try {
     font-weight: 600;
     border-radius: 8px;
     text-decoration: none;
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--header-primary) 30%, transparent);
     transition: all 0.25s ease;
 }
 
 #<?= $componentId ?> .<?= $cls ?>-cta:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 8px 28px color-mix(in srgb, var(--header-primary) 50%, transparent);
 }
 
 #<?= $componentId ?> .<?= $cls ?>-toggle {
