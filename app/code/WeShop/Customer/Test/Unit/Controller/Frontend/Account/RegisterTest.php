@@ -21,7 +21,7 @@ class RegisterTest extends TestCase
         $property->setAccessible(true);
 
         $this->assertSame(
-            'account_auth',
+            'account.auth',
             $property->getValue(new Register(
                 $this->createMock(CustomerSession::class),
                 $this->createMock(CustomerAccountService::class)

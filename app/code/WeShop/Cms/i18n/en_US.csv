@@ -1,32 +1,46 @@
-"CMS Page Management","CMS Page Management"
-"CMS page saved successfully.","CMS page saved successfully."
-"CMS page save failed.","CMS page save failed."
-"CMS page deleted successfully.","CMS page deleted successfully."
-"CMS page delete failed.","CMS page delete failed."
-"CMS page not found.","CMS page not found."
+﻿"CMS Page Management","CMS Page Management"
 "Page title is required.","Page title is required."
 "Page identifier is required.","Page identifier is required."
-"Page identifier already exists. Please use a different one.","Page identifier already exists. Please use a different one."
+"CMS page saved successfully.","CMS page saved successfully."
+"CMS page save failed.","CMS page save failed."
 "Invalid page ID.","Invalid page ID."
+"CMS page deleted successfully.","CMS page deleted successfully."
+"CMS page delete failed.","CMS page delete failed."
 "Page not found.","Page not found."
+"CMS page not found.","CMS page not found."
+"Create and manage static content pages for your storefront.","Create and manage static content pages for your storefront."
+"Total %d pages","Total %d pages"
+"Edit Page","Edit Page"
+"Create New Page","Create New Page"
 Title,Title
 Identifier,Identifier
-Status,Status
+"URL key used to access this page (e.g., ""about-us"", ""privacy-policy"").","URL key used to access this page (e.g., ""about-us"", ""privacy-policy"")."
 "Content Heading","Content Heading"
 Content,Content
 "Meta Title","Meta Title"
 "Meta Description","Meta Description"
 "Meta Keywords","Meta Keywords"
-"Page Layout","Page Layout"
-"Sort Order","Sort Order"
+Status,Status
 Enabled,Enabled
 Disabled,Disabled
-"Create New Page","Create New Page"
-"Edit Page","Edit Page"
+"Sort Order","Sort Order"
+"Page Layout","Page Layout"
+Default,Default
+"1 Column","1 Column"
+"2 Columns Left","2 Columns Left"
+"2 Columns Right","2 Columns Right"
+"Full Width","Full Width"
 "Save Page","Save Page"
-Delete,Delete
+Cancel,Cancel
+All,All
 Search,Search
-"Are you sure you want to delete this page?","Are you sure you want to delete this page?"
-"Back to list","Back to list"
+Reset,Reset
 Actions,Actions
-"Content Management","Content Management"
+Edit,Edit
+"Are you sure you want to delete this page?","Are you sure you want to delete this page?"
+Delete,Delete
+Previous,Previous
+Next,Next
+"No CMS pages found.","No CMS pages found."
+"Use the form to create your first CMS page or adjust filters.","Use the form to create your first CMS page or adjust filters."
+"No content available for this page.","No content available for this page."

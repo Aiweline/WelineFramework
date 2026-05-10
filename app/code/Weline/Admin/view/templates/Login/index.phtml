@@ -46,8 +46,9 @@
         animation: loginBgShift 20s ease infinite;
         min-height: 100vh;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
         position: relative;
         overflow: hidden;
     }
@@ -87,6 +88,24 @@
         position: relative;
         z-index: 1;
         width: 100%;
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 0;
+    }
+
+    /* 页脚版本号：与登录卡片纵向排列，置于底部居中（勿与卡片同一 flex 行并排） */
+    .weline-admin-login-page > .container-fluid {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 100%;
+        text-align: center;
+        padding: 0.5rem 1rem 1.25rem;
+    }
+
+    .weline-admin-login-page > .container-fluid .footer-wapper {
+        text-align: center;
     }
 
     /* Card */

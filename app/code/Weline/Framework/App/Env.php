@@ -197,6 +197,8 @@ class Env extends DataObject
             'event_debug' => false,
             'event_scan' => false,
             'phpunit_server' => null,
+            // 为 true 时 layout 包装失败也输出 X-Weline-* 响应头（不限 deploy=dev）
+            'theme_layout_wrap_response_headers' => false,
         ],
     ];
 

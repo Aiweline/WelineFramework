@@ -22,7 +22,10 @@ FedEx,FedEx
 "No FedEx shipping rate is currently available.","No FedEx shipping rate is currently available."
 获取FedEx访问令牌失败,获取FedEx访问令牌失败
 FedEx标准配送,FedEx标准配送
+"Failed to obtain FedEx access token.","Failed to obtain FedEx access token."
+"FedEx shipment creation failed: unexpected API response.","FedEx shipment creation failed: unexpected API response."
 "FedEx shipment creation failed.","FedEx shipment creation failed."
+"Unable to retrieve tracking information.","Unable to retrieve tracking information."
 "Unsupported shipping method: %{1}","Unsupported shipping method: %{1}"
 "Flat Rate","Flat Rate"
 "Standard delivery with a fixed shipping fee.","Standard delivery with a fixed shipping fee."
