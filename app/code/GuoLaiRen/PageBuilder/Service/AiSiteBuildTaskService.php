@@ -14,6 +14,9 @@ use GuoLaiRen\PageBuilder\Service\AI\Contract\LegacyContractAdapter;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceContractHelper;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceTruthCoverageLinter;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\VisualAssetUsageValidator;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\VisualContractQaLinter;
 use GuoLaiRen\PageBuilder\Service\AI\QA\RenderDataQualityLinter;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -2203,6 +2206,40 @@ class AiSiteBuildTaskService
                 );
             }
         }
+
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        if ($sourceTruth !== [] && \is_array($planJson['pages'] ?? null) && $planJson['pages'] !== []) {
+            $coverageLint = (new SourceTruthCoverageLinter())->lintPlanJson($sourceTruth, $planJson);
+            foreach (\is_array($coverageLint['findings'] ?? null) ? $coverageLint['findings'] : [] as $finding) {
+                $contentQualityFindings[] = $finding;
+            }
+        }
+
+        $visualQa = (new VisualContractQaLinter())->analyze($scope, $payload);
+        foreach ((new ContractQaReportBuilder())->buildContentQualityFindings([
+            'contract_type' => 'page_contract',
+            'visual_contract_unused' => $visualQa['visual_contract_unused'] ?? [],
+            'forbidden_visuals_hit' => $visualQa['forbidden_visuals_hit'] ?? [],
+        ]) as $finding) {
+            $contentQualityFindings[] = $finding;
+        }
+
+        $assetHtml = $this->aggregateRenderPayloadHtmlForAssetQa($payload);
+        if ($assetHtml !== '') {
+            $assetManifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+            $assetCheck = (new VisualAssetUsageValidator())->validate($assetManifest, $assetHtml);
+            foreach (\is_array($assetCheck['violations'] ?? null) ? $assetCheck['violations'] : [] as $violation) {
+                $contentQualityFindings[] = [
+                    'severity' => 'error',
+                    'category' => 'content_quality',
+                    'contract_type' => 'asset_manifest',
+                    'message' => (string)$violation,
+                    'path' => 'content_quality.asset_max_usage_violation',
+                ];
+            }
+        }
+
         $qaReportContract = (new ContractQaReportBuilder())->build(
             [ContractType::TYPE_RENDER_DATA => $contract],
             [
@@ -2231,6 +2268,33 @@ class AiSiteBuildTaskService
         ]);
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $payload buildRenderDataContractPayload
+     */
+    private function aggregateRenderPayloadHtmlForAssetQa(array $payload): string
+    {
+        $parts = [];
+        $shared = \is_array($payload['shared_components'] ?? null) ? $payload['shared_components'] : [];
+        foreach ($shared as $comp) {
+            if (\is_array($comp)) {
+                $parts[] = (string)($comp['html'] ?? '');
+            }
+        }
+        foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $layout) {
+            if (!\is_array($layout)) {
+                continue;
+            }
+            foreach (\is_array($layout['content'] ?? null) ? $layout['content'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $parts[] = (string)($block['html'] ?? $block['html_content'] ?? '');
+            }
+        }
+
+        return \implode("\n", \array_filter($parts, static fn(string $s): bool => $s !== ''));
     }
 
     /**

@@ -450,10 +450,28 @@ final class PreviewNavigationResolver
             return $baseHost . $href;
         }
 
-        $basePath = (string)\parse_url((string) (\w_env('request.uri', '/') ?? '/'), \PHP_URL_PATH);
-        $basePath = \preg_replace('#/[^/]*$#', '/', $basePath ?: '/');
-        $basePath = $basePath ?: '/';
+        $rawPath = (string)\parse_url((string) (\w_env('request.uri', '/') ?? '/'), \PHP_URL_PATH);
+        $path = \str_replace('\\', '/', $rawPath);
+        if ($path === '') {
+            $path = '/';
+        } elseif ($path[0] !== '/') {
+            $path = '/' . $path;
+        }
+        $path = \rtrim($path, '/');
+        if ($path === '') {
+            $path = '/';
+        }
 
-        return $baseHost . '/' . \ltrim($basePath . $href, '/');
+        $parent = \str_replace('\\', '/', \dirname($path));
+        if ($parent === '.' || $parent === '') {
+            $parent = '/';
+        }
+
+        $rel = \ltrim(\str_replace('\\', '/', $href), '/');
+        if ($parent === '/') {
+            return \rtrim($baseHost, '/') . '/' . $rel;
+        }
+
+        return \rtrim($baseHost, '/') . $parent . '/' . $rel;
     }
 }

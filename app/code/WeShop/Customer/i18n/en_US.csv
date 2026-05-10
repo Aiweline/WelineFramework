@@ -1,4 +1,8 @@
-﻿"Customer Management","Customer Management"
+﻿"WeShop login bridge","WeShop login bridge"
+"Invalid request method.","Invalid request method."
+"Configuration saved.","Configuration saved."
+"Save failed: %{1}","Save failed: %{1}"
+"Customer Management","Customer Management"
 "Customer not found or has been deleted.","Customer not found or has been deleted."
 "Customer not found.","Customer not found."
 Error,Error
@@ -87,6 +91,8 @@ Success,Success
 "Reset Password","Reset Password"
 "Customer profile is not linked to an auth user.","Customer profile is not linked to an auth user."
 "Unable to locate the auth user for this customer profile.","Unable to locate the auth user for this customer profile."
+金额：,金额：
+继续支付,继续支付
 我的账户,我的账户
 "您好, %1","您好, %1"
 用户,用户
@@ -95,22 +101,24 @@ Success,Success
 退出登录,退出登录
 待支付订单,待支付订单
 查看全部订单,查看全部订单
-金额：,金额：
-继续支付,继续支付
 账户,账户
 账户及心愿单,账户及心愿单
 "您好, 登录","您好, 登录"
-"店铺 > 客户管理","Store > Customer Management"
-系统配置,"System Configuration"
+登录桥接,登录桥接
 店铺,Store
 客户,Customer
+"Weline 登录页 · WeShop 密码桥","Weline 登录页 · WeShop 密码桥"
+"开启后：当前台 Weline 账号库中找不到用户且登录名为邮箱时，将尝试 WeShop 密码登录桥（需 WeShop 客户模块可用）。关闭则仅使用本地 Customer 账号。","开启后：当前台 Weline 账号库中找不到用户且登录名为邮箱时，将尝试 WeShop 密码登录桥（需 WeShop 客户模块可用）。关闭则仅使用本地 Customer 账号。"
+"启用 WeShop 密码登录桥","启用 WeShop 密码登录桥"
+保存,Save
+"店铺 > 客户管理","Store > Customer Management"
+系统配置,"System Configuration"
 总客户数,总客户数
 活跃客户,活跃客户
 非活跃客户,非活跃客户
 今日新增,今日新增
 客户列表,客户列表
 管理店铺客户信息,"Manage store customer information"
-保存,Save
 新增客户,"Add Customer"
 关闭,Close
 ID,ID

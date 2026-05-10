@@ -40,9 +40,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                 <h2 class="account-card__title"><lang>个人资料</lang></h2>
             </header>
             <div class="account-card__body">
-                <div class="account-card__alert account-card__alert--success d-none" id="profileSuccessMsg"></div>
-                <div class="account-card__alert account-card__alert--danger d-none" id="profileErrorMsg"></div>
-
+                <div class="account-card__alert account-card__alert--success" id="profileSuccessMsg"></div>
+                <div class="account-card__alert account-card__alert--danger" id="profileErrorMsg"></div>
                 <form id="profileForm" class="account-form">
                     <div class="account-form__row">
                         <div class="account-form__group">
@@ -98,8 +97,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                 <h2 class="account-card__title"><lang>修改密码</lang></h2>
             </header>
             <div class="account-card__body">
-                <div class="account-card__alert account-card__alert--success d-none" id="securitySuccessMsg"></div>
-                <div class="account-card__alert account-card__alert--danger d-none" id="securityErrorMsg"></div>
+                <div class="account-card__alert account-card__alert--success" id="securitySuccessMsg"></div>
+                <div class="account-card__alert account-card__alert--danger" id="securityErrorMsg"></div>
 
                 <form id="securityForm" class="account-form">
                     <div class="account-form__group">
@@ -131,6 +130,24 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 我的订单（WeShop_Order 等模块通过 Hook 注入列表） -->
+    <div class="account-index__section d-none" id="orders-section">
+        <div class="account-card">
+            <div class="account-card__body">
+                <w:hook name="Weline_Customer::frontend::account::index::orders"/>
+            </div>
+        </div>
+    </div>
+
+    <!-- 订阅 / 周期性方案（WeShop_Subscription 等模块通过 Hook 注入） -->
+    <div class="account-index__section d-none" id="subscriptions-section">
+        <div class="account-card">
+            <div class="account-card__body">
+                <w:hook name="Weline_Customer::frontend::account::index::subscriptions"/>
             </div>
         </div>
     </div>
@@ -319,6 +336,11 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     padding: var(--ai-gutter);
 }
 
+.account-index .d-none,
+.account-card__alert:empty {
+    display: none !important;
+}
+
 .account-card__alert {
     padding: 1rem;
     border-radius: var(--border-radius-lg, 0.75rem);
@@ -495,29 +517,61 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
 <script>
 (function() {
-    var navLinks = document.querySelectorAll('.account-sidebar__nav-link');
-    var sections = document.querySelectorAll('.account-index__section');
+    // 仅绑定带 data-section 的侧栏项（个人资料/安全设置等），避免把「退出登录」等普通链接
+    // 也套上 preventDefault + 错误的 href 解析；目标 ID 用 data-section，避免依赖 #fragment。
+    // 每次点击重新查询 .account-index__section，避免初始化时 NodeList 为空导致「只展开一块、不隐藏其它块」。
+    var navLinks = document.querySelectorAll('.account-sidebar__nav-link[data-section]');
+
+    function showAccountSection(targetId) {
+        if (!targetId) {
+            return;
+        }
+        var sections = document.querySelectorAll('.account-index__section');
+        var targetSection = document.getElementById(targetId + '-section');
+        sections.forEach(function(section) {
+            section.classList.add('d-none');
+        });
+        if (targetSection) {
+            targetSection.classList.remove('d-none');
+        }
+    }
 
     navLinks.forEach(function(link) {
         link.addEventListener('click', function(e) {
             e.preventDefault();
+            var targetId = link.getAttribute('data-section');
+            if (!targetId) {
+                return;
+            }
 
             navLinks.forEach(function(nav) {
                 nav.classList.remove('account-sidebar__nav-link--active');
             });
-            this.classList.add('account-sidebar__nav-link--active');
+            link.classList.add('account-sidebar__nav-link--active');
 
-            sections.forEach(function(section) {
-                section.classList.add('d-none');
-            });
-
-            var targetId = this.getAttribute('href').substring(1);
-            var targetSection = document.getElementById(targetId + '-section');
-            if (targetSection) {
-                targetSection.classList.remove('d-none');
-            }
+            showAccountSection(targetId);
+            try {
+                history.replaceState(null, '', '#' + targetId);
+            } catch (err) {}
         });
     });
+
+    (function syncInitialHash() {
+        var raw = window.location.hash ? window.location.hash.replace(/^#/, '') : '';
+        if (!raw) {
+            return;
+        }
+        var hasNav = Array.prototype.some.call(navLinks, function(a) {
+            return a.getAttribute('data-section') === raw;
+        });
+        if (!hasNav) {
+            return;
+        }
+        navLinks.forEach(function(nav) {
+            nav.classList.toggle('account-sidebar__nav-link--active', nav.getAttribute('data-section') === raw);
+        });
+        showAccountSection(raw);
+    })();
 
     var previewBtn = document.getElementById('previewAvatarBtn');
     if (previewBtn) {
@@ -546,8 +600,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
             var successMsg = document.getElementById('profileSuccessMsg');
             var errorMsg = document.getElementById('profileErrorMsg');
-            successMsg.classList.add('d-none');
-            errorMsg.classList.add('d-none');
+            successMsg.textContent = '';
+            errorMsg.textContent = '';
 
             var formData = new FormData(this);
             fetch('/customer/account/update', {
@@ -557,16 +611,16 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
-                    successMsg.textContent = data.message;
-                    successMsg.classList.remove('d-none');
+                    errorMsg.textContent = '';
+                    successMsg.textContent = data.message || '';
                 } else {
+                    successMsg.textContent = '';
                     errorMsg.textContent = data.message || '<?= htmlspecialchars((string) __('更新失败，请稍后重试'), ENT_QUOTES) ?>';
-                    errorMsg.classList.remove('d-none');
                 }
             })
             .catch(function() {
+                successMsg.textContent = '';
                 errorMsg.textContent = '<?= htmlspecialchars((string) __('更新失败，请稍后重试'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
             })
             .finally(function() {
                 btn.disabled = false;
@@ -580,28 +634,27 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         securityForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
+            var successMsg = document.getElementById('securitySuccessMsg');
+            var errorMsg = document.getElementById('securityErrorMsg');
+            successMsg.textContent = '';
+            errorMsg.textContent = '';
+
             var oldPassword = document.getElementById('old_password').value;
             var newPassword = document.getElementById('new_password').value;
             var confirmPassword = document.getElementById('confirm_password').value;
 
-            var errorMsg = document.getElementById('securityErrorMsg');
-            errorMsg.classList.add('d-none');
-
             if (!oldPassword || !newPassword || !confirmPassword) {
                 errorMsg.textContent = '<?= htmlspecialchars((string) __('请填写所有字段'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
                 return;
             }
 
             if (newPassword.length < 6) {
                 errorMsg.textContent = '<?= htmlspecialchars((string) __('新密码长度不能少于6位'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
                 return;
             }
 
             if (newPassword !== confirmPassword) {
                 errorMsg.textContent = '<?= htmlspecialchars((string) __('两次输入的新密码不一致'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
                 return;
             }
 
@@ -609,9 +662,6 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             var originalText = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<i class="ri-loader-4-line"></i> <?= htmlspecialchars((string) __('修改中...'), ENT_QUOTES) ?>';
-
-            var successMsg = document.getElementById('securitySuccessMsg');
-            successMsg.classList.add('d-none');
 
             var formData = new FormData(this);
             fetch('/customer/account/update', {
@@ -621,19 +671,19 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
-                    successMsg.textContent = data.message;
-                    successMsg.classList.remove('d-none');
+                    errorMsg.textContent = '';
+                    successMsg.textContent = data.message || '';
                     document.getElementById('old_password').value = '';
                     document.getElementById('new_password').value = '';
                     document.getElementById('confirm_password').value = '';
                 } else {
+                    successMsg.textContent = '';
                     errorMsg.textContent = data.message || '<?= htmlspecialchars((string) __('修改失败，请稍后重试'), ENT_QUOTES) ?>';
-                    errorMsg.classList.remove('d-none');
                 }
             })
             .catch(function() {
+                successMsg.textContent = '';
                 errorMsg.textContent = '<?= htmlspecialchars((string) __('修改失败，请稍后重试'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
             })
             .finally(function() {
                 btn.disabled = false;

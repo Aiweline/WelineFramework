@@ -209,7 +209,7 @@ final class ThemePageTypeResolver
             return ThemeLayout::PAGE_TYPE_CART;
         }
         if ($contains('account') && ($contains('login') || $contains('register') || $contains('forgotpassword'))) {
-            return 'account_auth';
+            return 'account.auth';
         }
         if ($contains('account')) {
             return ThemeLayout::PAGE_TYPE_ACCOUNT;
@@ -272,7 +272,7 @@ final class ThemePageTypeResolver
             return ThemeLayout::PAGE_TYPE_CART;
         }
         if (str_contains($path, '/account/login') || str_contains($path, '/account/register') || str_contains($path, '/account/forgot')) {
-            return 'account_auth';
+            return 'account.auth';
         }
         if (str_contains($path, '/account')) {
             return ThemeLayout::PAGE_TYPE_ACCOUNT;

@@ -107,6 +107,43 @@ class ControllerFetchFileAfterTest extends TestCase
         $this->assertSame($template->fetchCalls[0][1]['contentRenderKey'], $template->getData('contentRenderKey'));
         $this->assertSame('<html>wrapped backend</html>', $eventData->getData('content'));
     }
+
+    /**
+     * 布局 fetch 抛错时应保留事件原有 content（ENV_TEST 下不重抛）。
+     */
+    public function testPreservesEventContentWhenLayoutFetchThrows(): void
+    {
+        $template = new ControllerFetchFileAfterTestTemplateStub();
+        $template->setFetchResponse('theme/frontend/layouts/default/default.phtml', '<html>wrapped</html>');
+        $template->throwWhenFetching = 'theme/frontend/layouts/default/default.phtml';
+
+        $observer = new class($template) extends ControllerFetchFileAfter {
+            public function __construct(private readonly Template $template)
+            {
+            }
+
+            protected function getTemplateInstance(): Template
+            {
+                return $this->template;
+            }
+        };
+
+        $eventData = new DataObject([
+            'layoutType' => 'default',
+            'contentTemplate' => 'templates/frontend/home/index.phtml',
+            'layoutTemplate' => 'theme/frontend/layouts/default/default.phtml',
+            'fileName' => 'templates/frontend/home/index.phtml',
+            'layoutOption' => 'default',
+            'content' => '<section>prefetched</section>',
+        ]);
+        $event = new Event(['data' => $eventData]);
+        $event->setName('test');
+
+        $observer->execute($event);
+
+        $this->assertSame('<section>prefetched</section>', $eventData->getData('content'));
+        $this->assertGreaterThanOrEqual(1, count($template->fetchCalls));
+    }
 }
 
 class ControllerFetchFileAfterTestTemplateStub extends Template
@@ -117,6 +154,9 @@ class ControllerFetchFileAfterTestTemplateStub extends Template
     /** @var array<string,string> */
     private array $fetchResponses = [];
 
+    /** 匹配该路径的 fetch 时抛出（用于模拟布局渲染失败） */
+    public ?string $throwWhenFetching = null;
+
     public function setFetchResponse(string $fileName, string $response): void
     {
         $this->fetchResponses[$fileName] = $response;
@@ -125,6 +165,10 @@ class ControllerFetchFileAfterTestTemplateStub extends Template
     public function fetch(string $fileName, array $data = [])
     {
         $this->fetchCalls[] = [$fileName, $data];
+
+        if ($this->throwWhenFetching !== null && $fileName === $this->throwWhenFetching) {
+            throw new \RuntimeException('simulated layout fetch failure');
+        }
 
         return $this->fetchResponses[$fileName] ?? '';
     }
