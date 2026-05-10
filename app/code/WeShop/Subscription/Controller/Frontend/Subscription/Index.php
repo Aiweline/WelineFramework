@@ -10,6 +10,8 @@ use WeShop\Subscription\Service\SubscriptionListPageDataService;
 
 class Index extends BaseController
 {
+    private const CONTENT_TEMPLATE = 'WeShop_Subscription::templates/Frontend/Subscription/SubscriptionList/index.phtml';
+
     protected ?string $layoutType = 'subscription';
 
     public function __construct(
@@ -34,6 +36,6 @@ class Index extends BaseController
         }
 
         $this->assign('title', __('My Subscriptions'));
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }
