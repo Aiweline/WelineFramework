@@ -14,11 +14,21 @@
 @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
 @param.layout.leftsider {default=1,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
 @param.layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
+@param.showHeader {default=true,name="是否显示header",description="是否显示顶栏（Theme Partials，与首页一致）"}
+@param.showFooter {default=true,name="是否显示footer",description="是否显示底栏（Theme Partials，与首页一致）"}
+@param.showSearch {default=true,name="顶栏搜索",description="顶栏是否展示搜索（Partials）"}
+@param.showUserMenu {default=true,name="用户菜单",description="顶栏是否展示用户菜单（Partials）"}
 
 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
 -->
+<?php
+$meta = $this->getData('meta') ?? [];
+$meta['showHeader'] = true;
+$meta['showFooter'] = true;
+$this->assign('meta', $meta);
+?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
@@ -118,10 +128,14 @@
 <body>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::account::body-start</w:hook>
-    
-    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
-    @template(Weline_Frontend::templates/public/header.phtml)
-    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::account::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::account::header-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    </if>
 
     <!-- 个人中心布局的面包屑导航区域 -->
     <div class="account-dashboard__breadcrumb">
@@ -152,10 +166,14 @@
         </div>
     </div>
     
-    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-    @template(Weline_Frontend::templates/public/footer.phtml)
-    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
-    
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::account::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+        <w:hook>Weline_Theme::frontend::layouts::account::footer-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    </if>
+
     <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>

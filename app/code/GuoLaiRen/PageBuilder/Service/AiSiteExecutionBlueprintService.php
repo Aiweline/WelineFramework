@@ -11,6 +11,7 @@ use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractMetaBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceTruthContractBuilder;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -23,6 +24,7 @@ final class AiSiteExecutionBlueprintService
     private const STAGE_ONE_JSON_RETRY_MAX_TOKENS = 8192;
     /** @var array<string, array<string, mixed>|null> */
     private array $appendInstructionDecisionCache = [];
+    private ?SourceTruthContractBuilder $sourceTruthContractBuilder = null;
 
     public function __construct(
         private readonly AiSitePageBlueprintService $pageBlueprintService,
@@ -41,6 +43,15 @@ final class AiSiteExecutionBlueprintService
     private function getSkillRegistry(): AiSiteSkillRegistry
     {
         return $this->skillRegistry ?? ObjectManager::getInstance(AiSiteSkillRegistry::class);
+    }
+
+    private function getSourceTruthContractBuilder(): SourceTruthContractBuilder
+    {
+        if ($this->sourceTruthContractBuilder === null) {
+            $this->sourceTruthContractBuilder = ObjectManager::getInstance(SourceTruthContractBuilder::class);
+        }
+
+        return $this->sourceTruthContractBuilder;
     }
 
     /**
@@ -378,6 +389,22 @@ final class AiSiteExecutionBlueprintService
                 ['image_total' => \count($referenceImages)]
             );
         }
+
+        $sourceTruthContract = $this->getSourceTruthContractBuilder()->build(
+            $scope,
+            $websiteProfile,
+            \is_array($scope['reference_image_insights'] ?? null) ? $scope['reference_image_insights'] : [],
+            $instruction,
+            $pageTypes,
+            $contentLocale
+        );
+        $scope['source_truth_contract'] = $sourceTruthContract;
+        $scope['source_truth_contract_hash'] = \sha1((string)\json_encode($sourceTruthContract, \JSON_UNESCAPED_UNICODE));
+        $scope['asset_manifest_hash'] = \sha1((string)\json_encode(
+            \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [],
+            \JSON_UNESCAPED_UNICODE
+        ));
+
         $oneLineRequirement = $this->resolveStageOneRequirementSeed(
             $scope,
             $websiteProfile,
@@ -576,6 +603,10 @@ final class AiSiteExecutionBlueprintService
             'content_locale' => $contentLocale,
             'instruction' => $instruction,
             'target_scope' => $targetScope,
+            'reference_image_insights_signature' => (string)($scope['reference_image_insights_signature'] ?? ''),
+            'source_truth_contract_hash' => (string)($scope['source_truth_contract_hash'] ?? ''),
+            'asset_manifest_hash' => (string)($scope['asset_manifest_hash'] ?? ''),
+            'contract_schema_version' => 'source_truth_v1',
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
 
@@ -612,6 +643,31 @@ final class AiSiteExecutionBlueprintService
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{min:int, max:int, required:list<string>}
+     */
+    private function resolveStageOneBlockBudget(string $pageType, array $scope): array
+    {
+        $required = [];
+        if ($pageType === 'home_page') {
+            $required = [
+                'hero_download',
+                'game_showcase_or_features',
+                'trust_security',
+                'final_download_cta',
+            ];
+        } elseif (\in_array($pageType, ['about_page', 'contact_page'], true)) {
+            $required = [];
+        }
+
+        return [
+            'min' => $pageType === 'home_page' ? 5 : 3,
+            'max' => $pageType === 'home_page' ? 7 : 5,
+            'required' => $required,
+        ];
     }
 
     /**
@@ -1777,6 +1833,16 @@ final class AiSiteExecutionBlueprintService
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Site summary: ' . ($siteSummary !== '' ? $siteSummary : '-'),
             'Reference image insights (if any): ' . $this->buildReferenceImageInsightsPromptText($scope),
+            'Visual contract rules (non-negotiable when present): '
+                . \json_encode(
+                    \is_array($scope['reference_image_insights']['visual_contract'] ?? null)
+                        ? $scope['reference_image_insights']['visual_contract']
+                        : [],
+                    \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+                ),
+            'You MUST convert visual_contract into requirement_expansion signals that theme_design and later page plans will implement.',
+            'Every page_strategy row must cite which visual_contract elements matter for that page_type.',
+            'Do not output visual patterns listed in forbidden_visuals.',
             'Schema:',
             '{"requirement_expansion":{"original_brief":"string","expanded_brief":"string","planning_summary":"string","site_goal":"string","target_users":["string"],"business_context":"string","content_direction":"string","conversion_strategy":"string","page_strategy":[{"page_type":"string","intent":"string","content_focus":"string","conversion_role":"string"}],"technical_direction":["string"]}}',
             'Hard rules: expanded_brief must be a larger concrete version of the user requirement; page_strategy must cover every selected page type; all values must be customer-visible planning content, not prompt instructions.',
@@ -1816,6 +1882,17 @@ final class AiSiteExecutionBlueprintService
             'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
             'Brief: ' . ($brief !== '' ? $brief : '-'),
             'Reference image insights (must be honored before theme decisions): ' . $this->buildReferenceImageInsightsPromptText($scope),
+            'Visual contract rules (non-negotiable when present): '
+                . \json_encode(
+                    \is_array($scope['reference_image_insights']['visual_contract'] ?? null)
+                        ? $scope['reference_image_insights']['visual_contract']
+                        : [],
+                    \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+                ),
+            'You MUST convert visual_contract into theme_design.art_direction and the page design plans.',
+            'Every page_design_plan must cite which visual_contract items it implements.',
+            'Every block must map at least one visual_contract item or explicitly state not_applicable.',
+            'Do not output visual patterns listed in forbidden_visuals.',
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Schema:',
@@ -1849,13 +1926,29 @@ final class AiSiteExecutionBlueprintService
         $sharedComponents = \json_encode($planJson['shared_components'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $pageTypeOverview = \json_encode($this->resolveStageOnePageTypeOverview($planJson, $pageType), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $baselinePage = \json_encode($planJson['pages'][$pageType] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
-        $pageArchitectureGuide = $this->buildStageOnePageArchitectureGuide($pageType);
+        $blockBudget = $this->resolveStageOneBlockBudget($pageType, $scope);
+        $sourceTruthContract = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        $factsForPrompt = [];
+        foreach (\is_array($sourceTruthContract['must_include_facts'] ?? null) ? $sourceTruthContract['must_include_facts'] : [] as $f) {
+            if (\is_array($f)) {
+                $factsForPrompt[] = (string)($f['text'] ?? '');
+            }
+        }
+        $sourceTruthPromptLine = $sourceTruthContract !== []
+            ? 'SourceTruthContract is non-negotiable. The following facts MUST appear in visible copy: '
+                . \json_encode($factsForPrompt, \JSON_UNESCAPED_UNICODE)
+                . ' Visual must-honor: '
+                . \json_encode($sourceTruthContract['visual_must_honor'] ?? [], \JSON_UNESCAPED_UNICODE)
+                . ' Conversion goals: '
+                . \json_encode($sourceTruthContract['conversion_goals'] ?? [], \JSON_UNESCAPED_UNICODE)
+            : '';
+
         return \implode("\n", [
             'You are PageBuilder Stage-1 PAGE planner.',
             'Step 3 only: generate exactly this page type by carrying the confirmed requirement expansion, theme, Header, and Footer. Other page types are generated in parallel calls.',
             'Decision order: first page_design_plan, then blocks, then field_plan + execution_script; never draft block copy before page_design_plan is complete.',
             'Return STRICT JSON only for exactly one page. Start with `{` and end with `}`. Do not return other pages, markdown, explanation, or reasoning text.',
-            'JSON size rule: produce 2-3 blocks only; even legal/support pages must stay compact and split dense policy details into concise block fields.',
+            'Block budget: min=' . $blockBudget['min'] . ', max=' . $blockBudget['max'] . ', required=' . \json_encode($blockBudget['required'], \JSON_UNESCAPED_UNICODE) . '; even legal/support pages must stay compact and split dense policy details into concise block fields.',
             'Output budget: page_goal/theme_alignment_summary <= 180 chars each; each block.content/core_copy <= 220 chars; each field_plan.sample <= 120 chars; avoid long policy paragraphs that cause truncated JSON.',
             'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
@@ -1877,7 +1970,7 @@ final class AiSiteExecutionBlueprintService
             '- If theme_design.reference_style_context exists, page_design_plan must carry those reference-image cues into this page as adapted layout, palette, component, typography, and forbidden-style decisions.',
             '- page_design_plan.color_layering must name which theme colors are used for page background, alternating section surfaces, cards/panels, text, and CTA/accent states.',
             '- Prevent monotone pages: never make the entire page one flat background color unless the page_design_plan explicitly adds layered surfaces, cards, dividers, gradients, illustrations, or contrast bands.',
-            '- page_design_plan.section_flow must describe the visual rhythm across 2-3 blocks: opening impact, middle information/proof layer, and closing action or reassurance layer.',
+            '- page_design_plan.section_flow must describe the visual rhythm across the block sequence: opening impact, middle information/proof layer, and closing action or reassurance layer.',
             '- page_design_plan.interaction_notes must describe hover/focus/mobile behavior that matches the page role, not just generic CTA hover.',
             '- Visual polish is mandatory: every page must include at least one specific motif/detail (inline SVG idea, CSS texture, framed media treatment, asymmetric composition, editorial type contrast, or tactile button state) that fits the brief.',
             '- Customer-intent lock: page_design_plan and every block must preserve the user brief as an experience, not just as copy. If the user asks for gaming, APK, booking, consulting, education, or local service, the layout, affordances, effects, and CTAs must visibly fit that scenario.',
@@ -1895,8 +1988,11 @@ final class AiSiteExecutionBlueprintService
             '- These design_tags are source-of-truth for stage-2 and stage-3; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
             'Schema:',
             '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
-            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow; return a complete JSON object within the token budget.',
+            'Block budget: min=' . $blockBudget['min'] . ', max=' . $blockBudget['max'] . ', required=' . \json_encode($blockBudget['required'], \JSON_UNESCAPED_UNICODE) . '.',
+            'You MUST include every required_block_key unless SourceTruthContract marks it irrelevant.',
+            'Hard rules: output blocks according to budget; each block exactly 3 field_plan rows; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow; return a complete JSON object within the token budget.',
             'Self-check before return: verify every block has explicit page_flow_role rhythm (opening/proof/details/cta/support) and does not duplicate another page type block purpose.',
+            $sourceTruthPromptLine,
         ]);
     }
 
@@ -2782,7 +2878,7 @@ final class AiSiteExecutionBlueprintService
             '}',
             'Hard rules:',
             '- theme_alignment_summary schema compatibility phrase: "theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff"',
-            '- Output budget is mandatory: each selected page MUST contain 2-3 blocks only; each block MUST contain exactly 3 field_plan rows; execution_script.feature_points MUST contain at most 3 short items; content/core_copy MUST be concise final copy, not long article text.',
+            '- Output budget is mandatory: home_page MUST contain 5-7 blocks, other pages 3-5 blocks; each block MUST contain exactly 3 field_plan rows; execution_script.feature_points MUST contain at most 3 short items; content/core_copy MUST be concise final copy, not long article text.',
             '- Prefer dense implementation-ready summaries over exhaustive copy. Stage-2 will expand sections later, so Stage-1 must stay compact enough to return complete valid JSON.',
             '- All text fields must use locale: ' . $outputLanguage,
             '- Do not return markdown.',
@@ -11170,6 +11266,11 @@ final class AiSiteExecutionBlueprintService
         }
 
         return '';
+    }
+
+    private function pickString(mixed ...$values): string
+    {
+        return $this->firstNonEmptyString($values);
     }
 
     private function clipText(string $text, int $maxLength): string

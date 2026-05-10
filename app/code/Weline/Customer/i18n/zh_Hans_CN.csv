@@ -1,11 +1,11 @@
 ﻿"The login challenge token is missing.","The login challenge token is missing."
-"The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
-"Two-Factor Verification","Two-Factor Verification"
-"Please enter the verification code.","Please enter the verification code."
-"Two-factor verification succeeded.","Two-factor verification succeeded."
+"The login challenge is invalid or has expired.",登录验证已失效或已过期。
+"Two-Factor Verification",两步验证
+"Please enter the verification code.",请输入验证码。
+"Two-factor verification succeeded.",两步验证成功。
 "The reset link is invalid or has expired.",重设链接无效或已过期。
-"Reset Password","Reset Password"
-"Forgot Password","Forgot Password"
+"Reset Password",重设密码
+"Forgot Password",忘记密码
 "Email is required.",邮箱不能为空。
 "Please enter a valid email address.",请输入有效的邮箱地址。
 "The email is not registered.",该邮箱未注册。
@@ -22,23 +22,20 @@
 两次输入的新密码不一致,两次输入的新密码不一致
 更新成功,更新成功
 更新失败：%{1},更新失败：%{1}
-"Sign In","Sign In"
-"You are already signed in.","You are already signed in."
-"Username/email and password are required.","Username/email and password are required."
-"The user does not exist.","The user does not exist."
-"Too many login attempts. Please try again later.","Too many login attempts. Please try again later."
-"The password is incorrect.","The password is incorrect."
-"Login succeeded.","Login succeeded."
-"Login failed: %{1}","Login failed: %{1}"
-"Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
-"WeShop login bridge is unavailable: %{1}","WeShop login bridge is unavailable: %{1}"
+"Sign In",登录
+你已经登录了，请先退出登录.,你已经登录了，请先退出登录.
+"Username/email and password are required.",请输入用户名/邮箱和密码。
+用户不存在.,用户不存在.
+登录尝试次数过多，请稍后再试.,登录尝试次数过多，请稍后再试.
+密码错误.,密码错误.
+登录成功.,登录成功.
+"登录失败: %{1}","登录失败: %{1}"
 退出成功,退出成功
-"Create Account","Create Account"
-"First name and last name are required.","First name and last name are required."
-"Please accept the terms and privacy policy.","Please accept the terms and privacy policy."
-"Registration succeeded. Welcome to WeShop.","Registration succeeded. Welcome to WeShop."
-"Show password",显示密码
-"Hide password",隐藏密码
+"Create Account",创建账户
+你已经登录了，请先退出登录。,你已经登录了，请先退出登录。
+"First name and last name are required.",请输入名字和姓氏。
+"Please accept the terms and privacy policy.",请先同意服务条款和隐私政策。
+"Registration succeeded. Welcome.",注册成功，欢迎。
 无法统计令牌数量：%{1},无法统计令牌数量：%{1}
 加载前端客户失败：%{1},加载前端客户失败：%{1}
 无效的用户ID,无效的用户ID
@@ -53,6 +50,17 @@
 删除成功,删除成功
 令牌已重置,令牌已重置
 密码已重置,密码已重置
+前台顾客登录扩展区,前台顾客登录扩展区
+在顾客登录页注入第三方登录入口等扩展内容。,在顾客登录页注入第三方登录入口等扩展内容。
+账户首页订单分区,账户首页订单分区
+在顾客账户首页「我的订单」分区注入订单列表等内容。,在顾客账户首页「我的订单」分区注入订单列表等内容。
+账户首页订阅分区,账户首页订阅分区
+在顾客账户首页「订阅」分区注入周期性订阅入口等内容。,在顾客账户首页「订阅」分区注入周期性订阅入口等内容。
+密码必须至少8个字符，并且包含字母和数字.,密码必须至少8个字符，并且包含字母和数字.
+该邮箱已存在，请使用其他邮箱注册.,该邮箱已存在，请使用其他邮箱注册.
+"Two-factor verification is not available.",当前环境未启用两步验证。
+"Reset your password",重设密码
+"Click the link below to reset your password.",请点击下方链接重设密码。
 账户,账户
 我的订单,我的订单
 账户设置,账户设置
@@ -135,8 +143,9 @@ Session标识,Session标识
 忘记密码,忘记密码
 输入您的新密码以完成账户访问重置,输入您的新密码以完成账户访问重置
 输入您的账户邮箱，我们将发送重置链接,输入您的账户邮箱，我们将发送重置链接
+"Show password",显示密码
+"Hide password",隐藏密码
 欢迎回来！您可以在这里管理您的账户信息,欢迎回来！您可以在这里管理您的账户信息
-未知,未知
 用户名不可修改,用户名不可修改
 用户ID,用户ID
 头像URL,头像URL
@@ -147,13 +156,16 @@ Session标识,Session标识
 保存更改,保存更改
 原密码,原密码
 请输入当前密码以验证身份,请输入当前密码以验证身份
-至少6位字符,至少6位字符
 建议使用字母、数字和特殊字符组合,建议使用字母、数字和特殊字符组合
 确认新密码,确认新密码
-再次输入新密码,再次输入新密码
 再次输入新密码以确认,再次输入新密码以确认
 登录信息,登录信息
 最后登录IP,最后登录IP
+未知,未知
+会话ID,会话ID
+'请输入原密码','请输入原密码'
+'至少6位字符','至少6位字符'
+'再次输入新密码','再次输入新密码'
 保存中...,保存中...
 更新失败，请稍后重试,更新失败，请稍后重试
 请填写所有字段,请填写所有字段
@@ -172,12 +184,13 @@ Session标识,Session标识
 1个月,1个月
 忘记密码？,忘记密码？
 登录中...,登录中...
-或,或
 还没有账户？,还没有账户？
 立即注册,立即注册
 登录成功！,登录成功！
 登录失败，请检查用户名和密码,登录失败，请检查用户名和密码
 登录请求失败，请稍后重试,登录请求失败，请稍后重试
+'显示密码','显示密码'
+'隐藏密码','隐藏密码'
 用户登录,用户登录
 创建账户,创建账户
 使用邮箱注册您的账户,使用邮箱注册您的账户
@@ -192,3 +205,4 @@ Session标识,Session标识
 已有账户？,已有账户？
 立即登录,立即登录
 安全设置,安全设置
+订阅,订阅

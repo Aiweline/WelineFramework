@@ -11,7 +11,7 @@ use Weline\Framework\Manager\MessageManager;
 
 class Register extends BaseController
 {
-    protected ?string $layoutType = 'account_auth';
+    protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         private readonly CustomerSession $customerSession,

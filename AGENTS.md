@@ -19,6 +19,7 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 - WLS Testing: **ALWAYS** start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`) | Default port 9501 is PRODUCTION (DO NOT TOUCH) | **MUST stop test instance after testing**
 - WLS Lifecycle: code→`reload` | master→`restart -r` | NO `sleep/die/exit`
 - I18n: `__('text')` or `<lang>text</lang>` | Placeholders: `%{1}` or `%{name}`
+- Controller flash: **`MessageManager::warning|error|success(__('…'))`** only — not `$this->getMessageManager()->add*` (see `dev/ai/global-constraints.md`)
 - `.phtml`: prefer template taglibs (`<notempty>`, `<var>`, `<lang>`, …) over bulk `<?php`/`<?=` where equivalent — see `dev/ai/global-constraints.md`
 
 ## Critical Constraints

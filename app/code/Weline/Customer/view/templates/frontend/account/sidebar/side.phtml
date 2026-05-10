@@ -7,7 +7,7 @@ $email = $user->getEmail();
 $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 ?>
 <!-- 侧边栏导航 -->
-<div class="account-sidebar">
+<div class="account-sidebar-wrapper">
     <header class="account-sidebar__header">
         <div class="account-sidebar__avatar">
             <?php if ($avatar): ?>
@@ -33,6 +33,14 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             <i class="ri-lock-line"></i>
             <span><lang>安全设置</lang></span>
         </a>
+        <a class="account-sidebar__nav-link" href="#orders" data-section="orders">
+            <i class="ri-shopping-bag-line"></i>
+            <span><lang>我的订单</lang></span>
+        </a>
+        <a class="account-sidebar__nav-link" href="#subscriptions" data-section="subscriptions">
+            <i class="ri-repeat-2-line"></i>
+            <span><lang>订阅</lang></span>
+        </a>
         <hook>account.sidebar</hook>
         <a class="account-sidebar__nav-link account-sidebar__nav-link--logout" href="/customer/account/logout">
             <i class="ri-logout-box-line"></i>
@@ -42,7 +50,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 </div>
 
 <style>
-.account-sidebar {
+.account-sidebar-wrapper {
     --as-border-radius: var(--border-radius-lg, 0.75rem);
     --as-transition: var(--transition-base, 0.2s ease);
 }

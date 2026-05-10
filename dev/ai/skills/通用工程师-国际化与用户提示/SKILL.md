@@ -44,6 +44,7 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 
 # Weline Rules
 
+- **PHP controller flash messages** (success/warning/error): use **`MessageManager::warning(__('…'))` / `MessageManager::error(...)` / `MessageManager::success(...)`** (`Weline\Framework\Manager\MessageManager`). Do **not** use `$this->getMessageManager()->addWarning()` (or addError/addSuccess) unless a documented framework exception applies.
 - Do not hardcode user-facing text.
 - Use i18n for user-facing text.
 - Use `@lang` forms in custom-tag attributes instead of embedded PHP.

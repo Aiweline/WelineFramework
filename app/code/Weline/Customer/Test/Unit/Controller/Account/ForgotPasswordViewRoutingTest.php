@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Customer\Test\Unit\Controller\Account;
 
 use PHPUnit\Framework\TestCase;
-use WeShop\Customer\Service\PasswordResetService;
+use Weline\Customer\Service\PasswordResetService;
 use Weline\Customer\Controller\Account\ForgotPassword;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;

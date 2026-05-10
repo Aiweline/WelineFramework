@@ -2,12 +2,7 @@
 /**@var \Weline\Framework\View\Template $this */
 // 设置页面标题
 $this->setData('title', __('用户登录'));
-?>
-<?php
 $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect_url', '') ?: \w_env_get('redirect', '')));
-$googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', [
-    'redirect_url' => $redirectUrl,
-]));
 ?>
 <style>
 /* ========== 登录表单容器 ========== */
@@ -469,9 +464,9 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
                     type="button"
                     class="auth-form__password-toggle"
                     data-password-target="password"
-                    data-label-show="<?= htmlspecialchars(__('Show password'), ENT_QUOTES) ?>"
-                    data-label-hide="<?= htmlspecialchars(__('Hide password'), ENT_QUOTES) ?>"
-                    aria-label="<?= htmlspecialchars(__('Show password'), ENT_QUOTES) ?>"
+                    data-label-show="@lang{'显示密码'}"
+                    data-label-hide="@lang{'隐藏密码'}"
+                    aria-label="@lang{'显示密码'}"
                     aria-pressed="false"
                 >
                     <span class="auth-form__password-toggle-icon" aria-hidden="true">
@@ -513,12 +508,7 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     </form>
 
     <div class="auth-form__social">
-        <?php if ($googleLoginButton !== ''): ?>
-            <p class="auth-form__social-title"><lang>或</lang></p>
-            <div class="auth-form__social-buttons">
-                <?= $googleLoginButton ?>
-            </div>
-        <?php endif; ?>
+        <w:hook name="Weline_Customer::frontend::account::login::providers"/>
     </div>
 
     <footer class="auth-form__footer">

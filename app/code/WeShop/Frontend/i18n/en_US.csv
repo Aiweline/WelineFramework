@@ -1,23 +1,39 @@
-"Header account","Header account"
-"Header categories menu","Header categories menu"
-"Header currency switcher","Header currency switcher"
-"Header language switcher","Header language switcher"
-"Header mini cart","Header mini cart"
-"Header search after","Header search after"
-"Header search before","Header search before"
-"Header search suggestions after","Header search suggestions after"
-"Header search suggestions before","Header search suggestions before"
-"Homepage content after","Homepage content after"
-"Inject account-related UI into the storefront header.","Inject account-related UI into the storefront header."
-"Inject category navigation items into the storefront header menu.","Inject category navigation items into the storefront header menu."
-"Inject content after the storefront homepage main content block.","Inject content after the storefront homepage main content block."
-"Inject markup after the storefront header search input.","Inject markup after the storefront header search input."
-"Inject markup after the storefront header search suggestions list.","Inject markup after the storefront header search suggestions list."
-"Inject markup before the storefront header search input.","Inject markup before the storefront header search input."
-"Inject markup before the storefront header search suggestions list.","Inject markup before the storefront header search suggestions list."
-"Inject the currency switcher into the storefront header.","Inject the currency switcher into the storefront header."
-"Inject the language switcher into the storefront header.","Inject the language switcher into the storefront header."
-"Login succeeded.","Login succeeded."
+﻿WeShop,WeShop
+登录,登录
+邮箱和密码不能为空,邮箱和密码不能为空
 "Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
+"Login succeeded.","Login succeeded."
+新品上市,新品上市
+发现最新潮流,发现最新潮流
+限时特惠,限时特惠
+超值优惠等你来,超值优惠等你来
+品质保证,品质保证
+正品保障，放心购物,正品保障，放心购物
+首页,首页
+"Header categories menu","Header categories menu"
+"Inject category navigation items into the storefront header menu.","Inject category navigation items into the storefront header menu."
+"Header search before","Header search before"
+"Inject markup before the storefront header search input.","Inject markup before the storefront header search input."
+"Header search after","Header search after"
+"Inject markup after the storefront header search input.","Inject markup after the storefront header search input."
+"Header search suggestions before","Header search suggestions before"
+"Inject markup before the storefront header search suggestions list.","Inject markup before the storefront header search suggestions list."
+"Header search suggestions after","Header search suggestions after"
+"Inject markup after the storefront header search suggestions list.","Inject markup after the storefront header search suggestions list."
+"Header account","Header account"
+"Inject account-related UI into the storefront header.","Inject account-related UI into the storefront header."
+"Header language switcher","Header language switcher"
+"Inject the language switcher into the storefront header.","Inject the language switcher into the storefront header."
+"Header currency switcher","Header currency switcher"
+"Inject the currency switcher into the storefront header.","Inject the currency switcher into the storefront header."
+"Header mini cart","Header mini cart"
 "Render the mini-cart entry inside the storefront header.","Render the mini-cart entry inside the storefront header."
-WeShop,WeShop
+"Homepage content after","Homepage content after"
+"Inject content after the storefront homepage main content block.","Inject content after the storefront homepage main content block."
+"Summer Sale: Up to 50% Off","Summer Sale: Up to 50% Off"
+"Find the best deals on your favorite summer items and refresh your space.","Find the best deals on your favorite summer items and refresh your space."
+"Shop Now","Shop Now"
+"Deals of the Day","Deals of the Day"
+"View All","View All"
+OFF,OFF
+"Shop by Category","Shop by Category"

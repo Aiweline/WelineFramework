@@ -38,6 +38,7 @@
 "Google auth is not configured.","Google auth is not configured."
 "Unsupported Google auth mode: %{1}","Unsupported Google auth mode: %{1}"
 "Sign in with Google","Sign in with Google"
+或,或
 "Google Sign-In","Google Sign-In"
 "Connected Account","Connected Account"
 "Google auth is not configured yet.","Google auth is not configured yet."

@@ -118,6 +118,14 @@ interface HookInterface
      */
     const ADMIN_BACKEND_DASHBOARD_MAIN_OVERVIEW = 'Weline_Admin::backend::layouts::dashboard::main-overview';
 
+    // ==================== Customer Frontend Account ====================
+    /** 登录页第三方登录入口扩展 */
+    const CUSTOMER_FRONTEND_ACCOUNT_LOGIN_PROVIDERS = 'Weline_Customer::frontend::account::login::providers';
+    /** 账户首页「我的订单」分区注入 */
+    const CUSTOMER_FRONTEND_ACCOUNT_INDEX_ORDERS = 'Weline_Customer::frontend::account::index::orders';
+    /** 账户首页「订阅」分区注入 */
+    const CUSTOMER_FRONTEND_ACCOUNT_INDEX_SUBSCRIPTIONS = 'Weline_Customer::frontend::account::index::subscriptions';
+
     // ==================== DeveloperWorkspace Dev Tool Panel ====================
     /** 开发工具面板 - 在标签栏「耗时统计」之后注入扩展标签 */
     const DEVELOPER_WORKSPACE_DEVTOOL_PANEL_TABS_AFTER = 'Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::tabs-after';

@@ -4,17 +4,16 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller\Account;
 
-use WeShop\Auth\Model\PendingAuthChallenge;
-use WeShop\Customer\Service\CustomerWebAuthService;
+use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Framework\View\Template;
 
 class Challenge extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account_auth';
+    protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         private readonly Template $template,
-        private readonly CustomerWebAuthService $customerWebAuthService
+        private readonly CustomerLoginChallengeHandlerInterface $challengeHandler
     ) {
     }
 
@@ -26,14 +25,14 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
             return $this->redirect('/customer/account/login');
         }
 
-        $challenge = $this->customerWebAuthService->getChallenge($challengeToken);
-        if (!$challenge) {
+        $expiresAt = $this->challengeHandler->getChallengeExpiresAt($challengeToken);
+        if ($expiresAt === null) {
             $this->getMessageManager()->addError(__('The login challenge is invalid or has expired.'));
             return $this->redirect('/customer/account/login');
         }
 
         $this->assign('challenge_token', $challengeToken);
-        $this->assign('expires_at', (int) $challenge->getData(PendingAuthChallenge::schema_fields_EXPIRES_AT));
+        $this->assign('expires_at', $expiresAt);
         $this->assign('title', __('Two-Factor Verification'));
 
         return $this->fetch('Weline_Customer::templates/frontend/account/challenge.phtml');
@@ -50,7 +49,7 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
         }
 
         try {
-            $result = $this->customerWebAuthService->completeChallenge($challengeToken, $code);
+            $result = $this->challengeHandler->completeChallenge($challengeToken, $code);
             $this->getMessageManager()->addSuccess(__('Two-factor verification succeeded.'));
             return $this->redirect($this->normalizeRedirectPath((string) ($result['redirect_url'] ?? 'customer/account')));
         } catch (\Throwable $throwable) {
@@ -62,7 +61,7 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
     private function normalizeRedirectPath(string $redirectUrl): string
     {
         $normalized = ltrim(trim($redirectUrl), '/');
-        if ($normalized === '' || $normalized === 'customer/account/index' || $normalized === 'weshop/customer/account/index') {
+        if ($normalized === '' || $normalized === 'customer/account/index') {
             return '/customer/account';
         }
 

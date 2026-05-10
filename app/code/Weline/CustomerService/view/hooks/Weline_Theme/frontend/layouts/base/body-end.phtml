@@ -14,7 +14,7 @@ use Weline\Framework\Session\SessionFactory;
 // 获取当前客户会话
 $session = SessionFactory::getInstance()->createFrontendSession();
 $isLoggedIn = $session->isLoggedIn();
-$customerId = $isLoggedIn ? $session->getLoginID() : null;
+$customerId = $isLoggedIn ? $session->getUserId() : null;
 
 // 获取前端URL
 /** @var \Weline\Framework\Http\Url $urlBuilder */

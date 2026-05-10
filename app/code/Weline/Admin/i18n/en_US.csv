@@ -227,7 +227,6 @@ RTL模式,"RTL Mode"
 最近成交,"Recent Transactions"
 "Weline 登录面板","Weline Login Panel"
 记住我,"Remember Me"
-记住我一个星期！,"Remember me for a week!"
 保持登录一个星期。,"Keep logged in for a week."
 欢迎回来！,"Welcome back!"
 "登录 %{name} 管理面板","Login to %{name} Admin Panel"
@@ -235,8 +234,7 @@ RTL模式,"RTL Mode"
 输入密码,"Enter Password"
 验证码,验证码
 点击刷新验证码,点击刷新验证码
-验证码：,"Verification Code:"
-请输入验证码！,"Please enter verification code!"
+请输入验证码,请输入验证码
 忘记密码？,"Forgot Password?"
 "登 录",Login
 还没有账号？,"Don't have an account?"

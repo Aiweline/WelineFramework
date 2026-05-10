@@ -20,7 +20,8 @@
 
 ## 必做（全局）
 
-- 用户可见文案：`__()` 或 `<lang>`，词条进 i18n/*.csv
+- 用户可见文案：`__()` 或 `<lang>`，词条进 i18n/*.csv；**`__()` / Hook 规约等括号内默认字符串须以简体中文为源码主文案**（英文走语言包），详见 `.cursor/rules/i18n-default-source-zh.mdc` 与 `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md` 第 5b 节
+- **PHP 控制器中的 Flash / 会话提示（成功、警告、错误）**：必须使用 `Weline\Framework\Manager\MessageManager` **静态门面**，并与 `__()` 组合；例如 `MessageManager::warning(__('你已经登录了，请先退出登录。'));`、`MessageManager::error(...)`、`MessageManager::success(...)`。**禁止**写成 `$this->getMessageManager()->addWarning()` / `addError()` / `addSuccess()` 等实例链式调用（除非框架官方文档对特定场景另有明文例外）。
 - **`.phtml` 视图模板**：在能力与团队约定允许时**优先使用模板标签语法**（Taglib / 视图 DSL），而不是大块原生 PHP
   - 条件与空值展示：`<notempty name="field">`、`<empty>`、`<if>` 等与项目约定一致的标签
   - 变量输出：`<var>name</var>` 或与框架一致的变量标签（避免无故把已有标签改写成 `<?= ?>`）

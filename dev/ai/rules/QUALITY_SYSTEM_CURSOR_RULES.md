@@ -86,6 +86,16 @@
 
 ---
 
+## 5b. 国际化默认文案（强制）
+
+所有面向用户的 **`__()`、`<lang>`、Hook 规约 `name`/`description`** 等，**默认/源码字符串必须使用简体中文**，不得用英文作为主文案占位。
+
+英文等其他语言仅通过语言包（如各模块 `i18n/*.csv`）或框架等价机制补充；代码里以中文为单一事实来源。
+
+详见 Cursor 规则：`.cursor/rules/i18n-default-source-zh.mdc`。
+
+---
+
 ## 6. 多智能体团队协作流程（强制，大小需求一律执行）
 
 ### 6.1 团队角色与职责
@@ -221,4 +231,20 @@
   - **效率异常**：效率分持续低于团队均值 50% 且无合理解释 → 降级派工并要求说明
   - **处理流程**：疑似摸鱼 → 记录公示 → 警告 → 连续 2 次 → 移出团队池
 - **效率公示**：所有摸鱼记录计入绩效并上墙公示，不可删除，仅主智能体可标注"已核实误判"。
+
+---
+
+## 7. PHP 控制器用户提示 / Flash（强制）
+
+- **必须用** `Weline\Framework\Manager\MessageManager` **静态门面**输出会话 Flash：**`MessageManager::warning(__('…'))`、`MessageManager::error(...)`、`MessageManager::success(...)`**，并与 **`__()`** 组合以保证 i18n。
+- **禁止**在控制器中写成 **`$this->getMessageManager()->addWarning()` / `addError()` / `addSuccess()`**（除非框架官方文档对特定集成点另有明文例外）。
+- 全局约束见：`dev/ai/global-constraints.md`；Cursor 常驻摘要：`.cursor/rules/message-manager-static.mdc`。
+
+---
+
+## 7. PHP 控制器用户提示 / Flash（强制）
+
+- **必须用** `Weline\Framework\Manager\MessageManager` **静态门面**输出会话 Flash：**`MessageManager::warning(__('…'))`、`MessageManager::error(...)`、`MessageManager::success(...)`**，并与 **`__()`** 组合以保证 i18n。
+- **禁止**在控制器中写成 **`$this->getMessageManager()->addWarning()` / `addError()` / `addSuccess()`**（除非框架官方文档对特定集成点另有明文例外）。
+- 全局约束见：`dev/ai/global-constraints.md`；Cursor 常驻摘要：`.cursor/rules/message-manager-static.mdc`。
 
