@@ -331,11 +331,24 @@ final class AiSiteAssetManifestService
             $parts[] = 'Asset kind: ' . $kind;
         }
 
+        $isHeroSlot = (bool)\preg_match('/\b(hero|banner|cover)\b/i', $kind . ' ' . ((string)($slot['label'] ?? '')));
+
         if ($isLogoSlot) {
             $parts[] = 'Logo output requirements: generate a PNG logo with a transparent alpha background. Keep the logo isolated on transparency; do not place it on a card, wall, photo scene, colored rectangle, gradient backdrop, website mockup, or screenshot frame.';
+        } elseif ($isHeroSlot) {
+            $parts[] = 'Hero banner output requirements: fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed — cover the full canvas with the subject matter.';
+            $parts[] = 'Block-only visual constraints (very important):'
+                . ' generate a single self-contained illustration or photograph filling the whole canvas.'
+                . ' DO NOT draw a website mockup, screenshot frame, browser chrome, mobile-app frame, or any UI surface.'
+                . ' DO NOT include a website header, top navigation bar, brand logo, navigation menu, hamburger icon, or language switcher.'
+                . ' DO NOT include a website footer, copyright row, or footer link columns.'
+                . ' DO NOT draw call-to-action buttons, "Sign up"/"Get Started"/"Explore"/"Buy Now" buttons, badges that look like UI buttons, or any clickable controls.'
+                . ' DO NOT render readable English/Chinese paragraph text, slogans, headings, captions, watermarks, price tags, labels, or speech bubbles.'
+                . ' DO NOT show multiple separate page sections stitched together (no two-column site previews, no "as seen on" rows, no website screenshots).'
+                . ' Only render the subject-matter visual that fits inside one rectangular block area; treat the canvas as the inside of a single content block, not as a whole web page.';
         } else {
-            // 强行契约：单 block 视觉素材必须是"独立插画/照片"，禁止画完整网站布局。
-            // 这是修复 stage1 出现 hero 图把 header(logo+nav)、CTA 按钮、整页布局都画进去的关键约束。
+            $parts[] = 'Transparent background required: generate the subject with a transparent alpha/PNG background. Keep the subject isolated on full transparency; do not place it on a colored rectangle, gradient backdrop, solid color fill, photo scene background, or any artificial backdrop.';
+            $parts[] = 'Style-match requirement (CRITICAL): the visual style, color temperature, lighting, and composition MUST align with the overall brand aesthetic described in the reference style keywords/color palette above. Do NOT generate a generic stock photo, overly saturated 3D render, cartoon illustration, or dark/gritty image unless those match the brand style. Keep the rendering quality consistent with a premium brand website.';
             $parts[] = 'Block-only visual constraints (very important):'
                 . ' generate a single self-contained illustration or photograph filling the whole canvas.'
                 . ' DO NOT draw a website mockup, screenshot frame, browser chrome, mobile-app frame, or any UI surface.'
@@ -742,7 +755,7 @@ final class AiSiteAssetManifestService
                 $briefParts[] = 'PRIMARY SUBJECT for the hero banner background (CRITICAL — the entire scene MUST depict this business and culture; do not substitute a generic abstract gradient, generic stock photo, or off-topic figures): '
                     . $businessContext;
             }
-            $briefParts[] = 'Format: full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Fill the entire canvas edge-to-edge with one immersive scene; leave unobstructed negative space for headline overlay readability.';
+            $briefParts[] = 'Format: full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Fill the entire canvas edge-to-edge with one immersive scene. Apply a subtle gradient overlay at top and bottom edges (dark-to-transparent) so text and page content can overlay the image naturally. The style and color temperature MUST match the brand identity — not a generic stock photo.';
             if ($title !== '') {
                 $briefParts[] = 'Section headline context (do not render as readable slogan text inside the image): ' . $title;
             }
