@@ -547,7 +547,50 @@ class ComponentResolver
         
         return $jsonConfig['components'][$normalizedCode]['config_schema'] ?? [];
     }
-    
+
+    /**
+     * 获取组件的显示名称（从 component.json 读取）
+     *
+     * @param string $code 组件代码
+     * @param string $styleCode 模板代码
+     * @return string 组件显示名称，找不到时返回组件代码本身
+     */
+    public function getComponentName(string $code, string $styleCode): string
+    {
+        if (empty($code)) {
+            return '';
+        }
+
+        $componentJsonPath = $this->getPathResolver()->getComponentJsonPath($styleCode);
+        if (!file_exists($componentJsonPath)) {
+            return $code;
+        }
+
+        $jsonConfig = json_decode(file_get_contents($componentJsonPath), true);
+        if (!$jsonConfig || !isset($jsonConfig['components'])) {
+            return $code;
+        }
+
+        $normalizedCode = $this->getConfigNormalizer()->normalizeComponentCode($code);
+
+        // 直接匹配
+        if (isset($jsonConfig['components'][$normalizedCode]['name'])) {
+            return $jsonConfig['components'][$normalizedCode]['name'];
+        }
+
+        // 尝试模糊匹配（处理下划线/破折号格式差异）
+        foreach ($jsonConfig['components'] as $compCode => $compMeta) {
+            if (strcasecmp($compCode, $normalizedCode) === 0) {
+                return $compMeta['name'] ?? $code;
+            }
+            if (str_replace('_', '-', $compCode) === $normalizedCode) {
+                return $compMeta['name'] ?? $code;
+            }
+        }
+
+        return $code;
+    }
+
     /**
      * 清除缓存
      */

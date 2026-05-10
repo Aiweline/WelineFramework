@@ -1110,12 +1110,14 @@ const VB = {
         const isExternal = comp.from_template !== this.styleCode;
         const badge = isExternal ? `<span class="badge bg-warning text-dark">${comp.from_template}</span>` : '';
         
+        const displayName = comp.name || comp.component;
+
         return `
             <div class="vb-component" data-instance-id="${comp.id}" data-component="${comp.component}">
                 <div class="vb-component-header">
                     <span class="vb-component-name">
                         <i class="mdi mdi-drag"></i>
-                        ${comp.component}
+                        ${displayName}
                     </span>
                     ${badge}
                     <div class="vb-component-actions">

@@ -3,6 +3,8 @@
  * WeShop Default Theme - Customer Registration Page
  */
 $captchaHtml = $this->getData('captcha_html') ?? '';
+$registerUrl = $this->getUrl('weshop/customer/account/register');
+$formKey = $this->getFormKey();
 ?>
 <main class="flex-1 flex items-center justify-center py-12 px-4">
     <div class="w-full max-w-md">
@@ -15,45 +17,48 @@ $captchaHtml = $this->getData('captcha_html') ?? '';
                         <span class="material-symbols-outlined text-4xl text-primary">person_add</span>
                     </div>
                 </div>
-                <h1 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Create Account') ?></h1>
-                <p class="text-text-secondary-light dark:text-text-secondary-dark mt-2"><?= __('Join us and start shopping') ?></p>
+                <h1 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><lang>创建账户</lang></h1>
+                <p class="text-text-secondary-light dark:text-text-secondary-dark mt-2"><lang>加入我们，开始购物</lang></p>
             </div>
 
-            <form action="<?= $this->getUrl('weshop/customer/account/register') ?>" method="post" class="space-y-5">
-                <?= $this->getFormKey() ?>
+            <div class="auth-form__flash wf-system-messages mb-5" aria-live="polite">
+                <template>Weline_Component::message.phtml</template>
+            </div>
 
+            <form action="@url{'weshop/customer/account/register'}" method="post" class="space-y-5">
+                <var>formKey</var>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label for="firstname" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('First Name') ?></label>
+                        <label for="firstname" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><lang>名</lang></label>
                         <input type="text" id="firstname" name="firstname" required
                                class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 px-4 focus:border-primary focus:ring-primary"
-                               placeholder="<?= __('John') ?>">
+                               placeholder="@lang{'John'}">
                     </div>
                     <div>
-                        <label for="lastname" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Last Name') ?></label>
+                        <label for="lastname" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><lang>姓</lang></label>
                         <input type="text" id="lastname" name="lastname" required
                                class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 px-4 focus:border-primary focus:ring-primary"
-                               placeholder="<?= __('Doe') ?>">
+                               placeholder="@lang{'Doe'}">
                     </div>
                 </div>
 
                 <div>
-                    <label for="email" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Email Address') ?></label>
+                    <label for="email" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><lang>邮箱地址</lang></label>
                     <div class="relative">
                         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">mail</span>
                         <input type="email" id="email" name="email" required
                                class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 pl-10 pr-4 focus:border-primary focus:ring-primary"
-                               placeholder="<?= __('you@example.com') ?>">
+                               placeholder="@lang{'请输入邮箱地址'}">
                     </div>
                 </div>
 
                 <div>
-                    <label for="password" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Password') ?></label>
+                    <label for="password" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><lang>密码</lang></label>
                     <div class="relative">
                         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">lock</span>
                         <input type="password" id="password" name="password" required minlength="8"
                                class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 pl-10 pr-12 focus:border-primary focus:ring-primary"
-                               placeholder="<?= __('At least 8 characters') ?>">
+                               placeholder="@lang{'至少8个字符'}">
                         <button type="button" class="toggle-password absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark hover:text-primary">
                             <span class="material-symbols-outlined">visibility</span>
                         </button>
@@ -67,19 +72,19 @@ $captchaHtml = $this->getData('captcha_html') ?? '';
                 </div>
 
                 <div>
-                    <label for="confirm_password" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Confirm Password') ?></label>
+                    <label for="confirm_password" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><lang>确认密码</lang></label>
                     <div class="relative">
                         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">lock</span>
                         <input type="password" id="confirm_password" name="confirm_password" required
                                class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 pl-10 pr-4 focus:border-primary focus:ring-primary"
-                               placeholder="<?= __('Re-enter your password') ?>">
+                               placeholder="@lang{'请再次输入密码'}">
                     </div>
                 </div>
 
                 <div>
                     <label class="flex items-start gap-3">
                         <input type="checkbox" name="subscribe" class="form-checkbox rounded text-primary focus:ring-primary mt-1">
-                        <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Subscribe to our newsletter for exclusive deals and updates') ?></span>
+                        <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><lang>订阅我们的新闻资讯，获取独家优惠和更新</lang></span>
                     </label>
                 </div>
 
@@ -87,26 +92,26 @@ $captchaHtml = $this->getData('captcha_html') ?? '';
                     <label class="flex items-start gap-3">
                         <input type="checkbox" name="agree_terms" required class="form-checkbox rounded text-primary focus:ring-primary mt-1">
                         <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                            <?= __('I agree to the') ?> <a href="<?= $this->getUrl('cms/page/terms') ?>" class="text-primary hover:underline"><?= __('Terms of Service') ?></a> <?= __('and') ?> <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="text-primary hover:underline"><?= __('Privacy Policy') ?></a>
+                            <lang>我同意</lang> <a href="@url{'cms/page/terms'}" class="text-primary hover:underline"><lang>服务条款</lang></a> <lang>和</lang> <a href="@url{'cms/page/privacy'}" class="text-primary hover:underline"><lang>隐私政策</lang></a>
                         </span>
                     </label>
                 </div>
 
-                <?php if ($captchaHtml): ?>
+                <notempty name="captchaHtml">
                     <div class="captcha-container">
-                        <?= $captchaHtml ?>
+                        <var>captchaHtml</var>
                     </div>
-                <?php endif; ?>
+                </notempty>
 
                 <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined">person_add</span>
-                    <?= __('Create Account') ?>
+                    <lang>创建账户</lang>
                 </button>
             </form>
 
             <p class="text-center mt-8 text-text-secondary-light dark:text-text-secondary-dark">
-                <?= __('Already have an account?') ?>
-                <a href="<?= $this->getUrl('weshop/customer/account/login') ?>" class="text-primary hover:underline font-medium"><?= __('Sign in') ?></a>
+                <lang>已有账户？</lang>
+                <a href="@url{'weshop/customer/account/login'}" class="text-primary hover:underline font-medium"><lang>立即登录</lang></a>
             </p>
         </div>
 

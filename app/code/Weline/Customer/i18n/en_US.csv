@@ -37,6 +37,8 @@
 "First name and last name are required.","First name and last name are required."
 "Please accept the terms and privacy policy.","Please accept the terms and privacy policy."
 "Registration succeeded. Welcome to WeShop.","Registration succeeded. Welcome to WeShop."
+"Show password","Show password"
+"Hide password","Hide password"
 无法统计令牌数量：%{1},无法统计令牌数量：%{1}
 加载前端客户失败：%{1},加载前端客户失败：%{1}
 无效的用户ID,"Invalid user ID"

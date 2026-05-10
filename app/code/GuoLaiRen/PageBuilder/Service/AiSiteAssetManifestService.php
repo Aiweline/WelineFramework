@@ -241,12 +241,22 @@ final class AiSiteAssetManifestService
     }
 
     /**
+     * 强行契约：图像 prompt 必须以"业务主体"开头，brand 名称仅作次要装饰，否则 AI 会忽略
+     * 用户的真实业务诉求（如"印度棋牌/扑克"），照着 site_title 字面（"Teenipiya"）凭空发挥
+     * 出无关吉祥物/插画。重构原则：
+     *   1. PRIMARY SUBJECT 必须是 prompt 的第 1 行；
+     *   2. brand name 仅作 wordmark text reference / brand context，不作主体；
+     *   3. slot.brief 中如果以 "Generate the official website logo for X" 开头，
+     *      会先把它替换成 subject-first 写法，避免和 brand 主体语义冲突。
+     *
      * @param array<string, mixed> $slot
      * @param array<string, mixed> $scope
      */
     public function buildPrompt(array $slot, array $scope = []): string
     {
-        $brief = $this->firstString([
+        $isLogoSlot = $this->isLogoAssetSlot($slot);
+        $isFaviconLikeSlot = $isLogoSlot && $this->isFaviconLikeSlot($slot);
+        $rawBrief = $this->firstString([
             $slot['prompt_brief'] ?? null,
             $slot['brief'] ?? null,
             $slot['description'] ?? null,
@@ -256,27 +266,193 @@ final class AiSiteAssetManifestService
             $scope['website_profile']['site_title'] ?? null,
             $scope['site_title'] ?? null,
         ]);
+        $businessContext = $this->firstString([
+            $scope['website_profile']['brief_description'] ?? null,
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+        ]);
+        $siteTagline = $this->firstString([
+            $scope['website_profile']['site_tagline'] ?? null,
+            $scope['site_tagline'] ?? null,
+        ]);
+
+        $primarySubject = $this->resolvePrimaryVisualSubject($slot, $businessContext, $siteTagline);
+
         $parts = [];
-        if ($brief !== '') {
-            $parts[] = $brief;
+
+        // 第 1 行：强行契约 PRIMARY SUBJECT（最高优先级）。
+        if ($primarySubject !== '') {
+            if ($isFaviconLikeSlot) {
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL — the favicon/title icon glyph MUST visually depict this business; do not invent unrelated mascots, animals, or fantasy creatures): ' . $primarySubject;
+            } elseif ($isLogoSlot) {
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL — the logo mark/glyph MUST visually depict this business; reject any unrelated mascot, animal, or fantasy figure that does not match the industry): ' . $primarySubject;
+            } else {
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL — the entire scene MUST depict this exactly; every figure, prop, and setting comes from this domain): ' . $primarySubject;
+            }
+        } elseif ($businessContext !== '') {
+            // 兜底：没有提取到主体时，至少把 brief 当成主体而不是 context。
+            $parts[] = 'PRIMARY SUBJECT (CRITICAL — depict this domain only): ' . $businessContext;
         }
+
+        // 第 2 行：业务背景（如果与 PRIMARY SUBJECT 已重复就跳过）。
+        if ($businessContext !== '' && $businessContext !== $primarySubject) {
+            $parts[] = 'Business / cultural context (every figure, environment, and detail MUST match this exactly — never substitute a generic stock-photo subject): ' . $businessContext;
+        }
+
+        // 第 3 行：处理 slot.brief。先去掉 "Generate the official website logo for X" 这类
+        // 把 brand 当主体的句式，否则会与 PRIMARY SUBJECT 形成主体冲突。
+        $sanitizedBrief = $this->sanitizeSlotBriefForPrompt($rawBrief, $siteTitle);
+        if ($sanitizedBrief !== '') {
+            $parts[] = $isLogoSlot
+                ? 'Slot brief (reference only — does not override PRIMARY SUBJECT): ' . $sanitizedBrief
+                : $sanitizedBrief;
+        }
+
+        // 第 4 行：brand name —— 仅当 logo 时作为 wordmark text；其它仅作风格背景，不画文字。
         if ($siteTitle !== '') {
-            $parts[] = 'Website: ' . $siteTitle;
+            if ($isLogoSlot) {
+                $parts[] = 'Optional brand wordmark text (only as small typographic accompaniment to the PRIMARY SUBJECT glyph; never as the primary subject itself, never invent characters out of this name): ' . $siteTitle;
+            } else {
+                $parts[] = 'Brand context (do not render as text on the image): ' . $siteTitle;
+            }
         }
+
+        // 第 5 行：tagline 仅作为情绪/风格调子，不画文字。
+        if ($siteTagline !== '') {
+            $parts[] = $isLogoSlot
+                ? 'Brand personality for styling (mood/color palette only; never spell out this tagline inside the logo): ' . $siteTagline
+                : 'Brand personality (reflect this tone in visual style): ' . $siteTagline;
+        }
+
         $kind = $this->firstString([$slot['kind'] ?? null, $slot['slot_type'] ?? null]);
         if ($kind !== '') {
             $parts[] = 'Asset kind: ' . $kind;
+        }
+
+        if ($isLogoSlot) {
+            $parts[] = 'Logo output requirements: generate a PNG logo with a transparent alpha background. Keep the logo isolated on transparency; do not place it on a card, wall, photo scene, colored rectangle, gradient backdrop, website mockup, or screenshot frame.';
+        } else {
+            // 强行契约：单 block 视觉素材必须是"独立插画/照片"，禁止画完整网站布局。
+            // 这是修复 stage1 出现 hero 图把 header(logo+nav)、CTA 按钮、整页布局都画进去的关键约束。
+            $parts[] = 'Block-only visual constraints (very important):'
+                . ' generate a single self-contained illustration or photograph filling the whole canvas.'
+                . ' DO NOT draw a website mockup, screenshot frame, browser chrome, mobile-app frame, or any UI surface.'
+                . ' DO NOT include a website header, top navigation bar, brand logo, navigation menu, hamburger icon, or language switcher.'
+                . ' DO NOT include a website footer, copyright row, or footer link columns.'
+                . ' DO NOT draw call-to-action buttons, "Sign up"/"Get Started"/"Explore"/"Buy Now" buttons, badges that look like UI buttons, or any clickable controls.'
+                . ' DO NOT render readable English/Chinese paragraph text, slogans, headings, captions, watermarks, price tags, labels, or speech bubbles.'
+                . ' DO NOT show multiple separate page sections stitched together (no two-column site previews, no "as seen on" rows, no website screenshots).'
+                . ' Only render the subject-matter visual that fits inside one rectangular block area; treat the canvas as the inside of a single content block, not as a whole web page.';
         }
         $pageType = $this->firstString([$slot['page_type'] ?? null]);
         if ($pageType !== '') {
             $parts[] = 'Page type: ' . $pageType;
         }
-        $referenceInsightsPrompt = $this->buildReferenceInsightsPrompt($scope);
+        // 强行契约：reference_image_insights 中的 layout/component cues 经常描述
+        // "header + hero + columns + footer" 这类整页结构，喂给单 block 图像生成时
+        // 会让 AI 复制成网站 mockup。仅 logo 类资产保留风格 reference；其它视觉素材
+        // 仅吸收颜色/排版关键词，剥离布局/组件层面的页面结构暗示。
+        $referenceInsightsPrompt = $isLogoSlot
+            ? $this->buildReferenceInsightsPrompt($scope)
+            : $this->buildBlockReferenceInsightsPrompt($scope);
         if ($referenceInsightsPrompt !== '') {
             $parts[] = $referenceInsightsPrompt;
         }
 
+        // 收尾：再次复述 PRIMARY SUBJECT，避免 AI 在长 prompt 中"漂移"忘掉首要契约。
+        if ($primarySubject !== '') {
+            $parts[] = 'Reinforced contract: the visual MUST stay within the PRIMARY SUBJECT domain stated above; reject any drift toward unrelated mascots, generic stock imagery, or off-topic scenery.';
+        }
+
         return \trim(\implode("\n", $parts));
+    }
+
+    /**
+     * 强行契约抽取：基于 brief_description 推导一组"必须出现的图像主体关键词"。
+     * 这是修复 logo/banner 与用户业务诉求脱节的关键——AI 看到具体名词
+     * （playing cards / dealer / casino chips / India / APK 等）会优先把它们画进图，
+     * 而光看 "Business context: ..." 长句反而会被淹没。
+     *
+     * 关键词生成规则：
+     *   1. 优先从 brief_description 抽取。短句直接复用；长句保留前 240 字符。
+     *   2. 同时叠加 slot.brief 已存在的领域名词（如果有），减少 prompt 漂移。
+     *
+     * @param array<string, mixed> $slot
+     */
+    private function resolvePrimaryVisualSubject(array $slot, string $businessContext, string $siteTagline): string
+    {
+        $businessContext = \trim($businessContext);
+        $siteTagline = \trim($siteTagline);
+        $slotBrief = \trim((string)($slot['prompt_brief'] ?? $slot['brief'] ?? ''));
+
+        if ($businessContext === '' && $siteTagline === '' && $slotBrief === '') {
+            return '';
+        }
+
+        // 优先 business context；缺省退到 tagline；再退到 slot.brief。
+        if ($businessContext !== '') {
+            return $this->clipText($businessContext, 240);
+        }
+        if ($siteTagline !== '') {
+            return $this->clipText($siteTagline, 240);
+        }
+
+        return $this->clipText($slotBrief, 240);
+    }
+
+    /**
+     * 把 slot.brief 中"Generate the official website logo for X"这类把 brand 当主体的写法
+     * 替换成中性 "Logo output for X"，避免 AI 出现主体冲突（PRIMARY SUBJECT vs slot.brief）。
+     */
+    private function sanitizeSlotBriefForPrompt(string $brief, string $siteTitle): string
+    {
+        $brief = \trim($brief);
+        if ($brief === '') {
+            return '';
+        }
+        $brief = \preg_replace(
+            '/^(Generate|Create|Design|Produce)\s+(?:the\s+)?(?:official\s+)?(?:website\s+)?logo\s+for\s+"?[^"]*"?\.?\s*/iu',
+            'Logo specification: ',
+            $brief
+        ) ?? $brief;
+        $brief = \preg_replace(
+            '/^(Generate|Create|Design|Produce)\s+(?:the\s+)?(?:website\s+)?(?:title\s+)?(?:icon|favicon)(?:\s*\/\s*favicon)?\s+for\s+"?[^"]*"?\.?\s*/iu',
+            'Icon specification: ',
+            $brief
+        ) ?? $brief;
+        $brief = \preg_replace(
+            '/^(Visual\s+direction\s+hint|Style\s+hint|Business\s+context):\s*/iu',
+            '',
+            $brief
+        ) ?? $brief;
+
+        return \trim($brief);
+    }
+
+    private function clipText(string $value, int $limit): string
+    {
+        $value = \trim(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        if (\mb_strlen($value, 'UTF-8') <= $limit) {
+            return $value;
+        }
+
+        return \mb_substr($value, 0, \max(0, $limit - 3), 'UTF-8') . '...';
+    }
+
+    /**
+     * @param array<string, mixed> $slot
+     */
+    private function isFaviconLikeSlot(array $slot): bool
+    {
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+        $label = \strtolower(\trim((string)($slot['label'] ?? '')));
+        $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
+
+        return \in_array($field, ['icon', 'favicon', 'site.icon'], true)
+            || \str_contains($kind, 'favicon') || \str_contains($kind, 'title_icon')
+            || \str_contains($label, 'favicon') || \str_contains($label, 'title icon')
+            || \str_contains($slotId, 'favicon') || \str_contains($slotId, 'title-icon');
     }
 
     /**
@@ -290,6 +466,9 @@ final class AiSiteAssetManifestService
             $manifest = $this->upsert($manifest, $slot);
         }
         foreach ($this->buildRequiredIdentitySlots($scope) as $slot) {
+            $manifest = $this->upsert($manifest, $slot);
+        }
+        foreach ($this->buildRequiredHeroBannerSlots($scope) as $slot) {
             $manifest = $this->upsert($manifest, $slot);
         }
 
@@ -453,23 +632,45 @@ final class AiSiteAssetManifestService
         $existingLogo = $this->readExistingIdentityAssetUrl($scope, 'logo');
         $existingIcon = $this->readExistingIdentityAssetUrl($scope, 'icon');
 
-        $logoBrief = 'Generate the official website logo for "' . $brandReference . '". '
-            . 'Strong constraints: transparent background, production-ready horizontal logo or wordmark, simple brand mark, no mockup, no extra scene, no paragraph text, no watermark, no screenshot frame.';
-        if ($siteTagline !== '') {
-            $logoBrief .= ' Visual direction hint: ' . $siteTagline . '.';
-        }
-        if ($briefDescription !== '') {
-            $logoBrief .= ' Business context: ' . $briefDescription . '.';
-        }
+        // 强行契约：slot.brief 必须以"业务主体"开头，避免 buildPrompt 时 brand name 抢占
+        // PRIMARY SUBJECT 位置（导致出现与诉求脱节的吉祥物 logo）。
+        $subjectAnchor = $briefDescription !== ''
+            ? $briefDescription
+            : ($siteTagline !== '' ? $siteTagline : $brandReference);
 
-        $iconBrief = 'Generate the website title icon / favicon for "' . $brandReference . '". '
-            . 'Strong constraints: square 1:1 composition, transparent or clean solid background, highly recognizable at 16-64px, one bold symbol or monogram only, no paragraph text, no mockup, no watermark.';
-        if ($siteTagline !== '') {
-            $iconBrief .= ' Style hint: ' . $siteTagline . '.';
+        $logoBriefParts = [];
+        if ($subjectAnchor !== '') {
+            $logoBriefParts[] = 'PRIMARY SUBJECT for the logo glyph (the mark MUST visually depict this business — pick concrete iconography from the domain such as suit symbols, chips, dealer cues for card games; map vertical-specific objects/symbols for other industries): '
+                . $subjectAnchor;
         }
-        if ($briefDescription !== '') {
-            $iconBrief .= ' Business context: ' . $briefDescription . '.';
+        $logoBriefParts[] = 'Output requirements: PNG with transparent alpha background, production-ready horizontal logo or wordmark, simple brand mark, no mockup, no extra scene, no colored rectangle/backdrop, no paragraph text, no watermark, no screenshot frame.';
+        if ($brandReference !== '' && $brandReference !== $subjectAnchor) {
+            $logoBriefParts[] = 'Optional brand wordmark text alongside the glyph (small, secondary; never the primary subject; never invent characters out of this name): "' . $brandReference . '"';
         }
+        if ($siteTagline !== '' && $siteTagline !== $subjectAnchor) {
+            $logoBriefParts[] = 'Style/personality hint (mood and palette only, never spell out as text): ' . $siteTagline;
+        }
+        if ($briefDescription !== '' && $briefDescription !== $subjectAnchor) {
+            $logoBriefParts[] = 'Business context (every glyph element must reflect this domain): ' . $briefDescription;
+        }
+        $logoBrief = \implode("\n", $logoBriefParts);
+
+        $iconBriefParts = [];
+        if ($subjectAnchor !== '') {
+            $iconBriefParts[] = 'PRIMARY SUBJECT for the favicon/title icon (one bold recognizable symbol from this business — e.g., a card suit/chip/dealer chip cue for card games; a domain-correct symbol for any other vertical): '
+                . $subjectAnchor;
+        }
+        $iconBriefParts[] = 'Output requirements: square 1:1 composition, transparent or clean solid background, highly recognizable at 16-64px, one bold symbol or monogram only, no paragraph text, no mockup, no watermark.';
+        if ($brandReference !== '' && $brandReference !== $subjectAnchor) {
+            $iconBriefParts[] = 'Optional brand initial alongside the glyph (single letter/monogram only; never the primary subject): "' . $brandReference . '"';
+        }
+        if ($siteTagline !== '' && $siteTagline !== $subjectAnchor) {
+            $iconBriefParts[] = 'Style hint (mood/palette only): ' . $siteTagline;
+        }
+        if ($briefDescription !== '' && $briefDescription !== $subjectAnchor) {
+            $iconBriefParts[] = 'Business context: ' . $briefDescription;
+        }
+        $iconBrief = \implode("\n", $iconBriefParts);
 
         return [
             [
@@ -508,6 +709,172 @@ final class AiSiteAssetManifestService
     }
 
     /**
+     * Stage-1 JSON often omits a dedicated image row in {@see collectRequirementRows}, which leaves the
+     * asset manifest without a planned hero slot — previews fall back to bare gradients with no banner image.
+     * We synthesize a stable hero_image slot per hero section derived from the same blueprint wiring as
+     * {@see AiSiteBuildTaskService::buildBlueprintFromStageOneExecutionBlueprint}.
+     *
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function buildRequiredHeroBannerSlots(array $scope): array
+    {
+        $businessContext = $this->firstString([
+            $scope['website_profile']['brief_description'] ?? null,
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+        ]);
+        $slots = [];
+        foreach ($this->collectHeroSectionDescriptorsFromScope($scope) as $descriptor) {
+            $pageType = $descriptor['page_type'];
+            $sectionCode = $descriptor['section_code'];
+            $title = $descriptor['title'];
+            $slotId = $this->normalizeSlotId(
+                'page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode)
+            );
+
+            // 强行契约：banner slot.brief 必须以业务主体开头，否则 AI 会画与诉求无关的
+            // 通用渐变/抽象图案，跟"棋牌/印度市场/APK 下载"等真实诉求脱节。
+            $briefParts = [];
+            if ($businessContext !== '') {
+                $briefParts[] = 'PRIMARY SUBJECT for the hero banner background (CRITICAL — the entire scene MUST depict this business and culture; do not substitute a generic abstract gradient, generic stock photo, or off-topic figures): '
+                    . $businessContext;
+            }
+            $briefParts[] = 'Format: full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Fill the entire canvas edge-to-edge with one immersive scene; leave unobstructed negative space for headline overlay readability.';
+            if ($title !== '') {
+                $briefParts[] = 'Section headline context (do not render as readable slogan text inside the image): ' . $title;
+            }
+
+            $brief = \implode("\n", $briefParts);
+            $slots[] = [
+                'slot_id' => $slotId,
+                'slot_type' => 'hero_image',
+                'kind' => 'hero_banner_background',
+                'page_type' => $pageType,
+                'section_code' => $sectionCode,
+                'field' => 'image',
+                'label' => 'Hero banner background',
+                'brief' => $brief,
+                'prompt_brief' => $brief,
+                'status' => 'pending',
+                'source' => 'planned',
+                'final_url' => '',
+                'locked_by_user' => 0,
+            ];
+        }
+
+        return $slots;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{page_type:string,section_code:string,title:string}>
+     */
+    private function collectHeroSectionDescriptorsFromScope(array $scope): array
+    {
+        $out = [];
+        $seen = [];
+
+        $append = static function (string $pageType, string $sectionCode, string $title) use (&$out, &$seen): void {
+            $pageType = \trim($pageType);
+            $sectionCode = \trim($sectionCode);
+            if ($pageType === '' || $sectionCode === '') {
+                return;
+            }
+            $key = $pageType . "\n" . $sectionCode;
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $out[] = [
+                'page_type' => $pageType,
+                'section_code' => $sectionCode,
+                'title' => \trim($title),
+            ];
+        };
+
+        $pageBlueprints = \is_array($scope['build_blueprint']['page_blueprints'] ?? null)
+            ? $scope['build_blueprint']['page_blueprints']
+            : [];
+        foreach ($pageBlueprints as $pageType => $pb) {
+            if (!\is_scalar($pageType) || !\is_array($pb)) {
+                continue;
+            }
+            $pageTypeString = \trim((string)$pageType);
+            foreach (\is_array($pb['sections'] ?? null) ? $pb['sections'] : [] as $section) {
+                if (!\is_array($section)) {
+                    continue;
+                }
+                $template = \strtolower(\trim((string)($section['template'] ?? '')));
+                if (!\in_array($template, ['hero', 'banner'], true)) {
+                    continue;
+                }
+                $sectionCode = \trim((string)($section['code'] ?? ''));
+                $title = $this->firstString([
+                    $section['name'] ?? null,
+                    \is_array($section['config'] ?? null) ? ($section['config']['section_title'] ?? null) : null,
+                ]);
+                $append($pageTypeString, $sectionCode, $title);
+            }
+        }
+
+        if ($out !== []) {
+            return $out;
+        }
+
+        $pages = [];
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        if (\is_array($executionBlueprint['pages'] ?? null)) {
+            $pages = $executionBlueprint['pages'];
+        }
+
+        foreach ($pages as $pageType => $page) {
+            if (!\is_scalar($pageType) || !\is_array($page)) {
+                continue;
+            }
+            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            if ($blocks === [] || !\is_array($blocks[0] ?? null)) {
+                continue;
+            }
+            $block = $blocks[0];
+            $blockKey = \trim((string)($block['block_key'] ?? $block['source_block_key'] ?? $block['key'] ?? ''));
+            if ($blockKey === '') {
+                $blockKey = 'block_1';
+            }
+            $sectionSlug = $this->slugifySectionToken($blockKey);
+            $sectionCode = 'content/' . $this->slugifySectionToken((string)$pageType) . '-' . $sectionSlug;
+
+            $title = '';
+            foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
+                if (!\is_array($field)) {
+                    continue;
+                }
+                $fieldKey = \strtolower(\trim((string)($field['field'] ?? '')));
+                if (\str_contains($fieldKey, 'title') || \str_contains($fieldKey, 'headline')) {
+                    $title = \trim((string)($field['sample'] ?? ''));
+                    break;
+                }
+            }
+            if ($title === '') {
+                $title = \trim((string)($block['title'] ?? $block['goal'] ?? $block['content'] ?? ''));
+            }
+
+            $append(\trim((string)$pageType), $sectionCode, $title);
+        }
+
+        return $out;
+    }
+
+    private function slugifySectionToken(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        $value = \preg_replace('/[^a-z0-9]+/i', '-', $value) ?? $value;
+        $value = \trim($value, '-');
+
+        return $value !== '' ? $value : 'section';
+    }
+
+    /**
      * @param array<string, mixed> $scope
      */
     private function readExistingIdentityAssetUrl(array $scope, string $role): string
@@ -529,6 +896,24 @@ final class AiSiteAssetManifestService
         }
 
         return $value;
+    }
+
+    /**
+     * @param array<string, mixed> $slot
+     */
+    private function isLogoAssetSlot(array $slot): bool
+    {
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+        $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
+        $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
+        $label = \strtolower(\trim((string)($slot['label'] ?? '')));
+
+        return \in_array($field, ['logo', 'logo.image', 'brand.logo'], true)
+            || \in_array($kind, ['website_logo', 'brand_logo'], true)
+            || \str_contains($slotId, 'logo')
+            || (\str_contains($slotType, 'logo') && !\str_contains($kind, 'favicon'))
+            || (\str_contains($label, 'logo') && !\str_contains($label, 'favicon'));
     }
 
     /**
@@ -752,6 +1137,36 @@ final class AiSiteAssetManifestService
         $typographyCues = $this->normalizePromptList($insights['typography_cues'] ?? []);
         if ($typographyCues !== '') {
             $lines[] = 'Reference typography cues: ' . $typographyCues;
+        }
+        $forbidden = $this->normalizePromptList($insights['do_not_use'] ?? []);
+        if ($forbidden !== '') {
+            $lines[] = 'Avoid these reference mismatches: ' . $forbidden;
+        }
+
+        return \implode("\n", $lines);
+    }
+
+    /**
+     * 块级图像专用 reference 摘要：仅保留色彩/质感/风格类提示，
+     * 剥离 layout_cues / component_cues 等会被 AI 解读为"画整页"的结构信号。
+     *
+     * @param array<string, mixed> $scope
+     */
+    private function buildBlockReferenceInsightsPrompt(array $scope): string
+    {
+        $insights = \is_array($scope['reference_image_insights'] ?? null) ? $scope['reference_image_insights'] : [];
+        if ($insights === []) {
+            return '';
+        }
+
+        $lines = [];
+        $styleKeywords = $this->normalizePromptList($insights['style_keywords'] ?? []);
+        if ($styleKeywords !== '') {
+            $lines[] = 'Reference style keywords (apply to subject only): ' . $styleKeywords;
+        }
+        $colorPalette = $this->normalizePromptList($insights['color_palette'] ?? []);
+        if ($colorPalette !== '') {
+            $lines[] = 'Reference color palette (use as subject colors only): ' . $colorPalette;
         }
         $forbidden = $this->normalizePromptList($insights['do_not_use'] ?? []);
         if ($forbidden !== '') {

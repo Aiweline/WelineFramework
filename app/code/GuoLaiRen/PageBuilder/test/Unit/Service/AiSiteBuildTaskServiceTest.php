@@ -1359,4 +1359,83 @@ class AiSiteBuildTaskServiceTest extends TestCase
         self::assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $next['build_tasks']['page:contact_page:missing']['status']);
         self::assertTrue($service->hasUnfinishedBlueprintTasks($next));
     }
+
+    public function testFinalizeBuildTaskStatesThrowsWhenRenderDataQualityGateFails(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = [
+            'workspace_track' => 'virtual_theme',
+            'build_blueprint' => [
+                'source' => 'stage2_confirmed_task_plan',
+                'contract_source' => 'stage2_block_task_contract',
+                'signature' => 'build-blueprint-signature',
+                'task_plan_signature' => 'task-plan-signature',
+                'workspace_track' => 'virtual_theme',
+                'page_types' => ['home_page'],
+                'block_task_contract_id' => 'contract_block_task_current',
+                'source_contracts' => [
+                    [
+                        'id' => 'contract_block_plan_confirmed',
+                        'type' => ContractType::TYPE_BLOCK_PLAN,
+                        'version' => ContractType::VERSION_V1,
+                        'status' => ContractType::STATUS_CONFIRMED,
+                    ],
+                ],
+                'stage2_contracts' => [
+                    [
+                        'id' => 'contract_block_task_current',
+                        'type' => ContractType::TYPE_BLOCK_TASK_CONTRACT,
+                        'version' => ContractType::VERSION_V1,
+                        'status' => ContractType::STATUS_CONFIRMED,
+                    ],
+                ],
+                'tasks' => [
+                    [
+                        'task_key' => 'page:home_page:hero',
+                        'task_type' => 'page_section',
+                        'page_type' => 'home_page',
+                        'section_code' => 'content/home-page-hero',
+                        'group_key' => 'home_page',
+                    ],
+                ],
+            ],
+            'build_tasks' => [
+                'page:home_page:hero' => [
+                    'task_key' => 'page:home_page:hero',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+                ],
+            ],
+            'page_type_layouts' => [
+                'home_page' => [
+                    'title' => 'Home',
+                    'description' => 'Home description.',
+                    'h1' => 'Home',
+                    'content' => [
+                        [
+                            'code' => 'content/home-page-hero',
+                            'component' => 'content/home-page-hero',
+                            'design_tags' => ['visual' => ['hero']],
+                            'html' => '<section><div></section>',
+                        ],
+                    ],
+                ],
+            ],
+            'materialized_pages_by_type' => [
+                'home_page' => [
+                    'page_id' => 123,
+                    'seo_title' => 'Home',
+                    'seo_description' => 'Home seo.',
+                    'h1' => 'Home',
+                ],
+            ],
+            'asset_manifest' => [
+                'version' => 1,
+                'slots' => [],
+            ],
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $service->finalizeBuildTaskStatesAfterRunLoop($scope);
+    }
 }

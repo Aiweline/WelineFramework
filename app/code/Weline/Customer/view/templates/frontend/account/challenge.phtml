@@ -75,6 +75,10 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     line-height: 1.6;
 }
 
+.auth-form__flash {
+    width: 100%;
+}
+
 /* ========== 提示信息 ========== */
 .auth-form__hint {
     display: flex;
@@ -349,16 +353,13 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
         <p class="auth-form__subtitle"><lang>输入您的身份验证器应用生成的代码或备用恢复码</lang></p>
     </header>
 
+    <div class="auth-form__flash wf-system-messages" aria-live="polite">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+
     <form action="/customer/account/challenge" method="post" class="auth-form__body">
         <?= $this->getFormKey('/customer/account/challenge') ?>
         <input type="hidden" name="challenge_token" value="<?= htmlspecialchars($challengeToken, ENT_QUOTES) ?>" />
-
-        <?php if (!empty($success_message)): ?>
-        <div class="auth-form__alert auth-form__alert--success" id="successMessage"><?= $success_message ?></div>
-        <?php endif; ?>
-        <?php if (!empty($error_message)): ?>
-        <div class="auth-form__alert auth-form__alert--danger" id="errorMessage"><?= $error_message ?></div>
-        <?php endif; ?>
 
         <div class="auth-form__hint">
             <div class="auth-form__hint-icon">

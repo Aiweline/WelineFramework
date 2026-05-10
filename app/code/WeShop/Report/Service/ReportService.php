@@ -7,7 +7,9 @@ namespace WeShop\Report\Service;
 use WeShop\Report\Repository\ReportOrderRepositoryInterface;
 
 /**
- * 鎶ヨ〃鏈嶅姟
+ * Report Service
+ *
+ * Provides sales, customer, and product report data.
  */
 class ReportService
 {
@@ -16,11 +18,10 @@ class ReportService
     }
 
     /**
-     * 鑾峰彇閿€鍞姤琛?
+     * Get sales report summary for a date range.
      *
-     * @param string $startDate 寮€濮嬫棩鏈?
-     * @param string $endDate 缁撴潫鏃ユ湡
-     * @return array
+     * @param string $startDate Start date (Y-m-d)
+     * @param string $endDate End date (Y-m-d)
      */
     public function getSalesReport(string $startDate, string $endDate): array
     {
@@ -28,15 +29,44 @@ class ReportService
 
         $totalSales = 0;
         $orderCount = count($orders);
+        $byDay = [];
 
         foreach ($orders as $orderData) {
-            $totalSales += (float)($orderData['total'] ?? 0);
+            $total = (float) ($orderData['total'] ?? 0);
+            $totalSales += $total;
+
+            $day = substr((string) ($orderData['created_at'] ?? ''), 0, 10);
+            if ($day !== '') {
+                if (!isset($byDay[$day])) {
+                    $byDay[$day] = ['total' => 0.0, 'count' => 0];
+                }
+                $byDay[$day]['total'] += $total;
+                $byDay[$day]['count']++;
+            }
         }
 
         return [
             'total_sales' => $totalSales,
             'order_count' => $orderCount,
-            'average_order' => $orderCount > 0 ? $totalSales / $orderCount : 0,
+            'average_order' => $orderCount > 0 ? round($totalSales / $orderCount, 2) : 0.0,
+            'by_day' => $byDay,
+        ];
+    }
+
+    /**
+     * Get sales report data formatted for admin page display.
+     */
+    public function getPageData(string $startDate, string $endDate): array
+    {
+        $report = $this->getSalesReport($startDate, $endDate);
+
+        return [
+            'total_sales' => number_format((float) $report['total_sales'], 2),
+            'order_count' => (int) $report['order_count'],
+            'average_order' => number_format((float) $report['average_order'], 2),
+            'by_day' => $report['by_day'],
+            'start_date' => $startDate,
+            'end_date' => $endDate,
         ];
     }
 }
