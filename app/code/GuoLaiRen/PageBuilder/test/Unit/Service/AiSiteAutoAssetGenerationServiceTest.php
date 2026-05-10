@@ -124,6 +124,56 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
+    public function testPrepareBuildAssetsFallsBackToPlaceholderWhenFakeModeIsEnabled(): void
+    {
+        $publicId = 'asset-fake-mode-' . \bin2hex(\random_bytes(4));
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
+
+        $scope = [
+            'site_title' => 'Fake Mode Build Test',
+            'fake_mode' => 1,
+            'asset_manifest' => [
+                'slots' => [
+                    'home:hero' => [
+                        'slot_id' => 'home:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home',
+                        'label' => 'Hero visual',
+                        'brief' => 'A premium homepage hero image for the fake-mode test.',
+                    ],
+                ],
+            ],
+        ];
+
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static function (): array {
+                throw new \RuntimeException('Fake-mode build must not call the image generator (forced contract).');
+            }
+        );
+        $result = $service->prepareBuildAssets($session, 2, $scope, 1);
+        $resultScope = $result['scope'];
+        $slot = $resultScope['asset_manifest']['slots']['home:hero'] ?? [];
+        $variant = $slot['variants'][0] ?? [];
+        $relativePath = (string)($variant['path'] ?? '');
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
+
+        try {
+            self::assertSame(['home:hero'], $result['generated_slots']);
+            self::assertSame([], $result['failed_slots']);
+            self::assertSame('done', (string)($slot['status'] ?? ''));
+            self::assertSame('placeholder', (string)($variant['mode'] ?? ''));
+            self::assertSame(1, (int)($variant['placeholder'] ?? 0));
+            self::assertFileExists($absolutePath);
+        } finally {
+            if ($relativePath !== '' && \is_file($absolutePath)) {
+                \unlink($absolutePath);
+            }
+        }
+    }
+
     public function testPrepareBuildAssetsRegeneratesLegacyPlaceholderAssets(): void
     {
         $publicId = 'asset-placeholder-regenerate-' . \bin2hex(\random_bytes(4));
@@ -190,6 +240,76 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         } finally {
             foreach ($manifest as $generatedSlot) {
                 $relativePath = (string)($generatedSlot['variants'][0]['path'] ?? '');
+                if ($relativePath === '') {
+                    continue;
+                }
+                $path = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
+                if (\is_file($path)) {
+                    \unlink($path);
+                }
+            }
+        }
+    }
+
+    public function testPrepareBuildAssetsRetriesPlaceholderSectionAssetAndReplacesIt(): void
+    {
+        $publicId = 'asset-placeholder-section-' . \bin2hex(\random_bytes(4));
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
+        $placeholderUrl = '/pub/media/page-build/demo/ai-generated/home-hero-old.svg';
+
+        $scope = [
+            'site_title' => 'Placeholder Section Retry Test',
+            'asset_manifest' => [
+                'slots' => [
+                    'home:hero' => [
+                        'slot_id' => 'home:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home',
+                        'label' => 'Hero visual',
+                        'brief' => 'Generate the homepage hero visual.',
+                        'source' => 'generated',
+                        'status' => 'done',
+                        'final_url' => $placeholderUrl,
+                        'variants' => [[
+                            'url' => $placeholderUrl,
+                            'mode' => 'placeholder',
+                            'model' => 'placeholder',
+                            'placeholder' => 1,
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static fn(): array => [
+                'images' => [[
+                    'b64_json' => \base64_encode('real-hero-image'),
+                    'mime_type' => 'image/png',
+                    'revised_prompt' => 'Generated real hero visual',
+                ]],
+                'model' => 'fake-image-model',
+            ]
+        );
+
+        $result = $service->prepareBuildAssets($session, 2, $scope, 1);
+        $resultScope = $result['scope'];
+        $slot = $resultScope['asset_manifest']['slots']['home:hero'] ?? [];
+        $finalUrl = (string)($slot['final_url'] ?? '');
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($finalUrl, '/'));
+
+        try {
+            self::assertContains('home:hero', $result['generated_slots']);
+            self::assertNotSame($placeholderUrl, $finalUrl);
+            self::assertStringEndsWith('.png', $finalUrl);
+            self::assertSame($finalUrl, (string)($resultScope['verified_assets']['home:hero'] ?? ''));
+            self::assertSame('real-hero-image', (string)\file_get_contents($absolutePath));
+        } finally {
+            foreach (\is_array($slot['variants'] ?? null) ? $slot['variants'] : [] as $variant) {
+                $relativePath = (string)($variant['path'] ?? '');
                 if ($relativePath === '') {
                     continue;
                 }
@@ -277,18 +397,34 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
                 'Magazine-like layouts with bold imagery and layered composition.',
                 (string)($resultScope['reference_image_insights']['summary'] ?? '')
             );
-            self::assertStringContainsString(
-                'Reference style summary: Magazine-like layouts with bold imagery and layered composition.',
-                $seenPrompt
+            // 强行契约：单 block 图像（hero/section）的 prompt 必须剥离 layout/component/typography/summary
+            // cues，避免 AI 把整页 mockup 画进单 block 视觉里。
+            self::assertStringNotContainsString(
+                'Reference style summary',
+                $seenPrompt,
+                'Block-level prompt must strip "Reference style summary" to avoid AI rendering full website mockups.'
+            );
+            self::assertStringNotContainsString(
+                'Reference layout cues',
+                $seenPrompt,
+                'Block-level prompt must strip layout cues that imply full-page structure.'
+            );
+            self::assertStringNotContainsString(
+                'Reference component cues',
+                $seenPrompt,
+                'Block-level prompt must strip component cues to avoid AI rendering header/nav/CTA buttons.'
             );
             self::assertStringContainsString(
-                'Reference style keywords: editorial, high contrast',
+                'Reference style keywords (apply to subject only): editorial, high contrast',
                 $seenPrompt
             );
             self::assertStringContainsString(
                 'Avoid these reference mismatches: flat stock-photo look',
                 $seenPrompt
             );
+            // 同时确认负向 block-only 约束已注入
+            self::assertStringContainsString('Block-only visual constraints', $seenPrompt);
+            self::assertStringContainsString('DO NOT draw a website mockup', $seenPrompt);
             self::assertSame($seenPrompt, (string)($variant['revised_prompt'] ?? ''));
         } finally {
             if ($relativePath !== '' && \is_file($absolutePath)) {
@@ -445,5 +581,74 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         self::assertSame('', (string)($slot['final_url'] ?? ''));
         self::assertSame([], $resultScope['verified_assets'] ?? []);
         self::assertStringContainsString('No text2image model configured.', (string)($slot['error_message'] ?? ''));
+
+        $failTrail = \is_array($resultScope['asset_image_generation_failures'] ?? null) ? $resultScope['asset_image_generation_failures'] : [];
+        self::assertGreaterThanOrEqual(1, \count($failTrail));
+        self::assertSame('home:hero', (string)($failTrail[\count($failTrail) - 1]['slot_id'] ?? ''));
+        self::assertStringContainsString('No text2image model configured.', (string)($failTrail[\count($failTrail) - 1]['message'] ?? ''));
+    }
+
+    public function testPrepareBuildAssetsClearsHistoricalFailureWhenSlotGeneratesSuccessfully(): void
+    {
+        $publicId = 'asset-clear-failure-' . \bin2hex(\random_bytes(4));
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
+
+        $scope = [
+            'site_title' => 'Asset Failure Cleanup Test',
+            'asset_image_generation_failures' => [
+                [
+                    'slot_id' => 'home:hero',
+                    'message' => 'Old provider failure',
+                    'updated_at' => '2026-05-09 04:11:13',
+                ],
+                [
+                    'slot_id' => 'identity:website-logo',
+                    'message' => 'Keep this one',
+                    'updated_at' => '2026-05-09 04:11:13',
+                ],
+            ],
+            'asset_manifest' => [
+                'slots' => [
+                    'home:hero' => [
+                        'slot_id' => 'home:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home',
+                        'label' => 'Hero visual',
+                        'brief' => 'A premium homepage hero image for the generated site.',
+                    ],
+                ],
+            ],
+        ];
+
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static fn(): array => [
+                'images' => [[
+                    'b64_json' => \base64_encode('clean-success-image'),
+                    'mime_type' => 'image/png',
+                    'revised_prompt' => 'Generated hero visual',
+                ]],
+                'model' => 'fake-image-model',
+            ]
+        );
+        $result = $service->prepareBuildAssets($session, 2, $scope, 1);
+        $resultScope = $result['scope'];
+        $slot = $resultScope['asset_manifest']['slots']['home:hero'] ?? [];
+        $variant = $slot['variants'][0] ?? [];
+        $relativePath = (string)($variant['path'] ?? '');
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
+
+        try {
+            $failTrail = \is_array($resultScope['asset_image_generation_failures'] ?? null) ? $resultScope['asset_image_generation_failures'] : [];
+            self::assertCount(1, $failTrail);
+            self::assertSame('identity:website-logo', (string)($failTrail[0]['slot_id'] ?? ''));
+            self::assertSame(['home:hero'], $result['generated_slots']);
+        } finally {
+            if ($relativePath !== '' && \is_file($absolutePath)) {
+                \unlink($absolutePath);
+            }
+        }
     }
 }

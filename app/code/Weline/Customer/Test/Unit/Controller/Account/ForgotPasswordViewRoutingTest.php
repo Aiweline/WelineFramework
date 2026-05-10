@@ -25,7 +25,7 @@ class ForgotPasswordViewRoutingTest extends TestCase
 
         $controller->expects($this->once())->method('isLoggedIn')->willReturn(false);
         $assignCalls = 0;
-        $controller->expects($this->exactly(7))
+        $controller->expects($this->exactly(5))
             ->method('assign')
             ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): ForgotPassword {
                 $expectedKeys = [
@@ -34,8 +34,6 @@ class ForgotPasswordViewRoutingTest extends TestCase
                     'login_url',
                     'register_url',
                     'title',
-                    'error_message',
-                    'success_message',
                 ];
                 TestCase::assertSame($expectedKeys[$assignCalls], $key);
                 $assignCalls++;

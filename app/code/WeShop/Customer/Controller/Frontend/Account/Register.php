@@ -7,6 +7,7 @@ namespace WeShop\Customer\Controller\Frontend\Account;
 use WeShop\Customer\Service\CustomerAccountService;
 use WeShop\Customer\Session\CustomerSession;
 use WeShop\Frontend\Controller\BaseController;
+use Weline\Framework\Manager\MessageManager;
 
 class Register extends BaseController
 {
@@ -27,7 +28,7 @@ class Register extends BaseController
         $this->assign('login_url', $this->getUrl('weshop/customer/account/login'));
         $this->assign('title', __('注册'));
 
-        return $this->fetch();
+        return $this->fetch('WeShop_Frontend::templates/frontend/customer/account/register.phtml');
     }
 
     public function postIndex(): string

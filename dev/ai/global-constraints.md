@@ -21,5 +21,10 @@
 ## 必做（全局）
 
 - 用户可见文案：`__()` 或 `<lang>`，词条进 i18n/*.csv
+- **`.phtml` 视图模板**：在能力与团队约定允许时**优先使用模板标签语法**（Taglib / 视图 DSL），而不是大块原生 PHP
+  - 条件与空值展示：`<notempty name="field">`、`<empty>`、`<if>` 等与项目约定一致的标签
+  - 变量输出：`<var>name</var>` 或与框架一致的变量标签（避免无故把已有标签改写成 `<?= ?>`）
+  - 文案：`<lang>…</lang>`（与上条 i18n 约束一致）
+  - **例外**：文件顶部少量 `<?php` 赋值/注释、`@var`、以及标签无法表达的复杂逻辑时，可用 PHP；新建/修改模板时不要默认堆 `if/echo` 替代现有标签体系
 - 表结构变更：Model #[Col]/#[Index]，执行 `php bin/w setup:upgrade`
 - 新增控制器后：`php bin/w setup:upgrade --route`

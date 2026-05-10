@@ -1,0 +1,32 @@
+"CMS Page Management","CMS页面管理"
+"CMS page saved successfully.","CMS页面保存成功。"
+"CMS page save failed.","CMS页面保存失败。"
+"CMS page deleted successfully.","CMS页面删除成功。"
+"CMS page delete failed.","CMS页面删除失败。"
+"CMS page not found.","CMS页面未找到。"
+"Page title is required.","页面标题不能为空。"
+"Page identifier is required.","页面标识符不能为空。"
+"Page identifier already exists. Please use a different one.","页面标识符已存在，请使用其他标识符。"
+"Invalid page ID.","无效的页面ID。"
+"Page not found.","页面未找到。"
+Title,标题
+Identifier,标识符
+Status,状态
+"Content Heading","内容标题"
+Content,内容
+"Meta Title","Meta标题"
+"Meta Description","Meta描述"
+"Meta Keywords","Meta关键词"
+"Page Layout","页面布局"
+"Sort Order","排序"
+Enabled,启用
+Disabled,禁用
+"Create New Page","创建新页面"
+"Edit Page","编辑页面"
+"Save Page","保存页面"
+Delete,删除
+Search,搜索
+"Are you sure you want to delete this page?","确定要删除此页面吗？"
+"Back to list","返回列表"
+Actions,操作
+"Content Management","内容管理"

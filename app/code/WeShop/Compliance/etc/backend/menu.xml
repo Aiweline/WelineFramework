@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <!-- 合规管理 - 归入系统与服务 -->
+    <menu source="WeShop_Compliance::compliance_management" name="weshop_compliance_management" title="Compliance"
+          action="*/backend/compliance"
+          parent="Weline_Backend::system_service_group"
+          icon="mdi mdi-shield-check-outline"
+          order="60"/>
+</menus>

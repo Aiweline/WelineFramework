@@ -8,6 +8,8 @@
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+    <!-- 与 account_auth/default 一致：认证表单留白、Flash、密码可见性切换按钮 -->
+    <theme:css>Weline_Theme::theme/frontend/assets/css/auth-form-wflash.css</theme:css>
 </head>
 <body>
     @template(Weline_Frontend::templates/public/header.phtml)

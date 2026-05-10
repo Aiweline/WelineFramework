@@ -55,18 +55,18 @@ class CouponService
     protected function validateCoupon(Coupon $coupon, int $customerId, float $orderTotal): bool
     {
         // 检查是否启用
-        if (!$coupon->getData('is_active')) {
+        if (!$coupon->getData(Coupon::schema_fields_IS_ACTIVE)) {
             return false;
         }
-        
+
         // 检查有效期
         $now = date('Y-m-d H:i:s');
-        if ($coupon->getData('start_date') > $now || $coupon->getData('end_date') < $now) {
+        if ($coupon->getData(Coupon::schema_fields_START_DATE) > $now || $coupon->getData(Coupon::schema_fields_END_DATE) < $now) {
             return false;
         }
-        
+
         // 检查最低消费
-        if ($coupon->getData('min_amount') > $orderTotal) {
+        if ($coupon->getData(Coupon::schema_fields_MIN_AMOUNT) > $orderTotal) {
             return false;
         }
         
@@ -82,9 +82,9 @@ class CouponService
      */
     protected function calculateDiscount(Coupon $coupon, float $orderTotal): float
     {
-        $discountType = $coupon->getData('discount_type');
-        $discountValue = (float)$coupon->getData('discount_value');
-        
+        $discountType = $coupon->getData(Coupon::schema_fields_DISCOUNT_TYPE);
+        $discountValue = (float)$coupon->getData(Coupon::schema_fields_DISCOUNT_VALUE);
+
         if ($discountType === 'percent') {
             // 百分比折扣
             $discount = $orderTotal * ($discountValue / 100);
@@ -92,9 +92,9 @@ class CouponService
             // 固定金额折扣
             $discount = $discountValue;
         }
-        
+
         // 检查最大折扣金额
-        $maxDiscount = (float)$coupon->getData('max_discount');
+        $maxDiscount = (float)$coupon->getData(Coupon::schema_fields_MAX_DISCOUNT);
         if ($maxDiscount > 0 && $discount > $maxDiscount) {
             $discount = $maxDiscount;
         }

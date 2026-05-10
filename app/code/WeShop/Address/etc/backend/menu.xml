@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <!-- 地址管理 - 归入客户管理 -->
+    <menu source="WeShop_Address::address_management" name="weshop_address_management" title="Address Management"
+          action="*/backend/address"
+          parent="WeShop_Customer::customer_main"
+          icon="mdi mdi-map-marker-outline"
+          order="30"/>
+</menus>

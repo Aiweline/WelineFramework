@@ -449,6 +449,10 @@ final class AiSiteExecutionBlueprintService
                 );
                 $planJson = $this->mergeStageOneThemeAiPlanJson($planJson, $themeDecoded, $planLocale, $pageTypes, $scope);
                 $planJson['content_locale'] = $contentLocale;
+                // Repair incomplete theme_design before validation: AI sometimes
+                // returns a partial theme_design missing required sub-fields. Rather
+                // than failing the entire stage-1 pipeline, fill in reasonable defaults.
+                $planJson = $this->repairStageOneThemeDesignBeforeValidation($planJson, $scope, $pageTypes);
                 $this->assertStageOneThemePlanIsGenerated($planJson);
                 $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'theme_design', $pageTypes);
             }
@@ -1153,6 +1157,22 @@ final class AiSiteExecutionBlueprintService
             || $planJson['navigation_plan']['header_items'] === []
         ) {
             $planJson['navigation_plan'] = $this->buildNavigationPlan($pageTypes, $contentLocale);
+        } else {
+            // Sanitize individual header_items: AI sometimes returns items with empty
+            // label or href despite the prompt rules. Filter out broken rows and fall
+            // back to the built-in plan if too many items are invalid.
+            $headerItems = $planJson['navigation_plan']['header_items'];
+            $validItems = \array_values(\array_filter($headerItems, static function ($item): bool {
+                return \is_array($item)
+                    && \trim((string)($item['label'] ?? '')) !== ''
+                    && \trim((string)($item['href'] ?? '')) !== '';
+            }));
+            if (\count($validItems) < \max(2, (int)(\count($headerItems) * 0.5))) {
+                // More than half the items are broken — fall back entirely
+                $planJson['navigation_plan'] = $this->buildNavigationPlan($pageTypes, $contentLocale);
+            } else {
+                $planJson['navigation_plan']['header_items'] = $validItems;
+            }
         }
 
         if (
@@ -1163,6 +1183,21 @@ final class AiSiteExecutionBlueprintService
             || $planJson['footer_plan']['policies'] === []
         ) {
             $planJson['footer_plan'] = $this->buildFooterPlan($pageTypes, $contentLocale);
+        } else {
+            // Sanitize footer items similarly
+            foreach (['featured', 'policies'] as $footerKey) {
+                $items = \is_array($planJson['footer_plan'][$footerKey] ?? null) ? $planJson['footer_plan'][$footerKey] : [];
+                $validItems = \array_values(\array_filter($items, static function ($item): bool {
+                    return \is_array($item)
+                        && \trim((string)($item['label'] ?? '')) !== ''
+                        && \trim((string)($item['href'] ?? '')) !== '';
+                }));
+                if (\count($validItems) < \max(1, (int)(\count($items) * 0.5))) {
+                    $planJson['footer_plan'] = $this->buildFooterPlan($pageTypes, $contentLocale);
+                    break;
+                }
+                $planJson['footer_plan'][$footerKey] = $validItems;
+            }
         }
 
         return $planJson;
@@ -3326,7 +3361,11 @@ final class AiSiteExecutionBlueprintService
         $planJson['requirement_expansion'] = $requirementExpansion;
         $planJson['shared_components'] = $sharedComponents;
         $this->assertStageOneRequirementExpansionIsGenerated($planJson);
+        // Repair before assertion — same repair as in the main streaming pipeline
+        $planJson = $this->repairStageOneThemeDesignBeforeValidation($planJson, $scope, $pageTypes);
         $this->assertStageOneThemePlanIsGenerated($planJson);
+        // Re-sync $themeDesign after repair may have changed it
+        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : $themeDesign;
         $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
         $executionBlueprint['shared_components'] = $sharedComponents;
@@ -4752,6 +4791,97 @@ final class AiSiteExecutionBlueprintService
         $asciiLength = \strlen((string)\preg_replace('/[^\x00-\x7F]/', '', $text));
 
         return $asciiLength >= (int)\ceil(\strlen($text) * 0.7);
+    }
+
+    /**
+     * Repair an incomplete theme_design before the strict assertion runs.
+     *
+     * The AI sometimes returns a structurally valid JSON but with missing sub-fields
+     * inside theme_design (e.g., no `color_scheme.primary`, empty `visual_keywords`).
+     * Instead of failing the entire stage-1 pipeline with a generic error, fill in
+     * reasonable defaults from the palette/style data that IS available.
+     *
+     * @param array<string,mixed> $planJson
+     * @param array<string,mixed> $scope
+     * @param list<string> $pageTypes
+     * @return array<string,mixed>
+     */
+    private function repairStageOneThemeDesignBeforeValidation(array $planJson, array $scope, array $pageTypes): array
+    {
+        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [];
+        if ($themeDesign === []) {
+            // No theme_design at all — nothing to repair here; the assertion will catch it
+            return $planJson;
+        }
+
+        // Repair missing palette colors from theme_style or existing palette data
+        $palette = \is_array($planJson['palette'] ?? null) ? $planJson['palette'] : [];
+        $themeStyle = \is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : [];
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+
+        if (\trim((string)($colorScheme['primary'] ?? '')) === '') {
+            $colorScheme['primary'] = $this->pickString(
+                $palette['primary'] ?? null,
+                $themeStyle['primary_color'] ?? null,
+                '#1e293b'
+            );
+        }
+        if (\trim((string)($colorScheme['accent'] ?? '')) === '') {
+            $colorScheme['accent'] = $this->pickString(
+                $palette['accent'] ?? null,
+                $themeStyle['accent_color'] ?? null,
+                $themeStyle['secondary_color'] ?? null,
+                '#3b82f6'
+            );
+        }
+        $themeDesign['color_scheme'] = $colorScheme;
+
+        // Repair missing typography fields
+        $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+        if (\trim((string)($typography['font_family'] ?? '')) === '') {
+            $typography['font_family'] = $this->pickString(
+                $themeStyle['font_family'] ?? null,
+                $palette['font_family'] ?? null,
+                'system-ui, -apple-system, sans-serif'
+            );
+        }
+        if (\trim((string)($typography['spacing_scale'] ?? '')) === '') {
+            $typography['spacing_scale'] = '1.25';
+        }
+        $themeDesign['typography_spacing_radius'] = $typography;
+
+        // Repair missing visual_keywords
+        if (!\is_array($themeDesign['visual_keywords'] ?? null) || $themeDesign['visual_keywords'] === []) {
+            $themeStyleKeywords = \is_array($themeStyle['visual_keywords'] ?? null) ? $themeStyle['visual_keywords'] : [];
+            $paletteKeywords = \is_array($palette['visual_keywords'] ?? null) ? $palette['visual_keywords'] : [];
+            $fallbackKeywords = $themeStyleKeywords !== [] ? $themeStyleKeywords : ($paletteKeywords !== [] ? $paletteKeywords : []);
+            if ($fallbackKeywords !== []) {
+                $themeDesign['visual_keywords'] = $fallbackKeywords;
+            } else {
+                $themeDesign['visual_keywords'] = ['clean', 'professional', 'accessible'];
+            }
+        }
+
+        // Repair missing theme_purpose
+        if (\trim((string)($themeDesign['theme_purpose'] ?? '')) === '') {
+            $themeDesign['theme_purpose'] = \trim((string)($themeStyle['theme_purpose'] ?? $themeStyle['description'] ?? ''));
+            if ($themeDesign['theme_purpose'] === '') {
+                $siteTitle = \trim((string)($scope['site_title'] ?? $scope['website_profile']['site_title'] ?? ''));
+                $themeDesign['theme_purpose'] = $siteTitle !== ''
+                    ? '为 "' . $siteTitle . '" 建立清晰可信的线上品牌形象'
+                    : '建立清晰可信的线上品牌形象';
+            }
+        }
+
+        // Repair missing selection_reason (delegated to existing method)
+        $themeDesign = $this->repairAiStageOneThemeSelectionReasonBeforeValidation(
+            $themeDesign,
+            \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $scope['website_profile']['brief_description'] ?? '')),
+            \trim((string)($planJson['content_locale'] ?? $planJson['plan_locale'] ?? ''))
+        );
+
+        $planJson['theme_design'] = $themeDesign;
+        return $planJson;
     }
 
     /**
@@ -11289,12 +11419,35 @@ final class AiSiteExecutionBlueprintService
         }
 
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+        $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
+        $confirmedPlanBook = \is_array($confirmedWorkbench['plan_book'] ?? null) ? $confirmedWorkbench['plan_book'] : [];
         $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
             ? $scope['execution_blueprint_draft']
             : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null)
+            ? $executionBlueprint['page_plans']
+            : (\is_array($structured['page_plans'] ?? null) ? $structured['page_plans'] : []);
+        if ($pagePlans === []) {
+            $pagePlans = \is_array($confirmedWorkbench['structured_plan']['page_plans'] ?? null)
+                ? $confirmedWorkbench['structured_plan']['page_plans']
+                : (\is_array($confirmedPlanBook['structured']['page_plans'] ?? null) ? $confirmedPlanBook['structured']['page_plans'] : []);
+        }
         $pages = \is_array($executionBlueprint['pages'] ?? null)
             ? $executionBlueprint['pages']
             : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
+        if ($pages === [] && $pagePlans !== []) {
+            $pages = $pagePlans;
+        }
+        if ($pages === []) {
+            $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        }
+        if ($pages === []) {
+            $pages = \is_array($confirmedWorkbench['plan_json']['pages'] ?? null)
+                ? $confirmedWorkbench['plan_json']['pages']
+                : (\is_array($confirmedPlanBook['structured']['pages'] ?? null) ? $confirmedPlanBook['structured']['pages'] : []);
+        }
         $pagePlan = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
         if ($pagePlan === []) {
             throw new \RuntimeException('Stage-1 page plan not found for page type: ' . $pageType);
