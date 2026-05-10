@@ -49,11 +49,14 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
+    flex-shrink: 0;
 }
 
-.auth-form__icon i {
-    font-size: 2rem;
+.auth-form__icon-svg {
+    width: 2rem;
+    height: 2rem;
     color: var(--color-text-light);
+    display: block;
 }
 
 .auth-form__title {
@@ -255,24 +258,38 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     color: var(--color-text-light);
 }
 
-.auth-form__submit--loading {
-    position: relative;
-    color: transparent !important;
+.auth-form__submit-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
 }
 
-.auth-form__submit--loading::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    top: 50%;
-    left: 50%;
-    margin-left: -10px;
-    margin-top: -10px;
-    border: 2px solid var(--color-text-light);
+.auth-form__submit-state--busy {
+    display: none;
+}
+
+.auth-form__submit--busy .auth-form__submit-state--idle {
+    display: none;
+}
+
+.auth-form__submit--busy .auth-form__submit-state--busy {
+    display: inline-flex;
+}
+
+.auth-form__submit-spinner {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: currentColor;
     border-radius: 50%;
-    border-top-color: transparent;
-    animation: authSpin 0.8s linear infinite;
+    animation: authSpin 0.75s linear infinite;
+}
+
+.auth-form__submit--busy {
+    cursor: wait;
+    opacity: 0.92;
 }
 
 @keyframes authSpin {
@@ -316,10 +333,11 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
 .auth-form__footer {
     margin-top: var(--spacing-lg, 1.5rem);
     padding-top: var(--spacing-md, 1rem);
-    border-top: 1px solid var(--color-border-default);
+    border-top: none;
     text-align: center;
     font-size: var(--font-size-sm, 0.875rem);
     color: var(--color-text-secondary);
+    line-height: 1.6;
 }
 
 .auth-form__footer-link {
@@ -327,14 +345,17 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     text-decoration: none;
     font-weight: var(--font-weight-semibold, 600);
     transition: color 0.3s;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs, 0.25rem);
+    margin-inline-start: 0.25rem;
 }
 
 .auth-form__footer-link:hover {
     color: var(--color-link-hover);
     text-decoration: underline;
+}
+
+/* ========== 服务端 Flash（展示在表单卡片内） ========== */
+.auth-form__flash {
+    width: 100%;
 }
 
 /* ========== 错误提示 ========== */
@@ -382,36 +403,31 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
         height: 56px;
     }
 
-    .auth-form__icon i {
-        font-size: 1.75rem;
+    .auth-form__icon-svg {
+        width: 1.75rem;
+        height: 1.75rem;
     }
 }
 </style>
 
 <div class="auth-form">
     <header class="auth-form__header">
-        <div class="auth-form__icon">
-            <i class="fas fa-user-circle"></i>
+        <div class="auth-form__icon" aria-hidden="true">
+            <svg class="auth-form__icon-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                <path fill="currentColor" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.986 0-7 1.79-7 4v1h14v-1c0-2.21-3.014-4-7-4Z"/>
+            </svg>
         </div>
         <h1 class="auth-form__title"><lang>欢迎回来</lang></h1>
         <p class="auth-form__subtitle"><lang>请登录您的账户以继续</lang></p>
     </header>
 
+    <div class="auth-form__flash wf-system-messages" aria-live="polite">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+
     <form id="loginForm" class="auth-form__body" action="/customer/account/login" method="post">
         <?= $this->getFormKey('/customer/account/login') ?>
         <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>" />
-        <?php if (!empty($error_message)): ?>
-        <?php
-        echo $this->fetch('Weline_Theme::theme/frontend/components/alert.phtml', [
-            'type' => 'error',
-            'id' => 'errorMessage',
-            'message' => $error_message,
-            'dismissible' => false,
-            'class' => '',
-            'html' => true
-        ]);
-        ?>
-        <?php endif; ?>
 
         <div class="auth-form__field">
             <label class="auth-form__label" for="username">
@@ -438,7 +454,7 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
                 <i class="fas fa-lock"></i>
                 <lang>密码</lang>
             </label>
-            <div class="auth-form__input-wrapper">
+            <div class="auth-form__input-wrapper auth-form__input-wrapper--password">
                 <i class="fas fa-key"></i>
                 <input
                     class="auth-form__input"
@@ -449,6 +465,20 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
                     required
                     autocomplete="current-password"
                 />
+                <button
+                    type="button"
+                    class="auth-form__password-toggle"
+                    data-password-target="password"
+                    data-label-show="<?= htmlspecialchars(__('Show password'), ENT_QUOTES) ?>"
+                    data-label-hide="<?= htmlspecialchars(__('Hide password'), ENT_QUOTES) ?>"
+                    aria-label="<?= htmlspecialchars(__('Show password'), ENT_QUOTES) ?>"
+                    aria-pressed="false"
+                >
+                    <span class="auth-form__password-toggle-icon" aria-hidden="true">
+                        <svg class="auth-form__pwd-svg auth-form__pwd-svg--show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg class="auth-form__pwd-svg auth-form__pwd-svg--hide" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </span>
+                </button>
             </div>
         </div>
 
@@ -474,9 +504,10 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
         </div>
 
         <button type="submit" id="loginBtn" class="auth-form__submit">
-            <span id="loginText"><lang>登录</lang></span>
-            <span id="loginSpinner" class="d-none">
-                <i class="fas fa-spinner fa-spin me-2"></i><lang>登录中...</lang>
+            <span id="loginIdleLabel" class="auth-form__submit-state auth-form__submit-state--idle"><lang>登录</lang></span>
+            <span id="loginBusyLabel" class="auth-form__submit-state auth-form__submit-state--busy" aria-hidden="true">
+                <span class="auth-form__submit-spinner"></span>
+                <span><lang>登录中...</lang></span>
             </span>
         </button>
     </form>
@@ -491,11 +522,8 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     </div>
 
     <footer class="auth-form__footer">
-        <lang>还没有账户？</lang>
-        <a href="/customer/account/register" class="auth-form__footer-link">
-            <i class="fas fa-user-plus"></i>
-            <lang>立即注册</lang>
-        </a>
+        <span><lang>还没有账户？</lang></span>
+        <a href="/customer/account/register" class="auth-form__footer-link"><lang>立即注册</lang></a>
     </footer>
 </div>
 
@@ -503,81 +531,191 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
 (function() {
     'use strict';
 
-    $(document).ready(function() {
-        var $form = $('#loginForm');
-        var $errorMsg = $('#errorMessage');
-        var $errorText = $('#errorText');
-        var $loginBtn = $('#loginBtn');
-        var $loginText = $('#loginText');
-        var $loginSpinner = $('#loginSpinner');
-        var $username = $('#username');
-        var $password = $('#password');
-
-        function ensureErrorMsg() {
-            if ($errorMsg.length === 0) {
-                var alertHtml = '<div class="alert alert-danger" id="errorMessage" role="alert">' +
-                    '<i class="fa fa-exclamation-circle me-2"></i>' +
-                    '<span id="errorText"></span></div>';
-                $form.before(alertHtml);
-                $errorMsg = $('#errorMessage');
-                $errorText = $('#errorText');
+    function closest(el, selector) {
+        while (el && el.nodeType === 1) {
+            if (el.matches(selector)) {
+                return el;
             }
-            return $errorMsg;
+            el = el.parentElement;
+        }
+        return null;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var form = document.getElementById('loginForm');
+        var loginBtn = document.getElementById('loginBtn');
+        var loginIdleLabel = document.getElementById('loginIdleLabel');
+        var loginBusyLabel = document.getElementById('loginBusyLabel');
+        var username = document.getElementById('username');
+        var password = document.getElementById('password');
+
+        if (!form || !loginBtn || !username || !password) {
+            return;
         }
 
-        $username.on('focus', function() {
-            $(this).closest('.auth-form__input-wrapper').addClass('auth-form__input-wrapper--focused');
-        }).on('blur', function() {
-            $(this).closest('.auth-form__input-wrapper').removeClass('auth-form__input-wrapper--focused');
+        document.querySelectorAll('.auth-form__password-toggle[data-password-target]').forEach(function(btn) {
+            var targetId = btn.getAttribute('data-password-target');
+            var pwdInput = targetId ? document.getElementById(targetId) : null;
+            if (!pwdInput) {
+                return;
+            }
+            var showLabel = btn.getAttribute('data-label-show') || '';
+            var hideLabel = btn.getAttribute('data-label-hide') || '';
+            var iconWrap = btn.querySelector('.auth-form__password-toggle-icon');
+            btn.addEventListener('click', function() {
+                var wasPassword = pwdInput.type === 'password';
+                pwdInput.type = wasPassword ? 'text' : 'password';
+                var nowPlain = pwdInput.type === 'text';
+                btn.setAttribute('aria-pressed', nowPlain ? 'true' : 'false');
+                btn.setAttribute('aria-label', nowPlain ? hideLabel : showLabel);
+                if (iconWrap) {
+                    var svgShow = iconWrap.querySelector('.auth-form__pwd-svg--show');
+                    var svgHide = iconWrap.querySelector('.auth-form__pwd-svg--hide');
+                    if (svgShow && svgHide) {
+                        if (nowPlain) {
+                            svgShow.setAttribute('hidden', 'hidden');
+                            svgHide.removeAttribute('hidden');
+                        } else {
+                            svgShow.removeAttribute('hidden');
+                            svgHide.setAttribute('hidden', 'hidden');
+                        }
+                    }
+                }
+            });
         });
 
-        $password.on('focus', function() {
-            $(this).closest('.auth-form__input-wrapper').addClass('auth-form__input-wrapper--focused');
-        }).on('blur', function() {
-            $(this).closest('.auth-form__input-wrapper').removeClass('auth-form__input-wrapper--focused');
-        });
+        function ensureErrorMsg() {
+            var msg = document.getElementById('errorMessage');
+            if (!msg) {
+                msg = document.createElement('div');
+                msg.className = 'wflash wflash--danger auth-form__client-error';
+                msg.id = 'errorMessage';
+                msg.setAttribute('role', 'alert');
+                msg.innerHTML = '<i class="fas fa-exclamation-circle" aria-hidden="true"></i>' +
+                    '<span class="wflash__body" id="errorText"></span>';
+                form.parentNode.insertBefore(msg, form);
+            }
+            return msg;
+        }
 
-        $form.on('submit', function(e) {
+        function bindInputFocusWrap(input) {
+            input.addEventListener('focus', function() {
+                var wrap = closest(input, '.auth-form__input-wrapper');
+                if (wrap) {
+                    wrap.classList.add('auth-form__input-wrapper--focused');
+                }
+            });
+            input.addEventListener('blur', function() {
+                var wrap = closest(input, '.auth-form__input-wrapper');
+                if (wrap) {
+                    wrap.classList.remove('auth-form__input-wrapper--focused');
+                }
+            });
+        }
+
+        bindInputFocusWrap(username);
+        bindInputFocusWrap(password);
+
+        function normalizeLoginPayload(raw) {
+            if (raw == null) {
+                return null;
+            }
+            if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+                if (
+                    typeof raw.success !== 'undefined' ||
+                    typeof raw.redirect !== 'undefined' ||
+                    raw.status === 'authenticated' ||
+                    raw.status === 'challenge_required'
+                ) {
+                    return raw;
+                }
+                if (raw.data && typeof raw.data === 'object') {
+                    return normalizeLoginPayload(raw.data);
+                }
+            }
+            if (typeof raw === 'string') {
+                var t = raw.trim();
+                if (t.charAt(0) === '{' || t.charAt(0) === '[') {
+                    try {
+                        return normalizeLoginPayload(JSON.parse(t));
+                    } catch (e) {
+                        return null;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function isLoginSuccessPayload(payload) {
+            if (!payload || typeof payload !== 'object') {
+                return false;
+            }
+            if (payload.success === true || payload.success === 'true') {
+                return true;
+            }
+            return payload.status === 'authenticated';
+        }
+
+        form.addEventListener('submit', function(e) {
             e.preventDefault();
 
-            if ($errorMsg.length) {
-                $errorMsg.addClass('d-none').removeClass('show');
+            var existingErr = document.getElementById('errorMessage');
+            if (existingErr) {
+                existingErr.hidden = true;
             }
 
-            if (!$username.val().trim()) {
+            var userVal = (username.value || '').trim();
+            if (!userVal) {
                 ensureErrorMsg();
-                $errorText.text('<lang>请输入用户名或邮箱</lang>');
-                $username.focus();
+                var tUser = document.getElementById('errorText');
+                if (tUser) {
+                    tUser.innerHTML = '<lang>请输入用户名或邮箱</lang>';
+                }
+                username.focus();
                 return;
             }
 
-            if (!$password.val()) {
+            if (!password.value) {
                 ensureErrorMsg();
-                $errorText.text('<lang>请输入密码</lang>');
-                $password.focus();
+                var tPwd = document.getElementById('errorText');
+                if (tPwd) {
+                    tPwd.innerHTML = '<lang>请输入密码</lang>';
+                }
+                password.focus();
                 return;
             }
 
-            $loginBtn.prop('disabled', true).addClass('auth-form__submit--loading');
-            $loginText.hide();
-            $loginSpinner.removeClass('d-none').show();
+            loginBtn.disabled = true;
+            loginBtn.classList.add('auth-form__submit--busy');
+            loginBtn.setAttribute('aria-busy', 'true');
+
+            var body = new URLSearchParams(new FormData(form)).toString();
 
             window.Weline.Api.request('/customer/account/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: $form.serialize()
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json, text/javascript, */*;q=0.01'
+                },
+                body: body,
+                credentials: 'same-origin'
             })
             .then(function(response) {
-                var resp = response.data;
-                if (response.ok && resp && resp.success) {
-                    $loginBtn.removeClass('auth-form__submit--loading').addClass('auth-form__submit--success');
-                    $loginSpinner.addClass('d-none').hide();
-                    $loginText.html('<i class="fas fa-check-circle me-2"></i><lang>登录成功！</lang>').show();
+                var resp = normalizeLoginPayload(response.data);
+                if (response.ok && isLoginSuccessPayload(resp)) {
+                    loginBtn.classList.remove('auth-form__submit--busy');
+                    loginBtn.classList.add('auth-form__submit--success');
+                    loginBtn.setAttribute('aria-busy', 'false');
+                    if (loginBusyLabel) {
+                        loginBusyLabel.setAttribute('aria-hidden', 'true');
+                    }
+                    if (loginIdleLabel) {
+                        loginIdleLabel.innerHTML = '<i class="fas fa-check-circle"></i> <lang>登录成功！</lang>';
+                    }
 
-                    $loginBtn.css({
-                        'transform': 'scale(1.05)',
-                        'transition': 'transform 0.3s'
-                    });
+                    loginBtn.style.transform = 'scale(1.05)';
+                    loginBtn.style.transition = 'transform 0.3s';
 
                     setTimeout(function() {
                         window.location.href = (resp.redirect || '/customer/account');
@@ -587,42 +725,57 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
                 }
             })
             .catch(function(error) {
-                var errorMsg = (error && error.response && error.response.data && (error.response.data.message || error.response.data.msg)) || (error && error.message) || '<lang>登录请求失败，请稍后重试</lang>';
+                var errData = error && error.response ? error.response.data : null;
+                var parsedErr = normalizeLoginPayload(errData);
+                var errorMsg = (parsedErr && parsedErr.message) ||
+                    (errData && typeof errData === 'object' && (errData.message || errData.msg)) ||
+                    (error && error.message) ||
+                    '<lang>登录请求失败，请稍后重试</lang>';
                 handleLoginError(errorMsg);
             });
         });
 
         function handleLoginError(message) {
-            var $errEl = ensureErrorMsg();
-            $errorText.html(message);
+            var errEl = ensureErrorMsg();
+            errEl.removeAttribute('hidden');
+            var errText = document.getElementById('errorText');
+            if (errText) {
+                errText.innerHTML = message;
+            }
 
-            $('html, body').animate({
-                scrollTop: $errEl.offset().top - 100
-            }, 300);
+            var rect = errEl.getBoundingClientRect();
+            var scrollTop = window.scrollY + rect.top - 100;
+            window.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
 
-            $loginBtn.prop('disabled', false)
-                .removeClass('auth-form__submit--loading auth-form__submit--success')
-                .css('transform', '');
-            $loginSpinner.addClass('d-none').hide();
-            $loginText.text('<lang>登录</lang>').show();
+            loginBtn.disabled = false;
+            loginBtn.classList.remove('auth-form__submit--busy', 'auth-form__submit--success');
+            loginBtn.setAttribute('aria-busy', 'false');
+            loginBtn.style.transform = '';
+            loginBtn.style.transition = '';
+            if (loginBusyLabel) {
+                loginBusyLabel.setAttribute('aria-hidden', 'true');
+            }
+            if (loginIdleLabel) {
+                loginIdleLabel.innerHTML = '<lang>登录</lang>';
+            }
 
-            $form.addClass('auth-form--shake');
+            form.classList.add('auth-form--shake');
             setTimeout(function() {
-                $form.removeClass('auth-form--shake');
+                form.classList.remove('auth-form--shake');
             }, 500);
         }
 
-        $username.on('keypress', function(e) {
-            if (e.which === 13) {
-                $password.focus();
+        username.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                password.focus();
             }
         });
 
-    $password.on('keypress', function(e) {
-        if (e.which === 13 && !$loginBtn.prop('disabled')) {
-            $form.submit();
-        }
-    });
+        password.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !loginBtn.disabled) {
+                form.requestSubmit();
+            }
+        });
     });
 })();
 </script>

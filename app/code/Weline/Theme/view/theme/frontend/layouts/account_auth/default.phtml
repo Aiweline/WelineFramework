@@ -20,6 +20,7 @@
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+    <theme:css>Weline_Theme::theme/frontend/assets/css/auth-form-wflash.css</theme:css>
 </head>
 <body>
     <div class="account-auth <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth" data-layout="account_auth">

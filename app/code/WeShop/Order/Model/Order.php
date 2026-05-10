@@ -29,11 +29,17 @@ class Order extends Model
     public const schema_fields_discount_amount = 'discount_amount';
     #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: 'Tax amount')]
     public const schema_fields_tax_amount = 'tax_amount';
+    #[Col(type: 'varchar', length: 32, nullable: true, default: 'pending', comment: 'Payment status')]
+    public const schema_fields_payment_status = 'payment_status';
+    #[Col(type: 'varchar', length: 32, nullable: true, default: 'pending', comment: 'Fulfillment status')]
+    public const schema_fields_fulfillment_status = 'fulfillment_status';
+    #[Col(type: 'varchar', length: 32, nullable: true, default: 'none', comment: 'Return status')]
+    public const schema_fields_return_status = 'return_status';
     #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
     public const schema_fields_created_at = 'created_at';
     #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
     public const schema_fields_updated_at = 'updated_at';
     public string $indexer = 'order_indexer';
     public array $_unit_primary_keys = ['order_id'];
-    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'total', 'subtotal', 'created_at'];
+    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'payment_status', 'total', 'subtotal', 'created_at'];
 }

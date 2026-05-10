@@ -7,6 +7,7 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBlockPartialPatchService;
+use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
@@ -92,6 +93,20 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertSame('content/home-page-hero-banner', $result['component_code']);
     }
 
+    public function testReadCurrentSharedHeaderComponentFromScope(): void
+    {
+        $service = new AiSiteBlockPartialPatchService();
+
+        $result = $service->readCurrentBlockFromScope($this->sharedScope(), 'home_page', 'header/ai-site-header');
+
+        self::assertTrue($result['success']);
+        self::assertSame('shared_components.header', $result['source']);
+        self::assertSame('header/ai-site-header', $result['block_id']);
+        self::assertSame('header/ai-site-header', $result['component_code']);
+        self::assertSame('Generated header', $result['config']['title'] ?? null);
+        self::assertSame('<header class="hero-header">Header</header>', $result['html']);
+    }
+
     public function testReplaceCurrentBlockPersistsMaterializedPageAiLayout(): void
     {
         $currentBlocks = [
@@ -150,6 +165,52 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertSame('New Headline', $blocks[0]['config']['headline']);
         self::assertSame('Features', $blocks[1]['config']['headline']);
         self::assertSame('Updated headline.', $result['scope']['block_patch_history']['home']['hero'][0]['change_summary']);
+    }
+
+    public function testReplaceCurrentSharedHeaderPersistsToScopeAndVirtualThemeStorage(): void
+    {
+        $virtualThemeService = $this->getMockBuilder(AiSiteVirtualThemeService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['saveGeneratedSharedComponent'])
+            ->getMock();
+        $virtualThemeService->expects(self::once())
+            ->method('saveGeneratedSharedComponent')
+            ->with(
+                88,
+                self::callback(static function (array $component): bool {
+                    return ($component['region'] ?? '') === 'header'
+                        && ($component['code'] ?? '') === 'header/ai-site-header'
+                        && ($component['default_config']['title'] ?? '') === 'Refined header'
+                        && ($component['phtml'] ?? '') === '<header class="hero-header">Refined</header>';
+                })
+            );
+        $service = new AiSiteBlockPartialPatchService(virtualThemeService: $virtualThemeService);
+        $replacement = [
+            'block_id' => 'header/ai-site-header',
+            'type' => 'ai_generated_shared_header',
+            'html' => '<header class="hero-header">Refined</header>',
+            'config' => [
+                'title' => 'Refined header',
+                '_pb_server_component_code' => 'header/ai-site-header',
+            ],
+            'field_schema' => [],
+            '_pb_server_component_code' => 'header/ai-site-header',
+            '_pb_server_region' => 'header',
+            '_pb_server_template_phtml' => '<header class="hero-header">Refined</header>',
+        ];
+
+        $result = $service->applyReplacementBlockToScope(
+            $this->sharedScope(),
+            'home_page',
+            'header/ai-site-header',
+            $replacement,
+            ['change_summary' => 'Refined shared header.']
+        );
+
+        self::assertTrue($result['success']);
+        self::assertSame('Refined header', $result['scope']['shared_components']['header']['default_config']['title']);
+        self::assertSame('<header class="hero-header">Refined</header>', $result['scope']['shared_components']['header']['phtml']);
+        self::assertSame('Refined shared header.', $result['scope']['block_patch_history']['home_page']['header/ai-site-header'][0]['change_summary']);
     }
 
     public function testReplaceCurrentBlockAcceptsSectionCodeAlias(): void
@@ -389,6 +450,49 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
                     'title' => 'Home',
                     'materialized_page_id' => $pageId,
                     'blocks' => [],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sharedScope(): array
+    {
+        return [
+            'virtual_theme_id' => 88,
+            'page_types' => ['home_page'],
+            'virtual_pages_by_type' => [
+                'home_page' => [
+                    'title' => 'Home',
+                    'blocks' => [
+                        $this->block('home-page-hero', 'Headline', '<section>Headline</section>', 'content/home-page-hero'),
+                    ],
+                ],
+            ],
+            'shared_components' => [
+                'header' => [
+                    'code' => 'header/ai-site-header',
+                    'name' => 'AI Site Header',
+                    'region' => 'header',
+                    'phtml' => '<header class="hero-header">Header</header>',
+                    'html' => '<header class="hero-header">Header</header>',
+                    'default_config' => [
+                        'title' => 'Generated header',
+                        '_pb_server_component_code' => 'header/ai-site-header',
+                    ],
+                ],
+                'footer' => [
+                    'code' => 'footer/ai-site-footer',
+                    'name' => 'AI Site Footer',
+                    'region' => 'footer',
+                    'phtml' => '<footer class="site-footer">Footer</footer>',
+                    'html' => '<footer class="site-footer">Footer</footer>',
+                    'default_config' => [
+                        'title' => 'Generated footer',
+                        '_pb_server_component_code' => 'footer/ai-site-footer',
+                    ],
                 ],
             ],
         ];

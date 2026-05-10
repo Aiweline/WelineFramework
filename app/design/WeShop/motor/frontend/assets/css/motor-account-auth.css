@@ -266,6 +266,207 @@
     line-height: 1.7;
 }
 
+.motor-auth-flash.wf-system-messages {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+/* MessageManager Flash（自建 `.wflash`，非 Bootstrap alert） */
+.motor-auth-flash.wf-system-messages .system.message .wflash,
+.motor-login-flash.wf-system-messages .system.message .wflash {
+    position: relative;
+    margin-bottom: 0;
+    padding: 0.95rem 2.5rem 0.95rem 1.12rem;
+    border-radius: 1rem;
+    border-width: 2px;
+    border-style: solid;
+    font-size: 0.96rem;
+    line-height: 1.55;
+    font-weight: 500;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash__close,
+.motor-login-flash.wf-system-messages .system.message .wflash__close {
+    filter: none;
+    opacity: 0.72;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash__close:hover,
+.motor-login-flash.wf-system-messages .system.message .wflash__close:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* 错误 */
+.motor-auth-flash.wf-system-messages .system.message .wflash--danger,
+.motor-login-flash.wf-system-messages .system.message .wflash--danger {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.42) 0%, rgba(153, 27, 27, 0.38) 100%);
+    border-color: #f87171;
+    color: #fef2f2;
+    box-shadow: 0 6px 26px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--danger .wflash__close,
+.motor-login-flash.wf-system-messages .system.message .wflash--danger .wflash__close {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--danger .wflash__title,
+.motor-login-flash.wf-system-messages .system.message .wflash--danger .wflash__title {
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--danger .wflash__body,
+.motor-login-flash.wf-system-messages .system.message .wflash--danger .wflash__body {
+    color: #fecaca;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--danger .fa,
+.motor-auth-flash.wf-system-messages .system.message .wflash--danger .fas,
+.motor-login-flash.wf-system-messages .system.message .wflash--danger .fa,
+.motor-login-flash.wf-system-messages .system.message .wflash--danger .fas {
+    color: #fecaca;
+    font-size: 1.08rem;
+}
+
+/* 成功 */
+.motor-auth-flash.wf-system-messages .system.message .wflash--success,
+.motor-login-flash.wf-system-messages .system.message .wflash--success {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.38) 0%, rgba(6, 95, 70, 0.42) 100%);
+    border-color: #34d399;
+    color: #d1fae5;
+    box-shadow: 0 6px 26px rgba(16, 185, 129, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--success .wflash__close,
+.motor-login-flash.wf-system-messages .system.message .wflash--success .wflash__close {
+    filter: brightness(0) invert(1);
+    opacity: 0.78;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--success .wflash__title,
+.motor-login-flash.wf-system-messages .system.message .wflash--success .wflash__title {
+    font-weight: 700;
+    color: #ecfdf5;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--success .wflash__body,
+.motor-login-flash.wf-system-messages .system.message .wflash--success .wflash__body {
+    color: #a7f3d0;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--success .fa,
+.motor-auth-flash.wf-system-messages .system.message .wflash--success .fas,
+.motor-login-flash.wf-system-messages .system.message .wflash--success .fa,
+.motor-login-flash.wf-system-messages .system.message .wflash--success .fas {
+    color: #6ee7b7;
+    font-size: 1.08rem;
+}
+
+/* 警告 */
+.motor-auth-flash.wf-system-messages .system.message .wflash--warning,
+.motor-login-flash.wf-system-messages .system.message .wflash--warning {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.36) 0%, rgba(146, 64, 14, 0.4) 100%);
+    border-color: #fbbf24;
+    color: #fef3c7;
+    box-shadow: 0 6px 26px rgba(245, 158, 11, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--warning .wflash__close,
+.motor-login-flash.wf-system-messages .system.message .wflash--warning .wflash__close {
+    filter: brightness(0) invert(1);
+    opacity: 0.78;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--warning .wflash__title,
+.motor-login-flash.wf-system-messages .system.message .wflash--warning .wflash__title {
+    font-weight: 700;
+    color: #fffbeb;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--warning .wflash__body,
+.motor-login-flash.wf-system-messages .system.message .wflash--warning .wflash__body {
+    color: #fde68a;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--warning .fa,
+.motor-auth-flash.wf-system-messages .system.message .wflash--warning .fas,
+.motor-login-flash.wf-system-messages .system.message .wflash--warning .fa,
+.motor-login-flash.wf-system-messages .system.message .wflash--warning .fas {
+    color: #fcd34d;
+    font-size: 1.08rem;
+}
+
+/* 提示（notes） */
+.motor-auth-flash.wf-system-messages .system.message .wflash--notes,
+.motor-login-flash.wf-system-messages .system.message .wflash--notes {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.34) 0%, rgba(30, 58, 138, 0.44) 100%);
+    border-color: #60a5fa;
+    color: #bfdbfe;
+    box-shadow: 0 6px 26px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--notes .wflash__close,
+.motor-login-flash.wf-system-messages .system.message .wflash--notes .wflash__close {
+    filter: brightness(0) invert(1);
+    opacity: 0.78;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--notes .wflash__title,
+.motor-login-flash.wf-system-messages .system.message .wflash--notes .wflash__title {
+    font-weight: 700;
+    color: #dbeafe;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--notes .wflash__body,
+.motor-login-flash.wf-system-messages .system.message .wflash--notes .wflash__body {
+    color: #bfdbfe;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--notes .fa,
+.motor-auth-flash.wf-system-messages .system.message .wflash--notes .fas,
+.motor-login-flash.wf-system-messages .system.message .wflash--notes .fa,
+.motor-login-flash.wf-system-messages .system.message .wflash--notes .fas {
+    color: #93c5fd;
+    font-size: 1.08rem;
+}
+
+/* 信息 */
+.motor-auth-flash.wf-system-messages .system.message .wflash--info,
+.motor-login-flash.wf-system-messages .system.message .wflash--info {
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.28) 0%, rgba(51, 65, 85, 0.48) 100%);
+    border-color: #94a3b8;
+    color: #cbd5e1;
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--info .wflash__close,
+.motor-login-flash.wf-system-messages .system.message .wflash--info .wflash__close {
+    filter: brightness(0) invert(1);
+    opacity: 0.78;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--info .wflash__title,
+.motor-login-flash.wf-system-messages .system.message .wflash--info .wflash__title {
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--info .wflash__body,
+.motor-login-flash.wf-system-messages .system.message .wflash--info .wflash__body {
+    color: #cbd5e1;
+}
+
+.motor-auth-flash.wf-system-messages .system.message .wflash--info .fa,
+.motor-auth-flash.wf-system-messages .system.message .wflash--info .fas,
+.motor-login-flash.wf-system-messages .system.message .wflash--info .fa,
+.motor-login-flash.wf-system-messages .system.message .wflash--info .fas {
+    color: #94a3b8;
+    font-size: 1.08rem;
+}
+
 .motor-auth-alert {
     display: flex;
     align-items: flex-start;

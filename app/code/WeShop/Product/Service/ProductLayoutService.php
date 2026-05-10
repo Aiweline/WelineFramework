@@ -257,7 +257,13 @@ class ProductLayoutService
             if ($schedule->isRecurring()) {
                 // 循环任务：重新计算下次执行时间
                 $schedule->setStatus(ProductLayoutSchedule::STATUS_PENDING);
-                // TODO: 根据 cron 表达式计算下次执行时间
+                $cronExpression = $schedule->getCronExpression();
+                if ($cronExpression !== '') {
+                    $nextTime = $this->calculateNextCronTime($cronExpression);
+                    if ($nextTime !== null) {
+                        $schedule->setData(ProductLayoutSchedule::schema_fields_START_DATE, $nextTime);
+                    }
+                }
             } else {
                 // 非循环任务：标记为已完成
                 $schedule->setStatus(ProductLayoutSchedule::STATUS_COMPLETED);
@@ -273,6 +279,64 @@ class ProductLayoutService
             w_log_error("停用布局计划失败: {error}", ['error' => $e->getMessage()]);
             return false;
         }
+    }
+
+    /**
+     * Calculate next execution time from a cron expression.
+     */
+    private function calculateNextCronTime(string $cronExpression): ?string
+    {
+        $parts = preg_split('/\s+/', trim($cronExpression));
+        if (count($parts) < 5) {
+            return null;
+        }
+
+        $now = new \DateTime();
+        $now->modify('+1 minute');
+
+        for ($i = 0; $i < 366 * 24 * 60; $i++) {
+            $now->modify('+1 minute');
+            if (
+                $this->cronFieldMatch((int) $now->format('i'), $parts[0]) &&
+                $this->cronFieldMatch((int) $now->format('H'), $parts[1]) &&
+                $this->cronFieldMatch((int) $now->format('d'), $parts[2]) &&
+                $this->cronFieldMatch((int) $now->format('m'), $parts[3]) &&
+                $this->cronFieldMatch((int) $now->format('w'), $parts[4])
+            ) {
+                return $now->format('Y-m-d H:i:s');
+            }
+        }
+
+        return null;
+    }
+
+    private function cronFieldMatch(int $value, string $field): bool
+    {
+        if ($field === '*') {
+            return true;
+        }
+
+        $subFields = explode(',', $field);
+        foreach ($subFields as $sub) {
+            if (str_contains($sub, '/')) {
+                [$range, $step] = explode('/', $sub);
+                $step = (int) $step;
+                if ($range === '*') {
+                    if ($value % $step === 0) {
+                        return true;
+                    }
+                }
+            } elseif (str_contains($sub, '-')) {
+                [$low, $high] = explode('-', $sub);
+                if ($value >= (int) $low && $value <= (int) $high) {
+                    return true;
+                }
+            } elseif ((int) $sub === $value) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 

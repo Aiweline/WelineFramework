@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <!-- 社交功能管理 - 归入营销中心 -->
+    <menu source="WeShop_Social::social_management" name="weshop_social_management" title="Social"
+          action="*/backend/social"
+          parent="Weline_Backend::marketing_group"
+          icon="mdi mdi-share-variant-outline"
+          order="35"/>
+</menus>

@@ -1,25 +1,5 @@
 <?php
-$themeTemplate = null;
-try {
-    $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
-    $theme = $themeContext->resolveTheme('frontend');
-    if ($theme && $theme->getId()) {
-        $candidate = rtrim((string)$theme->getPath(), '\\/') . DIRECTORY_SEPARATOR
-            . 'Weline' . DIRECTORY_SEPARATOR . 'Customer' . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR
-            . 'templates' . DIRECTORY_SEPARATOR . 'frontend' . DIRECTORY_SEPARATOR . 'account' . DIRECTORY_SEPARATOR
-            . 'register.phtml';
-        if (is_file($candidate) && realpath($candidate) !== __FILE__) {
-            $themeTemplate = $candidate;
-        }
-    }
-} catch (\Throwable) {
-}
-
-if ($themeTemplate) {
-    include $themeTemplate;
-    return;
-}
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
 $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
 ?>
 <style>
@@ -62,11 +42,14 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
+    flex-shrink: 0;
 }
 
-.auth-form__icon i {
-    font-size: 2rem;
+.auth-form__icon-svg {
+    width: 2rem;
+    height: 2rem;
     color: var(--color-text-light);
+    display: block;
 }
 
 .auth-form__title {
@@ -242,14 +225,51 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
     transform: none;
 }
 
+.auth-form__submit-inner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.auth-form__submit-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+    color: currentColor;
+    display: block;
+}
+
+/* ========== 服务端 Flash（与登录一致：展示在表单卡片内） ========== */
+.auth-form__flash {
+    width: 100%;
+}
+
+/* ========== 服务端 / 前端校验提示 ========== */
+.auth-form__error {
+    border-radius: var(--radius-md, 8px);
+    margin-bottom: var(--spacing-md, 1rem);
+}
+
+.auth-form__error--shake {
+    animation: authShake 0.5s;
+}
+
+@keyframes authShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+}
+
 /* ========== 页脚链接 ========== */
 .auth-form__footer {
     margin-top: var(--spacing-lg, 1.5rem);
     padding-top: var(--spacing-md, 1rem);
-    border-top: 1px solid var(--color-border-default);
+    border-top: none;
     text-align: center;
     font-size: var(--font-size-sm, 0.875rem);
     color: var(--color-text-secondary);
+    line-height: 1.6;
 }
 
 .auth-form__footer-link {
@@ -257,9 +277,7 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
     text-decoration: none;
     font-weight: var(--font-weight-semibold, 600);
     transition: color 0.3s;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs, 0.25rem);
+    margin-inline-start: 0.25rem;
 }
 
 .auth-form__footer-link:hover {
@@ -294,8 +312,9 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
         height: 56px;
     }
 
-    .auth-form__icon i {
-        font-size: 1.75rem;
+    .auth-form__icon-svg {
+        width: 1.75rem;
+        height: 1.75rem;
     }
 
     .auth-form__row {
@@ -306,15 +325,23 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
 
 <div class="auth-form">
     <header class="auth-form__header">
-        <div class="auth-form__icon">
-            <i class="fas fa-user-plus"></i>
+        <div class="auth-form__icon" aria-hidden="true">
+            <svg class="auth-form__icon-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                <path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9 8v-1c0-2.33 4.67-3.5 7-3.5 1.46 0 2.83.22 4 .57V14h2v8H6zm13-6v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2z"/>
+            </svg>
         </div>
         <h1 class="auth-form__title"><lang>创建账户</lang></h1>
         <p class="auth-form__subtitle"><lang>使用邮箱注册您的账户</lang></p>
     </header>
 
+    <div class="auth-form__flash wf-system-messages" aria-live="polite">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+
     <form action="/customer/account/register" method="post" class="auth-form__body">
         <?= $this->getFormKey('/customer/account/register') ?>
+
+        <div id="registerClientError" class="wflash wflash--danger auth-form__error" role="alert" hidden></div>
 
         <div class="auth-form__row">
             <div class="auth-form__field">
@@ -379,7 +406,7 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                 <i class="fas fa-lock"></i>
                 <lang>密码</lang>
             </label>
-            <div class="auth-form__input-wrapper">
+            <div class="auth-form__input-wrapper auth-form__input-wrapper--password">
                 <i class="fas fa-key"></i>
                 <input
                     class="auth-form__input"
@@ -391,6 +418,20 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                     autocomplete="new-password"
                     placeholder="<lang>至少8位，包含字母和数字</lang>"
                 />
+                <button
+                    type="button"
+                    class="auth-form__password-toggle"
+                    data-password-target="password"
+                    data-label-show="<?= htmlspecialchars(__('Show password'), ENT_QUOTES) ?>"
+                    data-label-hide="<?= htmlspecialchars(__('Hide password'), ENT_QUOTES) ?>"
+                    aria-label="<?= htmlspecialchars(__('Show password'), ENT_QUOTES) ?>"
+                    aria-pressed="false"
+                >
+                        <span class="auth-form__password-toggle-icon" aria-hidden="true">
+                            <svg class="auth-form__pwd-svg auth-form__pwd-svg--show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg class="auth-form__pwd-svg auth-form__pwd-svg--hide" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        </span>
+                </button>
             </div>
         </div>
 
@@ -399,7 +440,7 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                 <i class="fas fa-check-double"></i>
                 <lang>确认密码</lang>
             </label>
-            <div class="auth-form__input-wrapper">
+            <div class="auth-form__input-wrapper auth-form__input-wrapper--password">
                 <i class="fas fa-check-double"></i>
                 <input
                     class="auth-form__input"
@@ -410,6 +451,20 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                     autocomplete="new-password"
                     placeholder="<lang>请再次输入密码</lang>"
                 />
+                <button
+                    type="button"
+                    class="auth-form__password-toggle"
+                    data-password-target="confirm_password"
+                    data-label-show="<?= htmlspecialchars(__('Show password'), ENT_QUOTES) ?>"
+                    data-label-hide="<?= htmlspecialchars(__('Hide password'), ENT_QUOTES) ?>"
+                    aria-label="<?= htmlspecialchars(__('Show password'), ENT_QUOTES) ?>"
+                    aria-pressed="false"
+                >
+                        <span class="auth-form__password-toggle-icon" aria-hidden="true">
+                            <svg class="auth-form__pwd-svg auth-form__pwd-svg--show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg class="auth-form__pwd-svg auth-form__pwd-svg--hide" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        </span>
+                </button>
             </div>
         </div>
 
@@ -433,56 +488,120 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
         </div>
 
         <button type="submit" class="auth-form__submit">
-            <i class="fas fa-user-plus me-2"></i>
-            <lang>创建账户</lang>
+            <span class="auth-form__submit-inner">
+                <svg class="auth-form__submit-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9 8v-1c0-2.33 4.67-3.5 7-3.5 1.46 0 2.83.22 4 .57V14h2v8H6zm13-6v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2z"/>
+                </svg>
+                <lang>创建账户</lang>
+            </span>
         </button>
     </form>
 
     <footer class="auth-form__footer">
-        <lang>已有账户？</lang>
-        <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>" class="auth-form__footer-link">
-            <i class="fas fa-sign-in-alt"></i>
-            <lang>立即登录</lang>
-        </a>
+        <span><lang>已有账户？</lang></span>
+        <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>" class="auth-form__footer-link"><lang>立即登录</lang></a>
     </footer>
-    <div id="register-form-error" class="alert alert-danger d-none" role="alert"></div>
 </div>
 
 <script>
 (function() {
     'use strict';
 
-    $(document).ready(function() {
-        var $form = $('form[action="/customer/account/register"]');
-        var $password = $('#password');
-        var $confirmPassword = $('#confirm_password');
+    function closest(el, selector) {
+        while (el && el.nodeType === 1) {
+            if (el.matches(selector)) {
+                return el;
+            }
+            el = el.parentElement;
+        }
+        return null;
+    }
 
-        function toggleInputFocus() {
-            $('.auth-form__input').on('focus', function() {
-                $(this).closest('.auth-form__input-wrapper').addClass('auth-form__input-wrapper--focused');
-            }).on('blur', function() {
-                $(this).closest('.auth-form__input-wrapper').removeClass('auth-form__input-wrapper--focused');
-            });
+    document.addEventListener('DOMContentLoaded', function() {
+        var form = document.querySelector('form[action="/customer/account/register"]');
+        var passwordEl = document.getElementById('password');
+        var confirmPasswordEl = document.getElementById('confirm_password');
+        var clientError = document.getElementById('registerClientError');
+
+        if (!form || !passwordEl || !confirmPasswordEl || !clientError) {
+            return;
         }
 
-        toggleInputFocus();
+        document.querySelectorAll('.auth-form__password-toggle[data-password-target]').forEach(function(btn) {
+            var targetId = btn.getAttribute('data-password-target');
+            var pwdInput = targetId ? document.getElementById(targetId) : null;
+            if (!pwdInput) {
+                return;
+            }
+            var showLabel = btn.getAttribute('data-label-show') || '';
+            var hideLabel = btn.getAttribute('data-label-hide') || '';
+            var iconWrap = btn.querySelector('.auth-form__password-toggle-icon');
+            btn.addEventListener('click', function() {
+                var wasPassword = pwdInput.type === 'password';
+                pwdInput.type = wasPassword ? 'text' : 'password';
+                var nowPlain = pwdInput.type === 'text';
+                btn.setAttribute('aria-pressed', nowPlain ? 'true' : 'false');
+                btn.setAttribute('aria-label', nowPlain ? hideLabel : showLabel);
+                if (iconWrap) {
+                    var svgShow = iconWrap.querySelector('.auth-form__pwd-svg--show');
+                    var svgHide = iconWrap.querySelector('.auth-form__pwd-svg--hide');
+                    if (svgShow && svgHide) {
+                        if (nowPlain) {
+                            svgShow.setAttribute('hidden', 'hidden');
+                            svgHide.removeAttribute('hidden');
+                        } else {
+                            svgShow.removeAttribute('hidden');
+                            svgHide.setAttribute('hidden', 'hidden');
+                        }
+                    }
+                }
+            });
+        });
 
-        $form.on('submit', function(e) {
-            var password = $password.val();
-            var confirmPassword = $confirmPassword.val();
+        document.querySelectorAll('.auth-form__input').forEach(function(input) {
+            input.addEventListener('focus', function() {
+                var wrap = closest(input, '.auth-form__input-wrapper');
+                if (wrap) {
+                    wrap.classList.add('auth-form__input-wrapper--focused');
+                }
+            });
+            input.addEventListener('blur', function() {
+                var wrap = closest(input, '.auth-form__input-wrapper');
+                if (wrap) {
+                    wrap.classList.remove('auth-form__input-wrapper--focused');
+                }
+            });
+        });
+
+        form.addEventListener('submit', function(e) {
+            var password = passwordEl.value;
+            var confirmPassword = confirmPasswordEl.value;
+
+            clientError.hidden = true;
+            clientError.classList.remove('auth-form__error--shake');
+            clientError.textContent = '';
 
             if (password !== confirmPassword) {
                 e.preventDefault();
-                $('#register-form-error').text('<lang>两次输入的密码不一致</lang>').removeClass('d-none');
-                $confirmPassword.focus();
-                return false;
+                clientError.innerHTML = '<lang>两次输入的密码不一致</lang>';
+                clientError.hidden = false;
+                clientError.classList.add('auth-form__error--shake');
+                confirmPasswordEl.focus();
+                setTimeout(function() {
+                    clientError.classList.remove('auth-form__error--shake');
+                }, 500);
+                return;
             }
 
             if (password.length < 8) {
                 e.preventDefault();
-                $('#register-form-error').text('<lang>密码长度至少为8位</lang>').removeClass('d-none');
-                $password.focus();
-                return false;
+                clientError.innerHTML = '<lang>密码长度至少为8位</lang>';
+                clientError.hidden = false;
+                clientError.classList.add('auth-form__error--shake');
+                passwordEl.focus();
+                setTimeout(function() {
+                    clientError.classList.remove('auth-form__error--shake');
+                }, 500);
             }
         });
     });

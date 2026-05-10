@@ -7,7 +7,6 @@ namespace WeShop\Customer\Controller\Frontend\Account;
 use WeShop\Customer\Service\PasswordResetService;
 use WeShop\Customer\Session\CustomerSession;
 use WeShop\Frontend\Controller\BaseController;
-use Weline\Framework\Manager\MessageManager;
 
 class ForgotPassword extends BaseController
 {
@@ -41,8 +40,6 @@ class ForgotPassword extends BaseController
         $this->assign('login_url', $this->getUrl('weshop/customer/account/login'));
         $this->assign('register_url', $this->getUrl('weshop/customer/account/register'));
         $this->assign('title', $resetRecord ? __('重置密码') : __('忘记密码'));
-        $this->assign('error_message', MessageManager::get_error_message());
-        $this->assign('success_message', MessageManager::get_success_message());
 
         return $this->fetch();
     }

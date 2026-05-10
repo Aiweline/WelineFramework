@@ -187,8 +187,22 @@
                     } catch (e) {
                         body = { parse_error: true, message: e instanceof Error ? e.message : String(e) };
                     }
-                } else if (/^text\//.test(contentType)) {
-                    body = await response.text();
+                } else {
+                    const text = await response.text();
+                    const trimmed = text.trim();
+                    if (
+                        trimmed.length > 0 &&
+                        ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                            (trimmed.startsWith('[') && trimmed.endsWith(']')))
+                    ) {
+                        try {
+                            body = JSON.parse(text);
+                        } catch (e) {
+                            body = text;
+                        }
+                    } else {
+                        body = text;
+                    }
                 }
                 const maintenance = response.status === 503 || (
                     body && typeof body === 'object' &&
