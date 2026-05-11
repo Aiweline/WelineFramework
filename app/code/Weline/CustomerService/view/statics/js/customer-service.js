@@ -1,10 +1,10 @@
 /**
- * 瀹㈡湇鏈嶅姟妯″潡JavaScript
+ * 鐎广垺婀囬張宥呭濡€虫健JavaScript
  */
 
 const CustomerServiceWidget = (function() {
     /**
-     * 鍥介檯鍖栵細浼樺厛浣跨敤椤甸潰娉ㄥ叆鐨?__锛屽惁鍒欓檷绾т负鍗犱綅绗︽浛鎹?
+     * 閸ヤ粙妾崠鏍电窗娴兼ê鍘涙担璺ㄦ暏妞ょ敻娼板▔銊ュ弳閻?__閿涘苯鎯侀崚娆撴缁狙傝礋閸楃姳缍呯粭锔芥禌閹?
      * @param {string} text
      * @param {Object|Array} params
      * @returns {string}
@@ -55,16 +55,16 @@ const CustomerServiceWidget = (function() {
         locale: 'zh_Hans_CN',
         displayMode: 'translated', // translated, both, original
         settingsOpen: false,
-        serviceStatus: 'offline' // online(缁?, ai(钃?, offline(鐏?
+        serviceStatus: 'offline' // online(缂?, ai(閽?, offline(閻?
     };
     
     /**
-     * 鍒濆鍖?
+     * 閸掓繂顫愰崠?
      */
     function init(options) {
         config = Object.assign(config, options);
         
-        // 浠巐ocalStorage鎭㈠鐘舵€?
+        // 娴犲窅ocalStorage閹垹顦查悩鑸碘偓?
         const savedState = localStorage.getItem('cs_widget_state');
         if (savedState) {
             try {
@@ -77,21 +77,21 @@ const CustomerServiceWidget = (function() {
             }
         }
         
-        // 鍒濆鍖朥I鐘舵€?
+        // 閸掓繂顫愰崠鏈閻樿埖鈧?
         initUIState();
     }
     
     /**
-     * 鍒濆鍖朥I鐘舵€?
+     * 閸掓繂顫愰崠鏈閻樿埖鈧?
      */
     function initUIState() {
-        // 璁剧疆璇█閫夋嫨鍣?
+        // 鐠佸墽鐤嗙拠顓♀枅闁瀚ㄩ崳?
         const localeSelect = document.getElementById('cs-locale-select');
         if (localeSelect) {
             localeSelect.value = state.locale;
         }
         
-        // 璁剧疆鏄剧ず妯″紡閫夋嫨鍣?
+        // 鐠佸墽鐤嗛弰鍓с仛濡€崇础闁瀚ㄩ崳?
         const displayModeSelect = document.getElementById('cs-display-mode');
         if (displayModeSelect) {
             displayModeSelect.value = state.displayMode;
@@ -99,7 +99,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鍒囨崲璁剧疆闈㈡澘
+     * 閸掑洦宕茬拋鍓х枂闂堛垺婢?
      */
     function toggleSettings() {
         const panel = document.getElementById('cs-settings-panel');
@@ -110,18 +110,18 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鏇存敼鏄剧ず妯″紡
+     * 閺囧瓨鏁奸弰鍓с仛濡€崇础
      */
     function changeDisplayMode(mode) {
         state.displayMode = mode;
         saveState();
         
-        // 閲嶆柊娓叉煋娑堟伅
+        // 闁插秵鏌婂〒鍙夌厠濞戝牊浼?
         loadMessages();
     }
     
     /**
-     * 鍒濆鍖栦細璇?
+     * 閸掓繂顫愰崠鏍︾窗鐠?
      */
     async function initSession() {
         try {
@@ -173,7 +173,7 @@ const CustomerServiceWidget = (function() {
     }
 
     /**
-     * 鎸夐渶鍒濆鍖栦細璇濓紝閬垮厤椤甸潰鍔犺浇鏃惰嚜鍔ㄥ垱寤轰細璇?     */
+     * 閹稿娓堕崚婵嗩潗閸栨牔绱扮拠婵撶礉闁灝鍘ゆい鐢告桨閸旂姾娴囬弮鎯板殰閸斻劌鍨卞杞扮窗鐠?     */
     async function ensureSessionReady() {
         if (state.sessionId && state.sessionToken) {
             return true;
@@ -191,7 +191,7 @@ const CustomerServiceWidget = (function() {
     }
 
     /**
-     * 鐢ㄦ埛涓诲姩鎵撳紑鑱婂ぉ鍚庡啀鍔犺浇浼氳瘽鍜岀姸鎬?     */
+     * 閻劍鍩涙稉璇插З閹垫挸绱戦懕濠傘亯閸氬骸鍟€閸旂姾娴囨导姘崇樈閸滃瞼濮搁幀?     */
     async function activateChat() {
         const initialized = await ensureSessionReady();
         if (!state.isOpen) {
@@ -216,7 +216,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鍒囨崲鑱婂ぉ绐楀彛
+     * 閸掑洦宕查懕濠傘亯缁愭褰?
      */
     async function toggleChat() {
         const chatWindow = document.getElementById('cs-chat-window');
@@ -239,7 +239,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鍙戦€佹秷鎭?
+     * 閸欐垿鈧焦绉烽幁?
      */
     async function sendMessage() {
         const input = document.getElementById('cs-message-input');
@@ -251,11 +251,11 @@ const CustomerServiceWidget = (function() {
 
         const sessionReady = await ensureSessionReady();
         if (!sessionReady || !state.sessionId) {
-            alert(__('瀹㈡湇浼氳瘽鍒濆鍖栧け璐ワ紝璇风◢鍚庨噸璇?));
+            alert(__('客服会话初始化失败，请稍后重试'));
             return;
         }
         
-        // 绂佺敤杈撳叆
+        // 缁備胶鏁ゆ潏鎾冲弳
         input.disabled = true;
         const sendButton = document.querySelector('.cs-send-button');
         sendButton.disabled = true;
@@ -277,7 +277,7 @@ const CustomerServiceWidget = (function() {
             if (data.success) {
                 input.value = '';
                 
-                // 娣诲姞娑堟伅鍒扮晫闈?
+                // 濞ｈ濮炲☉鍫熶紖閸掓壆鏅棃?
                 addMessage({
                     message_id: data.data.message_id,
                     content: data.data.content,
@@ -286,15 +286,15 @@ const CustomerServiceWidget = (function() {
                     created_at: data.data.created_at
                 });
                 
-                // 婊氬姩鍒板簳閮?                scrollToBottom();
-
+                // Scroll to bottom after the customer sends a message.
+                scrollToBottom();
                 maybeShowGuestBindPrompt();
             } else {
-                alert(data.message || __('鍙戦€佸け璐?));
+                alert(data.message || __('发送失败'));
             }
         } catch (error) {
             console.error('Failed to send message:', error);
-            alert(__('鍙戦€佸け璐ワ紝璇风◢鍚庨噸璇?));
+            alert(__('发送失败，请稍后重试'));
         } finally {
             input.disabled = false;
             sendButton.disabled = false;
@@ -302,7 +302,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鍔犺浇娑堟伅
+     * 閸旂姾娴囧☉鍫熶紖
      */
     async function loadMessages() {
         if (!state.sessionId) {
@@ -328,8 +328,8 @@ const CustomerServiceWidget = (function() {
                 if (data.data.length === 0) {
                     messagesContainer.innerHTML = `
                         <div class="cs-welcome-message">
-                            <p>${__('娆㈣繋浣跨敤瀹㈡湇鏈嶅姟锛?)}</p>
-                            <p>${__('璇疯緭鍏ユ偍鐨勯棶棰橈紝鎴戜滑鐨勫鏈嶅皢灏藉揩涓烘偍瑙ｇ瓟銆?)}</p>
+                            <p>${__('欢迎使用客服服务')}</p>
+                            <p>${__('请输入您的问题，我们的客服将尽快为您解答。')}</p>
                         </div>
                     `;
                 } else {
@@ -337,7 +337,7 @@ const CustomerServiceWidget = (function() {
                         addMessage(msg, false);
                     });
                     
-                    // 鏇存柊鏈€鍚庝竴鏉℃秷鎭疘D
+                    // 閺囧瓨鏌婇張鈧崥搴濈閺夆剝绉烽幁鐤楧
                     if (data.data.length > 0) {
                         state.lastMessageId = data.data[data.data.length - 1].message_id;
                     }
@@ -351,12 +351,12 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 娣诲姞娑堟伅鍒扮晫闈?
+     * 濞ｈ濮炲☉鍫熶紖閸掓壆鏅棃?
      */
     function addMessage(message, scroll = true) {
         const messagesContainer = document.getElementById('cs-chat-messages');
         
-        // 绉婚櫎娆㈣繋娑堟伅
+        // 缁夊娅庡▎銏ｇ箣濞戝牊浼?
         const welcomeMsg = messagesContainer.querySelector('.cs-welcome-message');
         if (welcomeMsg) {
             welcomeMsg.remove();
@@ -365,7 +365,7 @@ const CustomerServiceWidget = (function() {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'cs-message ' + message.sender_type;
         messageDiv.dataset.messageId = message.message_id;
-        // 瀛樺偍鍘熷娑堟伅鏁版嵁鐢ㄤ簬閲嶆柊娓叉煋
+        // 鐎涙ê鍋嶉崢鐔奉潗濞戝牊浼呴弫鐗堝祦閻劋绨柌宥嗘煀濞撳弶鐓?
         messageDiv.dataset.content = message.content || '';
         messageDiv.dataset.translatedContent = message.translated_content || '';
         messageDiv.dataset.sourceLocale = message.source_locale || '';
@@ -374,7 +374,7 @@ const CustomerServiceWidget = (function() {
         const bubble = document.createElement('div');
         bubble.className = 'cs-message-bubble';
         
-        // 鏍规嵁鏄剧ず妯″紡娓叉煋鍐呭
+        // 閺嶈宓侀弰鍓с仛濡€崇础濞撳弶鐓嬮崘鍛啇
         renderMessageContent(bubble, message);
         
         const timeDiv = document.createElement('div');
@@ -392,7 +392,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鏍规嵁鏄剧ず妯″紡娓叉煋娑堟伅鍐呭
+     * 閺嶈宓侀弰鍓с仛濡€崇础濞撳弶鐓嬪☉鍫熶紖閸愬懎顔?
      */
     function renderMessageContent(bubble, message) {
         const original = message.content || '';
@@ -405,7 +405,7 @@ const CustomerServiceWidget = (function() {
         switch (state.displayMode) {
             case 'both':
                 if (hasTranslation) {
-                    // 鏄剧ず鍘熸枃
+                    // 閺勫墽銇氶崢鐔告瀮
                     const originalDiv = document.createElement('div');
                     originalDiv.className = 'cs-message-original';
                     const originalLabel = document.createElement('span');
@@ -415,7 +415,7 @@ const CustomerServiceWidget = (function() {
                     originalDiv.appendChild(document.createTextNode(original));
                     bubble.appendChild(originalDiv);
                     
-                    // 鏄剧ず璇戞枃
+                    // 閺勫墽銇氱拠鎴炴瀮
                     const translatedDiv = document.createElement('div');
                     translatedDiv.className = 'cs-message-translated';
                     const translatedLabel = document.createElement('span');
@@ -441,15 +441,15 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鑾峰彇璇█鍚嶇О
+     * 閼惧嘲褰囩拠顓♀枅閸氬秶袨
      */
     function getLocaleName(locale) {
         const names = {
-            'zh_Hans_CN': '涓枃',
-            'zh_Hant_TW': '绻侀珨',
+            'zh_Hans_CN': '简中',
+            'zh_Hant_TW': '繁中',
             'en_US': 'EN',
-            'ja_JP': '鏃ユ湰瑾?,
-            'ko_KR': '頃滉淡鞏?,
+            'ja_JP': '日本語',
+            'ko_KR': '한국어',
             'fr_FR': 'FR',
             'de_DE': 'DE',
             'es_ES': 'ES',
@@ -463,7 +463,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 婊氬姩鍒板簳閮?
+     * 濠婃艾濮╅崚鏉跨俺闁?
      */
     function scrollToBottom() {
         const messagesContainer = document.getElementById('cs-chat-messages');
@@ -474,7 +474,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鏍煎紡鍖栨椂闂?
+     * 閺嶇厧绱￠崠鏍ㄦ闂?
      */
     function formatTime(timeStr) {
         if (!timeStr) return '';
@@ -484,18 +484,18 @@ const CustomerServiceWidget = (function() {
         const diff = now - date;
         
         if (diff < 60000) {
-            return __('鍒氬垰');
+            return __('刚刚');
         } else if (diff < 3600000) {
-            return Math.floor(diff / 60000) + __('鍒嗛挓鍓?);
+            return Math.floor(diff / 60000) + __('分钟前');
         } else if (diff < 86400000) {
-            return Math.floor(diff / 3600000) + __('灏忔椂鍓?);
+            return Math.floor(diff / 3600000) + __('小时前');
         } else {
             return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
     }
     
     /**
-     * 寮€濮嬭疆璇㈡柊娑堟伅
+     * 瀵偓婵鐤嗙拠銏℃煀濞戝牊浼?
      */
     function startPolling() {
         if (state.isPolling || !state.sessionId) {
@@ -521,14 +521,14 @@ const CustomerServiceWidget = (function() {
                             .map(el => parseInt(el.dataset.messageId))
                     );
                     
-                    // 鍙坊鍔犳柊娑堟伅
+                    // 閸欘亝鍧婇崝鐘虫煀濞戝牊浼?
                     let hasNew = false;
                     data.data.forEach(msg => {
                         if (!existingIds.has(msg.message_id) && msg.sender_type === 'agent') {
                             addMessage(msg);
                             hasNew = true;
                             
-                            // 鏇存柊鏈鏁伴噺
+                            // 閺囧瓨鏌婇張顏囶嚢閺佷即鍣?
                             if (!state.isOpen) {
                                 updateUnreadBadge();
                             }
@@ -542,11 +542,11 @@ const CustomerServiceWidget = (function() {
             } catch (error) {
                 console.error('Polling error:', error);
             }
-        }, 3000); // 姣?绉掕疆璇竴娆?
+        }, 3000); // 濮?缁夋帟鐤嗙拠顫濞?
     }
     
     /**
-     * 鍋滄杞
+     * 閸嬫粍顒涙潪顔款嚄
      */
     function stopPolling() {
         if (state.pollInterval) {
@@ -561,7 +561,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 妫€鏌ュ鏈嶅湪绾跨姸鎬?
+     * 濡偓閺屻儱顓归張宥呮躬缁捐法濮搁幀?
      */
     async function checkServiceStatus() {
         if (!config.chatUrl) return;
@@ -577,12 +577,12 @@ const CustomerServiceWidget = (function() {
                 updateStatusIndicator();
             }
         } catch (e) {
-            // 缃戠粶澶辫触淇濇寔褰撳墠鐘舵€?
+            // 缂冩垹绮舵径杈Е娣囨繃瀵旇ぐ鎾冲閻樿埖鈧?
         }
     }
 
     /**
-     * 寮€濮嬭疆璇㈠鏈嶅湪绾跨姸鎬侊紙姣?5绉掞級
+     * 瀵偓婵鐤嗙拠銏狀吂閺堝秴婀痪璺ㄥЦ閹緤绱欏В?5缁夋帪绱?
      */
     function startStatusPolling() {
         if (state.statusPollInterval) return;
@@ -590,22 +590,22 @@ const CustomerServiceWidget = (function() {
     }
 
     /**
-     * 鏇存柊鐘舵€佹寚绀哄櫒 UI
-     * online=缁胯壊, ai=钃濊壊, offline=鐏拌壊
+     * 閺囧瓨鏌婇悩鑸碘偓浣瑰瘹缁€鍝勬珤 UI
+     * online=缂佽儻澹? ai=閽冩繆澹? offline=閻忔媽澹?
      */
     function updateStatusIndicator() {
         const dot = document.getElementById('cs-status-dot');
         const label = document.getElementById('cs-status-label');
         if (!dot) return;
 
-        // 绉婚櫎鏃х殑鐘舵€佺被
+        // 缁夊娅庨弮褏娈戦悩鑸碘偓浣鸿
         dot.classList.remove('cs-status-online', 'cs-status-ai', 'cs-status-offline');
 
         switch (state.serviceStatus) {
             case 'online':
                 dot.classList.add('cs-status-online');
                 if (label) {
-                    label.textContent = __('瀹㈡湇鍦ㄧ嚎');
+                    label.textContent = __('鐎广垺婀囬崷銊у殠');
                     label.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
                     label.style.color = '#16a34a';
                 }
@@ -613,7 +613,7 @@ const CustomerServiceWidget = (function() {
             case 'ai':
                 dot.classList.add('cs-status-ai');
                 if (label) {
-                    label.textContent = __('AI 鏅鸿兘瀹㈡湇');
+                    label.textContent = __('AI 智能客服');
                     label.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
                     label.style.color = '#2563eb';
                 }
@@ -621,7 +621,7 @@ const CustomerServiceWidget = (function() {
             default:
                 dot.classList.add('cs-status-offline');
                 if (label) {
-                    label.textContent = __('瀹㈡湇绂荤嚎');
+                    label.textContent = __('鐎广垺婀囩粋鑽ゅ殠');
                     label.style.backgroundColor = 'rgba(156, 163, 175, 0.15)';
                     label.style.color = '#9ca3af';
                 }
@@ -630,7 +630,7 @@ const CustomerServiceWidget = (function() {
     }
 
     /**
-     * 鏇存柊鏈寰界珷
+     * 閺囧瓨鏌婇張顏囶嚢瀵扮晫鐝?
      */
     function updateUnreadBadge() {
         const badge = document.getElementById('cs-unread-badge');
@@ -648,7 +648,7 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鏇存敼璇█
+     * 閺囧瓨鏁肩拠顓♀枅
      */
     async function changeLanguage(locale) {
         state.locale = locale;
@@ -674,7 +674,7 @@ const CustomerServiceWidget = (function() {
             const data = await response.json();
             
             if (data.success) {
-                // 閲嶆柊鍔犺浇娑堟伅浠ヨ幏鍙栫炕璇?
+                // 闁插秵鏌婇崝鐘烘祰濞戝牊浼呮禒銉ㄥ箯閸欐牜鐐曠拠?
                 loadMessages();
             }
         } catch (error) {
@@ -707,16 +707,9 @@ const CustomerServiceWidget = (function() {
         guestBindPromptShown = true;
         showBindPrompt();
     }
-        if (guestBindPromptShown || config.isLoggedIn || !config.showGuestBindPrompt) {
-            return;
-        }
-
-        guestBindPromptShown = true;
-        showBindPrompt();
-    }
     
     /**
-     * 鍏抽棴缁戝畾寮圭獥
+     * 閸忔娊妫寸紒鎴濈暰瀵湱鐛?
      */
     function closeBindModal() {
         const modal = document.getElementById('cs-bind-modal');
@@ -726,21 +719,21 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
-     * 鍙戦€佺粦瀹氶偖浠?
+     * 閸欐垿鈧胶绮︾€规岸鍋栨禒?
      */
     async function sendBindEmail() {
         const emailInput = document.getElementById('cs-bind-email');
         const email = emailInput.value.trim();
         
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            alert(__('璇疯緭鍏ユ湁鏁堢殑閭鍦板潃'));
+            alert(__('请输入有效的邮箱地址'));
             return;
         }
         
         if (!state.sessionToken) {
             const sessionReady = await ensureSessionReady();
             if (!sessionReady || !state.sessionToken) {
-                alert(__('浼氳瘽鏈垵濮嬪寲锛岃鍒锋柊椤甸潰閲嶈瘯'));
+                alert(__('会话未初始化，请刷新页面重试'));
                 return;
             }
         }
@@ -760,19 +753,19 @@ const CustomerServiceWidget = (function() {
             const data = await response.json();
             
             if (data.success) {
-                alert(__('楠岃瘉閭欢宸插彂閫侊紝璇锋煡鏀舵偍鐨勯偖绠?));
+                alert(__('验证邮件已发送，请查收您的邮箱'));
                 closeBindModal();
             } else {
-                alert(data.message || __('鍙戦€佸け璐ワ紝璇风◢鍚庨噸璇?));
+                alert(data.message || __('发送失败，请稍后重试'));
             }
         } catch (error) {
             console.error('Failed to send bind email:', error);
-            alert(__('鍙戦€佸け璐ワ紝璇风◢鍚庨噸璇?));
+            alert(__('发送失败，请稍后重试'));
         }
     }
     
     /**
-     * 淇濆瓨鐘舵€?
+     * 娣囨繂鐡ㄩ悩鑸碘偓?
      */
     function saveState() {
         localStorage.setItem('cs_widget_state', JSON.stringify({
@@ -782,7 +775,7 @@ const CustomerServiceWidget = (function() {
         }));
     }
     
-    // 瀵煎嚭鍏叡API
+    // 鐎电厧鍤崗顒€鍙PI
     return {
         init,
         toggleChat,

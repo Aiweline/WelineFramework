@@ -96,7 +96,7 @@
         blockConfig: {},
         fieldSchema: {}
     };
-    // 区块刷新�?SSE 相关状态挂�?window 上，便于跨脚�?多入口共享同一份引用�?
+    // 区块刷新 / SSE 相关状态挂到 window 上，便于跨脚本多入口共享同一份引用。
     function getSharedBlockRefreshState() {
         if (!window.__pbBlockRefreshState || typeof window.__pbBlockRefreshState !== 'object') {
             window.__pbBlockRefreshState = {
@@ -246,7 +246,7 @@
         panel.classList.remove('d-none');
         label.textContent = published && liveUrl
             ? '发布已完成：可直接访问真实站点地址'
-            : '当前为预览地址（未发布也可访问预览�?;
+            : '当前为预览地址（未发布也可访问预览）';
         link.href = displayUrl;
         link.textContent = displayUrl;
     }
@@ -378,7 +378,7 @@
             + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
             + '<div class="fw-semibold">' + <?= \json_encode((string)__('方案1执行蓝图'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + '</div>'
             + '<span class="badge text-bg-success">' + (artifacts.confirmed
-                ? <?= \json_encode((string)__('宸茬‘璁?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+                ? <?= \json_encode((string)__('已确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
                 : <?= \json_encode((string)__('寰呯‘璁?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>) + '</span>'
             + '</div>'
             + (siteName !== '' ? '<div class="small mb-1">' + escapeHtml(siteName) + '</div>' : '')
@@ -679,10 +679,10 @@
         planRegeneratingByLocale: <?= \json_encode((string)__('正在根据当前方案语言重新生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planRegeneratingByPageTypesAndLocale: <?= \json_encode((string)__('正在根据当前页面类型和方案语言重新生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planGenerated: <?= \json_encode((string)__('第一阶段建站方案已生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planConfirmRequired: <?= \json_encode((string)__('请先确认第一阶段方案，再进入构建�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        buildPlanV2ConfirmRequired: <?= \json_encode((string)__('请先确认方案1，系统会直接基于执行蓝图进入构建�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmRequired: <?= \json_encode((string)__('请先确认第一阶段方案，再进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildPlanV2ConfirmRequired: <?= \json_encode((string)__('请先确认方案1，系统会直接基于执行蓝图进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planConfirmSaved: <?= \json_encode((string)__('第一阶段方案已确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planConfirmStartBuildQuestion: <?= \json_encode((string)__('方案1已确认，是否立即进入后台构建�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmStartBuildQuestion: <?= \json_encode((string)__('方案1已确认，是否立即进入后台构建？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planDeferred: <?= \json_encode((string)__('已保留当前第一阶段草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planDraftSaved: <?= \json_encode((string)__('第一阶段草稿已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planDraftSaveFailed: <?= \json_encode((string)__('第一阶段草稿保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -695,7 +695,7 @@
         planModeRebuild: <?= \json_encode((string)__('重建方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planModeReady: <?= \json_encode((string)__('可以继续微调或重建第一阶段建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planModeUnavailable: <?= \json_encode((string)__('第一阶段模式当前不可用，请检查生成流配置。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planModeRunning: <?= \json_encode((string)__('正在执行第一阶段局部调�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeRunning: <?= \json_encode((string)__('正在执行第一阶段局部调整...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planModeDone: <?= \json_encode((string)__('第一阶段局部调整已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planModeInstructionHint: <?= \json_encode((string)__('未选择局部操作时，这里可选填写整体调整说明。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planActionPrepared: <?= \json_encode((string)__('已选中第一阶段局部操作，请先填写你的具体调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -755,13 +755,13 @@
         blockSseConfirmRebuild: <?= \json_encode((string)__('确认重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseConfirmDefault: <?= \json_encode((string)__('确认执行'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRetryLabel: <?= \json_encode((string)__('重新请求重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseRetrying: <?= \json_encode((string)__('正在重新请求区块生成�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRetrying: <?= \json_encode((string)__('正在重新请求区块生成...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseStartPending: <?= \json_encode((string)__('控制台已准备，等待确认后连接生成流。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseWaitingConnection: <?= \json_encode((string)__('等待连接区块生成流，连接建立后将自动开始。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRefinePendingContext: <?= \json_encode((string)__('请确认微调，确认后将连接生成流并开始微调当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRebuildPendingContext: <?= \json_encode((string)__('请确认重建，确认后将连接生成流并开始重建当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseRefineConnecting: <?= \json_encode((string)__('已确认微调，正在连接生成�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseRebuildConnecting: <?= \json_encode((string)__('已确认重建，正在连接生成�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRefineConnecting: <?= \json_encode((string)__('已确认微调，正在连接生成...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRebuildConnecting: <?= \json_encode((string)__('已确认重建，正在连接生成...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRefineStarted: <?= \json_encode((string)__('连接已建立，开始微调当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRebuildStarted: <?= \json_encode((string)__('连接已建立，开始重建当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRefineAwaitingConfirm: <?= \json_encode((string)__('区块微调等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -815,7 +815,7 @@
         publishStageEntryReadyBadge: <?= \json_encode((string)__('可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyTitle: <?= \json_encode((string)__('虚拟主题已就绪，下一步进入确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyHint: <?= \json_encode((string)__('进入第三阶段后可先运行发布前预检，再确认准备发布。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryPublishedBadge: <?= \json_encode((string)__('宸插彂甯?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPublishedBadge: <?= \json_encode((string)__('已发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryPublishedTitle: <?= \json_encode((string)__('站点已经发布，仍可进入第三阶段查看发布状态'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryPublishedHint: <?= \json_encode((string)__('如果需要复查发布前清单、预览或发布结果，可以从这里进入第三阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryButton: <?= \json_encode((string)__('进入第三阶段确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1136,7 +1136,7 @@
         colorSystem: <?= \json_encode((string)__('色系系统'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         selectionReason: <?= \json_encode((string)__('风格选择原因'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         forbiddenStyles: <?= \json_encode((string)__('禁用风格'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        visualKeywords: <?= \json_encode((string)__('视觉关键�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualKeywords: <?= \json_encode((string)__('视觉关键词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         toneOfVoice: <?= \json_encode((string)__('内容语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         ctaTone: <?= \json_encode((string)__('CTA 语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeDirectEditTitle: <?= \json_encode((string)__('主题微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1193,7 +1193,7 @@
         publishCheckNoItems: <?= \json_encode((string)__('服务端暂未返回可读的检查项，请在「重新运行检查」后再试；如果问题持续，请联系技术支持。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishCheckItemOk: <?= \json_encode((string)__('已通过'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishCheckItemFail: <?= \json_encode((string)__('仍需修复'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishCheckConfirmStarting: <?= \json_encode((string)__('正在提交发布请求，请稍�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckConfirmStarting: <?= \json_encode((string)__('正在提交发布请求，请稍候...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishCheckConfirmPrompt: <?= \json_encode((string)__('确认将当前站点正式发布？发布后会覆盖原有线上站点内容。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishCheckConfirmAction: <?= \json_encode((string)__('确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
     };
@@ -1247,7 +1247,7 @@
         }).then(function (response) {
             if (!response.ok) {
                 return response.text().then(function (text) {
-                    var errMsg = (<?= \json_encode((string)__('请求失败�?{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+                    var errMsg = (<?= \json_encode((string)__('请求失败：%{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
                         .replace('%{status}', String(response.status || ''))
                         .replace('%{text}', String(response.statusText || ''));
                     try {
@@ -1862,7 +1862,7 @@
         }).then(function (response) {
             if (!response.ok) {
                 return response.text().then(function (text) {
-                    var errMsg = (<?= \json_encode((string)__('请求失败�?{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+                    var errMsg = (<?= \json_encode((string)__('请求失败：%{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
                         .replace('%{status}', String(response.status || ''))
                         .replace('%{text}', String(response.statusText || ''));
                     try {
@@ -1906,7 +1906,7 @@
         }).then(function (response) {
             if (!response.ok) {
                 return response.text().then(function (text) {
-                    var errMsg = (<?= \json_encode((string)__('请求失败�?{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+                    var errMsg = (<?= \json_encode((string)__('请求失败：%{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
                         .replace('%{status}', String(response.status || ''))
                         .replace('%{text}', String(response.statusText || ''));
                     try {
@@ -2743,7 +2743,7 @@
         var idNode = document.getElementById(elementId);
         pushNode(idNode);
 
-        // 同步多语言隐藏�?输入框节点（主元�?id �?*_value�?-hidden 等变体）�?
+        // 同步多语言隐藏输入框节点（主元素 id 及 *_value / *-hidden 等变体）。
         [
             elementId + '_value',
             elementId + '-value',
@@ -2969,7 +2969,7 @@
         }
         if (orderEl) {
             var orderId = parseInt(String(domainPurchaseState.order_id || 0), 10) || parseInt(String(domainPurchaseState.purchase_order_id || 0), 10) || 0;
-            orderEl.textContent = orderId > 0 ? String(orderId) : <?= \json_encode((string)__('寰呭垎閰?'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
+            orderEl.textContent = orderId > 0 ? String(orderId) : <?= \json_encode((string)__('待分配'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (buttonEl) {
             buttonEl.disabled = ['queued', 'running'].indexOf(String(domainPurchaseState.status || 'idle')) !== -1;
@@ -3926,7 +3926,7 @@
         if (normalizedCodes.length === 0) {
             var empty = document.createElement('span');
             empty.className = 'small text-muted';
-            empty.textContent = String(emptyText || <?= \json_encode((string)__('浣跨敤榛樿鎶€鑳?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            empty.textContent = String(emptyText || <?= \json_encode((string)__('使用默认技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
             container.appendChild(empty);
             return;
         }
@@ -3944,7 +3944,7 @@
             return String(label || '').trim() !== '';
         });
         if (labels.length === 0) {
-            return <?= \json_encode((string)__('榛樿鎶€鑳?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            return <?= \json_encode((string)__('默认技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         if (labels.length <= 3) {
             return labels.join(' / ');
@@ -3986,58 +3986,6 @@
         }
     }
 
-    /* function renderNeedsFormSkillSelection() {
-        var chipList = document.getElementById('pb-ai-skill-chip-list');
-        var optionList = document.getElementById('pb-ai-skill-option-list');
-        if (!chipList || !optionList) {
-            return;
-        }
-        var selectedCodes = getNeedsFormSelectedSkillCodes();
-        chipList.innerHTML = '';
-        selectedCodes.forEach(function (code) {
-            var option = getSkillOptionByCode(code);
-            var chip = document.createElement('span');
-            chip.className = 'badge rounded-pill ' + (!option || option.disabled ? 'text-bg-warning' : 'text-bg-primary');
-            chip.textContent = option ? option.label : code;
-            chip.setAttribute('data-skill-chip', code);
-            chipList.appendChild(chip);
-        });
-        if (selectedCodes.length === 0) {
-            var empty = document.createElement('span');
-            empty.className = 'small text-muted';
-            empty.textContent = '浣跨敤榛樿鎶€鑳?;
-            chipList.appendChild(empty);
-        }
-
-        optionList.innerHTML = '';
-        needsFormSkillOptions.forEach(function (option) {
-            var id = 'pb-ai-skill-option-' + option.code.replace(/[^a-zA-Z0-9_-]/g, '-');
-            var label = document.createElement('label');
-            label.className = 'form-check-label border rounded-pill px-3 py-2 mb-0 ' + (selectedCodes.indexOf(option.code) !== -1 ? 'bg-primary text-white' : 'bg-white');
-            label.style.cursor = option.disabled ? 'not-allowed' : 'pointer';
-            var input = document.createElement('input');
-            input.type = 'checkbox';
-            input.className = 'form-check-input me-2 pb-ai-skill-check';
-            input.id = id;
-            input.value = option.code;
-            input.checked = selectedCodes.indexOf(option.code) !== -1;
-            input.disabled = !!option.disabled;
-            var text = document.createElement('span');
-            text.textContent = option.label + (option.disabled ? '（已停用�? : '');
-            label.appendChild(input);
-            label.appendChild(text);
-            optionList.appendChild(label);
-        });
-        if (needsFormSkillOptions.length === 0) {
-            optionList.classList.add('d-none');
-        } else {
-            optionList.classList.remove('d-none');
-        }
-        renderGenerationSkillSummaries();
-    }
-
-    */
-
     function renderNeedsFormSkillSelection() {
         var chipList = document.getElementById('pb-ai-skill-chip-list');
         var optionList = document.getElementById('pb-ai-skill-option-list');
@@ -4057,7 +4005,7 @@
         if (selectedCodes.length === 0) {
             var empty = document.createElement('span');
             empty.className = 'small text-muted';
-            empty.textContent = <?= \json_encode((string)__('浣跨敤榛樿鎶€鑳?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            empty.textContent = <?= \json_encode((string)__('使用默认技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             chipList.appendChild(empty);
         }
 
@@ -4141,7 +4089,7 @@
             sub.className = 'small text-muted';
             sub.textContent = option.code + ' 路 ' + (option.readonly
                 ? <?= \json_encode((string)__('内置技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
-                : <?= \json_encode((string)__('鑷畾涔夋妧鑳?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+                : <?= \json_encode((string)__('自定义技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
             if (option.disabled) {
                 sub.textContent += ' · ' + <?= \json_encode((string)__('已停用'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             }
@@ -4220,7 +4168,7 @@
         skillManagerEditingCode = option && option.code ? String(option.code) : '';
         if (title) {
             title.textContent = skillManagerEditingCode
-                ? <?= \json_encode((string)__('缂栬緫鎶€鑳?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+                ? <?= \json_encode((string)__('编辑技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
                 : <?= \json_encode((string)__('新建技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         codeEl.value = option && option.code ? String(option.code) : '';
@@ -4255,46 +4203,12 @@
         renderSkillAdminList();
     }
 
-    /* function loadNeedsFormSkills() {
-        if (!String(skillListUrl || '').trim()) {
-            setSkillStatusText('未配置技能列表，保留默认生成行为');
-            return Promise.resolve([]);
-        }
-        setSkillStatusText('姝ｅ湪鍔犺浇鎶€鑳?..');
-        return fetch(skillListUrl, {
-            method: 'GET',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
-        }).then(function (response) {
-            if (!response.ok) {
-                throw new Error(String(response.status || ''));
-            }
-            return response.json();
-        }).then(function (payload) {
-            needsFormSkillOptions = normalizeSkillListPayload(payload);
-            renderNeedsFormSkillSelection();
-            renderSkillAdminList();
-            renderGenerationSkillSummaries();
-            setSkillStatusText(needsFormSkillOptions.length > 0 ? '可选择一个或多个技�? : '暂无可选技能，保留默认生成行为');
-            return needsFormSkillOptions;
-        }).catch(function () {
-            needsFormSkillOptions = [];
-            renderNeedsFormSkillSelection();
-            renderSkillAdminList();
-            renderGenerationSkillSummaries();
-            setSkillStatusText('技能列表暂不可用，保留默认生成行为');
-            return [];
-        });
-    }
-
-    */
-
     function loadNeedsFormSkills() {
         if (!String(skillListUrl || '').trim()) {
             setSkillStatusText(<?= \json_encode((string)__('未配置技能列表，保留默认生成行为'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
             return Promise.resolve([]);
         }
-        setSkillStatusText(<?= \json_encode((string)__('姝ｅ湪鍔犺浇鎶€鑳?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        setSkillStatusText(<?= \json_encode((string)__('正在加载技能...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         return postForm(skillListUrl, {}).then(function (payload) {
             needsFormSkillOptions = normalizeSkillListPayload(payload);
             renderNeedsFormSkillSelection();
@@ -4335,10 +4249,10 @@
 
     function disableCustomSkill(code) {
         if (!String(skillDisableUrl || '').trim()) {
-            setSkillManagerStatus(<?= \json_encode((string)__('未配置技能停用接�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error);
+            setSkillManagerStatus(<?= \json_encode((string)__('未配置技能停用接口'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
             return;
         }
-        setSkillManagerStatus(<?= \json_encode((string)__('姝ｅ湪鍋滅敤鎶€鑳?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'muted);
+        setSkillManagerStatus(<?= \json_encode((string)__('正在停用技能...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'muted');
         postForm(skillDisableUrl, { code: code }).then(function (payload) {
             if (!payload || payload.success === false) {
                 throw new Error(String((payload && payload.message) || 'disable skill failed'));
@@ -4352,90 +4266,15 @@
             }));
             renderNeedsFormSkillSelection();
             persistNeedsFormSkillSelection(getNeedsFormSelectedSkillCodes());
-            setSkillManagerStatus(<?= \json_encode((string)__('技能已停用'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'success);
+            setSkillManagerStatus(<?= \json_encode((string)__('技能已停用'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'success');
         }).catch(function (error) {
-            setSkillManagerStatus(error && error.message ? error.message : <?= \json_encode((string)__('鍋滅敤鎶€鑳藉け璐?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error);
+            setSkillManagerStatus(error && error.message ? error.message : <?= \json_encode((string)__('停用技能失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
         });
     }
-
-    /* function saveCustomSkillFromForm() {
-        if (!String(skillSaveUrl || '').trim()) {
-            setSkillManagerStatus('未配置技能保存接�?, 'error');
-            return;
-        }
-        var codeEl = document.getElementById('pb-ai-skill-code');
-        var nameEl = document.getElementById('pb-ai-skill-name');
-        var descriptionEl = document.getElementById('pb-ai-skill-description');
-        var bodyEl = document.getElementById('pb-ai-skill-body');
-        var code = codeEl ? String(codeEl.value || '').trim() : '';
-        var name = nameEl ? String(nameEl.value || '').trim() : '';
-        var body = bodyEl ? String(bodyEl.value || '').trim() : '';
-        if (!code || !name || !body) {
-            setSkillManagerStatus('请填写技能编码、名称和规则', 'error');
-            return;
-        }
-        setSkillManagerStatus('姝ｅ湪淇濆瓨鎶€鑳?..', 'muted');
-        postForm(skillSaveUrl, {
-            code: code,
-            name: name,
-            description: descriptionEl ? String(descriptionEl.value || '').trim() : '',
-            body: body,
-            status: 'active'
-        }).then(function (payload) {
-            if (!payload || payload.success === false) {
-                throw new Error(String((payload && payload.message) || '淇濆瓨鎶€鑳藉け璐?));
-            }
-            var option = normalizeSkillOption(payload.item || payload.skill || {});
-            if (option) {
-                mergeSkillOption(option);
-                setNeedsFormSelectedSkillCodes(getNeedsFormSelectedSkillCodes().concat([option.code]));
-                persistNeedsFormSkillSelection(getNeedsFormSelectedSkillCodes());
-            }
-            renderNeedsFormSkillSelection();
-            resetSkillManagerForm();
-            setSkillManagerStatus('已保存并选择技�?, 'success');
-        }).catch(function (error) {
-            setSkillManagerStatus(error && error.message ? error.message : '淇濆瓨鎶€鑳藉け璐?, 'error');
-        });
-    }
-
-    function initNeedsFormSkillManager(panel) {
-        var toggle = document.getElementById('pb-ai-skill-create-toggle');
-        var manager = document.getElementById('pb-ai-skill-manager-panel');
-        var saveBtn = document.getElementById('pb-ai-skill-save-btn');
-        var cancelBtn = document.getElementById('pb-ai-skill-cancel-btn');
-        if (!panel || !toggle || !manager) {
-            return;
-        }
-        if (!String(skillSaveUrl || '').trim()) {
-            toggle.classList.add('d-none');
-            return;
-        }
-        toggle.addEventListener('click', function () {
-            manager.classList.toggle('d-none');
-            if (!manager.classList.contains('d-none')) {
-                var codeEl = document.getElementById('pb-ai-skill-code');
-                if (codeEl && typeof codeEl.focus === 'function') {
-                    codeEl.focus();
-                }
-            }
-        });
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', function () {
-                resetSkillManagerForm();
-                manager.classList.add('d-none');
-            });
-        }
-        if (saveBtn) {
-            saveBtn.addEventListener('click', saveCustomSkillFromForm);
-        }
-    }
-
-    */
 
     function saveCustomSkillFromForm() {
         if (!String(skillSaveUrl || '').trim()) {
-            setSkillManagerStatus(<?= \json_encode((string)__('未配置技能保存接�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error);
+            setSkillManagerStatus(<?= \json_encode((string)__('未配置技能保存接口'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
             return;
         }
         var codeEl = document.getElementById('pb-ai-skill-code');
@@ -4446,10 +4285,10 @@
         var name = nameEl ? String(nameEl.value || '').trim() : '';
         var body = bodyEl ? String(bodyEl.value || '').trim() : '';
         if (!code || !name || !body) {
-            setSkillManagerStatus(<?= \json_encode((string)__('请填写技能编码、名称和规则'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error);
+            setSkillManagerStatus(<?= \json_encode((string)__('请填写技能编码、名称和规则'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
             return;
         }
-        setSkillManagerStatus(<?= \json_encode((string)__('姝ｅ湪淇濆瓨鎶€鑳?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'muted);
+        setSkillManagerStatus(<?= \json_encode((string)__('正在保存技能...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'muted');
         postForm(skillSaveUrl, {
             code: code,
             name: name,
@@ -4467,11 +4306,11 @@
                 persistNeedsFormSkillSelection(getNeedsFormSelectedSkillCodes());
             }
             renderNeedsFormSkillSelection();
-            setSkillManagerStatus(<?= \json_encode((string)__('已保存并选中技�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'success);
+            setSkillManagerStatus(<?= \json_encode((string)__('已保存并选中技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'success');
             closeSkillEditor();
             resetSkillManagerForm();
         }).catch(function (error) {
-            setSkillManagerStatus(error && error.message ? error.message : <?= \json_encode((string)__('淇濆瓨鎶€鑳藉け璐?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error);
+            setSkillManagerStatus(error && error.message ? error.message : <?= \json_encode((string)__('保存技能失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
         });
     }
 
@@ -4777,9 +4616,9 @@
             needsFormBaseSaveHint = String(hint.textContent || '');
         }
         if (status === 'saving') {
-            hint.textContent = '姝ｅ湪淇濆瓨闇€姹?..';
+            hint.textContent = '正在保存需求...';
         } else if (status === 'saved') {
-            hint.textContent = '需求已保存�?;
+            hint.textContent = '需求已保存。;
         } else if (status === 'failed') {
             hint.textContent = messages.saveFailed || '自动保存失败';
         } else {
@@ -4980,9 +4819,9 @@
                     link.setAttribute('rel', 'noopener noreferrer');
                     return;
                 }
-                // 站内路径：尝试映射到已知 page_type（如 /about�?contact）�?
+                // 站内路径：尝试映射到已知 page_type（如 /about、/contact）。
                 var internalPath = fullHref.replace(currentHost, '');
-                // detectPageTypeFromPath 鏍规嵁璺緞鍓嶇紑鍖归厤 home/about/contact 绛夈€?
+                // detectPageTypeFromPath 根据路径前缀匹配 home/about/contact 等。
                 var pageType = detectPageTypeFromPath(internalPath);
                 if (pageType && typeof rewriteInternalLinkToVisualEdit === 'function') {
                     var rewrittenUrl = rewriteInternalLinkToVisualEdit(pageType, fullHref);
@@ -5000,7 +4839,7 @@
     /**
      * 根据 URL 路径猜测 page_type（首页、关于、联系等）。
      * @param {string} path 不含查询串的路径
-     * @returns {string|null} 鍖归厤鍒扮殑 page_type 鎴?null
+     * @returns {string|null} 匹配到的 page_type 或 null
      */
     function detectPageTypeFromPath(path) {
         if (!path) {
@@ -5862,13 +5701,13 @@
         var originalHtml = aiBtn ? aiBtn.innerHTML : '';
         if (aiBtn) {
             aiBtn.disabled = true;
-            aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> ' + <?= \json_encode((string)__('生成�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> ' + <?= \json_encode((string)__('生成中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         if (content) {
             content.innerHTML = '';
         }
-        blockEditorTerminalLog(<?= \json_encode((string)__('连接�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'info);
-        blockEditorTerminalSetStatus(<?= \json_encode((string)__('连接�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        blockEditorTerminalLog(<?= \json_encode((string)__('连接中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'info');
+        blockEditorTerminalSetStatus(<?= \json_encode((string)__('连接中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
 
         function restoreAiButton() {
             if (aiBtn) {
@@ -5936,7 +5775,7 @@
                 if (eventName === 'start' || eventName === 'progress') {
                     if (payload.message) {
                         blockEditorTerminalLog(payload.message, eventName);
-                        blockEditorTerminalSetStatus(<?= \json_encode((string)__('宸茶繛鎺?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+                        blockEditorTerminalSetStatus(<?= \json_encode((string)__('已连接'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
                     }
                 } else if (eventName === 'context' && payload.display_text) {
                     blockEditorTerminalLog(payload.display_text, 'info');
@@ -5992,7 +5831,7 @@
             }
         } catch (error) {
             restoreAiButton();
-            blockEditorTerminalLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error);
+            blockEditorTerminalLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
             toast('error', String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
         }
     }
@@ -6973,7 +6812,7 @@
             var aiPromptValue = currentConfig._ai_prompt != null ? String(currentConfig._ai_prompt) : '';
             formHtml += '<div class="ai-generate-bar" style="margin-bottom:16px; padding:12px; background:linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(14,165,233,0.12) 100%); border-radius:10px; border:1px solid rgba(59,130,246,0.2);">';
             formHtml += '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px;">';
-            formHtml += '<span style="font-size:12px; opacity:0.85;"><i class="mdi mdi-robot" style="margin-right:4px;"></i><?= __('AI 可根据当前页面信息自动生成此组件的文字配�?') ?></span>';
+            formHtml += '<span style="font-size:12px; opacity:0.85;"><i class="mdi mdi-robot" style="margin-right:4px;"></i><?= __('AI 可根据当前页面信息自动生成此组件的文字配置') ?></span>';
             formHtml += '<button type="button" id="aiGenerateComponentConfigBtn" class="btn btn-sm" style="background:linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%); color:#fff; border:none; padding:4px 12px; font-size:12px;">';
             formHtml += '<i class="mdi mdi-auto-fix"></i> <?= __('AI生成') ?>';
             formHtml += '</button>';
@@ -6983,9 +6822,9 @@
             formHtml += '<textarea id="comp_config__ai_prompt" data-field="_ai_prompt" class="form-control form-control-sm" rows="2" style="width:100%; font-size:12px; resize:vertical;" placeholder="<?= __('例如：强调科技感、语气更强转化、CTA更直接') ?>">' + escapeHtml(aiPromptValue) + '</textarea>';
             formHtml += '</div>';
             formHtml += '<div class="small text-muted" style="font-size:12px; line-height:1.6;">';
-            formHtml += '<?= __('当前页面类型') ?>�? + escapeHtml(pageTypeLabel || context.page_type);
+            formHtml += '<?= __('当前页面类型') ?>：' + escapeHtml(pageTypeLabel || context.page_type);
             if (pageAiDescription) {
-                formHtml += '<br><?= __('页面AI描述') ?>�? + escapeHtml(pageAiDescription);
+                formHtml += '<br><?= __('页面 AI 描述') ?>：' + escapeHtml(pageAiDescription);
             }
             formHtml += '</div>';
             formHtml += buildComponentConfigTerminalHtml();
@@ -7138,17 +6977,17 @@
                             filledCount++;
                         });
                         if (filledCount > 0) {
-                            toast('success', <?= \json_encode((string)__('AI 宸茬敓鎴愮粍浠堕厤缃?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+                            toast('success', <?= \json_encode((string)__('AI 已生成组件配置'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
                         }
                     }
 
                     aiBtn.disabled = true;
-                    aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> ' + <?= \json_encode((string)__('生成�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+                    aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> ' + <?= \json_encode((string)__('生成中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
                     if (sseContent) {
                         sseContent.innerHTML = '';
                     }
-                    sseLog(<?= \json_encode((string)__('连接�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'info);
-                    sseSetStatus(<?= \json_encode((string)__('连接�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+                    sseLog(<?= \json_encode((string)__('连接中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'info');
+                    sseSetStatus(<?= \json_encode((string)__('连接中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
 
                     try {
                         var promptSaveConfig = collectComponentConfigModalValues(modalElement);
@@ -7206,13 +7045,13 @@
                             if (currentEvent === 'start' || currentEvent === 'progress') {
                                 if (payloadData.message) {
                                     sseLog(payloadData.message, currentEvent === 'start' ? 'start' : 'progress');
-                                    sseSetStatus(<?= \json_encode((string)__('宸茶繛鎺?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+                                    sseSetStatus(<?= \json_encode((string)__('已连接'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
                                 }
                             } else if (currentEvent === 'context' && payloadData.display_text) {
-                                sseLog('�??= __('操作上下�?') ?>�?, 'info');
+                                sseLog(<?= \json_encode((string)__('操作上下文'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'info');
                                 sseLog(payloadData.display_text, 'info');
                             } else if (currentEvent === 'prompt' && payloadData.prompt) {
-                                sseLog('�??= __('本次提示�?') ?>�?, 'info');
+                                sseLog(<?= \json_encode((string)__('本次提示词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'info');
                                 sseLog(payloadData.prompt, 'info');
                             } else if (currentEvent === 'thinking') {
                                 var thinkText = payloadData.content && typeof payloadData.content === 'string' ? payloadData.content : '';
@@ -7236,7 +7075,7 @@
                                     thinkingStreamingLineEl.style.opacity = '0.88';
                                     thinkingStreamingLineEl.innerHTML = '<span style="opacity:0.55; margin-right:8px;">['
                                         + new Date().toLocaleTimeString('zh-CN', { hour12: false })
-                                        + ']</span><span style="opacity:0.75; margin-right:6px;"><?= __('鎬濊€?') ?></span><span class="pb-ai-component-thinking-text"></span>';
+                                        + ']</span><span style="opacity:0.75; margin-right:6px;"><?= __('思考') ?></span><span class="pb-ai-component-thinking-text"></span>';
                                     sseContent.appendChild(thinkingStreamingLineEl);
                                     thinkingStreamingTextEl = thinkingStreamingLineEl.querySelector('.pb-ai-component-thinking-text');
                                 }
@@ -7280,7 +7119,7 @@
                             } else if (currentEvent === 'error') {
                                 completed = true;
                                 restoreAiButton();
-                                sseLog(String(payloadData.message || <?= \json_encode((string)__('生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error);
+                                sseLog(String(payloadData.message || <?= \json_encode((string)__('生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
                                 throw new Error(String(payloadData.message || <?= \json_encode((string)__('生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
                             }
 
@@ -7323,7 +7162,7 @@
                         }
                     } catch (error) {
                         restoreAiButton();
-                        sseLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error);
+                        sseLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
                         toast('error', String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
                     }
                 });
@@ -8750,8 +8589,8 @@
         if (!text) {
             return false;
         }
-        return /[脙脗锟絔/.test(text)
-            || /(闂|閻|缂|鈧|�?/.test(text);
+        return /[\u8119\u8117\u951f\ufffd]/.test(text)
+            || /[\u95c2\u95bb\u7f02\u9227\u9479\u93b6\u5bf0]/.test(text);
     }
 
     function humanizePreviewKey(key) {
@@ -8771,16 +8610,16 @@
             'privacy_policy'       => (string)__('隐私政策'),
             'terms_of_service'     => (string)__('服务条款'),
             'refund_policy'        => (string)__('退款政策'),
-            'shipping_policy'      => (string)__('閰嶉€佹斂绛?'),
+            'shipping_policy'      => (string)__('配送政策'),
             'cookie_policy'        => (string)__('Cookie 政策'),
             'blog_post'            => (string)__('博客文章'),
             'blog_category'        => (string)__('博客分类'),
             'blog_list'            => (string)__('博客列表'),
-            'custom_page'          => (string)__('鑷畾涔夐〉闈?'),
+            'custom_page'          => (string)__('自定义页面'),
             'hero'                 => (string)__('首屏'),
-            'intro'                => (string)__('浠嬬粛鍖?'),
-            'features'             => (string)__('鍔熻兘鍖?'),
-            'feature'              => (string)__('鍔熻兘鍖?'),
+            'intro'                => (string)__('介绍区'),
+            'features'             => (string)__('功能区'),
+            'feature'              => (string)__('功能区'),
             'benefit'              => (string)__('价值点'),
             'benefits'             => (string)__('价值点'),
             'testimonial'          => (string)__('用户评价'),
@@ -8793,7 +8632,7 @@
             'header'               => (string)__('页头'),
             'footer'               => (string)__('页脚'),
             'title'                => (string)__('标题'),
-            'subtitle'             => (string)__('鍓爣棰?'),
+            'subtitle'             => (string)__('副标题'),
             'description'          => (string)__('描述'),
             'content'              => (string)__('内容'),
             'button_text'          => (string)__('按钮文案'),
@@ -8812,7 +8651,7 @@
             'theme_palette'        => (string)__('主题配色'),
             'primary'              => (string)__('主色'),
             'secondary'            => (string)__('辅色'),
-            'accent'               => (string)__('寮鸿皟鑹?'),
+            'accent'               => (string)__('强调色'),
             'surface'              => (string)__('琛ㄩ潰鑹?'),
             'text'                 => (string)__('文本色'),
             'implementation_note'  => (string)__('实现说明'),
@@ -8851,11 +8690,11 @@
             return false;
         }
         return [
-            '请填�?, // i18n: matcher-source
+            '请填写, // i18n: matcher-source
             '填写说明', // i18n: matcher-source
             '写作提示', // i18n: matcher-source
             '不要描述', // i18n: matcher-source
-            '仅说明方�?, // i18n: matcher-source
+            '仅说明方向, // i18n: matcher-source
             'block direction',
             'direction only',
             'first-screen promise',
@@ -8880,8 +8719,8 @@
         var key = String(blockKey || '').trim().toLowerCase();
         var known = <?= \json_encode([
             'hero'          => (string)__('首屏'),
-            'intro'         => (string)__('浠嬬粛鍖?'),
-            'features'      => (string)__('鍔熻兘鍖?'),
+            'intro'         => (string)__('介绍区'),
+            'features'      => (string)__('功能区'),
             'benefit'       => (string)__('价值点'),
             'benefits'      => (string)__('价值点'),
             'testimonial'   => (string)__('用户评价'),
@@ -8904,18 +8743,18 @@
     function fallbackPlanBlockGoal(pageType, pageLabel, blockKey) {
         var pageName = String(pageLabel || fallbackPageLabel(pageType, ''));
         var blockName = fallbackBlockLabel(blockKey);
-        return (<?= \json_encode((string)__('在�?{page}”页面中，明确�?{block}”区块承担的信息目标与行动目标（�?CTA）�?'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageName).replace('%{block}', blockName);
+        return (<?= \json_encode((string)__('在“%{page}”页面中，明确“%{block}”区块承担的信息目标与行动目标（含 CTA）。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageName).replace('%{block}', blockName);
     }
 
     function fallbackPlanBlockContent(pageType, pageLabel, blockKey) {
         var pageName = String(pageLabel || fallbackPageLabel(pageType, ''));
         var blockName = fallbackBlockLabel(blockKey);
-        return (<?= \json_encode((string)__('为�?{page}”页面的�?{block}”区块生成可直接展示的文案与结构�?'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageName).replace('%{block}', blockName);
+        return (<?= \json_encode((string)__('为“%{page}”页面的“%{block}”区块生成可直接展示的文案与结构。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageName).replace('%{block}', blockName);
     }
 
     function fallbackFieldReason(field) {
         var label = humanizePreviewKey(field) || <?= \json_encode((string)__('字段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
-        return '�? + label + '”用于说明该项在当前区块中的必要性与业务意图�?;
+        return '“' + label + '”用于说明该项在当前区块中的必要性与业务意图。';
     }
 
     function resolveFieldPlanImplementationNote(row) {
@@ -8929,7 +8768,7 @@
         var blockLabel = fallbackBlockLabel(blockKey);
         var pageText = String(pageLabel || <?= \json_encode((string)__('页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).trim();
         if (key === 'core_copy') {
-            return (<?= \json_encode((string)__('围绕�?{page}”中的�?{block}”输出一句核心价值表达，并补充对�?CTA�?'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageText).replace('%{block}', blockLabel);
+            return (<?= \json_encode((string)__('围绕“%{page}”中的“%{block}”输出一句核心价值表达，并补充对应 CTA。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageText).replace('%{block}', blockLabel);
         }
         if (key === 'typography') {
             return <?= \json_encode((string)__('建议使用易读的标题层级与正文节奏，突出信息主次。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
@@ -9145,7 +8984,7 @@
                 if (text === '') {
                     return keyLabel;
                 }
-                return keyLabel + '�? + text;
+                return keyLabel + '：' + text;
             }).filter(Boolean);
         }
         var single = sanitizePreviewText(value, '');
@@ -10969,10 +10808,10 @@
             };
             if (scopeKind === 'stage' && false) {
                 window.__pbPreviewActionDebug.mode = 'stage-panel-removed';
-                toast('info', <?= \json_encode((string)__('阶段级微�?重建面板已移除，请在具体页面区块中执行新增、微调或删除�?'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+                toast('info', <?= \json_encode((string)__('阶段级微调/重建面板已移除，请在具体页面区块中执行新增、微调或删除。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
                 return true;
             }
-            // 老板 2026-04-23 口径：块�?跳到某位�?走独立的轻量弹窗，复�?persist*Sort�?
+            // 老板 2026-04-23 口径：块级跳到某位置走独立的轻量弹窗，复用 persist*Sort。
             if (action === 'move' && scopeKind === 'block') {
                 var moveKey = taskKey || blockKey;
                 if (moveKey === '') {
@@ -11062,7 +10901,7 @@
             : (normalizedAction === 'delete' ? 'delete' : (normalizedAction === 'refine' ? 'refine' : 'rebuild'));
         var blockConfig = {};
         if (mutationAction === 'create') {
-            var title = inlineInstruction || (blockLabel ? (blockLabel + ' follow-up) : <?= \json_encode((string)__('新区�?'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+            var title = inlineInstruction || (blockLabel ? (blockLabel + ' follow-up) : <?= \json_encode((string)__('新区块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
             blockConfig = {
                 title: title,
                 goal: title,
@@ -11097,11 +10936,11 @@
                 hydrateWorkspaceFromState(data.data);
             }
             if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'plan')) {
-                toast('success', data.message ? String(data.message) : (messages.blockOpSuccess || <?= \json_encode((string)__('块级操作已完成�?'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)');
+                toast('success', data.message ? String(data.message) : (messages.blockOpSuccess || <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>));
                 return;
             }
             if (data && data.success && data.data && typeof data.data === 'object') {
-                toast('success', data.message ? String(data.message) : (messages.blockOpSuccess || <?= \json_encode((string)__('块级操作已完成�?'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)');
+                toast('success', data.message ? String(data.message) : (messages.blockOpSuccess || <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>));
                 return;
             }
             toast('warning', data && data.message ? String(data.message) : messages.networkError);
@@ -11310,7 +11149,7 @@
      *
      * 设计目标（老板 2026-04-23 口径）：
      *  - 取代「调整与执行」面板内的块级操作散点按钮。
-     *  - 统一 `stage1` 下的 `refine/rebuild/create/delete` 四类意图入口�?
+     *  - 统一 `stage1` 下的 `refine/rebuild/create/delete` 四类意图入口。
      *  - 弹窗本身只负责捕获「用户意图文本 + 目标块信息」，并通过 CustomEvent
      *    让现有业务 JS 接管真正的 API 调用。这样可以最小化主 JS 的改动。
      *
@@ -11516,7 +11355,7 @@
         });
     }
 
-    // R3.2    // R3.2 跳到某位置：读取当前 sortable-list 的顺序，让用户输�?1-based 目标位置�?
+    // R3.2    // R3.2 跳到某位置：读取当前 sortable-list 的顺序，让用户输入 1-based 目标位置。
     function interpolateMessageTemplate(template, params) {
         var text = String(template || '');
         var dict = params && typeof params === 'object' ? params : {};
@@ -12079,7 +11918,7 @@
                 runBtn.dataset.originalText = String(runBtn.textContent || '');
             }
             runBtn.disabled = true;
-            runBtn.textContent = <?= \json_encode((string)__('处理�?..'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             return;
         }
         runBtn.disabled = planGenerationActionLockActive;
@@ -12690,10 +12529,10 @@
             return <?= \json_encode((string)__('页面重生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         if (op === 'block_partial_patch') {
-            return <?= \json_encode((string)__('鍖哄潡灞€閮ㄤ慨鏀?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            return <?= \json_encode((string)__('区块局部修改'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         if (op === 'block_regenerate') {
-            return <?= \json_encode((string)__('区块重生�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            return <?= \json_encode((string)__('区块重生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         return <?= \json_encode((string)__('构建任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     }
@@ -12887,7 +12726,7 @@
                 badgeText = String(badgeText || '') + ' 路 ' + String(runtimeDetail.badgeSuffix || '');
             }
             if (runtimeDetail.titleSuffix) {
-                titleText = String(titleText || '') + '�? + String(runtimeDetail.titleSuffix || '') + '�?;
+                titleText = String(titleText || '') + '（' + String(runtimeDetail.titleSuffix || '') + '）';
             }
             if (runtimeDetail.hint) {
                 hintText = String(runtimeDetail.hint || '');
@@ -13042,7 +12881,7 @@
     }
 
     /**
-     * 判断是否已具备进入构建准备链路的前置条件（阶段一方案/蓝图/工作区状态）�?     */
+     * 判断是否已具备进入构建准备链路的前置条件（阶段一方案/蓝图/工作区状态）。     */
     function extractResponseCode(data) {
         if (!data || typeof data !== 'object') {
             return '';
@@ -13786,10 +13625,10 @@
             + ': ' + progressPercent + '% [' + renderTaskProgressBarText(progressPercent) + ']';
         var countLine = <?= \json_encode((string)__('任务统计'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
             + ': '
-            + <?= \json_encode((string)__('总计'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.total + '�?
-            + <?= \json_encode((string)__('已完�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.done + '�?
-            + <?= \json_encode((string)__('进行�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.running + '�?
-            + <?= \json_encode((string)__('寰呭鐞?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.pending;
+            + <?= \json_encode((string)__('总计'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.total + ' / '
+            + <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.done + ' / '
+            + <?= \json_encode((string)__('进行中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.running + ' / '
+            + <?= \json_encode((string)__('待处理'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.pending;
         return header + '\n\n' + progressLine + '\n' + countLine;
     }
 
@@ -13867,7 +13706,7 @@
             var stateForPrompt = latestWorkspaceState && typeof latestWorkspaceState === 'object'
                 ? latestWorkspaceState
                 : (initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {});
-            // 仅在构建队列异常时提示“继续观�?继续操作”，正常运行中不打断用户�?
+            // 仅在构建队列异常时提示“继续观察 / 继续操作”，正常运行中不打断用户。
             if (!hasBuildQueueErrorForResumePrompt(stateForPrompt)) {
                 return;
             }
@@ -13956,7 +13795,7 @@
                         if (window.PbAiOperationRunner.startFromResponse(resumePayload, String(data.operation || 'build'))) {
                             toast('warning', (data && data.message)
                                 ? String(data.message)
-                                : (messages.operationResumed || <?= \json_encode((string)__('检测到已有操作，已自动接管任务流�?'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>)');
+                                : (messages.operationResumed || <?= \json_encode((string)__('检测到已有操作，已自动接管任务流。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
                             return;
                         }
                     }
@@ -14295,7 +14134,7 @@
                 }
                 if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
                     var confirmTitle = String(messages.publishCheckModalTitle || '发布前预检清单');
-                    var confirmMessage = String(messages.publishCheckConfirmPrompt || '确认将当前站点正式发布？发布后会覆盖原有线上站点内容�?);
+                    var confirmMessage = String(messages.publishCheckConfirmPrompt || '确认将当前站点正式发布？发布后会覆盖原有线上站点内容。);
                     var confirmAction = String(messages.publishCheckConfirmAction || '确认发布');
                     window.BackendConfirm.show(confirmMessage, {
                         title: confirmTitle,
