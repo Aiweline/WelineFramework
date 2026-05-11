@@ -3,6 +3,7 @@
 /**@var \Weline\Customer\Model\Customer $user */
 $avatar = $user->getAvatar();
 $username = $user->getUsername();
+$displayName = $username !== '' ? ucfirst($username) : '';
 $email = $user->getEmail();
 $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 ?>
@@ -11,10 +12,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     <!-- 个人资料头部 -->
     <header class="account-index__header">
         <div class="account-index__avatar">
-            <notempty name="avatar">
-                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="account-index__avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="account-index__avatar-fallback" id="avatarFallback"><var>avatarInitial</var></div>
-            </notempty>
+            <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="account-index__avatar-img"<?= $avatar ? '' : ' hidden' ?> onerror="this.hidden=true; var fallback=document.getElementById('avatarFallback'); if(fallback){fallback.hidden=false;}">
+            <div class="account-index__avatar-fallback" id="avatarFallback"<?= $avatar ? ' hidden' : '' ?>><var>avatarInitial</var></div>
         </div>
         <div class="account-index__user-info">
             <h1 class="account-index__username"><var>username</var></h1>
@@ -34,7 +33,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     </header>
 
     <!-- 个人资料部分 -->
-    <div class="account-index__section" id="profile-section">
+    <div class="account-index__section" id="profile-section" data-account-section="profile">
         <div class="account-card">
             <header class="account-card__header">
                 <h2 class="account-card__title"><lang>个人资料</lang></h2>
@@ -43,39 +42,29 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                 <div class="account-card__alert account-card__alert--success" id="profileSuccessMsg"></div>
                 <div class="account-card__alert account-card__alert--danger" id="profileErrorMsg"></div>
                 <form id="profileForm" class="account-form">
-                    <div class="account-form__row">
-                        <div class="account-form__group">
-                            <label for="username" class="account-form__label"><lang>用户名</lang></label>
-                            <input type="text" class="account-form__input" id="username"
-                                   value="<?= htmlspecialchars($user->getUsername()) ?>" disabled>
-                            <span class="account-form__hint"><lang>用户名不可修改</lang></span>
+                    <div class="account-form__group account-form__group--wide">
+                        <label class="account-form__label"><lang>账户标识</lang></label>
+                        <div class="account-identity" id="accountIdentity">
+                            <span class="account-identity__badge">#<?= $user->getId() ?></span>
+                            <strong class="account-identity__name"><?= htmlspecialchars($displayName) ?></strong>
                         </div>
-
-                        <div class="account-form__group">
-                            <label for="userId" class="account-form__label"><lang>用户ID</lang></label>
-                            <input type="text" class="account-form__input" id="userId"
-                                   value="<?= $user->getId() ?>" disabled>
-                        </div>
+                        <span class="account-form__hint"><lang>用户名和用户 ID 为系统标识，不可修改</lang></span>
                     </div>
 
-                    <div class="account-form__group">
+                    <div class="account-form__group account-form__group--wide">
                         <label for="avatar" class="account-form__label"><lang>头像URL</lang></label>
                         <div class="account-form__input-group">
                             <input type="url" class="account-form__input" id="avatar" name="avatar"
                                    value="<?= htmlspecialchars($user->getAvatar() ?: '') ?>"
                                    placeholder="https://example.com/avatar.jpg">
-                            <button type="button" class="account-form__btn account-form__btn--outline" id="previewAvatarBtn">
-                                <i class="ri-eye-line"></i> <lang>预览</lang>
-                            </button>
                         </div>
-                        <span class="account-form__hint"><lang>输入头像图片的完整URL地址</lang></span>
+                        <span class="account-form__hint"><lang>输入头像图片的完整 URL 地址，顶部头像会自动预览</lang></span>
                     </div>
 
                     <?php if ($email): ?>
-                    <div class="account-form__group">
+                    <div class="account-form__group account-form__group--medium">
                         <label for="email" class="account-form__label"><lang>邮箱</lang></label>
-                        <input type="email" class="account-form__input" id="email"
-                               value="<?= htmlspecialchars($email) ?>" disabled>
+                        <div class="account-form__display account-form__display--soft" id="email"><?= htmlspecialchars($email) ?></div>
                         <span class="account-form__hint"><lang>邮箱不可修改</lang></span>
                     </div>
                     <?php endif; ?>
@@ -91,7 +80,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     </div>
 
     <!-- 安全设置部分 -->
-    <div class="account-index__section d-none" id="security-section">
+    <div class="account-index__section d-none" id="security-section" data-account-section="security" hidden>
         <div class="account-card">
             <header class="account-card__header">
                 <h2 class="account-card__title"><lang>修改密码</lang></h2>
@@ -101,7 +90,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                 <div class="account-card__alert account-card__alert--danger" id="securityErrorMsg"></div>
 
                 <form id="securityForm" class="account-form">
-                    <div class="account-form__group">
+                    <div class="account-form__group account-form__group--medium">
                         <label for="old_password" class="account-form__label"><lang>原密码</lang></label>
                         <input type="password" class="account-form__input" id="old_password" name="old_password"
                                placeholder="@lang{'请输入原密码'}" required>
@@ -109,14 +98,14 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                     </div>
 
                     <div class="account-form__row">
-                        <div class="account-form__group">
+                        <div class="account-form__group account-form__group--medium">
                             <label for="new_password" class="account-form__label"><lang>新密码</lang></label>
                             <input type="password" class="account-form__input" id="new_password" name="new_password"
-                                   placeholder="@lang{'至少6位字符'}" minlength="6">
+                                   placeholder="@lang{'至少 6 位字符'}" minlength="6">
                             <span class="account-form__hint"><lang>建议使用字母、数字和特殊字符组合</lang></span>
                         </div>
 
-                        <div class="account-form__group">
+                        <div class="account-form__group account-form__group--medium">
                             <label for="confirm_password" class="account-form__label"><lang>确认新密码</lang></label>
                             <input type="password" class="account-form__input" id="confirm_password" name="confirm_password"
                                    placeholder="@lang{'再次输入新密码'}" minlength="6">
@@ -134,26 +123,10 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         </div>
     </div>
 
-    <!-- 我的订单（WeShop_Order 等模块通过 Hook 注入列表） -->
-    <div class="account-index__section d-none" id="orders-section">
-        <div class="account-card">
-            <div class="account-card__body">
-                <w:hook name="Weline_Customer::frontend::account::index::orders"/>
-            </div>
-        </div>
-    </div>
+    <!-- 扩展分区：其它模块通过 account.sidebar.content 注入 -->
+    <hook>account.sidebar.content</hook>
 
-    <!-- 订阅 / 周期性方案（WeShop_Subscription 等模块通过 Hook 注入） -->
-    <div class="account-index__section d-none" id="subscriptions-section">
-        <div class="account-card">
-            <div class="account-card__body">
-                <w:hook name="Weline_Customer::frontend::account::index::subscriptions"/>
-            </div>
-        </div>
-    </div>
-
-    <!-- 登录信息部分 -->
-    <div class="account-index__section d-none" id="login-info-section">
+    <div class="account-index__section d-none" id="login-info-section" data-account-section="login-info" hidden>
         <div class="account-card">
             <header class="account-card__header">
                 <h2 class="account-card__title"><lang>登录信息</lang></h2>
@@ -161,7 +134,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             <div class="account-card__body">
                 <div class="account-info-grid">
                     <div class="account-info-item">
-                        <label class="account-info-item__label"><lang>最后登录IP</lang></label>
+                        <label class="account-info-item__label"><lang>最后登录 IP</lang></label>
                         <div class="account-info-item__value">
                             <?php $loginIp = $user->getLoginIp(); ?>
                             <?php if ($loginIp): ?>
@@ -172,7 +145,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                         </div>
                     </div>
                     <div class="account-info-item">
-                        <label class="account-info-item__label"><lang>会话ID</lang></label>
+                        <label class="account-info-item__label"><lang>会话 ID</lang></label>
                         <div class="account-info-item__value">
                             <?php $sessionId = $user->getSessionId(); ?>
                             <?php if ($sessionId): ?>
@@ -363,13 +336,15 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 .account-form {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 1.5rem;
+    width: min(100%, 860px);
 }
 
 .account-form__row {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.25rem;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+    gap: 1rem 1.25rem;
+    align-items: start;
 }
 
 @media (max-width: 640px) {
@@ -382,6 +357,20 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-width: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.account-form__group--medium {
+    width: min(100%, 31rem);
+}
+
+.account-form__group--wide {
+    width: min(100%, 46rem);
 }
 
 .account-form__label {
@@ -392,29 +381,89 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
 .account-form__input {
     width: 100%;
+    min-height: 2.95rem;
     padding: 0.75rem 1rem;
     font-size: 0.9375rem;
     color: var(--color-text-primary);
-    background: var(--color-bg-primary);
-    border: 2px solid var(--color-border-default);
-    border-radius: var(--border-radius-lg, 0.75rem);
+    background: linear-gradient(180deg, #fbfdff 0%, #f4f7fb 100%);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: var(--border-radius-xl, 0.95rem);
     transition: var(--ai-transition);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.account-form__input:hover {
+    border-color: rgba(148, 163, 184, 0.32);
 }
 
 .account-form__input:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(240, 193, 75, 0.15);
+    background: #fffdf8;
+    box-shadow: 0 0 0 3px rgba(240, 193, 75, 0.12);
 }
 
 .account-form__input:disabled {
-    background: var(--color-bg-secondary);
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.92) 0%, rgba(241, 245, 249, 0.88) 100%);
+    color: rgba(15, 23, 42, 0.88);
     cursor: not-allowed;
+}
+
+.account-form__display {
+    display: flex;
+    align-items: center;
+    min-height: 2.95rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    color: var(--color-text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.account-form__display--soft {
+    padding-inline: 0.1rem;
+    color: rgba(15, 23, 42, 0.88);
+    font-weight: 500;
+}
+
+.account-identity {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    min-height: 2.95rem;
+    padding: 0.2rem 0;
+}
+
+.account-identity__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 4rem;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(240, 193, 75, 0.14);
+    color: var(--color-primary-dark);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.account-identity__name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1.3;
 }
 
 .account-form__input-group {
     display: flex;
-    gap: 0.5rem;
+    align-items: stretch;
+    gap: 0.625rem;
+    width: 100%;
 }
 
 .account-form__input-group .account-form__input {
@@ -424,10 +473,12 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 .account-form__hint {
     font-size: 0.8125rem;
     color: var(--color-text-secondary);
+    line-height: 1.5;
 }
 
 .account-form__actions {
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
 }
 
 .account-form__btn {
@@ -435,7 +486,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.35rem;
     font-size: 0.9375rem;
     font-weight: 600;
     border-radius: var(--border-radius-lg, 0.75rem);
@@ -457,14 +509,16 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 }
 
 .account-form__btn--outline {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.94);
     color: var(--color-text-primary);
     border-color: var(--color-border-default);
+    white-space: nowrap;
 }
 
 .account-form__btn--outline:hover {
     border-color: var(--color-primary);
     color: var(--color-primary-dark);
+    background: rgba(255, 248, 225, 0.9);
 }
 
 .account-info-grid {
@@ -512,12 +566,31 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     .account-card__body {
         padding: 1.25rem;
     }
+
+    .account-form {
+        width: 100%;
+    }
+
+    .account-form__group,
+    .account-form__group--small,
+    .account-form__group--medium,
+    .account-form__group--wide {
+        max-width: 100%;
+    }
+
+    .account-form__input-group {
+        flex-direction: column;
+    }
+
+    .account-form__btn--outline {
+        width: 100%;
+    }
 }
 </style>
 
 <script>
 (function() {
-    // 账户页 AJAX 文案（JSON 嵌入，避免 script 内 htmlspecialchars 导致 Unicode/HTML 实体异常）
+    // 账户页 AJAX 文案通过 JSON 直接嵌入，避免 script 内再次转义后出现 Unicode/HTML 实体异常。
     var i18nAccount = {
         saving: <?= json_encode((string) __('保存中...'), JSON_UNESCAPED_UNICODE) ?>,
         changing: <?= json_encode((string) __('修改中...'), JSON_UNESCAPED_UNICODE) ?>,
@@ -528,7 +601,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         passwordMismatch: <?= json_encode((string) __('两次输入的新密码不一致'), JSON_UNESCAPED_UNICODE) ?>
     };
 
-    /** 接口偶发返回 HTML 数字实体文案时的解码（勿用 textarea：部分环境下 innerHTML 无法可靠解码实体） */
+    /** 接口偶发返回 HTML 数字实体文案时进行解码；不使用 textarea，避免部分环境 innerHTML 解码不稳定。 */
     function welineDecodeHtmlEntities(message) {
         var s = String(message || '');
         if (s.indexOf('&') === -1) {
@@ -547,22 +620,35 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         return s;
     }
 
-    // 仅绑定带 data-section 的侧栏项（个人资料/安全设置等），避免把「退出登录」等普通链接
-    // 也套上 preventDefault + 错误的 href 解析；目标 ID 用 data-section，避免依赖 #fragment。
-    // 每次点击重新查询 .account-index__section，避免初始化时 NodeList 为空导致「只展开一块、不隐藏其它块」。
-    var navLinks = document.querySelectorAll('.account-sidebar__nav-link[data-section]');
+    // 仅绑定带 data-section 的侧栏项，避免把退出登录等普通链接也当成分区切换。
+    var navLinks = document.querySelectorAll('[data-account-nav-link][data-section]');
+
+    function setActiveNavLink(targetId) {
+        navLinks.forEach(function(nav) {
+            var isActive = nav.getAttribute('data-section') === targetId;
+            nav.classList.toggle('is-active', isActive);
+            if (nav.classList.contains('account-sidebar__nav-link')) {
+                nav.classList.toggle('account-sidebar__nav-link--active', isActive);
+            }
+        });
+    }
 
     function showAccountSection(targetId) {
         if (!targetId) {
             return;
         }
-        var sections = document.querySelectorAll('.account-index__section');
-        var targetSection = document.getElementById(targetId + '-section');
+        var sections = document.querySelectorAll('[data-account-section]');
+        var targetSection = document.querySelector('[data-account-section="' + targetId + '"]');
+        if (!targetSection) {
+            targetSection = document.getElementById(targetId + '-section');
+        }
         sections.forEach(function(section) {
             section.classList.add('d-none');
+            section.hidden = true;
         });
         if (targetSection) {
             targetSection.classList.remove('d-none');
+            targetSection.hidden = false;
         }
     }
 
@@ -574,14 +660,10 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                 return;
             }
 
-            navLinks.forEach(function(nav) {
-                nav.classList.remove('account-sidebar__nav-link--active');
-            });
-            link.classList.add('account-sidebar__nav-link--active');
-
+            setActiveNavLink(targetId);
             showAccountSection(targetId);
             try {
-                // 必须与侧栏 a[href] 一致：仅用 '#id' 会在当前文档为站点根时把地址栏写成 /#orders
+                // 必须与侧栏 a[href] 保持一致；只写 #id 会在站点根路径下把地址栏改成 /#orders。
                 var hrefAttr = link.getAttribute('href');
                 if (hrefAttr && hrefAttr.indexOf('#') !== -1) {
                     history.replaceState(null, '', hrefAttr);
@@ -603,26 +685,36 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         if (!hasNav) {
             return;
         }
-        navLinks.forEach(function(nav) {
-            nav.classList.toggle('account-sidebar__nav-link--active', nav.getAttribute('data-section') === raw);
-        });
+        setActiveNavLink(raw);
         showAccountSection(raw);
     })();
 
-    var previewBtn = document.getElementById('previewAvatarBtn');
-    if (previewBtn) {
-        previewBtn.addEventListener('click', function() {
-            var avatarUrl = document.getElementById('avatar').value;
-            var avatarPreview = document.getElementById('avatarPreview');
-            var avatarFallback = document.getElementById('avatarFallback');
-            if (avatarUrl && avatarPreview) {
-                avatarPreview.src = avatarUrl;
-                avatarPreview.style.display = 'block';
-                if (avatarFallback) {
-                    avatarFallback.style.display = 'none';
-                }
-            }
-        });
+    var avatarInput = document.getElementById('avatar');
+    var avatarPreview = document.getElementById('avatarPreview');
+    var avatarFallback = document.getElementById('avatarFallback');
+
+    function syncAvatarPreview() {
+        if (!avatarPreview || !avatarFallback || !avatarInput) {
+            return;
+        }
+
+        var avatarUrl = avatarInput.value.trim();
+        if (!avatarUrl) {
+            avatarPreview.hidden = true;
+            avatarFallback.hidden = false;
+            avatarPreview.removeAttribute('src');
+            return;
+        }
+
+        avatarPreview.hidden = false;
+        avatarFallback.hidden = true;
+        avatarPreview.src = avatarUrl;
+    }
+
+    if (avatarInput) {
+        avatarInput.addEventListener('input', syncAvatarPreview);
+        avatarInput.addEventListener('change', syncAvatarPreview);
+        syncAvatarPreview();
     }
 
     var profileForm = document.getElementById('profileForm');
@@ -729,3 +821,4 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     }
 })();
 </script>
+
