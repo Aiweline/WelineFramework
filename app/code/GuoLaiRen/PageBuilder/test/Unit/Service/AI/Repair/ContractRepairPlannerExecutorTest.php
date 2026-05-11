@@ -75,7 +75,7 @@ final class ContractRepairPlannerExecutorTest extends TestCase
 
         self::assertSame([], $result['applied']);
         self::assertCount(1, $result['blocked']);
-        self::assertStringContainsString('Frozen field changed', $result['blocked'][0]['blocked_reason']);
+        self::assertStringContainsString('frozen', \strtolower($result['blocked'][0]['blocked_reason']));
         self::assertSame(
             'Original title',
             $result['contract']['payload']['page_type_layouts']['home_page']['content'][0]['title']

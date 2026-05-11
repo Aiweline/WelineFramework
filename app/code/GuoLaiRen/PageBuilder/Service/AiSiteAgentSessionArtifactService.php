@@ -34,35 +34,20 @@ class AiSiteAgentSessionArtifactService
             'path' => ['plan_markdown'],
             'empty' => '',
         ],
-        'task_plan_structured' => [
-            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'path' => ['task_plan_structured'],
+        'build_plan_v2' => [
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+            'path' => ['build_plan_v2'],
             'empty' => [],
         ],
-        'task_plan_markdown' => [
-            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'path' => ['task_plan_markdown'],
-            'empty' => '',
-        ],
-        'task_plan_draft' => [
-            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'path' => ['virtual_theme_plan', 'draft'],
+        'plan_projection' => [
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+            'path' => ['plan_projection'],
             'empty' => [],
         ],
-        'task_plan_draft_markdown' => [
-            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'path' => ['virtual_theme_plan', 'draft_markdown'],
-            'empty' => '',
-        ],
-        'task_plan_confirmed' => [
-            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'path' => ['virtual_theme_plan', 'confirmed'],
+        'content_manifest' => [
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+            'path' => ['content_manifest'],
             'empty' => [],
-        ],
-        'task_plan_confirmed_markdown' => [
-            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'path' => ['virtual_theme_plan', 'confirmed_markdown'],
-            'empty' => '',
         ],
         'build_blueprint' => [
             'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
@@ -84,6 +69,21 @@ class AiSiteAgentSessionArtifactService
             'path' => ['render_data_contract'],
             'empty' => [],
         ],
+        'task_results' => [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'path' => ['task_results'],
+            'empty' => [],
+        ],
+        'qa_report' => [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'path' => ['qa_report_v2'],
+            'empty' => [],
+        ],
+        'repair_patch' => [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'path' => ['repair_patch'],
+            'empty' => [],
+        ],
     ];
 
     /**
@@ -94,30 +94,33 @@ class AiSiteAgentSessionArtifactService
             'plan_json',
             'plan_structured',
             'plan_markdown',
+            'build_plan_v2',
+            'plan_projection',
+            'content_manifest',
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
             'plan_json',
             'plan_structured',
             'plan_markdown',
-            'task_plan_structured',
-            'task_plan_markdown',
-            'task_plan_draft',
-            'task_plan_draft_markdown',
-            'task_plan_confirmed',
-            'task_plan_confirmed_markdown',
+            'build_plan_v2',
+            'plan_projection',
+            'content_manifest',
             'build_blueprint',
+            'task_results',
+            'qa_report',
+            'repair_patch',
         ],
         AiSiteAgentSession::STAGE_PUBLISH => [
             'plan_json',
             'plan_structured',
             'plan_markdown',
-            'task_plan_structured',
-            'task_plan_markdown',
-            'task_plan_draft',
-            'task_plan_draft_markdown',
-            'task_plan_confirmed',
-            'task_plan_confirmed_markdown',
+            'build_plan_v2',
+            'plan_projection',
+            'content_manifest',
             'build_blueprint',
+            'task_results',
+            'qa_report',
+            'repair_patch',
         ],
     ];
 
@@ -138,7 +141,6 @@ class AiSiteAgentSessionArtifactService
         }
 
         $scope = $this->removeSnapshotBackupsFromScope($scope);
-        $scope = $this->compactStageTwoArtifactsForStorage($scope);
         $refs = \is_array($scope[self::REF_KEY] ?? null) ? $scope[self::REF_KEY] : [];
         $touchedMap = \array_fill_keys($touchedArtifactKeys, true);
         $artifacts = [];
@@ -216,69 +218,14 @@ class AiSiteAgentSessionArtifactService
     {
         unset(
             $scope['confirmed_stage1_plan_book'],
-            $scope['stage2_context_snapshot'],
             $scope['theme_context_snapshot'],
             $scope['shared_prompt_context']
         );
 
-        foreach (['build_blueprint', 'task_plan_structured'] as $key) {
+        foreach (['build_blueprint'] as $key) {
             if (\is_array($scope[$key] ?? null)) {
                 $scope[$key] = $this->stripSnapshotBackupsFromTree($scope[$key]);
             }
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        foreach (['draft', 'confirmed'] as $key) {
-            if (\is_array($virtualThemePlan[$key] ?? null)) {
-                $virtualThemePlan[$key] = $this->stripSnapshotBackupsFromTree($virtualThemePlan[$key]);
-            }
-        }
-        if ($virtualThemePlan !== []) {
-            $scope['virtual_theme_plan'] = $virtualThemePlan;
-        }
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactStageTwoArtifactsForStorage(array $scope): array
-    {
-        if (\is_array($scope['task_plan_structured'] ?? null)) {
-            $scope['task_plan_structured'] = $this->compactStageTwoTaskPlanPayloadForStorage(
-                $scope['task_plan_structured']
-            );
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        foreach (['draft', 'confirmed'] as $key) {
-            if (\is_array($virtualThemePlan[$key] ?? null)) {
-                $virtualThemePlan[$key] = $this->compactStageTwoTaskPlanPayloadForStorage($virtualThemePlan[$key]);
-            }
-        }
-
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        $structured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-
-        if ($draft !== [] && $structured !== [] && $this->stageTwoTaskPlanPayloadsEquivalent($structured, $draft)) {
-            $scope['task_plan_structured'] = [];
-            $structured = [];
-        }
-
-        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1 && $confirmed !== []) {
-            if ($structured !== [] && $this->stageTwoTaskPlanPayloadsEquivalent($structured, $confirmed)) {
-                $scope['task_plan_structured'] = [];
-            }
-            if ($draft !== [] && $this->stageTwoTaskPlanPayloadsEquivalent($draft, $confirmed)) {
-                $virtualThemePlan['draft'] = [];
-            }
-        }
-
-        if ($virtualThemePlan !== []) {
-            $scope['virtual_theme_plan'] = $virtualThemePlan;
         }
 
         return $scope;
@@ -286,130 +233,7 @@ class AiSiteAgentSessionArtifactService
 
     private function compactArtifactPayloadForStorage(string $artifactKey, mixed $value): mixed
     {
-        if (!\is_array($value)) {
-            return $value;
-        }
-
-        if (\in_array($artifactKey, ['task_plan_structured', 'task_plan_draft', 'task_plan_confirmed'], true)) {
-            return $this->compactStageTwoTaskPlanPayloadForStorage($value);
-        }
-
         return $value;
-    }
-
-    /**
-     * Stage-2 snapshots carry the same contract set in three places:
-     * task_plan_workbench.contracts, task_plan_workbench.confirmed.contracts,
-     * and stage2_contracts. Keep stage2_contracts as the canonical contract
-     * payload and store lightweight refs in the workbench mirrors.
-     *
-     * @param array<string, mixed> $snapshot
-     * @return array<string, mixed>
-     */
-    private function compactStageTwoTaskPlanPayloadForStorage(array $snapshot): array
-    {
-        $snapshot = $this->stripSnapshotBackupsFromTree($snapshot);
-        $contracts = \is_array($snapshot['stage2_contracts'] ?? null) ? $snapshot['stage2_contracts'] : [];
-        if ($contracts === []) {
-            return $snapshot;
-        }
-
-        $contractRefs = $this->buildContractRefs($contracts);
-        $workbench = \is_array($snapshot['task_plan_workbench'] ?? null) ? $snapshot['task_plan_workbench'] : [];
-        if ($workbench === []) {
-            return $snapshot;
-        }
-
-        if (\is_array($workbench['contracts'] ?? null)) {
-            unset($workbench['contracts']);
-            $workbench['contract_refs'] = $contractRefs;
-        }
-
-        if (\is_array($workbench['confirmed'] ?? null)) {
-            if (\is_array($workbench['confirmed']['contracts'] ?? null)) {
-                unset($workbench['confirmed']['contracts']);
-                $workbench['confirmed']['contract_refs'] = $contractRefs;
-            }
-            if ($workbench['confirmed'] === []) {
-                unset($workbench['confirmed']);
-            }
-        }
-
-        $snapshot['task_plan_workbench'] = $workbench;
-
-        return $snapshot;
-    }
-
-    /**
-     * @param array<int|string, mixed> $contracts
-     * @return array<string, array{id:string,type:string,version:string,status:string,payload_hash:string}>
-     */
-    private function buildContractRefs(array $contracts): array
-    {
-        $refs = [];
-        foreach ($contracts as $key => $contract) {
-            if (!\is_array($contract) || $contract === []) {
-                continue;
-            }
-            $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
-            $type = \trim((string)($meta['type'] ?? $contract['type'] ?? (\is_string($key) ? $key : '')));
-            if ($type === '') {
-                continue;
-            }
-            $payload = \is_array($contract['payload'] ?? null) ? $contract['payload'] : [];
-            $id = \trim((string)($meta['id'] ?? $meta['contract_id'] ?? $contract['id'] ?? $contract['contract_id'] ?? ''));
-            if ($id === '') {
-                $id = 'contract_' . \substr(\sha1((string)\json_encode($contract, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)), 0, 16);
-            }
-            $refs[$type] = [
-                'id' => $id,
-                'type' => $type,
-                'version' => \trim((string)($meta['version'] ?? $contract['version'] ?? 'v1')),
-                'status' => \trim((string)($meta['status'] ?? $contract['status'] ?? '')),
-                'payload_hash' => \sha1((string)\json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
-            ];
-        }
-
-        return $refs;
-    }
-
-    /**
-     * @param array<string, mixed> $left
-     * @param array<string, mixed> $right
-     */
-    private function stageTwoTaskPlanPayloadsEquivalent(array $left, array $right): bool
-    {
-        $leftCore = $this->stageTwoTaskPlanEquivalenceCore($left);
-        $rightCore = $this->stageTwoTaskPlanEquivalenceCore($right);
-
-        return $leftCore !== [] && $leftCore == $rightCore;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return array<string, mixed>
-     */
-    private function stageTwoTaskPlanEquivalenceCore(array $payload): array
-    {
-        $core = [];
-        foreach ([
-            'plan_signature',
-            'content_locale',
-            'plan_locale',
-            'shared_tasks',
-            'page_tasks',
-            'task_tree',
-            'execution_blueprint',
-            'execution_order',
-            'block_task_schema',
-            'stage2_contracts',
-        ] as $key) {
-            if (\array_key_exists($key, $payload)) {
-                $core[$key] = $payload[$key];
-            }
-        }
-
-        return $core;
     }
 
     /**
@@ -420,14 +244,12 @@ class AiSiteAgentSessionArtifactService
     {
         unset(
             $tree['confirmed_stage1_plan_book'],
-            $tree['stage2_context_snapshot'],
             $tree['theme_context_snapshot'],
             $tree['shared_prompt_context']
         );
 
         if (\is_array($tree['runtime_context'] ?? null)) {
             unset(
-                $tree['runtime_context']['stage2_context_snapshot'],
                 $tree['runtime_context']['theme_context_snapshot'],
                 $tree['runtime_context']['shared_prompt_context']
             );
@@ -602,22 +424,20 @@ class AiSiteAgentSessionArtifactService
     public function resolveTouchedArtifactKeysFromPatch(array $patch): array
     {
         $keys = [];
-        foreach (['plan_json', 'plan_structured', 'plan_markdown', 'task_plan_structured', 'task_plan_markdown', 'build_blueprint'] as $topLevelKey) {
+        foreach ([
+            'plan_json',
+            'plan_structured',
+            'plan_markdown',
+            'build_plan_v2',
+            'plan_projection',
+            'content_manifest',
+            'build_blueprint',
+            'task_results',
+            'qa_report_v2',
+            'repair_patch',
+        ] as $topLevelKey) {
             if (\array_key_exists($topLevelKey, $patch)) {
-                $keys[] = $topLevelKey;
-            }
-        }
-
-        $virtualThemePlan = \is_array($patch['virtual_theme_plan'] ?? null) ? $patch['virtual_theme_plan'] : [];
-        $nestedMap = [
-            'draft' => 'task_plan_draft',
-            'draft_markdown' => 'task_plan_draft_markdown',
-            'confirmed' => 'task_plan_confirmed',
-            'confirmed_markdown' => 'task_plan_confirmed_markdown',
-        ];
-        foreach ($nestedMap as $nestedKey => $artifactKey) {
-            if (\array_key_exists($nestedKey, $virtualThemePlan)) {
-                $keys[] = $artifactKey;
+                $keys[] = $topLevelKey === 'qa_report_v2' ? 'qa_report' : $topLevelKey;
             }
         }
 
@@ -632,16 +452,18 @@ class AiSiteAgentSessionArtifactService
     {
         $expanded = $artifactKeys;
         foreach ($artifactKeys as $artifactKey) {
-            if (\in_array($artifactKey, ['task_plan_draft', 'task_plan_draft_markdown', 'task_plan_confirmed', 'task_plan_confirmed_markdown'], true)) {
-                $expanded[] = 'task_plan_draft';
-                $expanded[] = 'task_plan_draft_markdown';
-                $expanded[] = 'task_plan_confirmed';
-                $expanded[] = 'task_plan_confirmed_markdown';
-            }
-            if (\in_array($artifactKey, ['task_plan_structured', 'task_plan_markdown', 'build_blueprint'], true)) {
-                $expanded[] = 'task_plan_structured';
-                $expanded[] = 'task_plan_markdown';
+            if (\in_array($artifactKey, ['build_blueprint'], true)) {
                 $expanded[] = 'build_blueprint';
+            }
+            if (\in_array($artifactKey, ['build_plan_v2', 'plan_projection', 'content_manifest'], true)) {
+                $expanded[] = 'build_plan_v2';
+                $expanded[] = 'plan_projection';
+                $expanded[] = 'content_manifest';
+            }
+            if (\in_array($artifactKey, ['task_results', 'qa_report', 'repair_patch'], true)) {
+                $expanded[] = 'task_results';
+                $expanded[] = 'qa_report';
+                $expanded[] = 'repair_patch';
             }
         }
 

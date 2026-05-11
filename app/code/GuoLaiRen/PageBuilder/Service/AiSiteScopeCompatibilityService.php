@@ -89,7 +89,7 @@ class AiSiteScopeCompatibilityService
     /**
      * @param array<string, mixed> $scope
      */
-    public function hasConfirmedStageOnePlanForTaskPlan(array $scope): bool
+    public function hasConfirmedStageOnePlanForBuildPlan(array $scope): bool
     {
         $confirmedBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
         if ($confirmedBlueprint === []) {
@@ -194,7 +194,7 @@ class AiSiteScopeCompatibilityService
      */
     public function normalizeConfirmedPlanFlag(array $scope): array
     {
-        if ($this->hasConfirmedStageOnePlanForTaskPlan($scope)) {
+        if ($this->hasConfirmedStageOnePlanForBuildPlan($scope)) {
             $scope['plan_confirmed'] = 1;
             $confirmedAt = \trim((string)($scope['execution_blueprint_confirmed_at'] ?? ''));
             if ($confirmedAt !== '' && \trim((string)($scope['plan_confirmed_at'] ?? '')) === '') {

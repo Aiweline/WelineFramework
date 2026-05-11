@@ -24,7 +24,7 @@ final class AiSiteContractAdapterSelector
             'response_format' => ['type' => 'json_object'],
         ];
 
-        if ($stage === ContractType::STAGE_STAGE2) {
+        if ($stage === ContractType::STAGE_BUILD_PLAN) {
             $params['disable_conversation_history'] = true;
             $params['disable_conversation_persist'] = true;
         }

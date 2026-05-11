@@ -8,13 +8,9 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSessionEvent;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentQueueObserverHelperService;
-use GuoLaiRen\PageBuilder\Service\AiSiteAgentMutateTaskPlanTaskOperationPorts;
-use GuoLaiRen\PageBuilder\Service\AiSiteAgentMutateTaskPlanTaskOperationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentQueueObserverStreamService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentRegeneratePageOperationPorts;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentRegeneratePageOperationService;
-use GuoLaiRen\PageBuilder\Service\AiSiteAgentTaskPlanQueueRecoveryPorts;
-use GuoLaiRen\PageBuilder\Service\AiSiteAgentTaskPlanQueueRecoveryService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceEntryNoticeService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentStreamCodecService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
@@ -31,6 +27,8 @@ use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePublishService;
 use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
+use GuoLaiRen\PageBuilder\Service\AiSiteBuildPlanService;
+use GuoLaiRen\PageBuilder\Service\AiSiteBuildPlanTaskScheduler;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQualityGateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQueueSnapshotService;
@@ -41,8 +39,6 @@ use GuoLaiRen\PageBuilder\Service\AiSitePreviewLinkRewriteService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
 use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
-use GuoLaiRen\PageBuilder\Service\AiSiteTaskPlanSseService;
-use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
 use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillRepository;
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
@@ -75,7 +71,6 @@ class AiSiteAgent extends BaseController
     private const PARAMS_PATCH_BLOCK = ['public_id', 'page_type', 'block_id|component_code', 'instruction'];
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
     private const PARAMS_MUTATE_PLAN_BLOCK = ['public_id', 'page_type', 'action', 'block_key', 'block_config'];
-    private const PARAMS_MUTATE_TASK_PLAN_TASK = ['public_id', 'bucket', 'page_type', 'action', 'task_key', 'task_config'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
     private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
     private const STREAM_LEASE_TTL_SEC = 60;
@@ -105,8 +100,6 @@ class AiSiteAgent extends BaseController
     private readonly AiSiteHtmlBlocksBuildService $htmlBlocksBuildService;
     private readonly AiSitePageBlueprintService $pageBlueprintService;
     private readonly AiSiteExecutionBlueprintService $executionBlueprintService;
-    private readonly AiSiteVirtualThemePlanService $virtualThemePlanService;
-    private readonly AiSiteTaskPlanSseService $taskPlanSseService;
     private readonly AiSiteAgentStreamCodecService $streamCodecService;
     private readonly AiSiteAgentWorkspaceBridgeService $workspaceBridgeService;
     private readonly AiSiteAgentWorkspacePreviewService $workspacePreviewService;
@@ -116,8 +109,6 @@ class AiSiteAgent extends BaseController
     private readonly AiSiteAgentWorkspaceStateHelperService $workspaceStateHelperService;
     private readonly AiSiteAgentQueueObserverStreamService $queueObserverStreamService;
     private readonly AiSiteAgentRegeneratePageOperationService $regeneratePageOperationService;
-    private readonly AiSiteAgentMutateTaskPlanTaskOperationService $mutateTaskPlanTaskOperationService;
-    private readonly AiSiteAgentTaskPlanQueueRecoveryService $taskPlanQueueRecoveryService;
     private readonly AiSiteAgentWorkspaceEntryNoticeService $workspaceEntryNoticeService;
     private ?AiSiteBlockPartialPatchService $blockPartialPatchService = null;
     private readonly Url $url;
@@ -135,8 +126,6 @@ class AiSiteAgent extends BaseController
         ?AiSiteHtmlBlocksBuildService $htmlBlocksBuildService = null,
         ?AiSitePageBlueprintService $pageBlueprintService = null,
         ?AiSiteExecutionBlueprintService $executionBlueprintService = null,
-        ?AiSiteVirtualThemePlanService $virtualThemePlanService = null,
-        ?AiSiteTaskPlanSseService $taskPlanSseService = null,
         ?AiSiteAgentStreamCodecService $streamCodecService = null,
         ?AiSiteAgentWorkspaceBridgeService $workspaceBridgeService = null,
         ?AiSiteAgentWorkspacePreviewService $workspacePreviewService = null,
@@ -147,8 +136,6 @@ class AiSiteAgent extends BaseController
         ?AiSiteAgentWorkspaceStateHelperService $workspaceStateHelperService = null,
         ?AiSiteAgentQueueObserverStreamService $queueObserverStreamService = null,
         ?AiSiteAgentRegeneratePageOperationService $regeneratePageOperationService = null,
-        ?AiSiteAgentMutateTaskPlanTaskOperationService $mutateTaskPlanTaskOperationService = null,
-        ?AiSiteAgentTaskPlanQueueRecoveryService $taskPlanQueueRecoveryService = null,
         ?AiSiteAgentWorkspaceEntryNoticeService $workspaceEntryNoticeService = null,
     ) {
         $this->sessionService = $sessionService;
@@ -174,10 +161,6 @@ class AiSiteAgent extends BaseController
             ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
         $this->executionBlueprintService = $executionBlueprintService
             ?? ObjectManager::getInstance(AiSiteExecutionBlueprintService::class);
-        $this->virtualThemePlanService = $virtualThemePlanService
-            ?? ObjectManager::getInstance(AiSiteVirtualThemePlanService::class);
-        $this->taskPlanSseService = $taskPlanSseService
-            ?? ObjectManager::getInstance(AiSiteTaskPlanSseService::class);
         $this->streamCodecService = $streamCodecService
             ?? ObjectManager::getInstance(AiSiteAgentStreamCodecService::class);
         $this->workspaceBridgeService = $workspaceBridgeService
@@ -197,10 +180,6 @@ class AiSiteAgent extends BaseController
             ?? ObjectManager::getInstance(AiSiteAgentQueueObserverStreamService::class);
         $this->regeneratePageOperationService = $regeneratePageOperationService
             ?? ObjectManager::getInstance(AiSiteAgentRegeneratePageOperationService::class);
-        $this->mutateTaskPlanTaskOperationService = $mutateTaskPlanTaskOperationService
-            ?? ObjectManager::getInstance(AiSiteAgentMutateTaskPlanTaskOperationService::class);
-        $this->taskPlanQueueRecoveryService = $taskPlanQueueRecoveryService
-            ?? ObjectManager::getInstance(AiSiteAgentTaskPlanQueueRecoveryService::class);
         $this->workspaceEntryNoticeService = $workspaceEntryNoticeService
             ?? ObjectManager::getInstance(AiSiteAgentWorkspaceEntryNoticeService::class);
     }
@@ -309,11 +288,6 @@ class AiSiteAgent extends BaseController
         $this->assign('mutate_plan_block_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-plan-block'));
         $this->assign('refine_plan_page_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-refine-plan-page'));
         $this->assign('plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'));
-        $this->assign('start_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-task-plan'));
-        $this->assign('confirm_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-task-plan'));
-        $this->assign('sort_task_plan_tasks_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-task-plan-tasks'));
-        $this->assign('mutate_task_plan_task_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-task-plan-task'));
-        $this->assign('task_plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-task-plan-sse'));
         $this->assign('resume_build_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-resume-build'));
         $this->assign('run_virtual_theme_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-build'));
         $this->assign('start_build_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-build'));
@@ -625,7 +599,7 @@ class AiSiteAgent extends BaseController
     private function renderWorkspacePreviewUnavailablePage(int $adminId, string $publicId, string $requestedPageType): string
     {
         $sessionAccessible = false;
-        $taskPlanConfirmed = false;
+        $buildPlanConfirmed = false;
         $buildQueueRunning = false;
         if ($adminId > 0 && $publicId !== '' && $requestedPageType !== '') {
             $session = $this->sessionService->loadByPublicId($publicId, $adminId);
@@ -634,7 +608,10 @@ class AiSiteAgent extends BaseController
                 $scope = $this->scopeCompatibilityService->normalizeScope(
                     $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
                 );
-                $taskPlanConfirmed = (int)($scope['task_plan_confirmed'] ?? 0) === 1;
+                $buildPlanConfirmed = (int)($scope['build_plan_confirmed'] ?? 0) === 1
+                    || \is_array($scope['build_plan_v2'] ?? null)
+                    || \is_array($scope['plan_projection'] ?? null)
+                    || (int)($scope['plan_confirmed'] ?? 0) === 1;
                 $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
                 $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
                 $activeBuild = \is_array($activeOperations['build'] ?? null) ? $activeOperations['build'] : [];
@@ -648,7 +625,7 @@ class AiSiteAgent extends BaseController
         // 必须用 template() 直出 HTML：fetch() 会走 fetch_file_after，Theme 会把内容包进后台整页布局，iframe 内会出现后台顶栏/主题壳。
         return $this->template('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace-preview-unavailable.phtml', [
             'pb_preview_unavailable_session_ok' => $sessionAccessible,
-            'pb_preview_unavailable_task_plan_confirmed' => $taskPlanConfirmed,
+            'pb_preview_unavailable_build_plan_confirmed' => $buildPlanConfirmed,
             'pb_preview_unavailable_build_queue_running' => $buildQueueRunning,
             'pb_preview_unavailable_page_type' => $requestedPageType,
         ]);
@@ -677,22 +654,10 @@ class AiSiteAgent extends BaseController
         return $this->handleMutatePlanBlock();
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 寤虹珯浼氳瘽 API', 'mdi-api', '寰皟褰撳墠椤甸潰闃舵涓€鍧楁爲', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '微调当前页面阶段一块树', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postRefinePlanPage(): string
     {
         return $this->handleRefinePlanPage();
-    }
-
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '排序阶段二任务块', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postSortTaskPlanTasks(): string
-    {
-        return $this->handleSortTaskPlanTasks();
-    }
-
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', 'Mutate stage-2 tasks', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postMutateTaskPlanTask(): string
-    {
-        return $this->handleMutateTaskPlanTask();
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '更新阶段', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -780,19 +745,6 @@ class AiSiteAgent extends BaseController
     public function getPlanSse(): void { $this->handlePlanSse(); }
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建阶段一方案书(POST路由GET兼容)', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getPostPlanSse(): void { $this->handlePlanSse(); }
-
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '生成第二阶段任务方案', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postStartTaskPlan(): string { return $this->handleStartTaskPlan(); }
-
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '确认第二阶段任务方案', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postConfirmTaskPlan(): string { return $this->handleConfirmTaskPlan(); }
-
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建第二阶段任务方案', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postTaskPlanSse(): void { $this->handleTaskPlanSse(); }
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建第二阶段任务方案(POST路由GET兼容)', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function getPostTaskPlanSse(): void { $this->handleTaskPlanSse(); }
-
-    public function postStartTaskPlanSse(): void { $this->handleTaskPlanSse(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '显式继续未完成构建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postResumeBuild(): string { return $this->handleResumeBuild(); }
@@ -1443,35 +1395,17 @@ class AiSiteAgent extends BaseController
         $scope = $this->scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
         );
-        foreach ([$requestedStage, $currentStage] as $candidateStage) {
-            if ($candidateStage === '' || $candidateStage === AiSiteAgentSession::STAGE_PLAN) {
-                continue;
-            }
-            $candidateScope = $this->scopeCompatibilityService->normalizeScope(
-                $this->sessionService->loadScopeForStage($session, $candidateStage)
+        if ($requestedStage !== '' && $requestedStage !== AiSiteAgentSession::STAGE_PLAN) {
+            $requestedStageScope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($session, $requestedStage)
             );
-            foreach ([
-                'plan_json',
-                'plan_structured',
-                'plan_markdown',
-                'plan_workbench',
-                'execution_blueprint_draft',
-                'execution_blueprint',
-                'plan_generated_at',
-                'plan_confirmed',
-                'plan_confirmed_at',
-                'execution_blueprint_confirmed_signature',
-                'execution_blueprint_confirmed_at',
-            ] as $key) {
-                if ((!isset($scope[$key]) || $scope[$key] === [] || $scope[$key] === '' || $scope[$key] === 0 || $scope[$key] === null)
-                    && \array_key_exists($key, $candidateScope)
-                    && $candidateScope[$key] !== []
-                    && $candidateScope[$key] !== ''
-                    && $candidateScope[$key] !== 0
-                    && $candidateScope[$key] !== null) {
-                    $scope[$key] = $candidateScope[$key];
-                }
-            }
+            $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($requestedStageScope, $scope));
+        }
+        if ($currentStage !== '' && $currentStage !== AiSiteAgentSession::STAGE_PLAN && $currentStage !== $requestedStage) {
+            $currentStageScope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($session, $currentStage)
+            );
+            $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentStageScope, $scope));
         }
         $scope = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $scope);
         $scope = $this->hydrateStageOnePlanPayloadFromWorkbench($scope);
@@ -1482,13 +1416,14 @@ class AiSiteAgent extends BaseController
         $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null)
             ? $scope['execution_blueprint_draft']
             : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $existingBuildPlanV2 = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
         if ($executionBlueprintDraft === [] && $hasStageOnePayload) {
             $executionBlueprintDraft = $this->buildExecutionBlueprintFallbackFromStageOnePayload($scope);
             if ($executionBlueprintDraft !== []) {
                 $scope['execution_blueprint_draft'] = $executionBlueprintDraft;
             }
         }
-        if ($executionBlueprintDraft === []) {
+        if ($executionBlueprintDraft === [] && $existingBuildPlanV2 === []) {
             if ($hasStageOnePayload) {
                 try {
                     $fresh = $this->persistExistingPlanDraftOrThrow($session, $adminId, 'plan_confirm');
@@ -1525,14 +1460,27 @@ class AiSiteAgent extends BaseController
         }
 
         $scopePatch = [
-            'execution_blueprint' => $executionBlueprintDraft,
-            'execution_blueprint_confirmed_at' => \date('Y-m-d H:i:s'),
-            'execution_blueprint_confirmed_signature' => (string)($executionBlueprintDraft['signature'] ?? ''),
             'plan_confirmed' => 1,
         ];
+        if ($executionBlueprintDraft !== []) {
+            $scopePatch['execution_blueprint'] = $executionBlueprintDraft;
+            $scopePatch['execution_blueprint_confirmed_at'] = \date('Y-m-d H:i:s');
+            $scopePatch['execution_blueprint_confirmed_signature'] = (string)($executionBlueprintDraft['signature'] ?? '');
+        }
         if (isset($executionBlueprintDraft['workspace_track'])) {
             $scopePatch['workspace_track'] = (string)$executionBlueprintDraft['workspace_track'];
         }
+        $buildPlanPatch = $this->buildPlanV2ConfirmationScopePatch(\array_replace($scope, $scopePatch));
+        if ((int)($buildPlanPatch['build_plan_confirmed'] ?? 0) !== 1) {
+            return $this->jsonError(
+                'BUILD_PLAN_V2_INVALID',
+                (string)__('方案合同校验失败，请重新生成阶段一方案�?),
+                '),
+                ['public_id'],
+                ['build_plan_v2_validation' => \is_array($buildPlanPatch['build_plan_v2_validation'] ?? null) ? $buildPlanPatch['build_plan_v2_validation'] : []]
+            );
+        }
+        $scopePatch = \array_replace($scopePatch, $buildPlanPatch);
 
         $confirmedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $scopePatch));
         $confirmedScope = $this->buildTaskService->ensureTaskScope(
@@ -1549,6 +1497,7 @@ class AiSiteAgent extends BaseController
         $scopePatch['build_summary'] = [
             'task_summary' => $this->buildTaskService->summarize($confirmedScope),
             'confirmed_execution_blueprint_signature' => (string)($executionBlueprintDraft['signature'] ?? ''),
+            'build_plan_contract_id' => (string)($scopePatch['build_plan_v2']['contract_meta']['id'] ?? ''),
         ];
 
         $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
@@ -1559,16 +1508,20 @@ class AiSiteAgent extends BaseController
             $adminId,
             $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
             'plan_confirmed',
-            (string)__('方案已确认，已进入第二阶段，可继续生成任务方案并开始构建'),
+            (string)__('方案1已确认，已创建执行蓝图，可直接进入后台构建。'),
             [
                 'operation' => 'plan_confirm',
-                'details' => ['execution_blueprint_signature' => (string)($executionBlueprintDraft['signature'] ?? '')],
+                'details' => [
+                    'execution_blueprint_signature' => (string)($executionBlueprintDraft['signature'] ?? ''),
+                    'build_plan_contract_id' => (string)($scopePatch['build_plan_v2']['contract_meta']['id'] ?? ''),
+                    'build_plan_task_count' => \is_array($scopePatch['build_plan_v2']['tasks'] ?? null) ? \count($scopePatch['build_plan_v2']['tasks']) : 0,
+                ],
             ]
         );
 
         return $this->fetchJson([
             'success' => true,
-            'message' => (string)__('方案已确认，已进入第二阶段，可继续生成任务方案并开始构建'),
+            'message' => (string)__('方案1已确认，已创建执行蓝图，正在进入后台构建。'),
             'data' => $this->buildWorkspaceConfirmPayload(
                 $this->buildWorkspaceState($fresh, $adminId, 80, true),
                 'plan'
@@ -1779,8 +1732,8 @@ class AiSiteAgent extends BaseController
                 $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
                 $effectivePromptMode === 'rebuild' ? 'plan_rebuilt' : 'plan_refined',
                 $effectivePromptMode === 'rebuild'
-                    ? (string)__('阶段一方案已重建，请确认后再进入第二阶段')
-                    : (string)__('阶段一方案已微调，请确认后再进入第二阶段'),
+                    ? (string)__('方案1已重建，请确认后进入构建流程')
+                    : (string)__('方案1已微调，请确认后进入构建流程'),
                 [
                     'operation' => $effectivePromptMode === 'rebuild' ? 'rebuild_plan' : 'refine_plan',
                     'details' => [
@@ -1889,166 +1842,23 @@ class AiSiteAgent extends BaseController
         $rawChunkInfoBuffer = '';
     }
 
-    private function handleStartTaskPlan(): string
-    {
-        $adminId = (int)$this->getLoginUserId();
-        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
-        if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
-        }
-        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
-        if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
-        }
-
-        $requestedStage = $this->scopeCompatibilityService->normalizeStage(
-            \trim((string)$this->getRequestBodyValue('stage', ''))
-        );
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        if ($requestedStage !== '' && $requestedStage !== AiSiteAgentSession::STAGE_VISUAL_EDIT) {
-            $requestedStageScope = $this->scopeCompatibilityService->normalizeScope(
-                $this->sessionService->loadScopeForStage($session, $requestedStage)
-            );
-            $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($requestedStageScope, $scope));
-        }
-        $scope = $this->normalizePlanConfirmationForTaskPlan($session, $adminId, $scope);
-        if ($this->buildTaskService->hasRetryableAiFailures($scope, 'plan')) {
-            $summary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'plan');
-            return $this->jsonError(
-                'RETRYABLE_AI_FAILURES_PENDING',
-                (string)__('阶段一仍有 AI 生成失败项，请先点击重试失败项。'),
-                ['public_id'],
-                ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
-            );
-        }
-        if (!$this->isPlanConfirmedForTaskPlan($scope)) {
-            return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先确认第一阶段方案，再生成第二阶段任务方案'), ['public_id', 'plan_confirmed']);
-        }
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        if ($executionBlueprint === []) {
-            return $this->jsonError('EXECUTION_BLUEPRINT_REQUIRED', (string)__('缺少已确认执行蓝图，请重新生成并确认第一阶段方案'), ['public_id', 'execution_blueprint']);
-        }
-
-        $requestedPromptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
-        $effectivePromptMode = \in_array($requestedPromptMode, ['detect_bootstrap_task_plan', 'resume_task_plan', 'refine_task_plan', 'rebuild_task_plan'], true)
-            ? $requestedPromptMode
-            : 'resume_task_plan';
-        $requestedInstruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
-        $requestedTargetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
-        $requestedRound = \max(1, (int)$this->getRequestBodyValue('round', 1));
-        $requestedSelectedSkillCodes = $this->getRequestBodyValue(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, null);
-        $selectedSkillCodes = $requestedSelectedSkillCodes === null
-            ? $this->scopeCompatibilityService->normalizeSelectedSkillCodes($scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? [])
-            : $this->scopeCompatibilityService->normalizeSelectedSkillCodes($requestedSelectedSkillCodes);
-        if ($this->shouldReusePersistedTaskPlanWithoutQueue($scope, $effectivePromptMode, $requestedInstruction, $requestedTargetScope)) {
-            $responseState = $this->buildWorkspaceOperationPayload(
-                $this->buildWorkspaceState($session, $adminId, 24, true),
-                'task_plan'
-            );
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => 'Stage-two task plan already exists; reused persisted content without starting a new queue.',
-                'operation' => 'task_plan',
-                'start_sse' => false,
-                'task_plan_action' => 'reuse',
-                'task_plan' => \is_array($responseState['task_plan'] ?? null) ? $responseState['task_plan'] : [],
-                'data' => $responseState,
-            ]);
-        }
-
-        $regenerationResetPatch = $effectivePromptMode === 'rebuild_task_plan'
-            ? $this->buildTaskPlanRegenerationResetScopePatch()
-            : [];
-        if ($regenerationResetPatch !== []) {
-            $scope = \array_replace($scope, $regenerationResetPatch);
-        }
-
-        $scope = $this->buildTaskService->ensureTaskScope(
-            $scope,
-            \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-            (string)($scope['workspace_track'] ?? '')
-        );
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $scopePatch = \array_replace($regenerationResetPatch, [
-            'build_blueprint' => $buildBlueprint,
-            'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
-            AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
-            '_task_plan_sse_request' => [
-                'prompt_mode' => $effectivePromptMode,
-                'instruction' => $requestedInstruction,
-                'target_scope' => $requestedTargetScope,
-                'round' => $requestedRound,
-                AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
-            ],
-        ]);
-        $result = $this->startOperation(
-            $session,
-            $adminId,
-            'task_plan',
-            AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            $scopePatch,
-            '',
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
-        );
-
-        if (empty($result['success'])) {
-            if ((string)($result['operation'] ?? '') === 'task_plan') {
-                return $this->fetchJson([
-                    'success' => true,
-                    'message' => (string)__('检测到第二阶段任务方案任务已在执行中，继续复用当前进度。'),
-                    'operation' => 'task_plan',
-                    'execution_token' => (string)($result['execution_token'] ?? ''),
-                    'stream_url' => (string)($result['stream_url'] ?? ''),
-                    'start_sse' => true,
-                    'data' => $this->buildWorkspaceOperationPayload(
-                        $this->buildWorkspaceState($session, $adminId, 24, true),
-                        'task_plan'
-                    ),
-                ]);
-            }
-
-            return $this->fetchJson([
-                'success' => false,
-                'message' => (string)($result['message'] ?? __('当前无法启动第二阶段任务方案生成')),
-                'operation' => (string)($result['operation'] ?? ''),
-            ]);
-        }
-
-        $responseState = \is_array($result['data'] ?? null)
-            ? $result['data']
-            : $this->buildWorkspaceOperationPayload(
-                $this->buildWorkspaceState($session, $adminId, 24, true),
-                'task_plan'
-            );
-        return $this->fetchJson([
-            'success' => true,
-            'message' => (string)__('第二阶段任务方案生成任务已创建，请查看阶段进度。'),
-            'operation' => (string)($result['operation'] ?? 'task_plan'),
-            'execution_token' => (string)($result['execution_token'] ?? ''),
-            'stream_url' => (string)($result['stream_url'] ?? ''),
-            'start_sse' => true,
-            'queue_id' => (int)($result['queue_id'] ?? 0),
-            'queue_wait' => \is_array($result['queue_wait'] ?? null) ? $result['queue_wait'] : null,
-            'data' => $responseState,
-        ]);
-    }
-
     /**
      * @return array<string, mixed>
      */
     private function buildStageOnePlanRegenerationResetScopePatch(): array
     {
-        $taskPlanResetPatch = $this->buildTaskPlanRegenerationResetScopePatch();
-        $taskPlanResetPatch['_task_plan_rebuild_in_progress'] = 0;
-
-        return \array_replace($taskPlanResetPatch, [
+        return [
             'execution_blueprint' => [],
             'execution_blueprint_confirmed_at' => '',
             'execution_blueprint_confirmed_signature' => '',
             'execution_blueprint_draft' => [],
+            'build_plan_v2' => [],
+            'plan_projection' => [],
+            'content_manifest' => [],
+            'build_plan_v2_validation' => [],
+            'build_plan_confirmed' => 0,
+            'build_plan_confirmed_at' => '',
+            'has_build_plan_v2' => 0,
             'plan_confirmed' => 0,
             'plan_confirmed_at' => '',
             'plan_generated_at' => '',
@@ -2068,381 +1878,9 @@ class AiSiteAgent extends BaseController
             'build_summary' => [],
             'build_task_summary' => [],
             '_plan_sse_request' => [],
-            '_task_plan_sse_request' => [],
-        ]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildTaskPlanRegenerationResetScopePatch(): array
-    {
-        return [
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'draft_markdown' => '',
-                'draft_generated_at' => '',
-                'confirmed' => [],
-                'confirmed_markdown' => '',
-                'confirmed_at' => '',
-                'confirmed_signature' => '',
-                'plan_signature' => '',
-                'last_prompt_mode' => 'rebuild_task_plan',
-                'last_target_scope' => '',
-                'last_round' => 1,
-            ],
-            'task_plan_markdown' => '',
-            'task_plan_generated_at' => '',
-            'task_plan_structured' => [],
-            'task_plan_directory_tree' => [],
-            'task_plan_summary' => [],
-            'task_plan_confirmed' => 0,
-            'task_plan_confirmed_at' => '',
-            'task_plan_rebuild_summary' => [],
-            'task_plan_change_scope_report' => [],
-            'task_plan_generation_progress' => [],
-            'task_plan_generation_summary' => [],
-            'task_plan_generation_last_error' => '',
             'build_blueprint' => [],
             'build_tasks' => [],
-            '_task_plan_rebuild_in_progress' => 1,
         ];
-    }
-
-    private function handleConfirmTaskPlan(): string
-    {
-        $adminId = (int)$this->getLoginUserId();
-        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
-        if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
-        }
-        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
-        if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
-        }
-
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        $scope = $this->normalizePlanConfirmationForTaskPlan($session, $adminId, $scope);
-        $taskPlanForConfirm = $this->resolveStageTwoTaskPlanForConfirmation($scope);
-        $draftTaskPlan = \is_array($taskPlanForConfirm['structured'] ?? null) ? $taskPlanForConfirm['structured'] : [];
-        $draftMarkdown = (string)($taskPlanForConfirm['markdown'] ?? '');
-        if (!$this->isPlanConfirmedForTaskPlan($scope)) {
-            return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN_CONFIRM', (string)__('请先确认阶段一方案，再确认第二阶段任务方案'), ['public_id', 'plan_confirmed']);
-        }
-        $taskPlanRetryableFailureSummary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'task_plan');
-        if (false && $this->buildTaskService->hasRetryableAiFailures($scope, 'task_plan')) {
-            $summary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'task_plan');
-            return $this->jsonError(
-                'RETRYABLE_AI_FAILURES_PENDING',
-                (string)__('第二阶段仍有 AI 生成失败项，请先点击重试失败项。'),
-                ['public_id'],
-                ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
-            );
-        }
-        if ($draftTaskPlan === []) {
-            if ($this->buildTaskService->hasConfirmedTaskPlanForBuild($scope)) {
-                $scopePatch = [
-                    'task_plan_confirmed' => 1,
-                    'task_plan_confirmed_at' => (string)($scope['task_plan_confirmed_at'] ?? \date('Y-m-d H:i:s')),
-                ];
-                $confirmedScopeForAssets = \array_replace($scope, $scopePatch);
-                $assetManifest = $this->assetManifestService()->syncFromTaskPlan($confirmedScopeForAssets);
-                $scopePatch['asset_manifest'] = $assetManifest;
-                $scopePatch['verified_assets'] = $this->assetManifestService()->extractVerifiedAssets($assetManifest);
-                try {
-                    $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-                    if (!$saved) {
-                        throw new \RuntimeException('Second-stage task plan idempotent confirm persist failed: mergeScope returned false.');
-                    }
-                } catch (\Throwable $throwable) {
-                    return $this->jsonError('TASK_PLAN_CONFIRM_PERSIST_FAILED', $throwable->getMessage(), ['public_id']);
-                }
-                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                return $this->fetchJson([
-                    'success' => true,
-                    'message' => (string)__('第二阶段任务方案已确认'),
-                    'data' => $this->buildWorkspaceConfirmPayload(
-                        $this->buildWorkspaceState($fresh, $adminId, 80, true),
-                        'task_plan'
-                    ),
-                ]);
-            }
-            return $this->jsonError('TASK_PLAN_NOT_READY', (string)__('尚未生成第二阶段任务方案，请先生成后再确认'), ['public_id']);
-        }
-
-        $signature = (string)($taskPlanForConfirm['signature'] ?? '');
-        $generatedAt = (string)($taskPlanForConfirm['generated_at'] ?? \date('Y-m-d H:i:s'));
-        $confirmedAt = (string)($taskPlanForConfirm['confirmed_at'] ?? \date('Y-m-d H:i:s'));
-        $scopePatch = [
-            'task_plan_structured' => $draftTaskPlan,
-            'task_plan_markdown' => $draftMarkdown,
-            'task_plan_generated_at' => $generatedAt,
-            'virtual_theme_plan' => [
-                'draft' => $draftTaskPlan,
-                'draft_markdown' => $draftMarkdown,
-                'draft_generated_at' => $generatedAt,
-                'confirmed' => $draftTaskPlan,
-                'confirmed_markdown' => $draftMarkdown,
-                'confirmed_at' => $confirmedAt,
-                'confirmed_signature' => $signature,
-                'plan_signature' => $signature,
-            ],
-            'task_plan_confirmed' => 0,
-            'build_summary' => \array_replace(
-                \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-                [
-                    'task_plan_signature' => $signature,
-                    'task_plan_retryable_ai_failures' => $taskPlanRetryableFailureSummary,
-                ]
-            ),
-        ];
-        $scopePatch['task_plan_confirmed'] = 1;
-        $confirmedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $scopePatch));
-        $confirmedScope = $this->buildTaskService->ensureTaskScope(
-            $confirmedScope,
-            \is_array($confirmedScope['website_profile'] ?? null) ? $confirmedScope['website_profile'] : [],
-            (string)($confirmedScope['workspace_track'] ?? '')
-        );
-        if (\is_array($confirmedScope['build_blueprint'] ?? null) && $confirmedScope['build_blueprint'] !== []) {
-            $scopePatch['build_blueprint'] = $confirmedScope['build_blueprint'];
-        }
-        if (\is_array($confirmedScope['build_tasks'] ?? null) && $confirmedScope['build_tasks'] !== []) {
-            $scopePatch['build_tasks'] = $confirmedScope['build_tasks'];
-        }
-        $assetManifest = $this->assetManifestService()->syncFromTaskPlan($confirmedScope);
-        $scopePatch['asset_manifest'] = $assetManifest;
-        $scopePatch['verified_assets'] = $this->assetManifestService()->extractVerifiedAssets($assetManifest);
-        $confirmedScope['asset_manifest'] = $assetManifest;
-        $confirmedScope['verified_assets'] = $scopePatch['verified_assets'];
-        $scopePatch['build_summary'] = \array_replace(
-            \is_array($scopePatch['build_summary'] ?? null) ? $scopePatch['build_summary'] : [],
-            ['task_summary' => $this->buildTaskService->summarize($confirmedScope)]
-        );
-        $scopePatch = $this->compactConfirmedTaskPlanScope($scopePatch);
-        $scopePatch['asset_manifest'] = $assetManifest;
-        $scopePatch['verified_assets'] = $confirmedScope['verified_assets'];
-        try {
-            $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-            if (!$saved) {
-                throw new \RuntimeException('Second-stage task plan confirm persist failed: mergeScope returned false.');
-            }
-            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            $freshScope = $this->scopeCompatibilityService->normalizeScope(
-                $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-            );
-            $freshVirtualThemePlan = \is_array($freshScope['virtual_theme_plan'] ?? null) ? $freshScope['virtual_theme_plan'] : [];
-            $confirmed = \is_array($freshVirtualThemePlan['confirmed'] ?? null) ? $freshVirtualThemePlan['confirmed'] : [];
-            $confirmedMarkdown = \trim((string)($freshVirtualThemePlan['confirmed_markdown'] ?? ''));
-            if ($confirmed === [] || $confirmedMarkdown === '') {
-                throw new \RuntimeException(
-                    'Second-stage task plan confirm persist verification failed'
-                    . ' confirmed=' . ($confirmed === [] ? 'empty' : 'ok')
-                    . ' confirmed_markdown=' . ($confirmedMarkdown === '' ? 'empty' : 'ok')
-                );
-            }
-        } catch (\Throwable $throwable) {
-            return $this->jsonError('TASK_PLAN_CONFIRM_PERSIST_FAILED', $throwable->getMessage(), ['public_id']);
-        }
-        $this->appendWorkspaceEvent(
-            $session->getId(),
-            $adminId,
-            $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
-            'task_plan_confirmed',
-            (string)__('第二阶段任务方案已确认，可以开始执行构建'),
-            [
-                'operation' => 'task_plan_confirm',
-                'details' => ['task_plan_signature' => $signature],
-            ]
-        );
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => (string)__('第二阶段任务方案已确认'),
-            'data' => $this->buildWorkspaceConfirmPayload(
-                $this->buildWorkspaceState($fresh, $adminId, 80, true),
-                'task_plan'
-            ),
-        ]);
-    }
-
-    /**
-     * @param array<string, mixed> $scopePatch
-     */
-    private function persistTaskPlanDraftOrThrow(
-        AiSiteAgentSession $session,
-        int $adminId,
-        array $scopePatch,
-        string $source
-    ): AiSiteAgentSession {
-        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-        if (!$saved) {
-            throw new \RuntimeException('Second-stage task plan draft persist failed: mergeScope returned false.');
-        }
-
-        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
-        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
-
-        if ($draft !== [] && $draftMarkdown !== '') {
-            return $fresh;
-        }
-
-        if ($draft === [] && $taskPlanStructured !== []) {
-            $draft = $taskPlanStructured;
-        }
-        if ($draftMarkdown === '' && $taskPlanMarkdown !== '') {
-            $draftMarkdown = $taskPlanMarkdown;
-        }
-        if ($taskPlanMarkdown === '' && $draftMarkdown !== '') {
-            $taskPlanMarkdown = $draftMarkdown;
-        }
-
-        if ($draft !== [] && $draftMarkdown !== '') {
-            $virtualThemePlan['draft'] = $draft;
-            $virtualThemePlan['draft_markdown'] = $draftMarkdown;
-            if (\trim((string)($virtualThemePlan['draft_generated_at'] ?? '')) === '') {
-                $virtualThemePlan['draft_generated_at'] = \date('Y-m-d H:i:s');
-            }
-            $repairPatch = [
-                'virtual_theme_plan' => $virtualThemePlan,
-                'task_plan_markdown' => $taskPlanMarkdown,
-            ];
-            if ($taskPlanStructured !== []) {
-                $repairPatch['task_plan_structured'] = $taskPlanStructured;
-            }
-            $repairSaved = $this->sessionService->mergeScope($fresh->getId(), $adminId, $repairPatch);
-            if ($repairSaved) {
-                $fresh = $this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh;
-                $scope = $this->scopeCompatibilityService->normalizeScope(
-                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-                );
-                $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-                $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-                $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
-                $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-                $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
-                if ($draft !== [] && $draftMarkdown !== '') {
-                    return $fresh;
-                }
-            }
-        }
-
-        throw new \RuntimeException(
-            'Second-stage task plan draft persist verification failed'
-            . ' source=' . $source
-            . ' draft=' . ($draft === [] ? 'empty' : 'ok')
-            . ' draft_markdown=' . ($draftMarkdown === '' ? 'empty' : 'ok')
-            . ' task_plan_structured=' . ($taskPlanStructured === [] ? 'empty' : 'ok')
-            . ' task_plan_markdown=' . ($taskPlanMarkdown === '' ? 'empty' : 'ok')
-        );
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function buildTaskPlanConfirmationPatchFromScope(array $scope): array
-    {
-        $taskPlanForConfirm = $this->resolveStageTwoTaskPlanForConfirmation($scope);
-        $draftTaskPlan = \is_array($taskPlanForConfirm['structured'] ?? null) ? $taskPlanForConfirm['structured'] : [];
-        if ($draftTaskPlan === []) {
-            return [];
-        }
-
-        $draftMarkdown = (string)($taskPlanForConfirm['markdown'] ?? '');
-        $signature = (string)($taskPlanForConfirm['signature'] ?? '');
-        $generatedAt = (string)($taskPlanForConfirm['generated_at'] ?? \date('Y-m-d H:i:s'));
-        $confirmedAt = (string)($taskPlanForConfirm['confirmed_at'] ?? \date('Y-m-d H:i:s'));
-        $scopePatch = [
-            'task_plan_structured' => $draftTaskPlan,
-            'task_plan_markdown' => $draftMarkdown,
-            'task_plan_generated_at' => $generatedAt,
-            'virtual_theme_plan' => [
-                'draft' => $draftTaskPlan,
-                'draft_markdown' => $draftMarkdown,
-                'draft_generated_at' => $generatedAt,
-                'confirmed' => $draftTaskPlan,
-                'confirmed_markdown' => $draftMarkdown,
-                'confirmed_at' => $confirmedAt,
-                'confirmed_signature' => $signature,
-                'plan_signature' => $signature,
-            ],
-            'task_plan_confirmed' => 1,
-            'task_plan_confirmed_at' => $confirmedAt,
-        ];
-        $confirmedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $scopePatch));
-        $confirmedScope = $this->buildTaskService->ensureTaskScope(
-            $confirmedScope,
-            \is_array($confirmedScope['website_profile'] ?? null) ? $confirmedScope['website_profile'] : [],
-            (string)($confirmedScope['workspace_track'] ?? '')
-        );
-        if (\is_array($confirmedScope['build_blueprint'] ?? null) && $confirmedScope['build_blueprint'] !== []) {
-            $scopePatch['build_blueprint'] = $confirmedScope['build_blueprint'];
-        }
-        if (\is_array($confirmedScope['build_tasks'] ?? null) && $confirmedScope['build_tasks'] !== []) {
-            $scopePatch['build_tasks'] = $confirmedScope['build_tasks'];
-        }
-        $scopePatch['build_summary'] = \array_replace(
-            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-            ['task_summary' => $this->buildTaskService->summarize($confirmedScope)]
-        );
-
-        return $this->compactConfirmedTaskPlanScope($scopePatch);
-    }
-
-    private function persistExistingTaskPlanDraftOrThrow(
-        AiSiteAgentSession $session,
-        int $adminId,
-        string $source
-    ): AiSiteAgentSession {
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        if ($draft === [] && $taskPlanStructured !== []) {
-            $draft = $taskPlanStructured;
-        }
-
-        $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
-        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
-        if ($draftMarkdown === '' && $taskPlanMarkdown !== '') {
-            $draftMarkdown = $taskPlanMarkdown;
-        }
-        if ($taskPlanMarkdown === '' && $draftMarkdown !== '') {
-            $taskPlanMarkdown = $draftMarkdown;
-        }
-
-        if ($draft === [] || $draftMarkdown === '') {
-            throw new \RuntimeException(
-                'Second-stage task plan draft is not ready to save'
-                . ' source=' . $source
-                . ' draft=' . ($draft === [] ? 'empty' : 'ok')
-                . ' draft_markdown=' . ($draftMarkdown === '' ? 'empty' : 'ok')
-                . ' task_plan_structured=' . ($taskPlanStructured === [] ? 'empty' : 'ok')
-                . ' task_plan_markdown=' . ($taskPlanMarkdown === '' ? 'empty' : 'ok')
-            );
-        }
-
-        $virtualThemePlan['draft'] = $draft;
-        $virtualThemePlan['draft_markdown'] = $draftMarkdown;
-        if (\trim((string)($virtualThemePlan['draft_generated_at'] ?? '')) === '') {
-            $virtualThemePlan['draft_generated_at'] = \date('Y-m-d H:i:s');
-        }
-
-        return $this->persistTaskPlanDraftOrThrow($session, $adminId, [
-            'virtual_theme_plan' => $virtualThemePlan,
-            'task_plan_markdown' => $taskPlanMarkdown,
-        ], $source);
     }
 
     private function persistExistingPlanDraftOrThrow(
@@ -2502,675 +1940,6 @@ class AiSiteAgent extends BaseController
         throw new \RuntimeException('Stage-one plan draft persist verification failed source=' . $source);
     }
 
-    private function handleTaskPlanSse(): void
-    {
-        @\ignore_user_abort(true);
-
-        $adminId = (int)$this->getLoginUserId();
-        $this->releasePhpSessionLockForSse();
-        $sse = new SseWriter();
-        $sse->start();
-        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
-        $promptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
-        if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine_task_plan', 'rebuild_task_plan', 'detect_bootstrap_task_plan', 'resume_task_plan'], true)) {
-            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('任务方案流参数无效'), ['public_id', 'prompt_mode']);
-            $sse->complete(['success' => false]);
-            return;
-        }
-
-        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
-        if ($session === null) {
-            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), ['public_id'], 404);
-            $sse->complete(['success' => false]);
-            return;
-        }
-
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        $scope = $this->normalizePlanConfirmationForTaskPlan($session, $adminId, $scope);
-        if (!$this->isPlanConfirmedForTaskPlan($scope)) {
-            $this->sendSseContractError($sse, 'PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先确认阶段一方案，再继续调整第二阶段任务方案'), ['public_id', 'plan_confirmed'], 409);
-            $sse->complete(['success' => false]);
-            return;
-        }
-
-        if ($promptMode === 'rebuild_task_plan') {
-            $regenerationResetPatch = $this->buildTaskPlanRegenerationResetScopePatch();
-            $scope = \array_replace($scope, $regenerationResetPatch);
-            $this->sessionService->mergeScope($session->getId(), $adminId, $regenerationResetPatch);
-        }
-
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        if ($buildBlueprint === []) {
-            $scope = $this->buildTaskService->ensureTaskScope(
-                $scope,
-                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-                (string)($scope['workspace_track'] ?? '')
-            );
-            $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        }
-
-        $this->sendSseContractError(
-            $sse,
-            'QUEUE_START_REQUIRED',
-            'Direct AI SSE execution is disabled. Use the start endpoint to create one queue row, then observe scheduler progress.',
-            ['public_id', 'prompt_mode'],
-            409
-        );
-        $sse->complete([
-            'success' => false,
-            'message' => 'Direct AI SSE execution is disabled. Use the start endpoint to create one queue row; system scheduling usually starts within about one minute.',
-            'operation' => 'task_plan',
-            'queue_waiting_for_scheduler' => true,
-            'can_close_stream' => true,
-            'continue_other_operations' => true,
-        ]);
-        return;
-
-        if ($promptMode === 'detect_bootstrap_task_plan' || $promptMode === 'resume_task_plan') {
-            $this->handleTaskPlanDetectBootstrapSse($sse, $session, $adminId, $scope, $buildBlueprint);
-            return;
-        }
-
-        $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
-        $targetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
-        $round = \max(1, (int)$this->getRequestBodyValue('round', 1));
-        /** @var array<string, mixed> $sseReq */
-        $sseReq = \is_array($scope['_task_plan_sse_request'] ?? null) ? $scope['_task_plan_sse_request'] : [];
-        if ($instruction === '') {
-            $instruction = \trim((string)($sseReq['instruction'] ?? ''));
-        }
-        if ($targetScope === '') {
-            $targetScope = \trim((string)($sseReq['target_scope'] ?? ''));
-        }
-        if ($round === 1 && isset($sseReq['round'])) {
-            $rr = (int)$sseReq['round'];
-            if ($rr > 0) {
-                $round = $rr;
-            }
-        }
-
-        $sse->sendEvent('start', [
-            'message' => $promptMode === 'rebuild_task_plan'
-                ? (string)__('正在重建第二阶段任务方案')
-                : (string)__('正在微调第二阶段任务方案'),
-            'prompt_mode' => $promptMode,
-            'round' => $round,
-            'target_scope' => $targetScope,
-        ]);
-        $sse->sendEvent('progress', [
-            'message' => (string)__('正在整理当前任务方案上下文'),
-            'prompt_mode' => $promptMode,
-            'progress_percent' => 20,
-        ]);
-
-        try {
-            $draftPlan = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
-            $streamBuffer = '';
-            $rawChunkInfoBuffer = '';
-            // 与阶段一方案流对齐：等 AI 整包 JSON 期间只发 progress + 注释保活，不把原始 token 当 chunk 推给前端；完成后再分块输出 markdown。
-            $taskPlanStreamHeartbeat = function () use ($sse): void {
-                $sse->sendComment(\str_repeat(' ', 512) . 'pb-task-plan-ai');
-            };
-            $aiChunkCount = 0;
-            $chunkCallback = static function (string $chunk) use (&$streamBuffer, &$rawChunkInfoBuffer, $sse, $promptMode, &$aiChunkCount): void {
-                $streamBuffer .= $chunk;
-                if (\trim($chunk) === '') {
-                    return;
-                }
-                $queueMode = $sse instanceof QueueDbWriter;
-                if ($queueMode) {
-                    // Queue mode persists structured batch progress; avoid filling queue.result with raw AI JSON tokens.
-                    return;
-                }
-                $rawChunkInfoBuffer .= $chunk;
-                while (\mb_strlen($rawChunkInfoBuffer, 'UTF-8') >= 360) {
-                    if (!$sse->isAlive()) {
-                        $rawChunkInfoBuffer = '';
-                        return;
-                    }
-                    $part = (string)\mb_substr($rawChunkInfoBuffer, 0, 360, 'UTF-8');
-                    $rawChunkInfoBuffer = (string)\mb_substr($rawChunkInfoBuffer, 360, null, 'UTF-8');
-                    $sse->sendEvent('info', [
-                        'message' => $part,
-                        'prompt_mode' => $promptMode,
-                        'stream_stage' => 'ai_raw_chunk',
-                        'chunk' => $part,
-                    ]);
-                }
-                $aiChunkCount++;
-                if ($aiChunkCount === 1 || $aiChunkCount % 256 === 0) {
-                    if (!$sse->isAlive()) {
-                        return;
-                    }
-                    $sse->sendEvent('progress', [
-                        'message' => (string)__('AI 正在生成第二阶段任务方案…'),
-                        'prompt_mode' => $promptMode,
-                        'progress_percent' => 55,
-                        'ai_chunk_count' => $aiChunkCount,
-                    ]);
-                }
-            };
-            $progressCallback = $this->buildTaskPlanGenerationProgressCallback($sse, $session, $adminId, $promptMode);
-            $result = $promptMode === 'rebuild_task_plan'
-                ? $this->virtualThemePlanService->rebuildDraftTaskPlan($scope, $buildBlueprint, [
-                    'instruction' => $instruction,
-                    'round' => $round,
-                ], null, $taskPlanStreamHeartbeat, $progressCallback)
-                : $this->virtualThemePlanService->refineDraftTaskPlan($scope, $buildBlueprint, $draftPlan, [
-                    'instruction' => $instruction,
-                    'target_scope' => $targetScope,
-                    'round' => $round,
-                ], null, $taskPlanStreamHeartbeat, $progressCallback);
-
-            if ($rawChunkInfoBuffer !== '' && $sse->isAlive()) {
-                $sse->sendEvent('info', [
-                    'message' => $rawChunkInfoBuffer,
-                    'prompt_mode' => $promptMode,
-                    'stream_stage' => 'ai_raw_chunk',
-                    'chunk' => $rawChunkInfoBuffer,
-                ]);
-                $rawChunkInfoBuffer = '';
-            }
-
-            $markdown = (string)($result['markdown'] ?? '');
-            if ($markdown !== '' && $sse->isAlive()) {
-                $sse->sendEvent('progress', [
-                    'message' => (string)__('AI 已生成完整任务方案，正在输出正文'),
-                    'prompt_mode' => $promptMode,
-                    'progress_percent' => 72,
-                    'stream_stage' => 'markdown_stream',
-                ]);
-                foreach ($this->streamCodecService->chunkStringForSse($markdown, 220) as $mdChunk) {
-                    if (\trim($mdChunk) === '') {
-                        continue;
-                    }
-                    if (!$sse->isAlive()) {
-                        break;
-                    }
-                    $sse->sendEvent('chunk', [
-                        'content' => $mdChunk,
-                        'chunk' => $mdChunk,
-                        'prompt_mode' => $promptMode,
-                    ]);
-                    SchedulerSystem::yieldDelay(5);
-                }
-            }
-            $sse->sendEvent('progress', [
-                'message' => (string)__('任务方案正文输出完成，正在保存并生成最终状态'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 92,
-            ]);
-            $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
-            $virtualThemePlan = \is_array($result['virtual_theme_plan'] ?? null) ? $result['virtual_theme_plan'] : [];
-            $taskPlanGenerationSource = (string)($result['generation_source'] ?? '');
-            $retryableTaskPlanFailures = \is_array($result['retryable_ai_failures'] ?? null)
-                ? \array_values(\array_filter($result['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
-                : [];
-            if ($this->shouldRejectTaskPlanGenerationSource($scope, $taskPlanGenerationSource)) {
-                throw new \RuntimeException((string)__('第二阶段任务方案生成失败：当前结果不是 AI 生成，请检查 AI 服务后重试'));
-            }
-            $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
-            $scopePatch = [
-                'virtual_theme_plan' => [
-                    'draft' => $virtualThemePlan,
-                    'draft_markdown' => $markdown,
-                    'draft_generated_at' => \date('Y-m-d H:i:s'),
-                    'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
-                    'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
-                    'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
-                    'confirmed_signature' => (string)($scope['virtual_theme_plan']['confirmed_signature'] ?? ''),
-                    'plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                    'last_prompt_mode' => $promptMode,
-                    'last_target_scope' => $targetScope,
-                    'last_round' => $round,
-                ],
-                'task_plan_structured' => $structured,
-                'task_plan_directory_tree' => $taskPlanDirectoryTree,
-                'task_plan_summary' => [
-                    'signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                    'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
-                    'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
-                    'prompt_mode' => $promptMode,
-                ],
-                'task_plan_confirmed' => 0,
-                '_task_plan_rebuild_in_progress' => 0,
-            ];
-            if ($promptMode === 'rebuild_task_plan') {
-                $scopePatch['task_plan_rebuild_summary'] = \is_array($result['rebuild_summary'] ?? null) ? $result['rebuild_summary'] : [];
-            } else {
-                $scopePatch['task_plan_change_scope_report'] = \is_array($result['change_scope_report'] ?? null) ? $result['change_scope_report'] : [];
-            }
-            $scopePatch['_task_plan_sse_request'] = [];
-            $scopeWithTaskPlanFailures = $this->buildTaskService->replaceRetryableAiFailures(
-                \array_replace($scope, $scopePatch),
-                'task_plan',
-                $retryableTaskPlanFailures
-            );
-            if ($retryableTaskPlanFailures === []) {
-                $scopeWithTaskPlanFailures = $this->buildTaskService->clearBuildPrerequisiteFailureState($scopeWithTaskPlanFailures);
-            }
-            $scopePatch['retryable_ai_failures'] = \is_array($scopeWithTaskPlanFailures['retryable_ai_failures'] ?? null) ? $scopeWithTaskPlanFailures['retryable_ai_failures'] : [];
-            $scopePatch['retryable_ai_failure_count'] = (int)($scopeWithTaskPlanFailures['retryable_ai_failure_count'] ?? 0);
-            $scopePatch['next_stage_blocked_by_ai_failures'] = (int)($scopeWithTaskPlanFailures['next_stage_blocked_by_ai_failures'] ?? 0);
-            $scopePatch['latest_build_failed'] = (int)($scopeWithTaskPlanFailures['latest_build_failed'] ?? 0);
-            $scopePatch['latest_build_failure'] = \is_array($scopeWithTaskPlanFailures['latest_build_failure'] ?? null) ? $scopeWithTaskPlanFailures['latest_build_failure'] : [];
-            $scopePatch['publish_blocked_by_latest_ai_failure'] = (int)($scopeWithTaskPlanFailures['publish_blocked_by_latest_ai_failure'] ?? 0);
-            $scopePatch['publish_blocked_reason'] = (string)($scopeWithTaskPlanFailures['publish_blocked_reason'] ?? '');
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在持久化任务方案草案'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 95,
-            ]);
-            $fresh = $this->persistTaskPlanDraftOrThrow($session, $adminId, $scopePatch, $promptMode);
-
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在写入工作区事件并整理最终状态'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 97,
-            ]);
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
-                $promptMode === 'rebuild_task_plan' ? 'task_plan_rebuilt' : 'task_plan_refined',
-                $promptMode === 'rebuild_task_plan'
-                    ? (string)__('第二阶段任务方案已重建，请确认后再进入构建')
-                    : (string)__('第二阶段任务方案已微调，请确认后再进入构建'),
-                [
-                    'operation' => $promptMode,
-                    'details' => [
-                        'target_scope' => $targetScope,
-                        'round' => $round,
-                        'task_plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                    ],
-                ]
-            );
-            if ($retryableTaskPlanFailures !== []) {
-                $this->updateActiveOperation(
-                    $fresh,
-                    $adminId,
-                    [
-                        'operation' => 'task_plan',
-                        'status' => 'error',
-                        'message' => (string)__('第二阶段部分任务方案生成失败，请重试失败项。'),
-                        'retry_allowed' => 1,
-                        'failure_mode' => 'partial_retry_required',
-                        'retryable_ai_failure_count' => \count($retryableTaskPlanFailures),
-                    ],
-                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
-                );
-                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
-            }
-
-            $sse->sendEvent('progress', [
-                'message' => (string)__('第二阶段任务方案已生成，正在输出完成标记'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 99,
-            ]);
-
-            $state = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($fresh, $adminId, 80, true));
-            $sse->complete([
-                'success' => true,
-                'message' => $promptMode === 'rebuild_task_plan'
-                    ? (string)__('第二阶段任务方案重建完成')
-                    : (string)__('第二阶段任务方案微调完成'),
-                'prompt_mode' => $promptMode,
-                'partial_retry_required' => $retryableTaskPlanFailures !== [] ? 1 : 0,
-                'retryable_ai_failure_count' => \count($retryableTaskPlanFailures),
-                'task_plan' => [
-                    'markdown' => $markdown,
-                    'structured' => $structured,
-                    'virtual_theme_plan' => $virtualThemePlan,
-                ],
-                'state' => $state,
-            ]);
-        } catch (\Throwable $throwable) {
-            if ($promptMode === 'rebuild_task_plan') {
-                $this->sessionService->mergeScope($session->getId(), $adminId, [
-                    '_task_plan_rebuild_in_progress' => 0,
-                    '_task_plan_sse_request' => [],
-                    'task_plan_generation_last_error' => $throwable->getMessage(),
-                ]);
-            }
-            $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
-            $sse->complete([
-                'success' => false,
-                'message' => $throwable->getMessage(),
-                'prompt_mode' => $promptMode,
-            ]);
-        }
-    }
-
-    /**
-     * 阶段二手风琴展开：SSE 检测是否已有虚拟主题任务方案；已有则流式回填，无则按阶段一确认方案生成并落库后再输出（对齐《AI建站中台-计划》§1A 第二阶段即时行为）。
-     *
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $buildBlueprint
-     */
-    private function handleTaskPlanDetectBootstrapSse(
-        SseWriter $sse,
-        AiSiteAgentSession $session,
-        int $adminId,
-        array $scope,
-        array $buildBlueprint
-    ): void {
-        $promptMode = 'detect_bootstrap_task_plan';
-        $streamBuffer = '';
-        $rawChunkInfoBuffer = '';
-        try {
-            $sse->sendEvent('start', [
-                'message' => (string)__('正在检测第二阶段任务方案'),
-                'prompt_mode' => $promptMode,
-            ]);
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在连接任务方案流并检查会话草案'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 12,
-            ]);
-
-            // detect_bootstrap：不再使用会话内已存草案/确认稿作为“缓存快路径”，始终走 AI 生成（与前端期望一致）。
-            $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-            if ($executionBlueprint === []) {
-                $this->sendSseContractError($sse, 'EXECUTION_BLUEPRINT_REQUIRED', (string)__('缺少已确认执行蓝图，请重新生成并确认方案'), ['public_id', 'execution_blueprint'], 409);
-                $sse->complete(['success' => false, 'prompt_mode' => $promptMode]);
-                return;
-            }
-
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在通过 AI 根据阶段一确认方案生成第二阶段任务方案'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 28,
-            ]);
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在调用 AI 生成任务方案，生成期间请保持连接'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 34,
-            ]);
-
-            $scope = $this->buildTaskService->ensureTaskScope(
-                $scope,
-                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-                (string)($scope['workspace_track'] ?? '')
-            );
-            $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-            // 保活必须用 SSE 注释行：上游 AI 可能数十秒无 token，Nginx proxy_read_timeout 等会断客端连接；
-            // 禁止在等完整 JSON 阶段 sendEvent(progress/info) 透传模型原始流：既拉长可读字节间隔、又可能把半截 JSON 推给浏览器；完成后再统一 chunk markdown。
-            $taskPlanStreamHeartbeat = function () use ($sse): void {
-                $sse->sendComment(\str_repeat(' ', 512) . 'pb-task-plan-ai');
-            };
-            $aiChunkCount = 0;
-            $chunkCallback = static function (string $chunk) use (&$rawChunkInfoBuffer, $sse, $promptMode, &$aiChunkCount): void {
-                if (\trim($chunk) === '') {
-                    return;
-                }
-                $queueMode = $sse instanceof QueueDbWriter;
-                if (!$queueMode) {
-                    $rawChunkInfoBuffer .= $chunk;
-                    while (\mb_strlen($rawChunkInfoBuffer, 'UTF-8') >= 360) {
-                        if (!$sse->isAlive()) {
-                            $rawChunkInfoBuffer = '';
-                            return;
-                        }
-                        $part = (string)\mb_substr($rawChunkInfoBuffer, 0, 360, 'UTF-8');
-                        $rawChunkInfoBuffer = (string)\mb_substr($rawChunkInfoBuffer, 360, null, 'UTF-8');
-                        $sse->sendEvent('info', [
-                            'message' => $part,
-                            'prompt_mode' => $promptMode,
-                            'stream_stage' => 'ai_raw_chunk',
-                            'chunk' => $part,
-                        ]);
-                    }
-                }
-                $aiChunkCount++;
-                if ($aiChunkCount === 1 || $aiChunkCount % 12 === 0) {
-                    if (!$sse->isAlive()) {
-                        return;
-                    }
-                    $sse->sendEvent('progress', [
-                        'message' => (string)__('AI 正在持续生成任务方案，请保持连接'),
-                        'prompt_mode' => $promptMode,
-                        'progress_percent' => 55,
-                        'ai_chunk_count' => $aiChunkCount,
-                    ]);
-                }
-            };
-            $onTaskPlanCheckpoint = function (array $checkpoint) use ($session, $adminId, &$scope): void {
-                if ($checkpoint === [] || !\is_array($checkpoint['task_plan_structured'] ?? null)) {
-                    return;
-                }
-                $retryableFailures = \is_array($checkpoint['retryable_ai_failures'] ?? null)
-                    ? \array_values(\array_filter($checkpoint['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
-                    : [];
-                $scope = $this->buildTaskService->replaceRetryableAiFailures($scope, 'task_plan', $retryableFailures);
-                $this->sessionService->mergeScope((int)$session->getId(), $adminId, [
-                    AiSiteVirtualThemePlanService::TASK_PLAN_CHECKPOINT_SCOPE_KEY => [
-                        'updated_at' => (string)($checkpoint['updated_at'] ?? ''),
-                        'plan_signature' => (string)($checkpoint['plan_signature'] ?? ''),
-                        'completed_batch_ids' => \is_array($checkpoint['completed_batch_ids'] ?? null) ? $checkpoint['completed_batch_ids'] : [],
-                        'failed_batch_ids' => \is_array($checkpoint['failed_batch_ids'] ?? null) ? $checkpoint['failed_batch_ids'] : [],
-                        'retryable_ai_failures' => $retryableFailures,
-                    ],
-                    'retryable_ai_failures' => \is_array($scope['retryable_ai_failures'] ?? null) ? $scope['retryable_ai_failures'] : [],
-                    'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
-                    'next_stage_blocked_by_ai_failures' => (int)($scope['next_stage_blocked_by_ai_failures'] ?? 0),
-                    'task_plan_structured' => $checkpoint['task_plan_structured'],
-                    'virtual_theme_plan' => [
-                        'draft' => \is_array($checkpoint['virtual_theme_plan'] ?? null)
-                            ? $checkpoint['virtual_theme_plan']
-                            : $checkpoint['task_plan_structured'],
-                    ],
-                ]);
-            };
-            $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifactsStream(
-                $scope,
-                $buildBlueprint,
-                $chunkCallback,
-                $taskPlanStreamHeartbeat,
-                $this->buildTaskPlanGenerationProgressCallback($sse, $session, $adminId, $promptMode),
-                $onTaskPlanCheckpoint
-            );
-            if ($rawChunkInfoBuffer !== '' && !($sse instanceof QueueDbWriter) && $sse->isAlive()) {
-                $sse->sendEvent('info', [
-                    'message' => $rawChunkInfoBuffer,
-                    'prompt_mode' => $promptMode,
-                    'stream_stage' => 'ai_raw_chunk',
-                    'chunk' => $rawChunkInfoBuffer,
-                ]);
-                $rawChunkInfoBuffer = '';
-            }
-            $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
-            if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
-                throw new \RuntimeException('Task plan generation failed: AI result unavailable.');
-            }
-            $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
-            $markdown = (string)($artifacts['markdown'] ?? '');
-            $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
-
-            $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
-            $markdown = (string)($artifacts['markdown'] ?? '');
-            $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
-            $retryableTaskPlanFailures = \is_array($artifacts['retryable_ai_failures'] ?? null)
-                ? \array_values(\array_filter($artifacts['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
-                : [];
-
-            if ($sse->isAlive()) {
-                $sse->sendEvent('progress', [
-                    'message' => (string)__('AI 已生成完整任务方案，正在输出正文'),
-                    'prompt_mode' => $promptMode,
-                    'progress_percent' => 72,
-                    'stream_stage' => 'markdown_stream',
-                ]);
-            }
-
-            if ($markdown !== '') {
-                foreach ($this->streamCodecService->chunkStringForSse($markdown, 220) as $chunk) {
-                    if (\trim($chunk) === '') {
-                        continue;
-                    }
-                    if (!$sse->isAlive()) {
-                        break;
-                    }
-                    $sse->sendEvent('chunk', [
-                        'content' => $chunk,
-                        'chunk' => $chunk,
-                        'prompt_mode' => $promptMode,
-                    ]);
-                    SchedulerSystem::yieldDelay(5);
-                }
-            }
-            $sse->sendEvent('progress', [
-                'message' => (string)__('任务方案正文输出完成，正在保存并生成最终状态'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 92,
-            ]);
-
-            $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
-            $scopePatch = [
-                'build_blueprint' => $buildBlueprint,
-                'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
-                'virtual_theme_plan' => [
-                    'draft' => $virtualThemePlan,
-                    'draft_markdown' => $markdown,
-                    'draft_generated_at' => \date('Y-m-d H:i:s'),
-                    'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
-                    'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
-                    'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
-                    'plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                ],
-                'task_plan_markdown' => $markdown,
-                'task_plan_generated_at' => \date('Y-m-d H:i:s'),
-                'task_plan_structured' => $structured,
-                'task_plan_directory_tree' => $taskPlanDirectoryTree,
-                'task_plan_summary' => [
-                    'signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                    'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
-                    'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
-                    'source' => 'task_plan_sse',
-                    'generation_source' => $taskPlanGenerationSource,
-                ],
-                'task_plan_confirmed' => 0,
-                '_task_plan_rebuild_in_progress' => 0,
-            ];
-            $scopeWithTaskPlanFailures = $this->buildTaskService->replaceRetryableAiFailures(
-                \array_replace($scope, $scopePatch),
-                'task_plan',
-                $retryableTaskPlanFailures
-            );
-            $scopePatch['retryable_ai_failures'] = \is_array($scopeWithTaskPlanFailures['retryable_ai_failures'] ?? null) ? $scopeWithTaskPlanFailures['retryable_ai_failures'] : [];
-            $scopePatch['retryable_ai_failure_count'] = (int)($scopeWithTaskPlanFailures['retryable_ai_failure_count'] ?? 0);
-            $scopePatch['next_stage_blocked_by_ai_failures'] = (int)($scopeWithTaskPlanFailures['next_stage_blocked_by_ai_failures'] ?? 0);
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在持久化任务方案草案'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 95,
-            ]);
-            $fresh = $this->persistTaskPlanDraftOrThrow($session, $adminId, $scopePatch, $promptMode);
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在写入工作区事件并整理最终状态'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 97,
-            ]);
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
-                'task_plan_generated',
-                (string)__('已生成第二阶段任务方案，请确认后再开始执行构建'),
-                [
-                    'operation' => 'task_plan',
-                    'details' => [
-                        'task_plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                        'task_count' => \count(\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : []),
-                        'source' => 'detect_bootstrap_sse',
-                    ],
-                ]
-            );
-            $this->updateActiveOperation(
-                $fresh,
-                $adminId,
-                ['operation' => 'task_plan', 'status' => 'done', 'message' => (string)__('第二阶段任务方案已生成')],
-                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
-            );
-            if ($retryableTaskPlanFailures !== []) {
-                $this->updateActiveOperation(
-                    $fresh,
-                    $adminId,
-                    [
-                        'operation' => 'task_plan',
-                        'status' => 'error',
-                        'message' => (string)__('第二阶段部分任务方案生成失败，请重试失败项。'),
-                        'retry_allowed' => 1,
-                        'failure_mode' => 'partial_retry_required',
-                        'retryable_ai_failure_count' => \count($retryableTaskPlanFailures),
-                    ],
-                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
-                );
-            }
-
-            $sse->sendEvent('progress', [
-                'message' => (string)__('第二阶段任务方案已生成，正在输出完成标记'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 99,
-            ]);
-
-            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            $state = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($fresh, $adminId, 80, true));
-            $sse->complete([
-                'success' => true,
-                'message' => (string)__('第二阶段任务方案已生成，请确认后再进入构建'),
-                'prompt_mode' => $promptMode,
-                'phase' => 'virtual_theme_plan_generated',
-                'partial_retry_required' => $retryableTaskPlanFailures !== [] ? 1 : 0,
-                'retryable_ai_failure_count' => \count($retryableTaskPlanFailures),
-                'task_plan' => [
-                    'markdown' => $markdown,
-                    'structured' => $structured,
-                    'virtual_theme_plan' => $virtualThemePlan,
-                ],
-                'state' => $state,
-            ]);
-        } catch (\Throwable $throwable) {
-            if ($promptMode === 'rebuild_task_plan') {
-                $this->sessionService->mergeScope($session->getId(), $adminId, [
-                    '_task_plan_rebuild_in_progress' => 0,
-                    '_task_plan_sse_request' => [],
-                    'task_plan_generation_last_error' => $throwable->getMessage(),
-                ]);
-            }
-            $this->updateActiveOperation(
-                $session,
-                $adminId,
-                ['operation' => 'task_plan', 'status' => 'error', 'message' => $throwable->getMessage()],
-                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
-            );
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-                'operation_failed',
-                (string)__('第二阶段任务方案生成失败：%{message}', ['message' => $throwable->getMessage()]),
-                ['operation' => 'task_plan', 'details' => ['exception' => $throwable->getMessage()]],
-                AiSiteAgentSessionEvent::LEVEL_ERROR
-            );
-            $streamTail = \trim((string)\mb_substr($streamBuffer, -900, null, 'UTF-8'));
-            $errorMessage = $throwable->getMessage();
-            if ($streamTail !== '') {
-                $errorMessage .= "\n\n[stream_tail]\n" . $streamTail;
-            }
-            $sse->sendError($errorMessage, $this->inferThrowableHttpCode($throwable));
-            $sse->complete([
-                'success' => false,
-                'message' => $errorMessage,
-                'prompt_mode' => $promptMode,
-            ]);
-            if ($sse instanceof QueueDbWriter) {
-                throw $throwable;
-            }
-        }
-    }
-
     private function handleResumeBuild(): string
     {
         return $this->handleStartBuild(true);
@@ -3211,20 +1980,12 @@ class AiSiteAgent extends BaseController
         $currentScope = $this->scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
-        $currentScope = $this->normalizeTaskPlanConfirmationForBuild($currentScope);
+        $currentScope = $this->normalizeBuildPlanConfirmationForBuild($currentScope);
         $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $currentScope);
         $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentScope, $scopePatch));
         $mergedScope = $this->buildTaskService->restoreBuildPlanContract($mergedScope, $currentScope);
-        $mergedScope = $this->normalizeTaskPlanConfirmationForBuild($mergedScope);
-        if (!$this->isTaskPlanConfirmedForBuild($mergedScope) && $this->scopeHasPersistedStageTwoTaskPlan($mergedScope)) {
-            $taskPlanConfirmPatch = $this->buildTaskPlanConfirmationPatchFromScope($mergedScope);
-            if ($taskPlanConfirmPatch !== []) {
-                $scopePatch = \array_replace($scopePatch, $taskPlanConfirmPatch);
-                $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($mergedScope, $taskPlanConfirmPatch));
-                $mergedScope = $this->normalizeTaskPlanConfirmationForBuild($mergedScope);
-            }
-        }
-        if ($this->isTaskPlanConfirmedForBuild($mergedScope)) {
+        $mergedScope = $this->normalizeBuildPlanConfirmationForBuild($mergedScope);
+        if ($this->isBuildPlanReadyForBuild($mergedScope)) {
             $mergedScope = $this->buildTaskService->ensureTaskScope(
                 $mergedScope,
                 \is_array($mergedScope['website_profile'] ?? null) ? $mergedScope['website_profile'] : [],
@@ -3252,27 +2013,12 @@ class AiSiteAgent extends BaseController
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
         }
-        if (!$this->isTaskPlanConfirmedForBuild($mergedScope)) {
+        if (!$this->isBuildPlanReadyForBuild($mergedScope)) {
             return $this->jsonError(
-                'TASK_PLAN_REQUIRED_BEFORE_BUILD',
-                (string)__('请先确认第二阶段任务方案，再开始执行构建'),
-                ['public_id', 'task_plan_confirmed']
+                'BUILD_PLAN_REQUIRED_BEFORE_BUILD',
+                (string)__('请先确认方案1生成的 build_plan_v2，再开始执行构建'),
+                ['public_id', 'build_plan_confirmed']
             );
-        }
-        $activeOperation = \is_array($mergedScope['active_operation'] ?? null) ? $mergedScope['active_operation'] : [];
-        $activeTaskPlanOperation = \trim((string)($activeOperation['operation'] ?? '')) === 'task_plan'
-            && \in_array(\strtolower(\trim((string)($activeOperation['status'] ?? ''))), ['queued', 'pending', 'running', 'processing'], true);
-        if ($activeTaskPlanOperation) {
-            $mergedScope = $this->markRunningTaskPlanAsDiscardedForRebuild($mergedScope, $activeOperation);
-            $scopePatch['active_operation'] = \is_array($mergedScope['active_operation'] ?? null) ? $mergedScope['active_operation'] : [];
-            $scopePatch['active_operations'] = \is_array($mergedScope['active_operations'] ?? null) ? $mergedScope['active_operations'] : [];
-            $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
-                'active_operation' => $scopePatch['active_operation'],
-                'active_operations' => $scopePatch['active_operations'],
-            ]);
-            if ($saved) {
-                $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            }
         }
         if ($isResume) {
             $resumeSummary = $this->buildTaskService->summarize($mergedScope);
@@ -3356,7 +2102,7 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
         $assetManifestService = $this->assetManifestService();
-        $manifest = $assetManifestService->syncFromTaskPlan($scope);
+        $manifest = $assetManifestService->syncFromBuildPlan($scope);
         $slot = $assetManifestService->getSlot($manifest, $slotId);
         if ($slot === [] && $promptBrief !== '') {
             $manifest = $assetManifestService->upsert($manifest, [
@@ -3745,74 +2491,90 @@ class AiSiteAgent extends BaseController
     /**
      * @param array<string, mixed> $scope
      */
-    private function isTaskPlanConfirmedForBuild(array $scope): bool
+    private function isBuildPlanReadyForBuild(array $scope): bool
     {
-        return (int)($scope['task_plan_confirmed'] ?? 0) === 1
-            && $this->buildTaskService->hasConfirmedTaskPlanForBuild($scope);
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $buildPlanMeta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
+        $hasConfirmedBuildPlan = $buildPlan !== []
+            && ((int)($scope['build_plan_confirmed'] ?? 0) === 1 || \strtolower(\trim((string)($buildPlanMeta['status'] ?? ''))) === 'confirmed');
+        return $hasConfirmedBuildPlan && $this->buildTaskServiceForRead()->hasConfirmedBuildPlanForBuild($scope);
     }
 
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function shouldReusePersistedTaskPlanWithoutQueue(
-        array $scope,
-        string $promptMode,
-        string $instruction = '',
-        string $targetScope = ''
-    ): bool {
-        $promptMode = \trim($promptMode);
-        if ($promptMode === '') {
-            $promptMode = 'detect_bootstrap_task_plan';
-        }
-        if ($promptMode !== 'detect_bootstrap_task_plan') {
-            return false;
-        }
-        if (\trim($instruction) !== '' || \trim($targetScope) !== '') {
-            return false;
-        }
-
-        return $this->scopeHasPersistedStageTwoTaskPlan($scope);
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function isPlanConfirmedForTaskPlan(array $scope): bool
+    private function buildTaskServiceForRead(): AiSiteBuildTaskService
     {
-        return $this->scopeCompatibilityService->hasConfirmedStageOnePlanForTaskPlan($scope);
+        return isset($this->buildTaskService)
+            ? $this->buildTaskService
+            : ObjectManager::getInstance(AiSiteBuildTaskService::class);
     }
 
     /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function normalizePlanConfirmationForTaskPlan(
-        AiSiteAgentSession $session,
-        int $adminId,
-        array $scope
-    ): array {
-        $normalizedScope = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($scope);
-        $scopePatch = [];
-        if ((int)($normalizedScope['plan_confirmed'] ?? 0) !== (int)($scope['plan_confirmed'] ?? 0)) {
-            $scopePatch['plan_confirmed'] = (int)($normalizedScope['plan_confirmed'] ?? 0);
-        }
-        if ((string)($normalizedScope['plan_confirmed_at'] ?? '') !== (string)($scope['plan_confirmed_at'] ?? '')) {
-            $scopePatch['plan_confirmed_at'] = (string)($normalizedScope['plan_confirmed_at'] ?? '');
-        }
-        if ($scopePatch !== []) {
-            $this->sessionService->mergeScope((int)$session->getId(), $adminId, $scopePatch);
-        }
+    private function buildPlanV2DraftScopePatch(array $scope): array
+    {
+        try {
+            /** @var AiSiteBuildPlanService $service */
+            $service = ObjectManager::getInstance(AiSiteBuildPlanService::class);
+            $contract = $service->buildFromScope(
+                $scope,
+                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : []
+            );
+            $validation = $service->validate($contract);
+            if (!($validation['valid'] ?? false)) {
+                return ['build_plan_v2_validation' => $validation, 'has_build_plan_v2' => 0];
+            }
 
-        return $normalizedScope;
+            return [
+                'build_plan_v2' => $contract,
+                'plan_projection' => $service->projection($contract),
+                'content_manifest' => \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [],
+                'build_plan_v2_validation' => $validation,
+                'has_build_plan_v2' => 1,
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'build_plan_v2_validation' => [
+                    'valid' => false,
+                    'errors' => [$throwable->getMessage()],
+                ],
+                'has_build_plan_v2' => 0,
+            ];
+        }
     }
 
     /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function normalizeTaskPlanConfirmationForBuild(array $scope): array
+    private function buildPlanV2ConfirmationScopePatch(array $scope): array
     {
-        return $this->buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
+        try {
+            /** @var AiSiteBuildPlanTaskScheduler $scheduler */
+            $scheduler = ObjectManager::getInstance(AiSiteBuildPlanTaskScheduler::class);
+            return $scheduler->buildConfirmationScopePatch(
+                $scope,
+                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+                (string)($scope['workspace_track'] ?? '')
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'build_plan_v2_validation' => [
+                    'valid' => false,
+                    'errors' => [$throwable->getMessage()],
+                ],
+                'build_plan_confirmed' => 0,
+            ];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function normalizeBuildPlanConfirmationForBuild(array $scope): array
+    {
+        return $this->buildTaskService->normalizeConfirmedBuildPlanFlag($scope);
     }
 
     private function handleStartRegeneratePage(): string
@@ -4961,8 +3723,8 @@ class AiSiteAgent extends BaseController
             if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
                 return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认阶段一方案，再进入发布流程。')]);
             }
-            if ((int)($state['task_plan_confirmed'] ?? 0) !== 1) {
-                return $this->fetchJson(['success' => false, 'code' => 'TASK_PLAN_NOT_CONFIRMED', 'message' => __('请先确认第二阶段任务方案，再进入发布流程。')]);
+            if ((int)($state['build_plan_confirmed'] ?? 0) !== 1) {
+                return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('请先确认方案1生成的 build_plan_v2，再进入发布流程。')]);
             }
             return $this->fetchJson(['success' => false, 'code' => 'WORKSPACE_NOT_READY', 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
         }
@@ -5066,6 +3828,7 @@ class AiSiteAgent extends BaseController
             $lastGeneratedAt
         );
         $scope['virtual_pages_by_type'] = $virtualPages;
+        $scope = $this->syncUpdatedVirtualBlockToThemeLayout($scope, $pageTypes, $pageType, $updatedBlock);
         $scope['build_summary'] = \array_replace(
             \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
             ['task_summary' => $this->buildTaskService->summarize($scope)]
@@ -5126,6 +3889,106 @@ class AiSiteAgent extends BaseController
         $virtualPages[$pageType] = $virtualPage;
 
         return $virtualPages;
+    }
+
+    /**
+     * Keep block editor saves on the virtual theme side. Materialized Page rows
+     * are intentionally updated only by publish/materialization.
+     *
+     * @param array<string, mixed> $scope
+     * @param list<string> $pageTypes
+     * @param array<string, mixed> $updatedBlock
+     * @return array<string, mixed>
+     */
+    private function syncUpdatedVirtualBlockToThemeLayout(
+        array $scope,
+        array $pageTypes,
+        string $pageType,
+        array $updatedBlock
+    ): array {
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId <= 0) {
+            return $scope;
+        }
+
+        $blockConfig = \is_array($updatedBlock['config'] ?? null) ? $updatedBlock['config'] : [];
+        if ($blockConfig === []) {
+            return $scope;
+        }
+
+        $region = \strtolower(\trim((string)($updatedBlock['_pb_server_region'] ?? $blockConfig['region'] ?? '')));
+        if ($region === '') {
+            $region = $this->htmlBlocksBuildService->resolveSharedBlockRegion($updatedBlock);
+        }
+        if ($region === '') {
+            $region = 'content';
+        }
+        $componentCode = \trim((string)($updatedBlock['_pb_server_component_code'] ?? $updatedBlock['component_code'] ?? $updatedBlock['code'] ?? ''));
+        $blockId = \trim((string)($updatedBlock['block_id'] ?? ''));
+        if ($componentCode === '' && $blockId !== '') {
+            $componentCode = \str_replace('-', '/', $blockId);
+            if ($region === 'content' && !\str_starts_with($componentCode, 'content/')) {
+                $componentCode = 'content/' . $componentCode;
+            }
+        }
+
+        $targetPageType = \in_array($region, ['header', 'footer'], true) ? Page::TYPE_HOME : $pageType;
+        $layoutPageTypes = \array_values(\array_unique(\array_merge($pageTypes, [$targetPageType])));
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $layoutPageTypes);
+        if (!isset($pageTypeLayouts[$targetPageType]) || !\is_array($pageTypeLayouts[$targetPageType])) {
+            $pageTypeLayouts[$targetPageType] = $this->scopeCompatibilityService->normalizeLayoutConfig([], $targetPageType);
+        }
+        $layout = $pageTypeLayouts[$targetPageType];
+        $changed = false;
+
+        if (\in_array($region, ['header', 'footer'], true)) {
+            $slot = \is_array($layout[$region] ?? null) ? $layout[$region] : ['component' => '', 'config' => []];
+            if ($componentCode !== '') {
+                $slot['component'] = $componentCode;
+            }
+            $slot['config'] = $blockConfig;
+            $layout[$region] = $slot;
+            $changed = true;
+        } else {
+            $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+            foreach ($content as $index => $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $itemCode = \trim((string)($item['code'] ?? $item['component'] ?? ''));
+                $itemBlockId = $this->normalizeGeneratedComponentCodeToBlockId($itemCode);
+                if (
+                    ($componentCode !== '' && $itemCode === $componentCode)
+                    || ($blockId !== '' && $itemBlockId === $blockId)
+                ) {
+                    $item['config'] = $blockConfig;
+                    $content[$index] = $item;
+                    $changed = true;
+                    break;
+                }
+            }
+            if (!$changed && $componentCode !== '') {
+                $content[] = [
+                    'code' => $componentCode,
+                    'enabled' => true,
+                    'config' => $blockConfig,
+                    'instance_id' => $blockId,
+                    'sort_order' => (\count($content) + 1) * 10,
+                ];
+                $changed = true;
+            }
+            $layout['content'] = \array_values($content);
+        }
+
+        if (!$changed) {
+            return $scope;
+        }
+
+        $pageTypeLayouts[$targetPageType] = $layout;
+        $this->virtualThemeService->saveGeneratedPageLayout($virtualThemeId, $targetPageType, $layout);
+        $scope['page_type_layouts'] = $pageTypeLayouts;
+
+        return $scope;
     }
 
     private function runBlockPartialPatchOperation(
@@ -5353,7 +4216,7 @@ class AiSiteAgent extends BaseController
         $requestedPageId = (int)$this->getRequestBodyValue('preview_page_id', 0);
         $requestedPageType = \trim((string)$this->getRequestBodyValue('preview_page_type', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
@@ -5514,8 +4377,8 @@ class AiSiteAgent extends BaseController
         if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
             return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认阶段一方案，再检查发布条件。')]);
         }
-        if ((int)($state['task_plan_confirmed'] ?? 0) !== 1) {
-            return $this->fetchJson(['success' => false, 'code' => 'TASK_PLAN_NOT_CONFIRMED', 'message' => __('请先确认第二阶段任务方案，再检查发布条件。')]);
+        if ((int)($state['build_plan_confirmed'] ?? 0) !== 1) {
+            return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('请先确认方案1生成的 build_plan_v2，再检查发布条件。')]);
         }
         $virtualPages = \is_array($state['virtual_pages_by_type']) ? $state['virtual_pages_by_type'] : [];
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
@@ -5895,7 +4758,11 @@ class AiSiteAgent extends BaseController
         $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
         $status = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
 
-        return \in_array($status, ['done', 'error', 'cancelled', 'stop', 'stopped'], true);
+        if (\in_array($status, ['stop', 'stopped'], true)) {
+            return true;
+        }
+
+        return \in_array($status, ['done', 'error', 'cancelled'], true);
     }
 
     /**
@@ -6335,6 +5202,10 @@ class AiSiteAgent extends BaseController
                 '_plan_generation_checkpoint' => $retryablePlanFailures === [] ? [] : $checkpointForRetry,
                 'plan_generation_progress' => [],
             ]);
+            $buildPlanDraftPatch = $this->buildPlanV2DraftScopePatch(\array_replace($scope, $scopePatchPersist));
+            if ($buildPlanDraftPatch !== []) {
+                $scopePatchPersist = \array_replace($scopePatchPersist, $buildPlanDraftPatch);
+            }
             $scopeWithFailures = $this->buildTaskService->replaceRetryableAiFailures(
                 \array_replace($scope, $scopePatchPersist),
                 'plan',
@@ -6578,716 +5449,6 @@ class AiSiteAgent extends BaseController
     private function runPlanOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): void
     {
         $this->runQueuedPlanOperationFromWorkspaceStream($sse, $session, $adminId);
-    }
-
-    private function runTaskPlanOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): void
-    {
-        if (!$sse instanceof QueueDbWriter) {
-            $sse->sendEvent('progress', [
-                'message' => '等待系统调度，通常约 1 分钟，可关闭继续操作',
-                'operation' => 'task_plan',
-                'deferred_queue_progress' => true,
-                'progress_percent' => 0,
-            ]);
-            return;
-        }
-
-        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        $scope = $this->normalizePlanConfirmationForTaskPlan($fresh, $adminId, $scope);
-        if (!$this->isPlanConfirmedForTaskPlan($scope)) {
-            throw new \RuntimeException((string)__('请先确认第一阶段方案，再生成第二阶段任务方案。'));
-        }
-
-        $scope = $this->buildTaskService->ensureTaskScope(
-            $scope,
-            \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-            (string)($scope['workspace_track'] ?? '')
-        );
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        if ($buildBlueprint === []) {
-            throw new \RuntimeException((string)__('缺少任务蓝图，无法生成第二阶段任务方案。'));
-        }
-
-        /** @var array<string, mixed> $sseReq */
-        $sseReq = \is_array($scope['_task_plan_sse_request'] ?? null) ? $scope['_task_plan_sse_request'] : [];
-        $promptMode = \trim((string)($sseReq['prompt_mode'] ?? 'detect_bootstrap_task_plan'));
-        $instruction = \trim((string)($sseReq['instruction'] ?? ''));
-        $targetScope = \trim((string)($sseReq['target_scope'] ?? ''));
-        $round = \max(1, (int)($sseReq['round'] ?? 1));
-
-        if ($promptMode === '' || $promptMode === 'detect_bootstrap_task_plan' || $promptMode === 'resume_task_plan') {
-            $this->handleTaskPlanDetectBootstrapSse($sse, $fresh, $adminId, $scope, $buildBlueprint);
-            return;
-        }
-
-        if ($promptMode === 'mutate_task_plan_task') {
-            $this->runTaskPlanTaskMutationOperation($sse, $fresh, $adminId, $scope, $sseReq);
-            return;
-        }
-
-        $this->runInteractiveTaskPlanOperation(
-            $sse,
-            $fresh,
-            $adminId,
-            $scope,
-            $buildBlueprint,
-            $promptMode,
-            $instruction,
-            $targetScope,
-            $round
-        );
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $sseReq
-     */
-    private function runTaskPlanTaskMutationOperation(
-        SseWriter $sse,
-        AiSiteAgentSession $session,
-        int $adminId,
-        array $scope,
-        array $sseReq
-    ): void {
-        $mutation = \is_array($sseReq['mutation'] ?? null) ? $sseReq['mutation'] : [];
-        $action = \strtolower(\trim((string)($mutation['action'] ?? '')));
-        $bucket = \strtolower(\trim((string)($mutation['bucket'] ?? 'page'))) === 'shared' ? 'shared' : 'page';
-        $pageType = \trim((string)($mutation['page_type'] ?? ''));
-        $taskKey = \trim((string)($mutation['task_key'] ?? ''));
-        $taskConfig = \is_array($mutation['task_config'] ?? null) ? $mutation['task_config'] : [];
-        $taskConfigs = \is_array($mutation['task_configs'] ?? null) ? $mutation['task_configs'] : [];
-        $taskKeys = $this->resolveTaskPlanMutationTaskKeys($mutation, $taskKey);
-        $instruction = \trim((string)($sseReq['instruction'] ?? ($mutation['instruction'] ?? '')));
-        $targetScope = \trim((string)($sseReq['target_scope'] ?? ($taskKey !== '' ? $taskKey : ($bucket === 'shared' ? 'shared_tasks' : 'task_plan'))));
-        $round = \max(1, (int)($sseReq['round'] ?? 1));
-
-        if (!\in_array($action, ['refine', 'rebuild', 'delete', 'create'], true)) {
-            throw new \RuntimeException('Unsupported stage-2 task mutation action: ' . $action);
-        }
-
-        $startMessage = match ($action) {
-            'create' => 'Adding stage-2 task to draft task plan.',
-            'delete' => 'Deleting stage-2 task from draft task plan.',
-            'rebuild' => 'Rebuilding stage-2 task in draft task plan.',
-            default => 'Refining stage-2 task in draft task plan.',
-        };
-        $doneMessage = match ($action) {
-            'create' => 'Stage-2 task added.',
-            'delete' => 'Stage-2 task deleted.',
-            'rebuild' => 'Stage-2 task rebuilt.',
-            default => 'Stage-2 task refined.',
-        };
-
-        $sse->sendEvent('start', [
-            'message' => $startMessage,
-            'prompt_mode' => 'mutate_task_plan_task',
-            'mutation_action' => $action,
-            'round' => $round,
-            'target_scope' => $targetScope,
-            'task_key' => $taskKey,
-            'task_keys' => $taskKeys,
-            'page_type' => $pageType,
-            'bucket' => $bucket,
-        ]);
-        $sse->sendEvent('progress', [
-            'message' => 'Preparing stage-2 task mutation context.',
-            'prompt_mode' => 'mutate_task_plan_task',
-            'mutation_action' => $action,
-            'progress_percent' => 25,
-        ]);
-
-        try {
-            $scope = $this->hydrateTaskPlanDraftScopeForMutation($scope);
-            $mutationTargets = $this->buildTaskPlanMutationTargets(
-                $action,
-                $taskKeys,
-                $taskKey,
-                $taskConfig,
-                $taskConfigs
-            );
-            $workingScope = $scope;
-            $mutationSummaries = [];
-            $result = [];
-            foreach ($mutationTargets as $mutationTarget) {
-                $targetTaskKey = \trim((string)($mutationTarget['task_key'] ?? ''));
-                $targetTaskPatch = \is_array($mutationTarget['task_config'] ?? null) ? $mutationTarget['task_config'] : [];
-                $result = $this->virtualThemePlanService->mutateDraftTaskPlanTask(
-                    $workingScope,
-                    $action,
-                    $bucket,
-                    $pageType,
-                    $targetTaskKey,
-                    $targetTaskPatch,
-                    $instruction
-                );
-                $mutationSummary = \is_array($result['mutation_summary'] ?? null) ? $result['mutation_summary'] : [];
-                if ($mutationSummary !== []) {
-                    $mutationSummaries[] = $mutationSummary;
-                }
-                $workingScope = $this->buildScopeFromTaskPlanArtifactsForMutation($workingScope, $result);
-            }
-            if ($mutationSummaries !== []) {
-                $result['mutation_summary'] = $this->buildCombinedTaskPlanMutationSummary(
-                    $action,
-                    $bucket,
-                    $pageType,
-                    $mutationSummaries
-                );
-                $result['mutation_summaries'] = $mutationSummaries;
-            }
-
-            $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
-            $virtualThemePlan = \is_array($result['virtual_theme_plan'] ?? null) ? $result['virtual_theme_plan'] : [];
-            $markdown = (string)($result['markdown'] ?? '');
-            $summary = \is_array($result['mutation_summary'] ?? null) ? $result['mutation_summary'] : [];
-            $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
-
-            $sse->sendEvent('progress', [
-                'message' => 'Stage-2 task mutation finished. Persisting updated task plan draft.',
-                'prompt_mode' => 'mutate_task_plan_task',
-                'mutation_action' => $action,
-                'progress_percent' => 70,
-            ]);
-
-            if ($markdown !== '' && $sse->isAlive()) {
-                foreach ($this->streamCodecService->chunkStringForSse($markdown, 220) as $mdChunk) {
-                    if (\trim($mdChunk) === '') {
-                        continue;
-                    }
-                    if (!$sse->isAlive()) {
-                        break;
-                    }
-                    $sse->sendEvent('chunk', [
-                        'content' => $mdChunk,
-                        'chunk' => $mdChunk,
-                        'prompt_mode' => 'mutate_task_plan_task',
-                        'mutation_action' => $action,
-                    ]);
-                    SchedulerSystem::yieldDelay(5);
-                }
-            }
-
-            $scopePatch = [
-                'virtual_theme_plan' => [
-                    'draft' => $virtualThemePlan,
-                    'draft_markdown' => $markdown,
-                    'draft_generated_at' => \date('Y-m-d H:i:s'),
-                    'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
-                    'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
-                    'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
-                    'confirmed_signature' => (string)($scope['virtual_theme_plan']['confirmed_signature'] ?? ''),
-                    'plan_signature' => (string)($virtualThemePlan['signature'] ?? $scope['virtual_theme_plan']['plan_signature'] ?? ''),
-                    'last_prompt_mode' => 'manual_task_mutation',
-                    'last_target_scope' => (string)(($summary['task_key'] ?? $taskKey) ?: $targetScope),
-                    'last_round' => $round,
-                ],
-                'task_plan_markdown' => $markdown,
-                'task_plan_generated_at' => \date('Y-m-d H:i:s'),
-                'task_plan_structured' => $structured,
-                'task_plan_directory_tree' => $taskPlanDirectoryTree,
-                'task_plan_summary' => [
-                    'signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                    'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
-                    'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
-                    'prompt_mode' => 'manual_task_mutation',
-                    'generation_source' => 'manual_task_mutation',
-                ],
-                'task_plan_confirmed' => 0,
-                '_task_plan_rebuild_in_progress' => 0,
-                '_task_plan_sse_request' => [],
-            ];
-
-            $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
-                'task_plan_task_mutated',
-                $doneMessage,
-                [
-                    'operation' => 'task_plan',
-                    'details' => $summary,
-                ]
-            );
-            $this->updateActiveOperation(
-                $fresh,
-                $adminId,
-                ['operation' => 'task_plan', 'status' => 'done', 'message' => $doneMessage],
-                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
-            );
-
-            $state = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($fresh, $adminId, 80, true));
-            $sse->complete([
-                'success' => true,
-                'message' => $doneMessage,
-                'prompt_mode' => 'mutate_task_plan_task',
-                'mutation' => $summary,
-                'task_plan' => [
-                    'markdown' => $markdown,
-                    'structured' => $structured,
-                    'virtual_theme_plan' => $virtualThemePlan,
-                ],
-                'state' => $state,
-            ]);
-        } catch (\Throwable $throwable) {
-            $this->updateActiveOperation(
-                $session,
-                $adminId,
-                ['operation' => 'task_plan', 'status' => 'error', 'message' => $throwable->getMessage()],
-                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
-            );
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-                'operation_failed',
-                'Stage-2 task mutation failed: ' . $throwable->getMessage(),
-                ['operation' => 'task_plan', 'details' => ['exception' => $throwable->getMessage(), 'action' => $action]],
-                AiSiteAgentSessionEvent::LEVEL_ERROR
-            );
-            $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
-            $sse->complete([
-                'success' => false,
-                'message' => $throwable->getMessage(),
-                'prompt_mode' => 'mutate_task_plan_task',
-                'mutation_action' => $action,
-            ]);
-            if ($sse instanceof QueueDbWriter) {
-                throw $throwable;
-            }
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function hydrateTaskPlanDraftScopeForMutation(array $scope): array
-    {
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        $draftStructured = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
-        $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
-
-        if ($taskPlanStructured !== [] || $draftStructured !== []) {
-            return $scope;
-        }
-
-        $blueprint = \is_array($scope['execution_blueprint'] ?? null) && $scope['execution_blueprint'] !== []
-            ? $scope['execution_blueprint']
-            : (\is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== []
-                ? $scope['execution_blueprint_draft']
-                : (\is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : []));
-        if (!\is_array($blueprint['tasks'] ?? null) || $blueprint['tasks'] === []) {
-            return $scope;
-        }
-
-        $derived = $this->deriveTaskPlanArtifactsFromExecutionBlueprint($blueprint);
-        $derivedStructured = \is_array($derived['structured'] ?? null) ? $derived['structured'] : [];
-        if ($derivedStructured === []) {
-            return $scope;
-        }
-
-        $scope['task_plan_structured'] = $derivedStructured;
-        $virtualThemePlan['draft'] = $derivedStructured;
-        if ($taskPlanMarkdown === '') {
-            $taskPlanMarkdown = \trim((string)($derived['markdown'] ?? ''));
-        }
-        if ($draftMarkdown === '' && $taskPlanMarkdown !== '') {
-            $draftMarkdown = $taskPlanMarkdown;
-        }
-        if ($taskPlanMarkdown !== '') {
-            $scope['task_plan_markdown'] = $taskPlanMarkdown;
-            $virtualThemePlan['draft_markdown'] = $draftMarkdown !== '' ? $draftMarkdown : $taskPlanMarkdown;
-        }
-        if (\trim((string)($virtualThemePlan['draft_generated_at'] ?? '')) === '') {
-            $virtualThemePlan['draft_generated_at'] = \date('Y-m-d H:i:s');
-        }
-        if (\trim((string)($virtualThemePlan['plan_signature'] ?? '')) === '') {
-            $virtualThemePlan['plan_signature'] = (string)($derivedStructured['signature'] ?? $blueprint['signature'] ?? '');
-        }
-        $scope['virtual_theme_plan'] = $virtualThemePlan;
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $buildBlueprint
-     */
-    private function runInteractiveTaskPlanOperation(
-        SseWriter $sse,
-        AiSiteAgentSession $session,
-        int $adminId,
-        array $scope,
-        array $buildBlueprint,
-        string $promptMode,
-        string $instruction,
-        string $targetScope,
-        int $round
-    ): void {
-        $sse->sendEvent('start', [
-            'message' => $promptMode === 'rebuild_task_plan'
-                ? (string)__('正在重建第二阶段任务方案')
-                : (string)__('正在微调第二阶段任务方案'),
-            'prompt_mode' => $promptMode,
-            'round' => $round,
-            'target_scope' => $targetScope,
-        ]);
-        $sse->sendEvent('progress', [
-            'message' => (string)__('正在整理当前任务方案上下文'),
-            'prompt_mode' => $promptMode,
-            'progress_percent' => 20,
-        ]);
-
-        try {
-            $draftPlan = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
-            $streamBuffer = '';
-            $rawChunkInfoBuffer = '';
-            $taskPlanStreamHeartbeat = function () use ($sse): void {
-                $sse->sendComment(\str_repeat(' ', 512) . 'pb-task-plan-ai');
-            };
-            $aiChunkCount = 0;
-            $chunkCallback = static function (string $chunk) use (&$streamBuffer, &$rawChunkInfoBuffer, $sse, $promptMode, &$aiChunkCount): void {
-                $streamBuffer .= $chunk;
-                if (\trim($chunk) === '') {
-                    return;
-                }
-                $queueMode = $sse instanceof QueueDbWriter;
-                if (!$queueMode) {
-                    $rawChunkInfoBuffer .= $chunk;
-                    while (\mb_strlen($rawChunkInfoBuffer, 'UTF-8') >= 360) {
-                        if (!$sse->isAlive()) {
-                            $rawChunkInfoBuffer = '';
-                            return;
-                        }
-                        $part = (string)\mb_substr($rawChunkInfoBuffer, 0, 360, 'UTF-8');
-                        $rawChunkInfoBuffer = (string)\mb_substr($rawChunkInfoBuffer, 360, null, 'UTF-8');
-                        $sse->sendEvent('info', [
-                            'message' => $part,
-                            'prompt_mode' => $promptMode,
-                            'stream_stage' => 'ai_raw_chunk',
-                            'chunk' => $part,
-                        ]);
-                    }
-                }
-                $aiChunkCount++;
-                if ($aiChunkCount === 1 || $aiChunkCount % 12 === 0) {
-                    if (!$sse->isAlive()) {
-                        return;
-                    }
-                    $sse->sendEvent('progress', [
-                        'message' => (string)__('AI 正在生成第二阶段任务方案…'),
-                        'prompt_mode' => $promptMode,
-                        'progress_percent' => 55,
-                        'ai_chunk_count' => $aiChunkCount,
-                    ]);
-                }
-            };
-            $progressCallback = $this->buildTaskPlanGenerationProgressCallback($sse, $session, $adminId, $promptMode);
-            $result = $promptMode === 'rebuild_task_plan'
-                ? $this->virtualThemePlanService->rebuildDraftTaskPlan($scope, $buildBlueprint, [
-                    'instruction' => $instruction,
-                    'round' => $round,
-                ], $chunkCallback, $taskPlanStreamHeartbeat, $progressCallback)
-                : $this->virtualThemePlanService->refineDraftTaskPlan($scope, $buildBlueprint, $draftPlan, [
-                    'instruction' => $instruction,
-                    'target_scope' => $targetScope,
-                    'round' => $round,
-                ], $chunkCallback, $taskPlanStreamHeartbeat, $progressCallback);
-
-            if ($rawChunkInfoBuffer !== '' && !($sse instanceof QueueDbWriter) && $sse->isAlive()) {
-                $sse->sendEvent('info', [
-                    'message' => $rawChunkInfoBuffer,
-                    'prompt_mode' => $promptMode,
-                    'stream_stage' => 'ai_raw_chunk',
-                    'chunk' => $rawChunkInfoBuffer,
-                ]);
-            }
-
-            $markdown = (string)($result['markdown'] ?? '');
-            if ($markdown !== '' && $sse->isAlive()) {
-                $sse->sendEvent('progress', [
-                    'message' => (string)__('AI 已生成完整任务方案，正在输出正文'),
-                    'prompt_mode' => $promptMode,
-                    'progress_percent' => 72,
-                    'stream_stage' => 'markdown_stream',
-                ]);
-                foreach ($this->streamCodecService->chunkStringForSse($markdown, 220) as $mdChunk) {
-                    if (\trim($mdChunk) === '') {
-                        continue;
-                    }
-                    if (!$sse->isAlive()) {
-                        break;
-                    }
-                    $sse->sendEvent('chunk', [
-                        'content' => $mdChunk,
-                        'chunk' => $mdChunk,
-                        'prompt_mode' => $promptMode,
-                    ]);
-                    SchedulerSystem::yieldDelay(5);
-                }
-            }
-
-            $sse->sendEvent('progress', [
-                'message' => (string)__('任务方案正文输出完成，正在保存并生成最终状态'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 92,
-            ]);
-            $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
-            $virtualThemePlan = \is_array($result['virtual_theme_plan'] ?? null) ? $result['virtual_theme_plan'] : [];
-            $taskPlanGenerationSource = (string)($result['generation_source'] ?? '');
-            if ($this->shouldRejectTaskPlanGenerationSource($scope, $taskPlanGenerationSource)) {
-                throw new \RuntimeException((string)__('第二阶段任务方案生成失败：当前结果不是 AI 生成，请检查 AI 服务后重试'));
-            }
-            $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
-            $scopePatch = [
-                'virtual_theme_plan' => [
-                    'draft' => $virtualThemePlan,
-                    'draft_markdown' => $markdown,
-                    'draft_generated_at' => \date('Y-m-d H:i:s'),
-                    'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
-                    'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
-                    'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
-                    'confirmed_signature' => (string)($scope['virtual_theme_plan']['confirmed_signature'] ?? ''),
-                    'plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                    'last_prompt_mode' => $promptMode,
-                    'last_target_scope' => $targetScope,
-                    'last_round' => $round,
-                ],
-                'task_plan_markdown' => $markdown,
-                'task_plan_generated_at' => \date('Y-m-d H:i:s'),
-                'task_plan_structured' => $structured,
-                'task_plan_directory_tree' => $taskPlanDirectoryTree,
-                'task_plan_summary' => [
-                    'signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                    'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
-                    'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
-                    'prompt_mode' => $promptMode,
-                    'generation_source' => $taskPlanGenerationSource,
-                ],
-                'task_plan_confirmed' => 0,
-                '_task_plan_rebuild_in_progress' => 0,
-                '_task_plan_sse_request' => [],
-            ];
-            if ($promptMode === 'rebuild_task_plan') {
-                $scopePatch['task_plan_rebuild_summary'] = \is_array($result['rebuild_summary'] ?? null) ? $result['rebuild_summary'] : [];
-            } else {
-                $scopePatch['task_plan_change_scope_report'] = \is_array($result['change_scope_report'] ?? null) ? $result['change_scope_report'] : [];
-            }
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在持久化任务方案草案'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 95,
-            ]);
-            $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-
-            $sse->sendEvent('progress', [
-                'message' => (string)__('正在写入工作区事件并整理最终状态'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 97,
-            ]);
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
-                $promptMode === 'rebuild_task_plan' ? 'task_plan_rebuilt' : 'task_plan_refined',
-                $promptMode === 'rebuild_task_plan'
-                    ? (string)__('第二阶段任务方案已重建，请确认后再进入构建')
-                    : (string)__('第二阶段任务方案已微调，请确认后再进入构建'),
-                [
-                    'operation' => 'task_plan',
-                    'details' => [
-                        'prompt_mode' => $promptMode,
-                        'target_scope' => $targetScope,
-                        'round' => $round,
-                        'task_plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                    ],
-                ]
-            );
-            $this->updateActiveOperation(
-                $fresh,
-                $adminId,
-                ['operation' => 'task_plan', 'status' => 'done', 'message' => (string)__('第二阶段任务方案生成完成')],
-                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
-            );
-            $sse->sendEvent('progress', [
-                'message' => (string)__('第二阶段任务方案已生成，正在输出完成标记'),
-                'prompt_mode' => $promptMode,
-                'progress_percent' => 99,
-            ]);
-            $state = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($fresh, $adminId, 80, true));
-            $sse->complete([
-                'success' => true,
-                'message' => $promptMode === 'rebuild_task_plan'
-                    ? (string)__('第二阶段任务方案重建完成')
-                    : (string)__('第二阶段任务方案微调完成'),
-                'prompt_mode' => $promptMode,
-                'task_plan' => [
-                    'markdown' => $markdown,
-                    'structured' => $structured,
-                    'virtual_theme_plan' => $virtualThemePlan,
-                ],
-                'state' => $state,
-            ]);
-        } catch (\Throwable $throwable) {
-            $this->updateActiveOperation(
-                $session,
-                $adminId,
-                ['operation' => 'task_plan', 'status' => 'error', 'message' => $throwable->getMessage()],
-                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
-            );
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-                'operation_failed',
-                (string)__('第二阶段任务方案生成失败：%{message}', ['message' => $throwable->getMessage()]),
-                ['operation' => 'task_plan', 'details' => ['exception' => $throwable->getMessage()]],
-                AiSiteAgentSessionEvent::LEVEL_ERROR
-            );
-            $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
-            $sse->complete([
-                'success' => false,
-                'message' => $throwable->getMessage(),
-                'prompt_mode' => $promptMode,
-            ]);
-            // 队列消费（QueueDbWriter）必须向上抛错，否则 execute 会误判成功、草案校验报“字段全空”。
-            if ($sse instanceof QueueDbWriter) {
-                throw $throwable;
-            }
-        }
-    }
-
-    private function buildTaskPlanGenerationProgressCallback(
-        SseWriter $sse,
-        AiSiteAgentSession $session,
-        int $adminId,
-        string $promptMode
-    ): callable {
-        return function (array $progress) use ($sse, $session, $adminId, $promptMode): void {
-            $status = \trim((string)($progress['status'] ?? ''));
-            $batchId = \trim((string)($progress['batch_id'] ?? ''));
-            if ($status === '' || $batchId === '') {
-                return;
-            }
-
-            $total = \max(1, (int)($progress['total_batches'] ?? 1));
-            $completed = \max(0, (int)($progress['completed_batches'] ?? 0));
-            $batchIndex = \max(0, (int)($progress['batch_index'] ?? 0));
-            $attemptNo = \max(1, (int)($progress['attempt_no'] ?? ($status === 'batch_failed' ? 3 : 1)));
-            $errorMessage = \trim((string)($progress['error_message'] ?? ''));
-            $message = match ($status) {
-                'batch_begin' => (string)__('正在生成第二阶段任务：%{task}', ['task' => $batchId]),
-                'batch_done' => (string)__('第二阶段任务已生成：%{task}', ['task' => $batchId]),
-                'batch_failed' => (string)__('第二阶段任务生成失败：%{task}', ['task' => $batchId]),
-                default => (string)__('第二阶段任务生成进度：%{task}', ['task' => $batchId]),
-            };
-            $progressPercent = \min(94, \max(35, (int)\floor(35 + (($completed + ($status === 'batch_begin' ? 0 : 1)) / $total) * 55)));
-            $batchProgress = [
-                'batch_id' => $batchId,
-                'status' => $status,
-                'batch_type' => (string)($progress['batch_type'] ?? ''),
-                'batch_key' => (string)($progress['batch_key'] ?? ''),
-                'block_key' => (string)($progress['block_key'] ?? ''),
-                'task_keys' => \array_values(\array_filter(\array_map('strval', \is_array($progress['task_keys'] ?? null) ? $progress['task_keys'] : []))),
-                'attempt_no' => $attemptNo,
-                'error_message' => $errorMessage,
-                'updated_at' => \date('Y-m-d H:i:s'),
-            ];
-
-            try {
-                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $scope = $this->scopeCompatibilityService->normalizeScope(
-                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-                );
-                $generationProgress = \is_array($scope['task_plan_generation_progress'] ?? null)
-                    ? $scope['task_plan_generation_progress']
-                    : [];
-                $generationProgress[$batchId] = \array_replace(
-                    \is_array($generationProgress[$batchId] ?? null) ? $generationProgress[$batchId] : [],
-                    $batchProgress
-                );
-                $existingSummary = \is_array($scope['task_plan_generation_summary'] ?? null)
-                    ? $scope['task_plan_generation_summary']
-                    : [];
-                $summaryTotal = \max($total, (int)($existingSummary['total_batches'] ?? 0), \count($generationProgress));
-                $summaryCompleted = \count(\array_filter($generationProgress, static fn($item): bool => \is_array($item) && (string)($item['status'] ?? '') === 'batch_done'));
-                $summaryFailed = \count(\array_filter($generationProgress, static fn($item): bool => \is_array($item) && (string)($item['status'] ?? '') === 'batch_failed'));
-
-                $patch = [
-                    'task_plan_generation_progress' => $generationProgress,
-                    'task_plan_generation_summary' => [
-                        'total_batches' => $summaryTotal,
-                        'completed_batches' => $summaryCompleted,
-                        'failed_batches' => $summaryFailed,
-                        'prompt_mode' => $promptMode,
-                        'updated_at' => \date('Y-m-d H:i:s'),
-                    ],
-                ];
-
-                if ($status === 'batch_done' && \is_array($progress['structured'] ?? null) && \is_array($progress['virtual_theme_plan'] ?? null)) {
-                    $structured = $progress['structured'];
-                    $virtualThemePlan = $progress['virtual_theme_plan'];
-                    $patch['task_plan_structured'] = $structured;
-                    $patch['virtual_theme_plan'] = \array_replace(
-                        \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [],
-                        [
-                            'draft' => $virtualThemePlan,
-                            'draft_generated_at' => \date('Y-m-d H:i:s'),
-                            'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
-                            'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
-                            'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
-                            'confirmed_signature' => (string)($scope['virtual_theme_plan']['confirmed_signature'] ?? ''),
-                            'plan_signature' => (string)($virtualThemePlan['signature'] ?? ($scope['virtual_theme_plan']['plan_signature'] ?? '')),
-                            'last_prompt_mode' => $promptMode,
-                        ]
-                    );
-                    $patch['task_plan_confirmed'] = 0;
-                }
-
-                if ($status === 'batch_failed') {
-                    $patch['task_plan_generation_last_error'] = [
-                        'batch_id' => $batchId,
-                        'attempt_no' => $attemptNo,
-                        'message' => $errorMessage,
-                        'failed_at' => \date('Y-m-d H:i:s'),
-                    ];
-                }
-
-                $this->sessionService->mergeScope($fresh->getId(), $adminId, $patch);
-                $this->appendWorkspaceEvent(
-                    $fresh->getId(),
-                    $adminId,
-                    AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                    $status === 'batch_failed' ? 'task_plan_batch_failed' : ($status === 'batch_done' ? 'task_plan_batch_done' : 'task_plan_batch_started'),
-                    $status === 'batch_failed' && $errorMessage !== '' ? $message . '：' . $errorMessage : $message,
-                    ['operation' => 'task_plan', 'details' => $batchProgress],
-                    $status === 'batch_failed' ? AiSiteAgentSessionEvent::LEVEL_ERROR : AiSiteAgentSessionEvent::LEVEL_INFO
-                );
-            } catch (\Throwable) {
-                // Progress persistence should not interrupt the AI task-plan batch.
-            }
-
-            if ($sse->isAlive()) {
-                $payload = [
-                    'message' => $status === 'batch_failed' && $errorMessage !== '' ? $message . '：' . $errorMessage : $message,
-                    'operation' => 'task_plan',
-                    'prompt_mode' => $promptMode,
-                    'progress_percent' => $progressPercent,
-                    'progress_kind' => 'task_plan_batch',
-                    'task_plan_batch' => $batchProgress,
-                ];
-                $sse->sendEvent($status === 'batch_failed' ? 'warning' : 'progress', $payload);
-            }
-        };
     }
 
     private function emitPlanMarkdownBlocks(SseWriter $sse, AiSiteAgentSession $session, int $adminId, string $markdown): void
@@ -8548,55 +6709,6 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 页面进入时先用 task_plan 队列快照恢复 active_operation，避免前端拿到陈旧状态。
-     *
-     * @param array<string, mixed> $activeOperation
-     * @param array<string, mixed>|null $taskPlanQueueInfo
-     * @return array<string, mixed>
-     */
-    private function initializeTaskPlanActiveOperationFromQueueInfo(
-        AiSiteAgentSession $session,
-        array $activeOperation,
-        ?array $taskPlanQueueInfo
-    ): array {
-        if (!\is_array($taskPlanQueueInfo['snapshot'] ?? null)) {
-            return $activeOperation;
-        }
-        $snapshot = $taskPlanQueueInfo['snapshot'];
-        $queueStatus = \trim((string)($snapshot['status'] ?? ''));
-        if (!\in_array($queueStatus, ['pending', 'queued', 'running'], true)) {
-            return $activeOperation;
-        }
-
-        $operation = \trim((string)($activeOperation['operation'] ?? ''));
-        $status = \trim((string)($activeOperation['status'] ?? ''));
-        if ($operation === 'task_plan' && \in_array($status, ['queued', 'running'], true)) {
-            return $activeOperation;
-        }
-
-        $queueId = (int)($taskPlanQueueInfo['queue_id'] ?? $snapshot['queue_id'] ?? 0);
-        $executionToken = '';
-        if ($queueId > 0) {
-            $queueRow = $this->findAiSiteOperationQueueRow($session, 'task_plan', $queueId);
-            if (\is_array($queueRow) && $queueRow !== []) {
-                $content = \json_decode((string)($queueRow['content'] ?? ''), true);
-                if (\is_array($content)) {
-                    $executionToken = \trim((string)($content['execution_token'] ?? $content['token'] ?? ''));
-                }
-            }
-        }
-
-        return \array_replace($activeOperation, [
-            'operation' => 'task_plan',
-            'status' => $queueStatus === 'running' ? 'running' : 'queued',
-            'queue_id' => $queueId,
-            'execution_token' => $executionToken !== '' ? $executionToken : (string)($activeOperation['execution_token'] ?? ''),
-            'message' => (string)__('检测到第二阶段队列仍在执行，已初始化队列同步状态。'),
-            'updated_at' => \date('Y-m-d H:i:s'),
-        ]);
-    }
-
-    /**
      * @param array<string, mixed> $activeOperation
      * @param array<string, array<string, mixed>|null> $queueInfoByOperation
      * @return array<string, mixed>
@@ -8604,11 +6716,10 @@ class AiSiteAgent extends BaseController
     private function buildWorkspaceEntryQueueNotice(array $activeOperation, array $queueInfoByOperation): array
     {
         // Thin proxy to AiSiteAgentWorkspaceEntryNoticeService (R4.F5 Step C extraction).
-        // 唯一的控制器依赖 `getTaskPlanQueueRecoveryAction` 通过 Closure 端口注入。
         return $this->workspaceEntryNoticeService()->buildWorkspaceEntryQueueNotice(
             $activeOperation,
             $queueInfoByOperation,
-            fn (array $operation): string => $this->getTaskPlanQueueRecoveryAction($operation),
+            static fn (array $operation): string => '',
         );
     }
 
@@ -8623,56 +6734,11 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * @param array<string, mixed> $normalized
-     * @param array<string, mixed> $activeOperation
-     * @param array<string, mixed>|null $taskPlanQueueInfo
-     * @return array{normalized:array<string,mixed>,active_operation:array<string,mixed>,task_plan_queue_info:array<string,mixed>|null}
+     * @param array<string, mixed> $scope
      */
-    private function autoRerunTaskPlanQueueWhenQueueDoneButDraftMissing(
-        AiSiteAgentSession $session,
-        int $adminId,
-        string $currentStage,
-        array $normalized,
-        array $activeOperation,
-        ?array $taskPlanQueueInfo
-    ): array {
-        return [
-            'normalized' => $normalized,
-            'active_operation' => $activeOperation,
-            'task_plan_queue_info' => $taskPlanQueueInfo,
-        ];
-
-        $ports = new AiSiteAgentTaskPlanQueueRecoveryPorts(
-            isTaskPlanDraftMissing: fn (array $n): bool => $this->isTaskPlanDraftMissing($n),
-            findQueueRow: fn (AiSiteAgentSession $s, string $op, int $qid = 0): ?array
-                => ($row = $this->findAiSiteOperationQueueRow($s, $op, $qid)) !== null && $row !== [] ? $row : null,
-            enqueueTask: fn (AiSiteAgentSession $s, int $a, string $op, string $t, array $extras): int
-                => 0,
-            buildOperationEnvelope: fn (AiSiteAgentSession $s, string $op, string $t, string $st): array
-                => $this->buildOperationQueueEnvelope($s, $op, $t, $st),
-            mergeSessionScope: function (int $sid, int $a, array $patch): void {
-                $this->sessionService->mergeScope($sid, $a, $patch);
-            },
-            loadSession: fn (int $sid, int $a): ?AiSiteAgentSession
-                => $this->sessionService->loadById($sid, $a),
-            buildQueueInfoPayload: fn (AiSiteAgentSession $s, array $active, string $op): array
-                => $this->buildOperationStageQueueInfoPayload($s, $active, $op),
-            logSse: function (string $event, array $data, string $level = 'info'): void {
-                $this->logOperationSse($event, $data, $level);
-            },
-            resolveQueueStage: fn (string $op): string => $this->resolveAiSiteQueueStage($op),
-        );
-
-        return $this->taskPlanQueueRecoveryService->autoRerunTaskPlanQueueWhenQueueDoneButDraftMissing(
-            $session,
-            $adminId,
-            $currentStage,
-            AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            $normalized,
-            $activeOperation,
-            $taskPlanQueueInfo,
-            $ports
-        );
+    private function scopeHasPersistedStageOnePlan(array $scope): bool
+    {
+        return $this->scopeCompatibilityService->hasPersistedStageOnePlan($scope);
     }
 
     /**
@@ -8700,7 +6766,7 @@ class AiSiteAgent extends BaseController
         if ($currentStage !== AiSiteAgentSession::STAGE_VISUAL_EDIT) {
             return $result;
         }
-        if (!$this->isTaskPlanConfirmedForBuild($normalized)) {
+        if (!$this->isBuildPlanReadyForBuild($normalized)) {
             return $result;
         }
         if ((int)($taskSummary['total'] ?? 0) <= 0 || $this->countIncompleteBuildTasks($taskSummary) <= 0) {
@@ -8730,21 +6796,21 @@ class AiSiteAgent extends BaseController
             $freshScope = $this->scopeCompatibilityService->normalizeScope(
                 $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
             );
-            $freshScope = $this->normalizeTaskPlanConfirmationForBuild($freshScope);
+            $freshScope = $this->normalizeBuildPlanConfirmationForBuild($freshScope);
             $freshScope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($freshScope);
             $freshTaskSummary = $this->buildTaskService->summarize($freshScope);
             if ((int)($freshTaskSummary['total'] ?? 0) > 0) {
                 $taskSummary = $freshTaskSummary;
                 $result['task_summary'] = $freshTaskSummary;
-                foreach (['build_blueprint', 'build_tasks', 'task_plan_confirmed', 'virtual_theme_plan'] as $scopeKey) {
+                foreach (['build_blueprint', 'build_tasks', 'build_plan_v2', 'plan_projection', 'content_manifest', 'build_plan_confirmed'] as $scopeKey) {
                     if (\array_key_exists($scopeKey, $freshScope)) {
                         $normalized[$scopeKey] = $freshScope[$scopeKey];
                     }
                 }
                 $result['normalized'] = $normalized;
             }
-            if (!$this->isTaskPlanConfirmedForBuild($normalized) || $this->countIncompleteBuildTasks($taskSummary) <= 0) {
-                if ($this->isTaskPlanConfirmedForBuild($normalized) && $this->countIncompleteBuildTasks($taskSummary) <= 0) {
+            if (!$this->isBuildPlanReadyForBuild($normalized) || $this->countIncompleteBuildTasks($taskSummary) <= 0) {
+                if ($this->isBuildPlanReadyForBuild($normalized) && $this->countIncompleteBuildTasks($taskSummary) <= 0) {
                     $now = \date('Y-m-d H:i:s');
                     $doneOperation = \array_replace(
                         \is_array($freshScope['active_operation'] ?? null) ? $freshScope['active_operation'] : $activeOperation,
@@ -8870,7 +6936,7 @@ class AiSiteAgent extends BaseController
     {
         $activeOperations = \is_array($normalized['active_operations'] ?? null) ? $normalized['active_operations'] : [];
         $operationStates = [$activeOperation];
-        foreach (['plan', 'task_plan', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'publish'] as $operation) {
+        foreach (['plan', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'publish'] as $operation) {
             if (\is_array($activeOperations[$operation] ?? null)) {
                 $operationStates[] = $activeOperations[$operation];
             }
@@ -8965,659 +7031,6 @@ class AiSiteAgent extends BaseController
                 'resume_unfinished_tasks_only' => true,
             ]),
         ]);
-    }
-
-    /**
-     * @param array<string, mixed> $activeOperation
-     */
-    private function getTaskPlanQueueRecoveryAction(array $activeOperation): string
-    {
-        $action = \trim((string)($activeOperation['task_plan_recovery_action'] ?? ''));
-        if ($action !== '') {
-            return $action;
-        }
-
-        $details = \is_array($activeOperation['details'] ?? null) ? $activeOperation['details'] : [];
-        return \trim((string)($details['task_plan_recovery_action'] ?? ''));
-    }
-
-    /**
-     * 第二阶段任务方案是否已在会话 scope 中具备可展示/可构建的实质内容（单一真相源）。
-     *
-     * 用于：队列自愈是否误判「方案为空」、以及下发给前端的 {@see buildWorkspaceState} `has_virtual_theme_plan`，
-     * 避免 JS 仅靠局部字段猜测与后台恢复逻辑不一致。
-     *
-     * @param array<string, mixed> $scope normalizeScope 之后的会话 scope
-     */
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function scopeHasPersistedStageOnePlan(array $scope): bool
-    {
-        return $this->scopeCompatibilityService->hasPersistedStageOnePlan($scope);
-    }
-
-    private function scopeHasPersistedStageTwoTaskPlan(array $scope): bool
-    {
-        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
-            return true;
-        }
-
-        $taskPlanForConfirm = $this->resolveStageTwoTaskPlanForConfirmation($scope);
-        if (\is_array($taskPlanForConfirm['structured'] ?? null) && $taskPlanForConfirm['structured'] !== []) {
-            return true;
-        }
-
-        return $this->buildTaskService->hasConfirmedTaskPlanForBuild($scope);
-    }
-
-    /**
-     * 把已确认执行蓝图（execution_blueprint）的 tasks 反推成前端任务方案预览
-     * 期望的结构 {shared_tasks, page_tasks, ...}，并产出一份兜底 markdown 概览。
-     *
-     * 第二阶段方案确认后，task_plan_structured / virtual_theme_plan.draft|confirmed
-     * 都会被清空（实际数据沉到 execution_blueprint 中），如果不在内存中重新派生
-     * 一份，前端就会渲染出空白预览。
-     *
-     * @param array<string, mixed> $blueprint
-     * @return array{structured: array<string, mixed>, markdown: string}
-     */
-    private function deriveTaskPlanArtifactsFromExecutionBlueprint(array $blueprint): array
-    {
-        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
-        if ($tasks === []) {
-            return ['structured' => [], 'markdown' => ''];
-        }
-
-        $sharedTasks = [];
-        $pageTasks = [];
-        $pageLabels = [];
-
-        foreach ($tasks as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $taskKey = \trim((string)($task['task_key'] ?? ''));
-            $taskType = \trim((string)($task['task_type'] ?? ''));
-            $isShared = $taskType === 'shared_component'
-                || \str_starts_with($taskKey, 'shared:')
-                || \str_starts_with($taskKey, 'theme:')
-                || \str_starts_with($taskKey, 'global:');
-
-            $normalizedTask = $this->normalizeTaskFromExecutionBlueprint($task);
-            if ($normalizedTask === []) {
-                continue;
-            }
-
-            if ($isShared) {
-                $sharedTasks[] = $normalizedTask;
-                continue;
-            }
-
-            $pageType = \trim((string)($task['page_type'] ?? ''));
-            if ($pageType === '' && \is_array($task['block'] ?? null)) {
-                $pageType = \trim((string)($task['block']['page_key'] ?? ''));
-            }
-            if ($pageType === '' && \str_starts_with($taskKey, 'page:')) {
-                $rest = \substr($taskKey, 5);
-                $colonPos = \strpos($rest, ':');
-                $pageType = $colonPos === false ? $rest : \substr($rest, 0, $colonPos);
-            }
-            if ($pageType === '') {
-                $pageType = 'unknown_page';
-            }
-
-            if (!isset($pageTasks[$pageType])) {
-                $pageTasks[$pageType] = [];
-            }
-            $pageTasks[$pageType][] = $normalizedTask;
-
-            $pageLabel = \trim((string)($task['page_label'] ?? ''));
-            if ($pageLabel !== '' && !isset($pageLabels[$pageType])) {
-                $pageLabels[$pageType] = $pageLabel;
-            }
-        }
-
-        if ($sharedTasks === [] && $pageTasks === []) {
-            return ['structured' => [], 'markdown' => ''];
-        }
-
-        $structured = [];
-        if ($sharedTasks !== []) {
-            $structured['shared_tasks'] = $sharedTasks;
-        }
-        if ($pageTasks !== []) {
-            $structured['page_tasks'] = $pageTasks;
-        }
-
-        $signature = \trim((string)($blueprint['signature'] ?? ''));
-        if ($signature !== '') {
-            $structured['signature'] = $signature;
-        }
-        if ($pageLabels !== []) {
-            $structured['page_label_hints'] = $pageLabels;
-        }
-
-        return [
-            'structured' => $structured,
-            'markdown' => $this->buildExecutionBlueprintTaskPlanMarkdown($sharedTasks, $pageTasks, $pageLabels),
-        ];
-    }
-
-    /**
-     * 渲染派生 task plan 的概览 markdown，附带任务标题、任务键，方便 markdown tab 也有内容。
-     *
-     * @param list<array<string, mixed>> $sharedTasks
-     * @param array<string, list<array<string, mixed>>> $pageTasks
-     * @param array<string, string> $pageLabels
-     */
-    private function buildExecutionBlueprintTaskPlanMarkdown(array $sharedTasks, array $pageTasks, array $pageLabels): string
-    {
-        $lines = ['# 第二阶段任务方案'];
-
-        if ($sharedTasks !== []) {
-            $lines[] = '';
-            $lines[] = '## 共享组件任务 (shared_tasks)';
-            foreach ($sharedTasks as $task) {
-                $lines[] = $this->renderExecutionBlueprintTaskMarkdownLine($task);
-            }
-        }
-
-        if ($pageTasks !== []) {
-            foreach ($pageTasks as $pageType => $tasks) {
-                $label = $pageLabels[$pageType] ?? '';
-                $lines[] = '';
-                $lines[] = '## ' . ($label !== '' ? ($label . ' (' . $pageType . ')') : $pageType);
-                foreach ($tasks as $task) {
-                    $lines[] = $this->renderExecutionBlueprintTaskMarkdownLine($task);
-                }
-            }
-        }
-
-        $lines[] = '';
-        return \implode("\n", $lines);
-    }
-
-    /**
-     * @param array<string, mixed> $task
-     */
-    private function renderExecutionBlueprintTaskMarkdownLine(array $task): string
-    {
-        $taskKey = \trim((string)($task['task_key'] ?? ''));
-        $title = \trim((string)($task['label'] ?? ''));
-        if ($title === '') {
-            $title = $taskKey !== '' ? $taskKey : 'task';
-        }
-
-        $line = '- **' . $title . '**';
-        if ($taskKey !== '' && $taskKey !== $title) {
-            $line .= ' `' . $taskKey . '`';
-        }
-
-        $blockGoal = \trim((string)(($task['plan_context']['block_goal'] ?? '')));
-        if ($blockGoal !== '') {
-            $line .= ' — ' . $blockGoal;
-        } else {
-            $reason = \trim((string)($task['reason'] ?? ''));
-            if ($reason !== '') {
-                $line .= ' — ' . $reason;
-            }
-        }
-
-        return $line;
-    }
-
-    /**
-     * 把执行蓝图的单条任务归一化成前端 renderTaskPlanTaskCard 能直接消费的字段。
-     *
-     * @param array<string, mixed> $task
-     * @return array<string, mixed>
-     */
-    private function normalizeTaskFromExecutionBlueprint(array $task): array
-    {
-        $taskKey = \trim((string)($task['task_key'] ?? ''));
-        if ($taskKey === '') {
-            return [];
-        }
-
-        $blockObj = \is_array($task['block'] ?? null) ? $task['block'] : [];
-        $title = \trim((string)($task['title'] ?? ''));
-        if ($title === '') {
-            $title = \trim((string)($blockObj['title'] ?? ''));
-        }
-        $goal = \trim((string)($task['goal'] ?? ''));
-        if ($goal === '') {
-            $goal = \trim((string)($blockObj['goal'] ?? ''));
-        }
-        $styleBriefRaw = $task['style_brief'] ?? '';
-        $styleBrief = \is_scalar($styleBriefRaw) ? \trim((string)$styleBriefRaw) : '';
-        if ($styleBrief === '' && \is_array($styleBriefRaw) && isset($styleBriefRaw['summary']) && \is_scalar($styleBriefRaw['summary'])) {
-            $styleBrief = \trim((string)$styleBriefRaw['summary']);
-        }
-        if ($styleBrief === '') {
-            $styleDirection = $blockObj['style_direction'] ?? null;
-            if (\is_string($styleDirection)) {
-                $styleBrief = \trim($styleDirection);
-            } elseif (\is_array($styleDirection) && isset($styleDirection['summary']) && \is_string($styleDirection['summary'])) {
-                $styleBrief = \trim($styleDirection['summary']);
-            }
-        }
-        $seoBriefRaw = $task['seo_brief'] ?? '';
-        $seoBrief = \is_scalar($seoBriefRaw) ? \trim((string)$seoBriefRaw) : '';
-        if ($seoBrief === '' && \is_array($seoBriefRaw) && isset($seoBriefRaw['summary']) && \is_scalar($seoBriefRaw['summary'])) {
-            $seoBrief = \trim((string)$seoBriefRaw['summary']);
-        }
-        if ($seoBrief === '') {
-            $seoRole = $blockObj['seo_role'] ?? null;
-            if (\is_string($seoRole)) {
-                $seoBrief = \trim($seoRole);
-            } elseif (\is_array($seoRole) && isset($seoRole['summary']) && \is_string($seoRole['summary'])) {
-                $seoBrief = \trim($seoRole['summary']);
-            }
-        }
-        $blockKey = $this->normalizeBlueprintText($task['block_key'] ?? '');
-        if ($blockKey === '') {
-            $blockKey = $this->normalizeBlueprintText($blockObj['block_key'] ?? '');
-        }
-        $component = $this->normalizeBlueprintText($task['component'] ?? '');
-        $pageType = $this->normalizeBlueprintText($task['page_type'] ?? '');
-        $pageLabel = $this->normalizeBlueprintText($task['page_label'] ?? '');
-        $reason = $this->normalizeBlueprintText($task['reason'] ?? '');
-        if ($reason === '') {
-            $reason = $this->normalizeBlueprintText($blockObj['why'] ?? '');
-        }
-        $implementationDetail = $this->normalizeBlueprintText($task['implementation_detail'] ?? '');
-        if ($implementationDetail === '') {
-            $implementationDetail = $this->normalizeBlueprintText($blockObj['implementation_detail'] ?? '');
-        }
-
-        $fieldRequirements = [];
-        $fieldPlan = $blockObj['field_plan'] ?? null;
-        if (\is_array($fieldPlan)) {
-            foreach ($fieldPlan as $fieldRow) {
-                if (!\is_array($fieldRow)) {
-                    continue;
-                }
-                $fieldRequirements[] = $fieldRow;
-            }
-        }
-
-        $contentPlan = [];
-        $blockContent = $blockObj['content'] ?? null;
-        if (\is_array($blockContent)) {
-            $contentPlan = $blockContent;
-        }
-
-        $stylePlan = [];
-        $styleDirectionRaw = $blockObj['style_direction'] ?? null;
-        if (\is_array($styleDirectionRaw)) {
-            $stylePlan = $styleDirectionRaw;
-        } elseif (\is_string($styleDirectionRaw) && \trim($styleDirectionRaw) !== '') {
-            $stylePlan = ['summary' => \trim($styleDirectionRaw)];
-        }
-
-        $acceptance = [];
-        $completionRule = $task['completion_rule'] ?? ($blockObj['completion_rule'] ?? null);
-        if (\is_array($completionRule)) {
-            foreach ($completionRule as $rule) {
-                if (\is_string($rule) && \trim($rule) !== '') {
-                    $acceptance[] = \trim($rule);
-                } elseif (\is_array($rule) && isset($rule['text']) && \is_string($rule['text']) && \trim($rule['text']) !== '') {
-                    $acceptance[] = \trim($rule['text']);
-                }
-            }
-        } elseif (\is_string($completionRule) && \trim($completionRule) !== '') {
-            $acceptance[] = \trim($completionRule);
-        }
-
-        $label = $title !== '' ? $title : ($blockKey !== '' ? $blockKey : $taskKey);
-        $groupKey = $blockKey !== ''
-            ? $blockKey
-            : ($component !== '' ? $component : ($pageType !== '' ? $pageType : 'shared'));
-        $sceneHint = $taskKey;
-        $pageGoal = $pageLabel !== '' ? $pageLabel : $pageType;
-
-        return [
-            'task_key' => $taskKey,
-            'label' => $label,
-            'group_key' => $groupKey,
-            'plan_context' => [
-                'page_goal' => $pageGoal,
-                'block_goal' => $goal,
-                'block_why' => $reason,
-            ],
-            'task_script' => [
-                'scene' => $sceneHint,
-                'story_goal' => $goal !== '' ? $goal : $reason,
-                'content_fill_rule' => $styleBrief,
-                'stage3_directive' => $implementationDetail,
-                'field_content_requirements' => $fieldRequirements,
-            ],
-            'implementation_contract' => [
-                'acceptance' => $acceptance,
-            ],
-            'block_task' => [
-                'meta_fields' => $fieldRequirements,
-                'content_plan' => $contentPlan,
-                'style_plan' => $stylePlan,
-            ],
-            'reason' => $reason,
-            'planning_reason' => $reason,
-            'seo_brief' => $seoBrief,
-            'style_brief' => $styleBrief,
-            'block_key' => $blockKey,
-            'component' => $component,
-            'page_type' => $pageType,
-            'page_label' => $pageLabel,
-        ];
-    }
-
-    /**
-     * @param mixed $value
-     */
-    private function normalizeBlueprintText(mixed $value): string
-    {
-        if (\is_scalar($value)) {
-            return \trim((string)$value);
-        }
-        if (!\is_array($value)) {
-            return '';
-        }
-        foreach (['summary', 'text', 'title', 'label', 'name', 'value'] as $key) {
-            $candidate = $value[$key] ?? null;
-            if (\is_scalar($candidate)) {
-                $text = \trim((string)$candidate);
-                if ($text !== '') {
-                    return $text;
-                }
-            }
-        }
-        return '';
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array{
-     *   structured:array<string, mixed>,
-     *   markdown:string,
-     *   signature:string,
-     *   generated_at:string,
-     *   confirmed_at:string
-     * }
-     */
-    private function resolveStageTwoTaskPlanForConfirmation(array $scope): array
-    {
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $candidates = [
-            [
-                'structured' => \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [],
-                'markdown' => (string)($virtualThemePlan['draft_markdown'] ?? ''),
-                'generated_at' => (string)($virtualThemePlan['draft_generated_at'] ?? ''),
-            ],
-            [
-                'structured' => \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [],
-                'markdown' => (string)($scope['task_plan_markdown'] ?? ''),
-                'generated_at' => (string)($scope['task_plan_generated_at'] ?? ''),
-            ],
-            [
-                'structured' => \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [],
-                'markdown' => (string)($virtualThemePlan['confirmed_markdown'] ?? ''),
-                'generated_at' => (string)($virtualThemePlan['confirmed_at'] ?? ''),
-            ],
-        ];
-        if ($this->virtualThemePlanRootHasTaskPayload($virtualThemePlan)) {
-            $candidates[] = [
-                'structured' => $virtualThemePlan,
-                'markdown' => (string)($scope['task_plan_markdown'] ?? $virtualThemePlan['draft_markdown'] ?? ''),
-                'generated_at' => (string)($scope['task_plan_generated_at'] ?? $virtualThemePlan['draft_generated_at'] ?? ''),
-            ];
-        }
-
-        $selectedCandidate = $this->selectRichestStageTwoTaskPlanCandidate($candidates);
-        $structured = \is_array($selectedCandidate['structured'] ?? null) ? $selectedCandidate['structured'] : [];
-
-        $markdown = \trim((string)($selectedCandidate['markdown'] ?? ''));
-        if ($markdown === '') {
-            foreach ([
-                $virtualThemePlan['draft_markdown'] ?? '',
-                $scope['task_plan_markdown'] ?? '',
-                $virtualThemePlan['confirmed_markdown'] ?? '',
-            ] as $markdownCandidate) {
-                $markdown = \trim((string)$markdownCandidate);
-                if ($markdown !== '') {
-                    break;
-                }
-            }
-        }
-        if ($markdown === '' && $structured !== []) {
-            $markdown = $this->buildStageTwoTaskPlanFallbackMarkdown($structured);
-        }
-
-        $summary = \is_array($scope['task_plan_summary'] ?? null) ? $scope['task_plan_summary'] : [];
-        $signature = '';
-        foreach ([
-            $structured['signature'] ?? '',
-            $structured['plan_signature'] ?? '',
-            $virtualThemePlan['confirmed_signature'] ?? '',
-            $virtualThemePlan['plan_signature'] ?? '',
-            $summary['signature'] ?? '',
-        ] as $signatureCandidate) {
-            $signature = \trim((string)$signatureCandidate);
-            if ($signature !== '') {
-                break;
-            }
-        }
-        if ($signature === '' && $structured !== []) {
-            $signature = \sha1((string)\json_encode($structured, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
-        }
-
-        $generatedAt = \trim((string)($selectedCandidate['generated_at'] ?? ''));
-        if ($generatedAt === '') {
-            foreach ([
-                $virtualThemePlan['draft_generated_at'] ?? '',
-                $scope['task_plan_generated_at'] ?? '',
-                $virtualThemePlan['confirmed_at'] ?? '',
-            ] as $generatedAtCandidate) {
-                $generatedAt = \trim((string)$generatedAtCandidate);
-                if ($generatedAt !== '') {
-                    break;
-                }
-            }
-        }
-        if ($generatedAt === '') {
-            $generatedAt = \date('Y-m-d H:i:s');
-        }
-
-        $confirmedAt = \trim((string)($virtualThemePlan['confirmed_at'] ?? ''));
-        if ($confirmedAt === '' || (int)($scope['task_plan_confirmed'] ?? 0) !== 1) {
-            $confirmedAt = \date('Y-m-d H:i:s');
-        }
-
-        return [
-            'structured' => $structured,
-            'markdown' => $markdown,
-            'signature' => $signature,
-            'generated_at' => $generatedAt,
-            'confirmed_at' => $confirmedAt,
-        ];
-    }
-
-    /**
-     * @param list<array<string, mixed>> $candidates
-     * @return array<string, mixed>
-     */
-    private function selectRichestStageTwoTaskPlanCandidate(array $candidates): array
-    {
-        $selected = [];
-        $selectedScore = 0;
-        foreach ($candidates as $candidate) {
-            $structured = \is_array($candidate['structured'] ?? null) ? $candidate['structured'] : [];
-            $score = $this->countStageTwoTaskPlanPayloadItems($structured);
-            if ($score <= 0 || $score <= $selectedScore) {
-                continue;
-            }
-            $selected = $candidate;
-            $selectedScore = $score;
-        }
-
-        return $selected;
-    }
-
-    /**
-     * @param array<string, mixed> $taskPlan
-     */
-    private function countStageTwoTaskPlanPayloadItems(array $taskPlan): int
-    {
-        $seen = [];
-        $count = 0;
-
-        $this->countStageTwoTaskPlanTaskList(
-            \is_array($taskPlan['shared_tasks'] ?? null) ? $taskPlan['shared_tasks'] : [],
-            'shared',
-            $seen,
-            $count
-        );
-        $pageTasks = \is_array($taskPlan['page_tasks'] ?? null) ? $taskPlan['page_tasks'] : [];
-        foreach ($pageTasks as $pageType => $tasks) {
-            if (\is_array($tasks)) {
-                $this->countStageTwoTaskPlanTaskList($tasks, 'page:' . (string)$pageType, $seen, $count);
-            }
-        }
-        $executionBlueprint = \is_array($taskPlan['execution_blueprint'] ?? null) ? $taskPlan['execution_blueprint'] : [];
-        $this->countStageTwoTaskPlanTaskList(
-            \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [],
-            'execution',
-            $seen,
-            $count
-        );
-
-        return $count;
-    }
-
-    /**
-     * @param array<int, mixed> $tasks
-     * @param array<string, true> $seen
-     */
-    private function countStageTwoTaskPlanTaskList(array $tasks, string $prefix, array &$seen, int &$count): void
-    {
-        foreach ($tasks as $index => $task) {
-            if (!\is_array($task) || $task === []) {
-                continue;
-            }
-            $taskKey = \trim((string)($task['task_key'] ?? ''));
-            if ($taskKey === '') {
-                $taskKey = $prefix . ':' . $index . ':' . \sha1((string)\json_encode($task, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
-            }
-            if (isset($seen[$taskKey])) {
-                continue;
-            }
-            $seen[$taskKey] = true;
-            ++$count;
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $taskPlan
-     */
-    private function buildStageTwoTaskPlanFallbackMarkdown(array $taskPlan): string
-    {
-        $sharedCount = \count(\array_values(\array_filter(
-            \is_array($taskPlan['shared_tasks'] ?? null) ? $taskPlan['shared_tasks'] : [],
-            static fn($task): bool => \is_array($task) && $task !== []
-        )));
-        $pageTaskCount = 0;
-        $pageTasks = \is_array($taskPlan['page_tasks'] ?? null) ? $taskPlan['page_tasks'] : [];
-        foreach ($pageTasks as $tasks) {
-            if (!\is_array($tasks)) {
-                continue;
-            }
-            $pageTaskCount += \count(\array_values(\array_filter(
-                $tasks,
-                static fn($task): bool => \is_array($task) && $task !== []
-            )));
-        }
-
-        return '# 第二阶段任务方案' . "\n\n"
-            . '- shared_tasks: ' . $sharedCount . "\n"
-            . '- page_tasks: ' . $pageTaskCount . "\n";
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $activeOperation
-     * @return array<string, mixed>
-     */
-    private function buildTaskPlanStageEntryDecision(
-        string $stage,
-        array $scope,
-        array $activeOperation,
-        bool $hasStageTwoTaskPlan
-    ): array {
-        $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
-        $activeOperationStatus = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
-        $operationRunning = \in_array($activeOperationStatus, ['queued', 'running'], true);
-        $planQueueRunning = $operationRunning && $activeOperationName === 'plan';
-        $taskPlanQueueRunning = $operationRunning && $activeOperationName === 'task_plan';
-        $buildQueueRunning = $operationRunning && $activeOperationName === 'build';
-        $hasStageOneConfirmedPlan = $this->scopeCompatibilityService->hasConfirmedStageOnePlanForTaskPlan($scope);
-        $isVisualEditStage = $this->scopeCompatibilityService->normalizeStage($stage) === AiSiteAgentSession::STAGE_VISUAL_EDIT;
-        $shouldPromptGenerate = $isVisualEditStage
-            && $hasStageOneConfirmedPlan
-            && !$hasStageTwoTaskPlan
-            && !$planQueueRunning
-            && !$taskPlanQueueRunning
-            && !$buildQueueRunning;
-
-        return [
-            'stage' => $this->scopeCompatibilityService->normalizeStage($stage),
-            'is_visual_edit_stage' => $isVisualEditStage,
-            'has_phase_one_confirmed_plan' => $hasStageOneConfirmedPlan,
-            'has_phase_two_task_plan' => $hasStageTwoTaskPlan,
-            'plan_queue_running' => $planQueueRunning,
-            'task_plan_queue_running' => $taskPlanQueueRunning,
-            'build_queue_running' => $buildQueueRunning,
-            'operation_running' => $operationRunning,
-            'active_operation' => $activeOperationName,
-            'active_operation_status' => $activeOperationStatus,
-            'should_prompt_generate' => $shouldPromptGenerate,
-        ];
-    }
-
-    /**
-     * 兼容 LLM/历史合并把 `page_tasks` / `shared_tasks` 放在 `virtual_theme_plan` 根级、未包进 draft/confirmed 的形态。
-     *
-     * @param array<string, mixed> $virtualThemePlan
-     */
-    private function virtualThemePlanRootHasTaskPayload(array $virtualThemePlan): bool
-    {
-        $shared = $virtualThemePlan['shared_tasks'] ?? null;
-        if (\is_array($shared)) {
-            foreach ($shared as $row) {
-                if (\is_array($row) && $row !== []) {
-                    return true;
-                }
-            }
-        }
-
-        $pageTasks = $virtualThemePlan['page_tasks'] ?? null;
-        if (!\is_array($pageTasks) || $pageTasks === []) {
-            return false;
-        }
-        foreach ($pageTasks as $items) {
-            if (\is_array($items) && $items !== []) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array<string, mixed> $normalized
-     */
-    private function isTaskPlanDraftMissing(array $normalized): bool
-    {
-        return !$this->scopeHasPersistedStageTwoTaskPlan($normalized);
     }
 
     /**
@@ -10068,7 +7481,7 @@ class AiSiteAgent extends BaseController
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
             ],
-            'info', 'warning', 'plan_saved', 'plan_generated', 'plan_refined', 'plan_rebuilt', 'task_plan_generated', 'task_plan_refined', 'task_plan_rebuilt' => [
+            'info', 'warning', 'plan_saved', 'plan_generated', 'plan_refined', 'plan_rebuilt' => [
                 'event_type' => $eventType,
                 'message' => (string)($payload['message'] ?? ''),
                 'operation' => (string)($payload['operation'] ?? ''),
@@ -10185,9 +7598,6 @@ class AiSiteAgent extends BaseController
             'plan_generated',
             'plan_refined',
             'plan_rebuilt',
-            'task_plan_generated',
-            'task_plan_refined',
-            'task_plan_rebuilt',
         ], true)) {
             return null;
         }
@@ -10339,22 +7749,6 @@ class AiSiteAgent extends BaseController
         return 500;
     }
 
-    private function shouldRejectTaskPlanGenerationSource(
-        array $scope,
-        string $generationSource,
-        bool $allowDeterministicFallback = false
-    ): bool {
-        if ($generationSource === 'ai') {
-            return false;
-        }
-
-        if ((int)($scope['fake_mode'] ?? 0) === 1) {
-            return false;
-        }
-
-        return !($allowDeterministicFallback && $generationSource === 'deterministic');
-    }
-
     private function registerAiChunkForwarder(
         SseWriter $sse,
         AiSiteAgentSession $session,
@@ -10426,7 +7820,6 @@ class AiSiteAgent extends BaseController
      *   pre_publish_visual_urls:array<string, string>,
      *   active_operation:array<string, mixed>,
      *   plan_queue_info:array<string, mixed>|null,
-     *   task_plan_queue_info:array<string, mixed>|null,
      *   build_queue_info:array<string, mixed>|null,
      *   build_summary:array<string, mixed>,
      *   top_logs:list<array<string, mixed>>,
@@ -10463,17 +7856,11 @@ class AiSiteAgent extends BaseController
             \is_array($normalized['website_profile']) ? $normalized['website_profile'] : [],
             $workspaceTrack
         );
-        $normalized = $this->normalizeTaskPlanConfirmationForBuild($normalized);
+        $normalized = $this->normalizeBuildPlanConfirmationForBuild($normalized);
         $assetManifestService = $this->assetManifestService();
         $assetManifest = ['version' => 1, 'slots' => []];
-        if ((int)($normalized['task_plan_confirmed'] ?? 0) === 1 || \is_array($normalized['asset_manifest'] ?? null)) {
-            $assetManifest = $assetManifestService->syncFromTaskPlan($normalized);
-            $normalized['asset_manifest'] = $assetManifest;
-            $normalized['verified_assets'] = $assetManifestService->extractVerifiedAssets($assetManifest);
-        }
-        $shouldPersistCompactedTaskPlan = $this->shouldCompactConfirmedTaskPlanScope($normalized);
-        if ($shouldPersistCompactedTaskPlan) {
-            $normalized = $this->compactConfirmedTaskPlanScope($normalized);
+        if ((int)($normalized['build_plan_confirmed'] ?? 0) === 1 || (int)($normalized['plan_confirmed'] ?? 0) === 1 || \is_array($normalized['asset_manifest'] ?? null)) {
+            $assetManifest = $assetManifestService->syncFromBuildPlan($normalized);
             $normalized['asset_manifest'] = $assetManifest;
             $normalized['verified_assets'] = $assetManifestService->extractVerifiedAssets($assetManifest);
         }
@@ -10571,22 +7958,21 @@ class AiSiteAgent extends BaseController
         $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         $activeOperation = \is_array($normalized['active_operation'] ?? null) ? $normalized['active_operation'] : [];
         $activeOperations = \is_array($normalized['active_operations'] ?? null) ? $normalized['active_operations'] : [];
+        $supportedWorkspaceOperations = ['plan' => true, 'build' => true];
+        if (!isset($supportedWorkspaceOperations[\trim((string)($activeOperation['operation'] ?? ''))])) {
+            $activeOperation = [];
+        }
+        $activeOperations = \array_intersect_key($activeOperations, $supportedWorkspaceOperations);
         $planOperation = $this->resolveWorkspaceQueueOperationState($activeOperation, $activeOperations, 'plan');
-        $taskPlanOperation = $this->resolveWorkspaceQueueOperationState($activeOperation, $activeOperations, 'task_plan');
         $buildOperation = $this->resolveWorkspaceQueueOperationState($activeOperation, $activeOperations, 'build');
         $planQueueInfo = $this->shouldInspectOperationQueueInWorkspace($stage, $planOperation, 'plan')
             ? $this->buildPlanStageQueueInfoPayload($session, $planOperation)
             : null;
-        $taskPlanQueueInfo = $this->shouldInspectOperationQueueInWorkspace($stage, $taskPlanOperation, 'task_plan')
-            ? $this->buildOperationStageQueueInfoPayload($session, $taskPlanOperation, 'task_plan')
-            : null;
         $buildQueueInfo = $this->shouldInspectOperationQueueInWorkspace($stage, $buildOperation, 'build')
             ? $this->buildOperationStageQueueInfoPayload($session, $buildOperation, 'build')
             : null;
-        $activeOperation = $this->initializeTaskPlanActiveOperationFromQueueInfo($session, $activeOperation, $taskPlanQueueInfo);
         foreach ([
             'plan' => [$planOperation, $planQueueInfo],
-            'task_plan' => [$taskPlanOperation, $taskPlanQueueInfo],
             'build' => [$buildOperation, $buildQueueInfo],
         ] as $queueOperation => [$operationState, $queueInfo]) {
             $operationState = $this->reconcileActiveOperationWithQueueInfo($operationState, $queueInfo, $queueOperation);
@@ -10612,18 +7998,6 @@ class AiSiteAgent extends BaseController
         [
             'normalized' => $normalized,
             'active_operation' => $activeOperation,
-            'task_plan_queue_info' => $taskPlanQueueInfo,
-        ] = $this->autoRerunTaskPlanQueueWhenQueueDoneButDraftMissing(
-            $session,
-            $adminId,
-            $stage,
-            $normalized,
-            $activeOperation,
-            $taskPlanQueueInfo
-        );
-        [
-            'normalized' => $normalized,
-            'active_operation' => $activeOperation,
             'build_queue_info' => $buildQueueInfo,
             'task_summary' => $taskSummary,
         ] = $this->autoResumeBuildQueueWhenTasksIncomplete(
@@ -10637,7 +8011,6 @@ class AiSiteAgent extends BaseController
         );
         $workspaceEntryQueueNotice = $this->buildWorkspaceEntryQueueNotice($activeOperation, [
             'plan' => $planQueueInfo,
-            'task_plan' => $taskPlanQueueInfo,
             'build' => $buildQueueInfo,
         ]);
         $siteReady = (int)($normalized['site_ready'] ?? 1) === 1;
@@ -10722,48 +8095,6 @@ class AiSiteAgent extends BaseController
         $normalized['can_publish'] = $canPublish ? 1 : 0;
         $normalized['build_summary'] = $this->buildSummary($virtualPagesByType, $activeOperation, $canPublish, $pendingGenerationPageTypes, $taskSummary);
         $hasStageOnePlan = $this->scopeCompatibilityService->hasPersistedStageOnePlan($normalized);
-        $virtualThemePlan = \is_array($normalized['virtual_theme_plan'] ?? null) ? $normalized['virtual_theme_plan'] : [];
-        $hasVirtualThemePlan = $this->scopeHasPersistedStageTwoTaskPlan($normalized);
-        $taskPlanConfirmedAt = (string)($virtualThemePlan['confirmed_at'] ?? '');
-        $taskPlanStructured = \is_array($normalized['task_plan_structured'] ?? null) ? $normalized['task_plan_structured'] : [];
-        $taskPlanDraftStructured = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        $taskPlanConfirmedStructured = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        $taskPlanDraftMarkdown = (string)($normalized['task_plan_markdown'] ?? ($virtualThemePlan['draft_markdown'] ?? ''));
-        $taskPlanConfirmedMarkdown = (string)($virtualThemePlan['confirmed_markdown'] ?? '');
-
-        // Stage-two task plan derive：阶段二预览始终从草稿读取，确认态不直接展示。
-        // - 任务方案确认后，virtual_theme_plan.draft / task_plan_structured / task_plan_markdown 会被清空。
-        // - 此时不读 confirmed_markdown / confirmed structured 作为预览源（避免"确认态泄漏到前端"），
-        //   而是从 execution_blueprint 反推一份等价于"最新草稿"的结构化 + 概览 markdown，
-        //   让 buildPlanPreviewHtml 始终能走结构化预览，不再退化成 markdown 列表。
-        // 守门：仅允许在阶段二任务方案"已确认"且 execution_blueprint 来源为阶段二
-        // (build_blueprint.source = stage2_confirmed_task_plan) 时反推。否则
-        // 阶段一刚确认（execution_blueprint 已存在但仍属阶段一蓝图）时会被误识别成
-        // "阶段二已经生成方案"，前端就会出现"未生成阶段二却出现方案"的现象。
-        $taskPlanConfirmedFlag = (int)($normalized['task_plan_confirmed'] ?? 0) === 1;
-        $buildBlueprintForDerive = \is_array($normalized['build_blueprint'] ?? null) ? $normalized['build_blueprint'] : [];
-        $buildBlueprintIsStageTwo = (string)($buildBlueprintForDerive['source'] ?? '') === 'stage2_confirmed_task_plan';
-        if (
-            $taskPlanStructured === []
-            && $taskPlanDraftStructured === []
-            && \trim($taskPlanDraftMarkdown) === ''
-            && $taskPlanConfirmedFlag
-            && $buildBlueprintIsStageTwo
-        ) {
-            $blueprintForDerive = \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== []
-                ? $normalized['execution_blueprint']
-                : (\is_array($normalized['execution_blueprint_draft'] ?? null) ? $normalized['execution_blueprint_draft'] : []);
-            if (\is_array($blueprintForDerive['tasks'] ?? null) && $blueprintForDerive['tasks'] !== []) {
-                $derivedTaskPlan = $this->deriveTaskPlanArtifactsFromExecutionBlueprint($blueprintForDerive);
-                if (\is_array($derivedTaskPlan['structured'] ?? null) && $derivedTaskPlan['structured'] !== []) {
-                    $taskPlanStructured = $derivedTaskPlan['structured'];
-                }
-                if (\trim((string)($derivedTaskPlan['markdown'] ?? '')) !== '') {
-                    $taskPlanDraftMarkdown = (string)$derivedTaskPlan['markdown'];
-                }
-            }
-        }
-
         $eventsStartedAt = \microtime(true);
         $events = $this->sessionService->listRecentEvents($session->getId(), $adminId, $eventLimit);
         $this->logHotPathStage('build_workspace_state.events', $eventsStartedAt, [
@@ -10773,14 +8104,7 @@ class AiSiteAgent extends BaseController
         ]);
         $topLogs = \array_slice($events, -12);
 
-        $taskPlanStageEntry = $this->buildTaskPlanStageEntryDecision(
-            $stage,
-            $normalized,
-            $activeOperation,
-            $hasVirtualThemePlan
-        );
-
-        if ($persist || $shouldPersistCompactedTaskPlan) {
+        if ($persist) {
             $persistStartedAt = \microtime(true);
             $this->persistNormalizedState($session, $adminId, $normalized, $stage, $draftWebsiteId, $virtualThemeId);
             $this->logHotPathStage('build_workspace_state.persist', $persistStartedAt, [
@@ -10838,6 +8162,8 @@ class AiSiteAgent extends BaseController
                 'execution_blueprint' => \is_array($normalized['execution_blueprint_draft'] ?? null) && $normalized['execution_blueprint_draft'] !== []
                     ? $normalized['execution_blueprint_draft']
                     : (\is_array($normalized['execution_blueprint'] ?? null) ? $normalized['execution_blueprint'] : []),
+                'build_plan_v2' => \is_array($normalized['build_plan_v2'] ?? null) ? $normalized['build_plan_v2'] : [],
+                'projection' => \is_array($normalized['plan_projection'] ?? null) ? $normalized['plan_projection'] : [],
             ],
             'plan_json' => \is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : [],
             'plan_markdown' => (string)($normalized['plan_markdown'] ?? ''),
@@ -10845,6 +8171,12 @@ class AiSiteAgent extends BaseController
             'plan_confirmed' => (int)($normalized['plan_confirmed'] ?? 0),
             'has_stage_one_plan' => $hasStageOnePlan,
             'has_execution_blueprint' => \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== [],
+            'build_plan_v2' => \is_array($normalized['build_plan_v2'] ?? null) ? $normalized['build_plan_v2'] : [],
+            'plan_projection' => \is_array($normalized['plan_projection'] ?? null) ? $normalized['plan_projection'] : [],
+            'content_manifest' => \is_array($normalized['content_manifest'] ?? null) ? $normalized['content_manifest'] : [],
+            'build_plan_confirmed' => (int)($normalized['build_plan_confirmed'] ?? 0),
+            'build_plan_confirmed_at' => (string)($normalized['build_plan_confirmed_at'] ?? ''),
+            'has_build_plan_v2' => !empty($normalized['has_build_plan_v2']) || (\is_array($normalized['build_plan_v2'] ?? null) && $normalized['build_plan_v2'] !== []),
             'plan_confirmed_at' => (string)($normalized['plan_confirmed_at'] ?? ''),
             'plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'),
             'refine_plan_page_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-refine-plan-page'),
@@ -10853,25 +8185,7 @@ class AiSiteAgent extends BaseController
             'confirmed_plan_signature' => (string)($normalized['execution_blueprint_confirmed_signature'] ?? ''),
             // 阶段二预览契约：始终读取“草稿态”——
             //  - markdown 仅取 draft（confirmed_markdown 不再注入前端，避免确认态展示）；
-            //  - structured 仅取 task_plan_structured / draft（confirmed structured 已在上方 derive 中由蓝图反推补齐）。
-            'task_plan' => [
-                'markdown' => $taskPlanDraftMarkdown,
-                'structured' => $taskPlanStructured !== [] ? $taskPlanStructured : $taskPlanDraftStructured,
-                'virtual_theme_plan' => $virtualThemePlan,
-            ],
-            'task_plan_markdown' => $taskPlanDraftMarkdown,
-            'task_plan_structured' => $taskPlanStructured !== [] ? $taskPlanStructured : $taskPlanDraftStructured,
-            'task_plan_confirmed' => (int)($normalized['task_plan_confirmed'] ?? 0),
-            'task_plan_confirmed_at' => $taskPlanConfirmedAt,
-            'task_plan_generation_progress' => \is_array($normalized['task_plan_generation_progress'] ?? null) ? $normalized['task_plan_generation_progress'] : [],
-            'task_plan_generation_summary' => \is_array($normalized['task_plan_generation_summary'] ?? null) ? $normalized['task_plan_generation_summary'] : [],
-            'task_plan_generation_last_error' => \is_array($normalized['task_plan_generation_last_error'] ?? null) ? $normalized['task_plan_generation_last_error'] : [],
-            'task_plan_queue_skip' => \is_array($normalized['_task_plan_queue_skip'] ?? null) ? $normalized['_task_plan_queue_skip'] : [],
-            'has_virtual_theme_plan' => $hasVirtualThemePlan,
-            'task_plan_stage_entry' => $taskPlanStageEntry,
             'has_pending_build_tasks' => (int)($taskSummary['pending'] ?? 0) > 0,
-            'task_plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-task-plan-sse'),
-            'mutate_task_plan_task_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-task-plan-task'),
             'auto_start_build_after_stream' => false,
             'preview_page_options' => \is_array($normalized['preview_page_options']) ? $normalized['preview_page_options'] : [],
             'preview_page_id' => (int)$normalized['preview_page_id'],
@@ -10882,7 +8196,6 @@ class AiSiteAgent extends BaseController
             'pre_publish_visual_urls' => \is_array($normalized['pre_publish_visual_urls'] ?? null) ? $normalized['pre_publish_visual_urls'] : $prePublishVisualUrls,
             'active_operation' => $activeOperation,
             'plan_queue_info' => $planQueueInfo,
-            'task_plan_queue_info' => $taskPlanQueueInfo,
             'build_queue_info' => $buildQueueInfo,
             'workspace_entry_notice' => $workspaceEntryQueueNotice,
             'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
@@ -11162,11 +8475,7 @@ class AiSiteAgent extends BaseController
             'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
             'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
-            'task_plan_queue_info' => \is_array($state['task_plan_queue_info'] ?? null) ? $state['task_plan_queue_info'] : null,
             'build_queue_info' => \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null,
-            'task_plan_generation_progress' => \is_array($state['task_plan_generation_progress'] ?? null) ? $state['task_plan_generation_progress'] : [],
-            'task_plan_generation_summary' => \is_array($state['task_plan_generation_summary'] ?? null) ? $state['task_plan_generation_summary'] : [],
-            'task_plan_generation_last_error' => \is_array($state['task_plan_generation_last_error'] ?? null) ? $state['task_plan_generation_last_error'] : [],
         ], $this->buildWorkspaceStatusEnvelope($state, 'confirm'));
 
         if ($type === 'plan') {
@@ -11180,23 +8489,6 @@ class AiSiteAgent extends BaseController
             return $payload;
         }
 
-        if ($type === 'task_plan') {
-            $taskPlan = \is_array($state['task_plan'] ?? null) ? $state['task_plan'] : [];
-            $virtualThemePlan = \is_array($taskPlan['virtual_theme_plan'] ?? null) ? $taskPlan['virtual_theme_plan'] : [];
-            $payload['plan_confirmed'] = (int)($state['plan_confirmed'] ?? 0);
-            $payload['task_plan_confirmed'] = (int)($state['task_plan_confirmed'] ?? 0);
-            $payload['task_plan_confirmed_at'] = (string)($state['task_plan_confirmed_at'] ?? ($virtualThemePlan['confirmed_at'] ?? ''));
-            $payload['has_virtual_theme_plan'] = !empty($state['has_virtual_theme_plan']);
-            $payload['has_pending_build_tasks'] = !empty($state['has_pending_build_tasks']);
-            $payload['task_plan_sse_url'] = (string)($state['task_plan_sse_url'] ?? '');
-            $payload['task_plan'] = [
-                'virtual_theme_plan' => [
-                    'confirmed_at' => (string)($virtualThemePlan['confirmed_at'] ?? ''),
-                    'confirmed_signature' => (string)($virtualThemePlan['confirmed_signature'] ?? ''),
-                    'plan_signature' => (string)($virtualThemePlan['plan_signature'] ?? ''),
-                ],
-            ];
-        }
 
         return $payload;
     }
@@ -11239,24 +8531,16 @@ class AiSiteAgent extends BaseController
             'plan_confirmed' => (int)($state['plan_confirmed'] ?? 0),
             'plan_confirmed_at' => (string)($state['plan_confirmed_at'] ?? ''),
             'confirmed_plan_signature' => (string)($state['confirmed_plan_signature'] ?? ''),
-            'task_plan_confirmed' => (int)($state['task_plan_confirmed'] ?? 0),
-            'task_plan_confirmed_at' => (string)($state['task_plan_confirmed_at'] ?? ''),
             'has_stage_one_plan' => !empty($state['has_stage_one_plan']),
             'has_execution_blueprint' => !empty($state['has_execution_blueprint']),
-            'has_virtual_theme_plan' => !empty($state['has_virtual_theme_plan']),
             'has_pending_build_tasks' => !empty($state['has_pending_build_tasks']),
             'plan_sse_url' => (string)($state['plan_sse_url'] ?? ''),
-            'task_plan_sse_url' => (string)($state['task_plan_sse_url'] ?? ''),
             'refine_plan_page_url' => (string)($state['refine_plan_page_url'] ?? ''),
             'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
-            'task_plan_queue_info' => \is_array($state['task_plan_queue_info'] ?? null) ? $state['task_plan_queue_info'] : null,
             'build_queue_info' => \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null,
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
             'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
-            'task_plan_generation_progress' => \is_array($state['task_plan_generation_progress'] ?? null) ? $state['task_plan_generation_progress'] : [],
-            'task_plan_generation_summary' => \is_array($state['task_plan_generation_summary'] ?? null) ? $state['task_plan_generation_summary'] : [],
-            'task_plan_generation_last_error' => \is_array($state['task_plan_generation_last_error'] ?? null) ? $state['task_plan_generation_last_error'] : [],
             'website_profile' => \is_array($state['website_profile'] ?? null) ? $state['website_profile'] : [],
             'asset_manifest' => \is_array($state['asset_manifest'] ?? null) ? $state['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($state['verified_assets'] ?? null) ? $state['verified_assets'] : [],
@@ -11316,9 +8600,13 @@ class AiSiteAgent extends BaseController
             'plan_confirmed_at' => (string)($state['plan_confirmed_at'] ?? ''),
             'has_stage_one_plan' => !empty($state['has_stage_one_plan']),
             'has_execution_blueprint' => !empty($state['has_execution_blueprint']),
-            'task_plan_confirmed' => (int)($state['task_plan_confirmed'] ?? 0),
-            'task_plan_confirmed_at' => (string)($state['task_plan_confirmed_at'] ?? ''),
-            'has_virtual_theme_plan' => !empty($state['has_virtual_theme_plan']),
+            'build_plan_v2' => \is_array($state['build_plan_v2'] ?? null) ? $state['build_plan_v2'] : [],
+            'plan_projection' => \is_array($state['plan_projection'] ?? null) ? $state['plan_projection'] : [],
+            'content_manifest' => \is_array($state['content_manifest'] ?? null) ? $state['content_manifest'] : [],
+            'build_plan_confirmed' => (int)($state['build_plan_confirmed'] ?? 0),
+            'build_plan_confirmed_at' => (string)($state['build_plan_confirmed_at'] ?? ''),
+            'has_build_plan_v2' => !empty($state['has_build_plan_v2'])
+                || (\is_array($state['build_plan_v2'] ?? null) && $state['build_plan_v2'] !== []),
             'pagebuilder_pages_by_type' => \is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : [],
             'preview_page_options' => \is_array($state['preview_page_options'] ?? null) ? $state['preview_page_options'] : [],
             'preview_page_id' => (int)($state['preview_page_id'] ?? 0),
@@ -11329,15 +8617,10 @@ class AiSiteAgent extends BaseController
             'pre_publish_visual_urls' => \is_array($state['pre_publish_visual_urls'] ?? null) ? $state['pre_publish_visual_urls'] : [],
             'active_operation' => \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [],
             'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
-            'task_plan_queue_info' => \is_array($state['task_plan_queue_info'] ?? null) ? $state['task_plan_queue_info'] : null,
             'build_queue_info' => \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null,
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
             'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
-            'task_plan_generation_progress' => \is_array($state['task_plan_generation_progress'] ?? null) ? $state['task_plan_generation_progress'] : [],
-            'task_plan_generation_summary' => \is_array($state['task_plan_generation_summary'] ?? null) ? $state['task_plan_generation_summary'] : [],
-            'task_plan_generation_last_error' => \is_array($state['task_plan_generation_last_error'] ?? null) ? $state['task_plan_generation_last_error'] : [],
-            'task_plan_queue_skip' => \is_array($state['task_plan_queue_skip'] ?? null) ? $state['task_plan_queue_skip'] : [],
         ], $this->buildWorkspaceStatusEnvelope($state, 'queue'));
 
         if ($workspaceStream) {
@@ -11729,97 +9012,6 @@ class AiSiteAgent extends BaseController
     private function resolveWorkspaceLastEventId(array $events): int
     {
         return $this->workspaceStateHelperService()->resolveLastEventId($events);
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function shouldCompactConfirmedTaskPlanScope(array $scope): bool
-    {
-        if ((int)($scope['task_plan_confirmed'] ?? 0) !== 1) {
-            return false;
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        if ($confirmed === []) {
-            return false;
-        }
-
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        if ($draft !== [] && $draft == $confirmed) {
-            return true;
-        }
-
-        if ($this->hasReusableConfirmedBuildBlueprintForCompaction($scope)) {
-            foreach ([
-                'execution_blueprint',
-                'shared_tasks',
-                'page_tasks',
-                'shared_block_tasks',
-                'page_block_tasks',
-                'virtual_theme_build_tree',
-            ] as $key) {
-                if (\is_array($confirmed[$key] ?? null) && $confirmed[$key] !== []) {
-                    return true;
-                }
-            }
-
-            $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
-            $workbenchConfirmed = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
-            if (\is_array($workbenchConfirmed['structured_plan'] ?? null) || \is_array($workbenchConfirmed['plan_json'] ?? null)) {
-                return true;
-            }
-
-            foreach (\is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [] as $taskState) {
-                if (!\is_array($taskState)) {
-                    continue;
-                }
-                foreach ([
-                    'runtime_context',
-                    'plan_context',
-                    'task_script',
-                    'block_task',
-                    'implementation_contract',
-                ] as $key) {
-                    if (\array_key_exists($key, $taskState)) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        $confirmedMarkdown = \trim((string)($virtualThemePlan['confirmed_markdown'] ?? ''));
-        $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
-
-        return $confirmedMarkdown !== ''
-            && $draftMarkdown !== ''
-            && $draftMarkdown === $confirmedMarkdown;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function hasReusableConfirmedBuildBlueprintForCompaction(array $scope): bool
-    {
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-
-        return (string)($buildBlueprint['source'] ?? '') === 'stage2_confirmed_task_plan'
-            && \trim((string)($buildBlueprint['signature'] ?? '')) !== ''
-            && $tasks !== [];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactConfirmedTaskPlanScope(array $scope): array
-    {
-        if (!$this->shouldCompactConfirmedTaskPlanScope($scope)) {
-            return $scope;
-        }
-        return $this->workspaceStateHelperService()->compactConfirmedTaskPlanScope($scope);
     }
 
     /**
@@ -12345,7 +9537,7 @@ class AiSiteAgent extends BaseController
 
         $baseScope = $scope;
         if ($operation === 'build') {
-            $baseScope = $this->normalizeTaskPlanConfirmationForBuild($baseScope);
+            $baseScope = $this->normalizeBuildPlanConfirmationForBuild($baseScope);
             $scope = $baseScope;
             $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $baseScope);
         }
@@ -12353,7 +9545,7 @@ class AiSiteAgent extends BaseController
         $scope['page_types'] = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if ($operation === 'build') {
             $scope = $this->buildTaskService->restoreBuildPlanContract($scope, $baseScope);
-            $scope = $this->normalizeTaskPlanConfirmationForBuild($scope);
+            $scope = $this->normalizeBuildPlanConfirmationForBuild($scope);
             $resetFailedOrInterruptedTasks = (int)($operationDetails['fresh_repair_failed_tasks'] ?? 0) === 1
                 || (int)($operationDetails['resume_failed_tasks'] ?? 0) === 1;
             if ($resetFailedOrInterruptedTasks) {
@@ -12545,9 +9737,6 @@ class AiSiteAgent extends BaseController
         if ($operation === 'plan') {
             return 'pagebuilder_plan_generation';
         }
-        if ($operation === 'task_plan') {
-            return 'pagebuilder_task_plan_generation';
-        }
 
         return 'pagebuilder_component_generation';
     }
@@ -12632,15 +9821,17 @@ class AiSiteAgent extends BaseController
 
     private function shouldEnqueueOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
+    }
+
+    private function isAiSiteQueueBackedOperation(string $operation): bool
+    {
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
     }
 
     private function buildRunningOperationReuseMessage(string $operation): string
     {
         $operation = \trim($operation);
-        if ($operation === 'task_plan') {
-            return 'Current stage-two task-plan generation is still running; reusing the current queue progress.';
-        }
         if ($operation === 'build') {
             return 'Current site build is still running; reusing the current queue progress.';
         }
@@ -12666,9 +9857,6 @@ class AiSiteAgent extends BaseController
         }
         if ($requestedOperation === 'build' && \in_array($runningOperation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
             return (string)__('当前页面或区块 AI 操作仍在运行，暂不能启动整站构建；请等待完成后再试。');
-        }
-        if ($runningOperation === 'task_plan') {
-            return (string)__('第二阶段任务方案仍在生成，暂不能发起新的 AI 队列操作；请等待完成后再试。');
         }
         if ($runningOperation === 'build') {
             return (string)__('当前站点构建仍在运行，暂不能发起新的 AI 队列操作；请等待完成后再试。');
@@ -12900,394 +10088,6 @@ class AiSiteAgent extends BaseController
      * @param array<string, mixed> $scopePatch
      * @param array<string, mixed> $operationDetails
      */
-    private function isTaskPlanSchemeRebuildRequest(string $operation, array $scopePatch = [], array $operationDetails = []): bool
-    {
-        if (\trim($operation) !== 'task_plan') {
-            return false;
-        }
-
-        $request = \is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : [];
-        $promptMode = \trim((string)($operationDetails['prompt_mode'] ?? $scopePatch['prompt_mode'] ?? $request['prompt_mode'] ?? ''));
-        if ($promptMode === 'rebuild_task_plan') {
-            return true;
-        }
-
-        return (int)($scopePatch['_task_plan_rebuild_in_progress'] ?? 0) === 1;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $activeOperation
-     * @return array<string, mixed>
-     */
-    private function markRunningTaskPlanAsDiscardedForRebuild(array $scope, array $activeOperation): array
-    {
-        $discarded = \array_replace($activeOperation, [
-            'operation' => 'task_plan',
-            'status' => 'cancelled',
-            'message' => (string)__('方案重建已确认，旧的第二阶段任务方案生成已废弃。'),
-            'discarded_by_rebuild' => 1,
-            'updated_at' => \date('Y-m-d H:i:s'),
-        ]);
-        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
-        $activeOperations['task_plan'] = $discarded;
-        $scope['active_operations'] = $activeOperations;
-        $scope['active_operation'] = $discarded;
-
-        return $scope;
-    }
-
-    private function isAiSiteQueueBackedOperation(string $operation): bool
-    {
-        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @param array<string, mixed> $operationDetails
-     * @return array<string, mixed>
-     */
-    private function applyOperationDetailsToPayload(array $payload, array $operationDetails): array
-    {
-        if ($operationDetails === []) {
-            return $payload;
-        }
-
-        $existingDetails = \is_array($payload['details'] ?? null) ? $payload['details'] : [];
-        $payload['details'] = \array_replace($existingDetails, $operationDetails);
-        foreach ($this->getQueuedOperationDetailKeys() as $detailKey) {
-            if (\array_key_exists($detailKey, $operationDetails)) {
-                $payload[$detailKey] = $operationDetails[$detailKey];
-            }
-        }
-
-        return $payload;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function getQueuedOperationDetailKeys(): array
-    {
-        return [
-            'page_type',
-            'page_key',
-            'page_types',
-            'page_keys',
-            'block_id',
-            'block_ids',
-            'component_code',
-            'component_codes',
-            'component_label',
-            'component_labels',
-            'instruction',
-            'shared_region',
-            'shared_regions',
-            'stage_scope',
-            'action',
-            'target_scope',
-            'target_scopes',
-            'block_key',
-            'block_keys',
-            'section_code',
-            'section_codes',
-            'task_key',
-            'task_keys',
-            'bucket',
-            'buckets',
-            'prompt_mode',
-            'round',
-            'mutation',
-            'mutations',
-            'block_config',
-            'block_configs',
-            'task_config',
-            'task_configs',
-            'operation_scope',
-            'selection',
-            'selected_blocks',
-            'selected_tasks',
-            'targets',
-            'change_summary',
-            'changed_fields',
-            'reason',
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $mutation
-     * @return list<string>
-     */
-    private function resolvePlanMutationBlockKeys(array $mutation, string $primaryBlockKey): array
-    {
-        $blockKeys = $this->normalizeStringList($mutation['block_keys'] ?? []);
-        foreach (['component_codes', 'section_codes'] as $key) {
-            foreach ($this->normalizeStringList($mutation[$key] ?? []) as $candidate) {
-                if (!\in_array($candidate, $blockKeys, true)) {
-                    $blockKeys[] = $candidate;
-                }
-            }
-        }
-        $primaryBlockKey = \trim($primaryBlockKey);
-        if ($primaryBlockKey !== '' && !\in_array($primaryBlockKey, $blockKeys, true)) {
-            \array_unshift($blockKeys, $primaryBlockKey);
-        }
-
-        return \array_values($blockKeys);
-    }
-
-    /**
-     * @param list<string> $blockKeys
-     * @param array<string, mixed> $blockConfig
-     * @param array<string, mixed> $blockConfigs
-     * @return list<array{block_key:string, block_config:array<string,mixed>}>
-     */
-    private function buildPlanMutationTargets(
-        string $action,
-        array $blockKeys,
-        string $primaryBlockKey,
-        array $blockConfig,
-        array $blockConfigs
-    ): array {
-        $targets = [];
-        if ($action === 'create') {
-            if ($blockConfigs !== []) {
-                foreach ($blockConfigs as $configuredBlockKey => $configuredPatch) {
-                    $targets[] = [
-                        'block_key' => \trim((string)$configuredBlockKey),
-                        'block_config' => \is_array($configuredPatch) ? $configuredPatch : [],
-                    ];
-                }
-            } elseif ($blockKeys !== []) {
-                foreach ($blockKeys as $blockKey) {
-                    $targets[] = [
-                        'block_key' => $blockKey,
-                        'block_config' => $blockConfig,
-                    ];
-                }
-            } else {
-                $targets[] = [
-                    'block_key' => \trim($primaryBlockKey),
-                    'block_config' => $blockConfig,
-                ];
-            }
-        } else {
-            $resolvedBlockKeys = $blockKeys;
-            if ($resolvedBlockKeys === [] && \trim($primaryBlockKey) !== '') {
-                $resolvedBlockKeys = [\trim($primaryBlockKey)];
-            }
-            foreach ($resolvedBlockKeys as $blockKey) {
-                $configuredPatch = \is_array($blockConfigs[$blockKey] ?? null) ? $blockConfigs[$blockKey] : [];
-                $targets[] = [
-                    'block_key' => $blockKey,
-                    'block_config' => $configuredPatch !== [] ? $configuredPatch : $blockConfig,
-                ];
-            }
-        }
-
-        if ($targets === []) {
-            $targets[] = [
-                'block_key' => \trim($primaryBlockKey),
-                'block_config' => $blockConfig,
-            ];
-        }
-
-        return $targets;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $artifacts
-     * @return array<string, mixed>
-     */
-    private function buildScopeFromPlanArtifactsForMutation(array $scope, array $artifacts): array
-    {
-        $nextScope = $scope;
-        if (\is_array($artifacts['plan_structured'] ?? null)) {
-            $nextScope['plan_structured'] = $artifacts['plan_structured'];
-        } elseif (\is_array($artifacts['structured'] ?? null)) {
-            $nextScope['plan_structured'] = $artifacts['structured'];
-        }
-        if (\is_array($artifacts['execution_blueprint'] ?? null)) {
-            $nextScope['execution_blueprint_draft'] = $artifacts['execution_blueprint'];
-        }
-        if (\is_array($artifacts['plan_json'] ?? null)) {
-            $nextScope['plan_json'] = $artifacts['plan_json'];
-        }
-        if (\is_array($artifacts['plan_workbench'] ?? null)) {
-            $nextScope['plan_workbench'] = $artifacts['plan_workbench'];
-        }
-        if (\array_key_exists('markdown', $artifacts)) {
-            $nextScope['plan_markdown'] = (string)$artifacts['markdown'];
-        }
-
-        return $nextScope;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $mutationSummaries
-     * @return array<string, mixed>
-     */
-    private function buildCombinedPlanMutationSummary(string $action, string $pageType, array $mutationSummaries): array
-    {
-        $lastSummary = \is_array($mutationSummaries[\count($mutationSummaries) - 1] ?? null)
-            ? $mutationSummaries[\count($mutationSummaries) - 1]
-            : [];
-        $mutatedBlockKeys = [];
-        foreach ($mutationSummaries as $summary) {
-            $summaryBlockKey = \trim((string)($summary['block_key'] ?? ''));
-            if ($summaryBlockKey !== '' && !\in_array($summaryBlockKey, $mutatedBlockKeys, true)) {
-                $mutatedBlockKeys[] = $summaryBlockKey;
-            }
-        }
-
-        return \array_replace($lastSummary, [
-            'action' => $action,
-            'page_type' => $pageType,
-            'mutated_block_keys' => $mutatedBlockKeys,
-            'mutated_count' => \count($mutatedBlockKeys),
-        ]);
-    }
-
-    /**
-     * @param array<string, mixed> $mutation
-     * @return list<string>
-     */
-    private function resolveTaskPlanMutationTaskKeys(array $mutation, string $primaryTaskKey): array
-    {
-        $taskKeys = $this->normalizeStringList($mutation['task_keys'] ?? []);
-        foreach (['selected_tasks', 'block_keys', 'section_codes', 'component_codes'] as $key) {
-            foreach ($this->normalizeStringList($mutation[$key] ?? []) as $candidate) {
-                if (!\in_array($candidate, $taskKeys, true)) {
-                    $taskKeys[] = $candidate;
-                }
-            }
-        }
-        $primaryTaskKey = \trim($primaryTaskKey);
-        if ($primaryTaskKey !== '' && !\in_array($primaryTaskKey, $taskKeys, true)) {
-            \array_unshift($taskKeys, $primaryTaskKey);
-        }
-
-        return \array_values($taskKeys);
-    }
-
-    /**
-     * @param list<string> $taskKeys
-     * @param array<string, mixed> $taskConfig
-     * @param array<string, mixed> $taskConfigs
-     * @return list<array{task_key:string, task_config:array<string,mixed>}>
-     */
-    private function buildTaskPlanMutationTargets(
-        string $action,
-        array $taskKeys,
-        string $primaryTaskKey,
-        array $taskConfig,
-        array $taskConfigs
-    ): array {
-        $targets = [];
-        if ($action === 'create') {
-            if ($taskConfigs !== []) {
-                foreach ($taskConfigs as $configuredTaskKey => $configuredPatch) {
-                    $targets[] = [
-                        'task_key' => \trim((string)$configuredTaskKey),
-                        'task_config' => \is_array($configuredPatch) ? $configuredPatch : [],
-                    ];
-                }
-            } elseif ($taskKeys !== []) {
-                foreach ($taskKeys as $taskKey) {
-                    $targets[] = [
-                        'task_key' => $taskKey,
-                        'task_config' => $taskConfig,
-                    ];
-                }
-            } else {
-                $targets[] = [
-                    'task_key' => \trim($primaryTaskKey),
-                    'task_config' => $taskConfig,
-                ];
-            }
-        } else {
-            $resolvedTaskKeys = $taskKeys;
-            if ($resolvedTaskKeys === [] && \trim($primaryTaskKey) !== '') {
-                $resolvedTaskKeys = [\trim($primaryTaskKey)];
-            }
-            foreach ($resolvedTaskKeys as $taskKey) {
-                $configuredPatch = \is_array($taskConfigs[$taskKey] ?? null) ? $taskConfigs[$taskKey] : [];
-                $targets[] = [
-                    'task_key' => $taskKey,
-                    'task_config' => $configuredPatch !== [] ? $configuredPatch : $taskConfig,
-                ];
-            }
-        }
-
-        if ($targets === []) {
-            $targets[] = [
-                'task_key' => \trim($primaryTaskKey),
-                'task_config' => $taskConfig,
-            ];
-        }
-
-        return $targets;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $result
-     * @return array<string, mixed>
-     */
-    private function buildScopeFromTaskPlanArtifactsForMutation(array $scope, array $result): array
-    {
-        $nextScope = $scope;
-        if (\is_array($result['structured'] ?? null)) {
-            $nextScope['task_plan_structured'] = $result['structured'];
-        }
-        if (\is_array($result['virtual_theme_plan'] ?? null)) {
-            $virtualThemePlan = $result['virtual_theme_plan'];
-            $nextScope['virtual_theme_plan'] = \array_replace(
-                \is_array($nextScope['virtual_theme_plan'] ?? null) ? $nextScope['virtual_theme_plan'] : [],
-                ['draft' => $virtualThemePlan]
-            );
-        }
-        if (\array_key_exists('markdown', $result)) {
-            $nextScope['task_plan_markdown'] = (string)$result['markdown'];
-        }
-
-        return $nextScope;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $mutationSummaries
-     * @return array<string, mixed>
-     */
-    private function buildCombinedTaskPlanMutationSummary(
-        string $action,
-        string $bucket,
-        string $pageType,
-        array $mutationSummaries
-    ): array {
-        $lastSummary = \is_array($mutationSummaries[\count($mutationSummaries) - 1] ?? null)
-            ? $mutationSummaries[\count($mutationSummaries) - 1]
-            : [];
-        $mutatedTaskKeys = [];
-        foreach ($mutationSummaries as $summary) {
-            $summaryTaskKey = \trim((string)($summary['task_key'] ?? ''));
-            if ($summaryTaskKey !== '' && !\in_array($summaryTaskKey, $mutatedTaskKeys, true)) {
-                $mutatedTaskKeys[] = $summaryTaskKey;
-            }
-        }
-
-        return \array_replace($lastSummary, [
-            'action' => $action,
-            'bucket' => $bucket,
-            'page_type' => $bucket === 'shared' ? '' : $pageType,
-            'mutated_task_keys' => $mutatedTaskKeys,
-            'mutated_count' => \count($mutatedTaskKeys),
-        ]);
-    }
-
-    /**
-     * @param array<string, mixed> $scopePatch
-     */
     private function enqueueOperationQueueTask(
         AiSiteAgentSession $session,
         int $adminId,
@@ -13315,10 +10115,10 @@ class AiSiteAgent extends BaseController
         }
         $requestPayload = \is_array($scopePatch['_plan_sse_request'] ?? null)
             ? $scopePatch['_plan_sse_request']
-            : (\is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : []);
+            : [];
         $detailRequestPayload = \is_array($operationDetails['_plan_sse_request'] ?? null)
             ? $operationDetails['_plan_sse_request']
-            : (\is_array($operationDetails['_task_plan_sse_request'] ?? null) ? $operationDetails['_task_plan_sse_request'] : []);
+            : [];
         $selectedSkillCodes = $this->scopeCompatibilityService->normalizeSelectedSkillCodes(
             $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY]
                 ?? $operationDetails[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY]
@@ -13335,22 +10135,7 @@ class AiSiteAgent extends BaseController
         ) {
             $content[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] = $selectedSkillCodes;
         }
-        if ($this->isTaskPlanSchemeRebuildRequest($operation, $scopePatch, $operationDetails)) {
-            $content['_force_rebuild'] = 1;
-        }
         $content = $this->applyOperationDetailsToPayload($content, $operationDetails);
-        if ($operation === 'task_plan') {
-            $taskPlanRequest = \is_array($scopePatch['_task_plan_sse_request'] ?? null)
-                ? $scopePatch['_task_plan_sse_request']
-                : (\is_array($operationDetails['_task_plan_sse_request'] ?? null) ? $operationDetails['_task_plan_sse_request'] : []);
-            if ($taskPlanRequest !== []) {
-                $content['_task_plan_sse_request'] = $taskPlanRequest;
-                $content['prompt_mode'] = \trim((string)($taskPlanRequest['prompt_mode'] ?? ''));
-                $content['target_scope'] = \trim((string)($taskPlanRequest['target_scope'] ?? ''));
-                $content['round'] = (int)($taskPlanRequest['round'] ?? 1);
-            }
-            $this->ensureTaskPlanQueueContentPromptMode($session, $content, $scopePatch, $operationDetails);
-        }
         if (\in_array($operation, ['build', 'block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
             $content['scope_patch'] = $scopePatch;
         }
@@ -13436,8 +10221,7 @@ class AiSiteAgent extends BaseController
 
         $status = \strtolower(\trim((string)($queueRow['status'] ?? '')));
         if (\in_array($status, ['error', 'failed', 'fail'], true)) {
-            return $operation === 'task_plan'
-                && $this->isTaskPlanRetryQueueRequest($scopePatch, $operationDetails);
+            return false;
         }
         if ($preserveRunningQueueRow && $status === 'running') {
             return false;
@@ -13449,90 +10233,6 @@ class AiSiteAgent extends BaseController
     /**
      * @param array<string, mixed> $scopePatch
      * @param array<string, mixed> $operationDetails
-     */
-    private function isTaskPlanRetryQueueRequest(array $scopePatch, array $operationDetails): bool
-    {
-        $request = \array_replace(
-            \is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : [],
-            \is_array($operationDetails['_task_plan_sse_request'] ?? null) ? $operationDetails['_task_plan_sse_request'] : []
-        );
-
-        return \trim((string)($request['prompt_mode'] ?? '')) === 'resume_task_plan'
-            || \trim((string)($operationDetails['prompt_mode'] ?? '')) === 'resume_task_plan';
-    }
-
-    /**
-     * Worker 仅当 content 含有效 prompt_mode（或 retry hints）时才把任务识别为 resume/refine；
-     * scope 持久化后会清空 _task_plan_sse_request，故此处为队列 content 补齐顶层 prompt_mode。
-     *
-     * @param array<string, mixed> $content
-     * @param array<string, mixed> $scopePatch
-     * @param array<string, mixed> $operationDetails
-     */
-    private function ensureTaskPlanQueueContentPromptMode(
-        AiSiteAgentSession $session,
-        array &$content,
-        array $scopePatch,
-        array $operationDetails
-    ): void {
-        $valid = ['detect_bootstrap_task_plan', 'resume_task_plan', 'refine_task_plan', 'rebuild_task_plan'];
-        $current = \trim((string)($content['prompt_mode'] ?? ''));
-        if (\in_array($current, $valid, true)) {
-            return;
-        }
-        foreach ([
-            \trim((string)($operationDetails['prompt_mode'] ?? '')),
-            \trim((string)($scopePatch['prompt_mode'] ?? '')),
-        ] as $candidate) {
-            if (\in_array($candidate, $valid, true)) {
-                $content['prompt_mode'] = $candidate;
-
-                return;
-            }
-        }
-
-        $stageScope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        if ($this->buildTaskService->hasRetryableAiFailures($stageScope, 'task_plan')) {
-            $content['prompt_mode'] = 'resume_task_plan';
-
-            return;
-        }
-
-        $checkpoint = \is_array($stageScope[AiSiteVirtualThemePlanService::TASK_PLAN_CHECKPOINT_SCOPE_KEY] ?? null)
-            ? $stageScope[AiSiteVirtualThemePlanService::TASK_PLAN_CHECKPOINT_SCOPE_KEY]
-            : [];
-        $failedCheckpoint = \is_array($checkpoint['failed_batch_ids'] ?? null) ? $checkpoint['failed_batch_ids'] : [];
-        if ($failedCheckpoint !== []) {
-            $content['prompt_mode'] = 'resume_task_plan';
-
-            return;
-        }
-
-        $retryBatchIds = \is_array($stageScope['_task_plan_retry_failed_batches'] ?? null)
-            ? $stageScope['_task_plan_retry_failed_batches']
-            : [];
-        if ($retryBatchIds !== []) {
-            $content['prompt_mode'] = 'resume_task_plan';
-
-            return;
-        }
-
-        $vtp = \is_array($stageScope['virtual_theme_plan'] ?? null) ? $stageScope['virtual_theme_plan'] : [];
-        $last = \trim((string)($vtp['last_prompt_mode'] ?? ''));
-        if (\in_array($last, $valid, true)) {
-            $content['prompt_mode'] = $last;
-
-            return;
-        }
-
-        $content['prompt_mode'] = 'detect_bootstrap_task_plan';
-    }
-
-    /**
-     * @param array<string, mixed> $content
-     * @return array<string, mixed>
      */
     private function buildAiSiteQueueReusePatch(string $queueName, array $content, string $bizKey, int $typeId): array
     {
@@ -13602,7 +10302,6 @@ class AiSiteAgent extends BaseController
     {
         return match ($operation) {
             'plan' => \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class,
-            'task_plan' => \GuoLaiRen\PageBuilder\Queue\AiSiteTaskPlanQueue::class,
             'build' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             'block_regenerate' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             'block_partial_patch' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
@@ -13712,7 +10411,6 @@ class AiSiteAgent extends BaseController
         ];
         $queueInfoKey = match ($operation) {
             'plan' => 'plan_queue_info',
-            'task_plan' => 'task_plan_queue_info',
             default => 'build_queue_info',
         };
         if (\is_array($queueInfo)) {
@@ -13756,7 +10454,6 @@ class AiSiteAgent extends BaseController
     {
         return match ($operation) {
             'plan' => 'plan',
-            'task_plan' => 'task_plan',
             'build' => 'build',
             default => $operation !== '' ? $operation : 'workspace',
         };
@@ -13781,7 +10478,7 @@ class AiSiteAgent extends BaseController
     {
         return match ($operation) {
             'plan' => AiSiteAgentSession::STAGE_PLAN,
-            'task_plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'publish' => AiSiteAgentSession::STAGE_PUBLISH,
             default => 'workspace',
         };
@@ -14609,31 +11306,12 @@ class AiSiteAgent extends BaseController
         foreach ([
             $virtualPages[$pageType]['blocks'] ?? null,
             $scope['virtual_pages_by_type'][$pageType]['blocks'] ?? null,
-            $scope['pagebuilder_pages_by_type'][$pageType]['ai_layout']['blocks'] ?? null,
         ] as $candidate) {
             if (\is_array($candidate) && $candidate !== []) {
                 return \array_values(\array_filter($candidate, static fn(mixed $block): bool => \is_array($block)));
             }
         }
-
-        $pageId = (int)($scope['pagebuilder_pages_by_type'][$pageType]['page_id'] ?? 0);
-        if ($pageId <= 0) {
-            return [];
-        }
-
-        try {
-            /** @var Page $page */
-            $page = ObjectManager::make(Page::class);
-            $page->clearData()->clearQuery()->load($pageId);
-            if ((int)$page->getId() <= 0) {
-                return [];
-            }
-            $layout = $page->getAiLayoutArray();
-            $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
-            return \array_values(\array_filter($blocks, static fn(mixed $block): bool => \is_array($block)));
-        } catch (\Throwable) {
-            return [];
-        }
+        return [];
     }
 
     /**
@@ -14924,7 +11602,7 @@ class AiSiteAgent extends BaseController
                     'page_type' => $pageType,
                     'page_label' => (string)($pageTypeLabels[$pageType] ?? $pageType),
                     'section_code' => $sectionCode,
-                    'message' => 'Build task missing stage-two section spec: ' . $taskKey,
+                    'message' => 'Build task missing build-plan section spec: ' . $taskKey,
                 ];
                 continue;
             }
@@ -16295,7 +12973,7 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson(['success' => false, 'message' => $error]);
         }
         $saveTarget = \strtolower(\trim((string)$this->getRequestBodyValue('save_target', '')));
-        if ($merge && $isAutosave && $payload === [] && ($saveTarget === 'plan' || ($saveTarget === '' && $this->isTruthyRequestFlag('save_plan_draft') && !$this->isTruthyRequestFlag('save_task_plan_draft')))) {
+        if ($merge && $isAutosave && $payload === [] && ($saveTarget === 'plan' || ($saveTarget === '' && $this->isTruthyRequestFlag('save_plan_draft')))) {
             try {
                 $this->persistExistingPlanDraftOrThrow($session, $adminId, 'save_button');
             } catch (\Throwable $throwable) {
@@ -16316,27 +12994,6 @@ class AiSiteAgent extends BaseController
                 'autosave' => true,
             ]);
         }
-        if ($merge && $isAutosave && $payload === [] && ($saveTarget === 'task_plan' || ($saveTarget === '' && $this->isTruthyRequestFlag('save_task_plan_draft')))) {
-            try {
-                $this->persistExistingTaskPlanDraftOrThrow($session, $adminId, 'save_button');
-            } catch (\Throwable $throwable) {
-                return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
-            }
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-                'task_plan_draft_saved',
-                (string)__('第二阶段任务方案草稿已保存'),
-                ['details' => ['autosave' => 1, 'source' => 'save_button']]
-            );
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => (string)__('第二阶段任务方案草稿已保存'),
-                'autosave' => true,
-            ]);
-        }
         if (isset($payload['page_types']) && !\array_key_exists(AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY, $payload)) {
             $payload[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
@@ -16349,8 +13006,6 @@ class AiSiteAgent extends BaseController
         if ($siteProfileManual !== []) {
             $payload['site_profile_manual'] = $siteProfileManual;
         }
-        $payload = $this->normalizeTaskPlanStructuredScopePayload($payload);
-
         $saved = $merge ? $this->sessionService->mergeScope($session->getId(), $adminId, $payload) : $this->sessionService->replaceScope($session->getId(), $adminId, $payload);
         if (!$saved) {
             return $this->fetchJson(['success' => false, 'message' => __('保存失败')]);
@@ -16375,70 +13030,6 @@ class AiSiteAgent extends BaseController
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
 
         return $this->fetchJson(['success' => true, 'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true)]);
-    }
-
-    /**
-     * Keep manual stage-two field edits structured-first: the frontend sends the edited
-     * task tree in task_plan_structured and mirrors it into virtual_theme_plan.draft.
-     * This normalizer also covers older clients that only send one of those locations.
-     *
-     * @param array<string, mixed> $payload
-     * @return array<string, mixed>
-     */
-    private function normalizeTaskPlanStructuredScopePayload(array $payload): array
-    {
-        $virtualThemePlan = \is_array($payload['virtual_theme_plan'] ?? null) ? $payload['virtual_theme_plan'] : [];
-        $structured = \is_array($payload['task_plan_structured'] ?? null) ? $payload['task_plan_structured'] : [];
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-
-        if ($structured === [] && $this->looksLikeStructuredTaskPlanRoot($draft)) {
-            $structured = $draft;
-        }
-        if ($structured === []) {
-            return $payload;
-        }
-
-        $payload['task_plan_structured'] = $structured;
-        $virtualThemePlan['draft'] = $structured;
-        if (!isset($virtualThemePlan['draft_generated_at']) || \trim((string)$virtualThemePlan['draft_generated_at']) === '') {
-            $virtualThemePlan['draft_generated_at'] = \date('Y-m-d H:i:s');
-        }
-        $payload['virtual_theme_plan'] = $virtualThemePlan;
-
-        if (!\array_key_exists('task_plan_directory_tree', $payload)) {
-            $payload['task_plan_directory_tree'] = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
-        }
-
-        $summary = \is_array($payload['task_plan_summary'] ?? null) ? $payload['task_plan_summary'] : [];
-        $summary['signature'] = (string)($summary['signature'] ?? $virtualThemePlan['signature'] ?? $structured['signature'] ?? '');
-        $summary['shared_task_count'] = \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []);
-        $summary['page_task_count'] = \array_sum(\array_map(
-            static fn($items): int => \is_array($items) ? \count($items) : 0,
-            \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : []
-        ));
-        if (!isset($summary['generation_source']) || \trim((string)$summary['generation_source']) === '') {
-            $summary['generation_source'] = 'manual_structured_edit';
-        }
-        $payload['task_plan_summary'] = $summary;
-
-        return $payload;
-    }
-
-    /**
-     * @param array<string, mixed> $value
-     */
-    private function looksLikeStructuredTaskPlanRoot(array $value): bool
-    {
-        if (\is_array($value['shared_tasks'] ?? null) && $value['shared_tasks'] !== []) {
-            return true;
-        }
-        if (\is_array($value['page_tasks'] ?? null) && $value['page_tasks'] !== []) {
-            return true;
-        }
-        if (\is_array($value['task_script_brief'] ?? null) && $value['task_script_brief'] !== []) {
-            return true;
-        }
-        return false;
     }
 
     private function handleRefinePlanPage(): string
@@ -16780,203 +13371,20 @@ class AiSiteAgent extends BaseController
         return $next;
     }
 
-    private function handleSortTaskPlanTasks(): string
-    {
-        $adminId = (int)$this->getLoginUserId();
-        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
-        $bucket = \trim((string)$this->getRequestBodyValue('bucket', 'page'));
-        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
-        if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', 'Missing required params.', ['public_id', 'bucket', 'ordered_task_keys']);
-        }
-
-        $error = '';
-        $orderedTaskKeys = $this->getRequestJsonStringList('ordered_task_keys', $error);
-        if ($error !== '') {
-            return $this->fetchJson(['success' => false, 'message' => $error]);
-        }
-        if ($orderedTaskKeys === []) {
-            return $this->jsonError('INVALID_PARAMS', 'ordered_task_keys must not be empty.', ['ordered_task_keys']);
-        }
-
-        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
-        if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
-        }
-
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        try {
-            $artifacts = $this->virtualThemePlanService->reorderDraftTaskPlanTasks($scope, $bucket, $orderedTaskKeys, $pageType);
-        } catch (\Throwable $throwable) {
-            return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
-        }
-
-        $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
-        $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
-        $scopePatch = [
-            'virtual_theme_plan' => [
-                'draft' => $virtualThemePlan,
-                'draft_markdown' => (string)($artifacts['markdown'] ?? ''),
-                'draft_generated_at' => \date('Y-m-d H:i:s'),
-                'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
-                'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
-                'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
-                'confirmed_signature' => (string)($scope['virtual_theme_plan']['confirmed_signature'] ?? ''),
-                'plan_signature' => (string)($virtualThemePlan['signature'] ?? $scope['virtual_theme_plan']['plan_signature'] ?? ''),
-                'last_prompt_mode' => (string)($scope['virtual_theme_plan']['last_prompt_mode'] ?? ''),
-                'last_target_scope' => (string)($scope['virtual_theme_plan']['last_target_scope'] ?? ''),
-                'last_round' => (int)($scope['virtual_theme_plan']['last_round'] ?? 0),
-            ],
-            'task_plan_markdown' => (string)($artifacts['markdown'] ?? ''),
-            'task_plan_generated_at' => \date('Y-m-d H:i:s'),
-            'task_plan_structured' => $structured,
-            'task_plan_directory_tree' => \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [],
-            'task_plan_summary' => [
-                'signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
-                'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
-                'prompt_mode' => 'manual_reorder',
-                'generation_source' => 'manual_reorder',
-            ],
-        ];
-        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-        if (!$saved) {
-            return $this->fetchJson(['success' => false, 'message' => 'Failed to persist task-plan order.']);
-        }
-
-        $this->appendWorkspaceEvent(
-            $session->getId(),
-            $adminId,
-            $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-            'task_plan_tasks_reordered',
-            'Stage-2 task plan order saved.',
-            ['details' => \is_array($artifacts['reorder_summary'] ?? null) ? $artifacts['reorder_summary'] : []]
-        );
-        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => 'Stage-2 task-plan order saved.',
-            'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
-        ]);
-    }
-
-    private function handleMutateTaskPlanTask(): string
-    {
-        $adminId = (int)$this->getLoginUserId();
-        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
-        $bucket = \trim((string)$this->getRequestBodyValue('bucket', 'page'));
-        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
-        $action = \strtolower(\trim((string)$this->getRequestBodyValue('action', '')));
-        $taskKey = \trim((string)$this->getRequestBodyValue('task_key', ''));
-        $taskKeys = $this->normalizeStringList($this->getRequestBodyValue('task_keys', []));
-        if ($taskKey !== '' && !\in_array($taskKey, $taskKeys, true)) {
-            \array_unshift($taskKeys, $taskKey);
-        }
-        if ($adminId <= 0 || $publicId === '' || !\in_array($action, ['refine', 'rebuild', 'delete', 'create'], true)) {
-            return $this->jsonError('INVALID_PARAMS', 'Missing required params.', self::PARAMS_MUTATE_TASK_PLAN_TASK);
-        }
-        if ($action !== 'create' && $taskKeys === []) {
-            return $this->jsonError('INVALID_PARAMS', 'task_key is required for refine/rebuild/delete.', self::PARAMS_MUTATE_TASK_PLAN_TASK);
-        }
-
-        $taskConfig = [];
-        $taskConfigs = [];
-        $rawTaskConfig = $this->getRequestBodyValue('task_config', null);
-        if ($rawTaskConfig !== null && $rawTaskConfig !== '') {
-            $error = '';
-            $taskConfig = $this->getRequestJsonObject('task_config', $error);
-            if ($error !== '') {
-                return $this->fetchJson(['success' => false, 'message' => $error]);
-            }
-        }
-        if ($taskConfig === []) {
-            $rawTaskPatch = $this->getRequestBodyValue('task_patch', null);
-            if ($rawTaskPatch !== null && $rawTaskPatch !== '') {
-                $error = '';
-                $taskConfig = $this->getRequestJsonObject('task_patch', $error);
-                if ($error !== '') {
-                    return $this->fetchJson(['success' => false, 'message' => $error]);
-                }
-            }
-        }
-        $rawTaskConfigs = $this->getRequestBodyValue('task_configs', null);
-        if ($rawTaskConfigs !== null && $rawTaskConfigs !== '') {
-            $error = '';
-            $taskConfigs = $this->getRequestJsonObject('task_configs', $error);
-            if ($error !== '') {
-                return $this->fetchJson(['success' => false, 'message' => $error]);
-            }
-        }
-        $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
-        if ($instruction !== '' && !isset($taskConfig['instruction'])) {
-            $taskConfig['instruction'] = $instruction;
-        }
-        if ($taskConfigs === [] && $taskConfig !== [] && $taskKey !== '') {
-            $taskConfigs[$taskKey] = $taskConfig;
-        }
-
-        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
-        if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
-        }
-
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-        );
-        $round = \max(1, (int)$this->getRequestBodyValue('round', ((int)($scope['virtual_theme_plan']['last_round'] ?? 0)) + 1));
-        $targetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
-        $targetScopes = $this->normalizeStringList($this->getRequestBodyValue('target_scopes', []));
-        if ($targetScope !== '' && !\in_array($targetScope, $targetScopes, true)) {
-            \array_unshift($targetScopes, $targetScope);
-        }
-        $ports = new AiSiteAgentMutateTaskPlanTaskOperationPorts(
-            startOperation: fn (...$args): array => $this->startOperation(...$args),
-            buildWorkspaceState: fn (...$args): array => $this->buildWorkspaceState(...$args)
-        );
-
-        return $this->fetchJson(
-            $this->mutateTaskPlanTaskOperationService->run(
-                $session,
-                $adminId,
-                $scope,
-                $bucket,
-                $pageType,
-                $action,
-                $taskKey,
-                $taskConfig,
-                $instruction,
-                $round,
-                $targetScope,
-                $ports,
-                $taskKeys,
-                $taskConfigs,
-                $targetScopes
-            )
-        );
-    }
-
-    private function buildOperationStreamUrl(string $publicId, string $executionToken): string
-    {
-        return $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId, 'execution_token' => $executionToken]);
-    }
-
     private function supportsBackgroundOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
     }
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
     {
         // 队列型核心操作在前端已改为“持续观察直到队列终态”，
         // 因此这里必须保持 SSE 连接，不再走 checkpoint-only 快速 done。
-        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
     }
 
     /**
-     * Stage-1/2 planning operations are intentionally long-running and should not be auto-reclaimed
+     * Planning operations are intentionally long-running and should not be auto-reclaimed
      * just because their active_operation timestamp is old.
      *
      * @param array<string, mixed> $activeOperation
@@ -16984,7 +13392,7 @@ class AiSiteAgent extends BaseController
     private function shouldReclaimStaleActiveOperation(array $activeOperation): bool
     {
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
-        return !\in_array($operation, ['plan', 'task_plan'], true);
+        return $operation !== 'plan';
     }
 
     private function getObserverMaxIdleLoops(): int
@@ -16992,7 +13400,6 @@ class AiSiteAgent extends BaseController
         // 0 means "do not cut off observer mode because of idle time".
         return 0;
     }
-
 
     protected function fetchJson(array $data): string
     {
@@ -17140,7 +13547,7 @@ class AiSiteAgent extends BaseController
             $accountName = \trim((string)($row['account_name'] ?? ''));
             $label = $registrarName !== ''
                 ? $registrarName . ($accountName !== '' ? (' - ' . $accountName) : '')
-                : ($accountName !== '' ? $accountName : (string)__('鏈嶅姟鍟?'));
+                : ($accountName !== '' ? $accountName : (string)__('服务�?'));
             $options[] = [
                 'account_id' => $accountId,
                 'label' => $label,
