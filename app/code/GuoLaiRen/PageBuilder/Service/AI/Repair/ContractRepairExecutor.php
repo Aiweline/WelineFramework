@@ -7,12 +7,14 @@ namespace GuoLaiRen\PageBuilder\Service\AI\Repair;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractPatchValidator;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractQaReportBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanFrozenFieldValidator;
 
 final class ContractRepairExecutor
 {
     public function __construct(
         private readonly ?ContractPatchValidator $patchValidator = null,
-        private readonly ?ContractQaReportBuilder $qaReportBuilder = null
+        private readonly ?ContractQaReportBuilder $qaReportBuilder = null,
+        private readonly ?BuildPlanFrozenFieldValidator $buildPlanFrozenFieldValidator = null
     ) {
     }
 
@@ -34,6 +36,14 @@ final class ContractRepairExecutor
                 continue;
             }
             $path = \trim((string)($candidate['path'] ?? ''));
+            $pathValidation = $this->buildPlanFrozenFieldValidator()->validateRepairCandidatePath($path, $targetContract);
+            if (!(bool)($pathValidation['valid'] ?? false)) {
+                $blocked[] = $this->blockedCandidate(
+                    $candidate,
+                    \implode('; ', \array_map('strval', \is_array($pathValidation['errors'] ?? null) ? $pathValidation['errors'] : []))
+                );
+                continue;
+            }
             if (!$this->isMutablePath($path, $targetContract)) {
                 $blocked[] = $this->blockedCandidate($candidate, 'Path is not mutable: ' . $path);
                 continue;
@@ -50,6 +60,14 @@ final class ContractRepairExecutor
                 $blocked[] = $this->blockedCandidate(
                     $candidate,
                     \implode('; ', \array_map('strval', \is_array($validation['errors'] ?? null) ? $validation['errors'] : []))
+                );
+                continue;
+            }
+            $buildPlanValidation = $this->buildPlanFrozenFieldValidator()->validate($targetContract, $next);
+            if (!(bool)($buildPlanValidation['valid'] ?? false)) {
+                $blocked[] = $this->blockedCandidate(
+                    $candidate,
+                    \implode('; ', \array_map('strval', \is_array($buildPlanValidation['errors'] ?? null) ? $buildPlanValidation['errors'] : []))
                 );
                 continue;
             }
@@ -184,5 +202,10 @@ final class ContractRepairExecutor
         $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
 
         return \trim((string)($meta['type'] ?? $contract['type'] ?? ContractType::TYPE_RENDER_DATA));
+    }
+
+    private function buildPlanFrozenFieldValidator(): BuildPlanFrozenFieldValidator
+    {
+        return $this->buildPlanFrozenFieldValidator ?? new BuildPlanFrozenFieldValidator();
     }
 }

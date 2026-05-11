@@ -158,7 +158,7 @@ class AiSiteBuildQueue implements QueueInterface
                     $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
                     $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope);
                 }
-                $normalizedScope = $buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
+                $normalizedScope = $buildTaskService->normalizeConfirmedBuildPlanFlag($scope);
                 $scopeChanged = $normalizedScope !== $confirmedScope;
                 $scope = $normalizedScope;
             } elseif (\in_array($operation, ['block_regenerate', 'block_partial_patch'], true) && $scopePatch !== []) {
@@ -171,8 +171,8 @@ class AiSiteBuildQueue implements QueueInterface
                 $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
                 $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
             }
-            if (!$buildTaskService->hasConfirmedTaskPlanForBuild($scope)) {
-                throw new \RuntimeException('请先确认第二阶段任务方案，再开始执行构建。');
+            if (!$buildTaskService->hasConfirmedBuildPlanForBuild($scope)) {
+                throw new \RuntimeException('请先确认方案1生成的 build_plan_v2，再开始执行构建。');
             }
 
             $allowStubAiInTest = (int)($scope['fake_mode'] ?? 0) === 1;

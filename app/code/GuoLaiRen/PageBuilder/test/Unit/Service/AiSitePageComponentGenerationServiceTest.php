@@ -283,7 +283,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertStringContainsString('HTML fragments must be balanced', $prompt);
     }
 
-    public function testResolveConcurrencyUsesTaskCountWithoutApplicationCap(): void
+    public function testResolveConcurrencyUsesConfiguredApplicationCap(): void
     {
         $service = new AiSitePageComponentGenerationService();
         $method = new \ReflectionMethod($service, 'resolveConcurrency');
@@ -291,7 +291,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
 
         self::assertSame(1, $method->invoke($service, 0));
         self::assertSame(1, $method->invoke($service, 1));
-        self::assertSame(8, $method->invoke($service, 8));
+        self::assertSame(4, $method->invoke($service, 8));
     }
 
     public function testGenerateComponentEventsConcurrentlyReportsFulfilledAndRejectedTasks(): void
@@ -676,7 +676,7 @@ HTML,
         self::assertTrue($check['valid'], (string)($check['error'] ?? 'footer markup should stay syntax-valid after repair'));
     }
 
-    public function testBuildSectionGenerationPromptIncludesStageTwoTaskContext(): void
+    public function testBuildSectionGenerationPromptIncludesBuildPlanTaskContext(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
@@ -713,64 +713,63 @@ HTML,
                 'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'en_US',
                 'plan_locale' => 'en_US',
-                'task_plan_confirmed' => 1,
-                'virtual_theme_plan' => [
-                    'confirmed' => [
-                        'page_tasks' => [
-                            'home_page' => [
-                                [
-                                    'task_key' => 'page:home_page:content/home-page-hero',
-                                    'section_code' => 'content/home-page-hero',
-                                    'plan_context' => [
-                                        'page_goal' => 'Explain value',
-                                        'page_design_plan' => [
-                                            'color_layering' => 'hero panel over dark base, proof cards on lighter surface, amber CTA accent',
-                                            'section_flow' => ['hero impact', 'proof layer', 'final CTA'],
-                                            'interaction_notes' => ['CTA hover glow', 'card lift'],
-                                        ],
-                                        'page_flow_role' => 'opening',
-                                        'block_goal' => 'Open with a clear value proposition.',
+                'build_blueprint' => [
+                    'source' => 'build_plan_v2',
+                    'build_plan_signature' => 'build-plan-signature',
+                    'tasks' => [
+                        [
+                            'task_key' => 'page:home_page:content/home-page-hero',
+                            'task_type' => 'page_section',
+                            'page_type' => 'home_page',
+                            'section_code' => 'content/home-page-hero',
+                            'plan_context' => [
+                                'page_goal' => 'Explain value',
+                                'page_design_plan' => [
+                                    'color_layering' => 'hero panel over dark base, proof cards on lighter surface, amber CTA accent',
+                                    'section_flow' => ['hero impact', 'proof layer', 'final CTA'],
+                                    'interaction_notes' => ['CTA hover glow', 'card lift'],
+                                ],
+                                'page_flow_role' => 'opening',
+                                'block_goal' => 'Open with a clear value proposition.',
+                            ],
+                            'task_script' => [
+                                'story_goal' => 'Make the hero conversion-ready.',
+                                'content_fill_rule' => 'Use short headline and one CTA.',
+                                'stage3_directive' => 'Follow the confirmed hero task contract.',
+                                'field_content_requirements' => [
+                                    ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
+                                ],
+                            ],
+                            'implementation_contract' => [
+                                'acceptance' => ['Hero must render value proposition and CTA.'],
+                            ],
+                            'block_task' => [
+                                'content_plan' => [
+                                    'headline' => 'Use a launch-ready hero promise from the block plan.',
+                                    'body' => 'Explain one primary benefit and one proof point.',
+                                ],
+                                'style_plan' => [
+                                    'visual' => 'Use a layered neon card visual with CSS depth.',
+                                    'page_design_plan' => [
+                                        'color_layering' => 'hero panel over dark base, proof cards on lighter surface, amber CTA accent',
                                     ],
-                                    'task_script' => [
-                                        'story_goal' => 'Make the hero conversion-ready.',
-                                        'content_fill_rule' => 'Use short headline and one CTA.',
-                                        'stage3_directive' => 'Follow the confirmed hero task contract.',
-                                        'field_content_requirements' => [
-                                            ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
-                                        ],
+                                    'page_flow_role' => 'opening',
+                                ],
+                            ],
+                            'runtime_context' => [
+                                'task_session_id' => 'abc123',
+                                'theme_context_snapshot' => [
+                                    'visual_direction' => [
+                                        'name' => 'Festival Neon',
+                                        'visual_tone' => 'bright gaming trust',
                                     ],
-                                    'implementation_contract' => [
-                                        'acceptance' => ['Hero must render value proposition and CTA.'],
+                                    'palette' => [
+                                        'primary' => '#101827',
+                                        'accent' => '#f59e0b',
                                     ],
-                                    'block_task' => [
-                                        'content_plan' => [
-                                            'headline' => 'Use a launch-ready hero promise from the block plan.',
-                                            'body' => 'Explain one primary benefit and one proof point.',
-                                        ],
-                                        'style_plan' => [
-                                            'visual' => 'Use a layered neon card visual with CSS depth.',
-                                            'page_design_plan' => [
-                                                'color_layering' => 'hero panel over dark base, proof cards on lighter surface, amber CTA accent',
-                                            ],
-                                            'page_flow_role' => 'opening',
-                                        ],
-                                    ],
-                                    'runtime_context' => [
-                                        'task_session_id' => 'abc123',
-                                        'theme_context_snapshot' => [
-                                            'visual_direction' => [
-                                                'name' => 'Festival Neon',
-                                                'visual_tone' => 'bright gaming trust',
-                                            ],
-                                            'palette' => [
-                                                'primary' => '#101827',
-                                                'accent' => '#f59e0b',
-                                            ],
-                                        ],
-                                        'shared_prompt_context' => [
-                                            'brand_promise' => 'Fast game discovery with trusted checkout.',
-                                        ],
-                                    ],
+                                ],
+                                'shared_prompt_context' => [
+                                    'brand_promise' => 'Fast game discovery with trusted checkout.',
                                 ],
                             ],
                         ],
@@ -779,7 +778,7 @@ HTML,
             ]
         );
 
-        self::assertStringContainsString('Stage-2 task context for this section:', $prompt);
+        self::assertStringContainsString('Build-plan task context for this section:', $prompt);
         self::assertStringContainsString('page_design_plan', $prompt);
         self::assertStringContainsString('hero panel over dark base', $prompt);
         self::assertStringContainsString('page_flow_role: opening', $prompt);
@@ -790,8 +789,8 @@ HTML,
         self::assertStringContainsString('Festival Neon', $prompt);
         self::assertStringContainsString('stage1.shared_prompt_context', $prompt);
         self::assertStringContainsString('Fast game discovery with trusted checkout.', $prompt);
-        self::assertStringContainsString('stage2.task_script', $prompt);
-        self::assertStringContainsString('stage2.block_task', $prompt);
+        self::assertStringContainsString('build_plan.task_script', $prompt);
+        self::assertStringContainsString('build_plan.block_task', $prompt);
         self::assertStringContainsString('block_task.content_plan', $prompt);
         self::assertStringContainsString('Use a launch-ready hero promise from the block plan.', $prompt);
         self::assertStringContainsString('block_task.style_plan', $prompt);
@@ -825,7 +824,7 @@ HTML,
         self::assertStringContainsString('HTML structure contract', $prompt);
         self::assertStringContainsString('html fragment rule', $prompt);
         self::assertStringContainsString('no-overlap structure rule', $prompt);
-        self::assertStringContainsString('stage2 language rule', $prompt);
+        self::assertStringContainsString('build-plan language rule', $prompt);
         self::assertStringContainsString('rewrite any planned text that is not in the website content language', $prompt);
     }
 
@@ -857,20 +856,18 @@ HTML,
                 'brief_description' => 'Explain value',
             ],
             [
-                'task_plan_confirmed' => 1,
-                'virtual_theme_plan' => [
-                    'confirmed' => [
-                        'page_tasks' => [
-                            'home_page' => [
-                                [
-                                    'task_key' => 'page:home_page:content/home-page-hero',
-                                    'section_code' => 'content/home-page-hero',
-                                    'task_script' => [
-                                        'field_content_requirements' => [
-                                            ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
-                                            ['field' => 'description', 'sample' => 'Launch faster with a focused hero message.', 'reason' => 'Clarify value'],
-                                        ],
-                                    ],
+                'build_blueprint' => [
+                    'source' => 'build_plan_v2',
+                    'tasks' => [
+                        [
+                            'task_key' => 'page:home_page:content/home-page-hero',
+                            'task_type' => 'page_section',
+                            'page_type' => 'home_page',
+                            'section_code' => 'content/home-page-hero',
+                            'task_script' => [
+                                'field_content_requirements' => [
+                                    ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
+                                    ['field' => 'description', 'sample' => 'Launch faster with a focused hero message.', 'reason' => 'Clarify value'],
                                 ],
                             ],
                         ],
@@ -883,27 +880,19 @@ HTML,
         self::assertSame('Launch faster with a focused hero message.', (string)($config['content.description'] ?? ''));
     }
 
-    public function testConfirmedTaskPlanRootFallsBackToBuildBlueprintWhenSnapshotIsCompacted(): void
+    public function testBuildPlanRootReadsBuildBlueprintTasks(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
         );
 
         $root = (function (array $scope): array {
-            return $this->resolveTaskPlanRoot($scope);
+            return $this->resolveBuildPlanTaskRoot($scope);
         })->call($service, [
-            'task_plan_confirmed' => 1,
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'task-plan-signature',
-                    '_storage_compacted' => 1,
-                    'execution_blueprint_ref' => ['task_count' => 1],
-                ],
-            ],
             'build_blueprint' => [
-                'source' => 'stage2_confirmed_task_plan',
+                'source' => 'build_plan_v2',
                 'signature' => 'build-blueprint-signature',
-                'task_plan_signature' => 'task-plan-signature',
+                'build_plan_signature' => 'build-plan-signature',
                 'tasks' => [
                     [
                         'task_key' => 'page:home_page:content/home-page-hero',
@@ -924,7 +913,7 @@ HTML,
         );
     }
 
-    public function testTaskPlanPromptUsesScopeLevelRuntimeContextWhenTaskSnapshotsAreCompacted(): void
+    public function testBuildPlanPromptUsesScopeLevelRuntimeContextWhenTaskSnapshotsAreCompacted(): void
     {
         $service = new AiSitePageComponentGenerationService();
         $task = [
@@ -953,7 +942,7 @@ HTML,
         ];
 
         $prompt = (function (array $taskPlanTask, string $contextLabel, array $scope): string {
-            return $this->buildTaskPlanPromptAddon($taskPlanTask, $contextLabel, $scope);
+            return $this->buildBuildPlanTaskPromptAddon($taskPlanTask, $contextLabel, $scope);
         })->call($service, $task, 'section', $scope);
 
         self::assertStringContainsString('stage2-context-hash', $prompt);
@@ -961,7 +950,7 @@ HTML,
         self::assertStringContainsString('Compact trust navigation', $prompt);
     }
 
-    public function testTaskPlanPromptDoesNotTreatPlaceholderManifestAsVerifiedAsset(): void
+    public function testBuildPlanPromptDoesNotTreatPlaceholderManifestAsVerifiedAsset(): void
     {
         $service = new AiSitePageComponentGenerationService();
         $placeholderUrl = '/pub/media/page-build/demo/ai-generated/home-hero-old.svg';
@@ -996,7 +985,7 @@ HTML,
         ];
 
         $prompt = (function (array $taskPlanTask, string $contextLabel, array $scope): string {
-            return $this->buildTaskPlanPromptAddon($taskPlanTask, $contextLabel, $scope);
+            return $this->buildBuildPlanTaskPromptAddon($taskPlanTask, $contextLabel, $scope);
         })->call($service, $task, 'section', $scope);
 
         self::assertStringContainsString('verified_assets: []', $prompt);
@@ -1103,10 +1092,9 @@ HTML,
             pageBlueprintService: new AiSitePageBlueprintService(),
         );
         $scope = [
-            'task_plan_confirmed' => 1,
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'shared_tasks' => [
+            'build_blueprint' => [
+                'source' => 'build_plan_v2',
+                'tasks' => [
                         [
                             'task_key' => 'shared:header',
                             'region' => 'header',
@@ -1148,7 +1136,6 @@ HTML,
                                 ],
                             ],
                         ],
-                    ],
                 ],
             ],
         ];
@@ -1493,7 +1480,6 @@ HTML,
             [
                 'default_locale' => 'en_US',
                 'page_types' => ['home_page', 'about_page', 'contact_page'],
-                'task_plan_confirmed' => 1,
                 'execution_blueprint' => [
                     'shared_prompt_context' => [
                         'header_items' => [
@@ -1580,22 +1566,20 @@ HTML,
             ],
             [
                 'default_locale' => 'en_US',
-                'task_plan_confirmed' => 1,
-                'virtual_theme_plan' => [
-                    'confirmed' => [
-                        'page_tasks' => [
-                            'home_page' => [
-                                [
-                                    'task_key' => 'page:home_page:content/home-page-hero',
-                                    'section_code' => 'content/home-page-hero',
-                                    'task_script' => [
-                                        'story_goal' => 'Open with a crisp analytics promise.',
-                                        'content_fill_rule' => 'Use one headline and one proof sentence.',
-                                        'field_content_requirements' => [
-                                            ['field' => 'title', 'sample' => 'See campaign clarity in one dashboard'],
-                                            ['field' => 'description', 'sample' => 'Turn scattered campaign signals into one clear growth view.'],
-                                        ],
-                                    ],
+                'build_blueprint' => [
+                    'source' => 'build_plan_v2',
+                    'tasks' => [
+                        [
+                            'task_key' => 'page:home_page:content/home-page-hero',
+                            'task_type' => 'page_section',
+                            'page_type' => 'home_page',
+                            'section_code' => 'content/home-page-hero',
+                            'task_script' => [
+                                'story_goal' => 'Open with a crisp analytics promise.',
+                                'content_fill_rule' => 'Use one headline and one proof sentence.',
+                                'field_content_requirements' => [
+                                    ['field' => 'title', 'sample' => 'See campaign clarity in one dashboard'],
+                                    ['field' => 'description', 'sample' => 'Turn scattered campaign signals into one clear growth view.'],
                                 ],
                             ],
                         ],
@@ -2512,7 +2496,7 @@ HTML,
         self::assertSame($copy['body'], $plan['body']);
     }
 
-    public function testApplyTaskPlanContentPlanDefaultsAdoptsContentCopyAndCtaPlan(): void
+    public function testApplyBuildPlanContentPlanDefaultsAdoptsContentCopyAndCtaPlan(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
@@ -2540,7 +2524,7 @@ HTML,
         ];
 
         $config = (function (array $defaultConfig, array $taskPlanTask, string $locale): array {
-            return $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask, $locale);
+            return $this->applyBuildPlanDefaults($defaultConfig, $taskPlanTask, $locale);
         })->call($service, $defaultConfig, $taskPlanTask, 'en_US');
 
         self::assertSame('Home Hero', $config['content.title'] ?? null);

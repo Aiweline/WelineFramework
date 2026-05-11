@@ -9,7 +9,7 @@ final class ContractType
     public const VERSION_V1 = 'v1';
 
     public const STAGE_STAGE1 = 'stage1';
-    public const STAGE_STAGE2 = 'stage2';
+    public const STAGE_BUILD_PLAN = 'build_plan';
     public const STAGE_BUILD = 'build';
     public const STAGE_QA = 'qa';
     public const STAGE_REPAIR = 'repair';
@@ -58,7 +58,7 @@ final class ContractType
             self::TYPE_PAGE_CONTRACT,
             self::TYPE_BLOCK_PLAN => self::STAGE_STAGE1,
             self::TYPE_BLOCK_VISUAL_CONTRACT,
-            self::TYPE_BLOCK_TASK_CONTRACT => self::STAGE_STAGE2,
+            self::TYPE_BLOCK_TASK_CONTRACT => self::STAGE_BUILD_PLAN,
             self::TYPE_RENDER_DATA,
             self::TYPE_THEME_MANIFEST => self::STAGE_BUILD,
             self::TYPE_QA_REPORT => self::STAGE_QA,

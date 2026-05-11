@@ -474,7 +474,7 @@ final class AiSiteAssetManifestService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    public function syncFromTaskPlan(array $scope): array
+    public function syncFromBuildPlan(array $scope): array
     {
         $manifest = $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : []);
         foreach ($this->extractSlotsFromScope($scope) as $slot) {
@@ -521,9 +521,9 @@ final class AiSiteAssetManifestService
             $scope['plan_json'] ?? [],
             $scope['plan_structured'] ?? [],
             $scope['execution_blueprint'] ?? [],
-            $scope['task_plan_structured'] ?? [],
-            $scope['virtual_theme_plan']['draft'] ?? [],
-            $scope['virtual_theme_plan']['confirmed'] ?? [],
+            $scope['build_plan_v2'] ?? [],
+            $scope['plan_projection'] ?? [],
+            $scope['content_manifest'] ?? [],
         ];
         foreach ($sources as $source) {
             if (\is_array($source)) {

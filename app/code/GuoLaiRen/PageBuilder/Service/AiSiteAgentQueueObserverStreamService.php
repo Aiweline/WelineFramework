@@ -132,7 +132,6 @@ class AiSiteAgentQueueObserverStreamService
                 $activeOperation['message'] = $queueProcess;
             } elseif (!$waitingForScheduler && ($activeStatus === 'error' || $currentMessage === '')) {
                 $activeOperation['message'] = match ($operation) {
-                    'task_plan' => 'Stage-2 task-plan queue is running.',
                     'build' => 'Build queue is running.',
                     default => 'Stage-1 plan queue is running.',
                 };
@@ -171,9 +170,6 @@ class AiSiteAgentQueueObserverStreamService
             }
             if (\trim((string)($activeOperation['message'] ?? '')) === '') {
                 $activeOperation['message'] = match ($operation) {
-                    'task_plan' => $activeOperation['status'] === 'cancelled'
-                        ? (string)__('第二阶段任务方案队列已取消。')
-                        : (string)__('第二阶段任务方案队列已完成。'),
                     'build' => $activeOperation['status'] === 'cancelled'
                         ? (string)__('生成主题队列已取消。')
                         : (string)__('生成主题队列已完成。'),

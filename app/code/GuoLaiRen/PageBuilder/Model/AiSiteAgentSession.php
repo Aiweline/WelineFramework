@@ -46,41 +46,28 @@ class AiSiteAgentSession extends Model
         'block_task' => true,
         'implementation_contract' => true,
     ];
-    private const TASK_RUNTIME_SHARED_CONTEXT_KEYS = [
-        'stage2_context_snapshot' => true,
+    private const BUILD_RUNTIME_SHARED_CONTEXT_KEYS = [
         'theme_context_snapshot' => true,
         'shared_prompt_context' => true,
-    ];
-    private const CONFIRMED_TASK_PLAN_STORAGE_KEYS = [
-        'signature' => true,
-        'plan_signature' => true,
-        'content_locale' => true,
-        'plan_locale' => true,
-        'source' => true,
-        'version' => true,
-        'generated_at' => true,
-        'confirmed_at' => true,
-        'updated_at' => true,
-        'completed_at' => true,
-        'summary' => true,
-        'task_summary' => true,
-        'build_summary' => true,
     ];
     private const ARTIFACT_BACKED_SCOPE_PATHS = [
         self::STAGE_PLAN => [
             'plan_json' => [['plan_json'], []],
             'plan_structured' => [['plan_structured'], []],
+            'build_plan_v2' => [['build_plan_v2'], []],
+            'plan_projection' => [['plan_projection'], []],
+            'content_manifest' => [['content_manifest'], []],
         ],
         self::STAGE_VISUAL_EDIT => [
             'plan_json' => [['plan_json'], []],
             'plan_structured' => [['plan_structured'], []],
-            'task_plan_structured' => [['task_plan_structured'], []],
-            'task_plan_markdown' => [['task_plan_markdown'], ''],
-            'task_plan_draft' => [['virtual_theme_plan', 'draft'], []],
-            'task_plan_draft_markdown' => [['virtual_theme_plan', 'draft_markdown'], ''],
-            'task_plan_confirmed' => [['virtual_theme_plan', 'confirmed'], []],
-            'task_plan_confirmed_markdown' => [['virtual_theme_plan', 'confirmed_markdown'], ''],
+            'build_plan_v2' => [['build_plan_v2'], []],
+            'plan_projection' => [['plan_projection'], []],
+            'content_manifest' => [['content_manifest'], []],
             'build_blueprint' => [['build_blueprint'], []],
+            'task_results' => [['task_results'], []],
+            'qa_report' => [['qa_report_v2'], []],
+            'repair_patch' => [['repair_patch'], []],
         ],
     ];
     private ?string $scopeJsonDecodeCacheRaw = null;
@@ -392,8 +379,6 @@ class AiSiteAgentSession extends Model
         $scope = $this->compactConfirmedStageOnePlanPayloadsForStorage($scope);
         $scope = $this->compactConfirmedBuildBlueprintTaskRuntimeForStorage($scope);
         $scope = $this->compactConfirmedBuildTaskStateForStorage($scope);
-        $scope = $this->compactDraftTaskPlanSnapshotsForStorage($scope);
-        $scope = $this->compactConfirmedTaskPlanSnapshotsForStorage($scope);
         $scope = $this->removePersistentSnapshotBackupsForStorage($scope);
 
         return $scope;
@@ -532,8 +517,8 @@ class AiSiteAgentSession extends Model
     }
 
     /**
-     * Stage-2 runtime snapshots are identical across tasks. Store them once at
-     * scope level, then keep task definitions focused on task-specific data.
+     * Build-plan runtime snapshots are identical across tasks. Store them once
+     * at scope level, then keep task definitions focused on task-specific data.
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
@@ -542,12 +527,12 @@ class AiSiteAgentSession extends Model
     {
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-        if ((string)($buildBlueprint['source'] ?? '') !== 'stage2_confirmed_task_plan' || $tasks === []) {
+        if ((string)($buildBlueprint['source'] ?? '') !== 'build_plan_v2' || $tasks === []) {
             return $scope;
         }
 
         $changed = false;
-        foreach (self::TASK_RUNTIME_SHARED_CONTEXT_KEYS as $key => $_) {
+        foreach (self::BUILD_RUNTIME_SHARED_CONTEXT_KEYS as $key => $_) {
             if (\array_key_exists($key, $buildBlueprint)) {
                 $changed = true;
             }
@@ -557,7 +542,7 @@ class AiSiteAgentSession extends Model
                 continue;
             }
 
-            foreach (self::TASK_RUNTIME_SHARED_CONTEXT_KEYS as $key => $_) {
+            foreach (self::BUILD_RUNTIME_SHARED_CONTEXT_KEYS as $key => $_) {
                 if (\array_key_exists($key, $task)) {
                     unset($task[$key]);
                     $changed = true;
@@ -580,7 +565,6 @@ class AiSiteAgentSession extends Model
 
         if ($changed) {
             unset(
-                $buildBlueprint['stage2_context_snapshot'],
                 $buildBlueprint['theme_context_snapshot'],
                 $buildBlueprint['shared_prompt_context']
             );
@@ -639,196 +623,6 @@ class AiSiteAgentSession extends Model
     }
 
     /**
-     * Stage-2 draft generation used to persist the same large task tree in both
-     * task_plan_structured and virtual_theme_plan.draft. Keep draft canonical
-     * and let readers reconstruct task_plan_structured from it when needed.
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactDraftTaskPlanSnapshotsForStorage(array $scope): array
-    {
-        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
-            return $scope;
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        if ($draft === [] && $taskPlanStructured === []) {
-            return $scope;
-        }
-
-        if ($draft !== []) {
-            $compactedDraft = $this->compactConfirmedTaskPlanSnapshotForStorage($draft);
-            if ($compactedDraft !== $draft) {
-                $virtualThemePlan['draft'] = $compactedDraft;
-                $scope['virtual_theme_plan'] = $virtualThemePlan;
-                $draft = $compactedDraft;
-            }
-        }
-
-        if ($taskPlanStructured !== []) {
-            $compactedStructured = $this->compactConfirmedTaskPlanSnapshotForStorage($taskPlanStructured);
-            if ($draft !== [] && $this->isEquivalentTaskPlanSnapshot($compactedStructured, $draft)) {
-                $scope['task_plan_structured'] = [];
-            } elseif ($compactedStructured !== $taskPlanStructured) {
-                $scope['task_plan_structured'] = $compactedStructured;
-            }
-        }
-
-        return $scope;
-    }
-
-    /**
-     * Once a task plan is confirmed, keep only the latest confirmed snapshot and
-     * drop duplicated top-level copies.
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactConfirmedTaskPlanSnapshotsForStorage(array $scope): array
-    {
-        if ((int)($scope['task_plan_confirmed'] ?? 0) !== 1) {
-            return $scope;
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        if ($confirmed === []) {
-            return $scope;
-        }
-
-        $confirmedWasSlimmed = $this->shouldSlimConfirmedTaskPlanSnapshot($scope, $confirmed);
-        $confirmed = $this->compactConfirmedTaskPlanSnapshotForStorage($confirmed, $confirmedWasSlimmed, $scope);
-        $virtualThemePlan['confirmed'] = $confirmed;
-
-        $virtualThemePlan['draft'] = [];
-        $confirmedMarkdown = \trim((string)($virtualThemePlan['confirmed_markdown'] ?? ''));
-        $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
-        if ($confirmedMarkdown !== '' && ($draftMarkdown === '' || $draftMarkdown === $confirmedMarkdown)) {
-            $virtualThemePlan['draft_markdown'] = '';
-        }
-        unset($virtualThemePlan['draft_generated_at']);
-        $scope['virtual_theme_plan'] = $virtualThemePlan;
-
-        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        $compactedTaskPlanStructured = $this->compactConfirmedTaskPlanSnapshotForStorage($taskPlanStructured, $confirmedWasSlimmed, $scope);
-        if (
-            $taskPlanStructured === []
-            || $confirmedWasSlimmed
-            || $this->isEquivalentConfirmedTaskPlanSnapshot($compactedTaskPlanStructured, $confirmed)
-        ) {
-            $scope['task_plan_structured'] = [];
-        }
-
-        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
-        if ($confirmedMarkdown !== '' && ($taskPlanMarkdown === '' || $taskPlanMarkdown === $confirmedMarkdown)) {
-            $scope['task_plan_markdown'] = '';
-        }
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $snapshot
-     * @return array<string, mixed>
-     */
-    private function compactConfirmedTaskPlanSnapshotForStorage(array $snapshot, bool $slimForBuild = false, array $scope = []): array
-    {
-        if ($snapshot === []) {
-            return [];
-        }
-
-        if ($slimForBuild) {
-            return $this->compactConfirmedTaskPlanSnapshotForBuildStorage($snapshot, $scope);
-        }
-
-        $executionBlueprint = \is_array($snapshot['execution_blueprint'] ?? null) ? $snapshot['execution_blueprint'] : [];
-        if ($executionBlueprint !== []) {
-            unset($executionBlueprint['task_groups']);
-            if ($executionBlueprint === []) {
-                unset($snapshot['execution_blueprint']);
-            } else {
-                $snapshot['execution_blueprint'] = $executionBlueprint;
-            }
-        }
-
-        unset(
-            $snapshot['shared_block_tasks'],
-            $snapshot['page_block_tasks'],
-            $snapshot['virtual_theme_build_tree']
-        );
-
-        return $snapshot;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $confirmed
-     */
-    private function shouldSlimConfirmedTaskPlanSnapshot(array $scope, array $confirmed): bool
-    {
-        if (
-            $confirmed === []
-            || (int)($scope['task_plan_confirmed'] ?? 0) !== 1
-            || !$this->hasReusableBuildBlueprint($scope)
-        ) {
-            return false;
-        }
-
-        foreach ([
-            'execution_blueprint',
-            'shared_tasks',
-            'page_tasks',
-            'shared_block_tasks',
-            'page_block_tasks',
-            'virtual_theme_build_tree',
-        ] as $key) {
-            if (\is_array($confirmed[$key] ?? null) && $confirmed[$key] !== []) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array<string, mixed> $snapshot
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactConfirmedTaskPlanSnapshotForBuildStorage(array $snapshot, array $scope): array
-    {
-        $slim = \array_intersect_key($snapshot, self::CONFIRMED_TASK_PLAN_STORAGE_KEYS);
-        $signature = \trim((string)($snapshot['signature'] ?? $snapshot['plan_signature'] ?? ''));
-        if ($signature !== '') {
-            $slim['signature'] = $signature;
-        }
-
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $buildTasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-        $executionBlueprint = \is_array($snapshot['execution_blueprint'] ?? null) ? $snapshot['execution_blueprint'] : [];
-        $blueprintSignature = \trim((string)($executionBlueprint['signature'] ?? $buildBlueprint['signature'] ?? ''));
-        $taskPlanSignature = \trim((string)($buildBlueprint['task_plan_signature'] ?? $signature));
-        $pageTypes = \array_values(\array_filter(\array_map(
-            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-            \is_array($buildBlueprint['page_types'] ?? null) ? $buildBlueprint['page_types'] : []
-        ), static fn(string $value): bool => $value !== ''));
-
-        $slim['execution_blueprint_ref'] = \array_filter([
-            'signature' => $blueprintSignature,
-            'source' => \trim((string)($buildBlueprint['source'] ?? '')),
-            'task_plan_signature' => $taskPlanSignature,
-            'task_count' => \count($buildTasks),
-            'page_types' => $pageTypes,
-        ], static fn($value): bool => $value !== '' && $value !== []);
-        $slim['_storage_compacted'] = 1;
-
-        return $slim;
-    }
-
-    /**
      * @param array<string, mixed> $confirmed
      * @return array<string, mixed>
      */
@@ -871,25 +665,14 @@ class AiSiteAgentSession extends Model
     {
         unset(
             $scope['confirmed_stage1_plan_book'],
-            $scope['stage2_context_snapshot'],
             $scope['theme_context_snapshot'],
             $scope['shared_prompt_context']
         );
 
-        foreach (['build_blueprint', 'task_plan_structured'] as $rootKey) {
+        foreach (['build_blueprint'] as $rootKey) {
             if (\is_array($scope[$rootKey] ?? null)) {
                 $scope[$rootKey] = $this->stripSnapshotBackupsFromPlanTree($scope[$rootKey]);
             }
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        foreach (['draft', 'confirmed'] as $key) {
-            if (\is_array($virtualThemePlan[$key] ?? null)) {
-                $virtualThemePlan[$key] = $this->stripSnapshotBackupsFromPlanTree($virtualThemePlan[$key]);
-            }
-        }
-        if ($virtualThemePlan !== []) {
-            $scope['virtual_theme_plan'] = $virtualThemePlan;
         }
 
         return $scope;
@@ -902,7 +685,6 @@ class AiSiteAgentSession extends Model
     private function stripSnapshotBackupsFromPlanTree(array $tree): array
     {
         unset(
-            $tree['stage2_context_snapshot'],
             $tree['theme_context_snapshot'],
             $tree['shared_prompt_context'],
             $tree['confirmed_stage1_plan_book']
@@ -953,55 +735,17 @@ class AiSiteAgentSession extends Model
     }
 
     /**
-     * @param array<string, mixed> $scope
-     */
-    private function hasReusableBuildBlueprint(array $scope): bool
-    {
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-
-        return (string)($buildBlueprint['source'] ?? '') === 'stage2_confirmed_task_plan'
-            && \trim((string)($buildBlueprint['signature'] ?? '')) !== ''
-            && $tasks !== [];
-    }
-
-    /**
      * @param array<string, mixed> $runtimeContext
      * @return array<string, mixed>
      */
     private function stripTaskRuntimeSharedContextForStorage(array $runtimeContext): array
     {
         unset(
-            $runtimeContext['stage2_context_snapshot'],
             $runtimeContext['theme_context_snapshot'],
             $runtimeContext['shared_prompt_context']
         );
 
         return $runtimeContext;
-    }
-
-    /**
-     * @param array<string, mixed> $taskPlanStructured
-     * @param array<string, mixed> $confirmed
-     */
-    private function isEquivalentConfirmedTaskPlanSnapshot(array $taskPlanStructured, array $confirmed): bool
-    {
-        return $this->isEquivalentTaskPlanSnapshot($taskPlanStructured, $confirmed);
-    }
-
-    /**
-     * @param array<string, mixed> $left
-     * @param array<string, mixed> $right
-     */
-    private function isEquivalentTaskPlanSnapshot(array $left, array $right): bool
-    {
-        if ($left == $right) {
-            return true;
-        }
-
-        unset($left['signature'], $right['signature']);
-
-        return $left == $right;
     }
 
     /**

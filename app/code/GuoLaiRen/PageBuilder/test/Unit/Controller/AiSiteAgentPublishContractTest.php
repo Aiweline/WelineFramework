@@ -17,7 +17,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
             "'code' => 'LATEST_AI_BUILD_FAILED'",
             "'code' => 'SITE_NOT_READY'",
             "'code' => 'PLAN_NOT_CONFIRMED'",
-            "'code' => 'TASK_PLAN_NOT_CONFIRMED'",
+            "'code' => 'BUILD_PLAN_NOT_CONFIRMED'",
             "'code' => 'WORKSPACE_NOT_READY'",
             "'code' => 'PUBLISH_QUALITY_GATE_FAILED'",
             "'code' => 'VISUAL_THEME_CONFIRM_REQUIRED'",
@@ -33,7 +33,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
 
         foreach ([
             "'code' => 'PLAN_NOT_CONFIRMED'",
-            "'code' => 'TASK_PLAN_NOT_CONFIRMED'",
+            "'code' => 'BUILD_PLAN_NOT_CONFIRMED'",
             "'code' => 'LATEST_AI_BUILD_FAILED'",
             "'code' => 'DRAFT_WEBSITE_READY'",
             "'code' => 'VIRTUAL_THEME_READY'",

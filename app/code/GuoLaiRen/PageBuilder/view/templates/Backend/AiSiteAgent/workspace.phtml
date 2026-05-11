@@ -5,7 +5,7 @@
  *   - 3-step horizontal stepper (用户文案)
  *   - Single main action per step
  *   - Long-running work is observed through SSE while generation runs in backend queues
- *   - Dev artifacts (指标卡/JSON/Public ID) hidden by default
+ *   - Dev artifacts (鎸囨爣鍗?JSON/Public ID) hidden by default
  */
 
 $session = $this->getData('session');
@@ -23,11 +23,6 @@ $sortPlanBlocksUrl = (string)($this->getData('sort_plan_blocks_url') ?? '');
 $mutatePlanBlockUrl = (string)($this->getData('mutate_plan_block_url') ?? '');
 $refinePlanPageUrl = (string)($this->getData('refine_plan_page_url') ?? '');
 $planSseUrl = (string)($this->getData('plan_sse_url') ?? $this->getData('start_plan_sse_url') ?? '');
-$startTaskPlanUrl = (string)($this->getData('start_task_plan_url') ?? '');
-$confirmTaskPlanUrl = (string)($this->getData('confirm_task_plan_url') ?? '');
-$sortTaskPlanTasksUrl = (string)($this->getData('sort_task_plan_tasks_url') ?? '');
-$mutateTaskPlanTaskUrl = (string)($this->getData('mutate_task_plan_task_url') ?? '');
-$taskPlanSseUrl = (string)($this->getData('task_plan_sse_url') ?? '');
 $resumeBuildUrl = (string)($this->getData('resume_build_url') ?? '');
 $runVirtualThemeUrl = (string)($this->getData('run_virtual_theme_url') ?? $this->getData('start_build_url') ?? '');
 $startRegeneratePageUrl = (string)($this->getData('start_regenerate_page_url') ?? '');
@@ -137,7 +132,7 @@ if ($sessionResolvedTargetDomain === '' && \is_array($scope['recommended_domain_
     }
 }
 
-/** 阶段一建站方案是否已在会话中存在（用于第二阶段「生成细节任务规划方案」按钮门闩） */
+/** 阶段一建站方案是否已在会话中存在（用于方案1确认后直接进入构建的门闩�?*/
 $statePlanBlock = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
 $scopePlanMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
 $statePlanMarkdown = \trim((string)($statePlanBlock['markdown'] ?? ''));
@@ -150,9 +145,6 @@ $pbAiPhaseOnePlanPresent = (int)($state['plan_confirmed'] ?? 0) === 1
     || $scopePlanJson !== []
     || $statePlanJson !== []
     || $scopePlanStructured !== [];
-/** 第二阶段任务方案是否存在：只认后台 buildWorkspaceState 下发的单一真相源。 */
-$pbAiPhaseTwoTaskPlanPresent = !empty($state['has_virtual_theme_plan'])
-    || (int)($state['task_plan_confirmed'] ?? 0) === 1;
 
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
@@ -232,13 +224,6 @@ $visualEditUrl = (string)($state['visual_edit_url'] ?? '');
 $embeddedVisualUrl = $visualPreviewUrl !== '' ? $visualPreviewUrl : $visualEditUrl;
 $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
 $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
-$pbAiTaskPlanStageEntryDecision = \is_array($state['task_plan_stage_entry'] ?? null) ? $state['task_plan_stage_entry'] : [];
-$pbAiPhaseOneConfirmedForTaskPlan = !empty($pbAiTaskPlanStageEntryDecision['has_phase_one_confirmed_plan'])
-    || ((int)($state['plan_confirmed'] ?? 0) === 1 && !empty($state['has_execution_blueprint']));
-$pbAiPhaseTwoTaskPlanPresent = !empty($pbAiTaskPlanStageEntryDecision['has_phase_two_task_plan'])
-    || $pbAiPhaseTwoTaskPlanPresent;
-$pbAiTaskPlanQueueRunning = !empty($pbAiTaskPlanStageEntryDecision['task_plan_queue_running']);
-$pbAiPhaseTwoShouldPromptGenerate = !empty($pbAiTaskPlanStageEntryDecision['should_prompt_generate']);
 $canPublish = !empty($state['can_publish']);
 $events = \is_array($state['top_logs'] ?? null) ? $state['top_logs'] : (\is_array($state['events'] ?? null) ? $state['events'] : []);
 $initialVirtualPagesByTypeState = [];
@@ -291,7 +276,7 @@ $guidedSteps = [
     ],
     [
         'key' => 'visual_edit',
-        'label' => __('2 生成详细任务方案，开始生成主题'),
+        'label' => __('2 确认方案并生成网站'),
         'icon' => 'mdi-eye-outline',
         'done_when' => $visualPreviewUrl !== '',
     ],
@@ -303,7 +288,7 @@ $guidedSteps = [
     ],
 ];
 
-/** 当前激活的 guided 步骤索引 */
+/** 褰撳墠婵€娲荤殑 guided 姝ラ绱㈠紩 */
 $activeStepIndex = 0;
 foreach ($guidedSteps as $i => $s) {
     if ($s['key'] === $currentStage) {
@@ -315,8 +300,8 @@ foreach ($guidedSteps as $i => $s) {
 <?php
 $pbAiGuidedFakeMode = !empty($scope['fake_mode']);
 $pbAiTargetDomainHelpTitle = $pbAiGuidedFakeMode
-    ? (string)__('留空时由 AI 根据可用供应商自动选择并完成域名购买。当前为本地模拟环境，点击「AI 刷新」将按描述推荐 *.weline.test 子域用于联调。')
-    : (string)__('留空时由 AI 根据可用供应商自动选择并完成域名购买。可点击「AI 刷新」根据站点名称与描述智能推荐域名并填入。');
+    ? (string)__('留空时由 AI 根据可用供应商自动选择并完成域名购买。当前为本地模拟环境，点击 AI 刷新将推荐 *.weline.test 子域用于联调。')
+    : (string)__('留空时由 AI 根据可用供应商自动选择并完成域名购买。可点击 AI 刷新根据站点名称与描述智能推荐域名并填入。');
 $guidedScopeDefaults = [
     'site_title' => $guidedWorkspaceSiteTitle,
     'site_tagline' => (string)($scope['site_tagline'] ?? $websiteProfile['site_tagline'] ?? ''),
@@ -345,7 +330,7 @@ $domainStatusBadgeClass = match ($domainStatus) {
     default => 'bg-soft-secondary text-muted',
 };
 $domainActionLabel = match ($domainStatus) {
-    'completed' => (string)__('已购买完成'),
+    'completed' => (string)__('宸茶喘涔板畬鎴?'),
     'queued', 'running' => (string)__('正在购买域名'),
     'failed' => (string)__('重新发起购买'),
     default => (string)__('购买域名并建站'),
@@ -360,8 +345,8 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publish'], true)
     ? $currentStage
     : 'plan';
-    // 阶段一仅加载阶段一前端资源，避免提前注入阶段二/构建阶段前端入口。
 $workspaceTplData = \get_defined_vars();
+    // 阶段一仅加载阶段一前端资源，避免提前注入构建阶段前端入口�?$workspaceTplData = \get_defined_vars();
 ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml', $workspaceTplData) ?>
 <?php if ($workspaceRenderStage === 'plan'): ?>
@@ -382,7 +367,7 @@ $workspaceTplData = \get_defined_vars();
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml', $workspaceTplData) ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-plan.phtml', $workspaceTplData) ?>
 <?php elseif ($workspaceRenderStage === 'visual_edit'): ?>
-<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-phase2-queue-progress.phtml', $workspaceTplData) ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml', $workspaceTplData) ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-visual-edit.phtml', $workspaceTplData) ?>
 <?php else: ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-publish.phtml', $workspaceTplData) ?>

@@ -45,7 +45,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         $scope = $this->buildScope();
 
         $report = $service->inspectScope($scope, [
-            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>涓撲负鍗板害鐜╁鎵撻€犵殑妫嬬墝濞变箰娈垮爞</h1><p>浣撻獙Teen Patti銆丷ummy绛夌粡鍏告父鎴忥紝浜彈瀹夊叏鍏钩鐨勭幇浠ｅ寲绀惧尯</p><form aria-label="APK support form"><input name="name" placeholder="Your name"><input name="phone" placeholder="+91 phone number"><button type="button">Request APK link</button></form></section></main><footer>Footer</footer>',
+            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p><form aria-label="APK support form"><input name="name" placeholder="Your name"><input name="phone" placeholder="+91 phone number"><button type="button">Request APK link</button></form></section></main><footer>Footer</footer>',
         ]);
 
         self::assertTrue(
@@ -60,7 +60,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         $scope = $this->buildScope();
 
         $report = $service->inspectScope($scope, [
-            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>涓撲负鍗板害鐜╁鎵撻€犵殑妫嬬墝濞变箰娈垮爞</h1><p>AI content placeholder</p></section></main><footer>Footer</footer>',
+            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>AI content placeholder</p></section></main><footer>Footer</footer>',
         ]);
 
         self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));
@@ -72,7 +72,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         $scope = $this->buildScope();
 
         $report = $service->inspectScope($scope, [
-            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>访客看到真实玩家好评和清晰的下载步骤，信任感增强，并知道如何立即下载。</h1><p>浣撻獙Teen Patti銆丷ummy缁涘绮￠崗鍛婄埗閹村骏绱濇禍顐㈠綀鐎瑰鍙忛崗顒€閽╅惃鍕箛娴狅絽瀵茬粈鎯у隘</p></section></main><footer>Footer</footer>',
+            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>�ÿͿ�����ʵ��Һ��������������ز��裬���θ���ǿ����֪������������ء�</h1><p>体验Teen Patti、Rummy绛夌粡鍏告父鎴忥紝浜彈瀹夊叏鍏钩鐨勭幇浠ｅ寲绀惧尯</p></section></main><footer>Footer</footer>',
         ]);
 
         self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));
