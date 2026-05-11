@@ -27,7 +27,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $method->setAccessible(true);
 
         self::assertTrue((bool)$method->invoke($controller, 'plan'));
-        self::assertTrue((bool)$method->invoke($controller, 'task_plan'));
+        self::assertFalse((bool)$method->invoke($controller, 'task_plan'));
         self::assertTrue((bool)$method->invoke($controller, 'build'));
         self::assertFalse((bool)$method->invoke($controller, 'publish'));
     }
@@ -251,10 +251,60 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
             'page_types' => [Page::TYPE_HOME],
             'preview_page_type' => Page::TYPE_HOME,
-            'task_plan_confirmed' => 1,
+            'build_plan_confirmed' => 1,
+            'build_plan_confirmed_at' => '2026-05-11 00:00:00',
             'fake_mode' => 1,
             'website_profile' => ['business_name' => 'Patch Test'],
             'build_summary' => ['task_summary' => ['total' => 2, 'done' => 2]],
+            'build_plan_v2' => [
+                'contract_meta' => [
+                    'status' => 'confirmed',
+                    'confirmed_at' => '2026-05-11 00:00:00',
+                ],
+                'pages' => [
+                    ['page_type' => Page::TYPE_HOME, 'title' => 'Home'],
+                ],
+                'blocks' => [
+                    ['page_type' => Page::TYPE_HOME, 'block_key' => 'hero', 'component_code' => 'content/hero'],
+                    ['page_type' => Page::TYPE_HOME, 'block_key' => 'features', 'component_code' => 'content/features'],
+                ],
+                'tasks' => [
+                    [
+                        'task_key' => 'page:home_page:hero',
+                        'task_type' => 'page_section',
+                        'page_type' => Page::TYPE_HOME,
+                        'section_code' => 'content/hero',
+                        'runtime_context' => ['block_key' => 'hero'],
+                    ],
+                    [
+                        'task_key' => 'page:home_page:features',
+                        'task_type' => 'page_section',
+                        'page_type' => Page::TYPE_HOME,
+                        'section_code' => 'content/features',
+                        'runtime_context' => ['block_key' => 'features'],
+                    ],
+                ],
+            ],
+            'build_blueprint' => [
+                'source' => 'build_plan_v2',
+                'signature' => 'block-patch-confirmed-build-plan',
+                'tasks' => [
+                    [
+                        'task_key' => 'page:home_page:hero',
+                        'task_type' => 'page_section',
+                        'page_type' => Page::TYPE_HOME,
+                        'section_code' => 'content/hero',
+                        'runtime_context' => ['block_key' => 'hero'],
+                    ],
+                    [
+                        'task_key' => 'page:home_page:features',
+                        'task_type' => 'page_section',
+                        'page_type' => Page::TYPE_HOME,
+                        'section_code' => 'content/features',
+                        'runtime_context' => ['block_key' => 'features'],
+                    ],
+                ],
+            ],
             'virtual_pages_by_type' => [
                 Page::TYPE_HOME => [
                     'page_type' => Page::TYPE_HOME,
@@ -320,7 +370,15 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $queueExecutor = ObjectManager::getInstance(AiSiteBuildQueue::class);
         self::assertTrue($queueExecutor->validate($queue));
 
-        $result = $queueExecutor->execute($queue);
+        $bufferLevel = \ob_get_level();
+        \ob_start();
+        try {
+            $result = $queueExecutor->execute($queue);
+        } finally {
+            while (\ob_get_level() > $bufferLevel) {
+                \ob_end_clean();
+            }
+        }
         self::assertNotSame('', \trim($result));
 
         $queueRow = w_query('queue', 'get', ['queue_id' => $queueId]);
@@ -358,7 +416,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $method->setAccessible(true);
 
         self::assertFalse((bool)$method->invoke($controller, ['operation' => 'plan']));
-        self::assertFalse((bool)$method->invoke($controller, ['operation' => 'task_plan']));
+        self::assertTrue((bool)$method->invoke($controller, ['operation' => 'task_plan']));
         self::assertTrue((bool)$method->invoke($controller, ['operation' => 'build']));
     }
 
@@ -459,7 +517,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $method->setAccessible(true);
 
         self::assertTrue((bool)$method->invoke($controller, 'plan'));
-        self::assertTrue((bool)$method->invoke($controller, 'task_plan'));
+        self::assertFalse((bool)$method->invoke($controller, 'task_plan'));
         self::assertTrue((bool)$method->invoke($controller, 'build'));
         self::assertTrue((bool)$method->invoke($controller, 'block_regenerate'));
         self::assertTrue((bool)$method->invoke($controller, 'block_partial_patch'));
@@ -1501,7 +1559,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                 1,
                 'task_completed',
                 [
-                    'message' => '棣栭〉 Hero 鍖哄潡宸插畬鎴?',
+                    'message' => '首页 Hero 区块已完成',
                     'operation' => 'build',
                     'page_type' => Page::TYPE_HOME,
                     'task_key' => 'page:home_page:hero',
@@ -1686,18 +1744,18 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertArrayNotHasKey('content', $progressPayload);
     }
 
-    public function testWorkspaceEventMatchesTaskPlanOperationForTaskPlanStream(): void
+    public function testWorkspaceEventRejectsLegacyTaskPlanQueueOperation(): void
     {
         /** @var AiSiteAgent $controller */
         $controller = ObjectManager::getInstance(AiSiteAgent::class);
         $method = new ReflectionMethod(AiSiteAgent::class, 'workspaceEventMatchesStage');
         $method->setAccessible(true);
 
-        self::assertTrue((bool)$method->invoke($controller, [
+        self::assertFalse((bool)$method->invoke($controller, [
             'event_type' => 'info',
             'payload' => [
                 'operation' => 'task_plan',
-                'message' => 'task plan queue info',
+                'message' => 'legacy task plan queue info',
             ],
             'stage_code' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
         ], 'task_plan'));

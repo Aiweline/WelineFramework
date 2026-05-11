@@ -65,16 +65,21 @@ class CustomerAccountService
         ];
     }
 
-    public function authenticate(string $email, string $password): array
+    public function authenticate(string $login, string $password): array
     {
-        $email = $this->normalizeEmail($email);
-        $authUser = $this->findAuthUserByEmail($email);
+        $login = trim($login);
+        $authUser = $this->findAuthUserByLogin($login);
 
         if (!$authUser || !password_verify($password, (string) $authUser->getPassword())) {
-            throw new \RuntimeException((string) __('Invalid email or password.'));
+            throw new \RuntimeException((string) __('Invalid username/email or password.'));
         }
 
-        $profile = $this->customerProfileService->getOrCreateByAuthUser($authUser, ['email' => $email]);
+        $profileEmail = trim((string) $authUser->getEmail());
+        if ($profileEmail === '' && filter_var($login, FILTER_VALIDATE_EMAIL)) {
+            $profileEmail = $this->normalizeEmail($login);
+        }
+
+        $profile = $this->customerProfileService->getOrCreateByAuthUser($authUser, ['email' => $profileEmail]);
         $status = $profile->getData(CustomerProfile::schema_fields_STATUS);
         $enabled = $status === true
             || $status === 1
@@ -115,6 +120,28 @@ class CustomerAccountService
 
             Cookie::set('w_ut', $token, $rememberDuration, ['path' => '/']);
         }
+    }
+
+    public function findAuthUserByLogin(string $login): ?AuthCustomer
+    {
+        $login = trim($login);
+        if ($login === '') {
+            return null;
+        }
+
+        if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+            $authUser = $this->findAuthUserByEmail($login);
+            if ($authUser) {
+                return $authUser;
+            }
+        }
+
+        $authUser = $this->authCustomer->reset()
+            ->where(AuthCustomer::schema_fields_username, $login)
+            ->find()
+            ->fetch();
+
+        return $authUser->getId() ? $authUser : null;
     }
 
     public function findAuthUserByEmail(string $email): ?AuthCustomer

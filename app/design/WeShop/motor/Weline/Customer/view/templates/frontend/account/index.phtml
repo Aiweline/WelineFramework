@@ -16,7 +16,7 @@ if (!is_string($accountIndexPathJs) || $accountIndexPathJs === '') {
 $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
 ?>
 <section class="motor-account-index">
-    <section class="motor-account-section" id="overview-section">
+    <section class="motor-account-section" id="overview-section" data-account-section="overview">
         <div class="motor-account-hero">
             <div class="motor-account-hero__panel">
                 <div class="motor-account-eyebrow">
@@ -123,7 +123,7 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         </div>
     </section>
 
-    <section class="motor-account-section" id="profile-section" hidden>
+    <section class="motor-account-section" id="profile-section" data-account-section="profile" hidden>
         <div class="motor-account-grid">
             <article class="motor-account-card">
                 <header class="motor-account-card__header">
@@ -248,7 +248,7 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         </div>
     </section>
 
-    <section class="motor-account-section" id="security-section" hidden>
+    <section class="motor-account-section" id="security-section" data-account-section="security" hidden>
         <div class="motor-account-grid">
             <article class="motor-account-card">
                 <header class="motor-account-card__header">
@@ -342,7 +342,7 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         </div>
     </section>
 
-    <section class="motor-account-section" id="login-info-section" hidden>
+    <section class="motor-account-section" id="login-info-section" data-account-section="login-info" hidden>
         <div class="motor-account-info-grid">
             <article class="motor-account-info-card">
                 <div class="motor-account-info-card__label"><lang>最近登录 IP</lang></div>
@@ -380,15 +380,16 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
             </div>
         </article>
     </section>
+    <hook>account.sidebar.content</hook>
 </section>
 
 <script>
 (function() {
     'use strict';
 
-    var navLinks = Array.prototype.slice.call(document.querySelectorAll('.motor-account-sidebar__link[data-section]'));
+    var navLinks = Array.prototype.slice.call(document.querySelectorAll('[data-account-nav-link][data-section]'));
     var actionButtons = Array.prototype.slice.call(document.querySelectorAll('[data-target-section]'));
-    var sections = Array.prototype.slice.call(document.querySelectorAll('.motor-account-section'));
+    var sections = Array.prototype.slice.call(document.querySelectorAll('[data-account-section]'));
     var profileForm = document.getElementById('profileForm');
     var securityForm = document.getElementById('securityForm');
     var avatarInput = document.getElementById('avatar');
@@ -462,17 +463,30 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         });
     }
 
-    function showSection(sectionName, shouldScroll) {
-        var targetId = sectionName + '-section';
-
-        sections.forEach(function(section) {
-            section.hidden = section.id !== targetId;
-        });
-
+    function setActiveNavLink(sectionName) {
         navLinks.forEach(function(link) {
             var isActive = link.getAttribute('data-section') === sectionName;
-            link.classList.toggle('motor-account-sidebar__link--active', isActive);
+            link.classList.toggle('is-active', isActive);
+            if (link.classList.contains('motor-account-sidebar__link')) {
+                link.classList.toggle('motor-account-sidebar__link--active', isActive);
+            }
         });
+    }
+
+    function showSection(sectionName, shouldScroll) {
+        var targetId = sectionName + '-section';
+        var targetSection = document.querySelector('[data-account-section="' + sectionName + '"]');
+        if (!targetSection) {
+            targetSection = document.getElementById(targetId);
+        }
+
+        sections.forEach(function(section) {
+            var isTarget = section === targetSection;
+            section.hidden = !isTarget;
+            section.classList.toggle('d-none', !isTarget);
+        });
+
+        setActiveNavLink(sectionName);
 
         if (window.history && typeof window.history.replaceState === 'function') {
             window.history.replaceState(null, '', accountSectionUrlBase + '#' + sectionName);
@@ -500,7 +514,7 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
     });
 
     var initialSection = (window.location.hash || '#overview').replace('#', '');
-    if (!document.getElementById(initialSection + '-section')) {
+    if (!document.querySelector('[data-account-section="' + initialSection + '"]') && !document.getElementById(initialSection + '-section')) {
         initialSection = 'overview';
     }
     showSection(initialSection, false);

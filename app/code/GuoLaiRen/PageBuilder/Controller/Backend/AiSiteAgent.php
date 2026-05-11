@@ -1474,8 +1474,7 @@ class AiSiteAgent extends BaseController
         if ((int)($buildPlanPatch['build_plan_confirmed'] ?? 0) !== 1) {
             return $this->jsonError(
                 'BUILD_PLAN_V2_INVALID',
-                (string)__('方案合同校验失败，请重新生成阶段一方案�?),
-                '),
+                (string)__('方案合同校验失败，请重新生成阶段一方案。'),
                 ['public_id'],
                 ['build_plan_v2_validation' => \is_array($buildPlanPatch['build_plan_v2_validation'] ?? null) ? $buildPlanPatch['build_plan_v2_validation'] : []]
             );
@@ -10201,6 +10200,78 @@ class AiSiteAgent extends BaseController
     }
 
     /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $operationDetails
+     * @return array<string, mixed>
+     */
+    private function applyOperationDetailsToPayload(array $payload, array $operationDetails): array
+    {
+        if ($operationDetails === []) {
+            return $payload;
+        }
+
+        $existingDetails = \is_array($payload['details'] ?? null) ? $payload['details'] : [];
+        $payload['details'] = \array_replace($existingDetails, $operationDetails);
+        foreach ($this->getQueuedOperationDetailKeys() as $detailKey) {
+            if (\array_key_exists($detailKey, $operationDetails)) {
+                $payload[$detailKey] = $operationDetails[$detailKey];
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function getQueuedOperationDetailKeys(): array
+    {
+        return [
+            'page_type',
+            'page_key',
+            'page_types',
+            'page_keys',
+            'block_id',
+            'block_ids',
+            'component_code',
+            'component_codes',
+            'component_label',
+            'component_labels',
+            'instruction',
+            'shared_region',
+            'shared_regions',
+            'stage_scope',
+            'action',
+            'target_scope',
+            'target_scopes',
+            'block_key',
+            'block_keys',
+            'section_code',
+            'section_codes',
+            'task_key',
+            'task_keys',
+            'bucket',
+            'buckets',
+            'prompt_mode',
+            'round',
+            'mutation',
+            'mutations',
+            'block_config',
+            'block_configs',
+            'task_config',
+            'task_configs',
+            'operation_scope',
+            'selection',
+            'selected_blocks',
+            'selected_tasks',
+            'targets',
+            'change_summary',
+            'changed_fields',
+            'reason',
+        ];
+    }
+
+    /**
      * Scope already blocks the live same-operation queue before we enqueue.
      * If a slot still looks running here, it is usually stale unless the caller
      * explicitly preserves the currently running row.
@@ -11858,7 +11929,7 @@ class AiSiteAgent extends BaseController
             '/AI_GENERATED_SECTION|task_key|section_code|block_key|page_type|field_content_requirements/iu',
             '/content\/(?:home|about|contact|product|service)-page-[a-z0-9_-]+/iu',
             '/AI content placeholder|ai-empty|placeholder content|placeholder/iu',
-            '/Default Page Template|This is the default page|欢迎访问|默认页面模板|娆㈣繋璁块棶|榛樿椤甸潰妯℃澘/iu',
+            '/Default Page Template|This is the default page|欢迎访问|默认页面模板/iu',
             '/^(?:hero|cards|checklist|cta|home-page-highlights|home-page-details|about-page-story|about-page-values)$/iu',
         ];
         foreach ($badMatches as $match) {
@@ -13371,6 +13442,14 @@ class AiSiteAgent extends BaseController
         return $next;
     }
 
+    private function buildOperationStreamUrl(string $publicId, string $executionToken): string
+    {
+        return $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/operation-sse', [
+            'public_id' => $publicId,
+            'execution_token' => $executionToken,
+        ]);
+    }
+
     private function supportsBackgroundOperation(string $operation): bool
     {
         return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
@@ -13547,7 +13626,7 @@ class AiSiteAgent extends BaseController
             $accountName = \trim((string)($row['account_name'] ?? ''));
             $label = $registrarName !== ''
                 ? $registrarName . ($accountName !== '' ? (' - ' . $accountName) : '')
-                : ($accountName !== '' ? $accountName : (string)__('服务�?'));
+                : ($accountName !== '' ? $accountName : (string)__('服务商'));
             $options[] = [
                 'account_id' => $accountId,
                 'label' => $label,

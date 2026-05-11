@@ -5,7 +5,7 @@
  *   - 3-step horizontal stepper (用户文案)
  *   - Single main action per step
  *   - Long-running work is observed through SSE while generation runs in backend queues
- *   - Dev artifacts (鎸囨爣鍗?JSON/Public ID) hidden by default
+ *   - Dev artifacts (指标卡/JSON/Public ID) hidden by default
  */
 
 $session = $this->getData('session');
@@ -132,7 +132,7 @@ if ($sessionResolvedTargetDomain === '' && \is_array($scope['recommended_domain_
     }
 }
 
-/** 阶段一建站方案是否已在会话中存在（用于方案1确认后直接进入构建的门闩�?*/
+/** 阶段一建站方案是否已在会话中存在（用于方案1确认后直接进入构建的门闩） */
 $statePlanBlock = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
 $scopePlanMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
 $statePlanMarkdown = \trim((string)($statePlanBlock['markdown'] ?? ''));
@@ -288,7 +288,7 @@ $guidedSteps = [
     ],
 ];
 
-/** 褰撳墠婵€娲荤殑 guided 姝ラ绱㈠紩 */
+/** 当前激活的 guided 步骤索引 */
 $activeStepIndex = 0;
 foreach ($guidedSteps as $i => $s) {
     if ($s['key'] === $currentStage) {
@@ -330,7 +330,7 @@ $domainStatusBadgeClass = match ($domainStatus) {
     default => 'bg-soft-secondary text-muted',
 };
 $domainActionLabel = match ($domainStatus) {
-    'completed' => (string)__('宸茶喘涔板畬鎴?'),
+    'completed' => (string)__('已购买完成'),
     'queued', 'running' => (string)__('正在购买域名'),
     'failed' => (string)__('重新发起购买'),
     default => (string)__('购买域名并建站'),
@@ -346,7 +346,7 @@ $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publis
     ? $currentStage
     : 'plan';
 $workspaceTplData = \get_defined_vars();
-    // 阶段一仅加载阶段一前端资源，避免提前注入构建阶段前端入口�?$workspaceTplData = \get_defined_vars();
+    // 阶段一仅加载阶段一前端资源，避免提前注入构建阶段前端入口。
 ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml', $workspaceTplData) ?>
 <?php if ($workspaceRenderStage === 'plan'): ?>
