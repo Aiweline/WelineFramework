@@ -134,7 +134,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         $this->saveInstanceInfo($config, $workerPids);
         
         // 启动 Master 进程（用于监控和热重载）
-        if (!$config->frontend) {
+        if (!$config->windowMode) {
             $this->startMasterProcess($config);
         }
         
@@ -203,12 +203,12 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         $command .= " --memory-limit={$config->workerMemoryLimit}";
         $command .= " --name={$processName}";
         
-        if ($config->frontend) {
-            $command .= " --frontend";
+        if ($config->windowMode) {
+            $command .= " --win";
         }
         
-        $pid = Processer::create($command, !$config->frontend, $config->frontend);
-        if ($pid <= 0 && !$config->frontend) {
+        $pid = Processer::create($command, !$config->windowMode, $config->windowMode);
+        if ($pid <= 0 && !$config->windowMode) {
             SchedulerSystem::usleep(500000);
             $pid = Processer::getProcessIdByPort($port);
         }
@@ -235,11 +235,11 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         $command = "\"{$config->phpBinary}\" \"{$script}\" {$config->host} {$config->httpRedirectPort} {$config->port} {$config->instanceName}";
         $command .= " --name={$processName}";
         
-        if ($config->frontend) {
-            $command .= " --frontend";
+        if ($config->windowMode) {
+            $command .= " --win";
         }
-        $pid = Processer::create($command, !$config->frontend, $config->frontend);
-        if ($pid <= 0 && !$config->frontend) {
+        $pid = Processer::create($command, !$config->windowMode, $config->windowMode);
+        if ($pid <= 0 && !$config->windowMode) {
             SchedulerSystem::usleep(500000);
             $pid = Processer::getProcessIdByPort($config->httpRedirectPort);
         }
@@ -315,7 +315,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
             'ssl_cert' => $config->sslCert,
             'ssl_key' => $config->sslKey,
             'http_redirect_port' => $config->httpRedirectEnabled ? $config->httpRedirectPort : null,
-            'frontend' => $config->frontend,
+            'window_mode' => $config->windowMode,
             'started_at' => \date('Y-m-d H:i:s'),
             'start_time' => \time(),
         ];

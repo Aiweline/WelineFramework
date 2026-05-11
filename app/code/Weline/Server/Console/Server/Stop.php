@@ -75,8 +75,9 @@ class Stop extends CommandAbstract
     /** IPC 硬超时（秒）- 避免进度持续刷新时无限等待 */
     private const IPC_HARD_TIMEOUT_WIN = 45;
     private const IPC_HARD_TIMEOUT_LINUX = 30;
-    private const IPC_FORCE_HARD_TIMEOUT_WIN = 12;
-    private const IPC_FORCE_HARD_TIMEOUT_LINUX = 10;
+    /** `-f --ipc`：短硬超时，避免假死长等 */
+    private const IPC_FORCE_HARD_TIMEOUT_WIN = 6;
+    private const IPC_FORCE_HARD_TIMEOUT_LINUX = 5;
     
     /** 子进程全部退出后等待 Master 退出的最大时间（秒）- Linux 上 Master 清理索引/退出主循环较慢，需更长超时 */
     private const MASTER_EXIT_TIMEOUT_WIN = 5;
@@ -103,10 +104,13 @@ class Stop extends CommandAbstract
         $instanceName = $this->parseInstanceName($args);
         $stopAll = isset($args['all']) || isset($args['a']);
         $force = isset($args['force']) || isset($args['f']);
-        $fastLocal = isset($args['fast-local']) || isset($args['fast_local']);
+        $forceIpc = isset($args['ipc']) || isset($args['force-ipc']) || isset($args['force_ipc']);
+        $fastLocal = isset($args['fast-local'])
+            || isset($args['fast_local'])
+            || ($force && !$forceIpc);
 
         if ($stopAll) {
-            $this->stopAllInstances($force);
+            $this->stopAllInstances($force, $fastLocal);
             return;
         }
 
@@ -296,7 +300,7 @@ class Stop extends CommandAbstract
         if ($name === null) {
             return false;
         }
-        $this->stopInstance($name, true);
+        $this->stopInstance($name, true, true);
         return true;
     }
 
@@ -428,6 +432,13 @@ class Stop extends CommandAbstract
         $this->showInstanceInfo($instanceInfo);
         echo "\n";
 
+        if (!$fastLocal && $this->isMasterProcessAvailableForStop($instanceInfo)) {
+            if (!$this->validateInstanceForIpcStop($instanceInfo)) {
+                $this->printer->warning(__('实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。'));
+                $fastLocal = true;
+            }
+        }
+
         if ($fastLocal) {
             $this->printer->note(__('快速清场模式：跳过 IPC 排水，并发终止旧实例子进程...'));
             $terminated = $this->terminateDirectForceStopCandidatePids($instanceInfo);
@@ -496,9 +507,9 @@ class Stop extends CommandAbstract
             return;
         }
 
-        // 通过 IPC 发送 STOP 命令并等待完整停止
+        // 通过 IPC 发送 STOP 命令并等待完整停止（`-f --ipc`：仍走 IPC，但 Master 侧按强制停机处理）
         if ($force) {
-            $this->printer->note(__('-f 强制模式：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...'));
+            $this->printer->note(__('-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...'));
         }
         $this->printer->note(__('发送 STOP 命令给 Master (通过 IPC)...'));
         $ipcSuccess = $this->sendStopViaIpcAndWait($name, $controlPort, $masterPid, $force);
@@ -887,6 +898,7 @@ class Stop extends CommandAbstract
         $scopedInstance = MasterProcess::getScopedInstanceName($name);
         $prefixes = [
             MasterProcess::getMasterProcessName($name),
+            MasterProcess::getMasterProcessName($name) . '-win',
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
             MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
             MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
@@ -1507,14 +1519,16 @@ class Stop extends CommandAbstract
         $this->ipcMsg("连接成功 ✓", 'success');
         $this->ipcMsg("发送 STOP 命令...", 'stop');
         
-        // 发送 STOP 命令
+        // 发送 STOP 命令（msg_id 与 Master ACK / trace 对齐）
+        $traceId = 'cli-stop-' . \getmypid() . '-' . \time();
         $stopMsg = \Weline\Server\IPC\ControlMessage::command(
             \Weline\Server\IPC\ControlMessage::ACTION_STOP,
             '',
             [
+                'msg_id' => $traceId,
                 'stop_intent' => 'explicit',
                 'stop_source' => 'cli:server:stop',
-                'stop_trace_id' => 'cli-stop-' . \getmypid() . '-' . \time(),
+                'stop_trace_id' => $traceId,
                 'force_stop' => $force,
             ]
         );
@@ -1547,8 +1561,17 @@ class Stop extends CommandAbstract
         $masterAboutToExit = false; // 只在收到 "Master 即将退出" 时置 true
         $exitedPids = []; // 用 PID 去重，防止同一进程的 "已断开" 和 "已退出" 重复计数
         $totalInstances = 0; // 总实例数
-        
+        $stopAccepted = false;
+        $ackDeadline = $startedAt + ($force ? 1.0 : 2.0);
+
         while (\microtime(true) < $hardDeadline) {
+            if (!$stopAccepted && \microtime(true) >= $ackDeadline) {
+                $this->ipcMsg(__('STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。'), 'error');
+                $this->ipcAppendStopTraceHint($instanceName);
+                @\fclose($conn);
+                return false;
+            }
+
             // 优先用 pid_index.json 状态文件判定 Master 是否已退出（毫秒级），
             // 只有怀疑已退出时才用更重的 processExists/tasklist 二次确认。
             // 这一改动避免了 0.5s 间隔的循环每次过 TTL 触发一次 ~2.6s 的全表 tasklist，
@@ -1583,7 +1606,8 @@ class Stop extends CommandAbstract
                             $totalInstances,
                             $observedStopStage,
                             $childrenFullyExited,
-                            $masterAboutToExit
+                            $masterAboutToExit,
+                            $stopAccepted
                         );
                     }
                     // 连接断开 - Master 已关闭 IPC
@@ -1604,7 +1628,8 @@ class Stop extends CommandAbstract
                         $totalInstances,
                         $observedStopStage,
                         $childrenFullyExited,
-                        $masterAboutToExit
+                        $masterAboutToExit,
+                        $stopAccepted
                     );
                     if ($masterAboutToExit) {
                         break;
@@ -1750,7 +1775,8 @@ class Stop extends CommandAbstract
         int &$totalInstances,
         int &$observedStopStage,
         bool &$childrenFullyExited,
-        bool &$masterAboutToExit
+        bool &$masterAboutToExit,
+        bool &$stopAccepted
     ): void {
         $msg = \Weline\Server\IPC\ControlMessage::decode($line);
         if ($msg === null) {
@@ -1762,6 +1788,12 @@ class Stop extends CommandAbstract
         }
 
         $message = (string) ($msg['message'] ?? '');
+        $dataPayload = \is_array($msg['data'] ?? null) ? $msg['data'] : [];
+        $state = \strtolower((string) ($dataPayload['state'] ?? ''));
+        if ($message === 'Stopping' || $state === 'stopping') {
+            $stopAccepted = true;
+        }
+
         if ($message === '' || $message === $lastProgress) {
             return;
         }
@@ -1817,6 +1849,12 @@ class Stop extends CommandAbstract
     private function getIpcHardTimeout(bool $force = false): int
     {
         $isWin = (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN');
+        if ($force) {
+            return $isWin
+                ? self::IPC_FORCE_HARD_TIMEOUT_WIN
+                : self::IPC_FORCE_HARD_TIMEOUT_LINUX;
+        }
+
         $base = $isWin ? self::IPC_HARD_TIMEOUT_WIN : self::IPC_HARD_TIMEOUT_LINUX;
         $cap = $isWin ? 600 : 420;
 
@@ -2658,6 +2696,79 @@ class Stop extends CommandAbstract
         return 0;
     }
 
+    protected function validateInstanceForIpcStop(ServerInstanceInfo $info): bool
+    {
+        if ($info->masterPid <= 0 || !Processer::processExists($info->masterPid)) {
+            return false;
+        }
+
+        $expectedName = MasterProcess::getMasterProcessName($info->name);
+        $cmd = Processer::getProcessCommandLine($info->masterPid);
+        if ($cmd === '') {
+            return false;
+        }
+
+        if (!\str_contains($cmd, $expectedName) && !\str_contains($cmd, '--name=' . $expectedName)) {
+            return false;
+        }
+
+        $cp = $info->controlPort;
+        if ($cp <= 0) {
+            return false;
+        }
+
+        $inspect = $this->inspectRecoverablePortOccupant($cp);
+        if (!($inspect['in_use'] ?? false)) {
+            return false;
+        }
+
+        $ownerPid = (int) ($inspect['pid'] ?? 0);
+        if ($ownerPid <= 0) {
+            return false;
+        }
+
+        $scope = (string) ($inspect['scope'] ?? '');
+        $own = MasterProcess::getProjectScopeToken();
+        if ($scope !== '' && $scope !== $own) {
+            return false;
+        }
+
+        return $ownerPid === $info->masterPid
+            || \str_contains(Processer::getProcessCommandLine($ownerPid), $expectedName)
+            || $this->isRecoverableManagedPort($cp, $inspect, $info);
+    }
+
+    protected function ipcAppendStopTraceHint(string $instanceName): void
+    {
+        $file = Env::VAR_DIR . 'server' . DS . 'control' . DS . $instanceName . '.stop.trace.jsonl';
+        if (!\is_file($file)) {
+            return;
+        }
+
+        $tail = @\file_get_contents($file, false, null, \max(0, \filesize($file) - 4096));
+        if ($tail === false || $tail === '') {
+            return;
+        }
+
+        $lines = \preg_split('/\R/', \trim($tail)) ?: [];
+        $last = '';
+        foreach ($lines as $line) {
+            if ($line !== '') {
+                $last = $line;
+            }
+        }
+
+        if ($last === '') {
+            return;
+        }
+
+        $decoded = \json_decode($last, true);
+        $event = \is_array($decoded) ? (string) ($decoded['event'] ?? '') : '';
+        if ($event !== '') {
+            $this->printer->note(__('Master STOP 追踪文件末条事件：%{1}', [$event]));
+        }
+    }
+
     /**
      * @return array{
      *   in_use:bool,
@@ -3365,7 +3476,7 @@ class Stop extends CommandAbstract
     /**
      * 停止所有实例
      */
-    protected function stopAllInstances(bool $force = false): void
+    protected function stopAllInstances(bool $force = false, bool $fastLocal = false): void
     {
         $manager = $this->getInstanceManager();
         $instances = $this->collectStopAllInstanceNames($manager);
@@ -3391,7 +3502,7 @@ class Stop extends CommandAbstract
                     continue;
                 }
                 try {
-                    $this->stopInstance($name, $force);
+                    $this->stopInstance($name, $force, $fastLocal);
                 } finally {
                     $this->releaseStopLock();
                 }
@@ -3502,7 +3613,8 @@ class Stop extends CommandAbstract
             [
                 '[name]' => __('实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）'),
                 '-a, --all' => __('停止所有运行中的实例（含 Weline Server 与 CLI 服务器）'),
-                '-f, --force' => __('强制停止（跳过 IPC 排水并立即终止进程）'),
+                '-f, --force' => __('强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc'),
+                '--ipc, --force-ipc' => __('与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
@@ -3511,7 +3623,8 @@ class Stop extends CommandAbstract
                 __('停止指定实例') => 'php bin/w server:stop api-server',
                 __('停止 PHP 内置服务器') => 'php bin/w server:stop cli-server',
                 __('停止所有实例') => 'php bin/w server:stop --all',
-                __('强制停止') => 'php bin/w server:stop -f',
+                __('强制停止（本地快速清场）') => 'php bin/w server:stop -f',
+                __('强制但走 IPC（短超时）') => 'php bin/w server:stop -f --ipc',
             ]
         );
     }
