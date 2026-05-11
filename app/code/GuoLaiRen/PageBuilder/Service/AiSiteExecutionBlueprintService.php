@@ -298,7 +298,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 真实 AI 流式生成阶段一方案；失败时回退到本地规划器�?
+     * 真实 AI 流式生成阶段一方案；失败时回退到本地规划器。
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -2220,7 +2220,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 微调策略：默认累加（保留历史追加区块），仅当用户明确“删�?移除”时执行删除�?
+     * 微调策略：默认累加（保留历史追加区块），仅当用户明确“删除/移除”时执行删除。
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $artifacts
@@ -2268,8 +2268,8 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * fake_mode 需要让块级微调/新增/删除/重建在前端产生可观察差异�?
-     * 否则多次操作会始终落到同一份确定性草稿，E2E 无法判断阶段内编辑是否生效�?
+     * fake_mode 需要让块级微调/新增/删除/重建在前端产生可观察差异。
+     * 否则多次操作会始终落到同一份确定性草稿，E2E 无法判断阶段内编辑是否生效。
      *
      * @param array<string, mixed> $artifacts
      * @param array<string, mixed> $scope
@@ -3138,7 +3138,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 根据选择的页面类型动态生�?Markdown 模板
+     * 根据选择的页面类型动态生成 Markdown 模板
      *
      * @param list<string> $pageTypes
      * @return string
@@ -4010,7 +4010,7 @@ final class AiSiteExecutionBlueprintService
             if (!\is_array($fallbackPages[$pageType] ?? null)) {
                 continue;
             }
-            // 非英文方案下，强制使用本地页面块文案，确保遵守计划语言与结构约束�?
+            // 非英文方案下，强制使用本地页面块文案，确保遵守计划语言与结构约束。
             if (!$isEn) {
                 $normalized['pages'][$pageType] = $fallbackPages[$pageType];
             }
@@ -6197,7 +6197,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * �?AI 判定微调指令的真实意图，避免把“新增模块”逻辑硬编码在关键词表里�?
+     * 由 AI 判定微调指令的真实意图，避免把“新增模块”逻辑硬编码在关键词表里。
      *
      * @return array<string, mixed>|null
      */
