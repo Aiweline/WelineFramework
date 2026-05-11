@@ -123,12 +123,14 @@ class ExtendsScanner
     {
         $result = [];
 
-        $extendsModuleDir = $this->moduleScanService->resolveDirectory($basePath, 'extends/module');
+        $extendsModuleDir = $this->moduleScanService->resolveDirectory($basePath, 'extends/module')
+            ?? $this->moduleScanService->resolveDirectory($basePath, 'Extends/module');
         if ($extendsModuleDir !== null) {
             $this->scanExtendsDirectory($extendsModuleDir, $sourceModule, $basePath, 'module', $result);
         }
 
-        $extendsThemeDir = $this->moduleScanService->resolveDirectory($basePath, 'extends/theme');
+        $extendsThemeDir = $this->moduleScanService->resolveDirectory($basePath, 'extends/theme')
+            ?? $this->moduleScanService->resolveDirectory($basePath, 'Extends/theme');
         if ($extendsThemeDir !== null) {
             $this->scanExtendsDirectory($extendsThemeDir, $sourceModule, $basePath, 'theme', $result);
         }
@@ -158,11 +160,11 @@ class ExtendsScanner
                 $relativePath = str_replace($basePath . DIRECTORY_SEPARATOR, '', $filePath);
                 $relativePath = str_replace('\\', '/', $relativePath);
 
-                if (!str_starts_with($relativePath, 'extends/')) {
+                if (!str_starts_with(strtolower($relativePath), 'extends/')) {
                     $basePathTrimmed = rtrim($basePath, '/\\');
                     $relativePath = str_replace($basePathTrimmed . DIRECTORY_SEPARATOR, '', $filePath);
                     $relativePath = str_replace('\\', '/', $relativePath);
-                    if (!str_starts_with($relativePath, 'extends/')) {
+                    if (!str_starts_with(strtolower($relativePath), 'extends/')) {
                         continue;
                     }
                 }
@@ -211,7 +213,7 @@ class ExtendsScanner
 
     private function parseExtensionTarget(array $pathParts, string $type): ?array
     {
-        if (($pathParts[0] ?? '') !== 'extends' || ($pathParts[1] ?? '') !== $type) {
+        if (strcasecmp($pathParts[0] ?? '', 'extends') !== 0 || strcasecmp($pathParts[1] ?? '', $type) !== 0) {
             return null;
         }
 

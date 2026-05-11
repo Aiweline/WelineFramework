@@ -62,7 +62,7 @@ foreach ($argv as $arg) {
         $logInstanceName = $normalizeArgValue((string)\substr($arg, 20));
     } elseif ($arg === '--shared-service=1' || $arg === '--shared-service' || $arg === '-shared-service') {
         $sharedService = true;
-    } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '-f') {
+    } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '--win' || $arg === '-win' || $arg === '-f') {
         $isFrontend = true;
     }
 
