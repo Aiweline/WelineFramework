@@ -31,21 +31,13 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
         </div>
     </header>
     <nav class="account-sidebar__nav">
-        <a class="account-sidebar__nav-link account-sidebar__nav-link--active" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#profile" data-section="profile">
+        <a class="account-sidebar__nav-link account-sidebar__nav-link--active" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#profile" data-section="profile" data-account-nav-link="true">
             <i class="ri-user-line"></i>
             <span><lang>个人资料</lang></span>
         </a>
-        <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#security" data-section="security">
+        <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#security" data-section="security" data-account-nav-link="true">
             <i class="ri-lock-line"></i>
             <span><lang>安全设置</lang></span>
-        </a>
-        <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#orders" data-section="orders">
-            <i class="ri-shopping-bag-line"></i>
-            <span><lang>我的订单</lang></span>
-        </a>
-        <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#subscriptions" data-section="subscriptions">
-            <i class="ri-repeat-2-line"></i>
-            <span><lang>订阅</lang></span>
         </a>
         <hook>account.sidebar</hook>
         <a class="account-sidebar__nav-link account-sidebar__nav-link--logout" href="/customer/account/logout">
@@ -169,6 +161,79 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
 .account-sidebar__nav-link--active:hover {
     background: var(--color-primary-dark);
     color: var(--color-text-dark);
+}
+
+.account-hook-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 1px solid transparent;
+    border-radius: var(--as-border-radius);
+    background: transparent;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    transition: var(--as-transition);
+}
+
+.account-hook-nav-link:hover {
+    transform: translateX(4px);
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--color-text-primary);
+    text-decoration: none;
+}
+
+.account-hook-nav-link.is-active {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(59, 130, 246, 0.08) 100%);
+    border-color: rgba(37, 99, 235, 0.18);
+    box-shadow: 0 4px 14px rgba(30, 41, 59, 0.08);
+    color: var(--color-primary);
+}
+
+.account-hook-nav-link__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.account-hook-nav-link__label i {
+    width: 1.125rem;
+    font-size: 1rem;
+    text-align: center;
+    color: inherit;
+}
+
+.account-hook-nav-link__text {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+.account-hook-nav-link__text strong {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.account-hook-nav-link__text span {
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.account-hook-nav-link.is-active .account-hook-nav-link__text span,
+.account-hook-nav-link:hover .account-hook-nav-link__text span {
+    color: inherit;
+}
+
+.account-hook-nav-link__arrow {
+    color: inherit;
+    font-size: 0.875rem;
+    opacity: 0.68;
 }
 
 .account-sidebar__nav-link--logout {

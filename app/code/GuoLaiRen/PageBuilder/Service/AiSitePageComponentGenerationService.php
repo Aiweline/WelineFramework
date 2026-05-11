@@ -1672,7 +1672,7 @@ class AiSitePageComponentGenerationService
             'insufficient balance',
             'quota',
             '密钥',
-            '鏈厤缃?',
+            '未配置',
             '配置',
             '账户',
             '余额',

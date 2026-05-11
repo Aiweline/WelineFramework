@@ -72,7 +72,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         $scope = $this->buildScope();
 
         $report = $service->inspectScope($scope, [
-            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>�ÿͿ�����ʵ��Һ��������������ز��裬���θ���ǿ����֪������������ء�</h1><p>体验Teen Patti、Rummy绛夌粡鍏告父鎴忥紝浜彈瀹夊叏鍏钩鐨勭幇浠ｅ寲绀惧尯</p></section></main><footer>Footer</footer>',
+            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>访客看到真实玩家好评和清晰的下载步骤，信任感增强，并知道如何立即下载。</h1><p>体验 Teen Patti、Rummy 等经典游戏，享受安全公平的现代化社区</p></section></main><footer>Footer</footer>',
         ]);
 
         self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));

@@ -50,10 +50,14 @@ class LoginTest extends TestCase
         $session->expects($this->once())->method('isLoggedIn')->willReturn(false);
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnMap([
-            ['redirect', null, 'sales/order/view?id=8'],
-            ['redirect_url', null, null],
-        ]);
+        $request->method('getParam')
+            ->willReturnCallback(static function (string $key, mixed $default = ''): mixed {
+                return match ($key) {
+                    'redirect' => 'sales/order/view?id=8',
+                    'redirect_url' => null,
+                    default => $default,
+                };
+            });
 
         $assigned = [];
         $controller = $this->getMockBuilder(Login::class)
@@ -186,12 +190,12 @@ class LoginTest extends TestCase
         $this->assertSame('target', $controller->postIndex());
     }
 
-    public function testPostIndexFallsBackToUsernameFieldWhenEmailIsEmpty(): void
+    public function testPostIndexFallsBackToPlainUsernameWhenEmailIsEmpty(): void
     {
         $service = $this->createMock(CustomerWebAuthService::class);
         $service->expects($this->once())
             ->method('beginPasswordLogin')
-            ->with('ada@example.com', 'abc12345', false, 'weshop/cart')
+            ->with('weline', 'abc12345', false, 'weshop/cart')
             ->willReturn([
                 'status' => 'authenticated',
                 'redirect_url' => 'weshop/cart',
@@ -206,7 +210,7 @@ class LoginTest extends TestCase
         $request->method('getPost')->willReturnCallback(static function (string $key, mixed $default = null): mixed {
             return match ($key) {
                 'email' => '',
-                'username' => 'ada@example.com',
+                'username' => 'weline',
                 'password' => 'abc12345',
                 'remember_me' => false,
                 'remember' => false,
