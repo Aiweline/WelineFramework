@@ -9,6 +9,11 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 $loginIp = (string) ($user->getLoginIp() ?: __('未知'));
 $sessionId = (string) ($user->getSessionId() ?: __('未知'));
 $emailStatus = $email ? __('已绑定') : __('待完善');
+$accountIndexPathJs = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
+if (!is_string($accountIndexPathJs) || $accountIndexPathJs === '') {
+    $accountIndexPathJs = '/customer/account/index';
+}
+$accountIndexPathJs = rtrim($accountIndexPathJs, '/');
 ?>
 <section class="motor-account-index">
     <section class="motor-account-section" id="overview-section">
@@ -391,23 +396,29 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
     var avatarFallback = document.getElementById('avatarFallback');
     var profileSubmit = document.getElementById('profileSubmit');
     var securitySubmit = document.getElementById('securitySubmit');
+    /** 与侧栏 href 同源，禁止仅用 #section 调用 replaceState（否则地址栏易变成 /#xxx） */
+    var accountSectionUrlBase = <?= json_encode($accountIndexPathJs, JSON_UNESCAPED_UNICODE) ?>;
     var showPasswordText = <?= json_encode((string) __('显示密码'), JSON_UNESCAPED_UNICODE) ?>;
     var hidePasswordText = <?= json_encode((string) __('隐藏密码'), JSON_UNESCAPED_UNICODE) ?>;
     var updateFailedText = <?= json_encode((string) __('更新失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>;
+    var securityUpdateFailedText = <?= json_encode((string) __('修改失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>;
 
     function decodeHtmlEntities(message) {
-        var decoded = String(message || '');
-        var helper = document.createElement('textarea');
-
-        for (var i = 0; i < 3; i++) {
-            helper.innerHTML = decoded;
-            if (!helper.value || helper.value === decoded) {
+        var s = String(message || '');
+        if (s.indexOf('&') === -1) {
+            return s;
+        }
+        var div = document.createElement('div');
+        var prev;
+        for (var i = 0; i < 5; i++) {
+            prev = s;
+            div.innerHTML = s;
+            s = div.textContent || div.innerText || '';
+            if (s === prev || s.indexOf('&') === -1) {
                 break;
             }
-            decoded = helper.value;
         }
-
-        return decoded;
+        return s;
     }
 
     function setMessage(element, message) {
@@ -464,7 +475,7 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         });
 
         if (window.history && typeof window.history.replaceState === 'function') {
-            window.history.replaceState(null, '', '#' + sectionName);
+            window.history.replaceState(null, '', accountSectionUrlBase + '#' + sectionName);
         }
 
         if (shouldScroll) {
@@ -623,10 +634,10 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
                     return;
                 }
 
-                setMessage(errorMsg, data.message || updateFailedText);
+                setMessage(errorMsg, data.message || securityUpdateFailedText);
             })
             .catch(function(error) {
-                setMessage(errorMsg, (error && error.message) || updateFailedText);
+                setMessage(errorMsg, (error && error.message) || securityUpdateFailedText);
             })
             .finally(function() {
                 setButtonLoading(securitySubmit, false);

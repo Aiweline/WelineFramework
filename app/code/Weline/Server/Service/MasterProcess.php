@@ -78,7 +78,8 @@ class MasterProcess
     protected array $config = [];
     protected bool $running = true;
     protected bool $stopRequested = false;
-    protected bool $frontend = false;
+    /** Windows 可见窗口 / 子进程 --win（与守护进程/前台阻塞无关） */
+    protected bool $windowMode = false;
     protected int $controlPort = 0;
     protected string $sslCert = '';
     protected string $sslKey = '';
@@ -192,21 +193,21 @@ class MasterProcess
         string $sslKey = '',
         bool $sslEnabled = false,
         int $httpRedirectPort = 0,
-        bool $frontend = false
+        bool $windowMode = false
     ): self {
         $this->instanceName = $instanceName;
         $this->config = $config;
         $this->sslCert = $sslCert;
         $this->sslKey = $sslKey;
         $this->sslEnabled = $sslEnabled;
-        $this->frontend = $frontend;
+        $this->windowMode = $windowMode;
         $this->logger->setProcessTag('Master@' . $instanceName);
 
         // 始终启用文件日志（后台模式也需要日志）
         $this->logger->setFileEnabled(LogConfig::isEnabled());
 
         // 前台模式或全量调试 (-log)：控制台输出；默认后台仅写文件
-        if (LogConfig::isVerboseWlsLog() && LogConfig::isStdoutEnabled($frontend, LogConfig::isDevMode())) {
+        if (LogConfig::isVerboseWlsLog() && LogConfig::isStdoutEnabled($windowMode, LogConfig::isDevMode())) {
             $this->logger->setStdoutEnabled(true);
         }
 
@@ -214,7 +215,8 @@ class MasterProcess
         $this->log(__('Master 初始化开始 (Orchestrator 模式)'));
         $this->log(__('  实例名称: %{1}', [$instanceName]));
         $this->log(__('  运行模式: %{1}', [$this->mode]));
-        $this->log(__('  前台模式: %{1}', [$frontend ? 'Yes' : 'No']));
+        $this->log(__('  守护进程: %{1}', [(bool) ($config['daemon'] ?? true) ? __('是') : __('否')]));
+        $this->log(__('  Windows 窗口模式: %{1}', [$windowMode ? __('是') : __('否')]));
 
         $port = (int) ($config['port'] ?? 80);
         $this->mainPort = $port;
@@ -455,7 +457,7 @@ class MasterProcess
             return;
         }
 
-        @\cli_set_process_title(self::getMasterProcessCliTitle($this->instanceName, $this->frontend));
+        @\cli_set_process_title(self::getMasterProcessCliTitle($this->instanceName, $this->windowMode));
     }
 
     /**
@@ -535,9 +537,9 @@ class MasterProcess
             sslCert: $this->sslCert,
             sslKey: $this->sslKey,
             mode: $this->mode,
-            daemon: !$this->frontend,
+            daemon: (bool) ($this->config['daemon'] ?? true),
             debug: (bool) ($this->config['debug'] ?? false),
-            frontend: $this->frontend,
+            windowMode: $this->windowMode,
             envConfig: $envConfig,
             httpRedirectPort: $this->httpRedirectPort,
             // 运行态配置：由 Start.php 传入，优先级高于 envConfig
@@ -788,7 +790,7 @@ class MasterProcess
         $this->orchestrator?->setMasterShutdownIntent(true);
         $this->running = false;
 
-        if ($this->frontend) {
+        if (!$this->isDaemonModeConfigured()) {
             self::ipcMsg("收到 {$signal}，已切换到统一停机流程", 'stop');
         }
 
@@ -803,7 +805,7 @@ class MasterProcess
             return;
         }
 
-        if ($this->frontend) {
+        if (!$this->isDaemonModeConfigured()) {
             self::ipcMsg("统一停机请求未入队，回退为本地停机流程（signal={$signal}）", 'error');
         }
 
@@ -931,18 +933,26 @@ class MasterProcess
         return self::buildScopedProcessName(self::MASTER_PROCESS_NAME_PREFIX, $instanceName);
     }
 
-    public static function getMasterProcessDisplayName(string $instanceName, bool $frontend = false): string
+    public static function getMasterProcessDisplayName(string $instanceName, bool $windowMode = false): string
     {
         $name = self::getMasterProcessName($instanceName);
 
-        return $frontend ? $name . '-frontend' : $name;
+        return $windowMode ? $name . '-win' : $name;
     }
 
-    public static function getMasterProcessCliTitle(string $instanceName, bool $frontend = false): string
+    public static function getMasterProcessCliTitle(string $instanceName, bool $windowMode = false): string
     {
         $title = 'weline-wls-master --name=' . self::getMasterProcessName($instanceName);
 
-        return $frontend ? $title . ' --frontend' : $title;
+        return $windowMode ? $title . ' --win' : $title;
+    }
+
+    /**
+     * 实例配置中的 daemon：false 表示阻塞前台 Master（--foreground）
+     */
+    private function isDaemonModeConfigured(): bool
+    {
+        return (bool) ($this->config['daemon'] ?? true);
     }
 
     /**
@@ -1309,7 +1319,7 @@ class MasterProcess
         $buffer = '';
         $lastProgress = '';
 
-        if ($this->frontend) {
+        if (!$this->isDaemonModeConfigured()) {
             self::ipcMsg("收到 {$signal}，已切换到统一 IPC 停机流程", 'stop');
         }
 
@@ -1329,7 +1339,7 @@ class MasterProcess
                         continue;
                     }
 
-                    if ($this->frontend) {
+                    if (!$this->isDaemonModeConfigured()) {
                         self::renderStopProgress($message);
                     }
                     $lastProgress = $message;
@@ -1344,7 +1354,7 @@ class MasterProcess
 
         @\fclose($conn);
 
-        if ($this->frontend) {
+        if (!$this->isDaemonModeConfigured()) {
             self::ipcMsg("等待本地 IPC 停机进度超时（signal={$signal}）", 'error');
         }
 
@@ -1566,9 +1576,8 @@ class MasterProcess
                 WlsLogger::info_($formatted);
         }
 
-        // 前台模式下，WlsLogger 已输出到控制台，无需再通过 printer 重复输出
-        // 后台模式下，通过 printer 输出（此时 Logger 只写文件）
-        if (!$this->frontend && $this->printer !== null) {
+        // 阻塞前台 Master：WlsLogger 已输出到控制台，无需再通过 printer 重复输出
+        if ($this->isDaemonModeConfigured() && $this->printer !== null) {
             $this->printer->note($formatted);
         }
     }

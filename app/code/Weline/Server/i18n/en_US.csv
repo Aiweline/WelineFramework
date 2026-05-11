@@ -172,6 +172,25 @@ P99：%{1},"P99: %{1}"
 示例,示例
 说明,说明
 "与 server:start 使用同一套 HostsFileManager；仅 system.env 为 local/dev/test 时可用","与 server:start 使用同一套 HostsFileManager；仅 system.env 为 local/dev/test 时可用"
+实例文件不存在：%{1},实例文件不存在：%{1}
+实例校验：%{1},实例校验：%{1}
+"runtime_state=%{1} last_verified_at=%{2}","runtime_state=%{1} last_verified_at=%{2}"
+实例进程/端口一致性校验,实例进程/端口一致性校验
+打印实例元数据与进程/端口探测摘要,打印实例元数据与进程/端口探测摘要
+"实例名（默认 default）","实例名（默认 default）"
+校验默认实例,校验默认实例
+"未找到实例 [%{1}]","未找到实例 [%{1}]"
+"实例 %{1} control_port=%{2} master_pid=%{3}","实例 %{1} control_port=%{2} master_pid=%{3}"
+控制端口无效,控制端口无效
+连接失败：%{1},连接失败：%{1}
+"首包耗时 %{1}s owner_pid=%{2}","首包耗时 %{1}s owner_pid=%{2}"
+"IPC 连通性探测（status）","IPC 连通性探测（status）"
+"连接实例控制端口并发送 status，输出耗时与占用 PID","连接实例控制端口并发送 status，输出耗时与占用 PID"
+探测默认实例,探测默认实例
+未收到回执,未收到回执
+"IPC stop_test 诊断","IPC stop_test 诊断"
+"发送 stop_test，输出 Orchestrator 诊断 JSON","发送 stop_test，输出 Orchestrator 诊断 JSON"
+诊断默认实例,诊断默认实例
 "即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）","About to terminate all PHP processes on the system (including WLS, CLI server, etc.)"
 正在执行…,Running…
 "已结束所有 php.exe 进程","All php.exe processes have been terminated."
@@ -465,6 +484,7 @@ P99：%{1},"P99: %{1}"
 "正在强制终止另一个启动进程并清理实例 [%{1}] 的启动残留...","正在强制终止另一个启动进程并清理实例 [%{1}] 的启动残留..."
 "已强制接管启动锁，继续启动实例 [%{1}]","已强制接管启动锁，继续启动实例 [%{1}]"
 "强制清理后仍未获取启动锁，将按用户确认继续启动实例 [%{1}]。","强制清理后仍未获取启动锁，将按用户确认继续启动实例 [%{1}]。"
+"参数 --frontend/-frontend 已弃用：窗口可见请用 --win；阻塞前台 Master 请用 --foreground。","参数 --frontend/-frontend 已弃用：窗口可见请用 --win；阻塞前台 Master 请用 --foreground。"
 "使用已保存的实例配置：%{1} (%{2}:%{3})","使用已保存的实例配置：%{1} (%{2}:%{3})"
 "以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。","以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。"
 已生成新证书：%{1},"Generated new certificate: %{1}"
@@ -547,7 +567,6 @@ PID：%{1},PID：%{1}
 "请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。"
 后台域名池域名不需要写入此处。,后台域名池域名不需要写入此处。
 如果默认内网访问可忽略该提示。,如果默认内网访问可忽略该提示。
-实例文件不存在：%{1},实例文件不存在：%{1}
 实例文件无效,实例文件无效
 "master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。","master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。"
 "请执行 sudo setcap cap_net_bind_service=+ep $(which php) 授权，或使用 sudo。","请执行 sudo setcap cap_net_bind_service=+ep $(which php) 授权，或使用 sudo。"
@@ -891,11 +910,12 @@ disabled,disabled
 "控制端口已接受 STOP，继续复核残留进程 ✓","控制端口已接受 STOP，继续复核残留进程 ✓"
 "Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.","Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup."
 "实例元数据已标记停止并保留 ✓","实例元数据已标记停止并保留 ✓"
+"实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。","实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。"
 "快速清场模式：跳过 IPC 排水，并发终止旧实例子进程...","快速清场模式：跳过 IPC 排水，并发终止旧实例子进程..."
 "实例 [%{1}] 已停止（-f 强制模式） ✓","实例 [%{1}] 已停止（-f 强制模式） ✓"
 "实例 [%{1}] 已停止（快速清场） ✓","实例 [%{1}] 已停止（快速清场） ✓"
 "实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。"
-"-f 强制模式：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...","-f 强制模式：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程..."
+"-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...","-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程..."
 "发送 STOP 命令给 Master (通过 IPC)...","发送 STOP 命令给 Master (通过 IPC)..."
 "所有子进程已完整退出 ✓","所有子进程已完整退出 ✓"
 "Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.","Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup."
@@ -908,7 +928,9 @@ disabled,disabled
 重试次数：%{1},重试次数：%{1}
 "残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}","残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}"
 "已清理 %{1} 个残留进程（复核结束）","已清理 %{1} 个残留进程（复核结束）"
+"STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。","STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。"
 "启动锁已释放 ✓","启动锁已释放 ✓"
+"Master STOP 追踪文件末条事件：%{1}","Master STOP 追踪文件末条事件：%{1}"
 没有正在运行的实例,"No running instances"
 停止所有服务器实例,停止所有服务器实例
 "发现 %{1} 个 Weline Server 实例","发现 %{1} 个 Weline Server 实例"
@@ -921,10 +943,12 @@ disabled,disabled
 "停止正在运行的 Weline Server 或 PHP 内置服务器实例","停止正在运行的 Weline Server 或 PHP 内置服务器实例"
 "实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）","实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）"
 "停止所有运行中的实例（含 Weline Server 与 CLI 服务器）","停止所有运行中的实例（含 Weline Server 与 CLI 服务器）"
-"强制停止（跳过 IPC 排水并立即终止进程）","强制停止（跳过 IPC 排水并立即终止进程）"
+"强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc","强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc"
+"与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略","与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略"
 停止默认实例,"Stop default instance"
 "停止 PHP 内置服务器","停止 PHP 内置服务器"
-强制停止,"Force stop"
+强制停止（本地快速清场）,强制停止（本地快速清场）
+"强制但走 IPC（短超时）","强制但走 IPC（短超时）"
 正在停止服务器...,正在停止服务器...
 "Weline Server 已停止！","Weline Server 已停止！"
 "Weline Server 停止失败","Weline Server 停止失败"
@@ -1330,7 +1354,10 @@ DDoS攻击,DDoS攻击
 "Master 初始化开始 (Orchestrator 模式)","Master 初始化开始 (Orchestrator 模式)"
 "实例名称: %{1}","实例名称: %{1}"
 "运行模式: %{1}","运行模式: %{1}"
-"前台模式: %{1}","前台模式: %{1}"
+"守护进程: %{1}","守护进程: %{1}"
+是,是
+否,否
+"Windows 窗口模式: %{1}","Windows 窗口模式: %{1}"
 "Master 初始化完成","Master 初始化完成"
 "启动 Master 进程...","启动 Master 进程..."
 "已注册 Master PID","已注册 Master PID"

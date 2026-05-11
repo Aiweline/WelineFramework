@@ -137,7 +137,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: false,
             debug: false,
-            frontend: true,
+            windowMode: true,
             envConfig: [],
             httpRedirectPort: 80,
             dispatcherEnabled: true,
@@ -204,7 +204,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: false,
             debug: false,
-            frontend: true,
+            windowMode: true,
             envConfig: [
                 'router' => [
                     'area_routes' => [
@@ -390,7 +390,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'orchestrator' => [
@@ -456,7 +456,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'supervisor' => [
@@ -802,7 +802,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'session' => ['server_port' => 19970],
                 'wls' => [
@@ -888,7 +888,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'session' => ['server_port' => 19970],
                 'wls' => [
@@ -1110,7 +1110,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'session' => ['server_port' => 19970],
                 'wls' => [
@@ -1200,7 +1200,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             httpRedirectPort: 18081,
             dispatcherEnabled: true,
@@ -1706,7 +1706,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             dispatcherEnabled: true,
             workerCount: 1,
@@ -1924,7 +1924,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker' => ['count' => 0],
@@ -2042,7 +2042,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker' => ['count' => 0],
@@ -2155,7 +2155,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             dispatcherEnabled: true,
             workerCount: 2,
@@ -2340,7 +2340,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             dispatcherEnabled: true,
             workerCount: 0,
@@ -2960,7 +2960,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             dispatcherEnabled: true,
             workerCount: 6,
@@ -3269,7 +3269,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: true,
+            windowMode: true,
             envConfig: [
                 'wls' => [
                     'orchestrator' => [
@@ -3324,7 +3324,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: true,
+            windowMode: true,
             envConfig: [
                 'wls' => [
                     'orchestrator' => [
@@ -3468,7 +3468,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: true,
+            windowMode: true,
             envConfig: [
                 'wls' => [
                     'orchestrator' => [
@@ -3526,7 +3526,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'host' => 'p11005ce4.weline.test',
@@ -3560,7 +3560,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'host' => 'p11005ce4.weline.test',
@@ -3596,7 +3596,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'host' => 'p11005ce4.weline.test',
@@ -3633,7 +3633,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: true,
+            windowMode: true,
             envConfig: [
                 'wls' => [
                     'orchestrator' => [
@@ -3716,7 +3716,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'frontend',
             daemon: false,
             debug: false,
-            frontend: true,
+            windowMode: true,
             envConfig: []
         );
 
@@ -3746,7 +3746,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'system' => [
                     'maintenance' => true,
@@ -3800,7 +3800,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'system' => [
                     'maintenance' => true,
@@ -4388,7 +4388,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: true,
+            windowMode: true,
             envConfig: [
                 'wls' => [
                     'orchestrator' => $orchestratorConfig,
@@ -4416,7 +4416,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'session' => ['server_port' => 19970],
                 'wls' => [
@@ -4459,7 +4459,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             mode: $base->mode,
             daemon: $base->daemon,
             debug: $base->debug,
-            frontend: $base->frontend,
+            windowMode: $base->windowMode,
             envConfig: $base->envConfig,
             httpRedirectPort: $base->httpRedirectPort,
             dispatcherEnabled: $base->dispatcherEnabled,

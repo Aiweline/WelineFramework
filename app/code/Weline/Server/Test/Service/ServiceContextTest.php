@@ -25,7 +25,7 @@ class ServiceContextTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: true,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker_count' => 4,
@@ -51,7 +51,7 @@ class ServiceContextTest extends TestCase
         $this->assertEquals('multi', $this->context->mode);
         $this->assertFalse($this->context->daemon);
         $this->assertTrue($this->context->debug);
-        $this->assertFalse($this->context->frontend);
+        $this->assertFalse($this->context->windowMode);
     }
 
     public function testGetConfig(): void

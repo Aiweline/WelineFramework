@@ -86,8 +86,8 @@ class HttpRedirectProvider extends AbstractServiceProvider
             '--master-pid=' . $context->masterPid,
         ];
 
-        if ($context->frontend) {
-            $arguments[] = '--frontend';
+        if ($context->windowMode) {
+            $arguments[] = '--win';
         }
 
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);

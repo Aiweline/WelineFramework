@@ -108,8 +108,8 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             $arguments[] = '--ssl-key=' . $context->sslKey;
         }
 
-        if ($context->frontend) {
-            $arguments[] = '--frontend';
+        if ($context->windowMode) {
+            $arguments[] = '--win';
         }
 
         if ($mode === 'linux-direct') {
