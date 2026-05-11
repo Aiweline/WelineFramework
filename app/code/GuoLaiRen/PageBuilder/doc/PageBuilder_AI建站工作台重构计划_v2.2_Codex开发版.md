@@ -7,6 +7,8 @@
 
 ---
 
+
+> Codex implementation note (2026-05-11): latest product decision supersedes the earlier legacy-compat boundary below. The active implementation removes the old Stage2/task-plan runtime path instead of keeping it as a manual/debug entry. `AiSiteTaskPlanQueue`, `AiSiteVirtualThemePlanService`, legacy task-plan mutation/recovery services, and `LegacyContractAdapter` are deleted; old `task_plan` / `virtual_theme_plan` keys may remain only in cleanup/rejection lists so migrated scopes cannot pollute BuildPlan v2.2 state.
 ## 0. 给 Codex 的执行边界
 
 Codex 按本文开发时，必须遵守以下硬边界：

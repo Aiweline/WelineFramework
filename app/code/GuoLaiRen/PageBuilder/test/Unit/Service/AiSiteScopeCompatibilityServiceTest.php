@@ -168,7 +168,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         $normalized = $service->normalizeConfirmedPlanFlag($scope);
 
-        self::assertTrue($service->hasConfirmedStageOnePlanForTaskPlan($normalized));
+        self::assertTrue($service->hasConfirmedStageOnePlanForBuildPlan($normalized));
         self::assertSame(1, (int)($normalized['plan_confirmed'] ?? 0));
         self::assertSame('2026-04-24 12:00:00', (string)($normalized['plan_confirmed_at'] ?? ''));
     }
@@ -193,7 +193,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         $normalized = $service->normalizeConfirmedPlanFlag($scope);
 
-        self::assertFalse($service->hasConfirmedStageOnePlanForTaskPlan($normalized));
+        self::assertFalse($service->hasConfirmedStageOnePlanForBuildPlan($normalized));
         self::assertSame(0, (int)($normalized['plan_confirmed'] ?? 0));
     }
 

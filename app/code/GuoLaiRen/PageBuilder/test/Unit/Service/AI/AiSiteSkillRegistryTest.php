@@ -63,28 +63,6 @@ final class AiSiteSkillRegistryTest extends TestCase
         self::assertStringContainsString('Code craft gate', $payload);
     }
 
-    public function testStageTwoComponentSkillGuideMergesClaudeDesignAndFrontendDesign(): void
-    {
-        $registry = new AiSiteSkillRegistry();
-
-        $sharedLines = $registry->buildStageTwoComponentSkillGuide(['type' => 'shared']);
-        $sharedPayload = \implode("\n", $sharedLines);
-        self::assertStringContainsString('AI BUILDER SKILL CAPABILITY', $sharedPayload);
-        self::assertStringContainsString('CLAUDE-DESIGN HARD RULES', $sharedPayload);
-        self::assertStringContainsString('Frontend design skill reference', $sharedPayload);
-        self::assertStringContainsString(
-            'app/code/GuoLaiRen/PageBuilder/Service/AI/prompt_guides/frontend-design/SKILL.md',
-            $sharedPayload
-        );
-        self::assertStringContainsString('shared theme component such as header/footer', $sharedPayload);
-        self::assertStringContainsString('exact contrast pairings', $sharedPayload);
-        self::assertStringContainsString('neighboring-section contrast strategy', $sharedPayload);
-
-        $pageLines = $registry->buildStageTwoComponentSkillGuide(['type' => 'page']);
-        $pagePayload = \implode("\n", $pageLines);
-        self::assertStringContainsString('page-owned theme block component', $pagePayload);
-    }
-
     public function testGetSkillReturnsFallbackForUnknownCode(): void
     {
         $registry = new AiSiteSkillRegistry();
@@ -208,7 +186,7 @@ final class AiSiteSkillRegistryTest extends TestCase
             new SkillSnapshotBuilder($resolver)
         );
 
-        $payload = \implode("\n", $registry->buildPromptGuideLinesForScope('stage2', [
+        $payload = \implode("\n", $registry->buildPromptGuideLinesForScope('build_plan', [
             'plan_workbench' => [
                 'contract_context' => [
                     'selected_skill_codes' => ['conversion-copy'],

@@ -6,7 +6,6 @@ namespace GuoLaiRen\PageBuilder\Queue;
 
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
-use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
@@ -95,7 +94,7 @@ class AiSiteAssetQueue implements QueueInterface
                     $scope['reference_image_insights_signature'] = $referenceInsightSignature;
                 }
             }
-            $manifest = $manifestService->syncFromTaskPlan($scope);
+            $manifest = $manifestService->syncFromBuildPlan($scope);
             if ((int)($scope['allow_placeholder_image_assets'] ?? 0) !== 1) {
                 $manifest = $manifestService->discardPlaceholderGeneratedAssets($manifest);
                 $scope['asset_manifest'] = $manifest;
@@ -227,7 +226,7 @@ class AiSiteAssetQueue implements QueueInterface
                 }
             }
             $manifest = $manifestService->recordError(
-                $manifestService->syncFromTaskPlan($scope),
+                $manifestService->syncFromBuildPlan($scope),
                 $slotId,
                 $throwable->getMessage()
             );
@@ -473,24 +472,6 @@ class AiSiteAssetQueue implements QueueInterface
             }
         }
 
-        [$scope, $pageBuilderChanged, $pageBuilderBlocks] = $this->patchPageBuilderScopeAiLayout(
-            $scope,
-            $pageType,
-            $candidates,
-            $finalUrl,
-            $targetBlockId,
-            $targetComponentCode,
-            $updatedAt
-        );
-        if ($pageBuilderChanged) {
-            $changed = true;
-            $patchedBlocks = $pageBuilderBlocks;
-        }
-
-        if ($changed && $patchedBlocks !== []) {
-            $this->persistMaterializedPageAiLayoutBlocks($scope, $pageType, $patchedBlocks, $updatedAt);
-        }
-
         if (!$changed) {
             return ['scope' => $scope, 'patch' => [], 'changed' => false];
         }
@@ -509,9 +490,6 @@ class AiSiteAssetQueue implements QueueInterface
         ];
         if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
             $patch['virtual_pages_by_type'] = $scope['virtual_pages_by_type'];
-        }
-        if (\is_array($scope['pagebuilder_pages_by_type'] ?? null)) {
-            $patch['pagebuilder_pages_by_type'] = $scope['pagebuilder_pages_by_type'];
         }
 
         return ['scope' => $scope, 'patch' => $patch, 'changed' => true];
@@ -623,51 +601,6 @@ class AiSiteAssetQueue implements QueueInterface
         }
 
         return [\array_values($blocks), $changed];
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @param list<string> $candidates
-     * @return array{0:array<string,mixed>,1:bool,2:list<mixed>}
-     */
-    private function patchPageBuilderScopeAiLayout(
-        array $scope,
-        string $pageType,
-        array $candidates,
-        string $finalUrl,
-        string $targetBlockId,
-        string $targetComponentCode,
-        string $updatedAt
-    ): array {
-        $pages = \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [];
-        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        if ($page === []) {
-            return [$scope, false, []];
-        }
-
-        $layout = $this->normalizeAiLayoutPayload($page['ai_layout'] ?? []);
-        if (!\is_array($layout['blocks'] ?? null)) {
-            return [$scope, false, []];
-        }
-
-        [$blocks, $changed] = $this->patchBlocksImageUrls(
-            \array_values($layout['blocks']),
-            $candidates,
-            $finalUrl,
-            $targetBlockId,
-            $targetComponentCode
-        );
-        if (!$changed) {
-            return [$scope, false, []];
-        }
-
-        $layout['blocks'] = \array_values($blocks);
-        $layout['updated_at'] = $updatedAt;
-        $page['ai_layout'] = $layout;
-        $pages[$pageType] = $page;
-        $scope['pagebuilder_pages_by_type'] = $pages;
-
-        return [$scope, true, \array_values($blocks)];
     }
 
     /**
@@ -804,114 +737,6 @@ class AiSiteAssetQueue implements QueueInterface
         }
 
         return $value;
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @param list<mixed> $blocks
-     */
-    private function persistMaterializedPageAiLayoutBlocks(array $scope, string $pageType, array $blocks, string $updatedAt): void
-    {
-        $page = $this->loadMaterializedPageFromScope($scope, $pageType);
-        if (!$page instanceof Page) {
-            return;
-        }
-
-        $layout = $page->resolveAiLayoutForFrontend(true);
-        if (!\is_array($layout)) {
-            $layout = [];
-        }
-        $layout['blocks'] = \array_values($blocks);
-        $layout['updated_at'] = $updatedAt;
-
-        $page->setAiLayoutArray($layout)->save();
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     */
-    private function loadMaterializedPageFromScope(array $scope, string $pageType): ?Page
-    {
-        $pageId = $this->resolveMaterializedPageId($scope, $pageType);
-        if ($pageId <= 0) {
-            return null;
-        }
-
-        try {
-            /** @var Page $page */
-            $page = ObjectManager::make(Page::class);
-            $page->clearData()->clearQuery()->load($pageId);
-            return (int)$page->getId() > 0 ? $page : null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     */
-    private function resolveMaterializedPageId(array $scope, string $pageType): int
-    {
-        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $pageId = (int)($virtualPage['materialized_page_id'] ?? $virtualPage['page_id'] ?? 0);
-        if ($pageId > 0) {
-            return $pageId;
-        }
-
-        $pages = \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [];
-        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        $pageId = (int)($page['page_id'] ?? $page['id'] ?? 0);
-        if ($pageId > 0) {
-            return $pageId;
-        }
-
-        foreach ($pages as $key => $candidate) {
-            if (!\is_array($candidate) || !$this->isPageRecordForType($key, $candidate, $pageType)) {
-                continue;
-            }
-            $pageId = (int)($candidate['page_id'] ?? $candidate['id'] ?? 0);
-            if ($pageId > 0) {
-                return $pageId;
-            }
-        }
-
-        foreach ($virtualPages as $key => $candidate) {
-            if (!\is_array($candidate) || !$this->isPageRecordForType($key, $candidate, $pageType)) {
-                continue;
-            }
-            $pageId = (int)($candidate['materialized_page_id'] ?? $candidate['page_id'] ?? $candidate['id'] ?? 0);
-            if ($pageId > 0) {
-                return $pageId;
-            }
-        }
-
-        return 0;
-    }
-
-    /**
-     * @param array<string,mixed> $page
-     */
-    private function isPageRecordForType(mixed $key, array $page, string $pageType): bool
-    {
-        if (\is_string($key) && $key === $pageType) {
-            return true;
-        }
-
-        return \trim((string)($page['type'] ?? $page['page_type'] ?? '')) === $pageType;
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    private function normalizeAiLayoutPayload(mixed $layout): array
-    {
-        if (\is_string($layout)) {
-            $decoded = \json_decode($layout, true);
-            $layout = \is_array($decoded) ? $decoded : [];
-        }
-
-        return \is_array($layout) ? $layout : [];
     }
 
     /**

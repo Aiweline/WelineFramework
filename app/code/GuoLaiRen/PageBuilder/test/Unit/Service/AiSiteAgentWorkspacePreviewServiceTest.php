@@ -18,10 +18,10 @@ use Weline\Framework\Http\Url;
 
 final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
 {
-    public function testBuildUnavailablePayloadReflectsConfirmedTaskPlanState(): void
+    public function testBuildUnavailablePayloadReflectsConfirmedBuildPlanState(): void
     {
         $session = $this->createMock(AiSiteAgentSession::class);
-        $session->method('getScopeArray')->willReturn(['task_plan_confirmed' => 1]);
+        $session->method('getScopeArray')->willReturn(['build_plan_confirmed' => 1]);
 
         $sessionService = $this->createMock(AiSiteAgentSessionService::class);
         $sessionService->expects(self::once())
@@ -31,13 +31,13 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
         $sessionService->expects(self::once())
             ->method('loadScopeForStage')
             ->with($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-            ->willReturn(['task_plan_confirmed' => 1]);
+            ->willReturn(['build_plan_confirmed' => 1]);
 
         $scopeCompatibility = $this->createMock(AiSiteScopeCompatibilityService::class);
         $scopeCompatibility->expects(self::once())
             ->method('normalizeScope')
-            ->with(['task_plan_confirmed' => 1])
-            ->willReturn(['task_plan_confirmed' => 1]);
+            ->with(['build_plan_confirmed' => 1])
+            ->willReturn(['build_plan_confirmed' => 1]);
 
         $service = new AiSiteAgentWorkspacePreviewService(
             $sessionService,
@@ -50,7 +50,7 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
 
         self::assertSame([
             'session_accessible' => true,
-            'task_plan_confirmed' => true,
+            'build_plan_confirmed' => true,
             'page_type' => 'home',
         ], $payload);
     }

@@ -142,7 +142,7 @@ $showGuestBindPrompt = !$isLoggedIn
 <div id="cs-bind-modal" class="cs-modal" style="display: none;" data-editor-interactive>
     <div class="cs-modal-content">
         <div class="cs-modal-header">
-            <h3><?= __('绑定邮箱') ?></h3>
+            <h3><?= __('接收客服回复与优惠通知') ?></h3>
             <button class="cs-modal-close" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.closeBindModal()">
                 <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -150,15 +150,16 @@ $showGuestBindPrompt = !$isLoggedIn
             </button>
         </div>
         <div class="cs-modal-body">
-            <p><?= __('绑定邮箱后，您可以收到客服回复的邮件通知。') ?></p>
+            <p class="cs-modal-copy"><?= __('留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。') ?></p>
+            <p class="cs-modal-note"><?= __('仅用于本次客服咨询相关通知，不是简报订阅。') ?></p>
             <div class="cs-form-group">
-                <label><?= __('邮箱地址') ?></label>
-                <input type="email" id="cs-bind-email" class="cs-form-input" placeholder="<?= __('请输入您的邮箱') ?>">
+                <label><?= __('接收通知的邮箱') ?></label>
+                <input type="email" id="cs-bind-email" class="cs-form-input" placeholder="<?= __('请输入用于接收客服通知的邮箱') ?>">
             </div>
         </div>
         <div class="cs-modal-footer">
             <button class="cs-btn cs-btn-secondary" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.closeBindModal()">
-                <?= __('取消') ?>
+                <?= __('稍后再说') ?>
             </button>
             <button class="cs-btn cs-btn-primary" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.sendBindEmail()">
                 <?= __('发送验证邮件') ?>
@@ -189,19 +190,6 @@ function initCustomerServiceWidget() {
     // 初始化
     try {
         CustomerServiceWidget.init(customerServiceConfig);
-        
-        // 检查是否需要显示绑定提示
-        <?php if ($showGuestBindPrompt): ?>
-        setTimeout(function() {
-            if (
-                typeof CustomerServiceWidget !== 'undefined'
-                && typeof CustomerServiceWidget.showBindPrompt === 'function'
-                && customerServiceConfig.showGuestBindPrompt
-            ) {
-                CustomerServiceWidget.showBindPrompt();
-            }
-        }, 5000); // 5秒后提示
-        <?php endif; ?>
     } catch (error) {
         console.error('[CustomerService] 初始化失败:', error);
     }

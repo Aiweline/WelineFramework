@@ -250,6 +250,9 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
+            if (trim((string)($body['public_id'] ?? '')) !== '') {
+                throw new \Exception('AI workspace block edits must use the virtual theme update API.');
+            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -1306,6 +1309,9 @@ class Component extends BackendController
     public function layoutFields()
     {
         try {
+            if (trim((string)$this->request->getParam('public_id', '')) !== '') {
+                throw new \Exception('AI workspace block edits must use the virtual theme update API.');
+            }
             $pageId = (int)$this->request->getParam('page_id', 0);
             
             if (!$pageId) {
