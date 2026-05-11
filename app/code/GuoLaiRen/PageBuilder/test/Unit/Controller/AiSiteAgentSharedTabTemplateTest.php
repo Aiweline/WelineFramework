@@ -40,21 +40,20 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('reasonItems: collectPreviewReasonItems(footerPlan)', $script);
     }
 
-    public function testStageTwoTaskPlanCardsRenderQuestionMarkReasonEntrypoints(): void
+    public function testBuildPlanPreviewRendersQuestionMarkReasonEntrypointsWithoutStageTwoTaskPlan(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
 
         self::assertIsString($script);
-        self::assertStringContainsString('function collectTaskPlanPlanningReasonItems(task, blockTask, planContext)', $script);
-        self::assertStringContainsString('blockTaskObj.planning_reason', $script);
-        self::assertStringContainsString('taskObj.planning_reason', $script);
-        self::assertStringContainsString('contextObj.planning_reason', $script);
-        self::assertStringContainsString('taskObj.reason', $script);
-        self::assertStringContainsString('contextObj.reason', $script);
-        self::assertStringContainsString('var planningReasonItems = collectTaskPlanPlanningReasonItems(task, blockTask, planContext);', $script);
-        self::assertStringContainsString('renderPreviewReasonDisclosure(previewLabels.reason, planningReasonItems)', $script);
+        self::assertStringContainsString('function buildPlanPreviewHtml(markdownText, payload, options)', $script);
+        self::assertStringContainsString('function renderPreviewReasonDisclosure(label, reasonItems)', $script);
+        self::assertStringContainsString('function collectPreviewReasonItems(value)', $script);
+        self::assertStringContainsString("['reason', 'why', 'selection_reason', 'decision_reason', 'planning_reason', 'rationale', 'explanation']", $script);
+        self::assertStringContainsString('renderPreviewReasonDisclosure(previewLabels.reason, reasonItems)', $script);
         self::assertStringContainsString('>?</summary>', $script);
+        self::assertStringNotContainsString('collectTaskPlanPlanningReasonItems', $script);
+        self::assertStringNotContainsString('renderTaskPlan', $script);
     }
 
     public function testCurrentPageRefineUsesDedicatedPageApi(): void
@@ -90,15 +89,16 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertIsString($controller);
         self::assertIsString($layout);
         self::assertIsString($script);
-        self::assertStringContainsString('目标域名（必填）', $layout);
+        self::assertStringContainsString('for="pb-ai-target-domain"', $layout);
+        self::assertStringContainsString('class="form-control pb-ai-target-domain-sync"', $layout);
         self::assertStringContainsString('function isTargetDomainRequiredForPlanActionSatisfied()', $script);
-        self::assertStringContainsString('var domainLocked = !isTargetDomainRequiredForPlanActionSatisfied();', $script);
-        self::assertStringContainsString('b.disabled = globalRunVirtualThemeDisabled || domainLocked;', $script);
+        self::assertStringContainsString('if (!isTargetDomainRequiredForPlanActionSatisfied()) {', $script);
+        self::assertStringContainsString('setTargetDomainFieldInvalid(true);', $script);
         self::assertStringContainsString('messages.domainRequiredForPlanAction', $script);
         self::assertStringContainsString('TARGET_DOMAIN_REQUIRED', $controller);
     }
 
-    public function testConfirmUpdatePlanStartsPlanFlowWithoutBuildUrl(): void
+    public function testConfirmUpdatePlanStartsPlanFlowWithoutDependingOnBuildUrl(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $workspace = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml');
@@ -108,7 +108,7 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
 
         self::assertIsString($workspace);
         self::assertIsString($script);
-        self::assertStringContainsString('$runVirtualThemeUrl = \'\';', $workspace);
+        self::assertStringContainsString('$runVirtualThemeUrl = (string)($this->getData(\'run_virtual_theme_url\') ?? $this->getData(\'start_build_url\') ?? \'\');', $workspace);
         self::assertStringNotContainsString('if (!runVirtualThemeUrl) { return; }', $script);
         self::assertStringContainsString('if (!startPlanUrl) {', $script);
         self::assertStringContainsString('toast(\'error\', messages.planStartUnavailable);', $script);
@@ -120,26 +120,30 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         }
     }
 
-    public function testStageTwoConfirmWorkspaceShowsTaskProgress(): void
+    public function testBuildPlanConfirmWorkspaceShowsBuildTaskProgress(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $workspace = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml');
         $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
         $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
         $runtime = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        $buildQueueScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml');
 
         self::assertIsString($workspace);
         self::assertIsString($layout);
         self::assertIsString($script);
         self::assertIsString($runtime);
+        self::assertIsString($buildQueueScript);
         self::assertStringContainsString("\$currentStage !== 'plan'", $layout);
         self::assertStringContainsString('id="pb-ai-task-progress-heading"', $layout);
-        self::assertStringContainsString('data-task-progress-summary="stage2"', $layout);
-        self::assertStringContainsString("taskPlanConfirmedState = true;", $script);
+        self::assertStringContainsString('data-task-progress-summary="build"', $layout);
+        self::assertStringContainsString('buildPlanConfirmedState = true;', $script);
         self::assertStringNotContainsString('window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion', $script);
-        self::assertStringContainsString('startConfirmedBuild(triggerBtn || currentPlanTriggerButton, selectedTypes || currentPlanSelection, { allowTaskPlanRetry: false });', $script);
-        self::assertStringContainsString("window.__pbPhase2TaskProgress.syncFromWorkspaceState(workspaceState);", $script);
-        self::assertStringContainsString("window.__pbPhase2TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind);", $runtime);
-        self::assertStringContainsString("workspace/script-phase2-queue-progress.phtml", $workspace);
+        self::assertStringContainsString('ensureBuildPlanConfirmedBeforeBuild(triggerBtn, selectedTypes, options)', $script);
+        self::assertStringContainsString('startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, Object.assign({}, opts, {}));', $script);
+        self::assertStringContainsString("window.__pbBuildQueueProgress = {", $buildQueueScript);
+        self::assertStringContainsString("syncFromWorkspaceState: syncFromWorkspaceState", $buildQueueScript);
+        self::assertStringContainsString("window.__pbBuildQueueProgress.syncFromSsePayload(operation, payload || {}, eventKind);", $runtime);
+        self::assertStringContainsString("workspace/script-build-queue-progress.phtml", $workspace);
     }
 }

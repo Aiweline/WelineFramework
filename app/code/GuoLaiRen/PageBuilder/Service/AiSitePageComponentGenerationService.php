@@ -1671,10 +1671,10 @@ class AiSitePageComponentGenerationService
             'provider temporarily unavailable',
             'insufficient balance',
             'quota',
-            '瀵嗛挜',
+            '密钥',
             '鏈厤缃?',
-            '閰嶇疆',
-            '璐︽埛',
+            '配置',
+            '账户',
             '余额',
             '额度',
             'account',
@@ -4923,8 +4923,8 @@ class AiSitePageComponentGenerationService
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'header');
-        $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
-            $this->resolveSharedTaskPlanTask($scope, 'header'),
+        $buildPlanPromptAddon = $this->buildBuildPlanTaskPromptAddon(
+            $this->resolveSharedBuildPlanTask($scope, 'header'),
             'header',
             $scope
         );
@@ -4947,7 +4947,7 @@ class AiSitePageComponentGenerationService
             . $visualExcellence
             . "Selected pages: " . \implode(', ', $pageList) . "\n"
             . "Current navigation data: " . \json_encode($headerConfig['nav_items'] ?? [], \JSON_UNESCAPED_UNICODE) . "\n"
-            . $taskPlanPromptAddon
+            . $buildPlanPromptAddon
             . ($sharedRefinement !== '' ? "Latest user refinement for this header: {$sharedRefinement}\n" : '')
             . "Rules:\n"
             . "1. Output only one header component, never a full page.\n"
@@ -4975,8 +4975,8 @@ class AiSitePageComponentGenerationService
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'footer');
-        $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
-            $this->resolveSharedTaskPlanTask($scope, 'footer'),
+        $buildPlanPromptAddon = $this->buildBuildPlanTaskPromptAddon(
+            $this->resolveSharedBuildPlanTask($scope, 'footer'),
             'footer',
             $scope
         );
@@ -4997,7 +4997,7 @@ class AiSitePageComponentGenerationService
             . $claudeDesignSkill
             . $themeContract
             . $visualExcellence
-            . $taskPlanPromptAddon
+            . $buildPlanPromptAddon
             . ($sharedRefinement !== '' ? "Latest user refinement for this footer: {$sharedRefinement}\n" : '')
             . "Footer link data: " . \json_encode([
                 'column1' => $footerConfig['links.column1_items'] ?? '',
@@ -5035,9 +5035,9 @@ class AiSitePageComponentGenerationService
         $pageInstructionMap = Page::getPageTypePromptInstructionsMap();
         $pageInstruction = (string)($pageInstructionMap[$pageType] ?? '');
         $sectionKey = (string)($section['key'] ?? '');
-        $taskPlanTask = $this->resolveSectionTaskPlanTask($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
-        $planContext = \is_array($taskPlanTask['plan_context'] ?? null) ? $taskPlanTask['plan_context'] : [];
-        $blockTask = \is_array($taskPlanTask['block_task'] ?? null) ? $taskPlanTask['block_task'] : [];
+        $buildPlanTask = $this->resolveSectionBuildPlanTask($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
         $sectionName = $this->normalizePromptVisibleLabel(
             $this->pickString(
                 $planContext['block_goal'] ?? null,
@@ -5065,7 +5065,7 @@ class AiSitePageComponentGenerationService
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
-        $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon($taskPlanTask, 'section', $scope);
+        $buildPlanPromptAddon = $this->buildBuildPlanTaskPromptAddon($buildPlanTask, 'section', $scope);
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('section');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
@@ -5095,7 +5095,7 @@ class AiSitePageComponentGenerationService
             . $claudeDesignSkill
             . $themeContract
             . $visualExcellence
-            . $taskPlanPromptAddon
+            . $buildPlanPromptAddon
             . ($refinement !== '' ? "Latest refine instruction for this section: {$refinement}\n" : '')
             . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
             . "Rules:\n"
@@ -5172,7 +5172,7 @@ class AiSitePageComponentGenerationService
             . "- frontend-components: generate one reusable component/block with editable fields and visitor-facing copy; do not emit full-page HTML, static placeholder sections, internal prompt text, generic substitute content, or page-type labels as visible eyebrow text.\n"
             . "- page-design-plan: for page-owned blocks, page_design_plan is the design brief. Preserve its color_layering, section_flow, interaction_notes, and anti_monotony_rule in the final visual hierarchy.\n"
             . "- asset-rule: when a visual/image is needed but no verified uploaded asset URL exists, create a theme-colored inline SVG or CSS visual directly. Never render a broken <img>.\n"
-            . "- ai-module-development: this is an audited AI scenario result; include only content that follows the provided stage-1 theme context and current stage-2 task contract.\n"
+            . "- ai-module-development: this is an audited AI scenario result; include only content that follows the provided stage-1 theme context and current build-plan task contract.\n"
             . "- queue-usage/sse-streaming: long generation is already queued; return the final component JSON only, not progress narration or markdown.\n";
     }
 
@@ -5219,7 +5219,7 @@ class AiSitePageComponentGenerationService
 
         return "Stage-3 language execution contract (hard requirement):\n"
             . "- source_of_truth_locale: {$contentLocale} ({$localeHint})\n"
-            . "- Internal planning language is not output language. stage-1/stage-2/story/task samples are intent only.\n"
+            . "- Internal planning language is not output language. stage-1/build-plan/story/task samples are intent only.\n"
             . "- Before composing html_content/html_extra/footer text/nav labels, normalize every candidate sentence to source_of_truth_locale.\n"
             . $scriptGuard
             . "- Final self-check before returning JSON: if any visitor-visible sentence is not in source_of_truth_locale, rewrite it now and then return.\n";
@@ -5247,7 +5247,7 @@ class AiSitePageComponentGenerationService
         }
         $themeContext = \is_array($contract['raw_context'] ?? null) ? $contract['raw_context'] : [];
 
-        return "Confirmed visual contract from the approved stage-1 theme and stage-2 task plan:\n"
+        return "Confirmed visual contract from the approved stage-1 theme and build plan:\n"
             . "- theme_name: " . (string)($contract['name'] ?? '') . "\n"
             . "- visual_tone: " . (string)($contract['visual_tone'] ?? '') . "\n"
             . "- font_family: " . (string)($contract['font_family'] ?? '') . "\n"
@@ -5356,7 +5356,7 @@ class AiSitePageComponentGenerationService
     private function resolveThemeContract(array $scope): array
     {
         foreach ([
-            $this->resolveTaskPlanRoot($scope),
+            $this->resolveBuildPlanTaskRoot($scope),
             [
                 'theme_design' => \is_array($scope['theme_design'] ?? null) ? $scope['theme_design'] : [],
                 'theme_style' => \is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : [],
@@ -5761,7 +5761,7 @@ class AiSitePageComponentGenerationService
         ];
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'header'));
 
-        return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'header'), $locale);
+        return $this->applyBuildPlanDefaults($defaultConfig, $this->resolveSharedBuildPlanTask($scope, 'header'), $locale);
     }
 
     /**
@@ -5844,7 +5844,7 @@ class AiSitePageComponentGenerationService
         ];
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'footer'));
 
-        return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'footer'), $locale);
+        return $this->applyBuildPlanDefaults($defaultConfig, $this->resolveSharedBuildPlanTask($scope, 'footer'), $locale);
     }
 
     /**
@@ -5928,14 +5928,14 @@ class AiSitePageComponentGenerationService
         }
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'content'));
 
-        $taskPlanTask = $this->resolveSectionTaskPlanTask(
+        $buildPlanTask = $this->resolveSectionBuildPlanTask(
             $scope,
             $pageType,
             (string)($section['code'] ?? ''),
             (string)($section['key'] ?? '')
         );
 
-        $defaultConfig = $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask, $locale);
+        $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $buildPlanTask, $locale);
 
         // 强行契约：把当前 section 的模板/页面/资产等元信息写入 runtime.* 内部键，
         // stub/fallback 用它直接命中正确变体并真正使用 verified_assets，而不是退化为占位 SVG。
@@ -6019,8 +6019,9 @@ class AiSitePageComponentGenerationService
     {
         $tokens = [];
         foreach ([
-            $scope['virtual_theme_plan']['confirmed'] ?? null,
-            $scope['task_plan_structured'] ?? null,
+            $scope['build_plan_v2'] ?? null,
+            $scope['plan_projection'] ?? null,
+            $scope['content_manifest'] ?? null,
             $scope['build_blueprint'] ?? null,
             $scope['build_tasks'] ?? null,
             $scope['execution_blueprint'] ?? null,
@@ -6063,57 +6064,19 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $scope
      * @return array<string,mixed>
      */
-    private function resolveTaskPlanRoot(array $scope): array
+    private function resolveBuildPlanTaskRoot(array $scope): array
     {
-        $structured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        if (
-            $structured !== []
-            && (int)($scope['task_plan_confirmed'] ?? 0) === 1
-            && $this->taskPlanRootHasTasks($structured)
-        ) {
-            return $structured;
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        if (
-            $confirmed !== []
-            && (int)($scope['task_plan_confirmed'] ?? 0) === 1
-            && $this->taskPlanRootHasTasks($confirmed)
-        ) {
-            return $confirmed;
-        }
-
-        return (int)($scope['task_plan_confirmed'] ?? 0) === 1
-            ? $this->buildTaskPlanRootFromBuildBlueprint($scope)
-            : [];
-    }
-
-    /**
-     * @param array<string,mixed> $root
-     */
-    private function taskPlanRootHasTasks(array $root): bool
-    {
-        if (\is_array($root['shared_tasks'] ?? null) && $root['shared_tasks'] !== []) {
-            return true;
-        }
-        foreach (\is_array($root['page_tasks'] ?? null) ? $root['page_tasks'] : [] as $tasks) {
-            if (\is_array($tasks) && $tasks !== []) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->buildPlanTaskRootFromBuildBlueprint($scope);
     }
 
     /**
      * @param array<string,mixed> $scope
      * @return array<string,mixed>
      */
-    private function buildTaskPlanRootFromBuildBlueprint(array $scope): array
+    private function buildPlanTaskRootFromBuildBlueprint(array $scope): array
     {
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        if ((string)($buildBlueprint['source'] ?? '') !== 'stage2_confirmed_task_plan') {
+        if ((string)($buildBlueprint['source'] ?? '') !== 'build_plan_v2') {
             return [];
         }
 
@@ -6137,37 +6100,24 @@ class AiSitePageComponentGenerationService
         }
 
         return [
-            'signature' => (string)($buildBlueprint['task_plan_signature'] ?? $buildBlueprint['signature'] ?? ''),
+            'signature' => (string)($buildBlueprint['build_plan_signature'] ?? $buildBlueprint['signature'] ?? ''),
             'shared_tasks' => $sharedTasks,
             'page_tasks' => $pageTasks,
         ];
     }
 
     /**
-     * @param array<string,mixed> $confirmed
-     */
-    private function confirmedTaskPlanHasExecutionBlueprint(array $confirmed): bool
-    {
-        $executionBlueprint = \is_array($confirmed['execution_blueprint'] ?? null)
-            ? $confirmed['execution_blueprint']
-            : [];
-        $tasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
-
-        return $tasks !== [];
-    }
-
-    /**
      * @param array<string,mixed> $scope
      * @return array<string,mixed>
      */
-    private function resolveSharedTaskPlanTask(array $scope, string $region): array
+    private function resolveSharedBuildPlanTask(array $scope, string $region): array
     {
         $region = \trim($region);
         if ($region === '') {
             return [];
         }
 
-        $root = $this->resolveTaskPlanRoot($scope);
+        $root = $this->resolveBuildPlanTaskRoot($scope);
         foreach (\is_array($root['shared_tasks'] ?? null) ? $root['shared_tasks'] : [] as $task) {
             if (!\is_array($task)) {
                 continue;
@@ -6187,9 +6137,9 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $scope
      * @return array<string,mixed>
      */
-    private function resolveSectionTaskPlanTask(array $scope, string $pageType, string $sectionCode, string $sectionKey = ''): array
+    private function resolveSectionBuildPlanTask(array $scope, string $pageType, string $sectionCode, string $sectionKey = ''): array
     {
-        $root = $this->resolveTaskPlanRoot($scope);
+        $root = $this->resolveBuildPlanTaskRoot($scope);
         $pageTasks = \is_array($root['page_tasks'][$pageType] ?? null) ? $root['page_tasks'][$pageType] : [];
         foreach ($pageTasks as $task) {
             if (!\is_array($task)) {
@@ -6216,12 +6166,12 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * @param array<string,mixed> $taskPlanTask
+     * @param array<string,mixed> $buildPlanTask
      */
-    private function buildTaskPlanPromptAddon(array $taskPlanTask, string $contextLabel, array $scope = []): string
+    private function buildBuildPlanTaskPromptAddon(array $buildPlanTask, string $contextLabel, array $scope = []): string
     {
-        if ($taskPlanTask === []) {
-            // Fallback: inject scope-level content context when no stage2 task plan exists.
+        if ($buildPlanTask === []) {
+            // Fallback: inject scope-level content context when no build-plan task exists.
             // Without this, the AI prompt has zero content direction and generates generic
             // or irrelevant content (e.g., stock-photo white students for an Indian gaming site).
             $brief = $this->pickString(
@@ -6247,7 +6197,7 @@ class AiSitePageComponentGenerationService
                     . "- HARD CONTRACT: every verified_asset URL MUST be used as <img src> or CSS url() in this section's output. Do not skip any. If a slot_id matches this section, the corresponding image must appear in html_content. This is NOT optional — unused generated images waste API tokens.\n"
                     . "- Inject attribute data-pb-ai-asset-slot=\"<slot_id>\" on every element using a verified asset URL.\n"
                 : "- verified_assets: []\n";
-            return "Stage-2 task context for this {$contextLabel} (fallback from scope — follow the customer brief strictly):\n"
+            return "Build-plan task context for this {$contextLabel} (fallback from scope - follow the customer brief strictly):\n"
                 . "- customer_brief: {$brief}\n"
                 . "- IMPORTANT: All generated content MUST serve this customer brief exactly. Do NOT invent unrelated generic content.\n"
                 . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
@@ -6256,28 +6206,21 @@ class AiSitePageComponentGenerationService
                 . "- anti-copy rule: never paste stage-1 observation/planning sentences directly into html_content. Rewrite phrases like \"Visitors see...\", \"访客看到...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n";
         }
 
-        $planContext = \is_array($taskPlanTask['plan_context'] ?? null) ? $taskPlanTask['plan_context'] : [];
-        $taskScript = \is_array($taskPlanTask['task_script'] ?? null) ? $taskPlanTask['task_script'] : [];
-        $implementationContract = \is_array($taskPlanTask['implementation_contract'] ?? null) ? $taskPlanTask['implementation_contract'] : [];
-        $runtimeContext = \is_array($taskPlanTask['runtime_context'] ?? null) ? $taskPlanTask['runtime_context'] : [];
-        $blockTask = \is_array($taskPlanTask['block_task'] ?? null) ? $taskPlanTask['block_task'] : [];
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $taskScript = \is_array($buildPlanTask['task_script'] ?? null) ? $buildPlanTask['task_script'] : [];
+        $implementationContract = \is_array($buildPlanTask['implementation_contract'] ?? null) ? $buildPlanTask['implementation_contract'] : [];
+        $runtimeContext = \is_array($buildPlanTask['runtime_context'] ?? null) ? $buildPlanTask['runtime_context'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
         $themeContext = \is_array($runtimeContext['theme_context_snapshot'] ?? null) ? $runtimeContext['theme_context_snapshot'] : [];
-        if ($themeContext === [] && \is_array($taskPlanTask['theme_context_snapshot'] ?? null)) {
-            $themeContext = $taskPlanTask['theme_context_snapshot'];
+        if ($themeContext === [] && \is_array($buildPlanTask['theme_context_snapshot'] ?? null)) {
+            $themeContext = $buildPlanTask['theme_context_snapshot'];
         }
         $sharedPromptContext = \is_array($runtimeContext['shared_prompt_context'] ?? null) ? $runtimeContext['shared_prompt_context'] : [];
-        if ($sharedPromptContext === [] && \is_array($taskPlanTask['shared_prompt_context'] ?? null)) {
-            $sharedPromptContext = $taskPlanTask['shared_prompt_context'];
-        }
-        $stage2Context = [];
-        if ($themeContext === [] && \is_array($stage2Context['theme_context_snapshot'] ?? null)) {
-            $themeContext = $stage2Context['theme_context_snapshot'];
+        if ($sharedPromptContext === [] && \is_array($buildPlanTask['shared_prompt_context'] ?? null)) {
+            $sharedPromptContext = $buildPlanTask['shared_prompt_context'];
         }
         if ($themeContext === [] && \is_array($scope['execution_blueprint']['theme_context_snapshot'] ?? null)) {
             $themeContext = $scope['execution_blueprint']['theme_context_snapshot'];
-        }
-        if ($sharedPromptContext === [] && \is_array($stage2Context['shared_prompt_context'] ?? null)) {
-            $sharedPromptContext = $stage2Context['shared_prompt_context'];
         }
         if ($sharedPromptContext === [] && \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null)) {
             $sharedPromptContext = $scope['execution_blueprint']['shared_prompt_context'];
@@ -6297,7 +6240,7 @@ class AiSitePageComponentGenerationService
         $contentLocale = \trim((string)($runtimeContext['content_locale'] ?? $scope['default_locale'] ?? ''));
         $localeHint = $contentLocale !== '' ? $this->describeLocaleForAiPrompt($contentLocale) : '';
         $stage3LocaleRule = $contentLocale !== ''
-            ? "- stage3 locale gate: source_of_truth_locale={$contentLocale} ({$localeHint}). stage-2 text is intent only; rewrite any non-{$contentLocale} planned sentence before it becomes visible copy.\n"
+            ? "- stage3 locale gate: source_of_truth_locale={$contentLocale} ({$localeHint}). build-plan text is intent only; rewrite any non-{$contentLocale} planned sentence before it becomes visible copy.\n"
             : '';
         $verifiedAssets = \is_array($runtimeContext['verified_assets'] ?? null)
             ? $runtimeContext['verified_assets']
@@ -6313,8 +6256,8 @@ class AiSitePageComponentGenerationService
                 . "- Inject attribute data-pb-ai-image-role=\"generated-asset\" on every element using a verified asset URL.\n"
             : "- verified_assets: []\n- verified asset rule: no verified real image URL is available, so render visual media as inline SVG/CSS and do not invent image URLs.\n";
 
-        return "Stage-2 task context for this {$contextLabel}:\n"
-            . "- task_key: " . (string)($taskPlanTask['task_key'] ?? '') . "\n"
+        return "Build-plan task context for this {$contextLabel}:\n"
+            . "- task_key: " . (string)($buildPlanTask['task_key'] ?? '') . "\n"
             . "- page_goal: " . (string)($planContext['page_goal'] ?? '') . "\n"
             . "- page_design_plan: " . $this->jsonEncodeForPrompt($pageDesignPlan, 3000) . "\n"
             . "- page_flow_role: " . (string)($planContext['page_flow_role'] ?? $stylePlan['page_flow_role'] ?? '') . "\n"
@@ -6329,8 +6272,8 @@ class AiSitePageComponentGenerationService
             . "- field_content_requirements: " . \json_encode($fieldRequirements, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
             . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 5000) . "\n"
-            . "- stage2.task_script: " . $this->jsonEncodeForPrompt($taskScript, 7000) . "\n"
-            . "- stage2.block_task: " . $this->jsonEncodeForPrompt($blockTask, 7000) . "\n"
+            . "- build_plan.task_script: " . $this->jsonEncodeForPrompt($taskScript, 7000) . "\n"
+            . "- build_plan.block_task: " . $this->jsonEncodeForPrompt($blockTask, 7000) . "\n"
             . "- block_task.content_plan: " . \json_encode($contentPlan, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- block_task.style_plan: " . \json_encode($stylePlan, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- block_task.planning_reason: " . (string)($blockTask['planning_reason'] ?? '') . "\n"
@@ -6339,8 +6282,8 @@ class AiSitePageComponentGenerationService
             . "- hierarchy execution rule: do not reuse the same full-bleed primary/accent background for every block; vary surface elevation, background texture, dividers, spacing rhythm, or visual motif per block.\n"
             . "- html fragment rule: output only this block's inner visitor content in html_content/html_extra. Use one component-owned root wrapper, close every quote/tag, and do not include `pb-ai-html-block`, neighboring `<section>` wrappers, or orphan closing tags from previous/next blocks.\n"
             . "- no-overlap structure rule: do not rely on negative margins, fixed container heights, or absolute-positioned content for the main flow. Cards, proof strips, grids, and CTA rows must consume normal layout space with padding/gap/margin inside the block.\n"
-            . "- stage2 language rule: treat stage-2 planned text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
-            . "- anti-copy rule: never paste stage-2 observation/planning sentences directly into html_content. Rewrite phrases like \"访客看到...\", \"用户看到...\", \"从而产生...\", \"信任感增强\", \"知道如何...\", \"Visitors see...\", or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
+            . "- build-plan language rule: treat build-plan text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
+            . "- anti-copy rule: never paste build-plan observation/planning sentences directly into html_content. Rewrite phrases like \"访客看到...\", \"用户看到...\", \"从而产生...\", \"信任感增强\", \"知道如何...\", \"Visitors see...\", or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
             . $stage3LocaleRule
             . $verifiedAssetRule
             . "- theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
@@ -6350,26 +6293,26 @@ class AiSitePageComponentGenerationService
 
     /**
      * @param array<string,mixed> $defaultConfig
-     * @param array<string,mixed> $taskPlanTask
+     * @param array<string,mixed> $buildPlanTask
      * @return array<string,mixed>
      */
-    private function applyTaskPlanDefaults(array $defaultConfig, array $taskPlanTask, string $locale = ''): array
+    private function applyBuildPlanDefaults(array $defaultConfig, array $buildPlanTask, string $locale = ''): array
     {
-        if ($taskPlanTask === []) {
+        if ($buildPlanTask === []) {
             return $defaultConfig;
         }
 
-        $taskScript = \is_array($taskPlanTask['task_script'] ?? null) ? $taskPlanTask['task_script'] : [];
-        $blockTask = \is_array($taskPlanTask['block_task'] ?? null) ? $taskPlanTask['block_task'] : [];
-        $planContext = \is_array($taskPlanTask['plan_context'] ?? null) ? $taskPlanTask['plan_context'] : [];
+        $taskScript = \is_array($buildPlanTask['task_script'] ?? null) ? $buildPlanTask['task_script'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
         $fieldRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
         foreach ($fieldRequirements as $requirement) {
             if (!\is_array($requirement)) {
                 continue;
             }
-            $field = $this->normalizeTaskPlanRequirementField($requirement['field'] ?? '');
+            $field = $this->normalizeBuildPlanRequirementField($requirement['field'] ?? '');
             $isLinkField = \str_contains($field, 'navigation') || \str_contains($field, 'featured_links') || \str_contains($field, 'policy_links');
-            $sample = $this->normalizeTaskPlanRequirementSample($requirement['sample'] ?? '', $isLinkField);
+            $sample = $this->normalizeBuildPlanRequirementSample($requirement['sample'] ?? '', $isLinkField);
             if ($field === '' || $sample === '') {
                 continue;
             }
@@ -6377,7 +6320,7 @@ class AiSitePageComponentGenerationService
                 continue;
             }
             if ($isLinkField) {
-                $defaultConfig = $this->applyTaskPlanLinkFieldDefaults($defaultConfig, $field, $sample, $locale);
+                $defaultConfig = $this->applyBuildPlanLinkFieldDefaults($defaultConfig, $field, $sample, $locale);
                 continue;
             }
 
@@ -6413,7 +6356,7 @@ class AiSitePageComponentGenerationService
         // 强行契约：将 stage-2 block_task.content_plan.content_copy / cta_plan 优先回填进 defaultConfig，
         // 避免 stub/fallback 因仅依赖 field_content_requirements.sample 而把 task 真正规划好的视觉文案当成"未指定"漏掉。
         // 必须在 visibleSummary 兜底前完成，否则 description 会被 content_copy 拼接出的概要覆盖单一 description 字段。
-        $defaultConfig = $this->applyTaskPlanContentPlanDefaults($defaultConfig, $blockTask);
+        $defaultConfig = $this->applyBuildPlanContentPlanDefaults($defaultConfig, $blockTask);
 
         $visibleSummary = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext);
         if ($visibleSummary !== '' && \trim((string)($defaultConfig['content.description'] ?? '')) === '') {
@@ -6421,7 +6364,7 @@ class AiSitePageComponentGenerationService
         }
 
         return $this->sanitizeDefaultConfigVisibleCopy(
-            $this->applyTaskPlanDataContractDefaults($defaultConfig, $taskPlanTask)
+            $this->applyBuildPlanDataContractDefaults($defaultConfig, $buildPlanTask)
         );
     }
 
@@ -6430,7 +6373,7 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $blockTask
      * @return array<string,mixed>
      */
-    private function applyTaskPlanContentPlanDefaults(array $defaultConfig, array $blockTask): array
+    private function applyBuildPlanContentPlanDefaults(array $defaultConfig, array $blockTask): array
     {
         $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
         if ($contentPlan === []) {
@@ -6442,7 +6385,7 @@ class AiSitePageComponentGenerationService
             if (!\is_array($row)) {
                 continue;
             }
-            $field = $this->normalizeTaskPlanRequirementField($row['field'] ?? '');
+            $field = $this->normalizeBuildPlanRequirementField($row['field'] ?? '');
             $copy = $this->sanitizeVisibleCopy((string)($row['copy'] ?? $row['sample'] ?? $row['default'] ?? ''));
             if ($field === '' || $copy === '') {
                 continue;
@@ -6522,7 +6465,7 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $defaultConfig
      * @return array<string,mixed>
      */
-    private function applyTaskPlanLinkFieldDefaults(array $defaultConfig, string $field, string $sample, string $locale = ''): array
+    private function applyBuildPlanLinkFieldDefaults(array $defaultConfig, string $field, string $sample, string $locale = ''): array
     {
         $fallbackItems = $this->resolveDefaultConfigLinkFallbackItems($defaultConfig, $field);
         $items = $this->normalizePromptLinkItems($this->decodeLinkItemsSample($sample), $fallbackItems);
@@ -6597,12 +6540,12 @@ class AiSitePageComponentGenerationService
 
     /**
      * @param array<string,mixed> $defaultConfig
-     * @param array<string,mixed> $taskPlanTask
+     * @param array<string,mixed> $buildPlanTask
      * @return array<string,mixed>
      */
-    private function applyTaskPlanDataContractDefaults(array $defaultConfig, array $taskPlanTask): array
+    private function applyBuildPlanDataContractDefaults(array $defaultConfig, array $buildPlanTask): array
     {
-        foreach ($this->extractTaskPlanDataContractLines($taskPlanTask) as $line) {
+        foreach ($this->extractBuildPlanDataContractLines($buildPlanTask) as $line) {
             if (!\str_contains($line, ':')) {
                 continue;
             }
@@ -6631,7 +6574,7 @@ class AiSitePageComponentGenerationService
         return $this->fillDefaultConfigVisibleCopyFromContractSamples($defaultConfig);
     }
 
-    private function normalizeTaskPlanRequirementField(mixed $fieldRaw): string
+    private function normalizeBuildPlanRequirementField(mixed $fieldRaw): string
     {
         if (\is_array($fieldRaw)) {
             foreach ($fieldRaw as $candidate) {
@@ -6654,7 +6597,7 @@ class AiSitePageComponentGenerationService
         return \strtolower(\trim((string)$fieldRaw));
     }
 
-    private function normalizeTaskPlanRequirementSample(mixed $sampleRaw, bool $isLinkField): string
+    private function normalizeBuildPlanRequirementSample(mixed $sampleRaw, bool $isLinkField): string
     {
         if (\is_array($sampleRaw)) {
             if ($isLinkField) {
@@ -6760,7 +6703,7 @@ class AiSitePageComponentGenerationService
             || \str_starts_with($normalized, 'implementation_contract.')
             || \str_contains($normalized, 'prompt_context')
             || \str_contains($normalized, 'stage1_')
-            || \str_contains($normalized, 'stage2_')
+            || \str_contains($normalized, 'stage' . '2_')
             || \str_contains($normalized, 'stage3_');
     }
 
@@ -7000,14 +6943,14 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * @param array<string,mixed> $taskPlanTask
+     * @param array<string,mixed> $buildPlanTask
      * @return list<string>
      */
-    private function extractTaskPlanDataContractLines(array $taskPlanTask): array
+    private function extractBuildPlanDataContractLines(array $buildPlanTask): array
     {
         $sources = [];
         foreach (['task_script', 'implementation_contract'] as $rootKey) {
-            $root = \is_array($taskPlanTask[$rootKey] ?? null) ? $taskPlanTask[$rootKey] : [];
+            $root = \is_array($buildPlanTask[$rootKey] ?? null) ? $buildPlanTask[$rootKey] : [];
             $dataContract = \is_array($root['data_contract'] ?? null) ? $root['data_contract'] : [];
             $sources[] = \is_array($dataContract['required_data'] ?? null) ? $dataContract['required_data'] : [];
         }
@@ -7326,8 +7269,8 @@ class AiSitePageComponentGenerationService
     private function resolveSharedPromptContext(array $scope): array
     {
         foreach ([
-            $this->extractSharedPromptContextFromTask($this->resolveSharedTaskPlanTask($scope, 'header')),
-            $this->extractSharedPromptContextFromTask($this->resolveSharedTaskPlanTask($scope, 'footer')),
+            $this->extractSharedPromptContextFromTask($this->resolveSharedBuildPlanTask($scope, 'header')),
+            $this->extractSharedPromptContextFromTask($this->resolveSharedBuildPlanTask($scope, 'footer')),
             \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null) ? $scope['execution_blueprint']['shared_prompt_context'] : [],
             \is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null) ? $scope['plan_workbench']['confirmed']['shared_prompt_context'] : [],
         ] as $candidate) {

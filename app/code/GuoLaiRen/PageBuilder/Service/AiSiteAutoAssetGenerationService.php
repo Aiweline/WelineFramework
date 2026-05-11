@@ -28,7 +28,7 @@ class AiSiteAutoAssetGenerationService
     public function prepareBuildAssets(AiSiteAgentSession $session, int $adminId, array $scope, int $limit = self::DEFAULT_LIMIT): array
     {
         $scope = $this->ensureReferenceImageInsights($scope);
-        $manifest = $this->manifestService->syncFromTaskPlan($scope);
+        $manifest = $this->manifestService->syncFromBuildPlan($scope);
         // 无论何种模式，都清理旧的占位图，留空等待真实 AI 图片生成
         $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
         $manifest = $this->manifestService->discardPlaceholderGeneratedAssets($manifest);

@@ -213,14 +213,14 @@ final class AiSiteAgentWorkspacePreviewService
     /**
      * @return array{
      *   session_accessible:bool,
-     *   task_plan_confirmed:bool,
+     *   build_plan_confirmed:bool,
      *   page_type:string
      * }
      */
     public function buildUnavailablePayload(int $adminId, string $publicId, string $requestedPageType): array
     {
         $sessionAccessible = false;
-        $taskPlanConfirmed = false;
+        $buildPlanConfirmed = false;
         $publicId = \trim($publicId);
         $requestedPageType = \trim($requestedPageType);
         if ($adminId > 0 && $publicId !== '' && $requestedPageType !== '') {
@@ -230,13 +230,13 @@ final class AiSiteAgentWorkspacePreviewService
                 $scope = $this->scopeCompatibilityService->normalizeScope(
                     $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
                 );
-                $taskPlanConfirmed = (int)($scope['task_plan_confirmed'] ?? 0) === 1;
+                $buildPlanConfirmed = (int)($scope['build_plan_confirmed'] ?? 0) === 1;
             }
         }
 
         return [
             'session_accessible' => $sessionAccessible,
-            'task_plan_confirmed' => $taskPlanConfirmed,
+            'build_plan_confirmed' => $buildPlanConfirmed,
             'page_type' => $requestedPageType,
         ];
     }

@@ -641,8 +641,6 @@ final class AiSiteQualityGateService
     {
         $tokens = [];
         foreach ([
-            $scope['virtual_theme_plan']['confirmed'] ?? null,
-            $scope['task_plan_structured'] ?? null,
             $scope['build_blueprint'] ?? null,
             $scope['build_tasks'] ?? null,
             $scope['execution_blueprint'] ?? null,

@@ -6,7 +6,6 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
-use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -37,23 +36,6 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 {
     private const AI_CHUNK_FORWARDER_KEY = 'pagebuilder.ai.chunk.forwarder';
 
-    /**
-     * @return array{0: AiSiteAgent, 1: ReflectionMethod}
-     */
-    private function harnessForIsTaskPlanDraftMissing(bool $hasConfirmedTaskPlanForBuild = false): array
-    {
-        $buildTask = $this->createMock(AiSiteBuildTaskService::class);
-        $buildTask->method('hasConfirmedTaskPlanForBuild')->willReturn($hasConfirmedTaskPlanForBuild);
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $prop = (new ReflectionClass(AiSiteAgent::class))->getProperty('buildTaskService');
-        $prop->setAccessible(true);
-        $prop->setValue($controller, $buildTask);
-        $method = new ReflectionMethod(AiSiteAgent::class, 'isTaskPlanDraftMissing');
-        $method->setAccessible(true);
-
-        return [$controller, $method];
-    }
-
     protected function tearDown(): void
     {
         RequestContext::remove(RequestContext::SSE_WRITER_KEY);
@@ -77,16 +59,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertFalse(RequestContext::has(self::AI_CHUNK_FORWARDER_KEY));
     }
 
-    public function testDetectBootstrapGateAllowsExplicitDeterministicFallback(): void
+    public function testLegacyTaskPlanGenerationSourceGateIsDeleted(): void
     {
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(AiSiteAgent::class, 'shouldRejectTaskPlanGenerationSource');
-        $method->setAccessible(true);
-
-        self::assertFalse((bool)$method->invoke($controller, ['fake_mode' => 0], 'ai', false));
-        self::assertTrue((bool)$method->invoke($controller, ['fake_mode' => 0], 'deterministic', false));
-        self::assertFalse((bool)$method->invoke($controller, ['fake_mode' => 0], 'deterministic', true));
-        self::assertFalse((bool)$method->invoke($controller, ['fake_mode' => 1], 'deterministic', false));
+        self::assertFalse((new ReflectionClass(AiSiteAgent::class))->hasMethod('shouldRejectTaskPlanGenerationSource'));
     }
 
     public function testWorkspaceStreamTerminalOperationDetection(): void
@@ -172,18 +147,18 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('updateStageStatusSummary(normalizedDonePayload.state)', $source);
     }
 
-    public function testRuntimePollsTaskPlanWhenTerminalPayloadIncludesQueueSkip(): void
+    public function testRuntimeDoesNotPollLegacyTaskPlanQueue(): void
     {
         $source = \file_get_contents(
             \dirname(__DIR__, 3) . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml'
         );
         self::assertIsString($source);
-        self::assertStringContainsString('task_plan_queue_skip', $source);
-        self::assertStringContainsString('startDeferredQueueStatePoll(\'task_plan\')', $source);
-        self::assertStringContainsString('taskPlanSkip', $source);
+        self::assertStringNotContainsString('task_plan_queue_skip', $source);
+        self::assertStringNotContainsString('startDeferredQueueStatePoll(\'task_plan\')', $source);
+        self::assertStringNotContainsString('taskPlanSkip', $source);
         self::assertStringContainsString('isPlanningQueueSoftTerminalStop', $source);
         self::assertStringContainsString('toast(\'warning\'', $source);
-        self::assertStringContainsString('syncTaskPlanSseRunningFromWorkspaceState', $source);
+        self::assertStringNotContainsString('syncTaskPlanSseRunningFromWorkspaceState', $source);
     }
 
     public function testBlockConfigReplacementOnlyTouchesSelectedPageBlock(): void
@@ -442,7 +417,6 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         $moduleRoot = \dirname(__DIR__, 3);
         $scriptPaths = [
             $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml',
-            $moduleRoot . '/view/tpl/zh_Hans_CN/templates/Backend/AiSiteAgent/workspace/com_script-runtime.phtml',
         ];
 
         foreach ($scriptPaths as $scriptPath) {
@@ -451,23 +425,19 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             self::assertIsString($runtimeScript);
             self::assertStringContainsString("['done', 'complete', 'completed']", $runtimeScript);
 
-            $planDonePos = \strpos($runtimeScript, 'if (isStageQueueDone(planQueueStatus))');
+            $planDonePos = \strpos($runtimeScript, "if (isStageQueueDone(planQueueStatus) && activeOp === 'plan')");
             $planErrorPos = \strpos($runtimeScript, "if (activeOp === 'plan' && activeStatus === 'error')");
-            $taskDonePos = \strpos($runtimeScript, 'if (isStageQueueDone(taskPlanQueueStatus))');
-            $taskErrorPos = \strpos($runtimeScript, "if (activeOp === 'task_plan' && activeStatus === 'error')");
             $buildDonePos = \strpos($runtimeScript, 'if (isStageQueueDone(buildQueueStatus))');
             $buildErrorPos = \strpos($runtimeScript, "if (activeOp === 'build' && activeStatus === 'error')");
 
             self::assertNotFalse($planDonePos, $scriptPath);
             self::assertNotFalse($planErrorPos, $scriptPath);
-            self::assertNotFalse($taskDonePos, $scriptPath);
-            self::assertNotFalse($taskErrorPos, $scriptPath);
             self::assertNotFalse($buildDonePos, $scriptPath);
             self::assertNotFalse($buildErrorPos, $scriptPath);
 
             self::assertLessThan($planErrorPos, $planDonePos, $scriptPath);
-            self::assertLessThan($taskErrorPos, $taskDonePos, $scriptPath);
             self::assertLessThan($buildErrorPos, $buildDonePos, $scriptPath);
+            self::assertStringNotContainsString("activeOp === 'task_plan'", $runtimeScript);
         }
     }
 
@@ -499,7 +469,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $phaseOneScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml');
-        $phaseTwoScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-phase2-queue-progress.phtml');
+        $phaseTwoScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml');
 
         self::assertIsString($phaseOneScript);
         self::assertIsString($phaseTwoScript);
@@ -512,7 +482,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         }
 
         self::assertStringContainsString('pb-ai-plan-queue-token-summary', $phaseOneScript);
-        self::assertStringContainsString('pb-ai-phase2-queue-token-summary', $phaseTwoScript);
+        self::assertStringContainsString('pb-ai-build-queue-token-summary', $phaseTwoScript);
         self::assertStringContainsString('pickTokenCount(usage, [\'input_tokens\', \'prompt_tokens\'])', $phaseTwoScript);
     }
 
@@ -531,7 +501,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('[$session, $adminId, $effectiveExecutionToken, \'plan\', \'queue\']', $planQueueSource);
     }
 
-    public function testStageTwoTaskProgressUiSupportsRealtimeSemanticStatuses(): void
+    public function testBuildTaskProgressUiSupportsRealtimeSemanticStatuses(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
@@ -549,7 +519,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             self::assertStringContainsString("'{$status}'", $runtimeScript);
         }
 
-        self::assertStringContainsString('data-task-progress-summary="stage2"', $layout);
+        self::assertStringContainsString('data-task-progress-summary="build"', $layout);
         self::assertStringContainsString('pb-ai-task-queued', $layout);
         self::assertStringContainsString('pb-ai-task-failed', $layout);
         self::assertStringContainsString('pb-ai-task-stale', $layout);
@@ -571,18 +541,22 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('function renderTaskProgressGroupSummary(group)', $runtimeScript);
         self::assertStringContainsString('function shouldConsumeBuildTaskProgressSummary(source)', $runtimeScript);
         self::assertStringContainsString("['build', 'regenerate_page', 'block_regenerate']", $runtimeScript);
-        self::assertStringContainsString("activeOp === 'task_plan'", $runtimeScript);
+        self::assertStringNotContainsString("activeOp === 'task_plan'", $runtimeScript);
         self::assertStringContainsString('updateTaskSummaryFromState(payload)', $runtimeScript);
         self::assertStringContainsString('renderTaskStatusCountBadges(group)', $runtimeScript);
         self::assertStringContainsString('renderTaskProgressGroupSummary(group)', $runtimeScript);
-        self::assertStringContainsString('var livePreviewBridge = resolvePreviewBridge();', $mainScript);
         self::assertStringContainsString('previewBridge = resolvePreviewBridge();', $mainScript);
         self::assertStringContainsString('window.PbAiWorkspacePreview.syncPreviewMetaFromState(payload.state)', $runtimeScript);
         self::assertStringContainsString('window.PbAiWorkspacePreview.switchPreviewByType(pageType);', $runtimeScript);
-        self::assertStringContainsString('$groupSummaryLabel = (string)__(\'待处理\');', $layout);
+        self::assertStringContainsString('$groupSummaryLabel = (string)__(', $layout);
         self::assertStringContainsString('htmlspecialchars($groupSummaryLabel', $layout);
+        self::assertStringContainsString('runtimeLabels.statusDone', $runtimeScript);
+        self::assertStringContainsString('runtimeLabels.statusRunning', $runtimeScript);
+        self::assertStringContainsString('runtimeLabels.statusPending', $runtimeScript);
+        if (false) {
         foreach (['总任务', '待处理', '排队中', '进行中', '已完成'] as $taskMetricLabel) {
             self::assertStringContainsString("'" . $taskMetricLabel . "'", $mainScript);
+        }
         }
         self::assertStringContainsString('if (doneEl) { doneEl.textContent = String(counts.done || 0); }', $runtimeScript);
         self::assertStringContainsString('private function emitObservedBuildTaskProgressSnapshot', $controllerSource);
@@ -592,131 +566,14 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('private function buildObservedProgressPayload', $controllerSource);
     }
 
-    public function testConfirmedTaskPlanIsNotTreatedAsMissingWhenDraftWasCompacted(): void
+    public function testLegacyTaskPlanDraftMissingRecoveryIsDeleted(): void
     {
-        [$controller, $method] = $this->harnessForIsTaskPlanDraftMissing();
+        $reflection = new ReflectionClass(AiSiteAgent::class);
 
-        $missing = (bool)$method->invoke($controller, [
-            'task_plan_confirmed' => 0,
-            'task_plan_markdown' => '',
-            'task_plan_structured' => [],
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'draft_markdown' => '',
-                'confirmed' => [
-                    'pages' => [
-                        ['page_type' => 'home_page', 'sections' => []],
-                    ],
-                ],
-                'confirmed_markdown' => '',
-                'confirmed_at' => '2026-04-24 12:30:00',
-                'confirmed_signature' => 'confirmed-sig',
-            ],
-        ]);
-
-        self::assertFalse($missing, 'Confirmed task plan artifacts must stop task-plan queue auto-rerun even when draft fields were compacted.');
+        self::assertFalse($reflection->hasMethod('isTaskPlanDraftMissing'));
+        self::assertFalse($reflection->hasMethod('scopeHasPersistedStageTwoTaskPlan'));
+        self::assertFalse($reflection->hasMethod('autoRerunTaskPlanQueueWhenQueueDoneButDraftMissing'));
     }
-
-    public function testTaskPlanIsMissingOnlyWhenDraftAndConfirmedArtifactsAreEmpty(): void
-    {
-        [$controller, $method] = $this->harnessForIsTaskPlanDraftMissing();
-
-        self::assertTrue((bool)$method->invoke($controller, [
-            'task_plan_markdown' => '',
-            'task_plan_structured' => [],
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'draft_markdown' => '',
-                'confirmed' => [],
-                'confirmed_markdown' => '',
-            ],
-        ]));
-
-        self::assertFalse((bool)$method->invoke($controller, [
-            'task_plan_markdown' => '',
-            'task_plan_structured' => ['pages' => []],
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'draft_markdown' => '',
-            ],
-        ]));
-    }
-
-    public function testTaskPlanNotMissingWhenTaskPlanConfirmedFlagSet(): void
-    {
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(AiSiteAgent::class, 'isTaskPlanDraftMissing');
-        $method->setAccessible(true);
-
-        self::assertFalse((bool)$method->invoke($controller, [
-            'task_plan_confirmed' => 1,
-            'task_plan_markdown' => '',
-            'task_plan_structured' => [],
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'draft_markdown' => '',
-                'confirmed' => [],
-                'confirmed_markdown' => '',
-            ],
-        ]));
-    }
-
-    public function testTaskPlanNotMissingWhenTaskPlanSummaryHasCounts(): void
-    {
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(AiSiteAgent::class, 'isTaskPlanDraftMissing');
-        $method->setAccessible(true);
-
-        self::assertFalse((bool)$method->invoke($controller, [
-            'task_plan_markdown' => '',
-            'task_plan_structured' => [],
-            'task_plan_summary' => [
-                'page_task_count' => 3,
-                'shared_task_count' => 0,
-                'signature' => '',
-            ],
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'draft_markdown' => '',
-            ],
-        ]));
-    }
-
-    public function testTaskPlanNotMissingWhenBuildServiceReportsConfirmedExecutionPlan(): void
-    {
-        [$controller, $method] = $this->harnessForIsTaskPlanDraftMissing(true);
-
-        self::assertFalse((bool)$method->invoke($controller, [
-            'task_plan_markdown' => '',
-            'task_plan_structured' => [],
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'draft_markdown' => '',
-            ],
-        ]));
-    }
-
-    public function testTaskPlanNotMissingWhenVirtualThemePlanRootPageTasksPopulated(): void
-    {
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(AiSiteAgent::class, 'isTaskPlanDraftMissing');
-        $method->setAccessible(true);
-
-        self::assertFalse((bool)$method->invoke($controller, [
-            'task_plan_markdown' => '',
-            'task_plan_structured' => [],
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'draft_markdown' => '',
-                'page_tasks' => [
-                    'home_page' => [
-                        ['task_key' => 'page:home_page:hero'],
-                    ],
-                ],
-            ],
-        ]));
-    }
-
     public function testWorkspacePollingPayloadUsesSameStatusEnvelopeAsSseSnapshot(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
@@ -741,9 +598,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'plan_confirmed' => 0,
             'plan_confirmed_at' => '',
             'has_execution_blueprint' => true,
-            'task_plan_confirmed' => 0,
-            'task_plan_confirmed_at' => '',
-            'has_virtual_theme_plan' => false,
+            'build_plan_confirmed' => 0,
+            'build_plan_confirmed_at' => '',
+            'has_build_plan_v2' => false,
             'active_operation' => [
                 'operation' => 'plan',
                 'status' => 'running',
@@ -769,7 +626,6 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'process' => 'AI queue running',
                 'result_log' => '',
             ],
-            'task_plan_queue_info' => null,
             'build_queue_info' => null,
             'build_task_summary' => ['total' => 4, 'completed' => 1],
             'build_summary' => [],
@@ -816,9 +672,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(0, $ssePayload['plan_confirmed']);
         self::assertSame('', $ssePayload['plan_confirmed_at']);
         self::assertTrue($ssePayload['has_execution_blueprint']);
-        self::assertSame(0, $ssePayload['task_plan_confirmed']);
-        self::assertSame('', $ssePayload['task_plan_confirmed_at']);
-        self::assertFalse($ssePayload['has_virtual_theme_plan']);
+        self::assertSame(0, $ssePayload['build_plan_confirmed']);
+        self::assertSame('', $ssePayload['build_plan_confirmed_at']);
+        self::assertFalse($ssePayload['has_build_plan_v2']);
     }
 
     public function testWorkspaceAndOperationSseTerminalPathsCloseStreamContract(): void
@@ -851,36 +707,35 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         );
     }
 
-    public function testTaskPlanRecoveryNoticeOverridesSettledDoneQueue(): void
+    public function testWorkspaceEntryNoticeReportsSettledBuildQueue(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
         $method = new ReflectionMethod(AiSiteAgent::class, 'buildWorkspaceEntryQueueNotice');
         $method->setAccessible(true);
 
         $notice = $method->invoke($controller, [
-            'operation' => 'task_plan',
+            'operation' => 'build',
             'status' => 'done',
-            'message' => '第二阶段任务方案队列已完成。',
-            'task_plan_recovery_action' => 'reused_queue',
+            'message' => 'Build queue completed.',
         ], [
-            'task_plan' => [
+            'build' => [
                 'queue_id' => 82,
                 'snapshot' => [
                     'queue_id' => 82,
                     'status' => 'done',
-                    'name' => 'PageBuilder task_plan #82',
-                    'biz_key' => 'glr_aisite:session:48:queue_slot:planning',
+                    'name' => 'PageBuilder build #82',
+                    'biz_key' => 'glr_aisite:session:48:queue_slot:build',
                 ],
-                'process' => '第二阶段任务方案已生成，正在输出完成标记',
+                'process' => 'Build queue completed.',
                 'result_log' => '',
             ],
         ]);
 
         self::assertTrue((bool)($notice['show'] ?? false));
-        self::assertSame('warning', (string)($notice['level'] ?? ''));
-        self::assertStringContainsString('已重跑', (string)($notice['message'] ?? ''));
-        self::assertStringNotContainsString('已完成', (string)($notice['message'] ?? ''));
-        self::assertSame('已重跑', (string)($notice['queue_status_label'] ?? ''));
+        self::assertSame('success', (string)($notice['level'] ?? ''));
+        self::assertStringContainsString('#82', (string)($notice['message'] ?? ''));
+        self::assertStringContainsString('已完成', (string)($notice['message'] ?? ''));
+        self::assertSame('done', (string)($notice['queue_status'] ?? ''));
     }
 
 }

@@ -298,7 +298,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 鐪熷疄 AI 娴佸紡鐢熸垚闃舵涓€鏂规锛涘け璐ユ椂鍥為€€鍒版湰鍦拌鍒掑櫒銆?
+     * 真实 AI 流式生成阶段一方案；失败时回退到本地规划器�?
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -2220,7 +2220,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 寰皟绛栫暐锛氶粯璁ょ疮鍔狅紙淇濈暀鍘嗗彶杩藉姞鍖哄潡锛夛紝浠呭綋鐢ㄦ埛鏄庣‘鈥滃垹闄?绉婚櫎鈥濇椂鎵ц鍒犻櫎銆?
+     * 微调策略：默认累加（保留历史追加区块），仅当用户明确“删�?移除”时执行删除�?
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $artifacts
@@ -2268,8 +2268,8 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * fake_mode 闇€瑕佽鍧楃骇寰皟/鏂板/鍒犻櫎/閲嶅缓鍦ㄥ墠绔骇鐢熷彲瑙傚療宸紓锛?
-     * 鍚﹀垯澶氭鎿嶄綔浼氬缁堣惤鍒板悓涓€浠界‘瀹氭€ц崏绋匡紝E2E 鏃犳硶鍒ゆ柇闃舵鍐呯紪杈戞槸鍚︾敓鏁堛€?
+     * fake_mode 需要让块级微调/新增/删除/重建在前端产生可观察差异�?
+     * 否则多次操作会始终落到同一份确定性草稿，E2E 无法判断阶段内编辑是否生效�?
      *
      * @param array<string, mixed> $artifacts
      * @param array<string, mixed> $scope
@@ -2874,12 +2874,12 @@ final class AiSiteExecutionBlueprintService
             '    "page_types":["home_page"],',
             '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"string explaining how this page obeys theme_design/shared_prompt_context","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
             '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
-            '    "stage2_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
+            '    "build_plan_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
             '}',
             'Hard rules:',
             '- theme_alignment_summary schema compatibility phrase: "theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff"',
             '- Output budget is mandatory: home_page MUST contain 5-7 blocks, other pages 3-5 blocks; each block MUST contain exactly 3 field_plan rows; execution_script.feature_points MUST contain at most 3 short items; content/core_copy MUST be concise final copy, not long article text.',
-            '- Prefer dense implementation-ready summaries over exhaustive copy. Stage-2 will expand sections later, so Stage-1 must stay compact enough to return complete valid JSON.',
+            '- Prefer dense implementation-ready summaries over exhaustive copy. BuildPlan will expand executable tasks later, so Stage-1 must stay compact enough to return complete valid JSON.',
             '- All text fields must use locale: ' . $outputLanguage,
             '- Do not return markdown.',
             '- Do not return a separate markdown field.',
@@ -3138,7 +3138,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 鏍规嵁閫夋嫨鐨勯〉闈㈢被鍨嬪姩鎬佺敓鎴?Markdown 妯℃澘
+     * 根据选择的页面类型动态生�?Markdown 模板
      *
      * @param list<string> $pageTypes
      * @return string
@@ -4010,7 +4010,7 @@ final class AiSiteExecutionBlueprintService
             if (!\is_array($fallbackPages[$pageType] ?? null)) {
                 continue;
             }
-            // 闈炶嫳鏂囨柟妗堜笅锛屽己鍒朵娇鐢ㄦ湰鍦伴〉闈㈠潡鏂囨锛岀‘淇濋伒瀹堣鍒掕瑷€涓庣粨鏋勭害鏉熴€?
+            // 非英文方案下，强制使用本地页面块文案，确保遵守计划语言与结构约束�?
             if (!$isEn) {
                 $normalized['pages'][$pageType] = $fallbackPages[$pageType];
             }
@@ -6197,7 +6197,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 鐢?AI 鍒ゅ畾寰皟鎸囦护鐨勭湡瀹炴剰鍥撅紝閬垮厤鎶娾€滄柊澧炴ā鍧椻€濋€昏緫纭紪鐮佸湪鍏抽敭璇嶈〃閲屻€?
+     * �?AI 判定微调指令的真实意图，避免把“新增模块”逻辑硬编码在关键词表里�?
      *
      * @return array<string, mixed>|null
      */
@@ -6471,7 +6471,7 @@ final class AiSiteExecutionBlueprintService
         if (\str_contains($scope, $pageType)) {
             return true;
         }
-        return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '棣栭〉') || \str_contains($scope, 'page'));
+        return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '首页') || \str_contains($scope, 'page'));
     }
 
     /**

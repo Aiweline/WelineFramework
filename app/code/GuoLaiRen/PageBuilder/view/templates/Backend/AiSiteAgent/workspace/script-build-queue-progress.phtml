@@ -1,6 +1,6 @@
 <?php
 /**
- * 第二阶段侧栏队列信息：task_plan 与 build 两条队列的快照 / process / result 刷新逻辑。
+ * 构建侧栏队列信息：重构后只显示 build 队列。
  */
 ?>
 <script>
@@ -12,7 +12,6 @@
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var queueMessages = {
-        emptyTaskPlan: <?= \json_encode((string)__('当前没有可展示的第二阶段任务方案队列记录。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         emptyBuild: <?= \json_encode((string)__('当前没有可展示的生成主题队列记录。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         refreshed: <?= \json_encode((string)__('队列信息已刷新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         refreshFailed: <?= \json_encode((string)__('刷新队列信息失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
@@ -27,26 +26,16 @@
         totalTokensLabel: <?= \json_encode((string)__('总 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
     };
     var panelMap = {
-        task_plan: {
-            stateKey: 'task_plan_queue_info',
-            meta: 'pb-ai-task-plan-queue-info-meta',
-            process: 'pb-ai-task-plan-queue-info-process',
-            result: 'pb-ai-task-plan-queue-info-result',
-            panel: 'pb-ai-task-plan-queue-info-panel',
-            status: '[data-phase2-queue-status="task_plan"]',
-            empty: queueMessages.emptyTaskPlan
-        },
         build: {
             stateKey: 'build_queue_info',
             meta: 'pb-ai-build-queue-info-meta',
             process: 'pb-ai-build-queue-info-process',
             result: 'pb-ai-build-queue-info-result',
             panel: 'pb-ai-build-queue-info-panel',
-            status: '[data-phase2-queue-status="build"]',
+            status: '[data-build-queue-status="build"]',
             empty: queueMessages.emptyBuild
         }
     };
-
     function escapeHtml(text) {
         if (typeof bridge.escapeHtml === 'function') {
             return bridge.escapeHtml(text);
@@ -89,7 +78,7 @@
 
     function normalizeOperation(operation) {
         var op = String(operation || '').toLowerCase().trim();
-        return op === 'build' ? 'build' : (op === 'task_plan' ? 'task_plan' : '');
+        return op === 'build' ? 'build' : '';
     }
 
     function normalizeQueueId(value) {
@@ -167,7 +156,7 @@
         var jobType = snapshot.job_type || (info && info.job_type) || '';
         var status = snapshot.job_status || snapshot.status || (info && (info.job_status || info.status)) || '';
         var token = snapshot.token || snapshot.execution_token || (info && (info.token || info.execution_token)) || '';
-        return '<div class="row g-2 mb-2 pb-ai-phase2-queue-token-summary" role="list" data-queue-info-list="' + escapeHtml(operation) + '">'
+        return '<div class="row g-2 mb-2 pb-ai-build-queue-token-summary" role="list" data-queue-info-list="' + escapeHtml(operation) + '">'
             + renderQueueSummaryItem('job_key', queueMessages.jobKeyLabel, jobKey, true)
             + renderQueueSummaryItem('job_type', queueMessages.jobTypeLabel, jobType, false)
             + renderQueueSummaryItem('job_status', queueMessages.statusLabel, status, false)
@@ -376,13 +365,12 @@
         } catch (e) {
             // ignore
         }
-        renderQueueInfoPanel('task_plan', workspaceState.task_plan_queue_info || null);
         renderQueueInfoPanel('build', workspaceState.build_queue_info || null);
         syncPanelOpenState(workspaceState);
     }
 
-    function bindPhase2QueueInfoRefresh() {
-        var btn = document.getElementById('pb-ai-phase2-queue-info-refresh');
+    function bindBuildQueueInfoRefresh() {
+        var btn = document.getElementById('pb-ai-build-queue-info-refresh');
         if (!btn || btn.dataset.pbBound === '1' || !workspaceSnapshotUrl) {
             return;
         }
@@ -408,14 +396,13 @@
         });
     }
 
-    window.__pbPhase2TaskProgress = {
+    window.__pbBuildQueueProgress = {
         syncFromWorkspaceState: syncFromWorkspaceState,
         syncFromSsePayload: syncFromSsePayload,
         renderQueueInfoPanel: renderQueueInfoPanel,
-        bindPhase2QueueInfoRefresh: bindPhase2QueueInfoRefresh
+        bindBuildQueueInfoRefresh: bindBuildQueueInfoRefresh
     };
-
-    bindPhase2QueueInfoRefresh();
+    bindBuildQueueInfoRefresh();
     syncFromWorkspaceState(getLastWorkspaceState());
 })();
 </script>

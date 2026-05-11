@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
-use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use PHPUnit\Framework\TestCase;
@@ -49,7 +48,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $method->setAccessible(true);
 
         self::assertSame('stage1.requirement_expand', $method->invoke($controller, 'plan'));
-        self::assertSame('stage2.shared.tasks', $method->invoke($controller, 'task_plan'));
+        self::assertSame('', $method->invoke($controller, 'task_plan'));
         self::assertSame('virtual_theme.tree.build', $method->invoke($controller, 'build'));
         self::assertSame('virtual_theme.block.regenerate', $method->invoke($controller, 'block_regenerate'));
         self::assertSame('virtual_theme.block.partial_patch', $method->invoke($controller, 'block_partial_patch'));
@@ -69,7 +68,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
             $method->invoke($controller, 7, 'plan')
         );
         self::assertSame(
-            ['glr_aisite:session:7:stage:visual_edit:operation:task_plan'],
+            ['glr_aisite:session:7:stage:workspace:operation:task_plan'],
             $method->invoke($controller, 7, 'task_plan')
         );
         self::assertSame(
@@ -125,7 +124,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $method = new ReflectionMethod(AiSiteAgent::class, 'shouldReuseRunningQueuedOperation');
         $method->setAccessible(true);
 
-        self::assertTrue($method->invoke($controller, 'task_plan', 'task_plan'));
+        self::assertFalse($method->invoke($controller, 'task_plan', 'task_plan'));
         self::assertTrue($method->invoke($controller, 'build', 'build'));
         self::assertTrue($method->invoke($controller, 'block_regenerate', 'block_regenerate'));
         self::assertTrue($method->invoke($controller, 'block_partial_patch', 'block_partial_patch'));
@@ -268,41 +267,26 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         ]));
     }
 
-    public function testTaskPlanSchemeRebuildRequestIsRecognizedFromScopePatch(): void
+    public function testLegacyTaskPlanQueueOperationIsNotSupported(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(AiSiteAgent::class, 'isTaskPlanSchemeRebuildRequest');
-        $method->setAccessible(true);
+        $isQueueBacked = new ReflectionMethod(AiSiteAgent::class, 'isAiSiteQueueBackedOperation');
+        $isQueueBacked->setAccessible(true);
+        $resolveQueueClass = new ReflectionMethod(AiSiteAgent::class, 'resolveAiSiteQueueClass');
+        $resolveQueueClass->setAccessible(true);
 
-        self::assertTrue($method->invoke($controller, 'task_plan', [
-            '_task_plan_sse_request' => ['prompt_mode' => 'rebuild_task_plan'],
-        ]));
-        self::assertTrue($method->invoke($controller, 'task_plan', [
-            '_task_plan_rebuild_in_progress' => 1,
-        ]));
-        self::assertFalse($method->invoke($controller, 'task_plan', [
-            '_task_plan_sse_request' => ['prompt_mode' => 'refine_task_plan'],
-        ]));
-        self::assertFalse($method->invoke($controller, 'plan', [
-            '_task_plan_sse_request' => ['prompt_mode' => 'rebuild_task_plan'],
-        ]));
+        self::assertFalse($isQueueBacked->invoke($controller, 'task_plan'));
+        self::assertSame('', $resolveQueueClass->invoke($controller, 'task_plan'));
     }
 
-    public function testTaskPlanRebuildMarksOldRunningOperationDiscardedBeforeNewQueueStarts(): void
+    public function testBuildStartDoesNotCarryLegacyTaskPlanDiscardPath(): void
     {
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(AiSiteAgent::class, 'markRunningTaskPlanAsDiscardedForRebuild');
-        $method->setAccessible(true);
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $handleSource = $this->extractControllerMethodSource($source, 'handleStartBuild');
 
-        $scope = $method->invoke($controller, [], [
-            'operation' => 'task_plan',
-            'status' => 'running',
-            'execution_token' => 'old-token',
-        ]);
-
-        self::assertSame('cancelled', $scope['active_operation']['status']);
-        self::assertSame(1, $scope['active_operation']['discarded_by_rebuild']);
-        self::assertSame('cancelled', $scope['active_operations']['task_plan']['status']);
+        self::assertStringNotContainsString('markRunningTaskPlanAsDiscardedForRebuild', $source);
+        self::assertStringNotContainsString("operation'] ?? '') === 'task_plan'", $handleSource);
+        self::assertStringContainsString('isBuildPlanReadyForBuild($mergedScope)', $handleSource);
     }
 
     public function testQueueRowReuseOnlyPreservesExplicitlyRunningTaskPlanRow(): void
@@ -379,70 +363,29 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertSame([], $patch['execution_blueprint']);
         self::assertSame([], $patch['execution_blueprint_draft']);
         self::assertSame(0, $patch['plan_confirmed']);
-        self::assertSame([], $patch['virtual_theme_plan']['draft']);
-        self::assertSame([], $patch['virtual_theme_plan']['confirmed']);
-        self::assertSame('', $patch['task_plan_markdown']);
-        self::assertSame(0, $patch['task_plan_confirmed']);
+        self::assertSame([], $patch['build_plan_v2']);
+        self::assertSame([], $patch['plan_projection']);
+        self::assertSame([], $patch['content_manifest']);
+        self::assertSame(0, $patch['build_plan_confirmed']);
         self::assertSame([], $patch['build_blueprint']);
         self::assertSame([], $patch['build_tasks']);
-        self::assertSame(0, $patch['_task_plan_rebuild_in_progress']);
+        self::assertArrayNotHasKey('task_plan_confirmed', $patch);
+        self::assertArrayNotHasKey('virtual_theme_plan', $patch);
     }
 
-    public function testTaskPlanRebuildResetClearsConfirmedTaskPlanAndBuildArtifacts(): void
+    public function testLegacyTaskPlanRebuildResetMethodIsDeleted(): void
     {
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(AiSiteAgent::class, 'buildTaskPlanRegenerationResetScopePatch');
-        $method->setAccessible(true);
-
-        $patch = $method->invoke($controller);
-
-        self::assertSame([], $patch['virtual_theme_plan']['draft']);
-        self::assertSame('', $patch['virtual_theme_plan']['draft_markdown']);
-        self::assertSame([], $patch['virtual_theme_plan']['confirmed']);
-        self::assertSame('', $patch['virtual_theme_plan']['confirmed_markdown']);
-        self::assertSame('', $patch['task_plan_markdown']);
-        self::assertSame([], $patch['task_plan_structured']);
-        self::assertSame(0, $patch['task_plan_confirmed']);
-        self::assertSame([], $patch['build_blueprint']);
-        self::assertSame([], $patch['build_tasks']);
-        self::assertSame(1, $patch['_task_plan_rebuild_in_progress']);
+        self::assertFalse((new ReflectionClass(AiSiteAgent::class))->hasMethod('buildTaskPlanRegenerationResetScopePatch'));
     }
 
-    public function testForcedTaskPlanQueueRebuildAlsoClearsOldPlanArtifacts(): void
+    public function testLegacyTaskPlanQueueNoLongerProvidesRebuildResetPatch(): void
     {
-        $queue = (new ReflectionClass(\GuoLaiRen\PageBuilder\Queue\AiSiteTaskPlanQueue::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(\GuoLaiRen\PageBuilder\Queue\AiSiteTaskPlanQueue::class, 'buildTaskPlanForceRebuildResetPatch');
-        $method->setAccessible(true);
-
-        $patch = $method->invoke($queue);
-
-        self::assertSame([], $patch['virtual_theme_plan']['draft']);
-        self::assertSame([], $patch['virtual_theme_plan']['confirmed']);
-        self::assertSame('', $patch['task_plan_markdown']);
-        self::assertSame([], $patch['task_plan_structured']);
-        self::assertSame(0, $patch['task_plan_confirmed']);
-        self::assertSame([], $patch['build_blueprint']);
-        self::assertSame([], $patch['build_tasks']);
+        self::assertFileDoesNotExist(\dirname(__DIR__, 3) . '/Queue/AiSiteTaskPlanQueue.php');
     }
 
-    public function testDefaultTaskPlanStartReusesOnlyStructuredPersistedDraftWithoutQueue(): void
+    public function testDefaultTaskPlanStartReuseShortcutIsDeleted(): void
     {
-        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
-        $buildTaskService = $this->createMock(AiSiteBuildTaskService::class);
-        $buildTaskService->method('hasConfirmedTaskPlanForBuild')->willReturn(false);
-        $property = (new ReflectionClass(AiSiteAgent::class))->getProperty('buildTaskService');
-        $property->setAccessible(true);
-        $property->setValue($controller, $buildTaskService);
-
-        $method = new ReflectionMethod(AiSiteAgent::class, 'shouldReusePersistedTaskPlanWithoutQueue');
-        $method->setAccessible(true);
-
-        self::assertFalse($method->invoke($controller, ['task_plan_markdown' => 'draft'], 'detect_bootstrap_task_plan', '', ''));
-        self::assertTrue($method->invoke($controller, ['task_plan_structured' => ['shared_tasks' => [['task_key' => 'shared:header']]]], '', '', ''));
-        self::assertFalse($method->invoke($controller, ['task_plan_markdown' => 'draft'], 'refine_task_plan', '', ''));
-        self::assertFalse($method->invoke($controller, ['task_plan_markdown' => 'draft'], 'resume_task_plan', '', ''));
-        self::assertFalse($method->invoke($controller, ['task_plan_markdown' => 'draft'], 'detect_bootstrap_task_plan', 'change copy', ''));
-        self::assertFalse($method->invoke($controller, [], 'detect_bootstrap_task_plan', '', ''));
+        self::assertFalse((new ReflectionClass(AiSiteAgent::class))->hasMethod('shouldReusePersistedTaskPlanWithoutQueue'));
     }
 
     public function testStageOneResumeModeBypassesPureReuseShortcutAndKeepsCheckpointPrompting(): void
@@ -455,32 +398,9 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'resume_generation'", $source);
     }
 
-    public function testTaskPlanQueueDuplicateGuardAllowsOnlyExplicitMutationRequests(): void
+    public function testTaskPlanQueueMutationGuardIsDeletedWithLegacyQueueExecution(): void
     {
-        $queue = (new ReflectionClass(\GuoLaiRen\PageBuilder\Queue\AiSiteTaskPlanQueue::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(\GuoLaiRen\PageBuilder\Queue\AiSiteTaskPlanQueue::class, 'hasQueuedTaskPlanMutationRequest');
-        $method->setAccessible(true);
-
-        self::assertFalse($method->invoke($queue, [
-            '_task_plan_sse_request' => ['prompt_mode' => 'detect_bootstrap_task_plan'],
-        ]));
-        self::assertTrue($method->invoke($queue, [
-            '_task_plan_sse_request' => [
-                'prompt_mode' => 'mutate_task_plan_task',
-                'mutation' => [
-                    'action' => 'refine',
-                    'task_key' => 'page:home_page:content/home-page-hero',
-                ],
-            ],
-        ]));
-        self::assertTrue($method->invoke($queue, [
-            'details' => [
-                '_task_plan_sse_request' => ['prompt_mode' => 'refine_task_plan'],
-            ],
-        ]));
-        self::assertTrue($method->invoke($queue, [
-            'target_scope' => 'page_tasks.home_page.content/home-page-hero',
-        ]));
+        self::assertFileDoesNotExist(\dirname(__DIR__, 3) . '/Queue/AiSiteTaskPlanQueue.php');
     }
 
     public function testBuildQueuesReconcilePersistedArtifactsBeforePickingPendingTasks(): void
@@ -612,7 +532,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
 
         self::assertStringNotContainsString('buildFallbackPageTaskSectionSpec', $source);
-        self::assertStringContainsString('Build task missing stage-two section spec', $source);
+        self::assertStringContainsString('Build task missing build-plan section spec', $source);
     }
 
     public function testIncrementalMaterializationKeepsExactSinglePageSubset(): void
@@ -669,26 +589,18 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $visualEditKeysSource = $this->extractConstantArraySource($source, 'VISUAL_EDIT_STAGE_SCOPE_KEYS');
         self::assertStringContainsString("'_plan_generation_checkpoint'", $planKeysSource);
         self::assertStringContainsString("'plan_generation_progress'", $planKeysSource);
-        self::assertStringContainsString("'_task_plan_generation_checkpoint'", $visualEditKeysSource);
+        self::assertStringNotContainsString("'_task_plan_generation_checkpoint'", $visualEditKeysSource);
     }
 
-    public function testPlanAndTaskPlanResumeQueuesBypassDuplicatePersistedArtifactGuard(): void
+    public function testPlanResumeBypassesDuplicatePersistedArtifactGuardAndLegacyTaskPlanQueueIsDeleted(): void
     {
         $planQueueSource = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSitePlanQueue.php');
-        $taskPlanQueueSource = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSiteTaskPlanQueue.php');
         $planExecuteSource = $this->extractFunctionSource($planQueueSource, 'execute');
-        $taskPlanExecuteSource = $this->extractFunctionSource($taskPlanQueueSource, 'execute');
 
         self::assertStringContainsString('hasQueuedPlanResumeRequest($content)', $planExecuteSource);
         self::assertStringContainsString('$hasQueuedPlanMutation || $hasQueuedPlanResume', $planExecuteSource);
         self::assertStringContainsString("return \$promptMode === 'resume_plan';", $planQueueSource);
-
-        self::assertStringContainsString(
-            'hasQueuedTaskPlanResumeRequest($content, $queuedScope)',
-            $taskPlanExecuteSource
-        );
-        self::assertStringContainsString('$hasQueuedTaskPlanMutation || $hasQueuedTaskPlanResume', $taskPlanExecuteSource);
-        self::assertStringContainsString("if (\$promptMode === 'resume_task_plan')", $taskPlanQueueSource);
+        self::assertFileDoesNotExist(\dirname(__DIR__, 3) . '/Queue/AiSiteTaskPlanQueue.php');
     }
 
     public function testImageAssetQueueRecordsSlotErrorWithoutThrowingWholeQueue(): void
@@ -703,6 +615,27 @@ final class AiSiteAgentQueueReuseTest extends TestCase
             "throw new \\RuntimeException('Image asset generation failed:",
             $executeSource
         );
+    }
+
+    public function testImageAssetQueuePatchesVirtualThemeOnlyBeforePublish(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSiteAssetQueue.php');
+        $patchSource = $this->extractFunctionSource($source, 'applyGeneratedImagePatchToScope');
+
+        self::assertStringContainsString('$scope[\'virtual_pages_by_type\'] = $virtualPages;', $patchSource);
+        self::assertStringNotContainsString('pagebuilder_pages_by_type', $patchSource);
+        self::assertStringNotContainsString('setAiLayoutArray', $source);
+        self::assertStringNotContainsString('persistMaterializedPageAiLayoutBlocks', $source);
+    }
+
+    public function testWorkspaceHtmlBlockResolverReadsVirtualThemeOnlyBeforePublish(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $resolverSource = $this->extractFunctionSource($source, 'resolveExistingAiHtmlBlocksForPage');
+
+        self::assertStringContainsString('$scope[\'virtual_pages_by_type\'][$pageType][\'blocks\'] ?? null', $resolverSource);
+        self::assertStringNotContainsString('$scope[\'pagebuilder_pages_by_type\'][$pageType][\'ai_layout\'][\'blocks\'] ?? null', $source);
+        self::assertStringNotContainsString('$page->getAiLayoutArray()', $source);
     }
 
     public function testWorkspaceHydrateShowsPlanRetryButtonFromPersistedFailureState(): void
@@ -779,20 +712,20 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'fresh_repair_failed_tasks' => 1", $handleSource);
     }
 
-    public function testConfirmedTaskPlanBuildDiscardsLingeringTaskPlanActiveOperationBeforeQueueStart(): void
+    public function testBuildRequiresConfirmedBuildPlanBeforeQueueStart(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
         $handleSource = $this->extractControllerMethodSource($source, 'handleStartBuild');
 
-        $confirmedOffset = \strpos($handleSource, "if (!\$this->isTaskPlanConfirmedForBuild(\$mergedScope))");
-        $discardOffset = \strpos($handleSource, "\$mergedScope = \$this->markRunningTaskPlanAsDiscardedForRebuild(\$mergedScope, \$activeOperation);");
+        $confirmedOffset = \strpos($handleSource, "if (!\$this->isBuildPlanReadyForBuild(\$mergedScope))");
+        $ensureTaskOffset = \strpos($handleSource, "\$mergedScope = \$this->buildTaskService->ensureTaskScope(");
         $startOffset = \strpos($handleSource, "\$startResult = \$this->startOperation(");
 
-        self::assertNotFalse($confirmedOffset, 'build must still guard on confirmed stage-two task plan');
-        self::assertNotFalse($discardOffset, 'confirmed build should discard lingering task_plan active_operation before queue start');
+        self::assertNotFalse($confirmedOffset, 'build must guard on confirmed build_plan_v2');
+        self::assertNotFalse($ensureTaskOffset, 'confirmed build_plan_v2 should hydrate build tasks before queue start');
         self::assertNotFalse($startOffset, 'build startOperation call missing');
-        self::assertGreaterThan($confirmedOffset, $discardOffset);
-        self::assertLessThan($startOffset, $discardOffset);
+        self::assertLessThan($confirmedOffset, $ensureTaskOffset);
+        self::assertLessThan($startOffset, $confirmedOffset);
     }
 
     public function testBuildAutoResumeCountsOnlyRetryableIncompleteTasks(): void
@@ -930,13 +863,14 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringNotContainsString("\$operation === 'plan'", $observer);
     }
 
-    public function testEnsureTaskPlanQueueContentPromptModeHandlesRetryFailedBatchScope(): void
+    public function testQueueContentNoLongerCarriesTaskPlanPromptModeFallback(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
-        $body = $this->extractControllerMethodSource($source, 'ensureTaskPlanQueueContentPromptMode');
+        $body = $this->extractControllerMethodSource($source, 'enqueueOperationQueueTask');
 
-        self::assertStringContainsString('_task_plan_retry_failed_batches', $body);
-        self::assertStringContainsString("'resume_task_plan'", $body);
+        self::assertStringContainsString("_plan_sse_request", $body);
+        self::assertStringNotContainsString("_task_plan_sse_request", $body);
+        self::assertStringNotContainsString("resume_task_plan", $body);
     }
 
     /**
