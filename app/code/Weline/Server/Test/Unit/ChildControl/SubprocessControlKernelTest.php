@@ -479,13 +479,14 @@ PHP);
 
         self::assertNotFalse($sessionSource);
         self::assertNotFalse($redirectSource);
-        self::assertStringContainsString("\$arg === '--frontend' || \$arg === '-frontend' || \$arg === '-f'", $sessionSource);
+        self::assertStringContainsString("\$arg === '--frontend' || \$arg === '-frontend' || \$arg === '--win' || \$arg === '-win' || \$arg === '-f'", $sessionSource);
         self::assertStringContainsString('LogConfig::isDevMode() || $isFrontend', $sessionSource);
         self::assertStringNotContainsString('!$sharedService && $orphanGuard->shouldExit(', $sessionSource);
         self::assertStringContainsString('$orphanGuard->shouldExit(', $sessionSource);
         self::assertStringContainsString('$server->isSharedConsumerIdleWindowOpen()', $sessionSource);
         self::assertStringContainsString('$shouldResolveControlPort = !$sharedService || $controlPort > 0 || $supervisorEnabled;', $sessionSource);
         self::assertStringContainsString("\\in_array('--frontend', \$argv, true) || \\in_array('-frontend', \$argv, true)", $redirectSource);
+        self::assertStringContainsString("\\in_array('--win', \$argv, true) || \\in_array('-win', \$argv, true)", $redirectSource);
         self::assertStringContainsString('if ($isDev || $isFrontend)', $redirectSource);
     }
 

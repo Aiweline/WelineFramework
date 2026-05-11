@@ -29,7 +29,8 @@ class ServiceContext
         public readonly string $mode,
         public readonly bool $daemon,
         public readonly bool $debug,
-        public readonly bool $frontend,
+        /** Windows 子进程可见窗口等（原 frontend 语义中的「窗口」部分） */
+        public readonly bool $windowMode,
         public readonly array $envConfig,
         public readonly int $httpRedirectPort = 0,
         // 运行态字段：由 Start.php 计算后传入，优先级高于 envConfig
@@ -59,7 +60,7 @@ class ServiceContext
             mode: $this->mode,
             daemon: $this->daemon,
             debug: $this->debug,
-            frontend: $this->frontend,
+            windowMode: $this->windowMode,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,
             dispatcherEnabled: $this->dispatcherEnabled,
@@ -85,7 +86,7 @@ class ServiceContext
             mode: $this->mode,
             daemon: $this->daemon,
             debug: $this->debug,
-            frontend: $this->frontend,
+            windowMode: $this->windowMode,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,
             dispatcherEnabled: $this->dispatcherEnabled,

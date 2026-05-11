@@ -37,4 +37,13 @@ final class RequestFilterSecurityTest extends TestCase
 
         self::assertSame(['id' => 1], RequestFilter::filter('serialize', 'a:1:{s:2:"id";i:1;}'));
     }
+
+    public function testStringFilterEncodesArrayWithoutWarning(): void
+    {
+        self::assertSame('{"a":1,"b":2}', RequestFilter::filter('string', ['a' => 1, 'b' => 2]));
+        self::assertSame('', RequestFilter::filter('string', null));
+        self::assertSame('1', RequestFilter::filter('string', true));
+        self::assertSame('', RequestFilter::filter('string', false));
+        self::assertSame('plain', RequestFilter::filter('string', 'plain'));
+    }
 }

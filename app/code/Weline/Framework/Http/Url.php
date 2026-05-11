@@ -13,8 +13,8 @@ namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
-use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -25,6 +25,8 @@ final class UrlParserRequestState
     public array $parserCache = [];
     public array $decodeUrls = [];
     public bool $parsingInProgress = false;
+    /** 当前请求 ID —— 用于检测 WLS 多请求复用 Fiber 时的状态泄漏 */
+    public ?string $requestId = null;
 }
 
 class Url implements UrlInterface
@@ -793,35 +795,35 @@ class Url implements UrlInterface
         self::ensureParserSitesFresh();
 
         $url = $parse_url;
-        # 初始化server
-        if (empty($parserServer)) {
-            $parserServer = self::currentServer();
-            $parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
-            
+        # 初始化server（直接使用 self::$parserServer，避免局部变量与静态属性不一致导致跨请求污染）
+        if (empty(self::$parserServer)) {
+            self::$parserServer = self::currentServer();
+            self::$parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
+
             // 使用新的 area_routes 分组配置获取区域前缀
             $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend');
             if (empty($restFrontendPrefix)) {
                 // 如果没有配置，使用默认值 'api'
-                $parserServer['WELINE_REST_FRONTEND_PREFIX'] = 'api';
+                self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] = 'api';
             } else {
-                $parserServer['WELINE_REST_FRONTEND_PREFIX'] = strtolower($restFrontendPrefix);
+                self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] = strtolower($restFrontendPrefix);
             }
-            $parserServer['WELINE_REST_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('rest_backend') ?? '';
-            $parserServer['WELINE_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('backend') ?? '';
-            
+            self::$parserServer['WELINE_REST_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('rest_backend') ?? '';
+            self::$parserServer['WELINE_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('backend') ?? '';
+
             // 保留旧的变量名以兼容，后续可逐步移除
-            $parserServer['WELINE_API_AREA'] = $parserServer['WELINE_REST_FRONTEND_PREFIX'];
-            $parserServer['WELINE_API_AREA_PREFIX'] = '/' . $parserServer['WELINE_REST_FRONTEND_PREFIX'] . '/';
-            $parserServer['WELINE_API_ADMIN_AREA'] = $parserServer['WELINE_REST_BACKEND_PREFIX'];
-            $parserServer['WELINE_BACKEND_AREA'] = $parserServer['WELINE_BACKEND_PREFIX'];
-            
-            $parserServer['WELINE_AREA_ROUTE'] = '';
-            $parserServer['WELINE_AREA'] = 'frontend';
-            $parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
-            $parserServer['WELINE_USER_LANG'] = State::getLang();
-            $parserServer['WELINE_WEBSITE_ID'] = $parserServer['WELINE_WEBSITE_ID'] ?? '';
-            $parserServer['WELINE_WEBSITE_CODE'] = $parserServer['WELINE_WEBSITE_CODE'] ?? '';
-            $parserServer['WELINE_WEBSITE_URL'] = $parserServer['WELINE_WEBSITE_URL'] ?? '';
+            self::$parserServer['WELINE_API_AREA'] = self::$parserServer['WELINE_REST_FRONTEND_PREFIX'];
+            self::$parserServer['WELINE_API_AREA_PREFIX'] = '/' . self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] . '/';
+            self::$parserServer['WELINE_API_ADMIN_AREA'] = self::$parserServer['WELINE_REST_BACKEND_PREFIX'];
+            self::$parserServer['WELINE_BACKEND_AREA'] = self::$parserServer['WELINE_BACKEND_PREFIX'];
+
+            self::$parserServer['WELINE_AREA_ROUTE'] = '';
+            self::$parserServer['WELINE_AREA'] = 'frontend';
+            self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
+            self::$parserServer['WELINE_USER_LANG'] = State::getLang();
+            self::$parserServer['WELINE_WEBSITE_ID'] = self::$parserServer['WELINE_WEBSITE_ID'] ?? '';
+            self::$parserServer['WELINE_WEBSITE_CODE'] = self::$parserServer['WELINE_WEBSITE_CODE'] ?? '';
+            self::$parserServer['WELINE_WEBSITE_URL'] = self::$parserServer['WELINE_WEBSITE_URL'] ?? '';
         }
         
         if ($url) {
@@ -848,7 +850,7 @@ class Url implements UrlInterface
         }
         // 如果 self::$parserSites 已经初始化，直接使用，避免重复事件分发
         if (empty(self::$parserSites)) {
-            $parsingInProgress = true;
+            self::$parsingInProgress = true;
             try {
                 $detectWebsiteStart = \microtime(true);
                 $detect_website_data = new DataObject([
@@ -888,7 +890,7 @@ class Url implements UrlInterface
                 }
             } finally {
                 // 确保无论成功或异常都重置标志
-                $parsingInProgress = false;
+                self::$parsingInProgress = false;
             }
         }
         # 匹配网站 self::$parserSites 最长倒序
@@ -1428,9 +1430,26 @@ class Url implements UrlInterface
         $state->parsingInProgress = false;
 
         self::$parserServer = [];
+        self::$parserMatchs = [];
         self::$parserCache = [];
         self::$decode_urls = [];
         self::$parsingInProgress = false;
+    }
+
+    /**
+     * 重置所有请求级解析缓存（WLS 请求入口调用）。
+     *
+     * 与 StateManager::reset()（请求结束时运行）不同，此方法在请求开始时运行，
+     * 确保 run_before 观察者和后续 URL 解析不会读到上一个请求的残留状态。
+     * parserSites/parserCurrencies/parserLanguages 保留不重置（跨请求缓存以节省 DB 查询）。
+     */
+    public static function resetParserRequestCaches(): void
+    {
+        self::resetWlsFiberInterleavedParserScratch();
+        self::$parserMatchs = [];
+        self::$parserSiteMatchs = [];
+        self::$parserUrlCache = [];
+        self::$splitUrlCache = [];
     }
 
     public static function resetWebsiteParserSites(): void
@@ -1522,11 +1541,53 @@ class Url implements UrlInterface
         return \Fiber::getCurrent();
     }
 
+    /**
+     * 获取当前请求的唯一标识（用于跨请求缓存隔离）。
+     *
+     * 优先级：
+     * 1. RequestContext::getRequestId() —— 每个 WLS 请求由 bootstrapRequestCycle 生成
+     * 2. Context::current()->get('runtime.request_count') —— WlsRuntime 在 parser 前设置
+     * 3. $_SERVER['WLS_REQUEST_COUNT'] —— 兜底
+     * 4. null —— FPM 模式无需隔离
+     */
+    private static function currentRequestId(): ?string
+    {
+        if (\class_exists(\Weline\Framework\Runtime\RequestContext::class, false)) {
+            $requestId = \Weline\Framework\Runtime\RequestContext::getRequestId();
+            if ($requestId !== null && $requestId !== '') {
+                return $requestId;
+            }
+        }
+
+        if (\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
+            && \Weline\Framework\Runtime\Runtime::isPersistent()
+        ) {
+            $context = Context::getCurrent();
+            if ($context !== null) {
+                $count = $context->get('runtime.request_count', null);
+                if ($count !== null) {
+                    return 'rc-' . $count;
+                }
+            }
+            $count = $_SERVER['WLS_REQUEST_COUNT'] ?? null;
+            if ($count !== null) {
+                return 'rc-' . $count;
+            }
+        }
+
+        return null;
+    }
+
     private static function parserState(): UrlParserRequestState
     {
         $fiber = self::currentParserFiber();
         if ($fiber === null) {
             self::$mainParserState ??= new UrlParserRequestState();
+            $requestId = self::currentRequestId();
+            if ($requestId !== null && self::$mainParserState->requestId !== $requestId) {
+                self::$mainParserState = new UrlParserRequestState();
+                self::$mainParserState->requestId = $requestId;
+            }
             return self::$mainParserState;
         }
 
@@ -1535,7 +1596,17 @@ class Url implements UrlInterface
             self::$fiberParserStates[$fiber] = new UrlParserRequestState();
         }
 
-        return self::$fiberParserStates[$fiber];
+        $state = self::$fiberParserStates[$fiber];
+        $requestId = self::currentRequestId();
+        // WLS 中同一个 Fiber 可能被复用于处理多个请求（Fiber 结束后被重用），
+        // 此时 state 里可能残留上一个请求的解析缓存。用 requestId 检测并重置。
+        if ($requestId !== null && $state->requestId !== $requestId) {
+            $state = new UrlParserRequestState();
+            $state->requestId = $requestId;
+            self::$fiberParserStates[$fiber] = $state;
+        }
+
+        return $state;
     }
 
     private static function &parserServerRef(): array
@@ -1570,26 +1641,63 @@ class Url implements UrlInterface
 
     private static function currentServer(): array
     {
+        // WLS 常驻模式下，若当前不在 Fiber 请求上下文，禁止回退 mainContext，
+        // 避免误读上一次请求残留的上下文 server 快照。
         if (\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
             && \Weline\Framework\Runtime\Runtime::isPersistent()
             && \class_exists(\Fiber::class)
             && \Fiber::getCurrent() === null
         ) {
-            return [];
+            return \is_array($_SERVER ?? null) ? $_SERVER : [];
         }
 
-        return WelineEnv::serverAll();
+        $context = Context::getCurrent();
+        $server = $context?->server();
+        if (\is_array($server) && $server !== []) {
+            return $server;
+        }
+
+        return \is_array($_SERVER ?? null) ? $_SERVER : [];
     }
 
     private static function updateCurrentServerVar(string $key, mixed $value): void
     {
-        WelineEnv::setServer($key, $value, 'Url parser server update');
+        $_SERVER[$key] = $value;
+
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return;
+        }
+
+        $server = $context->server();
+        if (!\is_array($server)) {
+            $server = [];
+        }
+        $server[$key] = $value;
+        $context->set('input.server', $server);
     }
 
     private static function syncParserServerToCurrentContext(): void
     {
-        $server = WelineEnv::serverAll();
-        WelineEnv::replaceServer(\array_merge($server, self::$parserServer));
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return;
+        }
+
+        $server = $context->server();
+        if (!\is_array($server)) {
+            $server = [];
+        }
+        $server = \array_merge($server, self::$parserServer);
+        $context->set('input.server', $server);
+        $context->set('input.uri', (string)(self::$parserServer['REQUEST_URI'] ?? $context->get('input.uri', '/')));
+        $context->set('route.area', (string)(self::$parserServer['WELINE_AREA'] ?? $context->get('route.area', 'frontend')));
+        $context->set('route.area_route', (string)(self::$parserServer['WELINE_AREA_ROUTE'] ?? $context->get('route.area_route', '')));
+        $context->set('route.website_id', (int)(self::$parserServer['WELINE_WEBSITE_ID'] ?? $context->get('route.website_id', 0)));
+        $context->set('route.website_code', (string)(self::$parserServer['WELINE_WEBSITE_CODE'] ?? $context->get('route.website_code', '')));
+        $context->set('route.website_url', (string)(self::$parserServer['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', '')));
+        $context->set('route.language', (string)(self::$parserServer['WELINE_USER_LANG'] ?? $context->get('route.language', 'zh_Hans_CN')));
+        $context->set('route.currency', (string)(self::$parserServer['WELINE_USER_CURRENCY'] ?? $context->get('route.currency', 'CNY')));
     }
 
     /**
@@ -1611,6 +1719,8 @@ class Url implements UrlInterface
             'parserCache' => [],
             'parsingInProgress' => false,
             'decode_urls' => [],
+            'parserMatchs' => [],
+            'parserSiteMatchs' => [],
         ]);
     }
 }

@@ -262,6 +262,13 @@ class WlsRuntime implements RuntimeInterface
             }
             
             WelineEnv::set('wls.request_count', (string) $this->requestCount, 'WlsRuntime handle');
+            // WLS 请求入口：在 dispatchRunBefore 之前重置 URL 解析器请求级缓存。
+            // StateManager::reset() 在请求结束时运行，但 run_before 观察者可能在 URL parser
+            // 之前就生成 URL，此时 static 属性（parserServer/parserMatchs/parserCache 等）
+            // 仍持有上一个请求的残留值，导致 URL 拼接时生成错误的 website_url 前缀。
+            if (Runtime::isPersistent()) {
+                \Weline\Framework\Http\Url::resetParserRequestCaches();
+            }
             $t1 = \microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::pushCurrentParent('run_before');
