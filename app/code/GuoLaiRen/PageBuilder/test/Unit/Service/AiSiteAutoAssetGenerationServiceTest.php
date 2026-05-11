@@ -70,7 +70,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
-    public function testPrepareBuildAssetsWritesPlaceholderOnlyWhenExplicitlyAllowed(): void
+    public function testPrepareBuildAssetsLeavesSlotsPendingWhenPlaceholderFallbackIsExplicitlyAllowed(): void
     {
         $publicId = 'asset-placeholder-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -102,29 +102,15 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $result = $service->prepareBuildAssets($session, 2, $scope, 1);
         $resultScope = $result['scope'];
         $slot = $resultScope['asset_manifest']['slots']['home:hero'] ?? [];
-        $variant = $slot['variants'][0] ?? [];
-        $relativePath = (string)($variant['path'] ?? '');
-        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
 
-        try {
-            self::assertSame(['home:hero'], $result['generated_slots']);
-            self::assertSame([], $result['failed_slots']);
-            self::assertSame('done', (string)($slot['status'] ?? ''));
-            self::assertSame('image/svg+xml', (string)($variant['mime_type'] ?? ''));
-            self::assertSame('placeholder', (string)($variant['mode'] ?? ''));
-            self::assertSame(1, (int)($variant['placeholder'] ?? 0));
-            self::assertStringEndsWith('.svg', $relativePath);
-            self::assertFileExists($absolutePath);
-            self::assertStringContainsString('Text-to-image is not connected yet', (string)\file_get_contents($absolutePath));
-            self::assertSame([], $resultScope['verified_assets'] ?? []);
-        } finally {
-            if ($relativePath !== '' && \is_file($absolutePath)) {
-                \unlink($absolutePath);
-            }
-        }
+        self::assertSame([], $result['generated_slots']);
+        self::assertSame([], $result['failed_slots']);
+        self::assertSame([], $slot['variants'] ?? []);
+        self::assertSame('pending', (string)($slot['status'] ?? ''));
+        self::assertSame([], $resultScope['verified_assets'] ?? []);
     }
 
-    public function testPrepareBuildAssetsFallsBackToPlaceholderWhenFakeModeIsEnabled(): void
+    public function testPrepareBuildAssetsLeavesSlotsPendingWhenFakeModeIsEnabled(): void
     {
         $publicId = 'asset-fake-mode-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -156,22 +142,11 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $result = $service->prepareBuildAssets($session, 2, $scope, 1);
         $resultScope = $result['scope'];
         $slot = $resultScope['asset_manifest']['slots']['home:hero'] ?? [];
-        $variant = $slot['variants'][0] ?? [];
-        $relativePath = (string)($variant['path'] ?? '');
-        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
 
-        try {
-            self::assertSame(['home:hero'], $result['generated_slots']);
-            self::assertSame([], $result['failed_slots']);
-            self::assertSame('done', (string)($slot['status'] ?? ''));
-            self::assertSame('placeholder', (string)($variant['mode'] ?? ''));
-            self::assertSame(1, (int)($variant['placeholder'] ?? 0));
-            self::assertFileExists($absolutePath);
-        } finally {
-            if ($relativePath !== '' && \is_file($absolutePath)) {
-                \unlink($absolutePath);
-            }
-        }
+        self::assertSame([], $result['generated_slots']);
+        self::assertSame([], $result['failed_slots']);
+        self::assertSame([], $slot['variants'] ?? []);
+        self::assertSame('pending', (string)($slot['status'] ?? ''));
     }
 
     public function testPrepareBuildAssetsRegeneratesLegacyPlaceholderAssets(): void

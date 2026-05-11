@@ -25,7 +25,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 class AiSiteAgentQueueObserverHelperService
 {
     /**
-     * 对 plan / task_plan 这类"自带 SSE 事件流"的 operation，抑制 queue process 镜像转发；
+     * 对 plan 这类"自带 SSE 事件流"的 operation，抑制 queue process 镜像转发；
      * 其它 operation 走默认 process 镜像。保持与原 AiSiteAgent 私有方法语义一致。
      */
     public function shouldSuppressProcessMirror(string $operation): bool
@@ -34,27 +34,24 @@ class AiSiteAgentQueueObserverHelperService
     }
 
     /**
-     * 判断一行 queue.result 是否需要跳过：仅对 plan / task_plan 两类 operation 生效，
+     * 判断一行 queue.result 是否需要跳过：仅对 plan 两类 operation 生效，
      * 用于剔除"已由 SSE 事件流覆盖"的时间戳日志行，避免回放重复上屏。
-     * 匹配示例：`[HH:MM:SS] LOG|START|INFO|WARNING|PROGRESS|ERROR|DATA|AI_STREAM|PLAN_xxx|TASK_PLAN_xxx ...`
+     * 匹配示例：`[HH:MM:SS] LOG|START|INFO|WARNING|PROGRESS|ERROR|DATA|AI_STREAM|PLAN_xxx ...`
      */
     public function shouldSkipResultLine(string $operation, string $line): bool
     {
-        if ($operation === 'task_plan') {
-            return false;
-        }
         if (
             \str_contains($line, '正文流不写入队列日志')
             || \str_contains($line, '正文流已从队列 SSE 中省略')
         ) {
             return true;
         }
-        if (!\in_array($operation, ['plan', 'task_plan'], true)) {
+        if ($operation !== 'plan') {
             return false;
         }
 
         if ((bool)\preg_match(
-            '/^\[\d{2}:\d{2}:\d{2}\]\s+(?:LOG|START|INFO|WARNING|PROGRESS|ERROR|DATA|AI_STREAM|AI_PROGRESS|TOKEN_USAGE|PLAN_[A-Z0-9_]+|TASK_PLAN_[A-Z0-9_]+)\b/u',
+            '/^\[\d{2}:\d{2}:\d{2}\]\s+(?:LOG|START|INFO|WARNING|PROGRESS|ERROR|DATA|AI_STREAM|AI_PROGRESS|TOKEN_USAGE|PLAN_[A-Z0-9_]+)\b/u',
             $line
         )) {
             return true;
@@ -159,7 +156,7 @@ class AiSiteAgentQueueObserverHelperService
             'operation_progress' => 'progress',
             'ai_raw_chunk' => 'progress',
             'plan_chunk' => 'progress',
-            'plan_saved', 'plan_generated', 'plan_refined', 'plan_rebuilt', 'task_plan_generated', 'task_plan_refined', 'task_plan_rebuilt' => 'info',
+            'plan_saved', 'plan_generated', 'plan_refined', 'plan_rebuilt' => 'info',
             'ai_chunk' => 'progress',
             'shared_component_generated' => 'shared_component_generated',
             'page_generated' => 'page_generated',
@@ -192,9 +189,6 @@ class AiSiteAgentQueueObserverHelperService
             'plan_generated',
             'plan_refined',
             'plan_rebuilt',
-            'task_plan_generated',
-            'task_plan_refined',
-            'task_plan_rebuilt',
             'ai_chunk',
             'shared_component_generated',
             'page_generated',
@@ -378,7 +372,7 @@ class AiSiteAgentQueueObserverHelperService
     {
         $result = (string)($queueRow['result'] ?? '');
         $operation = $this->resolveQueueRowOperation($queueRow);
-        if (!\in_array($operation, ['plan', 'task_plan'], true) || \trim($result) === '') {
+        if ($operation !== 'plan' || \trim($result) === '') {
             return $result;
         }
 
@@ -456,10 +450,6 @@ class AiSiteAgentQueueObserverHelperService
         if ($value === 'plan' || \str_starts_with($value, 'stage1.')) {
             return 'plan';
         }
-        if ($value === 'task_plan' || \str_starts_with($value, 'stage2.task_plan')) {
-            return 'task_plan';
-        }
-
         return $value;
     }
 }

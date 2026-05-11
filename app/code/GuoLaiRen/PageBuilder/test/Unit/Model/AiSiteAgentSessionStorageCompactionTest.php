@@ -107,60 +107,10 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         );
     }
 
-    public function testConfirmedSnapshotsKeepOnlyLatestStorageCopy(): void
+    public function testConfirmedBuildPlanBlueprintAndTaskStateAreCompactedBeforeStorage(): void
     {
         $session = new AiSiteAgentSession();
-
-        $session->setScopeArray([
-            'workspace_track' => 'virtual_theme',
-            'task_plan_confirmed' => 1,
-            'task_plan_structured' => [
-                'page_tasks' => ['home_page' => [['title' => 'Hero']]],
-                'plan_signature' => 'task-plan-signature',
-            ],
-            'task_plan_markdown' => '',
-            'virtual_theme_plan' => [
-                'draft' => ['stale' => true],
-                'draft_markdown' => '',
-                'draft_generated_at' => '2026-04-24 15:00:00',
-                'confirmed' => [
-                    'signature' => 'task-plan-signature',
-                    'page_tasks' => ['home_page' => [['title' => 'Hero']]],
-                    'plan_signature' => 'task-plan-signature',
-                ],
-                'confirmed_markdown' => '# Confirmed task plan',
-            ],
-            'plan_workbench' => [
-                'stage1' => [
-                    'request_summary' => ['raw_requirement' => 'Need a marketing homepage'],
-                    'progress' => ['queue_job_done' => 3],
-                    'page_plans' => ['home_page' => ['heavy' => true]],
-                    'interaction_state' => ['active_page_key' => 'home_page'],
-                ],
-                'confirmed' => [
-                    'plan_book' => ['structured' => ['pages' => []]],
-                ],
-            ],
-        ]);
-
-        $stored = $session->getScopeArray();
-
-        self::assertSame([], $stored['virtual_theme_plan']['draft'] ?? null);
-        self::assertArrayNotHasKey('draft_generated_at', $stored['virtual_theme_plan']);
-        self::assertSame([], $stored['task_plan_structured'] ?? null);
-        self::assertSame(
-            ['request_summary' => ['raw_requirement' => 'Need a marketing homepage'], 'progress' => ['queue_job_done' => 3]],
-            $stored['plan_workbench']['stage1'] ?? null
-        );
-        self::assertArrayNotHasKey('page_plans', $stored['plan_workbench']['stage1'] ?? []);
-        self::assertArrayNotHasKey('interaction_state', $stored['plan_workbench']['stage1'] ?? []);
-    }
-
-    public function testConfirmedExecutionBlueprintAndBuildTaskStateAreCompactedBeforeStorage(): void
-    {
-        $session = new AiSiteAgentSession();
-        $stage2ContextSnapshot = [
-            'context_hash' => 'stage2-context-hash',
+        $sharedContext = [
             'theme_context_snapshot' => ['palette' => ['primary' => '#0f172a']],
             'shared_prompt_context' => ['nav_style' => 'compact trust nav'],
         ];
@@ -189,94 +139,19 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
                     'shared_prompt_context' => ['context_hash' => 'shared-hash'],
                 ],
             ],
-            'task_plan_confirmed' => 1,
-            'task_plan_structured' => [
-                'signature' => 'task-plan-signature',
-                'page_tasks' => [
-                    'home_page' => [
-                        [
-                            'task_key' => 'page:home_page:hero',
-                            'label' => 'Hero',
-                        ],
-                    ],
-                ],
-                'execution_blueprint' => [
-                    'signature' => 'task-blueprint-signature',
-                    'tasks' => [
-                        ['task_key' => 'page:home_page:hero'],
-                    ],
-                    'task_groups' => [
-                        'pages' => [
-                            'home_page' => [
-                                ['task_key' => 'page:home_page:hero'],
-                            ],
-                        ],
-                    ],
-                ],
-                'shared_block_tasks' => [
-                    ['task_key' => 'shared:header'],
-                ],
-                'page_block_tasks' => [
-                    'home_page' => [
-                        ['task_key' => 'page:home_page:hero'],
-                    ],
-                ],
-                'virtual_theme_build_tree' => [
-                    'pages' => ['home_page' => ['blocks' => []]],
-                ],
-            ],
-            'virtual_theme_plan' => [
-                'draft' => [],
-                'confirmed' => [
-                    'signature' => 'task-plan-signature',
-                    'page_tasks' => [
-                        'home_page' => [
-                            [
-                                'task_key' => 'page:home_page:hero',
-                                'label' => 'Hero',
-                            ],
-                        ],
-                    ],
-                    'execution_blueprint' => [
-                        'signature' => 'task-blueprint-signature',
-                        'tasks' => [
-                            ['task_key' => 'page:home_page:hero'],
-                        ],
-                        'task_groups' => [
-                            'pages' => [
-                                'home_page' => [
-                                    ['task_key' => 'page:home_page:hero'],
-                                ],
-                            ],
-                        ],
-                    ],
-                    'shared_block_tasks' => [
-                        ['task_key' => 'shared:header'],
-                    ],
-                    'page_block_tasks' => [
-                        'home_page' => [
-                            ['task_key' => 'page:home_page:hero'],
-                        ],
-                    ],
-                    'virtual_theme_build_tree' => [
-                        'pages' => ['home_page' => ['blocks' => []]],
-                    ],
-                ],
-                'confirmed_markdown' => '# Confirmed task plan',
-            ],
             'build_blueprint' => [
-                'source' => 'stage2_confirmed_task_plan',
+                'source' => 'build_plan_v2',
                 'signature' => 'build-blueprint-signature',
-                'task_plan_signature' => 'task-plan-signature',
                 'page_types' => ['home_page'],
+                'theme_context_snapshot' => $sharedContext['theme_context_snapshot'],
+                'shared_prompt_context' => $sharedContext['shared_prompt_context'],
                 'tasks' => [
                     [
                         'task_key' => 'page:home_page:hero',
                         'runtime_context' => [
                             'block_key' => 'hero',
-                            'stage2_context_snapshot' => $stage2ContextSnapshot,
-                            'theme_context_snapshot' => $stage2ContextSnapshot['theme_context_snapshot'],
-                            'shared_prompt_context' => $stage2ContextSnapshot['shared_prompt_context'],
+                            'theme_context_snapshot' => $sharedContext['theme_context_snapshot'],
+                            'shared_prompt_context' => $sharedContext['shared_prompt_context'],
                         ],
                     ],
                 ],
@@ -320,15 +195,8 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
             $stored['plan_workbench']['confirmed']['plan_book_ref'] ?? null
         );
 
-        self::assertSame([], $stored['task_plan_structured'] ?? null);
-        self::assertArrayNotHasKey('execution_blueprint', $stored['virtual_theme_plan']['confirmed'] ?? []);
-        self::assertArrayNotHasKey('page_tasks', $stored['virtual_theme_plan']['confirmed'] ?? []);
-        self::assertArrayNotHasKey('shared_block_tasks', $stored['virtual_theme_plan']['confirmed'] ?? []);
-        self::assertArrayNotHasKey('page_block_tasks', $stored['virtual_theme_plan']['confirmed'] ?? []);
-        self::assertArrayNotHasKey('virtual_theme_build_tree', $stored['virtual_theme_plan']['confirmed'] ?? []);
-        self::assertSame(1, $stored['virtual_theme_plan']['confirmed']['_storage_compacted'] ?? null);
-        self::assertSame(1, $stored['virtual_theme_plan']['confirmed']['execution_blueprint_ref']['task_count'] ?? null);
-        self::assertArrayNotHasKey('stage2_context_snapshot', $stored);
+        self::assertArrayNotHasKey('theme_context_snapshot', $stored['build_blueprint'] ?? []);
+        self::assertArrayNotHasKey('shared_prompt_context', $stored['build_blueprint'] ?? []);
         self::assertSame(['block_key' => 'hero'], $stored['build_blueprint']['tasks'][0]['runtime_context'] ?? null);
 
         $buildTaskState = $stored['build_tasks']['page:home_page:hero'] ?? [];
@@ -343,56 +211,7 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertArrayNotHasKey('runtime_context', $buildTaskState);
     }
 
-    public function testUnconfirmedStageTwoDraftKeepsSingleStructuredStorageCopy(): void
-    {
-        $session = new AiSiteAgentSession();
-        $structured = [
-            'plan_signature' => 'stage-two-signature',
-            'shared_tasks' => [
-                ['task_key' => 'shared:header', 'label' => 'Header'],
-            ],
-            'page_tasks' => [
-                'home_page' => [
-                    ['task_key' => 'page:home_page:hero', 'label' => 'Hero'],
-                ],
-            ],
-            'execution_blueprint' => [
-                'signature' => 'stage-two-blueprint',
-                'tasks' => [
-                    ['task_key' => 'page:home_page:hero'],
-                ],
-                'task_groups' => [
-                    'home_page' => [
-                        ['task_key' => 'page:home_page:hero', 'duplicated' => true],
-                    ],
-                ],
-            ],
-        ];
-        $draft = \array_replace($structured, ['signature' => 'stage-two-signature']);
-
-        $session->setScopeArray([
-            'workspace_track' => 'virtual_theme',
-            'task_plan_confirmed' => 0,
-            'task_plan_structured' => $structured,
-            'task_plan_markdown' => '# Stage two draft',
-            'virtual_theme_plan' => [
-                'draft' => $draft,
-                'draft_markdown' => '# Stage two draft',
-                'draft_generated_at' => '2026-04-25 15:50:00',
-                'plan_signature' => 'stage-two-signature',
-            ],
-        ]);
-
-        $stored = $session->getScopeArray();
-
-        self::assertSame([], $stored['task_plan_structured'] ?? null);
-        self::assertSame('stage-two-signature', $stored['virtual_theme_plan']['draft']['signature'] ?? null);
-        self::assertArrayNotHasKey('task_groups', $stored['virtual_theme_plan']['draft']['execution_blueprint'] ?? []);
-        self::assertSame('# Stage two draft', (string)($stored['task_plan_markdown'] ?? ''));
-        self::assertSame('# Stage two draft', (string)($stored['virtual_theme_plan']['draft_markdown'] ?? ''));
-    }
-
-    public function testArtifactBackedPayloadsAreNotStoredBackIntoScopeJson(): void
+    public function testBuildPlanArtifactBackedPayloadsAreNotStoredBackIntoScopeJson(): void
     {
         $session = new AiSiteAgentSession();
 
@@ -401,43 +220,30 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
                 AiSiteAgentSession::STAGE_PLAN => [
                     'plan_json' => ['storage' => 'session_artifact_v1', 'hash' => 'plan-json-hash'],
                     'plan_structured' => ['storage' => 'session_artifact_v1', 'hash' => 'plan-structured-hash'],
+                    'build_plan_v2' => ['storage' => 'session_artifact_v1', 'hash' => 'build-plan-hash'],
+                    'plan_projection' => ['storage' => 'session_artifact_v1', 'hash' => 'projection-hash'],
+                    'content_manifest' => ['storage' => 'session_artifact_v1', 'hash' => 'manifest-hash'],
                 ],
                 AiSiteAgentSession::STAGE_VISUAL_EDIT => [
-                    'task_plan_structured' => ['storage' => 'session_artifact_v1', 'hash' => 'task-plan-hash'],
-                    'task_plan_markdown' => ['storage' => 'session_artifact_v1', 'hash' => 'task-plan-markdown-hash'],
-                    'task_plan_draft' => ['storage' => 'session_artifact_v1', 'hash' => 'draft-hash'],
-                    'task_plan_draft_markdown' => ['storage' => 'session_artifact_v1', 'hash' => 'draft-markdown-hash'],
-                    'task_plan_confirmed' => ['storage' => 'session_artifact_v1', 'hash' => 'confirmed-hash'],
-                    'task_plan_confirmed_markdown' => ['storage' => 'session_artifact_v1', 'hash' => 'confirmed-markdown-hash'],
                     'build_blueprint' => ['storage' => 'session_artifact_v1', 'hash' => 'build-blueprint-hash'],
                 ],
             ],
             'plan_json' => ['pages' => ['home_page' => ['heavy' => \str_repeat('a', 1024)]]],
             'plan_structured' => ['pages' => ['home_page' => ['heavy' => \str_repeat('b', 1024)]]],
-            'task_plan_structured' => ['page_tasks' => ['home_page' => [['heavy' => \str_repeat('c', 1024)]]]],
-            'task_plan_markdown' => \str_repeat('markdown', 128),
-            'virtual_theme_plan' => [
-                'draft' => ['page_tasks' => ['home_page' => [['heavy' => \str_repeat('d', 1024)]]]],
-                'draft_markdown' => \str_repeat('draft', 128),
-                'confirmed' => ['page_tasks' => ['home_page' => [['heavy' => \str_repeat('e', 1024)]]]],
-                'confirmed_markdown' => \str_repeat('confirmed', 128),
-                'plan_signature' => 'keep-signature',
-            ],
-            'build_blueprint' => ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('f', 1024)]]],
+            'build_plan_v2' => ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('c', 1024)]]],
+            'plan_projection' => ['pages' => ['home_page' => ['blocks' => ['hero']]]],
+            'content_manifest' => ['pages' => ['home_page' => ['copy' => \str_repeat('d', 1024)]]],
+            'build_blueprint' => ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('e', 1024)]]],
         ]);
 
         $stored = $session->getScopeArray();
 
         self::assertSame([], $stored['plan_json'] ?? null);
         self::assertSame([], $stored['plan_structured'] ?? null);
-        self::assertSame([], $stored['task_plan_structured'] ?? null);
-        self::assertSame('', $stored['task_plan_markdown'] ?? null);
-        self::assertSame([], $stored['virtual_theme_plan']['draft'] ?? null);
-        self::assertSame('', $stored['virtual_theme_plan']['draft_markdown'] ?? null);
-        self::assertSame([], $stored['virtual_theme_plan']['confirmed'] ?? null);
-        self::assertSame('', $stored['virtual_theme_plan']['confirmed_markdown'] ?? null);
-        self::assertSame('keep-signature', $stored['virtual_theme_plan']['plan_signature'] ?? null);
+        self::assertSame([], $stored['build_plan_v2'] ?? null);
+        self::assertSame([], $stored['plan_projection'] ?? null);
+        self::assertSame([], $stored['content_manifest'] ?? null);
         self::assertSame([], $stored['build_blueprint'] ?? null);
-        self::assertSame('draft-hash', $stored['_artifact_refs'][AiSiteAgentSession::STAGE_VISUAL_EDIT]['task_plan_draft']['hash'] ?? null);
+        self::assertSame('build-plan-hash', $stored['_artifact_refs'][AiSiteAgentSession::STAGE_PLAN]['build_plan_v2']['hash'] ?? null);
     }
 }
