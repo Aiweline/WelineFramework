@@ -21,13 +21,20 @@ class ProductQueryProvider implements QueryProviderInterface
 {
     private ?int $productEavEntityId = null;
 
+    private readonly ProductCategory $productCategoryModel;
+    private readonly EavEntity $eavEntityModel;
+    private readonly EavAttribute $eavAttributeModel;
+
     public function __construct(
         private readonly Product $productModel,
         private readonly PriceService $priceService,
-        private readonly ProductCategory $productCategoryModel = new ProductCategory(),
-        private readonly EavEntity $eavEntityModel = new EavEntity(),
-        private readonly EavAttribute $eavAttributeModel = new EavAttribute()
+        ?ProductCategory $productCategoryModel = null,
+        ?EavEntity $eavEntityModel = null,
+        ?EavAttribute $eavAttributeModel = null,
     ) {
+        $this->productCategoryModel = $productCategoryModel ?? new ProductCategory();
+        $this->eavEntityModel = $eavEntityModel ?? new EavEntity();
+        $this->eavAttributeModel = $eavAttributeModel ?? new EavAttribute();
     }
 
     public function getProviderName(): string

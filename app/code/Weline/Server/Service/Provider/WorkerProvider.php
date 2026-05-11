@@ -96,8 +96,8 @@ class WorkerProvider extends AbstractServiceProvider
         $arguments[] = '--master-pid=' . $context->masterPid;
         $arguments[] = '--memory-limit=' . $context->getWorkerMemoryLimit();
 
-        if ($context->frontend) {
-            $arguments[] = '--frontend';
+        if ($context->windowMode) {
+            $arguments[] = '--win';
         }
 
         if ($mode === 'linux-direct') {

@@ -517,6 +517,36 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
 <script>
 (function() {
+    // 账户页 AJAX 文案（JSON 嵌入，避免 script 内 htmlspecialchars 导致 Unicode/HTML 实体异常）
+    var i18nAccount = {
+        saving: <?= json_encode((string) __('保存中...'), JSON_UNESCAPED_UNICODE) ?>,
+        changing: <?= json_encode((string) __('修改中...'), JSON_UNESCAPED_UNICODE) ?>,
+        profileUpdateFailed: <?= json_encode((string) __('更新失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
+        securityUpdateFailed: <?= json_encode((string) __('修改失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
+        fillAllFields: <?= json_encode((string) __('请填写所有字段'), JSON_UNESCAPED_UNICODE) ?>,
+        passwordTooShort: <?= json_encode((string) __('新密码长度不能少于6位'), JSON_UNESCAPED_UNICODE) ?>,
+        passwordMismatch: <?= json_encode((string) __('两次输入的新密码不一致'), JSON_UNESCAPED_UNICODE) ?>
+    };
+
+    /** 接口偶发返回 HTML 数字实体文案时的解码（勿用 textarea：部分环境下 innerHTML 无法可靠解码实体） */
+    function welineDecodeHtmlEntities(message) {
+        var s = String(message || '');
+        if (s.indexOf('&') === -1) {
+            return s;
+        }
+        var div = document.createElement('div');
+        var prev;
+        for (var i = 0; i < 5; i++) {
+            prev = s;
+            div.innerHTML = s;
+            s = div.textContent || div.innerText || '';
+            if (s === prev || s.indexOf('&') === -1) {
+                break;
+            }
+        }
+        return s;
+    }
+
     // 仅绑定带 data-section 的侧栏项（个人资料/安全设置等），避免把「退出登录」等普通链接
     // 也套上 preventDefault + 错误的 href 解析；目标 ID 用 data-section，避免依赖 #fragment。
     // 每次点击重新查询 .account-index__section，避免初始化时 NodeList 为空导致「只展开一块、不隐藏其它块」。
@@ -551,7 +581,13 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
             showAccountSection(targetId);
             try {
-                history.replaceState(null, '', '#' + targetId);
+                // 必须与侧栏 a[href] 一致：仅用 '#id' 会在当前文档为站点根时把地址栏写成 /#orders
+                var hrefAttr = link.getAttribute('href');
+                if (hrefAttr && hrefAttr.indexOf('#') !== -1) {
+                    history.replaceState(null, '', hrefAttr);
+                } else {
+                    history.replaceState(null, '', '#' + targetId);
+                }
             } catch (err) {}
         });
     });
@@ -596,7 +632,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             var btn = this.querySelector('button[type="submit"]');
             var originalText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="ri-loader-4-line"></i> <?= htmlspecialchars((string) __('保存中...'), ENT_QUOTES) ?>';
+            btn.innerHTML = '<i class="ri-loader-4-line"></i> ' + i18nAccount.saving;
 
             var successMsg = document.getElementById('profileSuccessMsg');
             var errorMsg = document.getElementById('profileErrorMsg');
@@ -612,15 +648,15 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             .then(function(data) {
                 if (data.success) {
                     errorMsg.textContent = '';
-                    successMsg.textContent = data.message || '';
+                    successMsg.textContent = welineDecodeHtmlEntities(data.message);
                 } else {
                     successMsg.textContent = '';
-                    errorMsg.textContent = data.message || '<?= htmlspecialchars((string) __('更新失败，请稍后重试'), ENT_QUOTES) ?>';
+                    errorMsg.textContent = welineDecodeHtmlEntities(data.message) || i18nAccount.profileUpdateFailed;
                 }
             })
             .catch(function() {
                 successMsg.textContent = '';
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('更新失败，请稍后重试'), ENT_QUOTES) ?>';
+                errorMsg.textContent = i18nAccount.profileUpdateFailed;
             })
             .finally(function() {
                 btn.disabled = false;
@@ -644,24 +680,24 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             var confirmPassword = document.getElementById('confirm_password').value;
 
             if (!oldPassword || !newPassword || !confirmPassword) {
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('请填写所有字段'), ENT_QUOTES) ?>';
+                errorMsg.textContent = i18nAccount.fillAllFields;
                 return;
             }
 
             if (newPassword.length < 6) {
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('新密码长度不能少于6位'), ENT_QUOTES) ?>';
+                errorMsg.textContent = i18nAccount.passwordTooShort;
                 return;
             }
 
             if (newPassword !== confirmPassword) {
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('两次输入的新密码不一致'), ENT_QUOTES) ?>';
+                errorMsg.textContent = i18nAccount.passwordMismatch;
                 return;
             }
 
             var btn = this.querySelector('button[type="submit"]');
             var originalText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="ri-loader-4-line"></i> <?= htmlspecialchars((string) __('修改中...'), ENT_QUOTES) ?>';
+            btn.innerHTML = '<i class="ri-loader-4-line"></i> ' + i18nAccount.changing;
 
             var formData = new FormData(this);
             fetch('/customer/account/update', {
@@ -672,18 +708,18 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             .then(function(data) {
                 if (data.success) {
                     errorMsg.textContent = '';
-                    successMsg.textContent = data.message || '';
+                    successMsg.textContent = welineDecodeHtmlEntities(data.message);
                     document.getElementById('old_password').value = '';
                     document.getElementById('new_password').value = '';
                     document.getElementById('confirm_password').value = '';
                 } else {
                     successMsg.textContent = '';
-                    errorMsg.textContent = data.message || '<?= htmlspecialchars((string) __('修改失败，请稍后重试'), ENT_QUOTES) ?>';
+                    errorMsg.textContent = welineDecodeHtmlEntities(data.message) || i18nAccount.securityUpdateFailed;
                 }
             })
             .catch(function() {
                 successMsg.textContent = '';
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('修改失败，请稍后重试'), ENT_QUOTES) ?>';
+                errorMsg.textContent = i18nAccount.securityUpdateFailed;
             })
             .finally(function() {
                 btn.disabled = false;

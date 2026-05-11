@@ -29,8 +29,8 @@ final class StartForceSwitchStopArgsTest extends TestCase
         $args = $this->invokeProtected($start, 'buildStopExistingServerArgs', 'default', false);
 
         self::assertArrayNotHasKey('fast-local', $args);
-        self::assertTrue((bool) ($args['force'] ?? false));
-        self::assertTrue((bool) ($args['f'] ?? false));
+        self::assertArrayNotHasKey('force', $args);
+        self::assertArrayNotHasKey('f', $args);
     }
 
     public function testMaintenanceModeHelpersSyncFrameworkAndWlsForTargetInstance(): void

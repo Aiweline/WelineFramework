@@ -177,6 +177,8 @@ class ControlMessage
     // ========== CLI 命令动作 ==========
 
     public const ACTION_STOP = 'stop';
+    /** CLI 诊断：探测 STOP 链路（不实际停机） */
+    public const ACTION_STOP_TEST = 'stop_test';
     public const ACTION_RELOAD = 'reload';
     /** 重载并等待完成：Master 滚动重启完成后才返回结果 */
     public const ACTION_RELOAD_WAIT = 'reload_wait';

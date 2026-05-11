@@ -128,7 +128,7 @@ final class ServiceOrchestratorTelemetryTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: ['wls' => ['orchestrator' => ['telemetry_5xx_worker_recovery_cooldown_sec' => 3.0]]],
             dispatcherEnabled: true,
             workerCount: $desiredWorkers,

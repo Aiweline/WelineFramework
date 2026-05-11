@@ -29,7 +29,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: true,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker_count' => 4,
@@ -152,7 +152,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: true,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'session' => [
@@ -183,7 +183,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker_count' => 1,
@@ -210,7 +210,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker_count' => 1,
@@ -261,7 +261,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             httpRedirectPort: 0,
         );
@@ -284,7 +284,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             httpRedirectPort: 9080,
         );
@@ -311,7 +311,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
         );
 

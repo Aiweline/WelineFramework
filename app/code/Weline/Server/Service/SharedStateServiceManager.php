@@ -21,8 +21,8 @@ class SharedStateServiceManager
 
     /**
      * 解析 ensure() 的前台标志，与日志及 Windows 下共享侧车拉起方式一致。
-     * - `server:start --frontend` 经 ensureRuntime 显式传入；
-     * - Worker 带 `--frontend` 时由 worker.php / worker_ssl.php 定义常量 WLS_FRONTEND_MODE。
+     * - `server:start --win`（或已弃用的 `--frontend`）经 ensureRuntime 显式传入；
+     * - Worker 带 `--win`/`--frontend` 时由 worker.php / worker_ssl.php 定义常量 WLS_FRONTEND_MODE。
      *
      * @param array<string, mixed> $config 可含 shared_service_frontend 强制覆盖
      */
@@ -1017,7 +1017,7 @@ class SharedStateServiceManager
                 $argv[] = '--name=' . $processName;
             }
             if ($frontend) {
-                $argv[] = '--frontend';
+                $argv[] = '--win';
             }
             $pid = Processer::createWindowsDetachedPhpArgv(
                 $argv,
@@ -1032,7 +1032,7 @@ class SharedStateServiceManager
 
         // enableLog=true：失败原因写入 Processer 进程日志。
         if ($frontend) {
-            $cmdLineForRegistry .= ' --frontend';
+            $cmdLineForRegistry .= ' --win';
         }
         return Processer::create($cmdLineForRegistry, block: false, foreground: $frontend, enableLog: true);
     }

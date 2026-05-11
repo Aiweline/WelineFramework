@@ -37,7 +37,7 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
     <?php if (!empty($unpaidOrders)): ?>
         <div class="weshop-unpaid-orders-alert">
             <div class="weshop-alert-content">
-                <span class="material-symbols-outlined weshop-alert-icon">warning</span>
+                <i class="ri-error-warning-line weshop-alert-icon" aria-hidden="true"></i>
                 <div class="weshop-alert-text">
                     <strong><?= __('您有 %1 个订单待支付', count($unpaidOrders)) ?></strong>
                     <p><?= __('请及时完成支付，避免订单自动取消') ?></p>
@@ -51,7 +51,7 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
         <h2 class="weshop-orders-title"><?= __('我的订单') ?></h2>
         <a href="<?= $this->getUrl('weshop/order/list') ?>" class="weshop-view-all-link">
             <?= __('查看全部') ?>
-            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">arrow_forward</span>
+            <i class="ri-arrow-right-s-line weshop-view-all-icon" aria-hidden="true"></i>
         </a>
     </div>
     
@@ -59,7 +59,7 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
     <div class="weshop-orders-list">
         <?php if (empty($result['items'])): ?>
             <div class="weshop-empty-orders">
-                <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--weshop-text-secondary);">shopping_bag</span>
+                <i class="ri-shopping-bag-line weshop-empty-orders-icon" aria-hidden="true"></i>
                 <p><?= __('您还没有订单') ?></p>
                 <a href="<?= $this->getUrl('weshop') ?>" class="weshop-shopping-button">
                     <?= __('去购物') ?>
@@ -141,7 +141,7 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
                         
                         <?php if ($canRetryPayment): ?>
                             <a href="<?= $this->getUrl('weshop/order/retry-payment', ['order_id' => $orderId]) ?>" class="weshop-action-button weshop-retry-payment-button">
-                                <span class="material-symbols-outlined" style="font-size: 1rem;">payment</span>
+                                <i class="ri-bank-card-line" style="font-size: 1rem;" aria-hidden="true"></i>
                                 <?= __('继续支付') ?>
                             </a>
                         <?php endif; ?>
@@ -160,13 +160,13 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
                             >
                                 <input type="hidden" name="order_id" value="<?= $orderId ?>">
                                 <button type="submit" class="weshop-action-button weshop-cancel-button">
-                                    <span class="material-symbols-outlined" style="font-size: 1rem;">cancel</span>
+                                    <i class="ri-close-circle-line" style="font-size: 1rem;" aria-hidden="true"></i>
                                     <?= __('取消订单') ?>
                                 </button>
                             </form>
                         <?php elseif ($requireReturn): ?>
                             <a href="<?= $this->getUrl('rma/create', ['order_id' => $orderId]) ?>" class="weshop-action-button weshop-return-button" title="<?= htmlspecialchars($cancelReason ?? '') ?>">
-                                <span class="material-symbols-outlined" style="font-size: 1rem;">assignment_return</span>
+                                <i class="ri-exchange-line" style="font-size: 1rem;" aria-hidden="true"></i>
                                 <?= __('申请退货') ?>
                             </a>
                         <?php elseif ($cancelReason): ?>
@@ -251,6 +251,19 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
     .weshop-view-all-link:hover {
         color: var(--weshop-primary-hover);
         text-decoration: underline;
+    }
+
+    .weshop-view-all-icon {
+        font-size: 1rem;
+        line-height: 1;
+        vertical-align: middle;
+    }
+
+    .weshop-empty-orders-icon {
+        display: inline-block;
+        font-size: 3rem;
+        line-height: 1;
+        color: var(--weshop-text-secondary);
     }
     
     .weshop-orders-list {

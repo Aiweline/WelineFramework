@@ -246,13 +246,16 @@ class Start extends CommandAbstract
         \register_shutdown_function([$this, 'releaseStartLock']);
         \register_shutdown_function([$this, 'shutdownCleanupOrphanWlsProcessesIfNeeded']);
         
-        // --frontend / -frontend / --foreground / -foreground：前台运行（不后台）
-        // 兼容：部分参数解析器可能不会把 -frontend 解析为 args['frontend']，
-        // 因此额外从原始 argv 兜底识别，避免误走后台路径。
-        $frontend = $this->resolveFrontendFlag($args);
-        
-        // -log / --log：启用进程管理日志（system.processer.log）+ 运行时 verbose（开发态 Master/子进程控制台等）
-        // --frontend：前台启动时同步视为全量日志开关，并写入实例 enable_log 供 Worker 等子进程读取
+        // --win：Windows 子进程可见窗口；--foreground：阻塞前台 Master（daemon=false）。
+        // --frontend/-frontend 已弃用，等价于 --win（窗口），不再自动阻塞后台。
+        if ($this->hasCliArgvToken(['--frontend', '-frontend'])) {
+            $this->printer->warning(__('参数 --frontend/-frontend 已弃用：窗口可见请用 --win；阻塞前台 Master 请用 --foreground。'));
+        }
+
+        $windowMode = $this->resolveWindowModeFlag($args);
+        $foregroundMode = $this->resolveForegroundOnlyFlag($args);
+
+        // -log / --log：启用进程管理日志 + verbose；-foreground 默认同步开启全量日志便于排障
         $enableLog = isset($args['log']);
         if (!$enableLog) {
             foreach ($args as $key => $val) {
@@ -261,6 +264,9 @@ class Start extends CommandAbstract
                     break;
                 }
             }
+        }
+        if ($foregroundMode) {
+            $enableLog = true;
         }
         if ($enableLog) {
             Processer::setLogEnabled(true);
@@ -286,8 +292,7 @@ class Start extends CommandAbstract
             return;
         }
         $publicHost = (string)($config['public_host'] ?? $host);
-        // -frontend/--frontend 要让 Master 保持在当前前台终端，子进程也按前台模式启动。
-        $daemon = $this->resolveDaemonMode($config, $frontend);
+        $daemon = $this->resolveDaemonMode($config, $foregroundMode);
         
         // --no-ssl 时仅 HTTP（端口保持 80）；否则默认启用 HTTPS
         $noSsl = !empty($config['no_ssl']);
@@ -412,7 +417,7 @@ class Start extends CommandAbstract
                     $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
                 }
                 $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
-                if (!$this->stopExistingServer($instanceName, $port, $count, !$frontend)) {
+                if (!$this->stopExistingServer($instanceName, $port, $count, true)) {
                     return;
                 }
                 // -r -f 是停机型切换：新实例启动后默认恢复到业务流量态，避免残留 system.maintenance 让 WLS 继续 sticky 维护。
@@ -522,7 +527,7 @@ class Start extends CommandAbstract
         $workerBasePort = (int) ($config['worker_base_port'] ?? $defaultWorkerBasePort);
         $this->printer->note(__('Worker基础端口: %{1}', [$workerBasePort]));
         try {
-            $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart, $frontend);
+            $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart, $windowMode);
             $this->printer->note(__('共享状态运行时: %{1}', [$sharedStateRuntime]));
         } catch (\RuntimeException $exception) {
             $this->printer->note(__('共享状态运行时解析失败: %{1}', [$exception->getMessage()]));
@@ -874,9 +879,9 @@ class Start extends CommandAbstract
         
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
-            $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($frontend);
+            $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($windowMode);
             $listenHost = $this->resolveServerListenHost((string)$host);
-            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), $publicHost);
+            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $windowMode, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), $publicHost);
         } finally {
             if ($workerPortAllocationLocked) {
                 $this->releaseWorkerPortAllocationLock();
@@ -913,7 +918,7 @@ class Start extends CommandAbstract
         // Master 统一管理：Dispatcher、Worker、HTTP Redirect
         $config['worker_port'] = $workerPort;
         $config['dispatcher_enabled'] = $dispatcherEnabled;
-        $config['orchestrator_runtime_options'] = $this->buildOrchestratorRuntimeOptions($frontend);
+        $config['orchestrator_runtime_options'] = $this->buildOrchestratorRuntimeOptions($windowMode);
         // 同步 daemon 标志到 config（$daemon 已根据 --frontend 参数覆盖，
         // 但 $config['daemon'] 仍是 env 默认值 true，导致 MasterProcess::log() 跳过控制台输出）
         $config['daemon'] = $daemon;
@@ -924,7 +929,7 @@ class Start extends CommandAbstract
 
         if ($daemon) {
             $this->wlsChildProcessesMayExist = true;
-            $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port, $frontend);
+            $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port, $foregroundMode, $windowMode);
             $this->wlsStartupProcessHandoffDone = true;
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
@@ -961,7 +966,7 @@ class Start extends CommandAbstract
 
         // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
         $this->wlsChildProcessesMayExist = true;
-        $this->runMasterProcess($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend);
+        $this->runMasterProcess($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $windowMode);
     }
 
     /**
@@ -1303,7 +1308,7 @@ class Start extends CommandAbstract
             'session_server_token_file_name' => (string) ($data['session_server_token_file_name'] ?? 'session_server.token'),
             'memory_server_port' => (int) ($data['memory_server_port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'memory_server_token_file_name' => (string) ($data['memory_server_token_file_name'] ?? 'memory_server.token'),
-            'daemon' => true,
+            'daemon' => (bool) ($data['daemon'] ?? true),
             'orchestrator_runtime_options' => $orchestratorRuntimeOptions,
         ];
         // HTTPS 模式固定规则：仅 443 启动 80 端口 Redirect Worker
@@ -1311,11 +1316,12 @@ class Start extends CommandAbstract
         if ($sslEnabled) {
             $httpRedirectPort = ($port === 443) ? 80 : 0;
         }
-        // 读取前台模式标记
-        $frontend = (bool)($data['frontend'] ?? false);
-        
-        // 读取进程日志开关（-log / 前台启动 写入的 enable_log）
-        $enableLog = (bool)($data['enable_log'] ?? false) || $frontend;
+        // window_mode 优先；兼容旧 frontend 字段
+        $windowMode = (bool) ($data['window_mode'] ?? $data['frontend'] ?? false);
+
+        // 读取进程日志开关（-log / 阻塞前台 Master 写入的 enable_log）
+        $daemonSaved = (bool) ($data['daemon'] ?? true);
+        $enableLog = (bool) ($data['enable_log'] ?? false) || !$daemonSaved;
         if ($enableLog) {
             Processer::setLogEnabled(true);
         }
@@ -1337,7 +1343,7 @@ class Start extends CommandAbstract
             $mainPort
         )->setPrinter($this->printer)
             // 恢复运行态配置（由 Start.php 保存）
-            ->init($instanceName, $config, $workerScript, (string)($data['ssl_cert'] ?? ''), (string)($data['ssl_key'] ?? ''), $sslEnabled, $httpRedirectPort, $frontend)
+            ->init($instanceName, $config, $workerScript, (string)($data['ssl_cert'] ?? ''), (string)($data['ssl_key'] ?? ''), $sslEnabled, $httpRedirectPort, $windowMode)
             ->run();
     }
     
@@ -1352,20 +1358,26 @@ class Start extends CommandAbstract
      * - 验证 Master 进程是否存活
      * - 超时（5秒）时输出警告而非假成功
      */
-    protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '127.0.0.1', int $port = 443, bool $frontend = false): bool
-    {
+    protected function startMasterInBackground(
+        string $instanceName,
+        bool $sslEnabled = false,
+        string $host = '127.0.0.1',
+        int $port = 443,
+        bool $foregroundMode = false,
+        bool $windowMode = false
+    ): bool {
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
         
         $masterName = MasterProcess::getMasterProcessName($instanceName);
-        $cmd = $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $frontend);
+        $cmd = $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
         $spawnedMasterPid = 0;
         if (IS_WIN) {
-            if ($frontend) {
+            if ($foregroundMode) {
                 $foregroundPid = $this->startForegroundManagedProcess($cmd);
                 $this->persistForegroundLauncherPid($instanceName, $cmd, $foregroundPid);
             } elseif (\method_exists(Processer::class, 'createWindowsDetachedPhpArgv')) {
-                $argv = $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $frontend);
+                $argv = $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
                 $pid = Processer::createWindowsDetachedPhpArgv($argv, BP, $cmd);
                 $spawnedMasterPid = \max(0, (int) $pid);
                 if ($pid <= 0) {
@@ -1379,7 +1391,7 @@ class Start extends CommandAbstract
             } else {
                 $bp = \str_replace("'", "''", BP);
                 $phpBin = \str_replace("'", "''", $phpBinary);
-                $argv = $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $frontend);
+                $argv = $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
                 $argList = $this->buildPowerShellArgumentListLiteral(\array_slice($argv, 1));
                 $psCmd = "Set-Location -LiteralPath '" . $bp . "'; Start-Process -FilePath '" . $phpBin . "' -ArgumentList " . $argList . " -WindowStyle Hidden -WorkingDirectory '" . $bp . "'";
                 $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
@@ -1508,7 +1520,8 @@ class Start extends CommandAbstract
         string $script,
         string $instanceName,
         string $masterName,
-        bool $frontend = false
+        bool $foregroundMode = false,
+        bool $windowMode = false
     ): array {
         $argv = [
             $phpBinary,
@@ -1518,13 +1531,17 @@ class Start extends CommandAbstract
             '--master-only',
         ];
 
-        if ($frontend) {
-            $argv[] = '--frontend';
+        if ($foregroundMode) {
+            $argv[] = '--foreground';
+        }
+
+        if ($windowMode) {
+            $argv[] = '--win';
         }
 
         $argv[] = '--name=' . $masterName;
 
-        if ($frontend) {
+        if ($windowMode) {
             $argv[] = '--window-title=' . MasterProcess::getMasterProcessDisplayName($instanceName, true);
         }
 
@@ -1536,7 +1553,8 @@ class Start extends CommandAbstract
         string $script,
         string $instanceName,
         string $masterName,
-        bool $frontend = false
+        bool $foregroundMode = false,
+        bool $windowMode = false
     ): string {
         $phpCommand = '"' . \str_replace('"', '\"', $phpBinary) . '"';
         $command = $phpCommand
@@ -1545,13 +1563,17 @@ class Start extends CommandAbstract
             . \escapeshellarg($instanceName)
             . ' --master-only';
 
-        if ($frontend) {
-            $command .= ' --frontend';
+        if ($foregroundMode) {
+            $command .= ' --foreground';
+        }
+
+        if ($windowMode) {
+            $command .= ' --win';
         }
 
         $command .= ' --name=' . \escapeshellarg($masterName);
 
-        if ($frontend) {
+        if ($windowMode) {
             $command .= ' --window-title=' . \escapeshellarg(MasterProcess::getMasterProcessDisplayName($instanceName, true));
         }
 
@@ -1659,39 +1681,6 @@ class Start extends CommandAbstract
         return Env::get($path, $default);
     }
 
-    /**
-     * -frontend/--frontend keeps the Master in the foreground. The Master owns
-     * child process startup, so this is the only place that decides whether the
-     * current command returns after launching a background Master.
-     *
-     * @param array<string, mixed> $config
-     */
-    protected function resolveFrontendFlag(array $args): bool
-    {
-        foreach (['frontend', 'foreground'] as $name) {
-            if (\array_key_exists($name, $args) && $this->isTruthyCliFlagValue($args[$name])) {
-                return true;
-            }
-        }
-
-        foreach ($args as $key => $value) {
-            if (\is_int($key) && \is_string($value) && $this->isFrontendFlagToken($value)) {
-                return true;
-            }
-        }
-
-        $rawArgv = $_SERVER['argv'] ?? [];
-        if (\is_array($rawArgv)) {
-            foreach ($rawArgv as $raw) {
-                if (\is_string($raw) && $this->isFrontendFlagToken($raw)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     private function isTruthyCliFlagValue(mixed $value): bool
     {
         if ($value === false || $value === null) {
@@ -1714,18 +1703,79 @@ class Start extends CommandAbstract
         return (bool)$value;
     }
 
-    private function isFrontendFlagToken(string $value): bool
+    protected function resolveDaemonMode(array $config, bool $foregroundMode): bool
     {
-        return \in_array($value, ['--frontend', '-frontend', '--foreground', '-foreground'], true);
-    }
-
-    protected function resolveDaemonMode(array $config, bool $frontend): bool
-    {
-        if ($frontend) {
+        if ($foregroundMode) {
             return false;
         }
 
         return (bool) ($config['daemon'] ?? true);
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    protected function hasCliArgvToken(array $tokens): bool
+    {
+        $rawArgv = $_SERVER['argv'] ?? [];
+        if (!\is_array($rawArgv)) {
+            return false;
+        }
+
+        foreach ($rawArgv as $raw) {
+            if (\is_string($raw) && \in_array($raw, $tokens, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function resolveForegroundOnlyFlag(array $args): bool
+    {
+        foreach (['foreground'] as $name) {
+            if (\array_key_exists($name, $args) && $this->isTruthyCliFlagValue($args[$name])) {
+                return true;
+            }
+        }
+
+        foreach ($args as $key => $value) {
+            if (\is_int($key) && \is_string($value) && \in_array($value, ['--foreground', '-foreground'], true)) {
+                return true;
+            }
+        }
+
+        return $this->hasCliArgvToken(['--foreground', '-foreground']);
+    }
+
+    protected function resolveWindowModeFlag(array $args): bool
+    {
+        foreach (['win', 'window'] as $name) {
+            if (\array_key_exists($name, $args) && $this->isTruthyCliFlagValue($args[$name])) {
+                return true;
+            }
+        }
+
+        if (\array_key_exists('frontend', $args) && $this->isTruthyCliFlagValue($args['frontend'])) {
+            return true;
+        }
+
+        foreach ($args as $key => $value) {
+            if (\is_int($key) && \is_string($value)
+                && \in_array($value, ['--win', '-win', '--window', '--frontend', '-frontend'], true)) {
+                return true;
+            }
+        }
+
+        return $this->hasCliArgvToken(['--win', '-win', '--window', '--frontend', '-frontend']);
+    }
+
+    /**
+     * @deprecated 使用 resolveWindowModeFlag / resolveForegroundOnlyFlag
+     */
+    protected function resolveFrontendFlag(array $args): bool
+    {
+        return $this->resolveWindowModeFlag($args);
     }
 
     /**
@@ -1985,7 +2035,7 @@ class Start extends CommandAbstract
     /**
      * 运行 Master 进程（监控并自动重启 Worker；HTTPS 启用时可自动启动 HTTP 重定向进程）
      */
-    protected function runMasterProcess(string $instanceName, array $config, string $workerScript, string $sslCert = '', string $sslKey = '', bool $sslEnabled = false, int $httpRedirectPort = 0, bool $frontend = false): void
+    protected function runMasterProcess(string $instanceName, array $config, string $workerScript, string $sslCert = '', string $sslKey = '', bool $sslEnabled = false, int $httpRedirectPort = 0, bool $windowMode = false): void
     {
         $masterPid = \getmypid();
         
@@ -2026,7 +2076,7 @@ class Start extends CommandAbstract
                     $this->wlsStartupProcessHandoffDone = true;
                     $this->releaseStartLock();
                 })
-                ->init($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend)
+                ->init($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $windowMode)
                 ->run();
         } catch (\Throwable $e) {
             // 启动中途失败时，强制清理当前实例已拉起的子进程，避免半启动残留。
@@ -2120,7 +2170,7 @@ class Start extends CommandAbstract
         return ObjectManager::getInstance(SharedStateRuntimeResolver::class);
     }
 
-    protected function resolveSharedStateRuntimeConfig(string $instanceName, array $config, bool $forceRestart = false, bool $frontend = false): array
+    protected function resolveSharedStateRuntimeConfig(string $instanceName, array $config, bool $forceRestart = false, bool $windowMode = false): array
     {
         $envConfig = $this->getEnvConfig();
         if (!\is_array($envConfig)) {
@@ -4329,8 +4379,10 @@ class Start extends CommandAbstract
      */
     protected function buildStopExistingServerArgs(string $instanceName, bool $fastLocal = false): array
     {
-        $args = [0 => 'server:stop', 1 => $instanceName, 'force' => true, 'f' => true];
+        $args = [0 => 'server:stop', 1 => $instanceName];
         if ($fastLocal) {
+            $args['force'] = true;
+            $args['f'] = true;
             $args['fast-local'] = true;
         }
 
@@ -5087,7 +5139,7 @@ class Start extends CommandAbstract
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = '', string $publicHost = ''): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $windowMode = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = '', string $publicHost = ''): void
     {
         $instanceData = [
             'name' => $instanceName,
@@ -5125,8 +5177,11 @@ class Start extends CommandAbstract
             'shared_state' => $sharedStateRuntime,
             // HTTP 重定向端口（HTTPS 模式下用于 HTTP→HTTPS 跳转）
             'http_redirect_port' => $httpRedirectPort,
-            // 前台模式（重启 Worker 时保持可见窗口）
-            'frontend' => $frontend,
+            // Windows 窗口模式（与阻塞前台 Master 无关）
+            'window_mode' => $windowMode,
+            'frontend' => $windowMode,
+            'runtime_state' => 'running',
+            'last_verified_at' => \time(),
             // 启动参数固化：子进程拉起链路统一读取实例参数，避免依赖 env.php 导致前台策略丢失。
             'orchestrator_runtime_options' => $orchestratorRuntimeOptions,
             // 与 -log 对齐：进程管理日志 + WLS 全量调试（子进程读此字段）
@@ -5191,13 +5246,13 @@ class Start extends CommandAbstract
      *
      * @return array<string, bool>
      */
-    protected function buildOrchestratorRuntimeOptions(bool $frontend): array
+    protected function buildOrchestratorRuntimeOptions(bool $windowMode): array
     {
-        if (!$frontend) {
+        if (!$windowMode) {
             return [];
         }
 
-        // Windows 前台模式：显式允许 Worker/非 Worker 使用前台创建，确保可见全部子进程控制台。
+        // Windows 窗口模式：显式允许 Worker/非 Worker 使用前台创建，确保可见全部子进程控制台。
         return [
             'allow_windows_frontend_child_process' => true,
             'frontend_worker_windows' => true,
@@ -5611,7 +5666,7 @@ PHP;
      * 
      * @return array 成功启动的 Worker PID 列表
      */
-    protected function startWorkers(string $instanceName, string $host, int $port, int $count, string $workerScript, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
+    protected function startWorkers(string $instanceName, string $host, int $port, int $count, string $workerScript, string $sslCert = '', string $sslKey = '', bool $windowMode = false): array
     {
         $this->printer->note(__('启动 Worker 进程...'));
         echo "\n";
@@ -5624,7 +5679,7 @@ PHP;
             $workerPort = $port + $i;
             $workerId = $i + 1;
             
-            $result = $this->startSingleWorker($phpBinary, $workerScript, $host, $workerPort, $workerId, $instanceName, $sslCert, $sslKey, $frontend);
+            $result = $this->startSingleWorker($phpBinary, $workerScript, $host, $workerPort, $workerId, $instanceName, $sslCert, $sslKey, $windowMode);
             
             if ($result['success']) {
                 $protocol = $sslEnabled ? 'HTTPS' : 'HTTP';
@@ -5648,7 +5703,7 @@ PHP;
      * 
      * @return int Dispatcher PID，失败返回 0
      */
-    protected function startDispatcher(string $instanceName, string $host, int $dispatcherPort, int $workerBasePort, int $workerCount, bool $frontend = false): int
+    protected function startDispatcher(string $instanceName, string $host, int $dispatcherPort, int $workerBasePort, int $workerCount, bool $windowMode = false): int
     {
         $this->printer->note(__('启动 Dispatcher 进程...'));
         
@@ -5671,10 +5726,10 @@ PHP;
         // 使用进程管理器统一创建进程
         // 参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>
         $command = "\"{$phpBinary}\" \"{$dispatcherScript}\" {$host} {$dispatcherPort} {$workerBasePort} {$workerCount} {$instanceName} --name={$processName}";
-        if ($frontend) {
-            $command .= " --frontend";
+        if ($windowMode) {
+            $command .= " --win";
         }
-        $pid = Processer::create($command, true, $frontend);
+        $pid = Processer::create($command, true, $windowMode);
         
         if ($pid > 0) {
             $this->updateInstanceDispatcherPid($instanceName, $pid);
@@ -5684,7 +5739,7 @@ PHP;
         if ($pid <= 0) {
             // 渐进式轮询：快速探测 -> 逐步放缓（10ms -> 20ms -> 50ms -> 100ms）
             $pollIntervals = [10_000, 20_000, 50_000, 100_000];
-            $maxWait = $frontend ? 3000 : 500;
+            $maxWait = $windowMode ? 3000 : 500;
             $waited = 0;
             $pollIndex = 0;
 
@@ -5727,7 +5782,7 @@ PHP;
     /**
      * 启动单个 Worker
      */
-    protected function startSingleWorker(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
+    protected function startSingleWorker(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $sslCert = '', string $sslKey = '', bool $windowMode = false): array
     {
         $logDir = WlsLogService::getLogDir($instanceName);
         if (!\is_dir($logDir)) {
@@ -5737,7 +5792,7 @@ PHP;
         
         // 方案1：proc_open（最可靠）
         if ($this->availableFunctions['proc_open'] && $this->availableFunctions['proc_close']) {
-            $result = $this->startWithProcOpen($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $frontend);
+            $result = $this->startWithProcOpen($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $windowMode);
             if ($result['success']) {
                 $this->usedMethod = 'proc_open';
                 return $result;
@@ -5746,7 +5801,7 @@ PHP;
         
         // 方案2：pcntl_fork（仅 Linux/Mac）
         if (!IS_WIN && $this->availableFunctions['pcntl_fork']) {
-            $result = $this->startWithPcntlFork($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $frontend);
+            $result = $this->startWithPcntlFork($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $windowMode);
             if ($result['success']) {
                 $this->usedMethod = 'pcntl_fork';
                 return $result;
@@ -5755,7 +5810,7 @@ PHP;
         
         // 方案3（备用）：exec + 批处理/nohup
         if ($this->availableFunctions['exec']) {
-            $result = $this->startWithExec($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $frontend);
+            $result = $this->startWithExec($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $windowMode);
             if ($result['success']) {
                 $this->usedMethod = IS_WIN ? 'exec (bat)' : 'exec (nohup)';
                 return $result;
@@ -5768,7 +5823,7 @@ PHP;
     /**
      * 使用 proc_open 启动
      */
-    protected function startWithProcOpen(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
+    protected function startWithProcOpen(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $windowMode = false): array
     {
         // 进程名包含实例名和 Worker ID，便于多 Master 架构下识别和管理
         // 使用新前缀：weline-wls-worker-{instanceName}-{id}
@@ -5781,18 +5836,18 @@ PHP;
             $command .= " --defer-ssl";
         }
         $command .= " --name={$processName}";
-        if ($frontend) {
-            $command .= " --frontend";
+        if ($windowMode) {
+            $command .= " --win";
         }
         // 使用进程管理器统一创建进程
-        $pid = Processer::create($command, true, $frontend);
+        $pid = Processer::create($command, true, $windowMode);
         
         // 前端模式或后台模式：如果 PID 获取失败，通过端口检测
         // Windows 前台模式下 Processer::create 通常返回 0，需要等待并检测端口
         if ($pid <= 0) {
             // 渐进式轮询：快速探测 -> 逐步放缓（10ms -> 20ms -> 50ms -> 100ms）
             $pollIntervals = [10_000, 20_000, 50_000, 100_000];
-            $maxWait = $frontend ? 3000 : 2000;
+            $maxWait = $windowMode ? 3000 : 2000;
             $waited = 0;
             $pollIndex = 0;
 
@@ -5811,13 +5866,13 @@ PHP;
             }
         }
         
-        return ['success' => $pid > 0 || $frontend, 'pid' => $pid, 'error' => $pid > 0 ? '' : 'Processer::create failed'];
+        return ['success' => $pid > 0 || $windowMode, 'pid' => $pid, 'error' => $pid > 0 ? '' : 'Processer::create failed'];
     }
     
     /**
      * 使用 pcntl_fork 启动（Linux/Mac）
      */
-    protected function startWithPcntlFork(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
+    protected function startWithPcntlFork(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $windowMode = false): array
     {
         $pid = \pcntl_fork();
         
@@ -5841,8 +5896,8 @@ PHP;
                 $command .= " --defer-ssl";
             }
             $command .= " --name={$processName}";
-            if ($frontend) {
-                $command .= " --frontend";
+            if ($windowMode) {
+                $command .= " --win";
             }
             $command .= " > \"{$logFile}\" 2>&1";
             @\exec($command);
@@ -5857,7 +5912,7 @@ PHP;
      * 
      * 注意：此方法现在统一使用 Processer::create，保留作为备用入口
      */
-    protected function startWithExec(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
+    protected function startWithExec(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $windowMode = false): array
     {
         // 进程名包含实例名和 Worker ID，便于多 Master 架构下识别和管理
         // 使用新前缀：weline-wls-worker-{instanceName}-{id}
@@ -5869,18 +5924,18 @@ PHP;
             $command .= " --defer-ssl";
         }
         $command .= " --name={$processName}";
-        if ($frontend) {
-            $command .= " --frontend";
+        if ($windowMode) {
+            $command .= " --win";
         }
         // 使用进程管理器统一创建进程
-        $pid = Processer::create($command, true, $frontend);
+        $pid = Processer::create($command, true, $windowMode);
         
         // 前端模式或后台模式：如果 PID 获取失败，通过端口检测
         // Windows 前台模式下 Processer::create 通常返回 0，需要等待并检测端口
         if ($pid <= 0) {
             // 渐进式轮询：快速探测 -> 逐步放缓（10ms -> 20ms -> 50ms -> 100ms）
             $pollIntervals = [10_000, 20_000, 50_000, 100_000];
-            $maxWait = $frontend ? 3000 : 2000;
+            $maxWait = $windowMode ? 3000 : 2000;
             $waited = 0;
             $pollIndex = 0;
 
@@ -5899,7 +5954,7 @@ PHP;
             }
         }
         
-        return ['success' => $pid > 0 || $frontend, 'pid' => $pid, 'error' => $pid > 0 ? '' : 'Processer::create failed'];
+        return ['success' => $pid > 0 || $windowMode, 'pid' => $pid, 'error' => $pid > 0 ? '' : 'Processer::create failed'];
     }
     
     /**
@@ -6734,7 +6789,8 @@ PHP;
     {
         // 构建 ServerConfig
         $instanceName = $args['instance'] ?? $args['name'] ?? 'default';
-        $frontend = $this->resolveFrontendFlag($args);
+        $windowMode = $this->resolveWindowModeFlag($args);
+        $foregroundMode = $this->resolveForegroundOnlyFlag($args);
         $enableLog = isset($args['log']);
         if (!$enableLog) {
             foreach ($args as $key => $val) {
@@ -6744,7 +6800,7 @@ PHP;
                 }
             }
         }
-        if ($frontend) {
+        if ($foregroundMode) {
             $enableLog = true;
         }
         if ($enableLog) {
@@ -6791,7 +6847,7 @@ PHP;
             'dispatcher_memory_limit' => $config['dispatcher_memory_limit'] ?? ($config['worker_memory_limit'] ?? '256M'),
             'ssl_cert' => $sslCert,
             'ssl_key' => $sslKey,
-            'frontend' => $frontend,
+            'window_mode' => $windowMode,
             'http_redirect_port' => $strategyRedirect,
             'log_dir' => WlsLogService::getLogDir($instanceName),
             'bin_dir' => \dirname(__DIR__, 2) . DS . 'bin' . DS,
