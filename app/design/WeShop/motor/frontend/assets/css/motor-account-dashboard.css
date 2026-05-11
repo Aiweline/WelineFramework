@@ -150,7 +150,8 @@
     gap: 0.45rem;
 }
 
-.motor-account-sidebar__link {
+.motor-account-sidebar__link,
+.motor-account-sidebar__nav .account-hook-nav-link {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -164,14 +165,16 @@
     transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease, color 0.2s ease;
 }
 
-.motor-account-sidebar__link:hover {
+.motor-account-sidebar__link:hover,
+.motor-account-sidebar__nav .account-hook-nav-link:hover {
     transform: translateY(-1px);
     border-color: rgba(255, 255, 255, 0.12);
     background: rgba(255, 255, 255, 0.08);
     color: var(--color-text-light, #f5f5f5);
 }
 
-.motor-account-sidebar__link--active {
+.motor-account-sidebar__link--active,
+.motor-account-sidebar__nav .account-hook-nav-link.is-active {
     border-color: rgba(241, 180, 76, 0.28);
     background: linear-gradient(135deg, rgba(227, 24, 55, 0.18) 0%, rgba(241, 180, 76, 0.1) 100%);
     color: var(--color-text-light, #f5f5f5);
@@ -182,38 +185,44 @@
     color: #ff9e9e;
 }
 
-.motor-account-sidebar__link-label {
+.motor-account-sidebar__link-label,
+.motor-account-sidebar__nav .account-hook-nav-link__label {
     display: inline-flex;
     align-items: center;
     gap: 0.7rem;
     min-width: 0;
 }
 
-.motor-account-sidebar__link-label i {
+.motor-account-sidebar__link-label i,
+.motor-account-sidebar__nav .account-hook-nav-link__label i {
     width: 1rem;
     text-align: center;
 }
 
-.motor-account-sidebar__link-text {
+.motor-account-sidebar__link-text,
+.motor-account-sidebar__nav .account-hook-nav-link__text {
     display: inline-flex;
     flex-direction: column;
     gap: 0.12rem;
     min-width: 0;
 }
 
-.motor-account-sidebar__link-text strong {
+.motor-account-sidebar__link-text strong,
+.motor-account-sidebar__nav .account-hook-nav-link__text strong {
     font-family: 'Rajdhani', sans-serif;
     font-size: 0.94rem;
     font-weight: 700;
 }
 
-.motor-account-sidebar__link-text span {
+.motor-account-sidebar__link-text span,
+.motor-account-sidebar__nav .account-hook-nav-link__text span {
     color: rgba(255, 255, 255, 0.52);
     font-size: 0.74rem;
     line-height: 1.4;
 }
 
-.motor-account-sidebar__link-arrow {
+.motor-account-sidebar__link-arrow,
+.motor-account-sidebar__nav .account-hook-nav-link__arrow {
     color: rgba(255, 255, 255, 0.35);
     font-size: 0.75rem;
 }

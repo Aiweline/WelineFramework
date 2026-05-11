@@ -29,12 +29,12 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? '');
                 <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>">
 
                 <div>
-                    <label for="email" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Email Address') ?></label>
+                    <label for="email" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Username or Email') ?></label>
                     <div class="relative">
-                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">mail</span>
-                        <input type="email" id="email" name="email" required
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">person</span>
+                        <input type="text" id="email" name="email" required autocomplete="username"
                                class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 pl-10 pr-4 focus:border-primary focus:ring-primary"
-                               placeholder="<?= __('you@example.com') ?>">
+                               placeholder="<?= __('Enter your username or email') ?>">
                     </div>
                 </div>
 

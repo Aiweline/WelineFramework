@@ -120,10 +120,10 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
                 'success' => true,
                 'message' => __('更新成功')
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $throwable) {
             return $this->json([
                 'success' => false,
-                'message' => __('更新失败：%{1}', [$e->getMessage()])
+                'message' => $this->buildUpdateFailureMessage($throwable)
             ]);
         }
     }
@@ -135,5 +135,17 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
     {
         header('Content-Type: application/json');
         return json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function buildUpdateFailureMessage(\Throwable $throwable): string
+    {
+        $message = html_entity_decode((string) $throwable->getMessage(), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $message = trim((string) preg_replace('/^[：:,，\s]+/u', '', $message));
+
+        if ($message === '' || $message === (string) __('请稍后重试')) {
+            return (string) __('更新失败，请稍后重试');
+        }
+
+        return (string) __('更新失败：%{1}', [$message]);
     }
 }

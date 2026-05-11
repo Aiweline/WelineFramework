@@ -39,7 +39,6 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
     protected function setUp(): void
     {
         $this->outputBufferBaseline = \ob_get_level();
-        \ob_start();
         parent::setUp();
         $this->sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
         $this->cleanupMarkedHarnessArtifacts();

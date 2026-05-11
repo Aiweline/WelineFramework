@@ -67,6 +67,60 @@ class CustomerAccountServiceTest extends TestCase
         $this->assertSame($authCustomer, $result['auth_user']);
     }
 
+    public function testAuthenticateAcceptsPlainUsernameLogin(): void
+    {
+        $authCustomer = new class extends AuthCustomer {
+            public function __construct()
+            {
+                $this->setData(self::schema_fields_ID, 42);
+                $this->setData(self::schema_fields_email, 'ada@example.com');
+                $this->setData(self::schema_fields_password, password_hash('abc12345', PASSWORD_DEFAULT));
+            }
+        };
+
+        $profile = $this->createMock(CustomerProfile::class);
+        $profile->method('getData')
+            ->willReturnCallback(static function (string $key): mixed {
+                return $key === CustomerProfile::schema_fields_STATUS ? 'active' : null;
+            });
+
+        $profileService = $this->createMock(CustomerProfileService::class);
+        $profileService->expects($this->once())
+            ->method('getOrCreateByAuthUser')
+            ->with($authCustomer, ['email' => 'ada@example.com'])
+            ->willReturn($profile);
+
+        $service = new class(
+            $authCustomer,
+            $profileService,
+            $this->createMock(CustomerSession::class),
+            $this->createMock(Request::class),
+            $this->createMock(CustomerToken::class),
+            $authCustomer
+        ) extends CustomerAccountService {
+            public function __construct(
+                AuthCustomer $authCustomer,
+                CustomerProfileService $profileService,
+                CustomerSession $customerSession,
+                Request $request,
+                CustomerToken $customerToken,
+                private readonly AuthCustomer $loginUser
+            ) {
+                parent::__construct($authCustomer, $profileService, $customerSession, $request, $customerToken);
+            }
+
+            public function findAuthUserByLogin(string $login): ?AuthCustomer
+            {
+                return $login === 'weline' ? $this->loginUser : null;
+            }
+        };
+
+        $result = $service->authenticate('weline', 'abc12345');
+
+        $this->assertSame($authCustomer, $result['auth_user']);
+        $this->assertSame($profile, $result['profile']);
+    }
+
     private function createAuthCustomerDouble(): AuthCustomer
     {
         return new class extends AuthCustomer {

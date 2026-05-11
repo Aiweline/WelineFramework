@@ -25,7 +25,7 @@ class Login extends BaseController
         }
 
         $request = $this->getRequest();
-        $redirectUrl = (string) ($request->getParam('redirect') ?? $request->getParam('redirect_url') ?? '');
+        $redirectUrl = (string) ($request->getParam('redirect', null) ?? $request->getParam('redirect_url', null) ?? '');
         $this->assign('redirect_url', $redirectUrl);
         $this->assign('register_url', $this->getUrl('weshop/customer/account/register'));
         $this->assign('forgot_password_url', $this->getUrl('weshop/customer/account/forgot-password'));
@@ -37,22 +37,22 @@ class Login extends BaseController
     public function postIndex(): string
     {
         $request = $this->getRequest();
-        $email = trim((string) ($request->getPost('email') ?? ''));
-        if ($email === '') {
-            $email = trim((string) ($request->getPost('username') ?? ''));
+        $login = trim((string) ($request->getPost('email') ?? ''));
+        if ($login === '') {
+            $login = trim((string) ($request->getPost('username') ?? ''));
         }
         $password = (string) ($request->getPost('password') ?? '');
         $rememberMe = (bool) ($request->getPost('remember_me') ?? $request->getPost('remember') ?? false);
-        $redirectUrl = (string) ($request->getPost('redirect_url') ?? $request->getParam('redirect') ?? '');
+        $redirectUrl = (string) ($request->getPost('redirect_url') ?? $request->getParam('redirect', null) ?? '');
 
-        if ($email === '' || $password === '') {
-            $this->getMessageManager()->addError(__('邮箱和密码不能为空'));
+        if ($login === '' || $password === '') {
+            $this->getMessageManager()->addError(__('Username/email and password are required.'));
             return $this->redirect('weshop/customer/account/login' . $this->buildRedirectQuery($redirectUrl));
         }
 
         try {
             $result = $this->customerWebAuthService->beginPasswordLogin(
-                $email,
+                $login,
                 $password,
                 $rememberMe,
                 $redirectUrl
