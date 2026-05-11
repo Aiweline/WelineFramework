@@ -14,7 +14,6 @@ use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSnapshotBuilder;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
-use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
 
@@ -1257,25 +1256,6 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $pageTasks
         ));
 
-        $stageTwoService = new AiSiteVirtualThemePlanService();
-        $taskPlan = $stageTwoService->buildTaskPlanArtifacts([
-            'fake_mode' => 1,
-            'site_title' => 'Page Block Sort Writeback Test',
-            'workspace_track' => 'virtual_theme',
-            'plan_json' => $reordered['plan_json'],
-            'plan_structured' => $reordered['structured'],
-            'plan_markdown' => $reordered['markdown'],
-            'plan_workbench' => $reordered['plan_workbench'],
-            'execution_blueprint' => $reordered['execution_blueprint'],
-            'execution_blueprint_confirmed_signature' => (string)($reordered['execution_blueprint']['signature'] ?? ''),
-        ], $reordered['execution_blueprint']);
-        $stageTwoPageTasks = \array_values(\is_array($taskPlan['structured']['page_tasks'][$pageType] ?? null)
-            ? $taskPlan['structured']['page_tasks'][$pageType]
-            : []);
-        self::assertSame(
-            \array_map(static fn(string $blockKey): string => 'page:' . $pageType . ':' . $blockKey, $orderedKeys),
-            \array_map(static fn(array $task): string => (string)($task['task_key'] ?? ''), $stageTwoPageTasks)
-        );
     }
 
     public function testReorderDraftPlanBlocksSupportsSharedBlocksSortOrder(): void
@@ -1468,7 +1448,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Critical page differentiation rules:', $capturedPrompts[2]);
         self::assertStringContainsString('design_tags', $capturedPrompts[2]);
         self::assertStringContainsString('never make the entire page one flat background color', $capturedPrompts[2]);
-        self::assertStringContainsString('Hard rules: output 2-3 blocks only', $capturedPrompts[2]);
+        self::assertStringContainsString('Block budget: min=5, max=7', $capturedPrompts[2]);
+        self::assertStringContainsString('You MUST include every required_block_key', $capturedPrompts[2]);
         $joinedPrompts = \implode("\n", $capturedPrompts);
         self::assertStringNotContainsString('"markdown":"string"', $joinedPrompts);
         self::assertStringNotContainsString('Markdown template (fill with concrete content, never with direction text):', $joinedPrompts);
@@ -3059,7 +3040,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 'execution_steps' => [
                     ['step' => 1, 'task_key' => 'shared:header', 'task_type' => 'shared', 'status' => 'pending'],
                 ],
-                'stage2_task_hints' => [
+                'build_plan_task_hints' => [
                     ['page' => 'home_page', 'block' => 'hero', 'task_types' => ['copywriting', 'ui_design', 'frontend_dev']],
                 ],
             ],

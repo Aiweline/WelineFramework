@@ -19,15 +19,10 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
             'plan_json' => ['pages' => ['home_page' => ['title' => 'Home']]],
             'plan_structured' => ['summary' => 'stage one'],
             'plan_markdown' => '# Stage one plan',
+            'build_plan_v2' => ['tasks' => [['task_key' => 'page:home_page:hero']]],
+            'plan_projection' => ['pages' => ['home_page' => ['blocks' => ['hero']]]],
+            'content_manifest' => ['pages' => ['home_page' => ['copy' => 'Hero copy']]],
             'confirmed_stage1_plan_book' => ['plan' => ['home_page']],
-            'task_plan_structured' => ['shared_tasks' => [['task_key' => 'shared:header']]],
-            'task_plan_markdown' => '# Task plan',
-            'virtual_theme_plan' => [
-                'draft' => ['page_tasks' => ['home_page' => [['task_key' => 'page:home:hero']]]],
-                'draft_markdown' => '# Draft',
-                'confirmed' => ['signature' => 'task-plan-signature'],
-                'confirmed_markdown' => '# Confirmed',
-            ],
             'build_blueprint' => [
                 'signature' => 'build-signature',
                 'tasks' => [['task_key' => 'shared:header']],
@@ -43,19 +38,17 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertSame([], $scope['plan_json']);
         self::assertSame([], $scope['plan_structured']);
         self::assertSame('', $scope['plan_markdown']);
+        self::assertSame([], $scope['build_plan_v2']);
+        self::assertSame([], $scope['plan_projection']);
+        self::assertSame([], $scope['content_manifest']);
         self::assertArrayNotHasKey('confirmed_stage1_plan_book', $scope);
-        self::assertSame([], $scope['task_plan_structured']);
-        self::assertSame('', $scope['task_plan_markdown']);
-        self::assertSame([], $scope['virtual_theme_plan']['draft']);
-        self::assertSame('', $scope['virtual_theme_plan']['draft_markdown']);
-        self::assertSame([], $scope['virtual_theme_plan']['confirmed']);
-        self::assertSame('', $scope['virtual_theme_plan']['confirmed_markdown']);
         self::assertSame([], $scope['build_blueprint']);
         self::assertContains('plan_json', $artifactKeys);
         self::assertContains('plan_markdown', $artifactKeys);
+        self::assertContains('build_plan_v2', $artifactKeys);
+        self::assertContains('plan_projection', $artifactKeys);
+        self::assertContains('content_manifest', $artifactKeys);
         self::assertNotContains('confirmed_stage1_plan_book', $artifactKeys);
-        self::assertContains('task_plan_draft', $artifactKeys);
-        self::assertContains('task_plan_confirmed', $artifactKeys);
         self::assertContains('build_blueprint', $artifactKeys);
         self::assertSame(
             'session_artifact_v1',

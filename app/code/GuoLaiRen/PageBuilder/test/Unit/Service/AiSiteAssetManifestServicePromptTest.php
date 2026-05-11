@@ -183,7 +183,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
             ],
         ];
 
-        $manifest = $service->syncFromTaskPlan($scope);
+        $manifest = $service->syncFromBuildPlan($scope);
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
 
         self::assertArrayHasKey('page:home_page:content-home-page-home-hero', $slots);
@@ -211,7 +211,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
             ],
         ];
 
-        $manifest = $service->syncFromTaskPlan($scope);
+        $manifest = $service->syncFromBuildPlan($scope);
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
         self::assertArrayHasKey('identity:website-logo', $slots);
 

@@ -120,6 +120,10 @@ class AiSiteAgentSessionService
         'build_blueprint',
         '_build_page_progress',
         'build_contracts',
+        'build_plan_confirmed',
+        'build_plan_confirmed_at',
+        'build_plan_v2',
+        'build_plan_v2_validation',
         'build_task_summary',
         'build_tasks',
         'build_workbench',
@@ -131,36 +135,24 @@ class AiSiteAgentSessionService
         'plan_confirmed',
         'plan_confirmed_at',
         'plan_markdown',
+        'plan_projection',
         'plan_workbench',
         'section_refinements',
         'shared_component_refinements',
         'shared_components',
-        'task_plan_confirmed',
-        'task_plan_confirmed_at',
-        'task_plan_generated_at',
-        '_task_plan_generation_checkpoint',
-        'task_plan_generation_last_error',
-        'task_plan_generation_progress',
-        'task_plan_generation_summary',
-        'task_plan_markdown',
-        'task_plan_structured',
-        'task_plan_summary',
+        'content_manifest',
         'asset_manifest',
         'asset_image_generation_failures',
+        'has_build_plan_v2',
         'qa_report_contract',
         'render_data_contract',
         'verified_assets',
-        'virtual_theme_plan',
         '_ai_generated_shared_components',
         '_queue_force_build',
         // 强行契约：build 强制重建标记必须随 scope 一同 load/save，否则
         // isGeneratedArtifactAvailableForTask 会因看不到 active=1 而把 task 当做已完成，导致无任何
         // 实际渲染的「Page layout has no rendered sections」假性失败。
         '_build_regeneration',
-        '_task_plan_rebuild_in_progress',
-        '_task_plan_sse_request',
-        '_task_plan_queue_skip',
-        '_task_plan_retry_failed_batches',
     ];
 
     public function __construct(
@@ -568,9 +560,6 @@ class AiSiteAgentSessionService
     private function mergeScopePatch(array $scope, array $patch): array
     {
         $merged = \array_replace($scope, $patch);
-        if (\is_array($scope['virtual_theme_plan'] ?? null) && \is_array($patch['virtual_theme_plan'] ?? null)) {
-            $merged['virtual_theme_plan'] = \array_replace($scope['virtual_theme_plan'], $patch['virtual_theme_plan']);
-        }
         if (\array_key_exists('asset_manifest', $patch)) {
             $manifest = \is_array($merged['asset_manifest'] ?? null) ? $merged['asset_manifest'] : [];
             $merged['asset_manifest_hash'] = \sha1((string)\json_encode($manifest, \JSON_UNESCAPED_UNICODE));
@@ -860,14 +849,6 @@ SQL;
         foreach (\array_chunk($keys, 40) as $chunk) {
             $jsonArgs = [];
             foreach ($chunk as $key) {
-                if ($key === 'virtual_theme_plan') {
-                    $jsonArgs[] = "'virtual_theme_plan'";
-                    // Keep full task-plan snapshots for stage reads.
-                    // Trimming confirmed/draft here can make build fallback to
-                    // stale/minimal blueprints (e.g. 28 tasks collapsing to 5).
-                    $jsonArgs[] = "scope_doc -> 'virtual_theme_plan'";
-                    continue;
-                }
                 $safeKey = \str_replace("'", "''", $key);
                 $jsonArgs[] = "'" . $safeKey . "'";
                 $jsonArgs[] = "scope_doc -> '" . $safeKey . "'";

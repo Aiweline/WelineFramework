@@ -18,8 +18,8 @@ final class PermissionMatrix
                 'can_patch' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'block_plan.*'],
                 'read_only' => [],
             ],
-            ContractType::STAGE_STAGE2 => [
-                'stage' => ContractType::STAGE_STAGE2,
+            ContractType::STAGE_BUILD_PLAN => [
+                'stage' => ContractType::STAGE_BUILD_PLAN,
                 'can_create' => ['block_visual_contract', 'block_task_contract'],
                 'can_patch' => ['block_visual_contract.*', 'block_task_contract.*'],
                 'read_only' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'block_plan.*'],
@@ -57,7 +57,7 @@ final class PermissionMatrix
     public function defaultFrozenFields(string $stage): array
     {
         return match ($stage) {
-            ContractType::STAGE_STAGE2 => [
+            ContractType::STAGE_BUILD_PLAN => [
                 'site_brief.site_title',
                 'design_manifest.theme_design',
                 'design_manifest.palette',

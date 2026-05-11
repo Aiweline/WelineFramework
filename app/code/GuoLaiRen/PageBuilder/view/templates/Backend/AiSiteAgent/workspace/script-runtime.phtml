@@ -1,4 +1,4 @@
-<script>
+﻿<script>
 (function () {
     'use strict';
     var PB_SSE_CONNECT_DELAY_MS = 5000;
@@ -59,10 +59,7 @@
         return isRuntimePublishBlockingAiOperation(op) || op === 'image_asset';
     }
     function resolveRuntimeQueueInfoKey(operation) {
-        var op = String(operation || '').trim().toLowerCase();
-        if (op === 'task_plan') {
-            return 'task_plan_queue_info';
-        }
+        var op = String(operation || '').trim().toLowerCase();
         if (isRuntimePublishBlockingAiOperation(op)) {
             return 'build_queue_info';
         }
@@ -243,7 +240,7 @@
             : {};
         var activeOperationName = String(active.operation || op || '').trim().toLowerCase();
         var activeStatus = normalizeTerminalOperationStatus(active.status || '');
-        if (activeStatus && (activeOperationName === 'task_plan' || activeOperationName === 'plan' || isRuntimeVisualRefreshOperation(activeOperationName))) {
+        if (activeStatus && (activeOperationName === 'plan' || isRuntimeVisualRefreshOperation(activeOperationName))) {
             return Object.assign({}, active, {
                 operation: activeOperationName,
                 status: activeStatus,
@@ -548,7 +545,7 @@
     function offerRetryForFailedOperation(operation, payload) {
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
         var modalOptions = {};
-        if (op === 'plan' || op === 'task_plan' || op === 'build') {
+        if (op === 'plan' || op === 'build') {
             modalOptions.extraMessage = (typeof messages === 'object' && messages.retryableAiFailuresPending)
                 ? String(messages.retryableAiFailuresPending || '')
                 : '失败项已加入错误列表，请在进入下一阶段前点击“重试失败项”处理完成。';
@@ -789,10 +786,7 @@
             case 'plan_saved':
             case 'plan_generated':
             case 'plan_refined':
-            case 'plan_rebuilt':
-            case 'task_plan_generated':
-            case 'task_plan_refined':
-            case 'task_plan_rebuilt':
+            case 'plan_rebuilt':
                 mirroredKind = 'done';
                 break;
             case 'total':
@@ -807,7 +801,7 @@
                 return null;
         }
         var operation = resolveOperationForQueuedMirror(payload);
-        if (operation !== 'plan' && operation !== 'task_plan') {
+        if (operation !== 'plan') {
             return null;
         }
         return {
@@ -886,11 +880,11 @@
 
     /**
      * 阶段一/二 SSE 终端镜像：优先使用事件载荷中的 operation（与后端一致），
-     * 避免仅依赖 runningOperationType 时第二阶段 info/progress 误写入第一阶段终端。
+     * 避免仅依赖 runningOperationType 时 build 队列 info/progress 误写入方案生成终端。
      */
     function resolveOperationForQueuedMirror(payload) {
         var p = payload && payload.operation ? String(payload.operation).toLowerCase().trim() : '';
-        if (p === 'plan' || p === 'task_plan') {
+        if (p === 'plan') {
             return p;
         }
         return String(runningOperationType || '').toLowerCase().trim();
@@ -916,7 +910,7 @@
         }
         if (mirroredKind !== '') {
             var opMirror = resolveOperationForQueuedMirror(payload);
-            if (payload && payload.operation && (opMirror === 'plan' || opMirror === 'task_plan')) {
+            if (payload && payload.operation && opMirror === 'plan') {
                 runningOperationType = opMirror;
             }
             syncQueuedStageUi(opMirror, mirroredKind, payload, { level: level || 'info' });
@@ -959,53 +953,31 @@
 
     function resolveQueuedStageUiBinding(operation) {
         var normalized = String(operation || '').toLowerCase();
-        if (normalized !== 'plan' && normalized !== 'task_plan') {
+        if (normalized !== 'plan') {
             return null;
         }
         var api = resolveWorkspaceApi();
-        var isPlan = normalized === 'plan';
-        var bindFn = isPlan ? api.bindPlanStageTerminal : api.bindTaskPlanStageTerminal;
-        var terminal = typeof bindFn === 'function'
-            ? bindFn()
-            : (window.WelineSseTerminal ? window.WelineSseTerminal[isPlan ? 'pb-ai-plan-sse-terminal' : 'pb-ai-task-plan-sse-terminal'] : null);
+        var terminal = typeof api.bindPlanStageTerminal === 'function'
+            ? api.bindPlanStageTerminal()
+            : (window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-plan-sse-terminal'] : null);
         return {
             terminal: terminal,
-            setStatus: isPlan ? api.setPlanModeStatus : api.setTaskPlanModeStatus,
-            setProgress: isPlan ? api.setPlanModalProgress : api.setTaskPlanModalProgress,
-            setLoading: isPlan ? api.setPlanModeRunButtonLoading : api.setTaskPlanModeRunButtonLoading,
-            getConfirmedState: isPlan ? api.getPlanConfirmedState : api.getTaskPlanConfirmedState
+            setStatus: api.setPlanModeStatus,
+            setProgress: api.setPlanModalProgress,
+            setLoading: api.setPlanModeRunButtonLoading,
+            getConfirmedState: api.getPlanConfirmedState
         };
     }
 
     function getQueuedStageDefaultMessage(operation, eventKind) {
-        var normalized = String(operation || '').toLowerCase();
         var kind = String(eventKind || '').toLowerCase();
-        if (kind === 'total') {
-            if (normalized === 'plan') {
-                return <?= \json_encode((string)__('第一阶段方案阶段提示已生成，事件流将继续同步后续进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-            }
-            if (normalized === 'task_plan') {
-                return <?= \json_encode((string)__('第二阶段任务方案阶段提示已生成，事件流将继续同步后续进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-            }
-            return <?= \json_encode((string)__('阶段提示已生成，事件流将继续同步后续进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-        }
-        if (normalized === 'plan') {
-            if (kind === 'start') { return '后台队列已接管，正在生成第一阶段方案。'; }
-            if (kind === 'progress') { return '第一阶段方案正在后台生成。'; }
-            if (kind === 'done') { return '第一阶段方案已生成完成。'; }
-            if (kind === 'error') { return '第一阶段方案生成失败，请重试。'; }
-            if (kind === 'warning') { return '第一阶段方案：已进入系统队列，正在同步进度。'; }
-            return '第一阶段方案任务已更新。';
-        }
-        if (normalized === 'task_plan') {
-            if (kind === 'start') { return '后台队列已接管，正在生成第二阶段任务方案。'; }
-            if (kind === 'progress') { return '第二阶段任务方案正在后台生成。'; }
-            if (kind === 'done') { return '第二阶段任务方案已生成完成。'; }
-            if (kind === 'error') { return '第二阶段任务方案生成失败，请重试。'; }
-            if (kind === 'warning') { return '第二阶段任务方案：已进入系统队列，正在同步进度。'; }
-            return '第二阶段任务方案任务已更新。';
-        }
-        return '';
+        if (kind === 'total') { return 'Plan prompt generated; syncing queue progress.'; }
+        if (kind === 'start') { return 'Plan generation has entered the background queue.'; }
+        if (kind === 'progress') { return 'Plan generation is running in the background queue.'; }
+        if (kind === 'done') { return 'Plan generation completed.'; }
+        if (kind === 'error') { return 'Plan generation failed. Please retry.'; }
+        if (kind === 'warning') { return 'Plan generation is waiting for the system scheduler.'; }
+        return 'Plan generation state updated.';
     }
 
     function getQueuedStageProgressPercent(operation, payload, eventKind) {
@@ -1013,35 +985,20 @@
         if (percent > 0) {
             return Math.max(0, Math.min(100, percent));
         }
-        var normalized = String(operation || '').toLowerCase();
         var kind = String(eventKind || '').toLowerCase();
         var queueStatus = readQueueStatusFromPayload(operation, payload);
         var queueStillWaiting = !!(payload && (payload.deferred_queue_progress || payload.queue_waiting_for_scheduler || payload.can_close_stream))
             || ['pending', 'queued'].indexOf(queueStatus) !== -1;
-        if (queueStillWaiting) {
-            return normalized === 'plan' ? 10 : 12;
-        }
-        if (queueStatus === 'running' || queueStatus === 'processing') {
-            return normalized === 'plan' ? 35 : 38;
-        }
-        if (kind === 'start') {
-            return normalized === 'plan' ? 12 : 14;
-        }
-        if (kind === 'progress') {
-            return normalized === 'plan' ? 48 : 52;
-        }
-        if (kind === 'total' || kind === 'done' || kind === 'error') {
-            return 100;
-        }
+        if (queueStillWaiting) { return 10; }
+        if (queueStatus === 'running' || queueStatus === 'processing') { return 35; }
+        if (kind === 'start') { return 12; }
+        if (kind === 'progress') { return 48; }
+        if (kind === 'total' || kind === 'done' || kind === 'error') { return 100; }
         if (kind === 'warning') {
             var qs = String(payload && payload.queue_status || '').toLowerCase();
-            if (qs === 'running') {
-                return normalized === 'plan' ? 40 : 44;
-            }
-            if (qs === 'pending') {
-                return normalized === 'plan' ? 10 : 12;
-            }
-            return normalized === 'plan' ? 8 : 10;
+            if (qs === 'running') { return 40; }
+            if (qs === 'pending') { return 10; }
+            return 8;
         }
         return 0;
     }
@@ -1049,27 +1006,14 @@
     function payloadIndicatesQueuedStageDraft(operation, payload, eventKind) {
         var normalized = String(operation || '').toLowerCase();
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
-        function hasPlanArtifact(value) {
-            if (!value || typeof value !== 'object') {
-                return false;
-            }
-            return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
+        if (normalized !== 'plan') {
+            return false;
         }
-        if (normalized === 'plan') {
-            if (Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')) {
-                return !!state.has_stage_one_plan || !!state.plan_confirmed;
-            }
-            return !!state.plan_confirmed || !!payload.plan_confirmed;
+        if (Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')) {
+            return !!state.has_stage_one_plan || !!state.plan_confirmed;
         }
-        if (normalized === 'task_plan') {
-            return !!state.has_virtual_theme_plan
-                || !!state.task_plan_confirmed
-                || !!payload.has_virtual_theme_plan
-                || !!payload.task_plan_confirmed
-                || (String(eventKind || '') === 'done' && (!payload || payload.success !== false));
-        }
-        return false;
+        return !!state.plan_confirmed || !!(payload && payload.plan_confirmed)
+            || (String(eventKind || '') === 'done' && (!payload || payload.success !== false));
     }
 
     function readQueueStatusFromPayload(operation, payload) {
@@ -1214,11 +1158,11 @@
             window.__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind);
         }
         if (
-            (String(operation || '').toLowerCase() === 'task_plan' || String(operation || '').toLowerCase() === 'build')
-            && window.__pbPhase2TaskProgress
-            && typeof window.__pbPhase2TaskProgress.syncFromSsePayload === 'function'
+            String(operation || '').toLowerCase() === 'build'
+            && window.__pbBuildQueueProgress
+            && typeof window.__pbBuildQueueProgress.syncFromSsePayload === 'function'
         ) {
-            window.__pbPhase2TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind);
+            window.__pbBuildQueueProgress.syncFromSsePayload(operation, payload || {}, eventKind);
         }
         var binding = resolveQueuedStageUiBinding(operation);
         if (!binding) {
@@ -1344,7 +1288,7 @@
         if (normalizedOperation && activeOperations[normalizedOperation] && typeof activeOperations[normalizedOperation] === 'object') {
             return activeOperations[normalizedOperation];
         }
-        var operationKeys = ['task_plan', 'plan', 'build', 'publish'];
+        var operationKeys = ['plan', 'build', 'publish'];
         for (var i = 0; i < operationKeys.length; i++) {
             var key = operationKeys[i];
             if (activeOperations[key] && typeof activeOperations[key] === 'object') {
@@ -1477,7 +1421,7 @@
 
         function finishOperation(payload) {
         var operation = payload && payload.operation ? String(payload.operation) : '';
-        if (operation === 'plan' || operation === 'task_plan') {
+        if (operation === 'plan') {
             var nextState = null;
             if (payload && payload.state && typeof payload.state === 'object') {
                 nextState = payload.state;
@@ -1843,7 +1787,7 @@
             return true;
         }
         var buildSummary = readBuildTaskSummaryCandidate(source);
-        if (readTaskProgressSummaryTotal(buildSummary) > 0 && (source.task_plan_confirmed || source.has_pending_build_tasks)) {
+        if (readTaskProgressSummaryTotal(buildSummary) > 0 && (source.has_pending_build_tasks)) {
             return true;
         }
         return false;
@@ -1968,77 +1912,6 @@
         return summary;
     }
 
-    /**
-     * 第二阶段「任务方案」按 batch 生成时，SSE progress_kind=task_plan_batch；侧栏任务列表来自 build_task_summary，
-     * 需把 batch_begin/done/failed 映射到对应 task_key，才能与终端 PROGRESS 一致。
-     *
-     * @param {object} summary
-     * @param {object} batch
-     * @return {object|null}
-     */
-    function mergeTaskPlanBatchIntoSummary(summary, batch) {
-        if (!summary || typeof summary !== 'object' || !batch || typeof batch !== 'object') {
-            return summary;
-        }
-        var ids = Object.create(null);
-        var batchId = String(batch.batch_id || '').trim();
-        if (batchId !== '') {
-            ids[batchId] = true;
-        }
-        var taskKeys = Array.isArray(batch.task_keys) ? batch.task_keys : [];
-        taskKeys.forEach(function (k) {
-            var key = String(k || '').trim();
-            if (key !== '') {
-                ids[key] = true;
-            }
-        });
-        if (!batchId && taskKeys.length === 0) {
-            return summary;
-        }
-        var statusRaw = String(batch.status || '').trim().toLowerCase();
-        var taskStatus;
-        if (statusRaw === 'batch_begin') {
-            taskStatus = 'running';
-        } else if (statusRaw === 'batch_done') {
-            taskStatus = 'done';
-        } else if (statusRaw === 'batch_failed') {
-            taskStatus = 'failed';
-        } else {
-            return summary;
-        }
-        var out = cloneTaskProgressSummary(summary);
-        var groups = out.groups && typeof out.groups === 'object' ? out.groups : null;
-        if (!groups) {
-            return summary;
-        }
-        var updatedAt = batch.updated_at ? String(batch.updated_at) : '';
-        var errMsg = batch.error_message != null ? String(batch.error_message) : '';
-        Object.keys(groups).forEach(function (groupKey) {
-            var group = groups[groupKey];
-            if (!group || !Array.isArray(group.tasks)) {
-                return;
-            }
-            group.tasks = group.tasks.map(function (task) {
-                if (!task || typeof task !== 'object') {
-                    return task;
-                }
-                var tk = String(task.task_key || '').trim();
-                if (tk === '' || !Object.prototype.hasOwnProperty.call(ids, tk)) {
-                    return task;
-                }
-                var next = Object.assign({}, task, { status: taskStatus });
-                if (updatedAt !== '') {
-                    next.updated_at = updatedAt;
-                }
-                if (taskStatus === 'failed' && errMsg !== '') {
-                    next.message = errMsg;
-                }
-                return next;
-            });
-        });
-        return normalizeTaskProgressSummary(out);
-    }
-
     function shouldShowBuildTaskProgressPanel(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var activeOperation = state.active_operation && typeof state.active_operation === 'object'
@@ -2046,11 +1919,7 @@
             : {};
         var activeOp = String(activeOperation.operation || '').trim().toLowerCase();
         var activeStatus = String(activeOperation.status || '').trim().toLowerCase();
-        // 仅第一阶段方案生成走独立队列进度；不压制第二阶段 task_plan（侧栏为蓝图任务列表，进度由 task_plan_batch 合并）。
-        if (
-            activeOp === 'plan'
-            && ['queued', 'running', 'pending', 'processing', 'in_progress'].indexOf(activeStatus) !== -1
-        ) {
+        if (activeOp === 'plan' && ['queued', 'running', 'pending', 'processing', 'in_progress'].indexOf(activeStatus) !== -1) {
             return false;
         }
         if (isBuildTaskProgressOperation(activeOp)) {
@@ -2059,14 +1928,17 @@
         if (state.has_pending_build_tasks) {
             return true;
         }
-        if (state.task_plan_confirmed && readTaskProgressSummaryTotal(readBuildTaskSummaryCandidate(state)) > 0) {
+        if ((state.build_plan_confirmed || state.has_build_plan_v2 || state.plan_confirmed) && readTaskProgressSummaryTotal(readBuildTaskSummaryCandidate(state)) > 0) {
             return true;
         }
         var api = resolveWorkspaceApi();
         if (typeof api.getHasPendingBuildTasksState === 'function' && !!api.getHasPendingBuildTasksState()) {
             return true;
         }
-        return getWorkspaceFlagState('getTaskPlanConfirmedState', false)
+        return (getWorkspaceFlagState('getBuildPlanConfirmedState', false)
+                || getWorkspaceFlagState('hasBuildPlanV2FlowEvidence', false)
+                || getWorkspaceFlagState('getPlanConfirmedState', false)
+                )
             && readTaskProgressSummaryTotal(window.__pbTaskSummary) > 0;
     }
 
@@ -2083,21 +1955,6 @@
         var generatingChanged = updateTaskProgressGeneratingState(workspaceState);
         var shouldConsumeBuildSummary = shouldConsumeBuildTaskProgressSummary(workspaceState);
         var summary = extractTaskProgressSummary(workspaceState);
-        var pkState = workspaceState && typeof workspaceState === 'object'
-            ? String(workspaceState.progress_kind || '').trim().toLowerCase()
-            : '';
-        if (
-            pkState === 'task_plan_batch'
-            && workspaceState
-            && typeof workspaceState === 'object'
-            && workspaceState.task_plan_batch
-            && typeof workspaceState.task_plan_batch === 'object'
-        ) {
-            var baseForBatch = summary || cloneTaskProgressSummary(window.__pbTaskSummary);
-            if (baseForBatch && typeof baseForBatch === 'object' && readTaskProgressSummaryTotal(baseForBatch) > 0) {
-                summary = mergeTaskPlanBatchIntoSummary(baseForBatch, workspaceState.task_plan_batch);
-            }
-        }
         if (!summary && shouldConsumeBuildSummary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'task_progress') {
             summary = mergeSingleTaskProgressPayload(cloneTaskProgressSummary(window.__pbTaskSummary), workspaceState);
         }
@@ -2105,7 +1962,7 @@
         if (!summary) {
             var operation = readTaskProgressOperation(workspaceState);
             var status = readTaskProgressStatusSignal(workspaceState);
-            var isPlanQueueSignal = ['plan', 'task_plan'].indexOf(String(operation || '').trim().toLowerCase()) !== -1
+            var isPlanQueueSignal = String(operation || '').trim().toLowerCase() === 'plan'
                 && ['pending', 'queued', 'running', 'processing', 'in_progress'].indexOf(status) !== -1;
             if (!shouldConsumeBuildSummary && !isPlanQueueSignal && !shouldShowBuildTaskProgressPanel(workspaceState)) {
                 var cleared = normalizeTaskProgressSummary({});
@@ -2120,8 +1977,6 @@
             }
             return;
         }
-        summary.ai_generating = !!summary.ai_generating || !!taskProgressGeneratingState.active || isQueueTaskProgressGenerating(workspaceState);
-        summary.ai_status = taskProgressGeneratingState.status || summary.ai_status || '';
         window.__pbTaskSummary = summary;
         if (typeof window.applyTaskSummarySelectionFilter === 'function') {
             window.applyTaskSummarySelectionFilter();
@@ -2367,11 +2222,20 @@
             workspaceStatus = 'published';
         }
         var planConfirmed = !!state.plan_confirmed;
-        var taskPlanConfirmed = !!state.task_plan_confirmed;
+        var hasBuildPlanV2 = hasRuntimeBuildPlanV2Evidence(state)
+            || !!state.has_build_plan_v2
+            || !!(state.build_plan_v2 && typeof state.build_plan_v2 === 'object' && Object.keys(state.build_plan_v2).length > 0)
+            || !!(state.plan_projection && typeof state.plan_projection === 'object' && Object.keys(state.plan_projection).length > 0)
+            || !!(state.plan && typeof state.plan === 'object' && (
+                (state.plan.build_plan_v2 && typeof state.plan.build_plan_v2 === 'object' && Object.keys(state.plan.build_plan_v2).length > 0)
+                || (state.plan.plan_projection && typeof state.plan.plan_projection === 'object' && Object.keys(state.plan.plan_projection).length > 0)
+            ));
+        var buildPlanConfirmed = runtimeTruthyFlag(state.build_plan_confirmed)
+            || String(state.build_plan_confirmed_at || '').trim() !== '';
+        var buildReadyForBuild = buildPlanConfirmed || planConfirmed || hasBuildPlanV2;
         var hasPlanDraft = Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')
             ? !!state.has_stage_one_plan
             : !!state.has_execution_blueprint;
-        var hasTaskPlanDraft = !!state.has_virtual_theme_plan;
 
         function make(label, badgeClass, message) {
             return { label: label, badgeClass: badgeClass, message: message };
@@ -2414,89 +2278,48 @@
         if (kind === 'plan') {
             var planQueueStatus = readStageQueueStatus(state.plan_queue_info);
             if (isStageQueueFailed(planQueueStatus)) {
-                return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.plan_queue_info) || activeMessage || '第一阶段方案生成失败，请重试。');
+                return make('Failed', 'text-bg-danger', readStageQueueFailureMessage(state.plan_queue_info) || activeMessage || 'Plan generation failed.');
             }
             if (isStageQueueInProgress(planQueueStatus)) {
                 return make(
-                    planQueueStatus === 'running' ? '生成中' : '排队中',
+                    planQueueStatus === 'running' ? 'Running' : 'Queued',
                     planQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
-                    readStageQueueMessage(state.plan_queue_info) || activeMessage || '第一阶段方案正在后台队列执行。'
+                    readStageQueueMessage(state.plan_queue_info) || activeMessage || 'Plan generation is running in the background queue.'
                 );
             }
-            if (isStageQueueDone(planQueueStatus)) {
-                if (activeOp === 'plan') {
-                    activeStatus = 'done';
-                }
+            if (isStageQueueDone(planQueueStatus) && activeOp === 'plan') {
+                activeStatus = 'done';
             }
             if (activeOp === 'plan' && activeStatus === 'queued') {
-                return make('排队中', 'text-bg-warning', activeMessage || '第一阶段方案已进入后台队列。');
+                return make('Queued', 'text-bg-warning', activeMessage || 'Plan generation entered the background queue.');
             }
             if (activeOp === 'plan' && activeStatus === 'running') {
-                return make('生成中', 'text-bg-primary', activeMessage || '第一阶段方案正在后台生成。');
+                return make('Running', 'text-bg-primary', activeMessage || 'Plan generation is running.');
             }
             if (activeOp === 'plan' && activeStatus === 'error') {
-                return make('失败', 'text-bg-danger', activeMessage || '第一阶段方案生成失败，请重试。');
+                return make('Failed', 'text-bg-danger', activeMessage || 'Plan generation failed.');
             }
-            if (planConfirmed) {
-                return make('已确认', 'text-bg-success', '第一阶段方案已确认，可以继续第二阶段。');
+            if (planConfirmed || buildPlanConfirmed) {
+                return make('Confirmed', 'text-bg-success', 'The plan is confirmed and can enter build.');
             }
-            if (hasPlanDraft) {
-                return make('待确认', 'text-bg-info', '第一阶段方案已生成，等待确认。');
+            if (hasPlanDraft || hasBuildPlanV2) {
+                return make('Pending', 'text-bg-info', 'The plan has been generated and is waiting for confirmation.');
             }
-            return make('待开始', 'text-bg-secondary', '等待生成第一阶段建站方案。');
+            return make('Ready', 'text-bg-secondary', 'Waiting to generate the site plan.');
         }
 
-        if (kind === 'task_plan') {
-            var taskPlanQueueStatus = readStageQueueStatus(state.task_plan_queue_info);
-            if (isStageQueueFailed(taskPlanQueueStatus)) {
-                return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.task_plan_queue_info) || activeMessage || '第二阶段任务方案生成失败，请重试。');
-            }
-            if (planConfirmed && isStageQueueInProgress(taskPlanQueueStatus)) {
-                return make(
-                    taskPlanQueueStatus === 'running' ? '生成中' : '排队中',
-                    taskPlanQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
-                    readStageQueueMessage(state.task_plan_queue_info) || activeMessage || '第二阶段任务方案正在后台队列执行。'
-                );
-            }
-            if (isStageQueueDone(taskPlanQueueStatus)) {
-                if (activeOp === 'task_plan') {
-                    activeStatus = 'done';
-                }
-                hasTaskPlanDraft = true;
-            }
-            if (!planConfirmed) {
-                return make('未解锁', 'text-bg-secondary', '请先确认第一阶段方案。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'queued') {
-                return make('排队中', 'text-bg-warning', activeMessage || '第二阶段任务方案已进入后台队列。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'running') {
-                return make('生成中', 'text-bg-primary', activeMessage || '第二阶段任务方案正在后台生成。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'error') {
-                return make('失败', 'text-bg-danger', activeMessage || '第二阶段任务方案生成失败，请重试。');
-            }
-            if (taskPlanConfirmed) {
-                return make('已确认', 'text-bg-success', '第二阶段任务方案已确认，可以进入构建。');
-            }
-            if (hasTaskPlanDraft) {
-                return make('待确认', 'text-bg-info', '第二阶段任务方案已生成，等待确认。');
-            }
-            return make('待开始', 'text-bg-secondary', '等待生成第二阶段任务方案。');
-        }
-
-        if (!taskPlanConfirmed) {
-            return make('未解锁', 'text-bg-secondary', '请先确认第二阶段任务方案。');
+        if (!buildReadyForBuild) {
+            return make('Locked', 'text-bg-secondary', 'Confirm the plan before build.');
         }
         var buildQueueStatus = readStageQueueStatus(state.build_queue_info);
         if (isStageQueueFailed(buildQueueStatus)) {
-            return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.build_queue_info) || activeMessage || '站点构建失败，请重试。');
+            return make('Failed', 'text-bg-danger', readStageQueueFailureMessage(state.build_queue_info) || activeMessage || 'Site build failed.');
         }
         if (isStageQueueInProgress(buildQueueStatus)) {
             return make(
-                buildQueueStatus === 'running' ? '构建中' : '排队中',
+                buildQueueStatus === 'running' ? 'Building' : 'Queued',
                 buildQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
-                readStageQueueMessage(state.build_queue_info) || activeMessage || '虚拟主题正在后台队列执行。'
+                readStageQueueMessage(state.build_queue_info) || activeMessage || 'Virtual theme build is running in the background queue.'
             );
         }
         if (isStageQueueDone(buildQueueStatus)) {
@@ -2508,92 +2331,28 @@
             }
         }
         if (activeOp === 'build' && activeStatus === 'queued') {
-            return make('排队中', 'text-bg-warning', activeMessage || '站点构建已进入后台队列。');
+            return make('Queued', 'text-bg-warning', activeMessage || 'Site build entered the background queue.');
         }
         if (activeOp === 'build' && activeStatus === 'running') {
-            return make('构建中', 'text-bg-primary', activeMessage || '站点正在后台构建。');
+            return make('Building', 'text-bg-primary', activeMessage || 'Site build is running.');
         }
         if (activeOp === 'build' && activeStatus === 'error') {
-            return make('失败', 'text-bg-danger', activeMessage || '站点构建失败，请重试。');
+            return make('Failed', 'text-bg-danger', activeMessage || 'Site build failed.');
         }
         if (workspaceStatus === 'published') {
-            return make('已发布', 'text-bg-success', '站点已发布。');
+            return make('Published', 'text-bg-success', 'The site has been published.');
         }
         if (workspaceStatus === 'can_publish' || workspaceStatus === 'editing') {
-            return make('可发布', 'text-bg-success', '站点内容已就绪，可继续编辑或发布。');
+            return make('Publishable', 'text-bg-success', 'The virtual theme is ready for editing or publishing.');
         }
         if (workspaceStatus === 'building' || workspaceStatus === 'publishing') {
-            return make('处理中', 'text-bg-primary', activeMessage || '后台正在处理构建或发布任务。');
+            return make('Running', 'text-bg-primary', activeMessage || 'The backend is processing build or publish.');
         }
-        return make('待开始', 'text-bg-secondary', '等待第二阶段确认后进入构建。');
-
-        if (kind === 'plan') {
-            if (activeOp === 'plan' && activeStatus === 'queued') {
-                return make('排队中', 'text-bg-warning', activeMessage || '第一阶段方案已进入后台队列。');
-            }
-            if (activeOp === 'plan' && activeStatus === 'running') {
-                return make('生成中', 'text-bg-primary', activeMessage || '第一阶段方案正在后台生成。');
-            }
-            if (activeOp === 'plan' && activeStatus === 'error') {
-                return make('失败', 'text-bg-danger', activeMessage || '第一阶段方案生成失败，请重试。');
-            }
-            if (planConfirmed) {
-                return make('已确认', 'text-bg-success', '第一阶段方案已确认，可继续第二阶段。');
-            }
-            if (hasPlanDraft) {
-                return make('待确认', 'text-bg-info', '第一阶段方案已生成，等待确认。');
-            }
-            return make('待开始', 'text-bg-secondary', '等待生成第一阶段建站方案。');
-        }
-
-        if (kind === 'task_plan') {
-            if (!planConfirmed) {
-                return make('未解锁', 'text-bg-secondary', '请先确认第一阶段方案。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'queued') {
-                return make('排队中', 'text-bg-warning', activeMessage || '第二阶段任务方案已进入后台队列。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'running') {
-                return make('生成中', 'text-bg-primary', activeMessage || '第二阶段任务方案正在后台生成。');
-            }
-            if (activeOp === 'task_plan' && activeStatus === 'error') {
-                return make('失败', 'text-bg-danger', activeMessage || '第二阶段任务方案生成失败，请重试。');
-            }
-            if (taskPlanConfirmed) {
-                return make('已确认', 'text-bg-success', '第二阶段任务方案已确认，可进入构建。');
-            }
-            if (hasTaskPlanDraft) {
-                return make('待确认', 'text-bg-info', '第二阶段任务方案已生成，等待确认。');
-            }
-            return make('待开始', 'text-bg-secondary', '等待生成第二阶段任务方案。');
-        }
-
-        if (!taskPlanConfirmed) {
-            return make('未解锁', 'text-bg-secondary', '请先确认第二阶段任务方案。');
-        }
-        if (activeOp === 'build' && activeStatus === 'queued') {
-            return make('排队中', 'text-bg-warning', activeMessage || '站点构建已进入后台队列。');
-        }
-        if (activeOp === 'build' && activeStatus === 'running') {
-            return make('构建中', 'text-bg-primary', activeMessage || '站点正在后台构建。');
-        }
-        if (activeOp === 'build' && activeStatus === 'error') {
-            return make('失败', 'text-bg-danger', activeMessage || '站点构建失败，请重试。');
-        }
-        if (workspaceStatus === 'published') {
-            return make('已发布', 'text-bg-success', '站点已发布。');
-        }
-        if (workspaceStatus === 'can_publish' || workspaceStatus === 'editing') {
-            return make('可发布', 'text-bg-success', '站点内容已就绪，可继续编辑或发布。');
-        }
-        if (workspaceStatus === 'building' || workspaceStatus === 'publishing') {
-            return make('处理中', 'text-bg-primary', activeMessage || '后台正在处理构建或发布任务。');
-        }
-        return make('待开始', 'text-bg-secondary', '等待第二阶段确认后进入构建。');
+        return make('Ready', 'text-bg-secondary', 'Waiting for confirmed plan build.');
     }
 
     function renderStageStatusCard(kind, presentation) {
-        var suffix = kind === 'task_plan' ? 'task-plan' : kind;
+        var suffix = kind;
         var badgeEl = document.getElementById('pb-ai-stage-status-' + suffix + '-badge');
         var messageEl = document.getElementById('pb-ai-stage-status-' + suffix + '-message');
         if (badgeEl) {
@@ -2619,7 +2378,7 @@
     function updateStageStatusSummary(workspaceState) {
         var state = resolveStageStatusWorkspaceState(workspaceState);
         renderStageStatusCard('plan', normalizeStageStatusPresentation('plan', state));
-        renderStageStatusCard('task_plan', normalizeStageStatusPresentation('task_plan', state));
+        renderStageStatusCard(normalizeStageStatusPresentation(state));
         renderStageStatusCard('build', normalizeStageStatusPresentation('build', state));
     }
 
@@ -2629,20 +2388,12 @@
      */
     function isPlanningQueueSoftTerminalStop(payload, queueStatusOnDone, normalizedDoneOperation) {
         var op = String(normalizedDoneOperation || '').trim().toLowerCase();
-        if (op !== 'plan' && op !== 'task_plan') {
+        if (op !== 'plan') {
             return false;
         }
         var terminal = String((payload && payload.terminal_status) || '').trim().toLowerCase();
         var queueSt = String(queueStatusOnDone || '').trim().toLowerCase();
-        if (terminal === 'stop' || terminal === 'stopped' || queueSt === 'stop') {
-            return true;
-        }
-        return op === 'task_plan'
-            && !!payload
-            && typeof payload.task_plan_queue_skip === 'object'
-            && payload.task_plan_queue_skip !== null
-            && !Array.isArray(payload.task_plan_queue_skip)
-            && Object.keys(payload.task_plan_queue_skip).length > 0;
+        return terminal === 'stop' || terminal === 'stopped' || queueSt === 'stop';
     }
 
     var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
@@ -2655,15 +2406,14 @@
     window.updateTaskSummaryFromState = updateTaskSummaryFromState;
     window.updateStageStatusSummary = updateStageStatusSummary;
     syncBuildTaskProgressPanelVisibility({
-        task_plan_confirmed: getWorkspaceFlagState('getTaskPlanConfirmedState', false),
-        has_virtual_theme_plan: getWorkspaceFlagState('getHasVirtualThemePlanState', false)
+        plan_confirmed: getWorkspaceFlagState('getPlanConfirmedState', false),
+        build_plan_confirmed: getWorkspaceFlagState('getBuildPlanConfirmedState', false),
+        has_build_plan_v2: getWorkspaceFlagState('hasBuildPlanV2FlowEvidence', false)
     });
     updateStageStatusSummary({
         active_operation: activeOperation,
         plan_confirmed: getWorkspaceFlagState('getPlanConfirmedState', false),
-        task_plan_confirmed: getWorkspaceFlagState('getTaskPlanConfirmedState', false),
         has_execution_blueprint: getWorkspaceFlagState('getHasExecutionBlueprintState', false),
-        has_virtual_theme_plan: getWorkspaceFlagState('getHasVirtualThemePlanState', false),
         workspace_status: ''
     });
     function startOperationStream(streamUrl, operation, executionToken, sourceTag) {
@@ -3258,23 +3008,7 @@
                 operation: String((payload && payload.operation) || operation || '')
             });
             var normalizedDoneOperation = String(normalizedDonePayload.operation || '');
-            if (success && (normalizedDoneOperation === 'plan' || normalizedDoneOperation === 'task_plan')) {
-                if (normalizedDoneOperation === 'task_plan') {
-                    var partialRetryReq = parseInt(String((payload && payload.partial_retry_required) || 0), 10) || 0;
-                    var retryableAiCount = parseInt(String((payload && payload.retryable_ai_failure_count) || 0), 10) || 0;
-                    var failureMode = String((payload && payload.failure_mode) || '').trim().toLowerCase();
-                    var taskPlanSkip = payload && payload.task_plan_queue_skip && typeof payload.task_plan_queue_skip === 'object'
-                        && !Array.isArray(payload.task_plan_queue_skip)
-                        && Object.keys(payload.task_plan_queue_skip).length > 0;
-                    if (partialRetryReq > 0 || retryableAiCount > 0 || failureMode === 'partial_retry_required' || taskPlanSkip) {
-                        startDeferredQueueStatePoll('task_plan');
-                    }
-                    var terminalStatusEarly = String((payload && payload.terminal_status) || '').trim().toLowerCase();
-                    var queueStatusEarly = String(queueStatusOnDone || '').trim().toLowerCase();
-                    if (queueStatusEarly === 'stop' || terminalStatusEarly === 'stop' || terminalStatusEarly === 'stopped') {
-                        startDeferredQueueStatePoll('task_plan');
-                    }
-                }
+            if (success && normalizedDoneOperation === 'plan') {
                 finishOperation(normalizedDonePayload);
             }
             if (!success && isPlanningQueueSoftTerminalStop(payload, queueStatusOnDone, normalizedDoneOperation)) {
@@ -3303,14 +3037,7 @@
                     payload,
                     'warning',
                     softMsg || softMsgRaw || <?= \json_encode((string)__('操作已中断'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                );
-                if (normalizedDoneOperation === 'task_plan') {
-                    startDeferredQueueStatePoll('task_plan');
-                }
-                if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.syncTaskPlanSseRunningFromWorkspaceState === 'function') {
-                    try {
-                        window.__pbWorkspaceApi.syncTaskPlanSseRunningFromWorkspaceState(payload.state || payload || {});
-                    } catch (e) {
+                ); catch (e) {
                         // ignore
                     }
                 }
@@ -3502,7 +3229,7 @@
             if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                 previewBridge.resumeWorkspaceStream();
             }
-            if (normalizedDoneOperation !== 'plan' && normalizedDoneOperation !== 'task_plan') {
+            if (normalizedDoneOperation !== 'plan') {
                 finishOperation(normalizedDonePayload);
             }
         });
@@ -3635,7 +3362,7 @@
         if (!operation || ['queued', 'pending', 'running', 'processing'].indexOf(status) === -1) {
             return;
         }
-        if (operation !== 'plan' && operation !== 'task_plan' && operation !== 'build' && operation !== 'image_asset') {
+        if (operation !== 'plan' && operation !== 'build' && operation !== 'image_asset') {
             return;
         }
         var hasExecutionToken = !!String(active.execution_token || '').trim();

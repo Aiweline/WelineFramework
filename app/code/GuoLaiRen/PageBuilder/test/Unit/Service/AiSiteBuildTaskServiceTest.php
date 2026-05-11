@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSiteBuildPlanService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
 use PHPUnit\Framework\TestCase;
@@ -46,83 +47,48 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame(['site_title' => 'Keep editable profile field'], $patch);
     }
 
-    public function testEnsureTaskScopeUsesConfirmedStageTwoExecutionBlueprintWhenAvailable(): void
+    public function testEnsureTaskScopeUsesConfirmedBuildPlanV2ContractWhenAvailable(): void
     {
-        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
-
-        $scope = $service->ensureTaskScope([
+        $buildPlanService = new AiSiteBuildPlanService();
+        $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope([
             'page_types' => ['home_page'],
-            'task_plan_confirmed' => 1,
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'stage2-confirmed-signature',
-                    'shared_tasks' => [
-                        [
-                            'task_key' => 'shared:header',
-                            'label' => 'Header',
-                            'region' => 'header',
-                            'sort_order' => 10,
-                        ],
-                        [
-                            'task_key' => 'shared:footer',
-                            'label' => 'Footer',
-                            'region' => 'footer',
-                            'sort_order' => 20,
-                        ],
-                    ],
-                    'page_tasks' => [
-                        'home_page' => [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Explain the service clearly.',
+            'execution_blueprint_draft' => [
+                'signature' => 'stage-one-signature',
+                'pages' => [
+                    'home_page' => [
+                        'title' => 'Home',
+                        'page_goal' => 'Convert qualified buyers with clear proof.',
+                        'blocks' => [
                             [
-                                'task_key' => 'page:home_page:hero',
-                                'page_type' => 'home_page',
-                                'section_code' => 'hero',
-                                'label' => 'Hero',
-                                'sort_order' => 110,
-                                'runtime_context' => [
-                                    'block_key' => 'hero',
-                                ],
-                            ],
-                        ],
-                    ],
-                    'execution_blueprint' => [
-                        'tasks' => [
-                            [
-                                'task_key' => 'shared:header',
-                                'sort_order' => 10,
-                                'can_parallel' => false,
-                                'progress_weight' => 1.0,
+                                'block_key' => 'hero',
+                                'title' => 'Launch reliable AI workflows',
+                                'goal' => 'Show the core value with a direct CTA.',
                             ],
                             [
-                                'task_key' => 'shared:footer',
-                                'sort_order' => 20,
-                                'can_parallel' => false,
-                                'progress_weight' => 1.0,
-                            ],
-                            [
-                                'task_key' => 'page:home_page:hero',
-                                'page_type' => 'home_page',
-                                'sort_order' => 110,
-                                'dependencies' => ['shared:header', 'shared:footer'],
-                                'can_parallel' => true,
-                                'progress_weight' => 2.5,
-                                'runtime_context' => [
-                                    'block_key' => 'hero',
-                                    'origin' => 'stage2',
-                                ],
+                                'block_key' => 'trust',
+                                'title' => 'Proof that operations stay reliable',
+                                'goal' => 'Show concrete evidence before conversion.',
                             ],
                         ],
                     ],
                 ],
             ],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        ]));
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $this->assertSame('stage2_confirmed_task_plan', $scope['build_blueprint']['source'] ?? null);
-        $this->assertSame('stage2-confirmed-signature', $scope['build_blueprint']['task_plan_signature'] ?? null);
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'build_plan_v2' => $buildPlan,
+            'build_plan_confirmed' => 1,
+        ], [], 'virtual_theme');
+
+        $this->assertSame('build_plan_v2', $scope['build_blueprint']['source'] ?? null);
+        $this->assertSame($buildPlan['contract_meta']['id'], $scope['build_blueprint']['build_plan_contract_id'] ?? null);
+        $this->assertSame($buildPlan['contract_meta']['signature'], $scope['build_blueprint']['build_plan_signature'] ?? null);
         $this->assertSame(
-            ['shared:header', 'shared:footer', 'page:home_page:hero'],
+            ['shared:header', 'shared:footer', 'page:home_page:hero', 'page:home_page:trust'],
             \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
         $pageTaskDefinition = \array_values(\array_filter(
@@ -134,8 +100,8 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame('home_page', $pageTaskDefinition[0]['page_type'] ?? null);
         $this->assertSame(['shared:header', 'shared:footer'], $pageTaskDefinition[0]['dependencies'] ?? []);
         $this->assertSame(
-            ['block_key' => 'hero', 'origin' => 'stage2'],
-            $pageTaskDefinition[0]['runtime_context'] ?? []
+            $buildPlan['contract_meta']['id'],
+            $pageTaskDefinition[0]['runtime_context']['build_plan_contract_id'] ?? null
         );
         $this->assertSame(
             ['task_key', 'status', 'attempt_no', 'message', 'result_ref', 'updated_at', 'started_at', 'finished_at'],
@@ -143,57 +109,32 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
     }
 
-    public function testEnsureTaskScopePrefersConfirmedBlockTaskContract(): void
+    public function testEnsureTaskScopeUsesConfirmedBuildPlanV2BeforeLegacyTaskPlan(): void
+    {
+        $buildPlanService = new AiSiteBuildPlanService();
+        $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope([
+            'page_types' => ['home_page'],
+            'site_title' => 'Example Site',
+            'brief_description' => 'Explain the service clearly.',
+        ]));
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'build_plan_v2' => $buildPlan,
+            'build_plan_confirmed' => 1,
+            'task_plan_confirmed' => 0,
+        ], [], 'virtual_theme');
+
+        $this->assertSame('build_plan_v2', $scope['build_blueprint']['source'] ?? null);
+        $this->assertSame(1, $scope['build_plan_confirmed'] ?? 0);
+        $this->assertArrayHasKey('shared:header', $scope['build_tasks']);
+        $this->assertArrayHasKey('page:home_page:hero', $scope['build_tasks']);
+    }
+
+    public function testEnsureTaskScopeIgnoresLegacyTaskPlanContractsWhenBuildPlanV2IsMissing(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
-        $blockTaskContract = [
-            'contract_meta' => [
-                'id' => 'contract_block_task_current',
-                'type' => ContractType::TYPE_BLOCK_TASK_CONTRACT,
-                'version' => ContractType::VERSION_V1,
-                'status' => ContractType::STATUS_CONFIRMED,
-            ],
-            'source_contracts' => [
-                [
-                    'id' => 'contract_block_plan_confirmed',
-                    'type' => ContractType::TYPE_BLOCK_PLAN,
-                    'version' => ContractType::VERSION_V1,
-                    'status' => ContractType::STATUS_CONFIRMED,
-                ],
-            ],
-            'payload' => [
-                'signature' => 'contract-task-plan-signature',
-                'shared_tasks' => [
-                    ['task_key' => 'shared:header', 'label' => 'Contract Header', 'sort_order' => 10],
-                    ['task_key' => 'shared:footer', 'label' => 'Contract Footer', 'sort_order' => 20],
-                ],
-                'page_tasks' => [
-                    'home_page' => [
-                        ['task_key' => 'page:home_page:hero', 'section_code' => 'hero', 'label' => 'Hero', 'sort_order' => 30],
-                        ['task_key' => 'page:home_page:trust', 'section_code' => 'trust', 'label' => 'Trust', 'sort_order' => 40],
-                    ],
-                ],
-                'execution_blueprint' => [
-                    'tasks' => [
-                        ['task_key' => 'shared:header', 'sort_order' => 10, 'can_parallel' => false],
-                        ['task_key' => 'shared:footer', 'sort_order' => 20, 'can_parallel' => false],
-                        [
-                            'task_key' => 'page:home_page:hero',
-                            'page_type' => 'home_page',
-                            'section_code' => 'hero',
-                            'sort_order' => 30,
-                            'runtime_context' => ['origin' => 'contract'],
-                        ],
-                        [
-                            'task_key' => 'page:home_page:trust',
-                            'page_type' => 'home_page',
-                            'section_code' => 'trust',
-                            'sort_order' => 40,
-                        ],
-                    ],
-                ],
-            ],
-        ];
 
         $scope = $service->ensureTaskScope([
             'page_types' => ['home_page'],
@@ -204,22 +145,6 @@ class AiSiteBuildTaskServiceTest extends TestCase
                     'shared_tasks' => [
                         ['task_key' => 'shared:legacy-only', 'sort_order' => 10],
                     ],
-                    'task_plan_workbench' => [
-                        'confirmed' => [
-                            'contracts' => [
-                                ContractType::TYPE_BLOCK_VISUAL_CONTRACT => [
-                                    'contract_meta' => [
-                                        'id' => 'contract_block_visual_current',
-                                        'type' => ContractType::TYPE_BLOCK_VISUAL_CONTRACT,
-                                        'version' => ContractType::VERSION_V1,
-                                        'status' => ContractType::STATUS_CONFIRMED,
-                                    ],
-                                    'payload' => [],
-                                ],
-                                ContractType::TYPE_BLOCK_TASK_CONTRACT => $blockTaskContract,
-                            ],
-                        ],
-                    ],
                 ],
             ],
         ], [
@@ -227,253 +152,99 @@ class AiSiteBuildTaskServiceTest extends TestCase
             'brief_description' => 'Example site summary',
         ], 'virtual_theme');
 
-        $this->assertSame('stage2_confirmed_task_plan', $scope['build_blueprint']['source'] ?? null);
-        $this->assertSame('stage2_block_task_contract', $scope['build_blueprint']['contract_source'] ?? null);
-        $this->assertSame('contract_block_task_current', $scope['build_blueprint']['block_task_contract_id'] ?? null);
-        $this->assertSame('contract-task-plan-signature', $scope['build_blueprint']['task_plan_signature'] ?? null);
-        $this->assertSame(
-            ['shared:header', 'shared:footer', 'page:home_page:hero', 'page:home_page:trust'],
-            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
-        );
+        $this->assertNotSame('stage2_confirmed_task_plan', $scope['build_blueprint']['source'] ?? '');
+        $this->assertSame(0, (int)($scope['build_plan_confirmed'] ?? 0));
+        $this->assertArrayHasKey('shared:header', $scope['build_tasks']);
+        $this->assertArrayHasKey('page:home_page:content/home-page-hero', $scope['build_tasks']);
         $this->assertArrayNotHasKey('shared:legacy-only', $scope['build_tasks']);
-        $this->assertSame(ContractType::TYPE_BLOCK_TASK_CONTRACT, $scope['build_blueprint']['stage2_contracts'][1]['type'] ?? null);
-        $this->assertSame(ContractType::TYPE_BLOCK_PLAN, $scope['build_blueprint']['source_contracts'][0]['type'] ?? null);
-        $pageTaskDefinition = \array_values(\array_filter(
-            $scope['build_blueprint']['tasks'] ?? [],
-            static fn(array $task): bool => ($task['task_key'] ?? '') === 'page:home_page:hero'
-        ));
-        $this->assertSame(['origin' => 'contract'], $pageTaskDefinition[0]['runtime_context'] ?? []);
     }
 
-    public function testEnsureTaskScopeAdaptsLegacyConfirmedTaskPlanToCompatibilityContract(): void
+    public function testHasConfirmedBuildPlanForBuildIgnoresLegacyTaskPlanOnlyScope(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
+        $this->assertFalse($service->hasConfirmedBuildPlanForBuild([
             'task_plan_confirmed' => 1,
-            'plan_workbench' => [
-                'confirmed' => [
-                    'contracts' => [
-                        ContractType::TYPE_BLOCK_PLAN => [
-                            'contract_meta' => [
-                                'id' => 'contract_block_plan_legacy_source',
-                                'type' => ContractType::TYPE_BLOCK_PLAN,
-                                'version' => ContractType::VERSION_V1,
-                                'status' => ContractType::STATUS_CONFIRMED,
-                            ],
-                            'payload' => [],
-                        ],
-                    ],
-                ],
+            'task_plan_structured' => [
+                'shared_tasks' => [['task_key' => 'shared:header']],
             ],
             'virtual_theme_plan' => [
                 'confirmed' => [
                     'signature' => 'legacy-confirmed-signature',
-                    'shared_tasks' => [
-                        ['task_key' => 'shared:header', 'sort_order' => 10],
-                        ['task_key' => 'shared:footer', 'sort_order' => 20],
-                    ],
                     'page_tasks' => [
-                        'home_page' => [
-                            ['task_key' => 'page:home_page:hero', 'section_code' => 'hero', 'sort_order' => 30],
-                        ],
+                        'home_page' => [['task_key' => 'page:home_page:hero']],
                     ],
                 ],
             ],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
-
-        $this->assertSame('stage2_confirmed_task_plan', $scope['build_blueprint']['source'] ?? null);
-        $this->assertSame('legacy_contract_adapter', $scope['build_blueprint']['contract_source'] ?? null);
-        $this->assertNotSame('', $scope['build_blueprint']['block_task_contract_id'] ?? '');
-        $this->assertSame(
-            ['shared:header', 'shared:footer', 'page:home_page:hero'],
-            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
-        );
-        $blockTaskRef = \array_values(\array_filter(
-            $scope['build_blueprint']['stage2_contracts'] ?? [],
-            static fn(array $ref): bool => ($ref['type'] ?? '') === ContractType::TYPE_BLOCK_TASK_CONTRACT
-        ));
-        $this->assertCount(1, $blockTaskRef);
-        $this->assertSame(ContractType::STATUS_COMPATIBILITY, $blockTaskRef[0]['status'] ?? null);
-        $this->assertSame(ContractType::TYPE_BLOCK_PLAN, $scope['build_blueprint']['source_contracts'][0]['type'] ?? null);
+        ]));
     }
 
-    public function testEnsureTaskScopeIgnoresTopLevelStageOneExecutionBlueprintForStageTwoBuild(): void
+    public function testNormalizeConfirmedBuildPlanFlagRepairsStaleBuildPlanConfirmedFlag(): void
     {
-        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
-
-        $stageOneTasks = [
-            ['task_key' => 'shared:header', 'sort_order' => 10],
-            ['task_key' => 'shared:footer', 'sort_order' => 20],
-            ['task_key' => 'page:home_page:a', 'page_type' => 'home_page', 'sort_order' => 30],
-            ['task_key' => 'page:home_page:b', 'page_type' => 'home_page', 'sort_order' => 40],
-        ];
-
-        $scope = $service->ensureTaskScope([
+        $buildPlanService = new AiSiteBuildPlanService();
+        $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope([
             'page_types' => ['home_page'],
-            'task_plan_confirmed' => 1,
-            'execution_blueprint' => [
-                'tasks' => $stageOneTasks,
-            ],
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'sig',
-                    'execution_blueprint' => [
-                        'tasks' => [
-                            ['task_key' => 'shared:header', 'sort_order' => 10],
-                            ['task_key' => 'shared:footer', 'sort_order' => 20],
-                        ],
-                    ],
-                ],
-            ],
-        ], [
             'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
-
-        $this->assertSame(
-            ['shared:header', 'shared:footer'],
-            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
-        );
-        $this->assertArrayNotHasKey('page:home_page:a', $scope['build_tasks']);
-        $this->assertArrayNotHasKey('page:home_page:b', $scope['build_tasks']);
-    }
-
-    public function testEnsureTaskScopeUsesStructuredTaskListsWhenRicherThanConfirmedEmbeddedTasks(): void
-    {
+            'brief_description' => 'Explain the service clearly.',
+        ]));
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
         $scope = $service->ensureTaskScope([
             'page_types' => ['home_page'],
-            'task_plan_confirmed' => 1,
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'sig',
-                    'shared_tasks' => [
-                        ['task_key' => 'shared:header', 'sort_order' => 10],
-                        ['task_key' => 'shared:footer', 'sort_order' => 20],
-                    ],
-                    'page_tasks' => [
-                        'home_page' => [
-                            ['task_key' => 'page:home_page:t1', 'sort_order' => 30],
-                            ['task_key' => 'page:home_page:t2', 'sort_order' => 40],
-                            ['task_key' => 'page:home_page:t3', 'sort_order' => 50],
-                        ],
-                    ],
-                    'execution_blueprint' => [
-                        'tasks' => [
-                            ['task_key' => 'shared:header', 'sort_order' => 10],
-                            ['task_key' => 'shared:footer', 'sort_order' => 20],
-                            ['task_key' => 'page:home_page:t1', 'page_type' => 'home_page', 'sort_order' => 30],
-                        ],
-                    ],
-                ],
-            ],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+            'build_plan_v2' => $buildPlan,
+            'build_plan_confirmed' => 0,
+        ], [], 'virtual_theme');
 
-        $this->assertSame(
-            ['shared:header', 'shared:footer', 'page:home_page:t1', 'page:home_page:t2', 'page:home_page:t3'],
-            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
-        );
+        $this->assertSame(1, (int)($scope['build_plan_confirmed'] ?? 0));
+        $this->assertSame('build_plan_v2', $scope['build_blueprint']['source'] ?? null);
+        $this->assertArrayHasKey('page:home_page:hero', $scope['build_tasks']);
     }
 
-    public function testEnsureTaskScopeUsesStructuredTaskListsWhenRicherThanTopLevelBlueprint(): void
+    public function testEnsureTaskScopeUsesFullBuildPlanV2PageGraph(): void
     {
-        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
-
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-            'task_plan_confirmed' => 1,
-            'execution_blueprint' => [
-                'tasks' => [
-                    ['task_key' => 'shared:header', 'sort_order' => 10],
-                    ['task_key' => 'page:home_page:t1', 'page_type' => 'home_page', 'sort_order' => 30],
-                ],
-            ],
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'sig',
-                    'shared_tasks' => [
-                        ['task_key' => 'shared:header', 'sort_order' => 10],
-                        ['task_key' => 'shared:footer', 'sort_order' => 20],
-                    ],
-                    'page_tasks' => [
-                        'home_page' => [
-                            ['task_key' => 'page:home_page:t1', 'sort_order' => 30],
-                            ['task_key' => 'page:home_page:t2', 'sort_order' => 40],
-                            ['task_key' => 'page:home_page:t3', 'sort_order' => 50],
-                        ],
-                    ],
-                ],
-            ],
-        ], [
+        $buildPlanService = new AiSiteBuildPlanService();
+        $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope([
+            'page_types' => ['home_page', 'about_page', 'contact_page'],
             'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
-
-        $this->assertSame(
-            ['shared:header', 'shared:footer', 'page:home_page:t1', 'page:home_page:t2', 'page:home_page:t3'],
-            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
-        );
-        $this->assertArrayHasKey('page:home_page:t3', $scope['build_tasks']);
-    }
-
-    public function testEnsureTaskScopeUsesFullStructuredPlanWhenConfirmedSnapshotIsCurrentPageOnly(): void
-    {
-        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
-
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-            'task_plan_confirmed' => 1,
-            'task_plan_structured' => [
-                'signature' => 'full-plan',
-                'shared_tasks' => [
-                    ['task_key' => 'shared:header', 'sort_order' => 10],
-                    ['task_key' => 'shared:footer', 'sort_order' => 20],
-                ],
-                'page_tasks' => [
+            'brief_description' => 'Explain the service clearly.',
+            'execution_blueprint_draft' => [
+                'signature' => 'stage-one-signature',
+                'pages' => [
                     'home_page' => [
-                        ['task_key' => 'page:home_page:hero', 'sort_order' => 30],
-                        ['task_key' => 'page:home_page:trust', 'sort_order' => 40],
-                        ['task_key' => 'page:home_page:cta', 'sort_order' => 50],
+                        'title' => 'Home',
+                        'page_goal' => 'Convert qualified buyers.',
+                        'blocks' => [
+                            ['block_key' => 'hero'],
+                            ['block_key' => 'trust'],
+                            ['block_key' => 'cta'],
+                        ],
                     ],
                     'about_page' => [
-                        ['task_key' => 'page:about_page:story', 'sort_order' => 60],
-                        ['task_key' => 'page:about_page:team', 'sort_order' => 70],
+                        'title' => 'About',
+                        'page_goal' => 'Explain the company story.',
+                        'blocks' => [
+                            ['block_key' => 'story'],
+                            ['block_key' => 'team'],
+                        ],
                     ],
                     'contact_page' => [
-                        ['task_key' => 'page:contact_page:form', 'sort_order' => 80],
-                        ['task_key' => 'page:contact_page:faq', 'sort_order' => 90],
-                    ],
-                ],
-            ],
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'partial-current-page',
-                    'shared_tasks' => [
-                        ['task_key' => 'shared:header', 'sort_order' => 10],
-                        ['task_key' => 'shared:footer', 'sort_order' => 20],
-                    ],
-                    'page_tasks' => [
-                        'home_page' => [
-                            ['task_key' => 'page:home_page:hero', 'sort_order' => 30],
-                            ['task_key' => 'page:home_page:trust', 'sort_order' => 40],
-                            ['task_key' => 'page:home_page:cta', 'sort_order' => 50],
+                        'title' => 'Contact',
+                        'page_goal' => 'Make contact easy.',
+                        'blocks' => [
+                            ['block_key' => 'form'],
+                            ['block_key' => 'faq'],
                         ],
                     ],
                 ],
             ],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        ]));
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page', 'about_page', 'contact_page'],
+            'build_plan_v2' => $buildPlan,
+            'build_plan_confirmed' => 1,
+        ], [], 'virtual_theme');
 
         $this->assertSame(
             [
@@ -491,45 +262,6 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
         $this->assertSame(['home_page', 'about_page', 'contact_page'], $scope['build_blueprint']['page_types'] ?? []);
         $this->assertCount(9, $scope['build_tasks']);
-    }
-
-    public function testEnsureTaskScopeRepairsStaleConfirmedFlagWhenConfirmedExecutionBlueprintExists(): void
-    {
-        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
-
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-            'task_plan_confirmed' => 0,
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'confirmed-but-flag-stale',
-                    'execution_blueprint' => [
-                        'tasks' => [
-                            [
-                                'task_key' => 'shared:header',
-                                'sort_order' => 10,
-                            ],
-                            [
-                                'task_key' => 'page:home_page:hero',
-                                'page_type' => 'home_page',
-                                'section_code' => 'hero',
-                                'sort_order' => 20,
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
-
-        $this->assertSame(1, (int)($scope['task_plan_confirmed'] ?? 0));
-        $this->assertSame('stage2_confirmed_task_plan', $scope['build_blueprint']['source'] ?? null);
-        $this->assertSame(
-            ['shared:header', 'page:home_page:hero'],
-            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
-        );
     }
 
     public function testFreshRepairResetsAttemptCountForQualityRetry(): void
@@ -717,14 +449,15 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
     }
 
-    public function testEnsureTaskScopeReusesExistingConfirmedBuildBlueprintWhenConfirmedPlanWasCompacted(): void
+    public function testEnsureTaskScopeReusesExistingConfirmedBuildPlanV2Blueprint(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
         $existingBlueprint = [
             'version' => 'v1',
-            'source' => 'stage2_confirmed_task_plan',
+            'source' => 'build_plan_v2',
             'signature' => 'existing-blueprint-signature',
-            'task_plan_signature' => 'confirmed-task-plan-signature',
+            'build_plan_contract_id' => 'build_plan_v2_current',
+            'build_plan_signature' => 'confirmed-build-plan-signature',
             'workspace_track' => 'virtual_theme',
             'page_types' => ['home_page'],
             'tasks' => [
@@ -741,17 +474,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
 
         $scope = $service->ensureTaskScope([
             'page_types' => ['home_page'],
-            'task_plan_confirmed' => 1,
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'confirmed-task-plan-signature',
-                    '_storage_compacted' => 1,
-                    'execution_blueprint_ref' => [
-                        'signature' => 'existing-blueprint-signature',
-                        'task_count' => 1,
-                    ],
-                ],
-            ],
+            'build_plan_confirmed' => 1,
             'build_blueprint' => $existingBlueprint,
             'build_tasks' => [
                 'page:home_page:hero' => [
@@ -769,8 +492,8 @@ class AiSiteBuildTaskServiceTest extends TestCase
             'brief_description' => 'Example site summary',
         ], 'virtual_theme');
 
-        $this->assertTrue($service->hasConfirmedTaskPlanForBuild($scope));
-        $this->assertSame(1, (int)($scope['task_plan_confirmed'] ?? 0));
+        $this->assertTrue($service->hasConfirmedBuildPlanForBuild($scope));
+        $this->assertSame(1, (int)($scope['build_plan_confirmed'] ?? 0));
         $this->assertSame($existingBlueprint, $scope['build_blueprint']);
         $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_RUNNING, $scope['build_tasks']['page:home_page:hero']['status'] ?? null);
         $this->assertSame(2, $scope['build_tasks']['page:home_page:hero']['attempt_no'] ?? null);
@@ -856,78 +579,16 @@ class AiSiteBuildTaskServiceTest extends TestCase
 
         $scope = $service->ensureTaskScope([
             'page_types' => ['home_page', 'about_page'],
-            'task_plan_confirmed' => 1,
-            'virtual_theme_plan' => [
-                'confirmed' => [
-                    'signature' => 'unit-test-signature',
-                    'shared_tasks' => [
-                        [
-                            'task_key' => 'shared:header',
-                            'region' => 'header',
-                            'label' => 'Header',
-                            'sort_order' => 10,
-                        ],
-                        [
-                            'task_key' => 'shared:footer',
-                            'region' => 'footer',
-                            'label' => 'Footer',
-                            'sort_order' => 20,
-                        ],
-                    ],
-                    'page_tasks' => [
-                        'home_page' => [
-                            [
-                                'task_key' => 'page:home_page:content/home-page-hero',
-                                'section_code' => 'content/home-page-hero',
-                                'label' => 'Home Hero',
-                                'sort_order' => 30,
-                            ],
-                        ],
-                        'about_page' => [
-                            [
-                                'task_key' => 'page:about_page:content/about-page-hero',
-                                'section_code' => 'content/about-page-hero',
-                                'label' => 'About Hero',
-                                'sort_order' => 40,
-                            ],
-                        ],
-                    ],
-                    'execution_blueprint' => [
-                        'tasks' => [
-                            [
-                                'task_key' => 'shared:header',
-                                'dependencies' => [],
-                                'can_parallel' => true,
-                                'sort_order' => 10,
-                            ],
-                            [
-                                'task_key' => 'shared:footer',
-                                'dependencies' => [],
-                                'can_parallel' => true,
-                                'sort_order' => 20,
-                            ],
-                            [
-                                'task_key' => 'page:home_page:content/home-page-hero',
-                                'page_type' => 'home_page',
-                                'dependencies' => ['shared:header', 'shared:footer'],
-                                'can_parallel' => false,
-                                'sort_order' => 30,
-                            ],
-                            [
-                                'task_key' => 'page:about_page:content/about-page-hero',
-                                'page_type' => 'about_page',
-                                'dependencies' => ['shared:header', 'shared:footer'],
-                                'can_parallel' => true,
-                                'sort_order' => 40,
-                            ],
-                        ],
-                    ],
-                ],
-            ],
         ], [
             'site_title' => 'Example Site',
             'brief_description' => 'Example site summary',
         ], 'virtual_theme');
+        foreach ($scope['build_blueprint']['tasks'] as &$task) {
+            if (($task['task_key'] ?? '') === 'page:home_page:content/home-page-hero') {
+                $task['can_parallel'] = false;
+            }
+        }
+        unset($task);
 
         $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
         $scope = $service->markTaskDone($scope, 'shared:footer', ['region' => 'footer']);
@@ -1223,29 +884,12 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $scope = [
             'workspace_track' => 'virtual_theme',
             'build_blueprint' => [
-                'source' => 'stage2_confirmed_task_plan',
-                'contract_source' => 'stage2_block_task_contract',
+                'source' => 'build_plan_v2',
                 'signature' => 'build-blueprint-signature',
-                'task_plan_signature' => 'task-plan-signature',
+                'build_plan_contract_id' => 'build_plan_v2_current',
+                'build_plan_signature' => 'build-plan-signature',
                 'workspace_track' => 'virtual_theme',
                 'page_types' => ['home_page'],
-                'block_task_contract_id' => 'contract_block_task_current',
-                'source_contracts' => [
-                    [
-                        'id' => 'contract_block_plan_confirmed',
-                        'type' => ContractType::TYPE_BLOCK_PLAN,
-                        'version' => ContractType::VERSION_V1,
-                        'status' => ContractType::STATUS_CONFIRMED,
-                    ],
-                ],
-                'stage2_contracts' => [
-                    [
-                        'id' => 'contract_block_task_current',
-                        'type' => ContractType::TYPE_BLOCK_TASK_CONTRACT,
-                        'version' => ContractType::VERSION_V1,
-                        'status' => ContractType::STATUS_CONFIRMED,
-                    ],
-                ],
                 'tasks' => [
                     [
                         'task_key' => 'shared:header',
@@ -1316,7 +960,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame('build-blueprint-signature', $contract['payload']['build_blueprint_signature'] ?? null);
         $this->assertSame($scope['page_type_layouts'], $contract['payload']['page_type_layouts'] ?? null);
         $this->assertSame(2, $contract['payload']['build_summary']['done'] ?? null);
-        $this->assertSame(ContractType::TYPE_BLOCK_TASK_CONTRACT, $contract['source_contracts'][0]['type'] ?? null);
+        $this->assertSame('build_plan_v2', $contract['source_contracts'][0]['type'] ?? null);
         $this->assertSame($contract, $next['build_contracts'][ContractType::TYPE_RENDER_DATA] ?? null);
         $this->assertSame($contract, $next['build_workbench']['contracts'][ContractType::TYPE_RENDER_DATA] ?? null);
 
@@ -1367,29 +1011,12 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $scope = [
             'workspace_track' => 'virtual_theme',
             'build_blueprint' => [
-                'source' => 'stage2_confirmed_task_plan',
-                'contract_source' => 'stage2_block_task_contract',
+                'source' => 'build_plan_v2',
                 'signature' => 'build-blueprint-signature',
-                'task_plan_signature' => 'task-plan-signature',
+                'build_plan_contract_id' => 'build_plan_v2_current',
+                'build_plan_signature' => 'build-plan-signature',
                 'workspace_track' => 'virtual_theme',
                 'page_types' => ['home_page'],
-                'block_task_contract_id' => 'contract_block_task_current',
-                'source_contracts' => [
-                    [
-                        'id' => 'contract_block_plan_confirmed',
-                        'type' => ContractType::TYPE_BLOCK_PLAN,
-                        'version' => ContractType::VERSION_V1,
-                        'status' => ContractType::STATUS_CONFIRMED,
-                    ],
-                ],
-                'stage2_contracts' => [
-                    [
-                        'id' => 'contract_block_task_current',
-                        'type' => ContractType::TYPE_BLOCK_TASK_CONTRACT,
-                        'version' => ContractType::VERSION_V1,
-                        'status' => ContractType::STATUS_CONFIRMED,
-                    ],
-                ],
                 'tasks' => [
                     [
                         'task_key' => 'page:home_page:hero',

@@ -63,7 +63,7 @@ final class ContractCoreServiceTest extends TestCase
 
     public function testPermissionMatrixReadOnlyPathRejectsDownstreamMutation(): void
     {
-        $matrix = (new PermissionMatrix())->forStage(ContractType::STAGE_STAGE2);
+        $matrix = (new PermissionMatrix())->forStage(ContractType::STAGE_BUILD_PLAN);
         $previous = [
             'site_brief' => ['site_title' => 'Original'],
             'block_task_contract' => ['tasks' => []],

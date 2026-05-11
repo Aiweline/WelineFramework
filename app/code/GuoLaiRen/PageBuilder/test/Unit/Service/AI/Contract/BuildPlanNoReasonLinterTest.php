@@ -1,0 +1,39 @@
+<?php
+
+declare(strict_types=1);
+
+namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI\Contract;
+
+use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanNoReasonLinter;
+use PHPUnit\Framework\TestCase;
+
+final class BuildPlanNoReasonLinterTest extends TestCase
+{
+    public function testAllowsExecutableFieldsWithoutExplanationKeys(): void
+    {
+        $result = (new BuildPlanNoReasonLinter())->validate([
+            'tasks' => [
+                ['task_id' => 'task.hero', 'acceptance_rule_ids' => ['layout.4_8_spacing']],
+            ],
+        ]);
+
+        self::assertTrue($result['valid']);
+        self::assertSame([], $result['errors']);
+    }
+
+    public function testRejectsNestedReasonFields(): void
+    {
+        $result = (new BuildPlanNoReasonLinter())->validate([
+            'blocks' => [
+                [
+                    'block_id' => 'home.hero',
+                    'design_reason' => 'Because it looks premium.',
+                ],
+            ],
+        ]);
+
+        self::assertFalse($result['valid']);
+        self::assertStringContainsString('Forbidden explanatory field', $result['errors'][0]);
+        self::assertStringContainsString('design_reason', $result['errors'][0]);
+    }
+}
