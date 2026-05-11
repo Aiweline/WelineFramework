@@ -66,7 +66,7 @@ final class StartCommandDaemonModeTest extends TestCase
         $start->__init();
 
         $originalArgv = $_SERVER['argv'] ?? null;
-        $_SERVER['argv'] = ['bin/w', 'server:start', '--foreground'];
+        $_SERVER['argv'] = ['bin/w', 'server:start', '--win'];
         try {
             self::assertTrue($start->frontendFlag([]));
         } finally {
@@ -84,14 +84,26 @@ final class StartCommandDaemonModeTest extends TestCase
             /**
              * @return list<string>
              */
-            public function masterArgv(string $phpBinary, string $script, string $instanceName, string $masterName, bool $frontend): array
-            {
-                return $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $frontend);
+            public function masterArgv(
+                string $phpBinary,
+                string $script,
+                string $instanceName,
+                string $masterName,
+                bool $foregroundMode,
+                bool $windowMode
+            ): array {
+                return $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
             }
 
-            public function masterCommand(string $phpBinary, string $script, string $instanceName, string $masterName, bool $frontend): string
-            {
-                return $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $frontend);
+            public function masterCommand(
+                string $phpBinary,
+                string $script,
+                string $instanceName,
+                string $masterName,
+                bool $foregroundMode,
+                bool $windowMode
+            ): string {
+                return $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
             }
         };
         $start->__init();
@@ -99,13 +111,13 @@ final class StartCommandDaemonModeTest extends TestCase
         $masterName = MasterProcess::getMasterProcessName('default');
         $displayName = MasterProcess::getMasterProcessDisplayName('default', true);
 
-        $argv = $start->masterArgv('php', 'bin/w', 'default', $masterName, true);
-        $command = $start->masterCommand('php', 'bin/w', 'default', $masterName, true);
+        $argv = $start->masterArgv('php', 'bin/w', 'default', $masterName, false, true);
+        $command = $start->masterCommand('php', 'bin/w', 'default', $masterName, false, true);
 
-        self::assertContains('--frontend', $argv);
+        self::assertContains('--win', $argv);
         self::assertContains('--name=' . $masterName, $argv);
         self::assertContains('--window-title=' . $displayName, $argv);
-        self::assertStringContainsString('--frontend', $command);
+        self::assertStringContainsString('--win', $command);
         self::assertStringContainsString('--name=', $command);
         self::assertStringContainsString($masterName, $command);
         self::assertStringContainsString('--window-title=', $command);
@@ -118,28 +130,40 @@ final class StartCommandDaemonModeTest extends TestCase
             /**
              * @return list<string>
              */
-            public function masterArgv(string $phpBinary, string $script, string $instanceName, string $masterName, bool $frontend): array
-            {
-                return $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $frontend);
+            public function masterArgv(
+                string $phpBinary,
+                string $script,
+                string $instanceName,
+                string $masterName,
+                bool $foregroundMode,
+                bool $windowMode
+            ): array {
+                return $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
             }
 
-            public function masterCommand(string $phpBinary, string $script, string $instanceName, string $masterName, bool $frontend): string
-            {
-                return $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $frontend);
+            public function masterCommand(
+                string $phpBinary,
+                string $script,
+                string $instanceName,
+                string $masterName,
+                bool $foregroundMode,
+                bool $windowMode
+            ): string {
+                return $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
             }
         };
         $start->__init();
 
         $masterName = MasterProcess::getMasterProcessName('default');
 
-        $argv = $start->masterArgv('php', 'bin/w', 'default', $masterName, false);
-        $command = $start->masterCommand('php', 'bin/w', 'default', $masterName, false);
+        $argv = $start->masterArgv('php', 'bin/w', 'default', $masterName, false, false);
+        $command = $start->masterCommand('php', 'bin/w', 'default', $masterName, false, false);
 
         self::assertContains('--master-only', $argv);
         self::assertContains('--name=' . $masterName, $argv);
-        self::assertNotContains('--frontend', $argv);
+        self::assertNotContains('--win', $argv);
         self::assertNotContains('--window-title=' . MasterProcess::getMasterProcessDisplayName('default', true), $argv);
-        self::assertStringNotContainsString('--frontend', $command);
+        self::assertStringNotContainsString('--win', $command);
         self::assertStringNotContainsString('--window-title=', $command);
     }
 
@@ -182,7 +206,7 @@ final class StartCommandDaemonModeTest extends TestCase
         };
         $start->__init();
 
-        self::assertSame(45678, $start->persistLauncherPid('default', 'php bin/w server:start --frontend'));
+        self::assertSame(45678, $start->persistLauncherPid('default', 'php bin/w server:start --win'));
         self::assertSame([
             ['default', ['launcher_pid' => 45678]],
         ], $manager->saved);

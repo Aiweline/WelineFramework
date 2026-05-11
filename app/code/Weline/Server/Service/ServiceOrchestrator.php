@@ -75,7 +75,9 @@ class ServiceOrchestrator
     private ?int $pendingStopProgressClientId = null;
     private string $stopStage = self::STOP_STAGE_IDLE;
     private ?int $stopProgressClientId = null;
-    
+    /** 当前 STOP 会话追踪 ID（回写 CLI command_result.msg_id / stop.trace.jsonl） */
+    private string $activeStopTraceId = '';
+
     /** ANSI 颜色常量 */
     private const ANSI_RESET = "\033[0m";
     private const ANSI_BLUE = "\033[34m";
@@ -472,7 +474,8 @@ class ServiceOrchestrator
         string $reason = 'shutdown',
         ?int $progressClientId = null,
         bool $exclusiveIpc = false,
-        bool $skipDrain = false
+        bool $skipDrain = false,
+        string $msgId = ''
     ): bool
     {
         if ($this->stopAllInProgress || $this->shuttingDown || $this->pendingStopReason !== null) {
@@ -508,18 +511,28 @@ class ServiceOrchestrator
         $this->pendingStopProgressClientId = $progressClientId;
         $this->setStopStage(self::STOP_STAGE_REQUESTED);
 
+        $trace = $msgId !== '' ? $msgId : ('stop-' . \getmypid() . '-' . \time());
+        $this->activeStopTraceId = $trace;
+        $this->appendStopTraceLine('accepted', ['reason' => $reason, 'skip_drain' => $skipDrain]);
+
         if ($progressClientId !== null && $this->controlServer !== null) {
-            $this->controlServer->sendTo(
+            $sent = $this->controlServer->sendTo(
                 $progressClientId,
                 ControlMessage::commandResult(
                     true,
-                    ['state' => 'stopping', 'stage' => $this->stopStage],
-                    'Stopping'
+                    ['state' => 'stopping', 'stage' => $this->stopStage, 'stop_trace_id' => $trace],
+                    'Stopping',
+                    $trace
                 )
             );
+            if (!$sent) {
+                WlsLogger::warning_("[Orchestrator] STOP ACK 发送失败 client={$progressClientId}");
+            }
+            $this->appendStopTraceLine('ack_sent', ['client_id' => $progressClientId, 'ok' => $sent]);
         }
 
         WlsLogger::info_("[Orchestrator] 已接收停止请求，立即进入统一停机流程，原因: {$reason}");
+        $this->consumePendingStopRequest();
         return true;
     }
 
@@ -1618,7 +1631,7 @@ class ServiceOrchestrator
             . ', bridge_enabled=' . ($windowsNativeSocketBridgeEnabled ? 'true' : 'false')
         );
         // 开发模式下：前台将子进程日志输出到控制台，后台仅写 wls 日志文件
-        $this->controlServer->setLogToConsole($context->frontend);
+        $this->controlServer->setLogToConsole($context->windowMode);
 
         // 设置 IPC 消息处理器
         $this->controlServer->onMessage([$this, 'handleIpcMessage']);
@@ -1857,7 +1870,7 @@ class ServiceOrchestrator
         $criticalRoles = $this->getWorkerCriticalInfraRoles();
 
         WlsLogger::info_('[Orchestrator] 所有本地子服务一并并发启动（包括共享服务）');
-        if ($context->frontend) {
+        if ($context->windowMode) {
             echo "\033[34m  开始启动所有进程（并发）...\033[0m\n";
         }
 
@@ -1875,7 +1888,7 @@ class ServiceOrchestrator
             foreach (($allInstances[$role] ?? []) as $instance) {
                 if ($instance !== null) {
                     $startedCount++;
-                    if ($context->frontend) {
+                    if ($context->windowMode) {
                         $portInfo = $instance->port !== null ? " (port={$instance->port})" : '';
                         echo "\033[32m      ✓ {$displayName}#{$instance->instanceId}{$portInfo}\033[0m\n";
                     }
@@ -1888,7 +1901,7 @@ class ServiceOrchestrator
             ));
             if (
                 $plannedCount > 0
-                && ($context->frontend || $provider->requiresStartupReadyBarrier() || $provider->isCriticalRole())
+                && ($context->windowMode || $provider->requiresStartupReadyBarrier() || $provider->isCriticalRole())
             ) {
                 $startupAcceptance[$role] = [
                     'displayName' => $displayName,
@@ -1918,7 +1931,7 @@ class ServiceOrchestrator
             return;
         }
 
-        if ($context->frontend) {
+        if ($context->windowMode) {
             echo "\033[32m  共启动 {$startedCount} 个服务实例\033[0m\n";
         }
 
@@ -2157,7 +2170,7 @@ class ServiceOrchestrator
                 );
             }
         }
-        if ($context->frontend) {
+        if ($context->windowMode) {
             echo "\033[31m  {$message}，已关闭服务器并清理已提交进程。\033[0m\n";
         }
 
@@ -2351,7 +2364,7 @@ class ServiceOrchestrator
             $instanceCount = $provider->getInstanceCount($context);
             $displayName = $provider->getDisplayName();
 
-            if ($context->frontend) {
+            if ($context->windowMode) {
                 echo "\033[34m  启动 {$displayName}: {$instanceCount} 个实例\033[0m\n";
             }
             WlsLogger::info_("[Orchestrator] 启动服务 {$displayName} (role={$role}, instances={$instanceCount}, priority={$provider->getPriority()})");
@@ -3337,7 +3350,7 @@ class ServiceOrchestrator
             ? (bool) \constant('IS_WIN')
             : (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN');
 
-        if ($isWin && $context->frontend) {
+        if ($isWin && $context->windowMode) {
             return 2_500_000;
         }
 
@@ -3855,7 +3868,7 @@ class ServiceOrchestrator
 
     private function resolveChildProcessLogFlag(ServiceProviderInterface $provider, ServiceContext $context): ?bool
     {
-        if ($context->frontend || $provider->requiresStartupReadyBarrier() || $provider->isCriticalRole()) {
+        if ($context->windowMode || $provider->requiresStartupReadyBarrier() || $provider->isCriticalRole()) {
             return true;
         }
 
@@ -3864,7 +3877,7 @@ class ServiceOrchestrator
 
     private function shouldLaunchForeground(string $role, ?ServiceContext $context): bool
     {
-        if ($context === null || !$context->frontend) {
+        if ($context === null || !$context->windowMode) {
             return false;
         }
 
@@ -4224,6 +4237,7 @@ class ServiceOrchestrator
         $this->stopProgressClientId = $progressClientId;
         $skipDrain = $this->shouldSkipStopAllDrain();
         WlsLogger::info_("[Orchestrator] 开始停止所有服务，原因: {$reason}, skip_drain=" . ($skipDrain ? '1' : '0'));
+        $this->appendStopTraceLine('stop_all_start', ['reason' => $reason]);
 
         $totalInstances = \count($this->registry->getAllInstances());
         if ($totalInstances === 0) {
@@ -4403,6 +4417,7 @@ class ServiceOrchestrator
         $this->stopAllSkipDrain = false;
         $this->pendingStopProgressClientId = null;
         $this->stopProgressClientId = null;
+        $this->activeStopTraceId = '';
         $this->setStopStage(self::STOP_STAGE_IDLE);
         $this->masterShutdownIntent = false;
         $this->ipcReleaseExclusive();
@@ -4426,15 +4441,64 @@ class ServiceOrchestrator
         Processer::removePidFile($masterName);
         WlsLogger::info_('[Orchestrator] Master 进程索引已清理');
     }
+
+    /**
+     * Master 侧 STOP 链路审计（JSON Lines）
+     *
+     * @param array<string, mixed> $extra
+     */
+    private function appendStopTraceLine(string $event, array $extra = []): void
+    {
+        if ($this->context === null) {
+            return;
+        }
+
+        $dir = Env::VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'control' . \DIRECTORY_SEPARATOR;
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+
+        $instance = $this->context->instanceName;
+        $file = $dir . $instance . '.stop.trace.jsonl';
+        $row = [
+            'ts' => \microtime(true),
+            'trace' => $this->activeStopTraceId,
+            'instance' => $instance,
+            'event' => $event,
+        ];
+        foreach ($extra as $k => $v) {
+            $row[$k] = $v;
+        }
+
+        @\file_put_contents($file, \json_encode($row, JSON_UNESCAPED_UNICODE) . "\n", \FILE_APPEND | \LOCK_EX);
+    }
     
     /**
      * 发送停止进度消息给 CLI 客户端
      */
-    private function sendStopProgress(string $message): void
+    private function sendStopProgress(string $message): bool
     {
-        if ($this->stopProgressClientId !== null && $this->controlServer !== null) {
-            $this->controlServer->sendTo($this->stopProgressClientId, ControlMessage::commandResult(true, [], $message));
+        if ($this->stopProgressClientId === null || $this->controlServer === null) {
+            WlsLogger::warning_("[Orchestrator] stop progress skipped: no progress client. message={$message}");
+            return false;
         }
+
+        $mid = $this->activeStopTraceId;
+        $ok = $this->controlServer->sendTo(
+            $this->stopProgressClientId,
+            ControlMessage::commandResult(
+                true,
+                ['stage' => $this->stopStage, 'state' => 'stopping'],
+                $message,
+                $mid
+            )
+        );
+
+        if (!$ok) {
+            WlsLogger::warning_("[Orchestrator] stop progress send failed: client={$this->stopProgressClientId}, message={$message}");
+        }
+
+        return $ok;
     }
 
     private function scheduleSharedStateConsumerRenewalIfReady(float $now): void
@@ -9050,7 +9114,7 @@ class ServiceOrchestrator
         WlsLogger::info_('[Server] ========================================');
 
         // 前台模式：直接输出访问地址表与代理转发说明（不悬浮，日志正常滚动）
-        if ($this->context?->frontend) {
+        if ($this->context?->windowMode) {
             $ctx = $this->context;
             $defaultPort = $sslEnabled ? 443 : 80;
             $baseUrl = $protocol . '://' . $displayHost . ($mainPort !== $defaultPort ? ':' . $mainPort : '');
@@ -9242,7 +9306,7 @@ class ServiceOrchestrator
             'ssl_cert' => $context->sslCert,
             'ssl_key' => $context->sslKey,
             'daemon' => $context->daemon,
-            'frontend' => $context->frontend,
+            'window_mode' => $context->windowMode,
             'master_mode' => $context->mode,
             'dispatcher_enabled' => $context->isDispatcherEnabled(),
             'worker_base_port' => $context->getWorkerBasePort(),
@@ -9930,6 +9994,30 @@ class ServiceOrchestrator
         }
     }
 
+    private function handleStopTestCommand(int $clientId): void
+    {
+        $canSchedule = !$this->stopAllInProgress
+            && !$this->shuttingDown
+            && $this->pendingStopReason === null;
+        $this->controlServer?->sendTo(
+            $clientId,
+            ControlMessage::commandResult(
+                true,
+                [
+                    'accepted' => true,
+                    'can_schedule_stop_task' => $canSchedule,
+                    'pending_stop_reason' => $this->pendingStopReason,
+                    'stop_all_in_progress' => $this->stopAllInProgress,
+                    'shutting_down' => $this->shuttingDown,
+                    'stop_stage' => $this->stopStage,
+                    'main_loop_task_count' => \count($this->mainLoopTasks),
+                    'ipc_exclusive_command' => $this->ipcExclusiveCommand,
+                ],
+                'stop_test',
+            )
+        );
+    }
+
     /**
      * 处理 command 消息
      */
@@ -9943,6 +10031,11 @@ class ServiceOrchestrator
         }
         $dispatcherOnlyMaintenance = $this->isMaintenanceControlAction($action)
             && !empty($msg['dispatcher_only']);
+
+        if ($action === ControlMessage::ACTION_STOP_TEST) {
+            $this->handleStopTestCommand($clientId);
+            return;
+        }
 
         if ($this->isQueuedControlCommand($action)) {
             if ($action === ControlMessage::ACTION_STOP) {
@@ -9968,7 +10061,11 @@ class ServiceOrchestrator
                 );
                 $this->clearPendingControlOperations('Control operation cancelled by stop');
                 $this->preemptActiveControlOperationForImperial($action);
-                $this->requestStop('command', $clientId, true, $forceStop);
+                $stopMsgId = (string) ($msg['msg_id'] ?? '');
+                if ($stopMsgId === '') {
+                    $stopMsgId = $stopTraceId;
+                }
+                $this->requestStop('command', $clientId, true, $forceStop, $stopMsgId);
 
                 return;
             }

@@ -126,7 +126,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         // 2. 启动 Dispatcher 进程（TCP 透传）
         $dispatcherPid = $this->startDispatcher($config);
         
-        if ($dispatcherPid <= 0 && !$config->frontend) {
+        if ($dispatcherPid <= 0 && !$config->windowMode) {
             $this->log(__('Dispatcher 启动失败'), 'WARN');
             // Dispatcher 启动失败不是致命错误（前端模式下可能返回 0）
         }
@@ -141,7 +141,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         $this->saveInstanceInfo($config, $workerPids, $dispatcherPid, $httpRedirectPid);
         
         // 5. 启动 Master 进程（用于监控和热重载）
-        if (!$config->frontend) {
+        if (!$config->windowMode) {
             $this->startMasterProcess($config);
         }
         
@@ -211,16 +211,16 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         $command .= " --memory-limit={$config->workerMemoryLimit}";
         $command .= " --name={$processName}";
         
-        if ($config->frontend) {
-            $command .= " --frontend";
+        if ($config->windowMode) {
+            $command .= " --win";
         }
         
         // 使用进程管理器创建进程
-        $pid = Processer::create($command, true, $config->frontend);
+        $pid = Processer::create($command, true, $config->windowMode);
         
         // 如果 PID 获取失败，通过端口检测
         if ($pid <= 0) {
-            $maxWait = $config->frontend ? 3000 : 2000;
+            $maxWait = $config->windowMode ? 3000 : 2000;
             $waitStep = 100;
             $waited = 0;
             
@@ -263,15 +263,15 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         $command .= " --memory-limit={$config->dispatcherMemoryLimit}";
         $command .= " --name={$processName}";
         
-        if ($config->frontend) {
-            $command .= " --frontend";
+        if ($config->windowMode) {
+            $command .= " --win";
         }
         
-        $pid = Processer::create($command, true, $config->frontend);
+        $pid = Processer::create($command, true, $config->windowMode);
         
         // 如果 PID 获取失败，通过端口检测
         if ($pid <= 0) {
-            $maxWait = $config->frontend ? 3000 : 1000;
+            $maxWait = $config->windowMode ? 3000 : 1000;
             $waitStep = 100;
             $waited = 0;
             
@@ -313,11 +313,11 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         $command = "\"{$config->phpBinary}\" \"{$script}\" {$config->host} {$config->httpRedirectPort} {$config->port} {$config->instanceName}";
         $command .= " --name={$processName}";
         
-        if ($config->frontend) {
-            $command .= " --frontend";
+        if ($config->windowMode) {
+            $command .= " --win";
         }
         
-        $pid = Processer::create($command, true, $config->frontend);
+        $pid = Processer::create($command, true, $config->windowMode);
         
         if ($pid <= 0) {
             $maxWait = 1000;
@@ -406,7 +406,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             'ssl_cert' => $config->sslCert,
             'ssl_key' => $config->sslKey,
             'http_redirect_port' => $config->httpRedirectEnabled ? $config->httpRedirectPort : null,
-            'frontend' => $config->frontend,
+            'window_mode' => $config->windowMode,
             'started_at' => \date('Y-m-d H:i:s'),
             'start_time' => \time(),
         ];

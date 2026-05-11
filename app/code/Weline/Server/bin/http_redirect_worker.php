@@ -58,8 +58,9 @@ if ($controlPort <= 0) {
 }
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
-// 解析 --frontend 参数
-$isFrontend = \in_array('--frontend', $argv, true) || \in_array('-frontend', $argv, true);
+// 解析窗口可见参数（与 --win 等价，--frontend 已弃用但仍兼容）
+$isFrontend = \in_array('--frontend', $argv, true) || \in_array('-frontend', $argv, true)
+    || \in_array('--win', $argv, true) || \in_array('-win', $argv, true);
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;

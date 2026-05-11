@@ -66,7 +66,7 @@ $orchestratorLaunchId = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
-    } elseif ($arg === '--frontend' || $arg === '-frontend') {
+    } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '--win' || $arg === '-win') {
         $isFrontend = true;
     } elseif ($arg === '--reuseport' || $arg === '-reuseport') {
         $useReusePort = true;

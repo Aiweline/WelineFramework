@@ -68,9 +68,9 @@ final class ServerConfig
     public readonly bool $sslEnabled;
     
     /**
-     * 是否前台运行
+     * Windows 可见窗口模式（原 frontend 配置项仍兼容读取）
      */
-    public readonly bool $frontend;
+    public readonly bool $windowMode;
     
     /**
      * HTTP 重定向端口（HTTP → HTTPS）
@@ -119,7 +119,7 @@ final class ServerConfig
         $this->sslCert = $config['ssl_cert'] ?? '';
         $this->sslKey = $config['ssl_key'] ?? '';
         $this->sslEnabled = !empty($this->sslCert) && !empty($this->sslKey);
-        $this->frontend = (bool) ($config['frontend'] ?? false);
+        $this->windowMode = (bool) ($config['window_mode'] ?? $config['frontend'] ?? false);
         $portVal = (int) ($config['port'] ?? 443);
         if ($this->sslEnabled) {
             $this->httpRedirectPort = ($portVal === 443) ? 80 : 0;
@@ -241,7 +241,7 @@ final class ServerConfig
             'ssl_cert' => $this->sslCert,
             'ssl_key' => $this->sslKey,
             'ssl_enabled' => $this->sslEnabled,
-            'frontend' => $this->frontend,
+            'window_mode' => $this->windowMode,
             'http_redirect_port' => $this->httpRedirectPort,
             'http_redirect_enabled' => $this->httpRedirectEnabled,
             'php_binary' => $this->phpBinary,

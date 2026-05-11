@@ -124,7 +124,7 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
             mode: 'legacy',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'orchestrator' => [

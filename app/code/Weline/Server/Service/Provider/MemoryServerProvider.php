@@ -86,8 +86,8 @@ class MemoryServerProvider extends AbstractServiceProvider
             '--token-file-name=' . $tokenFileName,
         ];
 
-        if ($context->frontend) {
-            $arguments[] = '--frontend';
+        if ($context->windowMode) {
+            $arguments[] = '--win';
         }
 
         return new ServiceCommand(
