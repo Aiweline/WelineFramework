@@ -168,6 +168,21 @@ id属性不能为空,id属性不能为空
 "SEO管理标签缺少 module 属性","SEO管理标签缺少 module 属性"
 SEO管理,SEO管理
 在新窗口打开,在新窗口打开
+"SEO 协议与搜索提交","SEO 协议与搜索提交"
+"SEO 账户","SEO 账户"
+"绑定后由 Weline_Seo 处理 sitemap 与新 URL 自动提交。","绑定后由 Weline_Seo 处理 sitemap 与新 URL 自动提交。"
+自动提交,自动提交
+"新 URL 产生后自动提交到已配置搜索引擎","新 URL 产生后自动提交到已配置搜索引擎"
+robots.txt,robots.txt
+"启用站点 robots 协议输出","启用站点 robots 协议输出"
+"Sitemap 声明","Sitemap 声明"
+"在 robots 中声明 sitemap.xml","在 robots 中声明 sitemap.xml"
+Google-Extended,Google-Extended
+"允许 AI 训练抓取","允许 AI 训练抓取"
+"禁止 Google-Extended","禁止 Google-Extended"
+"robots.txt 追加规则","robots.txt 追加规则"
+"每行一条 robots 指令；基础安全规则由 Weline_Seo 自动生成。","每行一条 robots 指令；基础安全规则由 Weline_Seo 自动生成。"
+"请选择 SEO 账户","请选择 SEO 账户"
 编辑SEO账户,编辑SEO账户
 新增SEO账户,新增SEO账户
 账户管理,账户管理
@@ -289,7 +304,6 @@ Sitemap管理,Sitemap管理
 "各模块通过 SitemapProvider 提供 URL 数据，包括页面、产品、分类等","各模块通过 SitemapProvider 提供 URL 数据，包括页面、产品、分类等"
 平台适配器生成,平台适配器生成
 "根据站点绑定的 SEO 平台（Google/Bing/Baidu），由对应适配器生成符合规范的 sitemap.xml","根据站点绑定的 SEO 平台（Google/Bing/Baidu），由对应适配器生成符合规范的 sitemap.xml"
-自动提交,自动提交
 "定时任务自动将 sitemap 提交到各搜索引擎，支持 Ping、API 和 IndexNow 协议","定时任务自动将 sitemap 提交到各搜索引擎，支持 Ping、API 和 IndexNow 协议"
 架构设计,架构设计
 "Provider 扩展机制","Provider 扩展机制"

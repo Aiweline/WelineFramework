@@ -164,6 +164,7 @@ class ControllerFetchFileAfter implements ObserverInterface
             'colors',
             'layout',
             'child_html',
+            'content',
             'contentTemplate',
             'layoutTemplate',
             'fileName',

@@ -693,6 +693,10 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect
             })
             .then(function(response) {
                 var resp = normalizeLoginPayload(response.data);
+                if (response.ok && resp && resp.status === 'challenge_required' && resp.redirect) {
+                    window.location.href = resp.redirect;
+                    return;
+                }
                 if (response.ok && isLoginSuccessPayload(resp)) {
                     loginBtn.classList.remove('auth-form__submit--busy');
                     loginBtn.classList.add('auth-form__submit--success');

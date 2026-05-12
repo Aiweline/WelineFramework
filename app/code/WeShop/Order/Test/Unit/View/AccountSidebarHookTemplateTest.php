@@ -22,6 +22,10 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('data-account-nav-link="true"', $sidebar);
         $this->assertStringContainsString('data-section="orders"', $sidebar);
         $this->assertStringContainsString('account-hook-nav-link', $sidebar);
+        $this->assertStringNotContainsString('data-account-nav-parent', $sidebar);
+        $this->assertStringNotContainsString('account-hook-nav-group', $sidebar);
+        $this->assertStringNotContainsString('account-hook-nav-title', $sidebar);
+        $this->assertStringNotContainsString('订单与服务', $sidebar);
 
         $this->assertStringContainsString('data-account-section="orders"', $content);
         $this->assertStringContainsString('id="orders-section"', $content);

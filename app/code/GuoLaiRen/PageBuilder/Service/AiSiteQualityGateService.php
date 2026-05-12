@@ -127,7 +127,11 @@ final class AiSiteQualityGateService
             $report = $this->inspectRenderedPage($pageType, $html, $layout, $scope, $pageId, $renderError);
             $pageReports[$pageType] = $report;
 
-            $requiredPagesReady = $requiredPagesReady && $pageId > 0 && $html !== '' && $renderError === '';
+            $hasRenderableVirtualDraft = $workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+                && $renderVirtualThemeId > 0
+                && \is_array($scope['virtual_pages_by_type'][$pageType] ?? null);
+            $requiredPagesReady = $requiredPagesReady && $html !== '' && $renderError === '' && ($pageId > 0 || $hasRenderableVirtualDraft);
+            $allContentClean = $allContentClean && (bool)($report['content_clean'] ?? false);
             // TEMP: 暂停“页面无内部标识/方案说明/demo 文案”门禁，不阻断发布。
             // 保留 page_reports.bad_matches 供排查，但质量项始终按通过处理。
             $allStageOneContentVisible = $allStageOneContentVisible && (bool)($report['stage1_content_visible'] ?? false);
@@ -181,6 +185,9 @@ final class AiSiteQualityGateService
         $layoutJson = (string)\json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
         $combined = $html . "\n" . $layoutJson;
         $badMatches = $this->matchBadContent($this->stripNonVisibleQualityGateHtml($html));
+        if (\preg_match('/\bai-site-fallback\b|<svg\s+[^>]*viewBox=["\']0 0 520 360["\']|Image Placeholder|Text-to-image is not connected yet/iu', $html) === 1) {
+            $badMatches[] = 'plan-derived fallback visual';
+        }
         $brokenImages = $this->matchBrokenImages($combined, $this->extractVerifiedAssetUrlsFromScope($scope));
         $legacyBlocks = $this->matchLegacyDefaultBlocks($layout);
         $stageOneHits = $this->matchStageOneContent($pageType, $html, $scope);
@@ -189,6 +196,12 @@ final class AiSiteQualityGateService
         $hasSvgVisual = \preg_match('/<svg\b|data:image\/svg\+xml|ai-site-svg-visual/i', $html) === 1;
         $hasAnyImageNeed = \preg_match('/\b(?:image|visual|media|asset|logo|icon|cards?|board|avatar|shield)\b/iu', $combined) === 1;
         $visualDepthSignals = $this->matchVisualDepthSignals($html);
+        $realAssetUrls = $this->extractRealVerifiedAssetUrlsFromScope($scope);
+        $usedRealAssetUrls = $this->matchUsedVerifiedAssets($html, $realAssetUrls);
+        $requiresRealImageAssets = $this->scopeRequiresRealImageAssets($scope);
+        $visualsSafe = $brokenImages === []
+            && (!$hasAnyImageNeed || $hasSvgVisual || \preg_match('/<img\b/i', $html) === 1)
+            && (!$requiresRealImageAssets || $usedRealAssetUrls !== []);
 
         return [
             'page_id' => $pageId,
@@ -202,11 +215,14 @@ final class AiSiteQualityGateService
             'theme_hits' => $themeHits,
             'shared_blocks_ready' => !empty($sharedBlocks['header']) && !empty($sharedBlocks['footer']),
             'shared_blocks' => $sharedBlocks,
-            'visuals_safe' => $brokenImages === [] && (!$hasAnyImageNeed || $hasSvgVisual || \preg_match('/<img\b/i', $html) === 1),
+            'visuals_safe' => $visualsSafe,
             'visuals' => [
                 'broken_images' => $brokenImages,
                 'has_svg_visual' => $hasSvgVisual,
                 'has_image_need' => $hasAnyImageNeed,
+                'requires_real_image_assets' => $requiresRealImageAssets,
+                'real_asset_urls' => $realAssetUrls,
+                'used_real_asset_urls' => $usedRealAssetUrls,
             ],
             'visual_depth_ok' => \count($visualDepthSignals) >= 3,
             'visual_depth_signals' => $visualDepthSignals,
@@ -304,11 +320,6 @@ final class AiSiteQualityGateService
 
     private function resolveRenderVirtualThemeId(array $scope): int
     {
-        $track = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
-        if ($track === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
-            return 0;
-        }
-
         return \max(0, (int)($scope['virtual_theme_id'] ?? 0));
     }
 
@@ -361,6 +372,8 @@ final class AiSiteQualityGateService
     private function matchBadContent(string $text): array
     {
         $patterns = [
+            '/Introduce brand story|build initial trust|Showcase available games|encourage exploration|Build user confidence|popular game categories|educate users|increase time on page|licenses, security certifications|secure download badges|reassure users|customer testimonials|build social proof|Answer common questions|remove barriers|Close the page with a compact summary|visitor has a clear endpoint|Key message|Next action/iu',
+            '/plan-derived fallback visual|ai-site-fallback|Image Placeholder|Text-to-image is not connected yet/iu',
             '/AI_GENERATED_SECTION|task_key|section_code|block_key|page_type|field_content_requirements/iu',
             '/content\/(?:home|about|contact|product|service)-page-[a-z0-9_-]+/iu',
             '/核心卖点|功能特性|把首页|值得点击|放出来|方案头部|方案背景|方案结尾|当前方案|任务方案|蓝图/iu',
@@ -412,6 +425,121 @@ final class AiSiteQualityGateService
         }
 
         return \array_values(\array_unique($urls));
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<string>
+     */
+    private function extractRealVerifiedAssetUrlsFromScope(array $scope): array
+    {
+        $urls = [];
+        $verified = \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [];
+        foreach ($verified as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $url = \trim((string)$value);
+            if ($this->isRealImageAssetUrl($url)) {
+                $urls[] = $url;
+            }
+        }
+
+        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        foreach (\is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [] as $slot) {
+            if (!\is_array($slot) || $this->isPlaceholderManifestSlot($slot)) {
+                continue;
+            }
+            $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
+            if (!$this->isRequiredRealImageSlotType($slotType)) {
+                continue;
+            }
+            $url = \trim((string)($slot['final_url'] ?? ''));
+            if ($this->isRealImageAssetUrl($url)) {
+                $urls[] = $url;
+            }
+        }
+
+        return \array_values(\array_unique($urls));
+    }
+
+    /**
+     * @param list<string> $assetUrls
+     * @return list<string>
+     */
+    private function matchUsedVerifiedAssets(string $html, array $assetUrls): array
+    {
+        $used = [];
+        foreach ($assetUrls as $assetUrl) {
+            $normalized = $this->normalizeVerifiedAssetUrl((string)$assetUrl);
+            if ($normalized !== '' && \str_contains($html, $normalized)) {
+                $used[] = (string)$assetUrl;
+            }
+        }
+
+        return \array_values(\array_unique($used));
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function scopeRequiresRealImageAssets(array $scope): bool
+    {
+        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        foreach (\is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [] as $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            if ($this->isRequiredRealImageSlotType(\strtolower(\trim((string)($slot['slot_type'] ?? ''))))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isRequiredRealImageSlotType(string $slotType): bool
+    {
+        return \in_array($slotType, ['hero_image', 'section_image', 'trust_brand_image', 'logo_icon'], true);
+    }
+
+    private function isRealImageAssetUrl(string $url): bool
+    {
+        $url = \trim($url);
+        if ($url === '') {
+            return false;
+        }
+        $lower = \strtolower($url);
+        if (\str_contains($lower, 'placeholder') || \str_starts_with($lower, 'data:image/svg')) {
+            return false;
+        }
+        if (\str_ends_with($lower, '.svg')) {
+            return false;
+        }
+
+        return \preg_match('/\.(?:jpe?g|png|webp|gif)(?:[?#].*)?$/i', $url) === 1
+            || \str_starts_with($lower, 'data:image/');
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function isPlaceholderManifestSlot(array $slot): bool
+    {
+        if ((int)($slot['placeholder'] ?? 0) === 1) {
+            return true;
+        }
+        foreach (['source', 'mode', 'model'] as $key) {
+            if (\strtolower(\trim((string)($slot[$key] ?? ''))) === 'placeholder') {
+                return true;
+            }
+        }
+        $url = \strtolower(\trim((string)($slot['final_url'] ?? '')));
+        if ($url === '') {
+            return false;
+        }
+
+        return \str_contains($url, 'placeholder') || \str_ends_with($url, '.svg');
     }
 
     /**
@@ -813,28 +941,13 @@ final class AiSiteQualityGateService
      */
     private function finalizeQualityItems(array $items, array $scope): array
     {
-        $isFakeMode = (int)($scope['fake_mode'] ?? 0) === 1;
-        $nonBlockingInFakeMode = [
-            'stage1_content_visible' => true,
-            'visual_assets_safe' => true,
-        ];
-
         foreach ($items as &$item) {
-            $key = \trim((string)($item['key'] ?? ''));
             $ok = !empty($item['ok']);
             $blocking = true;
             $level = $ok ? 'pass' : 'error';
 
-            if ($isFakeMode && isset($nonBlockingInFakeMode[$key])) {
-                $blocking = false;
-                $level = $ok ? 'pass' : 'warning';
-            }
-
             $item['blocking'] = $blocking;
             $item['level'] = $level;
-            if (!$blocking && !$ok) {
-                $item['message'] = 'Recorded as non-blocking in fake mode.';
-            }
         }
         unset($item);
 

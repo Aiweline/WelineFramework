@@ -5,7 +5,7 @@
  * @var \WeShop\Subscription\Model\SubscriptionPlan $plan
  * @var array $history
  */
-$title = $title ?? __('订阅详情');
+$title = $title ?? __('订阅服务详情');
 
 $statusOptions = \WeShop\Subscription\Model\Subscription::getStatusOptions();
 $actionOptions = \WeShop\Subscription\Model\SubscriptionHistory::getActionOptions();
@@ -25,7 +25,10 @@ $statusColorMap = [
 $statusColor = $statusColorMap[$status] ?? '#6b7280';
 ?>
 
-<div class="weshop-subscription-detail">
+<div class="weshop-subscription-detail" data-subscription-page
+     data-pause-url="<?= htmlspecialchars($this->getUrl('*/subscription/pause'), ENT_QUOTES, 'UTF-8') ?>"
+     data-resume-url="<?= htmlspecialchars($this->getUrl('*/subscription/pause/resume'), ENT_QUOTES, 'UTF-8') ?>"
+     data-cancel-url="<?= htmlspecialchars($this->getUrl('*/subscription/cancel'), ENT_QUOTES, 'UTF-8') ?>">
     <div class="weshop-sub-detail-header">
         <a href="<?= $this->getUrl('*/subscription/subscriptionList') ?>" class="weshop-back-link">
             <span class="material-symbols-outlined" style="font-size: 1rem;">arrow_back</span>
@@ -33,6 +36,7 @@ $statusColor = $statusColorMap[$status] ?? '#6b7280';
         </a>
         <h2><?= $title ?> #<?= $subscription->getId() ?></h2>
     </div>
+    <div class="weshop-subscription-message" data-subscription-message hidden></div>
 
     <!-- 订阅状态卡片 -->
     <div class="weshop-sub-status-card" style="border-color: <?= $statusColor ?>30;">
@@ -53,22 +57,33 @@ $statusColor = $statusColorMap[$status] ?? '#6b7280';
         </div>
         <div class="weshop-sub-status-actions">
             <?php if ($subscription->canPause()): ?>
-                <button class="weshop-sub-btn weshop-sub-btn-warning" onclick="pauseSubscription(<?= $subscription->getId() ?>)">
+                <button class="weshop-sub-btn weshop-sub-btn-warning" data-subscription-action="pause" data-id="<?= $subscription->getId() ?>">
                     <?= __('暂停') ?>
                 </button>
             <?php endif; ?>
             <?php if ($subscription->canResume()): ?>
-                <button class="weshop-sub-btn weshop-sub-btn-success" onclick="resumeSubscription(<?= $subscription->getId() ?>)">
+                <button class="weshop-sub-btn weshop-sub-btn-success" data-subscription-action="resume" data-id="<?= $subscription->getId() ?>">
                     <?= __('恢复') ?>
                 </button>
             <?php endif; ?>
             <?php if ($subscription->canCancel()): ?>
-                <button class="weshop-sub-btn weshop-sub-btn-danger" onclick="cancelSubscription(<?= $subscription->getId() ?>)">
+                <button class="weshop-sub-btn weshop-sub-btn-danger" data-subscription-cancel-toggle data-id="<?= $subscription->getId() ?>">
                     <?= __('取消订阅') ?>
                 </button>
             <?php endif; ?>
         </div>
     </div>
+
+    <?php if ($subscription->canCancel()): ?>
+        <form class="weshop-subscription-cancel" data-subscription-cancel-form data-id="<?= $subscription->getId() ?>" hidden>
+            <label><?= __('取消原因') ?></label>
+            <textarea name="reason" rows="2" placeholder="<?= __('可选，说明取消原因') ?>"></textarea>
+            <div>
+                <button type="button" data-subscription-cancel-close><?= __('收起') ?></button>
+                <button type="submit" class="is-danger"><?= __('确认取消') ?></button>
+            </div>
+        </form>
+    <?php endif; ?>
 
     <!-- 详细信息 -->
     <div class="weshop-sub-info-grid">
@@ -145,7 +160,7 @@ $statusColor = $statusColorMap[$status] ?? '#6b7280';
 </div>
 
 <style>
-    .weshop-subscription-detail { max-width: 800px; margin: 0 auto; padding: 2rem 1rem; }
+    .weshop-subscription-detail { max-width: 860px; margin: 0 auto; padding: 2rem 1rem; }
     .weshop-sub-detail-header { margin-bottom: 2rem; }
     .weshop-back-link { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--weshop-primary); text-decoration: none; font-size: 0.875rem; margin-bottom: 0.5rem; }
     .weshop-back-link:hover { text-decoration: underline; }
@@ -183,34 +198,15 @@ $statusColor = $statusColorMap[$status] ?? '#6b7280';
     .weshop-timeline-date { font-size: 0.75rem; color: var(--weshop-text-secondary); }
     .weshop-timeline-note { font-size: 0.8125rem; color: var(--weshop-text-secondary); margin: 0.25rem 0 0; }
     .weshop-timeline-amount { font-size: 0.8125rem; font-weight: 600; color: var(--weshop-primary); }
+    .weshop-subscription-message { margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 0.75rem; font-weight: 700; }
+    .weshop-subscription-message.is-success { background: #dcfce7; color: #166534; }
+    .weshop-subscription-message.is-error { background: #fee2e2; color: #991b1b; }
+    .weshop-subscription-cancel { margin: -0.5rem 0 1.5rem; padding: 1rem; border: 1px solid #fee2e2; border-radius: var(--weshop-border-radius-lg); background: #fff7f7; }
+    .weshop-subscription-cancel label { display: block; margin-bottom: 0.5rem; color: #991b1b; font-weight: 800; }
+    .weshop-subscription-cancel textarea { width: 100%; box-sizing: border-box; padding: 0.75rem; border: 1px solid #fecaca; border-radius: var(--weshop-border-radius-lg); resize: vertical; }
+    .weshop-subscription-cancel div { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
+    .weshop-subscription-cancel button { min-height: 2.5rem; padding: 0 1rem; border: 1px solid var(--weshop-border); border-radius: var(--weshop-border-radius-lg); background: white; cursor: pointer; font-weight: 700; }
+    .weshop-subscription-cancel .is-danger { border-color: #fecaca; background: #fee2e2; color: #991b1b; }
 </style>
 
-<script>
-    function pauseSubscription(id) {
-        if (!confirm('<?= __('暂停') ?>?')) return;
-        fetch('<?= $this->getUrl('*/subscription/pause') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-            body: 'id=' + id
-        }).then(r => r.json()).then(data => { if (data.code === 200) location.reload(); else alert(data.msg); });
-    }
-
-    function resumeSubscription(id) {
-        if (!confirm('<?= __('恢复') ?>?')) return;
-        fetch('<?= $this->getUrl('*/subscription/pause/resume') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-            body: 'id=' + id
-        }).then(r => r.json()).then(data => { if (data.code === 200) location.reload(); else alert(data.msg); });
-    }
-
-    function cancelSubscription(id) {
-        const reason = prompt('<?= __('取消原因') ?>');
-        if (reason === null) return;
-        fetch('<?= $this->getUrl('*/subscription/cancel') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-            body: 'id=' + id + '&reason=' + encodeURIComponent(reason)
-        }).then(r => r.json()).then(data => { if (data.code === 200) location.reload(); else alert(data.msg); });
-    }
-</script>
+<script src="@static(WeShop_Subscription::frontend/js/subscription-list.js)"></script>

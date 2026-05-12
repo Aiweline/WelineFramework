@@ -1,0 +1,226 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Geo\Model\Platform $platform
+ * @var array $accounts
+ */
+?>
+<div class="content-header">
+    <h1><?= __('平台账户管理') ?> - <?= htmlspecialchars($platform->getData('platform_name')) ?></h1>
+    <div class="action-bar">
+        <button type="button" class="btn btn-primary" onclick="showAddAccountModal()">
+            <i class="mdi mdi-plus"></i> <?= __('添加账户') ?>
+        </button>
+        <a href="<?= $this->getUrl('geo/backend/platform') ?>" class="btn btn-secondary">
+            <?= __('返回') ?>
+        </a>
+    </div>
+</div>
+
+<div class="content-body">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th><?= __('ID') ?></th>
+                <th><?= __('账户名称') ?></th>
+                <th><?= __('默认账户') ?></th>
+                <th><?= __('激活状态') ?></th>
+                <th><?= __('连接状态') ?></th>
+                <th><?= __('最后测试') ?></th>
+                <th><?= __('操作') ?></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($accounts)): ?>
+                <tr>
+                    <td colspan="7" class="text-center"><?= __('暂无数据') ?></td>
+                </tr>
+            <?php else: ?>
+                <?php foreach ($accounts as $account): ?>
+                    <tr>
+                        <td><?= $account['id'] ?></td>
+                        <td><?= htmlspecialchars($account['account_name']) ?></td>
+                        <td>
+                            <?php if ($account['is_default']): ?>
+                                <span class="badge badge-primary"><?= __('是') ?></span>
+                            <?php else: ?>
+                                <span class="badge badge-secondary"><?= __('否') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($account['is_active']): ?>
+                                <span class="badge badge-success"><?= __('激活') ?></span>
+                            <?php else: ?>
+                                <span class="badge badge-secondary"><?= __('未激活') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($account['status'] === 'active'): ?>
+                                <span class="badge badge-success"><?= __('成功') ?></span>
+                            <?php elseif ($account['status'] === 'failed'): ?>
+                                <span class="badge badge-danger"><?= __('失败') ?></span>
+                            <?php else: ?>
+                                <span class="badge badge-warning"><?= __('待测试') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $account['last_test_time'] ? date('Y-m-d H:i:s', $account['last_test_time']) : '-' ?></td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-info" 
+                                    onclick="testConnection(<?= $account['id'] ?>)">
+                                <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+                            </button>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+    </table>
+</div>
+
+<!-- 添加账户模态框 -->
+<div id="addAccountModal" style="display: none;">
+    <div class="modal-content">
+        <h3><?= __('添加账户') ?></h3>
+        <form id="account-form">
+            <input type="hidden" name="platform_id" value="<?= $platform->getId() ?>">
+            
+            <div class="form-group">
+                <label><?= __('账户名称') ?> <span class="required">*</span></label>
+                <input type="text" name="account_name" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label><?= __('API密钥') ?> <span class="required">*</span></label>
+                <input type="text" name="api_key" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label><?= __('API密钥（可选）') ?></label>
+                <input type="text" name="api_secret" class="form-control">
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="is_default" value="1">
+                    <?= __('设为默认账户') ?>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="is_active" value="1" checked>
+                    <?= __('激活') ?>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
+                <button type="button" class="btn btn-secondary" onclick="hideAddAccountModal()"><?= __('取消') ?></button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+<script>
+function showAddAccountModal() {
+    document.getElementById('addAccountModal').style.display = 'block';
+}
+
+function hideAddAccountModal() {
+    document.getElementById('addAccountModal').style.display = 'none';
+}
+
+function testConnection(accountId) {
+    const formData = new FormData();
+    formData.append('account_id', accountId);
+    
+    var testUrl = '<?= $this->getUrl('geo/backend/platform/testConnection') ?>';
+    var testOpts = { method: 'POST', body: formData };
+    window.Weline.Api.request(testUrl, testOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: data.success ? 'success' : 'error',
+                title: data.success ? '<?= __('测试成功') ?>' : '<?= __('测试失败') ?>',
+                text: data.message,
+                timer: data.success ? 2000 : 0,
+                showConfirmButton: !data.success
+            });
+        } else {
+            console.log(data.message);
+        }
+        if (data.success) {
+            location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('测试失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('测试失败') ?>');
+        }
+    });
+}
+
+document.getElementById('account-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    var saveUrl = '<?= $this->getUrl('geo/backend/platform/saveAccount') ?>';
+    var saveOpts = { method: 'POST', body: formData };
+    window.Weline.Api.request(saveUrl, saveOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
+        if (data.success) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: '<?= __('保存成功') ?>',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log('<?= __('保存成功') ?>');
+                location.reload();
+            }
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: data.message || '<?= __('保存失败') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error(data.message || '<?= __('保存失败') ?>');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('保存失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('保存失败') ?>');
+        }
+    });
+});
+</script>

@@ -1,0 +1,368 @@
+<?php
+/**
+ * Geo模块 - 头部位置选择器Hook
+ * 
+ * 在header中显示位置选择器，支持自动定位和手动选择
+ * Hook名称：header-location-selector
+ * 
+ * @hook-priority 50      Hook优先级：50（默认值）
+ * @hook-sort-order 0    Hook排序顺序：0（默认值）
+ * @hook-solo false      Hook独享：false（不独占）
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+// 从cookie或URL参数获取位置信息
+$currentLocation = null;
+$locationFromCookie = \w_env_cookie('weline_delivery_location');
+if ($locationFromCookie) {
+    $currentLocation = json_decode($locationFromCookie, true);
+}
+
+// 如果URL中有配送区域参数，优先使用
+$locationFromUrl = $this->request->getParam('delivery_location');
+if ($locationFromUrl) {
+    $currentLocation = json_decode(base64_decode($locationFromUrl), true);
+}
+
+// 准备位置数据
+$locationData = [
+    'country' => $currentLocation['country'] ?? __('中国大陆'),
+    'province' => $currentLocation['province'] ?? '',
+    'city' => $currentLocation['city'] ?? '',
+    'district' => $currentLocation['district'] ?? '',
+    'full_address' => $currentLocation['full_address'] ?? __('配送至'),
+];
+
+// 生成显示文本
+$displayText = $locationData['full_address'];
+if (empty($displayText) || $displayText === __('配送至')) {
+    if (!empty($locationData['city'])) {
+        $displayText = $locationData['city'];
+    } elseif (!empty($locationData['province'])) {
+        $displayText = $locationData['province'];
+    } elseif (!empty($locationData['country'])) {
+        $displayText = $locationData['country'];
+    } else {
+        $displayText = __('配送至');
+    }
+}
+
+?>
+<div class="geo-location-selector" data-geo-location-selector>
+    <a href="#" class="location-link" title="<?= __('选择配送地址') ?>" data-action="select-location">
+        <i class="fas fa-map-marker-alt"></i>
+        <div class="location-text">
+            <span class="location-line-1"><?= __('配送至') ?></span>
+            <span class="location-line-2" data-location-display><?= htmlspecialchars($displayText) ?></span>
+        </div>
+        <i class="fas fa-chevron-down"></i>
+    </a>
+    <div class="location-selector-dropdown" style="display: none;">
+        <div class="location-selector-header">
+            <h3><?= __('选择配送地址') ?></h3>
+        </div>
+        <div class="location-selector-content">
+            <div class="location-option" data-action="auto-detect">
+                <i class="fas fa-crosshairs"></i>
+                <span><?= __('自动定位') ?></span>
+            </div>
+            <div class="location-option" data-action="manual-select">
+                <i class="fas fa-map-marked-alt"></i>
+                <span><?= __('手动选择') ?></span>
+            </div>
+        </div>
+        <div class="location-selector-footer">
+            <button type="button" class="btn-close" data-action="close-selector"><?= __('关闭') ?></button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    // 等待DOM加载完成
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initLocationSelector);
+    } else {
+        initLocationSelector();
+    }
+    
+    function initLocationSelector() {
+        const selector = document.querySelector('[data-geo-location-selector]');
+        if (!selector) return;
+        
+        const link = selector.querySelector('[data-action="select-location"]');
+        const dropdown = selector.querySelector('.location-selector-dropdown');
+        const display = selector.querySelector('[data-location-display]');
+        const autoDetect = selector.querySelector('[data-action="auto-detect"]');
+        const manualSelect = selector.querySelector('[data-action="manual-select"]');
+        const closeBtn = selector.querySelector('[data-action="close-selector"]');
+        
+        if (!link || !dropdown || !display) return;
+        
+        // 打开/关闭下拉菜单
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isVisible = dropdown.style.display !== 'none';
+            dropdown.style.display = isVisible ? 'none' : 'block';
+        });
+        
+        // 关闭下拉菜单
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                dropdown.style.display = 'none';
+            });
+        }
+        
+        // 点击外部关闭
+        document.addEventListener('click', function(e) {
+            if (!selector.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+        
+        // 自动定位
+        if (autoDetect) {
+            autoDetect.addEventListener('click', async function() {
+                try {
+                    // 显示加载状态
+                    autoDetect.classList.add('loading');
+                    const loadingText = '@lang{定位中...}';
+                    autoDetect.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>' + loadingText + '</span>';
+                    
+                    // 检查WelineLocation是否已加载
+                    if (typeof WelineLocation === 'undefined') {
+                        // 尝试加载Geo模块
+                        if (typeof Weline !== 'undefined' && Weline.load) {
+                            await Weline.load('geo');
+                        } else {
+                            throw new Error('<?= __('Geo模块未加载') ?>');
+                        }
+                    }
+                    
+                    // 获取位置
+                    const position = await WelineLocation.getLocation();
+                    
+                    // 调用后端API获取地址信息
+                    const geoResponse = await fetch('/location/rest/v1/frontend/location/address', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            latitude: position.latitude,
+                            longitude: position.longitude
+                        })
+                    });
+                    
+                    if (!geoResponse.ok) {
+                        throw new Error('<?= __('获取地址信息失败') ?>');
+                    }
+                    
+                    const geoResult = await geoResponse.json();
+                    if (geoResult.code !== 200) {
+                        throw new Error(geoResult.msg || '<?= __('获取地址信息失败') ?>');
+                    }
+                    
+                    const addressData = geoResult.data;
+                    
+                    // 保存到cookie和localStorage
+                    saveLocationToStorage(addressData);
+                    
+                    // 更新显示
+                    updateLocationDisplay(addressData);
+                    
+                    // 调用配送接口获取配送信息和价格规则
+                    await updateShippingInfo(addressData);
+                    
+                    // 关闭下拉菜单
+                    dropdown.style.display = 'none';
+                    
+                } catch (error) {
+                    console.error('定位失败:', error);
+                    alert(error.message || '<?= __('定位失败，请稍后重试') ?>');
+                } finally {
+                    // 恢复按钮状态
+                    autoDetect.classList.remove('loading');
+                    const autoDetectText = '<?= __('自动定位') ?>';
+                    autoDetect.innerHTML = '<i class="fas fa-crosshairs"></i> <span>' + autoDetectText + '</span>';
+                }
+            });
+        }
+        
+        // 手动选择
+        if (manualSelect) {
+            manualSelect.addEventListener('click', async function() {
+                // 这里可以打开一个地址选择弹窗或跳转到地址选择页面
+                // 暂时使用一个简单的示例
+                const selectedAddress = prompt('<?= __('请输入配送地址（格式：省/市/区）') ?>', '');
+                if (selectedAddress) {
+                    // 解析地址（这里简化处理，实际应该调用地址选择组件）
+                    const addressParts = selectedAddress.split('/');
+                    const addressData = {
+                        country: '<?= __('中国') ?>',
+                        countryCode: 'CN',
+                        province: addressParts[0] || '',
+                        city: addressParts[1] || '',
+                        district: addressParts[2] || '',
+                        street: '',
+                        full_address: selectedAddress,
+                    };
+                    
+                    // 保存到cookie和localStorage
+                    saveLocationToStorage(addressData);
+                    
+                    // 更新显示
+                    updateLocationDisplay(addressData);
+                    
+                    // 调用配送接口获取配送信息和价格规则
+                    await updateShippingInfo(addressData);
+                    
+                    // 关闭下拉菜单
+                    dropdown.style.display = 'none';
+                }
+            });
+        }
+        
+        // 保存位置信息到cookie和localStorage（兼容函数）
+        function saveLocationToStorage(addressData) {
+            if (window.WelineShipping && window.WelineShipping.Location) {
+                window.WelineShipping.Location.save(addressData);
+            } else {
+                try {
+                    const cookieValue = JSON.stringify(addressData);
+                    const expires = new Date();
+                    expires.setTime(expires.getTime() + 30 * 24 * 60 * 60 * 1000);
+                    document.cookie = `weline_delivery_location=${encodeURIComponent(cookieValue)};expires=${expires.toUTCString()};path=/`;
+                    localStorage.setItem('weline_delivery_location', cookieValue);
+                } catch (e) {
+                    console.error('保存位置信息失败:', e);
+                }
+            }
+        }
+        
+        // 更新配送信息（调用配送接口并存储到IndexedDB）
+        async function updateShippingInfo(addressData) {
+            try {
+                if (window.WelineShipping && window.WelineShipping.Location) {
+                    await window.WelineShipping.Location.fetchShippingInfo(addressData);
+                } else {
+                    // 降级方案：直接调用接口
+                    const shippingResponse = await fetch('/shipping/rest/v1/frontend/shipping-info/get-by-location', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            country_code: addressData.countryCode || 'CN',
+                            province: addressData.province || '',
+                            city: addressData.city || '',
+                            district: addressData.district || ''
+                        })
+                    });
+                    
+                    if (shippingResponse.ok) {
+                        const shippingResult = await shippingResponse.json();
+                        if (shippingResult.code === 200 && window.WelineShipping && window.WelineShipping.IndexedDB) {
+                            await window.WelineShipping.IndexedDB.saveShippingInfo(addressData, shippingResult.data);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('更新配送信息失败:', e);
+            }
+        }
+        
+        // 更新位置显示
+        function updateLocationDisplay(addressData) {
+            let displayText = '';
+            if (addressData.city) {
+                displayText = addressData.city;
+            } else if (addressData.province) {
+                displayText = addressData.province;
+            } else if (addressData.country) {
+                displayText = addressData.country;
+            } else {
+                displayText = '<?= __('配送至') ?>';
+            }
+            
+            if (display) {
+                display.textContent = displayText;
+            }
+        }
+    }
+})();
+</script>
+
+<style>
+/* 只定义下拉菜单样式，不覆盖默认的location-link样式 */
+.geo-location-selector {
+    position: relative;
+    display: inline-block;
+}
+
+.geo-location-selector .location-selector-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    min-width: 280px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    padding: 16px;
+}
+
+.geo-location-selector .location-selector-header h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #111;
+}
+
+.geo-location-selector .location-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    color: #111;
+    text-decoration: none;
+}
+
+.geo-location-selector .location-option:hover {
+    background-color: #f5f5f5;
+}
+
+.geo-location-selector .location-option.loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.geo-location-selector .location-selector-footer {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #eee;
+    text-align: right;
+}
+
+.geo-location-selector .btn-close {
+    padding: 6px 16px;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    color: #111;
+}
+
+.geo-location-selector .btn-close:hover {
+    background: #e0e0e0;
+}
+</style>

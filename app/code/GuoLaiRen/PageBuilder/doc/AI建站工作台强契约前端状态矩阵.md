@@ -2,7 +2,7 @@
 
 ## 输入字段
 
-本次前端状态只消费 PageBuilder AI workbench 已确认的工作台快照和 SSE 字段，不新增后端流程。核心输入包括 `active_operation.operation/status/message/progress_percent/queue_id/retry_allowed/failure_mode/queue_waiting_for_scheduler/can_close_stream`，以及 `plan_queue_info`、`task_plan_queue_info`、`build_queue_info` 下的 `snapshot.status/job_status/queue_status/message/error/progress_percent/retry_allowed/failure_mode`。
+本次前端状态只消费 PageBuilder AI workbench 已确认的工作台快照和 SSE 字段，不新增后端流程。核心输入包括 `active_operation.operation/status/message/progress_percent/queue_id/retry_allowed/failure_mode/queue_waiting_for_scheduler/can_close_stream`，以及 `plan_queue_info`、`build_queue_info` 下的 `snapshot.status/job_status/queue_status/message/error/progress_percent/retry_allowed/failure_mode`。
 
 发布阶段同时读取 `can_publish`、`workspace_status`、`publish_status`、`latest_build_failed`、`publish_blocked_by_latest_ai_failure`、`publish_blocked_reason`、`retryable_ai_failure_count`、`retryable_ai_failures`。这些字段只决定按钮启停、阻断提示和重试入口显示，不直接触发新的取消或重试接口。
 
@@ -23,7 +23,7 @@
 
 ## 按钮矩阵
 
-第一阶段方案和第二阶段任务方案使用对应的队列状态禁用生成/确认按钮，只有终态成功并存在方案草稿时才开放确认。构建阶段在 `task_plan_confirmed=true` 后开放，若 `build_queue_info` 或 `active_operation` 处于 pending、queued、running、timeout、connection_lost，则保持构建和发布入口锁定。
+单阶段 BuildPlan 使用计划队列状态禁用生成/确认按钮，只有终态成功并存在方案草稿时才开放确认。构建阶段在 `build_plan_confirmed=true` 后开放，若 `build_queue_info` 或 `active_operation` 处于 pending、queued、running、timeout、connection_lost，则保持构建和发布入口锁定。
 
 发布按钮同时绑定四类合同字段：`can_publish`、运行中的 AI 队列、最新 AI 构建失败、retryable 失败项。任一条件不满足时，`pb-ai-start-publish` 写入 `data-pb-contract-*` 属性并显示 `pb-ai-publish-blocking-alert`，用于浏览器/E2E 直接断言。
 
@@ -32,9 +32,6 @@
 ```text
 event: progress
 data: {"operation":"build","queue_status":"running","progress_kind":"queue_info","queue_info":{"snapshot":{"status":"running"}}}
-
-event: progress
-data: {"operation":"task_plan","status":"error","retry_allowed":1,"failure_mode":"partial_retry_required"}
 
 event: error
 data: {"operation":"plan","status":"timeout","message":"长时间未收到队列终态"}

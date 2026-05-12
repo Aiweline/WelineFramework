@@ -14,6 +14,13 @@ use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Websites\Data\WebsiteData;
+use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteDomain;
 
 class Page extends FrontendController
 {
@@ -149,6 +156,12 @@ class Page extends FrontendController
                 $websiteId = (int)$websiteIdParam;
             }
         }
+        if ($websiteId <= 0) {
+            $websiteId = $this->resolveWebsiteIdFromCurrentHost() ?? 0;
+        }
+        if ($websiteId > 0) {
+            $this->syncWebsiteContext($websiteId);
+        }
         
         $page = null;
 
@@ -167,6 +180,7 @@ class Page extends FrontendController
                 $pageWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
                 if ($pageWebsiteId > 0) {
                     $websiteId = $pageWebsiteId;
+                    $this->syncWebsiteContext($websiteId);
                 }
                 if (!$isPreview) {
                     $pageStatus = (int)($page->getData(PageModel::schema_fields_STATUS) ?? PageModel::STATUS_DRAFT);
@@ -343,7 +357,158 @@ class Page extends FrontendController
     }
     
     /**
-     * 渲染内容部分
+     * Resolve the published-site domain context before loading the entity page.
+     */
+    private function resolveWebsiteIdFromCurrentHost(): ?int
+    {
+        foreach ($this->currentHostCandidates() as $host) {
+            $websiteId = $this->findWebsiteIdByHost($host);
+            if ($websiteId !== null && $websiteId > 0) {
+                $this->syncWebsiteContext($websiteId);
+                return $websiteId;
+            }
+        }
+
+        return null;
+    }
+
+    private function currentHostCandidates(): array
+    {
+        $candidates = [
+            WelineEnv::get('server.http_host', ''),
+            WelineEnv::get('http_weline_original_host', ''),
+            WelineEnv::get('http_x_forwarded_host', ''),
+            WelineEnv::server('HTTP_HOST', ''),
+            WelineEnv::server('HTTP_WELINE_ORIGINAL_HOST', ''),
+            WelineEnv::server('HTTP_X_FORWARDED_HOST', ''),
+            WelineEnv::server('SERVER_NAME', ''),
+            WelineEnv::server('WELINE_WEBSITE_URL', ''),
+            WelineEnv::server('WELINE_FULL_REQUEST_URI', ''),
+            $this->request->getServer('HTTP_HOST') ?: '',
+            $this->request->getServer('HTTP_WELINE_ORIGINAL_HOST') ?: '',
+            $this->request->getServer('HTTP_X_FORWARDED_HOST') ?: '',
+            $this->request->getServer('SERVER_NAME') ?: '',
+        ];
+
+        $hosts = [];
+        foreach ($candidates as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            foreach (\explode(',', \trim((string)$candidate)) as $part) {
+                $host = $this->normalizeHostCandidate($part);
+                if ($host !== '') {
+                    $hosts[$host] = $host;
+                }
+            }
+        }
+
+        return \array_values($hosts);
+    }
+
+    private function normalizeHostCandidate(string $host): string
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return '';
+        }
+
+        if (\str_contains($host, '://')) {
+            $parsedHost = \parse_url($host, \PHP_URL_HOST);
+            if (\is_string($parsedHost) && $parsedHost !== '') {
+                $host = $parsedHost;
+            }
+        } else {
+            $host = \preg_replace('#^//#', '', $host) ?? $host;
+            $host = \explode('/', $host, 2)[0] ?? $host;
+        }
+
+        $host = \trim($host);
+        if ($host === '' || $host === 'localhost' || \filter_var($host, \FILTER_VALIDATE_IP)) {
+            return '';
+        }
+
+        return (string)(\preg_replace('/:\d+$/', '', $host) ?? $host);
+    }
+
+    private function findWebsiteIdByHost(string $host): ?int
+    {
+        $hostNoPort = \strtolower(\trim((string)(\preg_replace('/:\d+$/', '', $host) ?? $host)));
+        if ($hostNoPort === '') {
+            return null;
+        }
+
+        try {
+            /** @var WebsiteDomain $domainModel */
+            $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+            $domain = clone $domainModel;
+            $domain->clearData()->clearQuery()->loadByDomain($hostNoPort);
+            if ((int)$domain->getData(WebsiteDomain::schema_fields_ID) > 0
+                && (string)$domain->getData(WebsiteDomain::schema_fields_STATUS) === WebsiteDomain::STATUS_ACTIVE
+            ) {
+                $websiteId = (int)$domain->getData(WebsiteDomain::schema_fields_WEBSITE_ID);
+                if ($websiteId > 0) {
+                    return $websiteId;
+                }
+            }
+
+            /** @var Website $websiteModel */
+            $websiteModel = ObjectManager::getInstance(Website::class);
+            $website = clone $websiteModel;
+            $website->clear()
+                ->where(Website::schema_fields_URL, "%{$hostNoPort}%", 'like')
+                ->find()
+                ->fetch();
+            if ($website->getId()) {
+                return (int)$website->getData(Website::schema_fields_ID);
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return null;
+    }
+
+    private function syncWebsiteContext(int $websiteId): void
+    {
+        if ($websiteId <= 0) {
+            return;
+        }
+
+        WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'PageBuilder page website');
+        RequestContext::setWelineWebsiteId($websiteId);
+        Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 30);
+
+        try {
+            /** @var Website $websiteModel */
+            $websiteModel = ObjectManager::getInstance(Website::class);
+            $website = clone $websiteModel;
+            $website->clearData()->clearQuery()->load($websiteId);
+            if (!$website->getId()) {
+                return;
+            }
+
+            WebsiteData::setWebsite($website);
+
+            $websiteCode = (string)($website->getData(Website::schema_fields_CODE) ?? '');
+            $websiteUrl = (string)($website->getData(Website::schema_fields_URL) ?? '');
+            if ($websiteCode !== '') {
+                WelineEnv::setServer('WELINE_WEBSITE_CODE', $websiteCode, 'PageBuilder page website');
+                RequestContext::setWelineWebsiteCode($websiteCode);
+                Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 30);
+            }
+            if ($websiteUrl !== '') {
+                WelineEnv::setServer('WELINE_WEBSITE_URL', $websiteUrl, 'PageBuilder page website');
+                RequestContext::setWelineWebsiteUrl($websiteUrl);
+                Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 30);
+            }
+        } catch (\Throwable $e) {
+            return;
+        }
+    }
+
+    /**
+     * Render the default content block.
      */
     private function renderContent(array $content, bool $hasTranslation, bool $isLocaleSupported): string
     {

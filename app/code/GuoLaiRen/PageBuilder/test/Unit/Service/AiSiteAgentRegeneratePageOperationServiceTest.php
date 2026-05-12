@@ -30,6 +30,7 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
         $mock = $this->createMock(AiSiteAgentSession::class);
         $mock->method('getId')->willReturn($id);
         $mock->method('getWebsiteId')->willReturn($websiteId);
+        $mock->method('getPublishStatus')->willReturn(AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
         $mock->method('getScopeArray')->willReturn([
             'draft_website_id' => 3,
             'website_id' => 9,
@@ -60,6 +61,8 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
             'appendWorkspaceEvent' => [],
             'ensureAiGeneratedVirtualTheme' => 0,
             'buildPlaceholderBlocksForPageType' => 0,
+            'materializeGeneratedPages' => 0,
+            'mergeMaterializedPagesIntoScope' => 0,
         ];
 
         $defaults = [
@@ -110,11 +113,17 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
                 $scope['_tasks_marked'] = ($scope['_tasks_marked'] ?? 0) + 1;
                 return $scope;
             },
-            'materializeGeneratedPages' => fn (string $track, int $wid, array $profile, array $keys, array $layouts, array $vpages): array => [
-                '_track' => $track,
-                '_wid' => $wid,
-            ],
-            'mergeMaterializedPagesIntoScope' => fn (array $scope, array $materialized): array => \array_merge($scope, ['_materialized' => $materialized]),
+            'materializeGeneratedPages' => function (string $track, int $wid, array $profile, array $keys, array $layouts, array $vpages) use (&$state): array {
+                $state['calls']['materializeGeneratedPages']++;
+                return [
+                    '_track' => $track,
+                    '_wid' => $wid,
+                ];
+            },
+            'mergeMaterializedPagesIntoScope' => function (array $scope, array $materialized) use (&$state): array {
+                $state['calls']['mergeMaterializedPagesIntoScope']++;
+                return \array_merge($scope, ['_materialized' => $materialized]);
+            },
             'summarizeBuildTasks' => fn (array $scope): array => ['summary_ok' => true],
             'replaceScope' => function (int $sessionId, int $adminId, array $scope) use (&$state): void {
                 $state['calls']['replaceScope'][] = [
@@ -333,6 +342,10 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
         ], $result);
         self::assertSame(1, $state['calls']['ensureAiGeneratedVirtualTheme']);
         self::assertSame(0, $state['calls']['buildPlaceholderBlocksForPageType']);
+        self::assertSame(0, $state['calls']['materializeGeneratedPages'], 'virtual_theme rebuild must stay in the virtual theme before publish');
+        self::assertSame(0, $state['calls']['mergeMaterializedPagesIntoScope'], 'virtual_theme rebuild must not attach entity page ids before publish');
+        self::assertContains('pagebuilder_pages_by_type', $state['calls']['replaceScope'][0]['scope_keys']);
+        self::assertContains('materialized_pages_by_type', $state['calls']['replaceScope'][0]['scope_keys']);
         self::assertCount(1, $state['calls']['bindVirtualTheme']);
         self::assertSame(777, $state['calls']['bindVirtualTheme'][0]['theme_id']);
     }

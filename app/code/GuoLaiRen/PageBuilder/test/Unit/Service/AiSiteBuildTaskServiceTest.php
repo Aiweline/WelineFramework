@@ -937,6 +937,10 @@ class AiSiteBuildTaskServiceTest extends TestCase
                         ],
                     ],
                 ],
+                'blog_list' => [
+                    'title' => 'Unselected Blog',
+                    'content' => [],
+                ],
             ],
             'materialized_pages_by_type' => [
                 'home_page' => [
@@ -958,7 +962,12 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame(ContractType::TYPE_RENDER_DATA, $contract['contract_meta']['type'] ?? null);
         $this->assertSame(ContractType::STAGE_BUILD, $contract['contract_meta']['stage'] ?? null);
         $this->assertSame('build-blueprint-signature', $contract['payload']['build_blueprint_signature'] ?? null);
-        $this->assertSame($scope['page_type_layouts'], $contract['payload']['page_type_layouts'] ?? null);
+        $this->assertSame(['home_page'], $contract['payload']['page_types'] ?? null);
+        $this->assertSame(
+            ['home_page' => $scope['page_type_layouts']['home_page']],
+            $contract['payload']['page_type_layouts'] ?? null
+        );
+        $this->assertArrayNotHasKey('blog_list', $contract['payload']['page_type_layouts'] ?? []);
         $this->assertSame(2, $contract['payload']['build_summary']['done'] ?? null);
         $this->assertSame('build_plan_v2', $contract['source_contracts'][0]['type'] ?? null);
         $this->assertSame($contract, $next['build_contracts'][ContractType::TYPE_RENDER_DATA] ?? null);

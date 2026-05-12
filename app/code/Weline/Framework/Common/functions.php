@@ -97,6 +97,19 @@ if (!function_exists('weline_is_static_file_path')) {
         if ($path === '') {
             return false;
         }
+        $rootProtocolFiles = [
+            'robots.txt',
+            'robots.xml',
+            'sitemap.xml',
+            'llms.txt',
+            'llms-full.txt',
+            'ai.txt',
+            'geo-feed.json',
+            'geo-feed.xml',
+        ];
+        if (!\str_contains($path, '/') && \in_array(\strtolower($path), $rootProtocolFiles, true)) {
+            return false;
+        }
         $arr = \explode('/', $path);
         $last = \end($arr);
         return \str_contains($last, '.')

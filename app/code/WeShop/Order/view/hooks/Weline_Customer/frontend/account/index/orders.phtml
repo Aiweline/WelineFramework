@@ -49,7 +49,7 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
     <!-- 订单列表标题 -->
     <div class="weshop-orders-header">
         <h2 class="weshop-orders-title"><?= __('我的订单') ?></h2>
-        <a href="<?= $this->getUrl('weshop/order/list') ?>" class="weshop-view-all-link">
+        <a href="/customer/account/index#orders" class="weshop-view-all-link" data-account-nav-link="true" data-section="orders">
             <?= __('查看全部') ?>
             <i class="ri-arrow-right-s-line weshop-view-all-icon" aria-hidden="true"></i>
         </a>
