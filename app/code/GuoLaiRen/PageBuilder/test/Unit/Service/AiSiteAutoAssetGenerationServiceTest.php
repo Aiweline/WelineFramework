@@ -70,7 +70,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
-    public function testPrepareBuildAssetsLeavesSlotsPendingWhenPlaceholderFallbackIsExplicitlyAllowed(): void
+    public function testPrepareBuildAssetsReportsFailureWhenPlaceholderFallbackIsExplicitlyAllowed(): void
     {
         $publicId = 'asset-placeholder-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -104,13 +104,17 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $slot = $resultScope['asset_manifest']['slots']['home:hero'] ?? [];
 
         self::assertSame([], $result['generated_slots']);
-        self::assertSame([], $result['failed_slots']);
+        self::assertSame('home:hero', (string)($result['failed_slots'][0]['slot_id'] ?? ''));
+        self::assertStringContainsString(
+            'Explicit placeholder fallback should not call the image generator.',
+            (string)($result['failed_slots'][0]['message'] ?? '')
+        );
         self::assertSame([], $slot['variants'] ?? []);
-        self::assertSame('pending', (string)($slot['status'] ?? ''));
+        self::assertSame('error', (string)($slot['status'] ?? ''));
         self::assertSame([], $resultScope['verified_assets'] ?? []);
     }
 
-    public function testPrepareBuildAssetsLeavesSlotsPendingWhenFakeModeIsEnabled(): void
+    public function testPrepareBuildAssetsReportsFailureWhenFakeModeImageGenerationFails(): void
     {
         $publicId = 'asset-fake-mode-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -144,9 +148,13 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $slot = $resultScope['asset_manifest']['slots']['home:hero'] ?? [];
 
         self::assertSame([], $result['generated_slots']);
-        self::assertSame([], $result['failed_slots']);
+        self::assertSame('home:hero', (string)($result['failed_slots'][0]['slot_id'] ?? ''));
+        self::assertStringContainsString(
+            'Fake-mode build must not call the image generator',
+            (string)($result['failed_slots'][0]['message'] ?? '')
+        );
         self::assertSame([], $slot['variants'] ?? []);
-        self::assertSame('pending', (string)($slot['status'] ?? ''));
+        self::assertSame('error', (string)($slot['status'] ?? ''));
     }
 
     public function testPrepareBuildAssetsRegeneratesLegacyPlaceholderAssets(): void

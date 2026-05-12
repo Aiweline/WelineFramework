@@ -45,7 +45,7 @@ class View extends BaseController
             return '';
         }
 
-        $this->assign('title', __('Subscription Details'));
+        $this->assign('title', __('订阅服务详情'));
         return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }

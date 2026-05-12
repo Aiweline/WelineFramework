@@ -81,6 +81,17 @@ final class AiSiteMaterializationServiceTest extends TestCase
         ], Page::TYPE_HOME)));
     }
 
+    public function testVirtualThemeMaterializationUsesLayoutConfigInsteadOfStaleAiHtmlBlocks(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteMaterializationService.php');
+        self::assertIsString($source);
+
+        self::assertStringContainsString('$hasGeneratedLayout = $this->layoutHasGeneratedContentComponents($materializedLayoutConfig);', $source);
+        self::assertStringContainsString('if (!$hasGeneratedLayout) {', $source);
+        self::assertStringContainsString('$renderMode = $hasGeneratedLayout ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;', $source);
+        self::assertStringContainsString('$aiLayoutJson = $hasGeneratedLayout ? null : \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);', $source);
+    }
+
     public function testSinglePageMaterializationDoesNotInjectHomePage(): void
     {
         $page = $this->createMock(Page::class);

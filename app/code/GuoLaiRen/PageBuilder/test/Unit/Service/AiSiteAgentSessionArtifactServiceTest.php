@@ -27,6 +27,9 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
                 'signature' => 'build-signature',
                 'tasks' => [['task_key' => 'shared:header']],
             ],
+            'build_workbench' => ['contracts' => ['render_data' => ['id' => 'rd']]],
+            'build_contracts' => ['render_data' => ['payload' => ['page_types' => ['home_page']]]],
+            'render_data_contract' => ['payload' => ['page_types' => ['home_page']]],
         ]);
 
         $scope = $prepared['scope'];
@@ -43,6 +46,9 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertSame([], $scope['content_manifest']);
         self::assertArrayNotHasKey('confirmed_stage1_plan_book', $scope);
         self::assertSame([], $scope['build_blueprint']);
+        self::assertSame([], $scope['build_workbench']);
+        self::assertSame([], $scope['build_contracts']);
+        self::assertSame([], $scope['render_data_contract']);
         self::assertContains('plan_json', $artifactKeys);
         self::assertContains('plan_markdown', $artifactKeys);
         self::assertContains('build_plan_v2', $artifactKeys);
@@ -50,10 +56,27 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertContains('content_manifest', $artifactKeys);
         self::assertNotContains('confirmed_stage1_plan_book', $artifactKeys);
         self::assertContains('build_blueprint', $artifactKeys);
+        self::assertContains('build_workbench', $artifactKeys);
+        self::assertContains('build_contracts', $artifactKeys);
+        self::assertContains('render_data_contract', $artifactKeys);
         self::assertSame(
             'session_artifact_v1',
             $scope['_artifact_refs'][AiSiteAgentSession::STAGE_VISUAL_EDIT]['build_blueprint']['storage'] ?? null
         );
+    }
+
+    public function testVisualEditArtifactKeyListHydratesBuildContracts(): void
+    {
+        $service = new AiSiteAgentSessionArtifactService(new AiSiteAgentSessionArtifact());
+
+        $keys = $service->artifactKeysForStage(AiSiteAgentSession::STAGE_VISUAL_EDIT);
+
+        self::assertContains('build_workbench', $keys);
+        self::assertContains('build_contracts', $keys);
+        self::assertContains('render_data_contract', $keys);
+        self::assertContains('build_workbench', $service->resolveTouchedArtifactKeysFromPatch(['build_workbench' => []]));
+        self::assertContains('build_contracts', $service->resolveTouchedArtifactKeysFromPatch(['build_contracts' => []]));
+        self::assertContains('render_data_contract', $service->resolveTouchedArtifactKeysFromPatch(['render_data_contract' => []]));
     }
 
     public function testUntouchedEmptyPayloadKeepsExistingArtifactReference(): void

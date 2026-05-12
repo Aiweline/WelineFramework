@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**@var \Weline\Framework\View\Template $this */
 /**@var \Weline\Frontend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Block\ThemeConfig::class);
@@ -8,16 +8,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Fron
 ?>
 <meta charset="UTF-8">
 <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, shrink-to-fit=no'>
-<title><?php echo $this->getData('title') ?? __('欢迎使用WelineFramework框架！'); ?></title>
-<!--元数据-->
-<meta content="<?php echo $this->getData('description'); ?>" name="description"/>
-<meta charset='UTF-8'>
-<meta content="<?php echo $this->getData('title'); ?>" name='author'/>
-<meta content="<?php echo $this->getData('description'); ?>" name='description'/>
+<w:seo slot="head"/>
+<w:geo slot="head"/>
 <link rel="Shortcut Icon" href="@static(Weline_Frontend::img/favicon.png)">
 <link rel="Shortcut Icon" href="@static(Weline_Frontend::img/favicon.png)">
 <link rel="Bookmark" href="@static(Weline_Frontend::img/favicon.png)">
-<!--加载requirejs-->
+<!--鍔犺浇requirejs-->
 <?php if (DEV) : ?>
     <!--        <script src="@static(Weline_Frontend::frontend/lib/requirejs/2.3.6/requirejs.js)"></script>-->
 <?php
@@ -27,7 +23,7 @@ else:
 <?php
 endif;
 ?>
-<!--加载require常用js模块-->
+<!--鍔犺浇require甯哥敤js妯″潡-->
 <!--<script src="@static(Weline_Frontend::base/require.configs.js)"></script>-->
 <w:block class='Weline\Frontend\Block\Header\Base' template='Weline_Frontend::header/base.phtml'/>
 
@@ -37,7 +33,7 @@ endif;
 <css>Weline_Frontend::/libs/font-awesome-4.7.0/css/font-awesome.min.css</css>
 <!-- Bootstrap Css -->
 <css>Weline_Frontend::libs/bootstrap-5.1.3-dist/css/bootstrap.min.css</css>
-<!-- 注意：Theme 资源由 Theme 模块的 head partial 负责加载，不在此处加载 -->
+<!-- 娉ㄦ剰锛歍heme 璧勬簮鐢?Theme 妯″潡鐨?head partial 璐熻矗鍔犺浇锛屼笉鍦ㄦ澶勫姞杞?-->
 <!--JS-->
 <js>Weline_Frontend::/libs/jquery/3.6.0/jquery.js</js>
 <script>
@@ -47,31 +43,31 @@ endif;
     window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
 </script>
 <?php
-// 获取开发模式状态
+// 鑾峰彇寮€鍙戞ā寮忕姸鎬?
 $isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
 
-// 根据环境设置模块配置URL和基础URL
+// 鏍规嵁鐜璁剧疆妯″潡閰嶇疆URL鍜屽熀纭€URL
 if ($isDev) {
-    // 开发模式
+    // 寮€鍙戞ā寮?
     $modulesConfigUrl = '/Weline/Frontend/view/statics/base/weline.modules.js';
     $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
 } else {
-    // 生产模式
+    // 鐢熶骇妯″紡
     $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
     $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
 }
 
-// 配置主题配置
+// 閰嶇疆涓婚閰嶇疆
 $themeConfigPayload = [
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
 ];
 ?>
-<!-- Frontend配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
+<!-- Frontend閰嶇疆锛氫娇鐢╠ata-no-extract鏍囪锛屼笉浼氳鎻愬彇鍒板閮↗S鏂囦欢 -->
 <script data-no-extract="true">
     (function() {
-        // 合并到全局配置
+        // 鍚堝苟鍒板叏灞€閰嶇疆
         if (!window.__WelineThemeConfig) {
             window.__WelineThemeConfig = {};
         }
@@ -80,10 +76,10 @@ $themeConfigPayload = [
         window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
     })();
 </script>
-<!-- Weline.Api 同步回退（确保 request 立即可用） -->
+<!-- Weline.Api 鍚屾鍥為€€锛堢‘淇?request 绔嬪嵆鍙敤锛?-->
 <script src="<?= $isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js' : '/static/Weline/Frontend/js/weline-api-fallback.js' ?>"></script>
-<!-- 注意：Theme JS 和初始化由 Theme 模块的 head partial 负责，不在此处加载 -->
-<!--加载配置页头-->
+<!-- 娉ㄦ剰锛歍heme JS 鍜屽垵濮嬪寲鐢?Theme 妯″潡鐨?head partial 璐熻矗锛屼笉鍦ㄦ澶勫姞杞?-->
+<!--鍔犺浇閰嶇疆椤靛ご-->
 <?php
 if($this->getHeader()){
     echo $this->getHeader()->getHtml();

@@ -1,27 +1,21 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
-/**@var \Weline\Customer\Model\Customer $user */
+/** @var \Weline\Customer\Model\Customer $user */
 $avatar = $user->getAvatar();
 $username = $user->getUsername();
 $email = $user->getEmail();
 $avatarInitial = strtoupper(mb_substr($username, 0, 1));
-// 侧栏锚点须挂在账户首页路径下，避免站点存在 <base href> 或从其它页复制链接时变成 https://host/#fragment
 $accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
 if (!is_string($accountIndexPath) || $accountIndexPath === '') {
     $accountIndexPath = '/customer/account/index';
 }
 $accountIndexPath = rtrim($accountIndexPath, '/');
 ?>
-<!-- 侧边栏导航 -->
 <div class="account-sidebar-wrapper">
     <header class="account-sidebar__header">
         <div class="account-sidebar__avatar">
-            <?php if ($avatar): ?>
-                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" class="account-sidebar__avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="account-sidebar__avatar-fallback"><?= $avatarInitial ?></div>
-            <?php else: ?>
-                <div class="account-sidebar__avatar-fallback"><?= $avatarInitial ?></div>
-            <?php endif; ?>
+            <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="sidebarAvatarPreview" class="account-sidebar__avatar-img"<?= $avatar ? '' : ' hidden' ?>>
+            <div class="account-sidebar__avatar-fallback" id="sidebarAvatarFallback"<?= $avatar ? ' hidden' : '' ?>><?= $avatarInitial ?></div>
         </div>
         <div class="account-sidebar__user-info">
             <h4 class="account-sidebar__username"><?= htmlspecialchars($username) ?></h4>
@@ -30,18 +24,18 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
             <?php endif; ?>
         </div>
     </header>
+
     <nav class="account-sidebar__nav">
-        <a class="account-sidebar__nav-link account-sidebar__nav-link--active" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#profile" data-section="profile" data-account-nav-link="true">
-            <i class="ri-user-line"></i>
+        <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#profile" data-section="profile" data-account-nav-link="true">
             <span><lang>个人资料</lang></span>
         </a>
         <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#security" data-section="security" data-account-nav-link="true">
-            <i class="ri-lock-line"></i>
             <span><lang>安全设置</lang></span>
         </a>
-        <hook>account.sidebar</hook>
+
+        <w:hook name="account.sidebar"/>
+
         <a class="account-sidebar__nav-link account-sidebar__nav-link--logout" href="/customer/account/logout">
-            <i class="ri-logout-box-line"></i>
             <span><lang>退出登录</lang></span>
         </a>
     </nav>
@@ -75,6 +69,11 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--color-primary);
+}
+
+.account-sidebar__avatar-img[hidden],
+.account-sidebar__avatar-fallback[hidden] {
+    display: none !important;
 }
 
 .account-sidebar__avatar-fallback {
@@ -120,6 +119,14 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
     gap: 0.25rem;
 }
 
+.account-sidebar__nav-link[data-section="profile"] {
+    order: 10;
+}
+
+.account-sidebar__nav-link[data-section="security"] {
+    order: 20;
+}
+
 .account-sidebar__nav-link {
     display: flex;
     align-items: center;
@@ -163,43 +170,126 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
     color: var(--color-text-dark);
 }
 
+.account-hook-nav-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0.75rem 0;
+}
+
+.account-hook-nav-title {
+    padding: 0 1rem 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.04em;
+}
+
 .account-hook-nav-link {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 0.75rem;
     width: 100%;
-    padding: 0.875rem 1rem;
+    padding: 0.75rem 1rem;
     border: 1px solid transparent;
     border-radius: var(--as-border-radius);
     background: transparent;
-    color: var(--color-text-secondary);
+    color: var(--color-text-primary);
     text-decoration: none;
     transition: var(--as-transition);
+    order: 30;
 }
 
 .account-hook-nav-link:hover {
-    transform: translateX(4px);
     background: rgba(148, 163, 184, 0.08);
     color: var(--color-text-primary);
     text-decoration: none;
 }
 
-.account-hook-nav-link.is-active {
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(59, 130, 246, 0.08) 100%);
-    border-color: rgba(37, 99, 235, 0.18);
-    box-shadow: 0 4px 14px rgba(30, 41, 59, 0.08);
-    color: var(--color-primary);
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) {
+    background: var(--color-primary);
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--color-text-dark);
+    font-weight: 700;
+    transform: none;
+}
+
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__label i,
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__text strong {
+    color: var(--color-text-dark);
+}
+
+.account-hook-nav-link.is-active:not([data-account-nav-parent]):hover {
+    background: var(--color-primary-dark);
+    color: var(--color-text-dark);
+}
+
+.account-hook-nav-link[data-account-nav-parent] {
+    order: 21;
+    width: calc(100% - 1.75rem);
+    margin-left: 1.75rem;
+    padding: 0.625rem 0.75rem;
+    color: var(--color-text-secondary);
+}
+
+.account-hook-nav-link[data-account-nav-parent]:hover {
+    transform: none;
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--color-primary-dark);
+}
+
+.account-hook-nav-link[data-account-nav-parent].is-active {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--color-primary-dark);
+    font-weight: 700;
+    transform: none;
+}
+
+.account-hook-nav-link[data-account-nav-parent].is-active .account-hook-nav-link__label i,
+.account-hook-nav-link[data-account-nav-parent].is-active .account-hook-nav-link__text strong {
+    color: var(--color-primary-dark);
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__label {
+    gap: 0.5rem;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__label i {
+    display: inline-block;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__text strong {
+    font-size: 0.875rem;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__text span {
+    display: none;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__arrow {
+    display: inline-flex;
+    margin-left: auto;
+    flex-shrink: 0;
+    opacity: 1;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .badge {
+    white-space: nowrap;
 }
 
 .account-hook-nav-link__label {
     display: inline-flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0;
     min-width: 0;
 }
 
 .account-hook-nav-link__label i {
+    display: none;
     width: 1.125rem;
     font-size: 1rem;
     text-align: center;
@@ -225,18 +315,29 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
     line-height: 1.45;
 }
 
-.account-hook-nav-link.is-active .account-hook-nav-link__text span,
 .account-hook-nav-link:hover .account-hook-nav-link__text span {
     color: inherit;
 }
 
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__text span {
+    color: var(--color-text-dark);
+    opacity: 0.78;
+}
+
+.account-hook-nav-link[data-account-nav-parent].is-active .account-hook-nav-link__text span {
+    color: var(--color-primary-dark);
+    opacity: 0.72;
+}
+
 .account-hook-nav-link__arrow {
+    display: none;
     color: inherit;
     font-size: 0.875rem;
     opacity: 0.68;
 }
 
 .account-sidebar__nav-link--logout {
+    order: 100;
     margin-top: 0.5rem;
     color: var(--color-error);
 }

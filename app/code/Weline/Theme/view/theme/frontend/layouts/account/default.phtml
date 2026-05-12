@@ -159,7 +159,17 @@ $this->assign('meta', $meta);
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::account::content-before</w:hook>
             <main class="account-main-content" id="account-main-content" data-layout="account_main_content">
+                <if condition="meta.content">
                 {{meta.content}}
+                    <elseif condition="content"/>
+                    {{content}}
+                    <elseif condition="meta.contentTemplate"/>
+                    <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                    <elseif condition="contentTemplate"/>
+                    <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+                    <else/>
+                    <?= $this->getChildHtml('content') ?>
+                </if>
             </main>
             <w:hook>Weline_Theme::frontend::layouts::account::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>

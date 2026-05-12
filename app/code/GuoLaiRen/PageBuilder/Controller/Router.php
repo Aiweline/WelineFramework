@@ -27,8 +27,12 @@ class Router implements RouterInterface
      */
     public static function process(string &$path, array &$rule): void
     {
-        // 1. 跳过已经匹配的路由
-        if (!empty($rule['module'])) {
+        $trimmedPath = trim($path, '/');
+
+        $isRootPath = ($trimmedPath === '' || $trimmedPath === 'index' || $trimmedPath === 'index/index');
+
+        // Keep existing module routes, but allow the published site root to be resolved by PageBuilder.
+        if (!empty($rule['module']) && !$isRootPath) {
             return;
         }
         
@@ -38,16 +42,15 @@ class Router implements RouterInterface
         }
         
         // 3. 处理空路径：域名根直接显示当前站点首页，或预览时用 query 的 handle
-        $trimmedPath = trim($path, '/');
-        if (empty($trimmedPath)) {
+        if ($isRootPath) {
             $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? self::getCurrentWebsiteId();
             // 无站点时按请求 host 解析站点，便于直接用域名访问首页
             if ($websiteId <= 0) {
-                $host = (string)WelineEnv::server('HTTP_HOST', '');
-                if ($host !== '') {
+                foreach (self::currentHostCandidates() as $host) {
                     $websiteId = self::findWebsiteIdByHost($host) ?? 0;
                     if ($websiteId > 0) {
                         WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'PageBuilder router host website');
+                        break;
                     }
                 }
             }
@@ -275,18 +278,81 @@ class Router implements RouterInterface
      */
     private static function resolveWebsiteIdFromCurrentHost(): ?int
     {
-        $host = (string)(WelineEnv::server('HTTP_HOST') ?: WelineEnv::server('SERVER_NAME', ''));
-        if ($host === '') {
-            return null;
-        }
-
-        $websiteId = self::findWebsiteIdByHost((string)$host);
-        if ($websiteId !== null && $websiteId > 0) {
-            WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'PageBuilder current host website');
-            return $websiteId;
+        foreach (self::currentHostCandidates() as $host) {
+            $websiteId = self::findWebsiteIdByHost($host);
+            if ($websiteId !== null && $websiteId > 0) {
+                WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'PageBuilder current host website');
+                return $websiteId;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * WLS 测试入口会通过 127.0.0.1:port 代理访问，真实发布域名可能只保留在原始 Host 或完整 URL 上。
+     *
+     * @return list<string>
+     */
+    private static function currentHostCandidates(): array
+    {
+        $candidates = [
+            WelineEnv::get('server.http_host', ''),
+            WelineEnv::get('http_weline_original_host', ''),
+            WelineEnv::get('http_x_forwarded_host', ''),
+            WelineEnv::server('HTTP_HOST', ''),
+            WelineEnv::server('HTTP_WELINE_ORIGINAL_HOST', ''),
+            WelineEnv::server('HTTP_X_FORWARDED_HOST', ''),
+            WelineEnv::server('SERVER_NAME', ''),
+            WelineEnv::server('WELINE_WEBSITE_URL', ''),
+            WelineEnv::server('WELINE_FULL_REQUEST_URI', ''),
+            WelineEnv::get('website_url', ''),
+            WelineEnv::get('full_request_uri', ''),
+        ];
+
+        $hosts = [];
+        foreach ($candidates as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $candidate = \trim((string)$candidate);
+            if ($candidate === '') {
+                continue;
+            }
+            foreach (\explode(',', $candidate) as $part) {
+                $host = self::normalizeHostCandidate($part);
+                if ($host !== '') {
+                    $hosts[$host] = $host;
+                }
+            }
+        }
+
+        return \array_values($hosts);
+    }
+
+    private static function normalizeHostCandidate(string $host): string
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return '';
+        }
+
+        if (\str_contains($host, '://')) {
+            $parsedHost = \parse_url($host, \PHP_URL_HOST);
+            if (\is_string($parsedHost) && $parsedHost !== '') {
+                $host = $parsedHost;
+            }
+        } else {
+            $host = \preg_replace('#^//#', '', $host) ?? $host;
+            $host = \explode('/', $host, 2)[0] ?? $host;
+        }
+
+        $host = \trim($host);
+        if ($host === '' || $host === 'localhost' || \filter_var($host, \FILTER_VALIDATE_IP)) {
+            return '';
+        }
+
+        return (string)(\preg_replace('/:\d+$/', '', $host) ?? $host);
     }
 
     private static function findWebsiteIdByHost(string $host): ?int
