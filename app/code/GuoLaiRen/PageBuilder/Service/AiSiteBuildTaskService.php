@@ -1957,20 +1957,33 @@ class AiSiteBuildTaskService
      */
     private function buildRenderDataContractPayload(array $scope, array $buildBlueprint, array $summary): array
     {
+        $pageTypes = \array_values(\array_filter(\array_map(
+            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            \is_array($buildBlueprint['page_types'] ?? null) ? $buildBlueprint['page_types'] : []
+        ), static fn(string $value): bool => $value !== ''));
+        $pageTypeSet = \array_fill_keys($pageTypes, true);
+        $pageTypeLayouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $materializedPagesByType = \is_array($scope['materialized_pages_by_type'] ?? null) ? $scope['materialized_pages_by_type'] : [];
+        $virtualPagesByType = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $pagebuilderPagesByType = \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [];
+        if ($pageTypeSet !== []) {
+            $pageTypeLayouts = \array_intersect_key($pageTypeLayouts, $pageTypeSet);
+            $materializedPagesByType = \array_intersect_key($materializedPagesByType, $pageTypeSet);
+            $virtualPagesByType = \array_intersect_key($virtualPagesByType, $pageTypeSet);
+            $pagebuilderPagesByType = \array_intersect_key($pagebuilderPagesByType, $pageTypeSet);
+        }
+
         return [
             'build_blueprint_signature' => \trim((string)($buildBlueprint['signature'] ?? '')),
             'build_plan_contract_id' => \trim((string)($buildBlueprint['build_plan_contract_id'] ?? '')),
             'build_plan_signature' => \trim((string)($buildBlueprint['build_plan_signature'] ?? '')),
             'workspace_track' => \trim((string)($buildBlueprint['workspace_track'] ?? $scope['workspace_track'] ?? '')),
-            'page_types' => \array_values(\array_filter(\array_map(
-                static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                \is_array($buildBlueprint['page_types'] ?? null) ? $buildBlueprint['page_types'] : []
-            ), static fn(string $value): bool => $value !== '')),
-            'page_type_layouts' => \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [],
+            'page_types' => $pageTypes,
+            'page_type_layouts' => $pageTypeLayouts,
             'shared_components' => \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [],
-            'materialized_pages_by_type' => \is_array($scope['materialized_pages_by_type'] ?? null) ? $scope['materialized_pages_by_type'] : [],
-            'virtual_pages_by_type' => \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [],
-            'pagebuilder_pages_by_type' => \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [],
+            'materialized_pages_by_type' => $materializedPagesByType,
+            'virtual_pages_by_type' => $virtualPagesByType,
+            'pagebuilder_pages_by_type' => $pagebuilderPagesByType,
             'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [],
             'build_summary' => $summary,
         ];
@@ -2142,7 +2155,7 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * 二阶段任务方案已成功生成后，清理“请先确认第二阶段任务方案再构建”这一类旧的构建前置错误。
+     * 构建方案准备完成后，清理旧构建前置错误。
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>

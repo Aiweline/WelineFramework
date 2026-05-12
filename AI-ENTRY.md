@@ -51,9 +51,15 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 
 ## ⚠️ Constraints
 
-**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | Alter fields in `Setup/Upgrade.php` | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | WLS `sleep/die/exit` | Write detailed fix reports to root directory | **Test on default port 9501 or reuse instance names** | **Leave test instances running after session ends**
+**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | Alter fields in `Setup/Upgrade.php` | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | WLS `sleep/die/exit` | Run blocking foreground services/watchers in Codex shell (`--no-daemon`, foreground dev servers, watch mode) | Write detailed fix reports to root directory | **Test on default port 9501 or reuse instance names** | **Leave test instances running after session ends**
 
-**ALWAYS:** I18n `__('text')` or `<lang>text</lang>` | Placeholders `%{1}` or `%{name}` | `.phtml` prefer template taglibs (`<notempty>`, `<var>`, `<lang>`, etc.) over bulk raw PHP — see `dev/ai/global-constraints.md` | ORM chains end with `.fetch()`/`.fetchArray()` | Schema via `#[Col]` + `setup:upgrade` | Write fix reports in module's doc/ directory | Update module README with test status | **Start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`)** | **Stop test instance after testing (`server:stop -n {instance-name}`)**
+**ALWAYS:** I18n `__('text')` or `<lang>text</lang>` | Placeholders `%{1}` or `%{name}` | `.phtml` prefer template taglibs (`<notempty>`, `<var>`, `<lang>`, etc.) over bulk raw PHP — see `dev/ai/global-constraints.md` | ORM chains end with `.fetch()`/`.fetchArray()` | Schema via `#[Col]` + `setup:upgrade` | Write fix reports in module's doc/ directory | Update module README with test status | **Start dedicated test instance in background/daemon mode with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`)** | Verify long-running services with bounded status/request commands | **Stop test instance after testing (`server:stop -n {instance-name}`)**
+
+### Codex Runtime Safety
+
+- Codex must never start WLS/dev servers, watchers, or other long-running commands in foreground mode from the main tool shell. `php bin/w server:start ... --no-daemon` is explicitly forbidden.
+- Start long-running services only as background/daemon instances with unique names, then inspect logs/status using separate bounded commands.
+- If foreground logs are genuinely needed, launch a hidden/background helper and read bounded output; do not block the Codex command runner.
 
 ## 📝 Documentation Rules
 

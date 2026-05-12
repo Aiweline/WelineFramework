@@ -60,16 +60,20 @@ class AiSiteMaterializationService
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
             $layoutConfig = $layouts[$pageType] ?? $this->scopeCompatibilityService->normalizeLayoutConfig([]);
             $materializedLayoutConfig = $this->resolveMaterializedLayoutConfig($layoutConfig);
-            $blocks = \is_array($virtualPage['blocks'] ?? null) ? $this->filterPageContentAiHtmlBlocks($virtualPage['blocks']) : [];
-            if ($blocks === []) {
-                $blocks = $this->resolveExistingAiHtmlBlocks($page);
+            $hasGeneratedLayout = $this->layoutHasGeneratedContentComponents($materializedLayoutConfig);
+            $blocks = [];
+            if (!$hasGeneratedLayout) {
+                $blocks = \is_array($virtualPage['blocks'] ?? null) ? $this->filterPageContentAiHtmlBlocks($virtualPage['blocks']) : [];
+                if ($blocks === []) {
+                    $blocks = $this->resolveExistingAiHtmlBlocks($page);
+                }
             }
-            if ($blocks === [] && !$this->layoutHasGeneratedContentComponents($materializedLayoutConfig)) {
+            if ($blocks === [] && !$hasGeneratedLayout) {
                 throw new \RuntimeException((string)__('AI virtual theme page has no generated layout or blocks: %{1}', [$pageType]));
             }
             $aiLayout = ['blocks' => $blocks];
-            $renderMode = $blocks !== [] ? Page::RENDER_MODE_AI_HTML : Page::RENDER_MODE_THEME;
-            $aiLayoutJson = $blocks !== [] ? \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE) : null;
+            $renderMode = $hasGeneratedLayout ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
+            $aiLayoutJson = $hasGeneratedLayout ? null : \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);
 
             $page->setData(Page::schema_fields_TYPE, $pageType)
                 ->setData(Page::schema_fields_WEBSITE_ID, $websiteId)

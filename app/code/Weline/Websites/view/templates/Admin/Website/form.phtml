@@ -343,53 +343,11 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
                                     <div class="form-text-hint"><lang>按住Ctrl或Cmd键可多选</lang></div>
                                 </div>
 
-                                <div class="col-6 mb-3">
-                                    <label for="seo_account" class="form-label"><?= __('SEO 账户') ?></label>
-                                    <?php
-                                    $seoAccountId = '';
-                                    $seoAccountName = __('未绑定');
-                                    if (!empty($website['website_id'])) {
-                                        try {
-                                            $seoBinding = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
-                                            $binding = $seoBinding->getByWebsiteId((int)$website['website_id']);
-                                            if ($binding) {
-                                                $seoAccountId = $binding->getAccountId();
-                                                $seoAccount = ObjectManager::getInstance(\Weline\Seo\Model\SeoAccount::class);
-                                                $account = $seoAccount->load($seoAccountId);
-                                                if ($account->getId()) {
-                                                    $seoAccountName = $account->getData('name') . ' (' . $account->getData('provider') . ')';
-                                                }
-                                            }
-                                        } catch (\Exception $e) {
-                                        }
-                                    }
-                                    ?>
-                                    <w:seo:account:select 
-                                        id="seo_account"
-                                        name="seo_account_id"
-                                        value="seoAccountId|''"
-                                        display="seoAccountName|'请选择SEO账户'"
-                                        class="w-100"
-                                    />
-                                    <div class="form-text-hint"><?= __('绑定后将自动提交sitemap到该SEO账户的搜索引擎') ?></div>
-                                </div>
-
-                                <div class="col-6 mb-3">
-                                    <label class="form-label">&nbsp;</label>
-                                    <div class="p-2 bg-body-secondary rounded">
-                                        <small class="text-muted">
-                                            <i class="mdi mdi-information-outline"></i>
-                                            <?= __('SEO账户管理请前往：') ?>
-                                            <a href="<?= $this->getBackendUrl('*/weline_seo/backend/account/index') ?>" target="_blank">
-                                                <?= __('SEO管理 > 账户管理') ?>
-                                            </a>
-                                        </small>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                <w:hook>Weline_Websites::backend::website::form::sections-after</w:hook>
             </div>
 
             <div class="mt-4">

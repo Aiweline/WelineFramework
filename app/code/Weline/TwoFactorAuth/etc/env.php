@@ -10,6 +10,7 @@ declare(strict_types=1);
  */
 
 return [
-    'router'       => 'two-factor-auth',
+    'router' => 'two-factor-auth',
+    'weline_customer_login_challenge_handler' => \Weline\TwoFactorAuth\Service\CustomerTwoFactorLoginChallengeHandler::class,
 ];
 

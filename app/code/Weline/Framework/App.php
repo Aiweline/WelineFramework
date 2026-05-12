@@ -122,6 +122,30 @@ class App
         return \is_array($parse) ? $parse : null;
     }
 
+    private function normalizeParsedUri(mixed $uri): string
+    {
+        if (\is_array($uri)) {
+            $path = $uri['path'] ?? $uri['uri'] ?? $uri['REQUEST_URI'] ?? $uri['data'] ?? '';
+            if (!\is_scalar($path)) {
+                $path = '';
+            }
+            $path = (string)$path;
+
+            $query = $uri['query'] ?? '';
+            if (\is_array($query)) {
+                $query = \http_build_query($query);
+            }
+            if (\is_scalar($query) && $query !== '') {
+                $query = (string)$query;
+                $path .= (\str_contains($path, '?') ? '&' : '?') . \ltrim($query, '?');
+            }
+
+            return $path;
+        }
+
+        return \is_scalar($uri) ? (string)$uri : '';
+    }
+
     public function applyParsedUrl(array $parse): void
     {
         if (!isset($parse['server']) || !\is_array($parse['server'])) {
@@ -137,7 +161,7 @@ class App
         $isBackendArea = $area === 'backend' || $area === 'rest_backend';
         WelineEnv::set('route.is_backend', $isBackendArea, 'App applyParsedUrl');
         if (isset($parse['uri'])) {
-            $uri = Url::decode_url((string)$parse['uri']);
+            $uri = Url::decode_url($this->normalizeParsedUri($parse['uri']));
             // 必须始终把 parser 产出的 uri 写回 REQUEST_URI。
             // 否则 backend 场景会保留旧 URI（含 backend key 前缀），
             // 导致后续 w_env('request.uri') / Router 读取到错误路径并 404。
@@ -147,7 +171,7 @@ class App
 
         if (!isset($parse['server']['REQUEST_URI']) || $parse['server']['REQUEST_URI'] === '') {
             $parse['server']['REQUEST_URI'] = isset($parse['uri'])
-                ? Url::decode_url((string)$parse['uri'])
+                ? Url::decode_url($this->normalizeParsedUri($parse['uri']))
                 : $this->getCurrentRequestUri();
         }
 
@@ -178,7 +202,7 @@ class App
 
         // 必须用 parser 已合并进 input.server 的 REQUEST_URI，不能读旧的 request.uri（WlsRuntime 预写会残留）。
         $serverMerged = Context::current()->server();
-        $currentUri = Url::decode_url((string)($serverMerged['REQUEST_URI'] ?? '/'));
+        $currentUri = Url::decode_url($this->normalizeParsedUri($serverMerged['REQUEST_URI'] ?? '/'));
         if ($currentUri === '') {
             $currentUri = '/';
         }

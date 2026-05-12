@@ -83,7 +83,7 @@ class ShippingAddress extends FrontendController
                 $message = __('创建成功');
             }
             
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => true,
                     'message' => $message,
@@ -94,7 +94,7 @@ class ShippingAddress extends FrontendController
             $this->getMessageManager()->addSuccess($message);
             $this->redirect('*/index');
         } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => $e->getMessage()
@@ -114,7 +114,7 @@ class ShippingAddress extends FrontendController
         $id = $this->request->getPost('id');
         
         if (!$id) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => __('参数错误')
@@ -128,7 +128,7 @@ class ShippingAddress extends FrontendController
         try {
             $this->service->delete((int)$id);
             
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => true,
                     'message' => __('删除成功')
@@ -138,7 +138,7 @@ class ShippingAddress extends FrontendController
             $this->getMessageManager()->addSuccess(__('删除成功'));
             $this->redirect('*/index');
         } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => $e->getMessage()
@@ -158,7 +158,7 @@ class ShippingAddress extends FrontendController
         $id = $this->request->getPost('id');
         
         if (!$id) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => __('参数错误')
@@ -172,7 +172,7 @@ class ShippingAddress extends FrontendController
         try {
             $this->service->setDefault((int)$id);
             
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => true,
                     'message' => __('设置成功')
@@ -182,7 +182,7 @@ class ShippingAddress extends FrontendController
             $this->getMessageManager()->addSuccess(__('设置成功'));
             $this->redirect('*/index');
         } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => $e->getMessage()
@@ -201,6 +201,16 @@ class ShippingAddress extends FrontendController
     {
         header('Content-Type: application/json');
         return json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function wantsJson(): bool
+    {
+        if ($this->request->isAjax()) {
+            return true;
+        }
+
+        $accept = (string)($_SERVER['HTTP_ACCEPT'] ?? '');
+        return str_contains($accept, 'application/json');
     }
 }
 

@@ -224,6 +224,67 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertArrayNotHasKey('events', $pruned);
     }
 
+    public function testPruneStateForViewKeepsEditableVirtualThemeLayoutMetadata(): void
+    {
+        $service = new AiSiteAgentWorkspaceStateHelperService();
+        $state = [
+            'public_id' => 'pub_layout',
+            'page_type_layouts' => [
+                'home_page' => [
+                    'page_type' => 'home_page',
+                    'label' => 'Home',
+                    'version' => '1.0',
+                    'page_id' => 0,
+                    'use_original_template' => false,
+                    'header' => [
+                        'component' => 'header/ai-site-header',
+                        'config' => [
+                            'site_title' => 'Editable Site',
+                            'nav_hint' => 'Home | Contact',
+                        ],
+                        'html' => '<header>drop</header>',
+                    ],
+                    'content' => [
+                        [
+                            'code' => 'content/home-page-hero',
+                            'enabled' => true,
+                            'config' => [
+                                'headline' => 'Editable Headline',
+                                'cta_text' => 'Start',
+                                'nested' => ['subtitle' => 'Nested Editable'],
+                            ],
+                            'sort_order' => 10,
+                            'phtml' => '<section>drop</section>',
+                        ],
+                    ],
+                    'footer' => [
+                        'component' => 'footer/ai-site-footer',
+                        'config' => ['site_title' => 'Editable Site'],
+                    ],
+                    'blocks' => [['html' => 'legacy']],
+                    'sections' => [['html' => 'legacy']],
+                ],
+            ],
+        ];
+
+        $pruned = $service->pruneStateForView($state);
+        $layout = $pruned['page_type_layouts']['home_page'];
+
+        self::assertSame('1.0', $layout['version']);
+        self::assertSame(1, $layout['block_count']);
+        self::assertSame(1, $layout['section_count']);
+        self::assertSame('header/ai-site-header', $layout['header']['component']);
+        self::assertSame('Editable Site', $layout['header']['config']['site_title']);
+        self::assertSame('content/home-page-hero', $layout['content'][0]['code']);
+        self::assertSame('Editable Headline', $layout['content'][0]['config']['headline']);
+        self::assertSame('Nested Editable', $layout['content'][0]['config']['nested']['subtitle']);
+        self::assertSame('footer/ai-site-footer', $layout['footer']['component']);
+        self::assertArrayNotHasKey('html', $layout['header']);
+        self::assertArrayNotHasKey('phtml', $layout['content'][0]);
+        self::assertArrayNotHasKey('blocks', $layout);
+        self::assertArrayNotHasKey('sections', $layout);
+    }
+
     public function testSelectStatusQueueInfoUsesPlanAndBuildBucketsOnly(): void
     {
         $service = new AiSiteAgentWorkspaceStateHelperService();

@@ -547,6 +547,17 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         );
     }
 
+    public function testVirtualThemeBuildPersistsDraftWithoutMaterializingEntityPages(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $persistSource = $this->extractControllerMethodSource($source, 'persistVirtualThemeBuildScope');
+
+        self::assertStringContainsString('dropPrePublishMaterializedPagesFromVirtualThemeScope', $persistSource);
+        self::assertStringNotContainsString('materializeGeneratedPages(', $persistSource);
+        self::assertStringContainsString("\$scope['pagebuilder_pages_by_type'] = [];", $source);
+        self::assertStringContainsString("\$scope['materialized_pages_by_type'] = [];", $source);
+    }
+
     public function testBuildQueueTerminalErrorClearsSchedulerWaitingFlags(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSiteBuildQueue.php');
@@ -806,6 +817,80 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertNotFalse($allowUnclaimedQueueOffset, 'Queue worker must claim observer-mirrored running operations.');
         self::assertNotFalse($duplicateStreamOffset, 'Duplicate-stream guard missing.');
         self::assertLessThan($duplicateStreamOffset, $allowUnclaimedQueueOffset);
+    }
+
+    public function testForeignSessionQueueRuntimeStateIsDiscarded(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'discardForeignAiSiteQueueRuntimeState');
+        $method->setAccessible(true);
+
+        $scope = [
+            'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
+            'active_operation' => [
+                'operation' => 'build',
+                'status' => 'done',
+                'job_key' => 'glr_aisite:session:1793:job:virtual_theme.tree.build',
+                'queue_id' => 1910,
+            ],
+            'active_operations' => [
+                'plan' => [
+                    'operation' => 'plan',
+                    'job_key' => 'glr_aisite:session:1793:job:stage1.requirement_expand',
+                ],
+                'publish' => [
+                    'operation' => 'publish',
+                    'job_key' => 'glr_aisite:session:1794:job:virtual_theme.publish',
+                ],
+            ],
+            'build_queue_info' => [
+                'content' => [
+                    'job_key' => 'glr_aisite:session:1793:job:virtual_theme.tree.build',
+                ],
+            ],
+        ];
+
+        $cleaned = $method->invoke($controller, $scope, 1794);
+
+        self::assertSame([], $cleaned['active_operation']);
+        self::assertArrayNotHasKey('plan', $cleaned['active_operations']);
+        self::assertArrayHasKey('publish', $cleaned['active_operations']);
+        self::assertArrayNotHasKey('build_queue_info', $cleaned);
+        self::assertSame(AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH, $cleaned['workspace_status']);
+    }
+
+    public function testCurrentSessionQueueRuntimeStateIsPreserved(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'discardForeignAiSiteQueueRuntimeState');
+        $method->setAccessible(true);
+
+        $scope = [
+            'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
+            'active_operation' => [
+                'operation' => 'build',
+                'status' => 'queued',
+                'job_key' => 'glr_aisite:session:1794:job:virtual_theme.tree.build',
+            ],
+            'active_operations' => [
+                'build' => [
+                    'operation' => 'build',
+                    'job_key' => 'glr_aisite:session:1794:job:virtual_theme.tree.build',
+                ],
+            ],
+        ];
+
+        self::assertSame($scope, $method->invoke($controller, $scope, 1794));
+    }
+
+    public function testStartBuildDoesNotRunSynchronousAiPreflightBeforeQueue(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'requiresFrontendAiProviderReadinessCheck');
+        $method->setAccessible(true);
+
+        self::assertFalse($method->invoke($controller, 'build'));
+        self::assertFalse($method->invoke($controller, 'plan'));
     }
 
     public function testQueueRowBizKeyMatchDoesNotLetTaskPlanUseStageOnePlanningSlot(): void

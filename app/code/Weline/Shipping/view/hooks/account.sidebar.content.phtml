@@ -1,0 +1,493 @@
+<?php
+/**
+ * @hook-priority 50
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+
+$user = $this->getData('user');
+if (!$user) {
+    return;
+}
+
+$shippingAddresses = [];
+$deliveryAddresses = [];
+$shippingLoadError = '';
+$deliveryLoadError = '';
+
+try {
+    $shippingService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Shipping\Service\ShippingAddressService::class);
+    $shippingAddresses = $shippingService->getList();
+} catch (\Throwable) {
+    $shippingLoadError = (string)__('发货地址加载失败，请稍后重试');
+}
+
+try {
+    $deliveryService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Shipping\Service\DeliveryAddressService::class);
+    $deliveryAddresses = $deliveryService->getListByCustomer((int)$user->getId());
+} catch (\Throwable) {
+    $deliveryLoadError = (string)__('收货地址加载失败，请稍后重试');
+}
+
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+
+$addressData = static function ($address, string $idField, string $type): array {
+    return [
+        'id' => (int)$address->getId(),
+        $idField => (int)$address->getId(),
+        'type' => $type,
+        'name' => (string)$address->getData('name'),
+        'contact_name' => (string)$address->getData('contact_name'),
+        'contact_phone' => (string)$address->getData('contact_phone'),
+        'country' => (string)($address->getData('country') ?: '中国'),
+        'province' => (string)$address->getData('province'),
+        'city' => (string)$address->getData('city'),
+        'district' => (string)$address->getData('district'),
+        'street' => (string)$address->getData('street'),
+        'postal_code' => (string)$address->getData('postal_code'),
+        'is_default' => $address->isDefault() ? 1 : 0,
+        'full_address' => (string)$address->getFullAddress(),
+    ];
+};
+
+$json = static fn(array $data): string => htmlspecialchars(
+    json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+    ENT_QUOTES,
+    'UTF-8'
+);
+
+$shippingPayloads = array_map(
+    static fn($address): array => $addressData($address, 'shipping_address_id', 'shipping'),
+    $shippingAddresses
+);
+$deliveryPayloads = array_map(
+    static fn($address): array => $addressData($address, 'delivery_address_id', 'delivery'),
+    $deliveryAddresses
+);
+
+$renderAddressCard = static function (array $address, string $contactLabel) use ($escape, $json): void {
+    ?>
+    <article class="account-address-card<?= $address['is_default'] ? ' account-address-card--default' : '' ?>" data-address-card data-address-id="<?= (int)$address['id'] ?>">
+        <header class="account-address-card__header">
+            <div>
+                <strong data-address-name><?= $escape($address['name']) ?></strong>
+                <p data-address-contact><?= $escape($address['contact_name']) ?> · <?= $escape($address['contact_phone']) ?></p>
+            </div>
+            <span class="account-address-card__badge" data-address-default-badge<?= $address['is_default'] ? '' : ' hidden' ?>><lang>默认</lang></span>
+        </header>
+        <div class="account-address-card__body">
+            <span class="account-address-card__term"><?= $escape($contactLabel) ?></span>
+            <span class="account-address-card__value" data-address-full><?= $escape($address['full_address']) ?></span>
+            <span class="account-address-card__postal" data-address-postal<?= $address['postal_code'] ? '' : ' hidden' ?>><lang>邮编：</lang><?= $escape($address['postal_code']) ?></span>
+        </div>
+        <div class="account-address-card__actions">
+            <button type="button" class="account-address-card__action" data-address-edit data-address-json="<?= $json($address) ?>"><lang>编辑</lang></button>
+            <button type="button" class="account-address-card__action" data-address-default data-id="<?= (int)$address['id'] ?>"<?= $address['is_default'] ? ' hidden' : '' ?>><lang>设为默认</lang></button>
+            <button type="button" class="account-address-card__action account-address-card__action--danger" data-address-delete data-id="<?= (int)$address['id'] ?>"><lang>删除</lang></button>
+        </div>
+    </article>
+    <?php
+};
+
+$renderAddressForm = static function (string $idField, string $typeLabel, string $contactLabel): void {
+    ?>
+    <div class="account-address-form-wrap" data-address-form-wrap hidden>
+        <form class="account-address-form" data-address-form>
+            <input type="hidden" name="<?= $idField ?>" value="">
+            <input type="hidden" name="is_enabled" value="1">
+            <header class="account-address-form__header">
+                <div>
+                    <h3 class="account-address-form__title" data-address-form-title><lang>新增</lang><?= $typeLabel ?></h3>
+                    <p><lang>保存后当前页面会自动刷新地址卡片，不会跳转页面。</lang></p>
+                </div>
+                <button type="button" class="account-address-form__close" data-address-close aria-label="<?= __('关闭') ?>">×</button>
+            </header>
+            <div class="account-address-form__grid">
+                <label class="account-address-form__field">
+                    <span><lang>地址名称</lang></span>
+                    <input name="name" type="text" required placeholder="<?= __('例如：华东仓 / 家') ?>">
+                </label>
+                <label class="account-address-form__field">
+                    <span><?= $contactLabel ?></span>
+                    <input name="contact_name" type="text" required placeholder="<?= __('请输入联系人') ?>">
+                </label>
+                <label class="account-address-form__field">
+                    <span><lang>联系电话</lang></span>
+                    <input name="contact_phone" type="text" required placeholder="<?= __('请输入联系电话') ?>">
+                </label>
+                <label class="account-address-form__field">
+                    <span><lang>国家/地区</lang></span>
+                    <input name="country" type="text" value="<?= __('中国') ?>">
+                </label>
+                <label class="account-address-form__field">
+                    <span><lang>省份</lang></span>
+                    <input name="province" type="text" required placeholder="<?= __('省份') ?>">
+                </label>
+                <label class="account-address-form__field">
+                    <span><lang>城市</lang></span>
+                    <input name="city" type="text" required placeholder="<?= __('城市') ?>">
+                </label>
+                <label class="account-address-form__field">
+                    <span><lang>区县</lang></span>
+                    <input name="district" type="text" placeholder="<?= __('区县') ?>">
+                </label>
+                <label class="account-address-form__field">
+                    <span><lang>邮政编码</lang></span>
+                    <input name="postal_code" type="text" placeholder="<?= __('可选') ?>">
+                </label>
+                <label class="account-address-form__field account-address-form__field--wide">
+                    <span><lang>详细地址</lang></span>
+                    <textarea name="street" required placeholder="<?= __('街道、门牌号、仓库或收件说明') ?>"></textarea>
+                </label>
+            </div>
+            <label class="account-address-form__checkbox">
+                <input type="checkbox" name="is_default" value="1">
+                <span><lang>设为默认地址</lang></span>
+            </label>
+            <div class="account-address-form__actions">
+                <button type="submit" class="account-address-form__submit"><lang>保存地址</lang></button>
+                <button type="button" class="account-address-form__cancel" data-address-cancel><lang>取消</lang></button>
+            </div>
+        </form>
+    </div>
+    <?php
+};
+?>
+<section class="account-hook-section account-index__section d-none motor-account-section" id="shipping-address-section" data-account-section="shipping-address" hidden>
+    <div class="account-card account-address-panel" data-address-panel="shipping" data-save-url="/shipping/frontend/shipping-address/save" data-delete-url="/shipping/frontend/shipping-address/delete" data-default-url="/shipping/frontend/shipping-address/set-default" data-id-field="shipping_address_id">
+        <textarea hidden readonly data-address-seed><?= $json($shippingPayloads) ?></textarea>
+        <header class="account-card__header account-address-panel__header">
+            <div>
+                <h2 class="account-card__title"><lang>发货地址</lang></h2>
+                <p class="account-address-panel__desc"><lang>管理店铺或账户发货时使用的寄出地址。</lang></p>
+            </div>
+            <button type="button" class="account-address-panel__action" data-address-new><lang>新增发货地址</lang></button>
+        </header>
+        <div class="account-card__body">
+            <div class="account-address-message" data-address-message hidden></div>
+            <?php if ($shippingLoadError): ?>
+                <div class="account-card__alert account-card__alert--danger"><?= $escape($shippingLoadError) ?></div>
+            <?php endif; ?>
+            <div class="account-address-grid" data-address-list>
+                <?php foreach ($shippingPayloads as $address): ?>
+                    <?php $renderAddressCard($address, (string)__('联系人')); ?>
+                <?php endforeach; ?>
+            </div>
+            <div class="account-address-empty" data-address-empty<?= empty($shippingPayloads) && !$shippingLoadError ? '' : ' hidden' ?>>
+                <strong><lang>还没有发货地址</lang></strong>
+                <span><lang>点击“新增发货地址”，直接在当前页面维护。</lang></span>
+            </div>
+            <?php $renderAddressForm('shipping_address_id', (string)__('发货地址'), (string)__('联系人')); ?>
+        </div>
+    </div>
+</section>
+
+<section class="account-hook-section account-index__section d-none motor-account-section" id="delivery-address-section" data-account-section="delivery-address" hidden>
+    <div class="account-card account-address-panel" data-address-panel="delivery" data-save-url="/shipping/frontend/delivery/save" data-delete-url="/shipping/frontend/delivery/delete" data-default-url="/shipping/frontend/delivery/set-default" data-id-field="delivery_address_id">
+        <textarea hidden readonly data-address-seed><?= $json($deliveryPayloads) ?></textarea>
+        <header class="account-card__header account-address-panel__header">
+            <div>
+                <h2 class="account-card__title"><lang>收货地址</lang></h2>
+                <p class="account-address-panel__desc"><lang>管理配送和订单收货时使用的地址。</lang></p>
+            </div>
+            <button type="button" class="account-address-panel__action" data-address-new><lang>新增收货地址</lang></button>
+        </header>
+        <div class="account-card__body">
+            <div class="account-address-message" data-address-message hidden></div>
+            <?php if ($deliveryLoadError): ?>
+                <div class="account-card__alert account-card__alert--danger"><?= $escape($deliveryLoadError) ?></div>
+            <?php endif; ?>
+            <div class="account-address-grid" data-address-list>
+                <?php foreach ($deliveryPayloads as $address): ?>
+                    <?php $renderAddressCard($address, (string)__('收货人')); ?>
+                <?php endforeach; ?>
+            </div>
+            <div class="account-address-empty" data-address-empty<?= empty($deliveryPayloads) && !$deliveryLoadError ? '' : ' hidden' ?>>
+                <strong><lang>还没有收货地址</lang></strong>
+                <span><lang>点击“新增收货地址”，直接在当前页面维护。</lang></span>
+            </div>
+            <?php $renderAddressForm('delivery_address_id', (string)__('收货地址'), (string)__('收货人')); ?>
+        </div>
+    </div>
+</section>
+
+<style>
+.account-address-panel__header {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.account-address-panel__desc {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    margin: 0.35rem 0 0;
+}
+
+.account-address-panel__action,
+.account-address-form__submit {
+    align-items: center;
+    background: var(--color-primary);
+    border: 0;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    color: var(--color-text-dark);
+    cursor: pointer;
+    display: inline-flex;
+    font-weight: 800;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0.65rem 1.15rem;
+}
+
+.account-address-panel__action:hover,
+.account-address-form__submit:hover {
+    background: var(--color-primary-dark);
+    color: var(--color-text-dark);
+}
+
+.account-address-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+}
+
+.account-address-card {
+    background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--border-radius-xl, 1rem);
+    padding: 1.1rem;
+}
+
+.account-address-card--default {
+    border-color: rgba(240, 193, 75, 0.72);
+    box-shadow: 0 0 0 3px rgba(240, 193, 75, 0.14);
+}
+
+.account-address-card__header {
+    align-items: flex-start;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    margin-bottom: 0.9rem;
+}
+
+.account-address-card__header strong {
+    color: var(--color-text-primary);
+    display: block;
+    font-size: 1rem;
+}
+
+.account-address-card__header p {
+    color: var(--color-text-secondary);
+    font-size: 0.8125rem;
+    margin: 0.25rem 0 0;
+}
+
+.account-address-card__badge {
+    background: rgba(240, 193, 75, 0.18);
+    border-radius: 999px;
+    color: var(--color-primary-dark);
+    flex: 0 0 auto;
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 0.2rem 0.6rem;
+}
+
+.account-address-card__body {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.account-address-card__term,
+.account-address-card__postal {
+    color: var(--color-text-secondary);
+    font-size: 0.8125rem;
+}
+
+.account-address-card__value {
+    color: var(--color-text-primary);
+    line-height: 1.55;
+    word-break: break-word;
+}
+
+.account-address-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.account-address-card__action {
+    background: rgba(240, 193, 75, 0.14);
+    border: 0;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    color: var(--color-primary-dark);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 800;
+    min-height: 2.15rem;
+    padding: 0.4rem 0.75rem;
+}
+
+.account-address-card__action--danger {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-error);
+}
+
+.account-address-empty,
+.account-address-message {
+    background: rgba(248, 250, 252, 0.72);
+    border: 1px dashed rgba(148, 163, 184, 0.45);
+    border-radius: var(--border-radius-xl, 1rem);
+    color: var(--color-text-secondary);
+    display: grid;
+    gap: 0.35rem;
+    padding: 1.25rem;
+}
+
+.account-address-empty {
+    margin-top: 1rem;
+}
+
+.account-address-empty strong {
+    color: var(--color-text-primary);
+}
+
+.account-address-message {
+    border-style: solid;
+    margin-bottom: 1rem;
+}
+
+.account-address-message--success {
+    background: #d1fae5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.account-address-message--danger {
+    background: #fee2e2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+.account-address-form-wrap {
+    margin-top: 1.25rem;
+}
+
+.account-address-form {
+    background: linear-gradient(135deg, #fffdf4 0%, #f8fafc 100%);
+    border: 1px solid rgba(240, 193, 75, 0.32);
+    border-radius: var(--border-radius-xl, 1rem);
+    padding: 1.25rem;
+}
+
+.account-address-form__header {
+    align-items: flex-start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.account-address-form__title {
+    color: var(--color-text-primary);
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.account-address-form__header p {
+    color: var(--color-text-secondary);
+    font-size: 0.8125rem;
+    margin: 0.25rem 0 0;
+}
+
+.account-address-form__close {
+    background: transparent;
+    border: 0;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 1.35rem;
+    line-height: 1;
+}
+
+.account-address-form__grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-address-form__field {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.account-address-form__field--wide {
+    grid-column: 1 / -1;
+}
+
+.account-address-form__field span {
+    color: var(--color-text-primary);
+    font-size: 0.85rem;
+    font-weight: 800;
+}
+
+.account-address-form__field input,
+.account-address-form__field textarea {
+    background: #fff;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: var(--border-radius-lg, 0.75rem);
+    color: var(--color-text-primary);
+    min-height: 2.75rem;
+    padding: 0.7rem 0.9rem;
+    width: 100%;
+}
+
+.account-address-form__field textarea {
+    min-height: 5.5rem;
+    resize: vertical;
+}
+
+.account-address-form__checkbox {
+    align-items: center;
+    color: var(--color-text-primary);
+    display: inline-flex;
+    font-weight: 800;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.account-address-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.1rem;
+}
+
+.account-address-form__cancel {
+    background: rgba(148, 163, 184, 0.12);
+    border: 0;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-weight: 800;
+    min-height: 2.75rem;
+    padding: 0.65rem 1.15rem;
+}
+
+@media (max-width: 640px) {
+    .account-address-panel__action,
+    .account-address-form__submit,
+    .account-address-form__cancel {
+        width: 100%;
+    }
+
+    .account-address-form__grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+<script src="@static(Weline_Shipping::frontend/js/account-address.js)"></script>

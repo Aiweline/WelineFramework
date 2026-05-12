@@ -1,419 +1,141 @@
 <?php
+/**
+ * @hook-priority 50
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
 
- * 
- * @hook-priority 50   Hook优先级：50（默认值）
- * @hook-sort-order 0  Hook排序顺序：0（默认值）
- * @hook-solo false    Hook独享：false（不独占）
- * */
-/**@var \Weline\Framework\View\Template $this */
-
-// 获取当前用户（从模板数据中获取）
 $user = $this->getData('user');
 if (!$user) {
     return;
 }
 
-$userId = $user->getId();
+$userId = (int)$user->getId();
 
-// 获取两步验证服务
 try {
     /** @var \Weline\TwoFactorAuth\Service\TwoFactorAuthService $twoFactorService */
     $twoFactorService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\TwoFactorAuth\Service\TwoFactorAuthService::class);
     $isEnabled = $twoFactorService->isEnabled($userId);
     $config = $twoFactorService->getUserConfig($userId);
-    $remainingSeconds = $twoFactorService->getRemainingSeconds();
+    $setupData = null;
+
+    if (!$isEnabled) {
+        $accountLabel = $user->getUsername() . ':' . $user->getEmail();
+        $setupData = $twoFactorService->initialize($userId);
+        $setupData['formatted_secret'] = $twoFactorService->formatSecret($setupData['secret']);
+        $setupData['qr_code_url'] = $twoFactorService->getQRCodeUrl($setupData['secret'], $accountLabel);
+    }
 } catch (\Exception $e) {
-    // 如果服务不可用，不显示面板
     return;
 }
-
-// 准备内容HTML
-$statusBadge = $isEnabled 
-    ? '<div style="display: inline-block; padding: 8px 20px; border-radius: 20px; font-weight: bold; font-size: 14px; background: #d4edda; color: #155724; margin-bottom: 1.5rem;">✓ ' . __('已启用') . '</div>'
-    : '<div style="display: inline-block; padding: 8px 20px; border-radius: 20px; font-weight: bold; font-size: 14px; background: #f8d7da; color: #721c24; margin-bottom: 1.5rem;">✗ ' . __('未启用') . '</div>';
-
-$infoGrid = '';
-if ($isEnabled && $config) {
-    $createdAt = date('Y-m-d', strtotime($config['created_at']));
-    $lastUsed = $config['last_used_at'] ? date('Y-m-d H:i', strtotime($config['last_used_at'])) : __('未使用');
-    $backupCodesCount = $config['backup_codes_count'];
-    
-    $infoGrid = '
-        <div class="twofa-info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
-            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
-                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">' . __('启用时间') . '</div>
-                <div style="font-size: 18px; font-weight: bold; color: #333;">' . $createdAt . '</div>
-            </div>
-            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
-                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">' . __('最后使用') . '</div>
-                <div style="font-size: 18px; font-weight: bold; color: #333;">' . $lastUsed . '</div>
-            </div>
-            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
-                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">' . __('剩余备份码') . '</div>
-                <div style="font-size: 18px; font-weight: bold; color: #333;">' . $backupCodesCount . ' ' . __('个') . '</div>
-            </div>
-        </div>
-        
-        <div class="twofa-actions" style="display: flex; gap: 1rem; flex-wrap: wrap;">
-            <button type="button" class="btn btn-secondary" onclick="showRegenerateBackupCodesModal()" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #6c757d; color: white; cursor: pointer; font-weight: 500; transition: all 0.3s;">
-                ' . __('重新生成备份码') . '
-            </button>
-            <button type="button" class="btn btn-danger" onclick="showDisableTwoFactorModal()" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #dc3545; color: white; cursor: pointer; font-weight: 500; transition: all 0.3s;">
-                ' . __('禁用2FA') . '
-            </button>
-        </div>
-    ';
-} else {
-    $infoGrid = '
-        <div class="twofa-not-enabled" style="margin-bottom: 2rem;">
-            <p style="color: #666; margin-bottom: 1.5rem;">
-                ' . __('您的账户尚未启用双因素身份验证。启用后，登录时需要额外提供动态验证码。') . '
-            </p>
-            <a href="/two-factor-auth/frontend/setup?referer=' . urlencode('/frontend/account') . '" class="btn btn-primary" style="display: inline-block; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; transition: all 0.3s;">
-                ' . __('立即启用') . '
-            </a>
-        </div>
-    ';
-}
-
-$content = '
-    <div class="alert alert-info" style="background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; border-radius: 8px; padding: 0.875rem 1rem; margin-bottom: 1.5rem;">
-        <i class="ri-information-line"></i> ' . __('增强您的账户安全性，使用标准TOTP协议（兼容所有主流验证器应用）') . '
-    </div>
-    
-    <div class="twofa-status" style="margin-bottom: 2rem;">
-        <h3 style="margin-bottom: 1rem; color: #1e293b; font-size: 1.25rem;">' . __('当前状态') . '</h3>
-        ' . $statusBadge . '
-    </div>
-    
-    ' . $infoGrid . '
-    
-    <div class="twofa-app-link" style="margin-top: 2rem; padding: 1.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; text-align: center; color: white;">
-        <h3 style="margin-bottom: 0.5rem; color: white;">📱 ' . __('使用我们自己的验证器APP') . '</h3>
-        <p style="opacity: 0.9; margin-bottom: 1rem; color: white;">' . __('完全自主开发，无需依赖第三方应用') . '</p>
-            <a href="javascript:void(0)" onclick="showAuthenticatorAppModal()" class="btn" style="display: inline-block; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: white; color: #667eea; text-decoration: none; font-weight: 500; transition: all 0.3s; cursor: pointer;">
-            ' . __('打开验证器APP') . '
-        </a>
-    </div>
-';
 ?>
-<!-- 两步验证设置部分 -->
-<div class="content-section d-none" id="twofa-section">
-    <?php
-    echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
-        'title' => __('双因素身份验证'),
-        'content' => $content
-    ]);
-    ?>
-</div>
+<section class="account-hook-section account-index__section d-none motor-account-section" id="twofa-section" data-account-section="twofa" hidden>
+    <div class="account-card twofa-account-panel" data-twofa-panel data-enabled="<?= $isEnabled ? '1' : '0' ?>">
+        <header class="account-card__header">
+            <h2 class="account-card__title"><?= __('两步验证') ?></h2>
+        </header>
+        <div class="account-card__body">
+            <div class="twofa-notice">
+                <strong><?= __('增强账户安全') ?></strong>
+                <span><?= __('启用后，登录时需要输入验证器应用生成的 6 位动态验证码。') ?></span>
+            </div>
 
-<!-- 禁用2FA模态框 -->
-<div class="modal d-none" id="disableTwoFactorModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-    <div class="modal-content" style="background: white; padding: 2rem; border-radius: 10px; max-width: 400px; width: 90%;">
-        <h2 style="margin-bottom: 1rem; color: #333;"><?= __('禁用双因素身份验证') ?></h2>
-        <p style="color: #666; margin: 1rem 0;"><?= __('请输入当前验证码以确认操作') ?></p>
-        <div class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500;"><?= __('验证码') ?></label>
-            <input type="text" id="disableTwoFactorCode" placeholder="<?= __('输入6位验证码') ?>" maxlength="6" style="width: 100%; padding: 0.75rem; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;">
-        </div>
-        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-            <button type="button" onclick="closeDisableTwoFactorModal()" class="btn btn-secondary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #6c757d; color: white; cursor: pointer;">
-                <?= __('取消') ?>
-            </button>
-            <button type="button" onclick="disableTwoFactor()" class="btn btn-danger" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #dc3545; color: white; cursor: pointer;">
-                <?= __('确认禁用') ?>
-            </button>
+            <div class="twofa-message" data-twofa-message hidden></div>
+
+            <?php if ($isEnabled): ?>
+                <div class="twofa-status-card twofa-status-card--enabled">
+                    <span class="twofa-status-pill twofa-status-pill--enabled"><?= __('已启用') ?></span>
+                    <div>
+                        <h3><?= __('当前已保护您的账户') ?></h3>
+                        <p><?= __('请妥善保存备份码。禁用或重新生成备份码时，需要输入当前动态验证码。') ?></p>
+                    </div>
+                </div>
+
+                <div class="twofa-meta-grid">
+                    <div class="twofa-meta-item">
+                        <span><?= __('启用时间') ?></span>
+                        <strong><?= $config && !empty($config['created_at']) ? date('Y-m-d', strtotime($config['created_at'])) : '-' ?></strong>
+                    </div>
+                    <div class="twofa-meta-item">
+                        <span><?= __('最后使用') ?></span>
+                        <strong><?= $config && !empty($config['last_used_at']) ? date('Y-m-d H:i', strtotime($config['last_used_at'])) : __('未使用') ?></strong>
+                    </div>
+                    <div class="twofa-meta-item">
+                        <span><?= __('剩余备份码') ?></span>
+                        <strong><?= $config ? (int)$config['backup_codes_count'] : 0 ?></strong>
+                    </div>
+                </div>
+
+                <div class="twofa-action-grid">
+                    <form class="twofa-inline-form" data-twofa-action="regenerate" data-endpoint="/two-factor-auth/frontend/setup/regenerate-backup-codes">
+                        <label for="twofaRegenerateCode"><?= __('重新生成备份码') ?></label>
+                        <div class="twofa-form-row">
+                            <input id="twofaRegenerateCode" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="<?= __('输入 6 位验证码') ?>">
+                            <button type="submit" class="account-btn account-btn--secondary"><?= __('生成') ?></button>
+                        </div>
+                    </form>
+
+                    <form class="twofa-inline-form" data-twofa-action="disable" data-endpoint="/two-factor-auth/frontend/setup/disable">
+                        <label for="twofaDisableCode"><?= __('禁用两步验证') ?></label>
+                        <div class="twofa-form-row">
+                            <input id="twofaDisableCode" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="<?= __('输入 6 位验证码') ?>">
+                            <button type="submit" class="account-btn account-btn--danger"><?= __('禁用') ?></button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="twofa-backup-result" data-twofa-backup-result hidden></div>
+            <?php else: ?>
+                <div class="twofa-status-card">
+                    <span class="twofa-status-pill"><?= __('未启用') ?></span>
+                    <div>
+                        <h3><?= __('在当前页面完成启用') ?></h3>
+                        <p><?= __('扫描二维码或手动输入密钥，然后填入验证器中的 6 位验证码即可启用。') ?></p>
+                    </div>
+                </div>
+
+                <div class="twofa-setup-grid">
+                    <div class="twofa-qr-card">
+                        <img src="<?= htmlspecialchars($setupData['qr_code_url'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= __('两步验证二维码') ?>">
+                        <span><?= __('使用验证器应用扫描二维码') ?></span>
+                    </div>
+
+                    <form class="twofa-setup-form" data-twofa-action="enable" data-endpoint="/two-factor-auth/frontend/setup/enable">
+                        <input type="hidden" name="secret" value="<?= htmlspecialchars($setupData['secret'], ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="backup_codes" value="<?= htmlspecialchars(json_encode($setupData['backup_codes'], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>">
+                        <label><?= __('手动密钥') ?></label>
+                        <div class="twofa-secret"><?= htmlspecialchars($setupData['formatted_secret'], ENT_QUOTES, 'UTF-8') ?></div>
+
+                        <label for="twofaEnableCode"><?= __('验证码') ?></label>
+                        <div class="twofa-form-row">
+                            <input id="twofaEnableCode" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="<?= __('输入 6 位验证码') ?>">
+                            <button type="submit" class="account-btn"><?= __('验证并启用') ?></button>
+                        </div>
+
+                        <div class="twofa-backup-codes">
+                            <strong><?= __('备份码') ?></strong>
+                            <p><?= __('启用成功后请保存这些备份码，用于验证器不可用时登录。') ?></p>
+                            <div class="twofa-backup-code-grid">
+                                <?php foreach ($setupData['backup_codes'] as $backupCode): ?>
+                                    <span><?= htmlspecialchars($backupCode, ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            <?php endif; ?>
+
+            <div class="twofa-app-card">
+                <div>
+                    <strong><?= __('验证器应用') ?></strong>
+                    <p><?= __('可使用任意标准 TOTP 验证器，也可以打开内置验证器应用。') ?></p>
+                </div>
+                <a href="/twofa-app/" target="_blank" class="account-btn account-btn--secondary"><?= __('打开验证器') ?></a>
+            </div>
         </div>
     </div>
-</div>
+</section>
 
-<!-- 重新生成备份码模态框 -->
-<div class="modal d-none" id="regenerateBackupCodesModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-    <div class="modal-content" style="background: white; padding: 2rem; border-radius: 10px; max-width: 400px; width: 90%;">
-        <h2 style="margin-bottom: 1rem; color: #333;"><?= __('重新生成备份码') ?></h2>
-        <p style="color: #666; margin: 1rem 0;"><?= __('旧的备份码将失效，请输入验证码确认') ?></p>
-        <div class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500;"><?= __('验证码') ?></label>
-            <input type="text" id="regenerateBackupCodesCode" placeholder="<?= __('输入6位验证码') ?>" maxlength="6" style="width: 100%; padding: 0.75rem; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;">
-        </div>
-        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-            <button type="button" onclick="closeRegenerateBackupCodesModal()" class="btn btn-secondary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #6c757d; color: white; cursor: pointer;">
-                <?= __('取消') ?>
-            </button>
-            <button type="button" onclick="regenerateBackupCodes()" class="btn btn-primary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; cursor: pointer;">
-                <?= __('确认生成') ?>
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-// 显示禁用2FA模态框
-function showDisableTwoFactorModal() {
-    document.getElementById('disableTwoFactorModal').classList.remove('d-none');
-    document.getElementById('disableTwoFactorModal').style.display = 'flex';
-}
-
-// 关闭禁用2FA模态框
-function closeDisableTwoFactorModal() {
-    document.getElementById('disableTwoFactorModal').classList.add('d-none');
-    document.getElementById('disableTwoFactorModal').style.display = 'none';
-    document.getElementById('disableTwoFactorCode').value = '';
-}
-
-// 显示重新生成备份码模态框
-function showRegenerateBackupCodesModal() {
-    document.getElementById('regenerateBackupCodesModal').classList.remove('d-none');
-    document.getElementById('regenerateBackupCodesModal').style.display = 'flex';
-}
-
-// 关闭重新生成备份码模态框
-function closeRegenerateBackupCodesModal() {
-    document.getElementById('regenerateBackupCodesModal').classList.add('d-none');
-    document.getElementById('regenerateBackupCodesModal').style.display = 'none';
-    document.getElementById('regenerateBackupCodesCode').value = '';
-}
-
-// 禁用2FA
-async function disableTwoFactor() {
-    const code = document.getElementById('disableTwoFactorCode').value;
-    if (!code || code.length !== 6) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请输入6位验证码') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请输入6位验证码') ?>');
-        }
-        return;
-    }
-
-    try {
-        const response = await fetch('/two-factor-auth/frontend/setup/disable', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `code=${code}`
-        });
-
-        const result = await response.json();
-        
-        if (result.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: result.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                console.log(result.message);
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('失败') ?>',
-                    text: result.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(result.message);
-            }
-        }
-    } catch (error) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('操作失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('操作失败，请重试') ?>');
-        }
-    }
-}
-
-// 重新生成备份码
-async function regenerateBackupCodes() {
-    const code = document.getElementById('regenerateBackupCodesCode').value;
-    if (!code || code.length !== 6) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请输入6位验证码') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请输入6位验证码') ?>');
-        }
-        return;
-    }
-
-    try {
-        const response = await fetch('/two-factor-auth/frontend/setup/regenerate-backup-codes', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `code=${code}`
-        });
-
-        const result = await response.json();
-        
-        if (result.success) {
-            // 显示新的备份码
-            let codesHtml = '<h3 style="margin-bottom: 1rem;"><?= __('新的备份码') ?></h3><ul style="list-style: none; padding: 0;">';
-            result.backup_codes.forEach(code => {
-                codesHtml += `<li style="font-family: monospace; padding: 0.5rem; background: #f8f9fa; margin-bottom: 0.5rem; border-radius: 4px;">${code}</li>`;
-            });
-            codesHtml += '</ul><p style="color: red; margin-top: 1rem;"><?= __('请妥善保存这些备份码！') ?></p>';
-            
-            const modal = document.getElementById('regenerateBackupCodesModal');
-            modal.querySelector('.modal-content').innerHTML = codesHtml + 
-                '<button class="btn btn-primary" onclick="location.reload()" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; cursor: pointer; margin-top: 1rem;"><?= __('完成') ?></button>';
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: result.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                console.log(result.message);
-            }
-        }
-    } catch (error) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('操作失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('操作失败，请重试') ?>');
-        }
-    }
-}
-
-// 点击模态框外部关闭
-document.addEventListener('click', function(event) {
-    if (event.target.id === 'disableTwoFactorModal') {
-        closeDisableTwoFactorModal();
-    }
-    if (event.target.id === 'regenerateBackupCodesModal') {
-        closeRegenerateBackupCodesModal();
-    }
-    if (event.target.id === 'authenticatorAppModal') {
-        closeAuthenticatorAppModal();
-    }
-});
-
-// 显示验证器APP提示模态框
-function showAuthenticatorAppModal() {
-    const modal = document.createElement('div');
-    modal.id = 'authenticatorAppModal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
-    
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/.test(navigator.userAgent);
-    
-    let installInstructions = '';
-    if (isIOS) {
-        installInstructions = `
-            <div style="margin-top: 1rem; padding: 1rem; background: #e7f3ff; border-radius: 8px;">
-                <strong>📱 <?= __('iOS设备安装步骤：') ?></strong>
-                <ol style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                    <li><?= __('点击下方"打开验证器"按钮') ?></li>
-                    <li><?= __('在Safari浏览器中，点击底部"分享"按钮') ?></li>
-                    <li><?= __('选择"添加到主屏幕"') ?></li>
-                    <li><?= __('点击"添加"完成安装') ?></li>
-                </ol>
-            </div>
-        `;
-    } else if (isAndroid) {
-        installInstructions = `
-            <div style="margin-top: 1rem; padding: 1rem; background: #e7f3ff; border-radius: 8px;">
-                <strong>📱 <?= __('Android设备安装步骤：') ?></strong>
-                <ol style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                    <li><?= __('点击下方"打开验证器"按钮') ?></li>
-                    <li><?= __('在Chrome浏览器中，点击右上角"菜单"（三个点）') ?></li>
-                    <li><?= __('选择"添加到主屏幕"或"安装应用"') ?></li>
-                    <li><?= __('点击"添加"或"安装"完成') ?></li>
-                </ol>
-            </div>
-        `;
-    } else {
-        installInstructions = `
-            <div style="margin-top: 1rem; padding: 1rem; background: #e7f3ff; border-radius: 8px;">
-                <strong>💻 <?= __('桌面设备安装步骤：') ?></strong>
-                <ol style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                    <li><?= __('点击下方"打开验证器"按钮') ?></li>
-                    <li><?= __('在浏览器地址栏右侧，点击"安装"图标') ?></li>
-                    <li><?= __('或使用浏览器的"添加到主屏幕"功能') ?></li>
-                    <li><?= __('安装后即可像应用一样使用') ?></li>
-                </ol>
-            </div>
-        `;
-    }
-    
-    modal.innerHTML = `
-        <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-            <h2 style="margin-bottom: 1rem; color: #333; display: flex; align-items: center; gap: 0.5rem;">
-                📱 <?= __('打开验证器APP') ?>
-            </h2>
-            <p style="color: #666; margin-bottom: 1rem; line-height: 1.6;">
-                <?= __('我们的验证器是一个PWA（渐进式Web应用），可以像原生应用一样安装到您的设备上。') ?>
-            </p>
-            <div style="margin-top: 1rem; padding: 1rem; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-                <strong>💡 <?= __('提示：') ?></strong>
-                <p style="margin: 0.5rem 0 0 0; color: #856404;">
-                    <?= __('建议将验证器保存到桌面，方便随时使用。安装后可以离线使用，无需每次打开浏览器。') ?>
-                </p>
-            </div>
-            ${installInstructions}
-            <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
-                <button onclick="closeAuthenticatorAppModal()" style="padding: 0.75rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; cursor: pointer; font-weight: 500;">
-                    <?= __('取消') ?>
-                </button>
-                <a href="/twofa-app/" target="_blank" onclick="closeAuthenticatorAppModal()" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
-                    <?= __('打开验证器') ?>
-                </a>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // 点击外部关闭
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            closeAuthenticatorAppModal();
-        }
-    });
-}
-
-// 关闭验证器APP提示模态框
-function closeAuthenticatorAppModal() {
-    const modal = document.getElementById('authenticatorAppModal');
-    if (modal) {
-        modal.remove();
-    }
-}
-</script>
+<link href="@static(Weline_TwoFactorAuth::frontend/css/account-two-factor.css)" rel="stylesheet" type="text/css"/>
+<script src="@static(Weline_TwoFactorAuth::frontend/js/account-two-factor-inline-v2.js)"></script>

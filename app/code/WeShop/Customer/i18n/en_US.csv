@@ -30,7 +30,7 @@ Success,Success
 "Your password has been reset. Please sign in with the new password.","Your password has been reset. Please sign in with the new password."
 "Please log in to continue.","Please log in to continue."
 登录,登录
-邮箱和密码不能为空,邮箱和密码不能为空
+"Username/email and password are required.","Username/email and password are required."
 "Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
 "Login succeeded.","Login succeeded."
 已成功登出,已成功登出
@@ -81,7 +81,7 @@ Success,Success
 "Security Center","Security Center"
 "Password must be at least 8 characters and contain letters and numbers.","Password must be at least 8 characters and contain letters and numbers."
 "An account with this email already exists.","An account with this email already exists."
-"Invalid email or password.","Invalid email or password."
+"Invalid username/email or password.","Invalid username/email or password."
 "This account has been disabled.","This account has been disabled."
 "The verification code is invalid.","The verification code is invalid."
 "The challenge does not belong to a customer login.","The challenge does not belong to a customer login."
@@ -173,7 +173,3 @@ ID,ID
 最近活动,"Recent Activity"
 暂无活动记录,"No activity records yet"
 该客户的最近活动将在此处显示,"This customer's recent activity will be displayed here"
-"Username or Email","Username or Email"
-"Enter your username or email","Enter your username or email"
-"Invalid username/email or password.","Invalid username/email or password."
-"Username/email and password are required.","Username/email and password are required."

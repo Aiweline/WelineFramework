@@ -15,7 +15,6 @@ final class AiSiteAgentPublishContractTest extends TestCase
 
         foreach ([
             "'code' => 'LATEST_AI_BUILD_FAILED'",
-            "'code' => 'SITE_NOT_READY'",
             "'code' => 'PLAN_NOT_CONFIRMED'",
             "'code' => 'BUILD_PLAN_NOT_CONFIRMED'",
             "'code' => 'WORKSPACE_NOT_READY'",
@@ -39,13 +38,13 @@ final class AiSiteAgentPublishContractTest extends TestCase
             "'code' => 'VIRTUAL_THEME_READY'",
             "'code' => 'WEBSITE_PROFILE_READY'",
             "'code' => 'VIRTUAL_PAGES_READY'",
-            "'code' => 'HTML_BLOCKS_READY'",
-            "'code' => 'SITE_READY'",
             "'code' => 'VISUAL_EDITOR_READY'",
             "'code' => \$passed ? 'PUBLISH_CHECKLIST_PASSED' : 'PUBLISH_CHECKLIST_BLOCKED'",
         ] as $expectedCode) {
             self::assertStringContainsString($expectedCode, $methodSource);
         }
+        self::assertStringNotContainsString("'code' => 'HTML_BLOCKS_READY'", $methodSource);
+        self::assertStringNotContainsString("'code' => 'SITE_READY'", $methodSource);
     }
 
     public function testWorkspaceSnapshotHandlerRemainsReadOnlyForWorkbenchStepStatus(): void

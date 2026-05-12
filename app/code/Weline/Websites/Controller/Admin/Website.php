@@ -140,6 +140,7 @@ class Website extends BackendController
         
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
+            $postData = $data;
             try {
                 $poolIds = $data['pool_ids'] ?? '';
                 $subPath = $this->normalizeSubPath((string)($data['sub_path'] ?? ''));
@@ -189,6 +190,7 @@ class Website extends BackendController
                     unset($data['website_id']);
                 }
                 unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path']);
+                $this->stripExtensionPostData($data);
                 $this->website->clearData()->setData($data)->save();
                 $websiteId = $this->website->getId();
                 
@@ -203,19 +205,8 @@ class Website extends BackendController
                 
                 $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
                 $websiteLanguage->setWebsiteLanguages((int)$websiteId, $languageCodes);
-                
-                $seoAccountId = (int)($data['seo_account_id'] ?? 0);
-                if ($seoAccountId > 0) {
-                    try {
-                        $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-                        $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', [
-                            'website_id' => (int)$websiteId,
-                            'account_id' => $seoAccountId,
-                            'is_auto_submit' => true,
-                        ]);
-                    } catch (\Exception $e) {
-                    }
-                }
+
+                $this->dispatchWebsiteSaveAfter((int)$websiteId, 'add', $this->website->getData(), $postData, $addressList);
                 
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站添加成功'),
@@ -293,6 +284,7 @@ class Website extends BackendController
 
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
+            $postData = $data;
             
             // 从 POST 数据中获取 website_id，如果没有则从 URL 参数中获取 id，最后使用已加载的 websiteId
             $postWebsiteId = $data['website_id'] ?? null;
@@ -355,6 +347,7 @@ class Website extends BackendController
                 
                 $data['website_id'] = $postWebsiteId;
                 unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path']);
+                $this->stripExtensionPostData($data);
                 $this->website->addData($data)->save();
                 
                 $this->saveWebsiteDomains($postWebsiteId, $addressList);
@@ -373,18 +366,7 @@ class Website extends BackendController
                     MessageManager::warning(__('保存关联语言失败: %{1}', [$e->getMessage()]));
                 }
                 
-                $seoAccountId = (int)($data['seo_account_id'] ?? 0);
-                if ($seoAccountId > 0) {
-                    try {
-                        $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-                        $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', [
-                            'website_id' => $postWebsiteId,
-                            'account_id' => $seoAccountId,
-                            'is_auto_submit' => true,
-                        ]);
-                    } catch (\Exception $e) {
-                    }
-                }
+                $this->dispatchWebsiteSaveAfter($postWebsiteId, 'edit', $this->website->getData(), $postData, $addressList);
                 
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站更新成功'),
@@ -463,6 +445,7 @@ class Website extends BackendController
     public function quickSave()
     {
         try {
+            $postData = $this->request->getPost();
             $name = trim((string) $this->request->getPost('name', ''));
             $code = trim((string) $this->request->getPost('code', ''));
             $addressLines = trim((string) $this->request->getPost('address_lines', ''));
@@ -539,6 +522,7 @@ class Website extends BackendController
                 throw new \Exception(__('网站保存失败，未能获取网站ID'));
             }
             $this->saveWebsiteDomains($websiteId, $addressList);
+            $this->dispatchWebsiteSaveAfter($websiteId, 'quick_save', $newWebsite->getData(), $postData, $addressList);
             
             return $this->fetchJson([
                 'success' => true,
@@ -608,6 +592,48 @@ class Website extends BackendController
      * 
      * @return array
      */
+    private function stripExtensionPostData(array &$data): void
+    {
+        unset(
+            $data['extensions']
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $websiteData
+     * @param array<string, mixed> $postData
+     * @param array<int, array<string, string>> $addressList
+     */
+    private function dispatchWebsiteSaveAfter(
+        int $websiteId,
+        string $action,
+        array $websiteData,
+        array $postData,
+        array $addressList = []
+    ): void {
+        if ($websiteId <= 0) {
+            return;
+        }
+
+        try {
+            $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $eventsManager->dispatch('Weline_Websites::website_save_after', [
+                'website_id' => $websiteId,
+                'website' => $websiteData,
+                'post_data' => $postData,
+                'address_list' => $addressList,
+                'action' => $action,
+            ]);
+        } catch (\Throwable $e) {
+            w_log_error(sprintf(
+                '[Weline_Websites] website_save_after dispatch failed: website_id=%d, action=%s, error=%s',
+                $websiteId,
+                $action,
+                $e->getMessage()
+            ));
+        }
+    }
+
     private function getAllCurrencies(): array
     {
         try {

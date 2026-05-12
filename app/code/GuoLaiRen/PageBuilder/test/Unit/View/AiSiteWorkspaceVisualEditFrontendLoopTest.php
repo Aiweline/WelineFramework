@@ -59,9 +59,12 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
         $modalBody = $this->extractFunctionBody($script, 'openWorkspaceVisualComponentConfigModal');
         $saveBody = $this->extractFunctionBody($script, 'saveWorkspaceVirtualBlockConfig');
+        $collectBody = $this->extractFunctionBody($script, 'collectComponentConfigModalValues');
 
         self::assertStringContainsString('var context = resolveWorkspaceVisualComponentContext(payload);', $modalBody);
         self::assertStringContainsString('var currentBlock = findVirtualBlock(context.page_type, context.block_id) || findVirtualBlock(context.page_type, context.component_code);', $modalBody);
+        self::assertStringContainsString('var layoutItem = findWorkspaceVisualLayoutItem(context.page_type, context.component_code, context.block_id, context.region);', $modalBody);
+        self::assertStringContainsString('currentBlock = buildWorkspaceVisualFallbackBlock(context, layoutItem);', $modalBody);
         self::assertStringContainsString('var currentConfig = cloneJson(currentBlock.config || {});', $modalBody);
         self::assertStringContainsString('var fields = currentBlock.field_schema && typeof currentBlock.field_schema === \'object\'', $modalBody);
         self::assertStringContainsString('var styleCode = resolveWorkspacePageStyleCode(context.page_type);', $modalBody);
@@ -73,13 +76,50 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('public_id: context.public_id,', $saveBody);
         self::assertStringContainsString('page_type: context.page_type,', $saveBody);
         self::assertStringContainsString('block_id: context.block_id,', $saveBody);
+        self::assertStringContainsString('component_code: context.component_code,', $saveBody);
+        self::assertStringContainsString('region: context.region,', $saveBody);
+        self::assertStringContainsString('index: context.index,', $saveBody);
         self::assertStringContainsString('block_config: blockConfig', $saveBody);
+        self::assertStringContainsString("data-field=\"_ai_prompt\"", $modalBody);
+        self::assertStringContainsString("data-config-helper=\"1\"", $modalBody);
+        self::assertStringContainsString("input.getAttribute('data-config-helper')", $collectBody);
         self::assertStringContainsString('await saveWorkspaceVirtualBlockConfig(context, promptSaveConfig);', $modalBody);
         self::assertStringContainsString('var saveResult = await saveWorkspaceVirtualBlockConfig(context, newConfig);', $modalBody);
         self::assertStringContainsString('hydrateWorkspaceFromState(saveResult.data);', $modalBody);
         self::assertStringContainsString('updateVirtualBlockState(context.page_type, saveResult.block);', $modalBody);
         self::assertStringContainsString('replaceCurrentBlockHtml(context.page_type, saveResult.block);', $modalBody);
         self::assertStringContainsString('refreshEmbeddedPreviewPreservingScroll();', $modalBody);
+    }
+
+    public function testPlanPreviewReadsRefactoredWorkbenchContracts(): void
+    {
+        $script = $this->workspaceScript();
+        $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($controller);
+
+        self::assertStringContainsString('function buildStructuredPlanRootFromWorkbenchContracts(contracts)', $script);
+        self::assertStringContainsString('contracts.block_plan', $script);
+        self::assertStringContainsString('contracts.page_contract', $script);
+        self::assertStringContainsString('contracts.design_manifest', $script);
+        self::assertStringContainsString('contracts.site_brief', $script);
+        self::assertStringContainsString('buildStructuredPlanRootFromWorkbenchContracts(conf.contracts)', $script);
+        self::assertStringContainsString('function syncStageOnePlanPreviewFromWorkspaceState(workspaceState)', $script);
+        self::assertStringContainsString('syncStageOnePlanPreviewFromWorkspaceState(workspaceState);', $script);
+        self::assertStringContainsString('plan_workbench: pickFirstNonEmptyPlanObject(state.plan_workbench, scope.plan_workbench, plan.plan_workbench)', $script);
+        self::assertStringContainsString('extractStageOneStructuredPlanFromContracts', $controller);
+        self::assertStringContainsString("\$confirmedContractsStructured = \$this->extractStageOneStructuredPlanFromContracts", $controller);
+    }
+
+    public function testVisualEditPreviewTabsHydrateFromVirtualPagesWithoutEntityPageIds(): void
+    {
+        $script = $this->workspaceScript();
+        $syncBody = $this->extractFunctionBody($script, 'syncPreviewMetaFromState');
+        $urlBody = $this->extractFunctionBody($script, 'buildVisualPageEditorUrl');
+
+        self::assertStringContainsString('Object.keys(workspaceState.virtual_pages_by_type).forEach(function (pageType)', $syncBody);
+        self::assertStringContainsString('upsertPreviewTab(pageType, label || normalizePageTypeLabel(pageType), pageId, shouldActivate);', $syncBody);
+        self::assertStringContainsString("editorUrl.searchParams.set('page_type', String(pageType));", $urlBody);
+        self::assertStringContainsString("editorUrl.searchParams.set('page_id', String(pageId));", $urlBody);
     }
 
     public function testWorkspacePreviewClickAndMessageActionsOpenTheSharedBlockEditor(): void
@@ -96,6 +136,8 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("if (payload.type === 'pb-component-action') {", $messageBody);
         self::assertStringContainsString("if (String(payload.action || '') === 'edit-block' || String(payload.action || '') === 'open-editor') {", $messageBody);
         self::assertStringContainsString('openBlockEditorModal(payload);', $messageBody);
+        self::assertStringNotContainsString('openLegacyBlockEditorModal', $script);
+        self::assertStringNotContainsString('skipLegacyFallback', $script);
     }
 
     public function testVisualPreviewImagesCanStartSingleAssetRegeneration(): void
@@ -286,6 +328,13 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("renderStageStatusCard('build'", $runtime);
         self::assertStringContainsString('data-task-progress-summary="build"', $layout);
         self::assertStringNotContainsString('data-stage-status-card="task_plan"', $layout);
+        self::assertStringNotContainsString('pb-ai-workspace-track-btn', $layout);
+        self::assertStringNotContainsString('pb-ai-workspace-track-btn', $script);
+        self::assertStringNotContainsString('pb-ai-site-ready-dev', $layout);
+        self::assertStringNotContainsString('pb-ai-site-ready-dev', $script);
+        self::assertStringNotContainsString('site_ready', $layout);
+        self::assertStringNotContainsString('site_ready', $script);
+        self::assertStringNotContainsString('site_ready', $runtime);
     }
 
     public function testControllerWorkspacePayloadDoesNotExposeLegacyTaskPlanState(): void
@@ -294,7 +343,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertIsString($source);
         $body = $this->extractPhpMethodBody($source, 'buildWorkspaceState');
 
-        self::assertStringContainsString('$supportedWorkspaceOperations = [\'plan\' => true, \'build\' => true];', $body);
+        self::assertStringContainsString('$supportedWorkspaceOperations = [\'plan\' => true, \'build\' => true, \'publish\' => true];', $body);
         self::assertStringContainsString("'plan' => \$planQueueInfo", $body);
         self::assertStringContainsString("'build' => \$buildQueueInfo", $body);
         self::assertStringNotContainsString("'task_plan' => [", $body);
@@ -303,30 +352,40 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringNotContainsString('has_virtual_theme_plan', $body);
         self::assertStringNotContainsString('initializeTaskPlanActiveOperationFromQueueInfo', $body);
         self::assertStringNotContainsString('autoRerunTaskPlanQueueWhenQueueDoneButDraftMissing', $body);
+        self::assertStringNotContainsString('&& $siteReady;', $body);
+
+        $operationPayloadBody = $this->extractPhpMethodBody($source, 'buildWorkspaceOperationPayload');
+        self::assertStringContainsString("'page_type_layouts' => \$this->pruneWorkspacePageTypeLayoutsForPayload(\$state)", $operationPayloadBody);
+        self::assertStringContainsString('private function pruneWorkspacePageTypeLayoutsForPayload(array $state): array', $source);
     }
 
-    public function testBlockRefineUsesQueuedPartialPatchBeforeLegacySseFallback(): void
+    public function testBlockRefineUsesQueuedPartialPatchWithoutLegacySseFallback(): void
     {
         $script = $this->workspaceScript();
         $submitBody = $this->extractFunctionBody($script, 'submitRefineComponent');
 
-        self::assertStringContainsString('if ((!startPatchBlockUrl && !startBlockRefineSseUrl)', $submitBody);
+        self::assertStringContainsString("if (!startPatchBlockUrl || !window.PbAiOperationRunner", $submitBody);
         self::assertStringContainsString('blockRefreshState.blockId = refineComponentState.componentCode;', $submitBody);
         self::assertStringContainsString('renderBlockStreamingState(messages.refineQueued);', $submitBody);
         self::assertStringContainsString('postForm(startPatchBlockUrl, {', $submitBody);
         self::assertStringContainsString('block_id: refineComponentState.blockId,', $submitBody);
         self::assertStringContainsString('component_code: refineComponentState.componentCode,', $submitBody);
         self::assertStringContainsString('window.PbAiOperationRunner.startFromResponse(data)', $submitBody);
+        self::assertStringNotContainsString('openBlockSseModal(', $submitBody);
+        self::assertStringNotContainsString('startBlockRefineSseUrl', $submitBody);
+    }
 
-        $queuedPatch = \strpos($submitBody, 'postForm(startPatchBlockUrl, {');
-        $legacySseFallback = \strpos($submitBody, 'var opened = openBlockSseModal(');
-        self::assertIsInt($queuedPatch);
-        self::assertIsInt($legacySseFallback);
-        self::assertLessThan(
-            $legacySseFallback,
-            $queuedPatch,
-            'Block refine should enqueue block_partial_patch before falling back to the legacy block SSE flow.'
-        );
+    public function testBlockRegenerateUsesQueuedOperationRunnerWithoutLegacySseModal(): void
+    {
+        $script = $this->workspaceScript();
+        $regenerateBody = $this->extractFunctionBody($script, 'startBlockRegenerate');
+
+        self::assertStringContainsString("if (!startRefineComponentUrl || !window.PbAiOperationRunner", $regenerateBody);
+        self::assertStringContainsString('postForm(startRefineComponentUrl, {', $regenerateBody);
+        self::assertStringContainsString("instruction: ''", $regenerateBody);
+        self::assertStringContainsString('window.PbAiOperationRunner.startFromResponse(data)', $regenerateBody);
+        self::assertStringNotContainsString('openBlockSseModal(', $regenerateBody);
+        self::assertStringNotContainsString('startBlockRegenerateSseUrl', $regenerateBody);
     }
 
     public function testRuntimePartialPatchEventRefreshesOnlyCurrentBlock(): void
@@ -361,24 +420,15 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('window.clearBlockStreamingState = clearBlockStreamingState;', $runtime);
     }
 
-    public function testBlockRefreshFallsBackToWorkspaceSnapshotWhenSseStateIsIncomplete(): void
+    public function testBlockRefreshUsesOperationRunnerWithoutLegacyBlockSseSnapshotFallback(): void
     {
         $script = $this->workspaceScript();
-        $snapshotBody = $this->extractFunctionBody($script, 'fetchWorkspaceSnapshotStateForBlockRefresh');
-        $resolverBody = $this->extractFunctionBody($script, 'resolvePendingBlockSseResultTarget');
-        $applyBody = $this->extractFunctionBody($script, 'applyPendingBlockSseResultWithSnapshot');
 
-        self::assertStringContainsString('workspaceApi.fetchWorkspaceSnapshotState()', $snapshotBody);
-        self::assertStringContainsString('hydrateWorkspaceFromState(workspaceState);', $snapshotBody);
-        self::assertStringContainsString('mergeVirtualPagesByTypeState(workspaceState.virtual_pages_by_type);', $snapshotBody);
-
-        self::assertStringContainsString('var payloadState = pendingBlockSseResult && pendingBlockSseResult.state', $resolverBody);
-        self::assertStringContainsString('var nextBlock = pageState && Array.isArray(pageState.blocks)', $resolverBody);
-        self::assertStringContainsString('findVirtualBlockInList(key, stateItem.blocks, targetBlockId);', $resolverBody);
-
-        self::assertStringContainsString('if (resolved.effectiveState && resolved.nextBlock) {', $applyBody);
-        self::assertStringContainsString('return fetchWorkspaceSnapshotStateForBlockRefresh().then(function () {', $applyBody);
-        self::assertStringContainsString('return applyPendingBlockSseResult(options);', $applyBody);
+        self::assertStringNotContainsString('fetchWorkspaceSnapshotStateForBlockRefresh', $script);
+        self::assertStringNotContainsString('resolvePendingBlockSseResultTarget', $script);
+        self::assertStringNotContainsString('applyPendingBlockSseResultWithSnapshot', $script);
+        self::assertStringNotContainsString('pendingBlockSseResult', $script);
+        self::assertStringNotContainsString('pendingBlockSseStart', $script);
 
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         self::assertIsString($runtime);
@@ -685,8 +735,22 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('syncBuildPlanStartButtonState();', $hydrateBody);
         self::assertStringContainsString('syncRetryableAiFailureActionGuards(workspaceState);', $hydrateBody);
         self::assertStringContainsString('build_plan_confirmed', $script);
+        self::assertStringContainsString('hasBuildTaskEvidence', $script);
+        self::assertStringContainsString('build_plan_confirmed_at', \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php'));
         self::assertStringNotContainsString('syncTaskPlanSseRunningFromWorkspaceState', $script . $runtime);
         self::assertStringNotContainsString('task_plan_queue_info', $script . $runtime);
+    }
+
+    public function testBuildStartDoesNotFakeRunningQueueBeforeBackendResponse(): void
+    {
+        $script = $this->workspaceScript();
+        $body = $this->extractFunctionBody($script, 'pbAiConfirmGenerateThemeContinue');
+        $postOffset = \strpos($body, 'postForm(runVirtualThemeUrl, requestPayload)');
+        self::assertNotFalse($postOffset, 'build request postForm call missing');
+
+        $beforePost = \substr($body, 0, $postOffset);
+        self::assertStringNotContainsString('markBuildStageGenerationStarting', $beforePost);
+        self::assertStringContainsString('showBuildGuard(messages.buildPreparing);', $beforePost);
     }
 
     public function testPublishStageStillKeepsPublishControlsAfterRemovingAiQualityRepairEntry(): void

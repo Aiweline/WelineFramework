@@ -30,8 +30,8 @@ class AiSitePageComponentGenerationService
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
     /** 单组件仅允许一次完整 AI 生成；失败入账「可重试失败项」，由用户手动触发重试。 */
     private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
-    // 临时旁路：先跳过主观低质量文案门禁以解除卡在反复校验重试的问题；硬性语言/泄漏守卫仍执行。
-    private const SKIP_COMPONENT_QUALITY_VALIDATION = true;
+    // BuildPlan v2.2: generated visitor sections must pass quality gates; no fallback copy can ship.
+    private const ENFORCE_COMPONENT_QUALITY_VALIDATION = true;
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
     private const COMPONENT_CSS_CLASS_SCOPE_FALLBACK = 'pb-ai-site-component';
     private const COMPONENT_CSS_SCOPE_PLACEHOLDER = '#componentId';
@@ -733,34 +733,6 @@ class AiSitePageComponentGenerationService
                 $throwable = $err instanceof \Throwable
                     ? $err
                     : new \RuntimeException('AI generateStreamBatch task failed for component key: ' . (string)$componentKey);
-                if ($this->shouldFallbackComponentGeneration($throwable)) {
-                    try {
-                        $region = (string)($spec['region'] ?? 'content');
-                        $this->emitComponentStreamFallbackNotice(
-                            $region,
-                            'AI component stream returned no usable content; generated a plan-derived baseline component so the build can continue.'
-                        );
-                        yield $componentKey => [
-                            'status' => 'fulfilled',
-                            'result' => $this->buildFallbackComponent(
-                                (string)($spec['componentCode'] ?? ''),
-                                (string)($spec['name'] ?? ''),
-                                $region,
-                                (string)($spec['prompt'] ?? ''),
-                                \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
-                                \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : []
-                            ),
-                        ];
-                        continue;
-                    } catch (\Throwable $fallbackThrowable) {
-                        $throwable = new \RuntimeException(
-                            'AI component stream failed and plan-derived baseline generation failed: '
-                            . $this->summarizeThrowable($fallbackThrowable),
-                            0,
-                            $throwable
-                        );
-                    }
-                }
                 yield $componentKey => [
                     'status' => 'rejected',
                     'error' => $throwable,
@@ -791,33 +763,6 @@ class AiSitePageComponentGenerationService
                     'result' => $artifact,
                 ];
             } catch (\Throwable $primary) {
-                if ($this->shouldFallbackComponentGeneration($primary)) {
-                    try {
-                        $this->emitComponentStreamFallbackNotice(
-                            $region,
-                            'AI component JSON could not be repaired; generated a plan-derived baseline component so the build can continue.'
-                        );
-                        yield $componentKey => [
-                            'status' => 'fulfilled',
-                            'result' => $this->buildFallbackComponent(
-                                (string)($spec['componentCode'] ?? ''),
-                                (string)($spec['name'] ?? ''),
-                                $region,
-                                (string)($spec['prompt'] ?? ''),
-                                \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
-                                \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : []
-                            ),
-                        ];
-                        continue;
-                    } catch (\Throwable $fallbackThrowable) {
-                        $primary = new \RuntimeException(
-                            'AI component JSON repair failed and plan-derived baseline generation failed: '
-                            . $this->summarizeThrowable($fallbackThrowable),
-                            0,
-                            $primary
-                        );
-                    }
-                }
                 yield $componentKey => [
                     'status' => 'rejected',
                     'error' => $primary,
@@ -1135,21 +1080,6 @@ class AiSitePageComponentGenerationService
                 . ' real-AI attempts: '
                 . $finalReason
             : 'AI component generation failed: ' . $finalReason;
-
-        if ($this->shouldFallbackComponentGeneration($lastThrowable ?? new \RuntimeException('unknown'))) {
-            $this->emitComponentStreamFallbackNotice(
-                $region,
-                'AI component generation failed after retries; generated a plan-derived baseline component so the build can continue.'
-            );
-            return $this->buildFallbackComponent(
-                $componentCode,
-                $name,
-                $region,
-                $prompt,
-                $defaultConfig,
-                $renderContext
-            );
-        }
 
         throw new \RuntimeException($message, 0, $lastThrowable);
 
@@ -1647,6 +1577,8 @@ class AiSitePageComponentGenerationService
 
     private function shouldFallbackComponentGeneration(\Throwable $throwable): bool
     {
+        return false;
+
         $message = \strtolower($this->collectThrowableMessages($throwable));
         if (\trim($message) === '') {
             return true;
@@ -1844,7 +1776,7 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        if (!self::SKIP_COMPONENT_QUALITY_VALIDATION && $region === 'content') {
+        if (self::ENFORCE_COMPONENT_QUALITY_VALIDATION && $region === 'content') {
             $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason((string)($aiData['html_content'] ?? ''));
             if ($lowQualityReason !== null) {
                 throw new \RuntimeException((string)__('AI 组件内容质量不足：%{1}。请重新生成。', [$lowQualityReason]));
@@ -2656,6 +2588,9 @@ class AiSitePageComponentGenerationService
         }
 
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
+        if (\preg_match('/\bai-site-fallback\b|<svg\s+viewBox=["\']0 0 520 360["\']/iu', $trimmed) === 1) {
+            return 'plan-derived fallback visual leaked into generated content';
+        }
         // 强行契约：泄漏检测只看"可见文本"——属性中的合法 URL/slot id（如
         //   src="/pub/.../page-home_page-content-home-page-hero-xxx.jpg"
         //   data-pb-ai-asset-slot="page:home_page:content-home-page-hero"
@@ -2679,6 +2614,9 @@ class AiSitePageComponentGenerationService
         $trimmed = \trim($html);
         if ($trimmed === '') {
             return 'empty html';
+        }
+        if (\preg_match('/\bai-site-fallback\b|<svg\s+viewBox=["\']0 0 520 360["\']/iu', $trimmed) === 1) {
+            return 'plan-derived fallback visual leaked into generated content';
         }
 
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
@@ -5908,6 +5846,7 @@ class AiSitePageComponentGenerationService
                 \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
             );
         }
+        $defaultConfig = $this->repairDefaultVisibleCopyFromStageOneSamples($defaultConfig, $stageOneSamples);
         $themeTokens = $this->collectContractThemeTokens($scope);
         if ($themeTokens !== []) {
             $defaultConfig['contract.theme_tokens'] = \implode(' ', \array_slice($themeTokens, 0, 8));
@@ -5936,6 +5875,7 @@ class AiSitePageComponentGenerationService
         );
 
         $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $buildPlanTask, $locale);
+        $defaultConfig = $this->repairDefaultVisibleCopyFromStageOneSamples($defaultConfig, $stageOneSamples);
 
         // 强行契约：把当前 section 的模板/页面/资产等元信息写入 runtime.* 内部键，
         // stub/fallback 用它直接命中正确变体并真正使用 verified_assets，而不是退化为占位 SVG。
@@ -5948,6 +5888,42 @@ class AiSitePageComponentGenerationService
             $defaultConfig['runtime.section_image_url'] = $sectionImageUrl;
             $defaultConfig['runtime.section_image_alt'] = $sectionImageAlt;
             $defaultConfig['runtime.section_image_slot_id'] = $sectionImageSlotId;
+        }
+
+        return $defaultConfig;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param list<string> $stageOneSamples
+     * @return array<string,mixed>
+     */
+    private function repairDefaultVisibleCopyFromStageOneSamples(array $defaultConfig, array $stageOneSamples): array
+    {
+        foreach (['content.title', 'content.subtitle', 'content.description'] as $key) {
+            $value = \trim((string)($defaultConfig[$key] ?? ''));
+            if ($value === '' || $this->containsPlanningObservationCopy($value)) {
+                $defaultConfig[$key] = '';
+            }
+        }
+
+        $samples = \array_values(\array_filter($stageOneSamples, static fn(string $sample): bool => \trim($sample) !== ''));
+        if ($samples === []) {
+            return $defaultConfig;
+        }
+
+        if (\trim((string)($defaultConfig['content.title'] ?? '')) === '') {
+            $defaultConfig['content.title'] = $this->clipText($samples[0], 72);
+        }
+
+        if (\trim((string)($defaultConfig['content.description'] ?? '')) === '') {
+            $title = \trim((string)($defaultConfig['content.title'] ?? ''));
+            foreach ($samples as $sample) {
+                if ($sample !== $title && \mb_strlen($sample) >= 12) {
+                    $defaultConfig['content.description'] = $this->clipText($sample, 180);
+                    break;
+                }
+            }
         }
 
         return $defaultConfig;
@@ -6908,6 +6884,33 @@ class AiSitePageComponentGenerationService
             '输出必须是访客可见内容',
             '直接产出可上屏',
             '字段样例',
+        ] as $marker) {
+            $marker = \mb_strtolower($marker);
+            if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
+                return true;
+            }
+        }
+
+        foreach ([
+            'Introduce brand story',
+            'build initial trust',
+            'Showcase available games',
+            'encourage exploration',
+            'Build user confidence',
+            'popular game categories',
+            'educate users',
+            'increase time on page',
+            'licenses, security certifications',
+            'secure download badges',
+            'reassure users',
+            'customer testimonials',
+            'build social proof',
+            'Answer common questions',
+            'remove barriers',
+            'Close the page with a compact summary',
+            'visitor has a clear endpoint',
+            'Key message',
+            'Next action',
         ] as $marker) {
             $marker = \mb_strtolower($marker);
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {

@@ -434,7 +434,7 @@ class QueueDbWriter extends SseWriter
 
     private function shouldEmitSuppressedStreamTelemetry(): bool
     {
-        return \in_array($this->operation, ['plan', 'task_plan'], true);
+        return $this->operation === 'plan';
     }
 
 

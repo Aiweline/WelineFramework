@@ -69,4 +69,24 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         $this->assertStringContainsString('<main class="account-main-content', $content);
         $this->assertStringNotContainsString('.account-dashboard__body {', $content);
     }
+
+    public function testAccountLayoutsKeepContentFallbackHosts(): void
+    {
+        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account';
+        $files = [
+            $base . '/default.phtml',
+            $base . '/dashboard.phtml',
+        ];
+
+        foreach ($files as $path) {
+            $this->assertFileExists($path);
+            $content = (string) file_get_contents($path);
+
+            $this->assertStringContainsString('{{meta.content}}', $content);
+            $this->assertStringContainsString('{{content}}', $content);
+            $this->assertStringContainsString('meta.contentTemplate', $content);
+            $this->assertStringContainsString('contentTemplate', $content);
+            $this->assertStringContainsString("getChildHtml('content')", $content);
+        }
+    }
 }

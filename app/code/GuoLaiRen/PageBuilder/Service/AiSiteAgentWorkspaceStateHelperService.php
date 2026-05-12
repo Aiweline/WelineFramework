@@ -168,10 +168,7 @@ class AiSiteAgentWorkspaceStateHelperService
         if ($normalized === '' || !\preg_match('/^[a-z0-9_\\-]{1,32}$/', $normalized)) {
             return '';
         }
-        if (\in_array($normalized, ['task_plan', 'task-plan', 'stage2', 'stage-two', 'phase2', 'phase-2'], true)) {
-            return '';
-        }
-        return $normalized;
+        return \in_array($normalized, ['plan', 'build', 'visual-edit'], true) ? $normalized : '';
     }
 
     /**
@@ -404,7 +401,7 @@ class AiSiteAgentWorkspaceStateHelperService
     public function resolveEnvelopeCursor(array $state, array $activeOperation): string
     {
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
-        if (\in_array($operation, ['task_plan', 'stage2', 'phase2'], true)) {
+        if (!\in_array($operation, ['plan', 'build', 'regenerate_page', 'block_regenerate', 'block_partial_patch'], true)) {
             $operation = '';
         }
         $pageType = \trim((string)($activeOperation['page_type'] ?? $state['preview_page_type'] ?? ''));
@@ -426,9 +423,23 @@ class AiSiteAgentWorkspaceStateHelperService
     public function resolveProgressKind(array $state, array $activeOperation): string
     {
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
-        if (
-            (int)($state['build_plan_confirmed'] ?? 0) === 1
-            && \in_array($operation, ['build', 'regenerate_page', 'block_regenerate', 'block_partial_patch'], true)
+        if (!\in_array($operation, ['build', 'regenerate_page', 'block_regenerate', 'block_partial_patch'], true)) {
+            return 'queue_info';
+        }
+
+        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        $buildPlan = \is_array($state['build_plan_v2'] ?? null)
+            ? $state['build_plan_v2']
+            : (\is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : []);
+        $buildPlanMeta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
+        $taskSummary = \is_array($state['build_task_summary'] ?? null)
+            ? $state['build_task_summary']
+            : (\is_array($scope['build_task_summary'] ?? null) ? $scope['build_task_summary'] : []);
+
+        if ((int)($state['build_plan_confirmed'] ?? $scope['build_plan_confirmed'] ?? 0) === 1
+            || !empty($state['has_build_plan_v2'])
+            || \strtolower(\trim((string)($buildPlanMeta['status'] ?? ''))) === 'confirmed'
+            || (int)($taskSummary['total'] ?? 0) > 0
         ) {
             return 'task_progress';
         }
@@ -631,13 +642,98 @@ class AiSiteAgentWorkspaceStateHelperService
             }
             $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
             $sections = \is_array($layout['sections'] ?? null) ? $layout['sections'] : [];
-            $result[(string)$pageType] = [
+            $summary = [
                 'page_type' => (string)($layout['page_type'] ?? $pageType),
                 'label' => (string)($layout['label'] ?? ''),
                 'block_count' => \count($blocks),
                 'section_count' => \count($sections),
                 'slimmed' => true,
             ];
+            foreach (['version', 'page_id', 'use_original_template'] as $key) {
+                if (\array_key_exists($key, $layout) && !\is_array($layout[$key]) && !\is_object($layout[$key])) {
+                    $summary[$key] = $layout[$key];
+                }
+            }
+            foreach (['header', 'footer'] as $region) {
+                if (\is_array($layout[$region] ?? null)) {
+                    $summary[$region] = $this->prunePageTypeLayoutComponentForView($layout[$region], $region);
+                }
+            }
+            if (\is_array($layout['content'] ?? null)) {
+                $summary['content'] = [];
+                foreach ($layout['content'] as $index => $item) {
+                    if (!\is_array($item)) {
+                        continue;
+                    }
+                    $summary['content'][] = $this->prunePageTypeLayoutComponentForView($item, 'content', $index);
+                }
+            }
+
+            $result[(string)$pageType] = $summary;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $component
+     * @param int|string|null $index
+     * @return array<string, mixed>
+     */
+    private function prunePageTypeLayoutComponentForView(array $component, string $region, int|string|null $index = null): array
+    {
+        $result = [
+            'region' => $region,
+        ];
+        if ($index !== null) {
+            $result['index'] = \is_int($index) ? $index : (string)$index;
+        }
+
+        foreach ([
+            'code',
+            'component',
+            'name',
+            'label',
+            'title',
+            'instance_id',
+            'style_code',
+            'sort_order',
+            'enabled',
+        ] as $key) {
+            if (!\array_key_exists($key, $component) || \is_array($component[$key]) || \is_object($component[$key])) {
+                continue;
+            }
+            $result[$key] = $component[$key];
+        }
+
+        if (\is_array($component['config'] ?? null)) {
+            $result['config'] = $this->pruneLayoutComponentConfigForView($component['config']);
+        } else {
+            $result['config'] = [];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function pruneLayoutComponentConfigForView(array $config): array
+    {
+        $result = [];
+        foreach ($config as $key => $value) {
+            if (\is_array($value)) {
+                $nested = $this->pruneLayoutComponentConfigForView($value);
+                if ($nested !== []) {
+                    $result[(string)$key] = $nested;
+                }
+                continue;
+            }
+            if (\is_object($value) || \is_resource($value)) {
+                continue;
+            }
+            $result[(string)$key] = $value;
         }
 
         return $result;

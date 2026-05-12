@@ -504,7 +504,13 @@ class DetectWebsite implements ObserverInterface
             function () use ($websiteModel): array {
                 try {
                     $rows = [];
-                    foreach ($websiteModel->reset()->clearQuery()->select()->fetchIterator() as $row) {
+                    /** @var Website $query */
+                    $query = clone $websiteModel;
+                    $query->clearData()->clearQuery()->select()->fetch();
+                    foreach ($query->getItems() as $row) {
+                        if (\is_object($row) && \method_exists($row, 'getData')) {
+                            $row = $row->getData();
+                        }
                         if (\is_array($row)) {
                             $rows[] = $row;
                         }
@@ -536,12 +542,16 @@ class DetectWebsite implements ObserverInterface
                     /** @var WebsiteDomain $domainModel */
                     $domainModel = w_obj(WebsiteDomain::class);
                     $rows = [];
-                    foreach (
-                        $domainModel->clearQuery()
-                            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
-                            ->select()
-                            ->fetchIterator() as $row
-                    ) {
+                    /** @var WebsiteDomain $query */
+                    $query = clone $domainModel;
+                    $query->clearData()->clearQuery()
+                        ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+                        ->select()
+                        ->fetch();
+                    foreach ($query->getItems() as $row) {
+                        if (\is_object($row) && \method_exists($row, 'getData')) {
+                            $row = $row->getData();
+                        }
                         if (\is_array($row)) {
                             $rows[] = $row;
                         }

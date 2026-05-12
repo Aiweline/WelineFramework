@@ -11,6 +11,6 @@ Register::register(
     [
         'Weline_Framework',
         'Weline_I18n',
-        'Weline_Geo',
+        'Weline_Location',
     ]
 );

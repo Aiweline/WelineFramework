@@ -53,35 +53,6 @@ class AiSitePublishService
         array $virtualPagesByType = [],
         string $workspaceTrack = AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
     ): array {
-        if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
-            $materialized = $this->materializationService->materializeHtml(
-                $websiteId,
-                $websiteProfile,
-                $pageTypes,
-                $virtualPagesByType
-            );
-            $this->applyPublishSnapshotsForMaterializedPages($materialized['pagebuilder_pages_by_type'] ?? []);
-            $verification = $this->publishVerificationService->assertPublishedPagesRenderable(
-                $materialized['pagebuilder_pages_by_type'] ?? [],
-                0,
-                $workspaceTrack,
-                $websiteProfile
-            );
-            $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
-
-            $previewPageId = (int)($materialized['preview_page_id'] ?? 0);
-
-            return \array_replace(
-                $materialized,
-                [
-                    'materialized_pages_by_type' => $materialized['pagebuilder_pages_by_type'] ?? [],
-                    'publish_verification' => $verification,
-                    'published_at' => \date('Y-m-d H:i:s'),
-                ],
-                $this->visualUrlService->resolveUrls($previewPageId, 0)
-            );
-        }
-
         $pageTypeLayouts = $this->resolveVirtualThemePublishLayouts(
             $virtualThemeId,
             $pageTypes,

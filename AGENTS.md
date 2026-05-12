@@ -13,6 +13,11 @@ php bin/w server:reload|restart -r # WLS lifecycle (test instance only)
 php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (REQUIRED after testing)
 ```
 
+## Codex Runtime Safety
+- Codex MUST NOT run blocking foreground services or watchers in tool shell commands. This includes `php bin/w server:start ... --no-daemon`, foreground dev servers, file watchers, or any command expected to keep running until manually stopped.
+- Long-running WLS/dev services must be started in background/daemon mode with a unique test instance name, then verified with a separate bounded status/request command.
+- If live foreground logs are required, use an explicitly backgrounded/hidden helper with bounded inspection commands, never a blocking foreground command in the main Codex shell.
+
 ## Core Patterns (see AI-ENTRY.md for details)
 - ORM: chains end with `.fetch()`/`.fetchArray()` | Pagination: `.pagination($p,$s)`
 - Schema: `#[Col]` + `setup:upgrade` (NEVER edit `generated/` or `Setup/Upgrade.php`)
@@ -23,9 +28,9 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 - `.phtml`: prefer template taglibs (`<notempty>`, `<var>`, `<lang>`, …) over bulk `<?php`/`<?=` where equivalent — see `dev/ai/global-constraints.md`
 
 ## Critical Constraints
-**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | **Test on default port 9501 or reuse instance names** | **Leave test instances running after session ends**
+**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | **Run blocking foreground services/watchers in Codex shell (`--no-daemon`, foreground dev servers, watch mode)** | **Test on default port 9501 or reuse instance names** | **Leave test instances running after session ends**
 
-**ALWAYS:** Start dedicated test instance with unique name (`-p 9502+ -n ai-test-{unique-id}`) | **Stop test instance after testing (`server:stop -n {instance-name}`)**
+**ALWAYS:** Start dedicated test instance in background/daemon mode with unique name (`-p 9502+ -n ai-test-{unique-id}`) | Verify with bounded status/request commands | **Stop test instance after testing (`server:stop -n {instance-name}`)**
 
 ## Resources
 - Diagrams: `dev/ai/diagrams/00-INDEX.txt`
