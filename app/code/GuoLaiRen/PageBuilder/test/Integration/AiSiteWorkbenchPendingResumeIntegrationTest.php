@@ -36,19 +36,6 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         self::assertStringContainsString('BackendConfirm.show(confirmMessage, {', $script);
     }
 
-    public function testTaskPlanGenerateConfirmIsGuardedAcrossStageEntryAndPanelOpen(): void
-    {
-        $script = (string)\file_get_contents(
-            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
-
-        self::assertStringContainsString('var taskPlanGeneratePromptInFlight = false;', $script);
-        self::assertStringContainsString('var taskPlanGeneratePromptHandled = false;', $script);
-        self::assertStringContainsString('function shouldOpenTaskPlanGeneratePromptOnce()', $script);
-        self::assertStringContainsString('if (!shouldOpenTaskPlanGeneratePromptOnce()) {', $script);
-        self::assertStringContainsString('taskPlanGeneratePromptHandled = true;', $script);
-    }
-
     public function testWorkspaceStateHydrationNormalizesNestedOperationMapsBeforeRetryablePrompts(): void
     {
         $script = (string)\file_get_contents(

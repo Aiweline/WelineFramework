@@ -12,7 +12,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     <!-- 个人资料头部 -->
     <header class="account-index__header">
         <div class="account-index__avatar">
-            <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="account-index__avatar-img"<?= $avatar ? '' : ' hidden' ?> onerror="this.hidden=true; var fallback=document.getElementById('avatarFallback'); if(fallback){fallback.hidden=false;}">
+            <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="account-index__avatar-img"<?= $avatar ? '' : ' hidden' ?>>
             <div class="account-index__avatar-fallback" id="avatarFallback"<?= $avatar ? ' hidden' : '' ?>><var>avatarInitial</var></div>
         </div>
         <div class="account-index__user-info">
@@ -124,7 +124,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     </div>
 
     <!-- 扩展分区：其它模块通过 account.sidebar.content 注入 -->
-    <hook>account.sidebar.content</hook>
+    <w:hook name="account.sidebar.content"/>
 
     <div class="account-index__section d-none" id="login-info-section" data-account-section="login-info" hidden>
         <div class="account-card">
@@ -235,6 +235,11 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     border: 3px solid var(--color-bg-primary);
 }
 
+.account-index__avatar-img[hidden],
+.account-index__avatar-fallback[hidden] {
+    display: none !important;
+}
+
 .account-index__avatar-fallback {
     width: 100%;
     height: 100%;
@@ -309,6 +314,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     padding: var(--ai-gutter);
 }
 
+.account-index [hidden],
 .account-index .d-none,
 .account-card__alert:empty {
     display: none !important;
@@ -598,8 +604,12 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         securityUpdateFailed: <?= json_encode((string) __('修改失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
         fillAllFields: <?= json_encode((string) __('请填写所有字段'), JSON_UNESCAPED_UNICODE) ?>,
         passwordTooShort: <?= json_encode((string) __('新密码长度不能少于6位'), JSON_UNESCAPED_UNICODE) ?>,
-        passwordMismatch: <?= json_encode((string) __('两次输入的新密码不一致'), JSON_UNESCAPED_UNICODE) ?>
+        passwordMismatch: <?= json_encode((string) __('两次输入的新密码不一致'), JSON_UNESCAPED_UNICODE) ?>,
+        invalidServerResponse: <?= json_encode((string) __('服务器返回了无效响应，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
+        endpointNotFound: <?= json_encode((string) __('保存接口不存在，页面脚本或路由需要同步修复'), JSON_UNESCAPED_UNICODE) ?>
     };
+
+    var profileUpdateUrl = <?= json_encode('/customer/account/index/update', JSON_UNESCAPED_UNICODE) ?>;
 
     /** 接口偶发返回 HTML 数字实体文案时进行解码；不使用 textarea，避免部分环境 innerHTML 解码不稳定。 */
     function welineDecodeHtmlEntities(message) {
@@ -620,15 +630,74 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         return s;
     }
 
+    function parseJsonResponse(response) {
+        var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (contentType.indexOf('application/json') === -1) {
+            return response.text().then(function(text) {
+                if (response.status === 404) {
+                    throw new Error(i18nAccount.endpointNotFound);
+                }
+
+                var normalized = welineDecodeHtmlEntities(text);
+                var trimmed = normalized.trim();
+
+                if (trimmed.indexOf('{') === 0 || trimmed.indexOf('[') === 0) {
+                    var parsed = null;
+                    try {
+                        parsed = JSON.parse(trimmed);
+                    } catch (jsonError) {}
+
+                    if (parsed && typeof parsed === 'object') {
+                        if (!response.ok) {
+                            throw new Error(welineDecodeHtmlEntities(parsed && parsed.message ? parsed.message : '') || i18nAccount.invalidServerResponse);
+                        }
+                        return parsed;
+                    }
+                }
+
+                if (normalized.indexOf('<') !== -1 || normalized.indexOf('>') !== -1) {
+                    throw new Error(i18nAccount.invalidServerResponse);
+                }
+
+                throw new Error(normalized || i18nAccount.invalidServerResponse);
+            });
+        }
+
+        return response.json().then(function(data) {
+            if (!response.ok) {
+                var message = welineDecodeHtmlEntities(data && data.message ? data.message : '');
+                throw new Error(message || i18nAccount.invalidServerResponse);
+            }
+
+            return data;
+        });
+    }
+
     // 仅绑定带 data-section 的侧栏项，避免把退出登录等普通链接也当成分区切换。
     var navLinks = document.querySelectorAll('[data-account-nav-link][data-section]');
 
     function setActiveNavLink(targetId) {
+        var activeParent = '';
+        navLinks.forEach(function(nav) {
+            if (nav.getAttribute('data-section') === targetId) {
+                activeParent = nav.getAttribute('data-account-nav-parent') || '';
+            }
+        });
+
         navLinks.forEach(function(nav) {
             var isActive = nav.getAttribute('data-section') === targetId;
-            nav.classList.toggle('is-active', isActive);
+            var isActiveParent = activeParent && nav.getAttribute('data-section') === activeParent;
+            nav.classList.remove('is-active');
             if (nav.classList.contains('account-sidebar__nav-link')) {
-                nav.classList.toggle('account-sidebar__nav-link--active', isActive);
+                nav.classList.remove('account-sidebar__nav-link--active');
+            }
+            if (!isActive && !isActiveParent) {
+                return;
+            }
+            if (nav.classList.contains('account-sidebar__nav-link')) {
+                nav.classList.add('account-sidebar__nav-link--active');
+            } else if (!isActiveParent) {
+                nav.classList.add('is-active');
             }
         });
     }
@@ -676,40 +745,63 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
     (function syncInitialHash() {
         var raw = window.location.hash ? window.location.hash.replace(/^#/, '') : '';
-        if (!raw) {
-            return;
-        }
         var hasNav = Array.prototype.some.call(navLinks, function(a) {
             return a.getAttribute('data-section') === raw;
         });
-        if (!hasNav) {
-            return;
-        }
-        setActiveNavLink(raw);
-        showAccountSection(raw);
+        var initialSection = raw && hasNav ? raw : 'profile';
+        setActiveNavLink(initialSection);
+        showAccountSection(initialSection);
     })();
 
     var avatarInput = document.getElementById('avatar');
-    var avatarPreview = document.getElementById('avatarPreview');
-    var avatarFallback = document.getElementById('avatarFallback');
+    var avatarTargets = [
+        {
+            image: document.getElementById('avatarPreview'),
+            fallback: document.getElementById('avatarFallback')
+        },
+        {
+            image: document.getElementById('sidebarAvatarPreview'),
+            fallback: document.getElementById('sidebarAvatarFallback')
+        }
+    ];
 
     function syncAvatarPreview() {
-        if (!avatarPreview || !avatarFallback || !avatarInput) {
+        if (!avatarInput) {
             return;
         }
 
         var avatarUrl = avatarInput.value.trim();
         if (!avatarUrl) {
-            avatarPreview.hidden = true;
-            avatarFallback.hidden = false;
-            avatarPreview.removeAttribute('src');
+            avatarTargets.forEach(function(target) {
+                if (!target.image || !target.fallback) {
+                    return;
+                }
+                target.image.hidden = true;
+                target.fallback.hidden = false;
+                target.image.removeAttribute('src');
+            });
             return;
         }
 
-        avatarPreview.hidden = false;
-        avatarFallback.hidden = true;
-        avatarPreview.src = avatarUrl;
+        avatarTargets.forEach(function(target) {
+            if (!target.image || !target.fallback) {
+                return;
+            }
+            target.image.hidden = false;
+            target.fallback.hidden = true;
+            target.image.src = avatarUrl;
+        });
     }
+
+    avatarTargets.forEach(function(target) {
+        if (!target.image || !target.fallback) {
+            return;
+        }
+        target.image.addEventListener('error', function() {
+            target.image.hidden = true;
+            target.fallback.hidden = false;
+        });
+    });
 
     if (avatarInput) {
         avatarInput.addEventListener('input', syncAvatarPreview);
@@ -732,11 +824,11 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             errorMsg.textContent = '';
 
             var formData = new FormData(this);
-            fetch('/customer/account/update', {
+            fetch(profileUpdateUrl, {
                 method: 'POST',
                 body: formData
             })
-            .then(function(response) { return response.json(); })
+            .then(parseJsonResponse)
             .then(function(data) {
                 if (data.success) {
                     errorMsg.textContent = '';
@@ -746,9 +838,9 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                     errorMsg.textContent = welineDecodeHtmlEntities(data.message) || i18nAccount.profileUpdateFailed;
                 }
             })
-            .catch(function() {
+            .catch(function(error) {
                 successMsg.textContent = '';
-                errorMsg.textContent = i18nAccount.profileUpdateFailed;
+                errorMsg.textContent = welineDecodeHtmlEntities(error && error.message ? error.message : '') || i18nAccount.profileUpdateFailed;
             })
             .finally(function() {
                 btn.disabled = false;
@@ -792,11 +884,11 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             btn.innerHTML = '<i class="ri-loader-4-line"></i> ' + i18nAccount.changing;
 
             var formData = new FormData(this);
-            fetch('/customer/account/update', {
+            fetch(profileUpdateUrl, {
                 method: 'POST',
                 body: formData
             })
-            .then(function(response) { return response.json(); })
+            .then(parseJsonResponse)
             .then(function(data) {
                 if (data.success) {
                     errorMsg.textContent = '';
@@ -809,9 +901,9 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                     errorMsg.textContent = welineDecodeHtmlEntities(data.message) || i18nAccount.securityUpdateFailed;
                 }
             })
-            .catch(function() {
+            .catch(function(error) {
                 successMsg.textContent = '';
-                errorMsg.textContent = i18nAccount.securityUpdateFailed;
+                errorMsg.textContent = welineDecodeHtmlEntities(error && error.message ? error.message : '') || i18nAccount.securityUpdateFailed;
             })
             .finally(function() {
                 btn.disabled = false;

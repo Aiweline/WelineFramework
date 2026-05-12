@@ -331,7 +331,7 @@ test.describe('AI Site Workbench', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
   });
 
-  test('pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing', async ({ page }) => {
+  test('pagebuilder provider handoff starts the one-stage plan queue without legacy direct execution', async ({ page }) => {
     test.slow();
     test.setTimeout(420000);
     const anomalies = bindPageAnomalies(page);
@@ -396,108 +396,61 @@ test.describe('AI Site Workbench', () => {
       await loginAsAdmin(page);
       await gotoStable(page, new URL(pagebuilderWorkspaceUrl, page.url()).toString());
     }
-    await expect(page.locator('#pb-ai-run-virtual-theme')).toBeVisible({ timeout: 30000 });
+    const directAiExecutionUrls = [];
+    let startPlanPostData = '';
+    page.on('request', (request) => {
+      const url = request.url();
+      if (/\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/(?:post-ai|post-generate|post-execute|direct-ai|run-ai)/i.test(url)) {
+        directAiExecutionUrls.push(url);
+      }
+    });
+    await page.route(/\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/post-start-plan\b/i, async (route) => {
+      startPlanPostData = route.request().postData() || '';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          start_sse: false,
+          message: 'E2E mocked plan queue accepted.',
+          data: {
+            queue_id: 990001,
+            status: 'pending',
+          },
+        }),
+      });
+    });
+
+    const startPlanButton = page.locator('.pb-ai-run-virtual-theme').first();
+    await expect(startPlanButton).toBeVisible({ timeout: 30000 });
+    await expect(startPlanButton).toBeEnabled({ timeout: 30000 });
     await expectWorkbenchScreenshot(page, 'ai-site-workbench-pagebuilder-expert.png');
 
     await fillFirstVisible(page, ['#pb-ai-site-title'], 'PageBuilder E2E Coffee');
-    await fillFirstVisible(page, ['#pb-ai-site-tagline'], 'Roasting story and product showcase');
     await fillFirstVisible(page, ['#pb-ai-target-domain', '#pb-ai-target-domain-summary'], localDomain);
     await fillFirstVisible(page, ['#pb-ai-brief-description'], 'Need a home page, about page, and contact page with strong brand storytelling.');
 
-    await page.click('#pb-ai-run-virtual-theme', { force: true });
+    const startPlanRequestPromise = page.waitForRequest(
+      (request) => /\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/post-start-plan\b/i.test(request.url())
+        && request.method() === 'POST',
+      { timeout: 60000 }
+    );
+    await startPlanButton.click({ force: true });
     await confirmPagebuilderGenerateIfNeeded(page);
+    await startPlanRequestPromise;
 
-    await expect
-      .poll(async () => {
-        const text = await page.locator('#pb-ai-draft-website-id').textContent();
-        return Number(String(text || '0').trim() || '0');
-      }, { timeout: WORKSPACE_TIMEOUT })
-      .toBeGreaterThan(0);
-
-    /** @type {any} */
-    let pageBuilderState = await readJsonTextarea(page, '#pb-ai-scope-full');
-    pageBuilderState.draft_website_id = Number(pageBuilderState.draft_website_id || 0);
-    pageBuilderState.virtual_theme_id = Number(pageBuilderState.virtual_theme_id || 0);
-    pageBuilderState.preview_page_id = Number(pageBuilderState.preview_page_id || 0);
-    expect(Number(pageBuilderState.draft_website_id)).toBeGreaterThan(0);
-    expect(Number(pageBuilderState.virtual_theme_id)).toBeGreaterThan(0);
-    expect(Number(pageBuilderState.preview_page_id)).toBeGreaterThan(0);
-    expect(Object.keys(pageBuilderState.pagebuilder_pages_by_type || {})).not.toHaveLength(0);
-
-    for (const pageInfo of Object.values(pageBuilderState.pagebuilder_pages_by_type || {})) {
-      expect(Number(pageInfo.website_id)).toBe(Number(pageBuilderState.draft_website_id));
-    }
-
-    const previewOptions = Array.isArray(pageBuilderState.preview_page_options)
-      ? pageBuilderState.preview_page_options
-      : [];
-    if (previewOptions.length > 1) {
-      const nextOption = previewOptions.find(option => Number(option.page_id || option.value || 0) !== Number(pageBuilderState.preview_page_id));
-      expect(nextOption).toBeTruthy();
-
-      await page.selectOption('#pb-ai-preview-page-select', String(nextOption.page_id || nextOption.value));
-      await page.click('#pb-ai-switch-preview-page', { force: true });
-
-      await expect
-        .poll(async () => {
-          const scope = await readJsonTextarea(page, '#pb-ai-scope-full');
-          return Number(scope.preview_page_id || 0);
-        }, { timeout: WORKSPACE_TIMEOUT })
-        .toBe(Number(nextOption.page_id || nextOption.value));
-
-      pageBuilderState = await readJsonTextarea(page, '#pb-ai-scope-full');
-    }
+    expect(startPlanPostData).toContain('site_title');
+    expect(startPlanPostData).toContain('target_domain');
+    expect(startPlanPostData).toContain(localDomain);
+    expect(directAiExecutionUrls).toEqual([]);
+    await expect(page.locator('[data-pb-queue-state-detail="plan"]').first())
+      .toContainText(/running|pending|accepted/i, { timeout: 15000 });
 
     await gotoStable(page, websitesWorkspaceUrl);
-    await expect(page.locator('#site-builder-visual-preview-frame')).toBeVisible({ timeout: 30000 });
-    await expectWorkbenchScreenshot(page, 'ai-site-workbench-websites-mirror.png');
-
-    await expect
-      .poll(async () => {
-        const state = await readJsonTextarea(page, '#site-builder-scope-full');
-        return {
-          draftWebsiteId: Number(state.draft_website_id || 0),
-          previewPageId: Number(state.preview_page_id || 0),
-          visualPreviewUrl: String(state.visual_preview_url || ''),
-          visualEditUrl: String(state.visual_edit_url || ''),
-        };
-      }, { timeout: WORKSPACE_TIMEOUT })
-      .toEqual({
-        draftWebsiteId: Number(pageBuilderState.draft_website_id),
-        previewPageId: Number(pageBuilderState.preview_page_id),
-        visualPreviewUrl: String(pageBuilderState.visual_preview_url || ''),
-        visualEditUrl: String(pageBuilderState.visual_edit_url || ''),
-      });
-
     const websitesState = await readJsonTextarea(page, '#site-builder-scope-full');
-    const mirrorFrameSrc = await page.locator('#site-builder-visual-preview-frame').getAttribute('src');
-    expect(mirrorFrameSrc).toContain('/pagebuilder/backend/preview/full');
-    expect(mirrorFrameSrc).toContain('visual_editor=1');
-    expect(mirrorFrameSrc).toContain(`virtual_theme_id=${pageBuilderState.virtual_theme_id}`);
-    expect(mirrorFrameSrc).toContain(`page_id=${pageBuilderState.preview_page_id}`);
+    expect(String(websitesState.pagebuilder_workspace_url || '')).toMatch(PAGEBUILDER_AI_WORKSPACE_PATH_RE);
+    expect(JSON.stringify(websitesState)).not.toMatch(/legacy_stage2|stage2_confirmed_task_plan|stage2_task_plan/i);
 
-    const editorHref = await page.locator('a[href*="/pagebuilder/backend/page/edit"]').first().getAttribute('href');
-    expect(editorHref).toContain('/pagebuilder/backend/page/edit');
-    expect(editorHref).toContain(`id=${pageBuilderState.preview_page_id}`);
-    expect(editorHref).toContain(`virtual_theme_id=${pageBuilderState.virtual_theme_id}`);
-    expect(websitesState.visual_edit_url).toBe(editorHref);
-
-    const editorPage = await page.context().newPage();
-    const editorAnomalies = bindPageAnomalies(editorPage);
-    await gotoStable(editorPage, new URL(editorHref, page.url()).toString());
-    await expect(editorPage.locator('#previewIframe')).toBeVisible({ timeout: 30000 });
-
-    const editorPreviewSrc = await editorPage.locator('#previewIframe').getAttribute('src');
-    expect(editorPreviewSrc).toContain('/pagebuilder/backend/preview/full');
-    expect(editorPreviewSrc).toContain('visual_editor=1');
-    expect(editorPreviewSrc).toContain(`page_id=${pageBuilderState.preview_page_id}`);
-    expect(editorPreviewSrc).toContain(`virtual_theme_id=${pageBuilderState.virtual_theme_id}`);
-    const unexpectedEditorPageErrors = filterUnexpectedAnomalies(editorAnomalies.pageErrors, PAGE_ERROR_ALLOWLIST);
-    const unexpectedEditorConsoleErrors = filterUnexpectedAnomalies(editorAnomalies.consoleErrors, CONSOLE_ERROR_ALLOWLIST);
-    expect(unexpectedEditorPageErrors, unexpectedEditorPageErrors.join('\n')).toEqual([]);
-    expect(unexpectedEditorConsoleErrors, unexpectedEditorConsoleErrors.join('\n')).toEqual([]);
-
-    await editorPage.close();
     const unexpectedPageErrors = filterUnexpectedAnomalies(anomalies.pageErrors, PAGE_ERROR_ALLOWLIST);
     const unexpectedConsoleErrors = filterUnexpectedAnomalies(anomalies.consoleErrors, CONSOLE_ERROR_ALLOWLIST);
     expect(unexpectedPageErrors, unexpectedPageErrors.join('\n')).toEqual([]);

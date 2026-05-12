@@ -138,11 +138,12 @@ $showGuestBindPrompt = !$isLoggedIn
     </div>
 </div>
 
-<!-- 邮件绑定弹窗 -->
+<?php
+$bindModalHtml = <<<'BIND_MODAL_HTML'
 <div id="cs-bind-modal" class="cs-modal" style="display: none;" data-editor-interactive>
     <div class="cs-modal-content">
         <div class="cs-modal-header">
-            <h3><?= __('接收客服回复与优惠通知') ?></h3>
+            <h3>{{title}}</h3>
             <button class="cs-modal-close" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.closeBindModal()">
                 <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -150,23 +151,38 @@ $showGuestBindPrompt = !$isLoggedIn
             </button>
         </div>
         <div class="cs-modal-body">
-            <p class="cs-modal-copy"><?= __('留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。') ?></p>
-            <p class="cs-modal-note"><?= __('仅用于本次客服咨询相关通知，不是简报订阅。') ?></p>
+            <p class="cs-modal-copy">{{copy}}</p>
+            <p class="cs-modal-note">{{note}}</p>
             <div class="cs-form-group">
-                <label><?= __('接收通知的邮箱') ?></label>
-                <input type="email" id="cs-bind-email" class="cs-form-input" placeholder="<?= __('请输入用于接收客服通知的邮箱') ?>">
+                <label>{{email_label}}</label>
+                <input type="email" id="cs-bind-email" class="cs-form-input" placeholder="{{email_placeholder}}">
             </div>
         </div>
         <div class="cs-modal-footer">
             <button class="cs-btn cs-btn-secondary" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.closeBindModal()">
-                <?= __('稍后再说') ?>
+                {{later}}
             </button>
             <button class="cs-btn cs-btn-primary" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.sendBindEmail()">
-                <?= __('发送验证邮件') ?>
+                {{send}}
             </button>
         </div>
     </div>
 </div>
+BIND_MODAL_HTML;
+$bindModalHtml = strtr($bindModalHtml, [
+    '{{title}}' => __('接收客服回复与优惠通知'),
+    '{{copy}}' => __('留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。'),
+    '{{note}}' => __('仅用于本次客服咨询相关通知，不是简报订阅。'),
+    '{{email_label}}' => __('接收通知的邮箱'),
+    '{{email_placeholder}}' => __('请输入用于接收客服通知的邮箱'),
+    '{{later}}' => __('稍后再说'),
+    '{{send}}' => __('发送验证邮件'),
+]);
+?>
+<!-- 邮件绑定弹窗模板：用户发送客服消息后再创建真实弹窗节点 -->
+<script type="application/json" id="cs-bind-modal-template">
+<?= json_encode($bindModalHtml, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+</script>
 
 <script>
 // 初始化客服组件的配置（必须在外部脚本加载前定义）

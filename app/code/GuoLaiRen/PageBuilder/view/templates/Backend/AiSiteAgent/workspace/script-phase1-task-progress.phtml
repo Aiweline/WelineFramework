@@ -1,6 +1,6 @@
 <?php
 /**
- * 第一阶段侧栏「任务进度」内嵌：plan 队列快照 / process / result 刷新逻辑。
+ * 建站方案侧栏「任务进度」内嵌：plan 队列快照 / process / result 刷新逻辑。
  * 依赖 script-main 已挂载的 window.PbAiWorkspacePreview（postForm、toast、escapeHtml）与 window.hydrateWorkspaceFromState。
  */
 ?>
@@ -13,7 +13,7 @@
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var queueMessages = {
-        empty: <?= \json_encode((string)__('当前没有可展示的第一阶段方案队列记录（尚未入队或队列已清理）。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        empty: <?= \json_encode((string)__('当前没有可展示的建站方案队列记录（尚未入队或队列已清理）。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         refreshed: <?= \json_encode((string)__('队列信息已刷新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         refreshFailed: <?= \json_encode((string)__('刷新队列信息失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         queueIdLabel: <?= \json_encode((string)__('队列编号'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,

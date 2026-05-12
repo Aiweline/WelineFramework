@@ -19,10 +19,10 @@ final class MotorAccountHookHostTest extends TestCase
         $sidebar = (string) file_get_contents($sidebarTemplate);
         $index = (string) file_get_contents($indexTemplate);
 
-        $this->assertStringContainsString('<hook>account.sidebar</hook>', $sidebar);
+        $this->assertStringContainsString('<w:hook name="account.sidebar"/>', $sidebar);
         $this->assertStringContainsString('data-account-nav-link="true"', $sidebar);
 
-        $this->assertStringContainsString('<hook>account.sidebar.content</hook>', $index);
+        $this->assertStringContainsString('<w:hook name="account.sidebar.content"/>', $index);
         $this->assertStringContainsString('data-account-section="overview"', $index);
         $this->assertStringContainsString('data-account-section="profile"', $index);
         $this->assertStringContainsString('data-account-section="security"', $index);

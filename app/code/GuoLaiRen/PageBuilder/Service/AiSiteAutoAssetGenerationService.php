@@ -124,10 +124,7 @@ class AiSiteAutoAssetGenerationService
      */
     private function shouldUsePlaceholderFallback(array $scope): bool
     {
-        if ((int)($scope['allow_placeholder_image_assets'] ?? 0) === 1) {
-            return true;
-        }
-        return (int)($scope['fake_mode'] ?? 0) === 1;
+        return false;
     }
 
     /**

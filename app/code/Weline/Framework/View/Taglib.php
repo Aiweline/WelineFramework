@@ -1351,7 +1351,7 @@ class Taglib
                                         $else_content = substr($content, $min_pos);
                                     } else {
                                         // 如果没找到 HTML 或 PHP 标签，尝试提取 hook 名称（在遇到非合法字符前停止）
-                                        $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $trimmed_content);
+                                        $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $trimmed_content);
                                         $hook_name = preg_replace('/\s+/', '', $hook_name);
                                         $else_content = '';
                                     }
@@ -1369,7 +1369,7 @@ class Taglib
                             // 移除可能混入的 PHP 代码
                             $hook_name = preg_replace('/<\?[^?]+' . self::PHP_CLOSE_TAG . '/', '', $hook_name);
                             // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
-                            $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                            $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                             $hook_name = trim($hook_name);
                             
                             // 检查 hook 是否存在
@@ -1506,7 +1506,7 @@ class Taglib
                                 $hook_name = trim((string)$attributes['name']);
                                 $hook_name = preg_replace('/<[^>]+>/', '', $hook_name);
                                 $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
-                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                                 $hook_name = trim($hook_name);
                             } elseif ($tag_key === '@tag()' || $tag_key === '@tag{}') {
                                 $hook_name = trim($tag_data[1] ?? '');
@@ -1533,9 +1533,9 @@ class Taglib
                                 $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
                                 
                                 // 只保留 hook 名称（在遇到非合法字符前停止）
-                                // hook 名称格式：Module::area::type::component::position，只允许字母、数字、下划线、连字符、冒号
+                                // hook 名称允许字母、数字、下划线、点号、连字符、冒号。
                                 // 遇到空格、括号等字符时，应该截断
-                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                                 $hook_name = trim($hook_name);
                                 
                                 // 在开发环境下，检查 hook 是否有规约（在 hook.php 中定义）
@@ -1544,12 +1544,12 @@ class Taglib
                                 $hook_name = preg_replace('/<[^>]+>/', '', $hook_name); // 移除 HTML 标签
                                 $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name); // 移除 PHP 代码
                                 // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
-                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                                 $hook_name = trim($hook_name);
                             } else {
                                 // 其他格式（向后兼容）
                                 $hook_name = trim($tag_data[1] ?? '');
-                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                                 $hook_name = trim($hook_name);
                             }
                             

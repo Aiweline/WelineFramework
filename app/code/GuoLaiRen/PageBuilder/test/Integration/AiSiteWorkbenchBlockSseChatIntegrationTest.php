@@ -47,7 +47,6 @@ final class AiSiteWorkbenchBlockSseChatIntegrationTest extends AbstractAiSiteWor
 
         self::assertTrue((bool)$method->invoke($controller, 'block_regenerate'));
         self::assertTrue((bool)$method->invoke($controller, 'plan'));
-        self::assertTrue((bool)$method->invoke($controller, 'task_plan'));
         self::assertTrue((bool)$method->invoke($controller, 'build'));
         self::assertTrue((bool)$method->invoke($controller, 'block_partial_patch'));
         self::assertTrue((bool)$method->invoke($controller, 'regenerate_page'));

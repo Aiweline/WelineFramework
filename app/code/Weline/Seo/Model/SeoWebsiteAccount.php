@@ -208,6 +208,20 @@ class SeoWebsiteAccount extends Model
      * @param int $websiteId
      * @return string[] 平台代码数组 ['google', 'bing', ...]
      */
+    public function unbindWebsite(int $websiteId): bool
+    {
+        if ($websiteId <= 0) {
+            return false;
+        }
+
+        $this->reset()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->delete()
+            ->fetch();
+
+        return true;
+    }
+
     public function getWebsitePlatforms(int $websiteId): array
     {
         $bindings = $this->getByWebsiteId($websiteId);

@@ -77,13 +77,6 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0),
             'Confirmed plan state should be visible before build starts.'
         );
-        $taskPlanFlow = $this->generateAndConfirmTaskPlan($publicId, $scopePatch);
-        self::assertSame(
-            1,
-            (int)($taskPlanFlow['confirm_task_plan']['data']['task_plan_confirmed'] ?? 0),
-            'Confirmed task-plan state should be visible before build starts.'
-        );
-
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',
@@ -390,7 +383,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         );
     }
 
-    public function testStartPublishShowsFriendlyMessageWhenDomainNotReady(): void
+    public function testVirtualThemePublishIgnoresLegacySiteReadyFlag(): void
     {
         $buildFlow = $this->createAndBuildWorkbenchSession();
         $publicId = (string)$buildFlow['public_id'];
@@ -415,14 +408,13 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             ['public_id' => $publicId]
         );
         self::assertTrue((bool)($checkPayload['success'] ?? false), \json_encode($checkPayload, \JSON_UNESCAPED_UNICODE));
-        self::assertFalse((bool)($checkPayload['data']['passed'] ?? true), \json_encode($checkPayload['data'] ?? [], \JSON_UNESCAPED_UNICODE));
+        self::assertTrue((bool)($checkPayload['data']['passed'] ?? false), \json_encode($checkPayload['data'] ?? [], \JSON_UNESCAPED_UNICODE));
 
         $siteReadyItems = \array_values(\array_filter(
             (array)($checkPayload['data']['items'] ?? []),
             static fn ($item): bool => \is_array($item) && (string)($item['key'] ?? '') === 'site_ready'
         ));
-        self::assertNotEmpty($siteReadyItems);
-        self::assertFalse((bool)($siteReadyItems[0]['ok'] ?? true));
+        self::assertSame([], $siteReadyItems, \json_encode($checkPayload['data']['items'] ?? [], \JSON_UNESCAPED_UNICODE));
 
         $startPublishPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-publish',
@@ -431,8 +423,8 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             [],
             ['public_id' => $publicId]
         );
-        self::assertFalse((bool)($startPublishPayload['success'] ?? true), \json_encode($startPublishPayload, \JSON_UNESCAPED_UNICODE));
-        self::assertStringContainsString('域名尚未就绪', (string)($startPublishPayload['message'] ?? ''));
+        self::assertNotSame('SITE_NOT_READY', (string)($startPublishPayload['code'] ?? ''), \json_encode($startPublishPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertStringNotContainsString('域名尚未就绪', (string)($startPublishPayload['message'] ?? ''));
     }
 
     public function testSwitchPreviewPageAppendsMissingPageTypeToScope(): void
@@ -479,7 +471,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertContains((string)($data['preview_page_type'] ?? ''), [Page::TYPE_HOME, Page::TYPE_ABOUT]);
     }
 
-    public function testStartBuildRequiresStagePlansBeforeBuild(): void
+    public function testStartBuildRequiresConfirmedBuildPlanBeforeBuild(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -523,12 +515,12 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         );
 
         self::assertFalse((bool)($startBuildPayload['success'] ?? true), \json_encode($startBuildPayload, \JSON_UNESCAPED_UNICODE));
-        self::assertSame('TASK_PLAN_REQUIRED_BEFORE_BUILD', (string)($startBuildPayload['code'] ?? ''));
+        self::assertSame('BUILD_PLAN_REQUIRED_BEFORE_BUILD', (string)($startBuildPayload['code'] ?? ''));
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
 
-        $startBuildWithoutTaskPlanPayload = $this->invokeJsonAction(
+        $startBuildWithPlanPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',
             'postStartBuild',
@@ -538,8 +530,8 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
                 'scope_patch' => $scopePatch,
             ]
         );
-        self::assertFalse((bool)($startBuildWithoutTaskPlanPayload['success'] ?? true), \json_encode($startBuildWithoutTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
-        self::assertSame('TASK_PLAN_REQUIRED_BEFORE_BUILD', (string)($startBuildWithoutTaskPlanPayload['code'] ?? ''));
+        self::assertTrue((bool)($startBuildWithPlanPayload['success'] ?? false), \json_encode($startBuildWithPlanPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertNotSame('', (string)($startBuildWithPlanPayload['execution_token'] ?? ''));
     }
 
     /**
@@ -592,9 +584,6 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
-        $taskPlanFlow = $this->generateAndConfirmTaskPlan($publicId, $scopePatch);
-        self::assertSame(1, (int)($taskPlanFlow['confirm_task_plan']['data']['task_plan_confirmed'] ?? 0));
-
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',
@@ -616,7 +605,19 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertGreaterThan(0, (int)($buildResult['draft_website_id'] ?? 0));
         self::assertGreaterThan(0, (int)($buildResult['virtual_theme_id'] ?? 0));
         self::assertGreaterThanOrEqual(\count($pageTypes), $buildWriter->countEvents('progress'));
-        self::assertCount(\count($pageTypes), $buildWriter->eventsByName('page_generated'));
+        $pageGeneratedEvents = $buildWriter->eventsByName('page_generated');
+        self::assertGreaterThanOrEqual(\count($pageTypes), \count($pageGeneratedEvents));
+        $generatedPageTypes = [];
+        foreach ($pageGeneratedEvents as $generatedEvent) {
+            $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
+            $pageType = (string)($payload['page_type'] ?? '');
+            if ($pageType !== '') {
+                $generatedPageTypes[$pageType] = true;
+            }
+        }
+        foreach ($pageTypes as $pageType) {
+            self::assertArrayHasKey($pageType, $generatedPageTypes);
+        }
         $parallelBatchEvents = \array_values(\array_filter(
             $buildWriter->eventsByName('info'),
             static function (array $event): bool {

@@ -129,13 +129,44 @@ class SlotRendererService
      */
     private function processSlotsWithDom(string $html, array $slotWidgets): string
     {
+        $bodyParts = $this->splitHtmlBody($html);
+        if ($bodyParts !== null) {
+            $bodyParts['body'] = $this->processSlotFragmentWithDom($bodyParts['body'], $slotWidgets);
+            return $bodyParts['before'] . $bodyParts['body'] . $bodyParts['after'];
+        }
+
+        return $this->processSlotFragmentWithDom($html, $slotWidgets);
+    }
+
+    /**
+     * Keep document-level SEO/head markup out of the slot DOM pass.
+     */
+    private function splitHtmlBody(string $html): ?array
+    {
+        if (!preg_match('/^(.*?<body\b[^>]*>)(.*)(<\/body\s*>.*)$/is', $html, $matches)) {
+            return null;
+        }
+
+        return [
+            'before' => $matches[1],
+            'body' => $matches[2],
+            'after' => $matches[3],
+        ];
+    }
+
+    /**
+     * Process only the slot-bearing HTML fragment so DOMDocument cannot move
+     * invalid head children into body and break SEO output.
+     */
+    private function processSlotFragmentWithDom(string $html, array $slotWidgets): string
+    {
         // 避免 DOM 解析器的警告
         libxml_use_internal_errors(true);
 
         $doc = new \DOMDocument();
         // 添加 UTF-8 声明避免编码问题
-        $html = '<?xml encoding="UTF-8">' . $html;
-        $doc->loadHTML($html);
+        $wrappedHtml = '<?xml encoding="UTF-8"><div data-weline-slot-root="1">' . $html . '</div>';
+        $doc->loadHTML($wrappedHtml, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 
         // 收集模板中存在的所有 slot ID
         $existingSlotIds = [];
@@ -197,14 +228,22 @@ class SlotRendererService
         }
 
         // 获取处理后的 HTML
-        $result = $doc->saveHTML();
+        $result = '';
+        $root = $doc->documentElement;
+        if ($root instanceof \DOMElement && $root->getAttribute('data-weline-slot-root') === '1') {
+            foreach ($root->childNodes as $child) {
+                $result .= $doc->saveHTML($child);
+            }
+        } else {
+            $result = $doc->saveHTML();
+        }
 
         libxml_clear_errors();
 
         // 移除 XML 声明
-        $result = preg_replace('/<\?xml encoding="UTF-8"\?>/', '', $result);
+        $result = preg_replace('/<\?xml encoding="UTF-8"\?>/', '', (string)$result);
 
-        return $result;
+        return (string)$result;
     }
     
     /**

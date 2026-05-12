@@ -20,7 +20,6 @@ class Accounts extends FrontendController
     public function __construct(
         TotpAccount $totpAccount
     ) {
-        parent::__construct();
         $this->totpAccount = $totpAccount;
     }
 

@@ -35,7 +35,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         ]);
 
         self::assertFalse($report['passed']);
-        self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));
+        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
         self::assertFalse((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? true));
     }
 
@@ -63,7 +63,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
             'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>AI content placeholder</p></section></main><footer>Footer</footer>',
         ]);
 
-        self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));
+        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
     }
 
     public function testInspectScopeRejectsVisiblePlanningObservationCopy(): void
@@ -75,7 +75,39 @@ final class AiSiteQualityGateServiceTest extends TestCase
             'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>访客看到真实玩家好评和清晰的下载步骤，信任感增强，并知道如何立即下载。</h1><p>体验 Teen Patti、Rummy 等经典游戏，享受安全公平的现代化社区</p></section></main><footer>Footer</footer>',
         ]);
 
-        self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));
+        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+    }
+
+    public function testInspectScopePassesForVirtualDraftRenderedOverrideWithoutEntityPageId(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        unset($scope['pagebuilder_pages_by_type']);
+        $scope['workspace_track'] = AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
+        $scope['virtual_theme_id'] = 99;
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>涓撲负鍗板害鐜╁鎵撻€犵殑妫嬬墝濞变箰娈垮爞</h1><p>浣撻獙Teen Patti銆丷ummy绛夌粡鍏告父鎴忥紝浜彈瀹夊叏鍏钩鐨勭幇浠ｅ寲绀惧尯</p></section></main><footer>Footer</footer>',
+        ]);
+
+        self::assertTrue((bool)($this->findItem($report['items'], 'required_pages_render')['ok'] ?? false));
+    }
+
+    public function testInspectScopeRequiresRealAssetsWhenManifestDeclaresImageSlots(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['asset_manifest'] = [
+            'slots' => [
+                ['slot_id' => 'hero', 'slot_type' => 'hero_image', 'final_url' => ''],
+            ],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>涓撲负鍗板害鐜╁鎵撻€犵殑妫嬬墝濞变箰娈垮爞</h1><p>浣撻獙Teen Patti銆丷ummy绛夌粡鍏告父鎴忥紝浜彈瀹夊叏鍏钩鐨勭幇浠ｅ寲绀惧尯</p></section></main><footer>Footer</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? true));
     }
 
     public function testNormalizeQualityItemsReconnectsCanonicalFieldAndDropsUnknownItems(): void

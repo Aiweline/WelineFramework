@@ -265,6 +265,18 @@ class Core
         $this->router = [];
     }
 
+    private function isFrontendRootRequest(): bool
+    {
+        if ($this->request_area !== \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND) {
+            return false;
+        }
+
+        $uri = (string)(\w_env('request.uri', $this->request->getUri()) ?? '');
+        $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: $uri);
+
+        return \trim($path, '/') === '';
+    }
+
     private static function isStaleEmptyRootRouterCache(
         string $requestArea,
         string $url,
@@ -338,10 +350,11 @@ class Core
             }
         }
         $hasPreviewTheme = \w_env_get('preview_theme') !== null && (int)\w_env_get('preview_theme') > 0;
+        $isFrontendRootRequest = $this->isFrontendRootRequest();
         
         
         // 性能优化：复用已读取的统一缓存数据
-        if ($this->unifiedCacheData === null) {
+        if ($this->unifiedCacheData === null && !$isFrontendRootRequest) {
             $cached = $this->cache->get($this->unified_cache_key);
             // 将 false 转换为 null，保持类型一致性
             $this->unifiedCacheData = ($cached === false) ? null : $cached;
@@ -351,6 +364,7 @@ class Core
         if (
             !$this->is_backend
             && !$hasPreviewTheme
+            && !$isFrontendRootRequest
             && is_array($this->unifiedCacheData)
             && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])
             && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])
@@ -365,7 +379,7 @@ class Core
         }
         
         // 回退到旧的缓存方式（兼容性）
-        $router = ($this->is_backend || $hasPreviewTheme) ? null : $this->cache->get($this->_router_cache_key);
+        $router = ($this->is_backend || $hasPreviewTheme || $isFrontendRootRequest) ? null : $this->cache->get($this->_router_cache_key);
         if ($router) {
             if (self::isStaleEmptyRootRouterCache($this->request_area, $url, $this->request->getRule(), $router)) {
                 $this->clearCurrentRequestRouteCaches();
@@ -490,6 +504,7 @@ class Core
     public function processUrl()
     {
         $hasPreviewTheme = \w_env_get('preview_theme') !== null && (int)\w_env_get('preview_theme') > 0;
+        $isFrontendRootRequest = $this->isFrontendRootRequest();
         // 后端请求不缓存，直接跳过缓存读取
         if ($this->is_backend) {
             $this->routerGeneratedGetParams = [];
@@ -525,14 +540,14 @@ class Core
         }
         
         // 性能优化：复用已读取的统一缓存数据
-        if ($this->unifiedCacheData === null && !$hasPreviewTheme) {
+        if ($this->unifiedCacheData === null && !$hasPreviewTheme && !$isFrontendRootRequest) {
             $cached = $this->cache->get($this->unified_cache_key);
             // 将 false 转换为 null，保持类型一致性
             $this->unifiedCacheData = ($cached === false) ? null : $cached;
         }
         
         // 优先尝试读取统一缓存（减少 IO 操作）
-        if (!$hasPreviewTheme && is_array($this->unifiedCacheData) && !empty($this->unifiedCacheData)) {
+        if (!$hasPreviewTheme && !$isFrontendRootRequest && is_array($this->unifiedCacheData) && !empty($this->unifiedCacheData)) {
             $unifiedCache = $this->unifiedCacheData;
             // 从统一缓存中提取数据
             $url = $unifiedCache[KeyBuilder::UNIFIED_CACHE_URL_KEY] ?? null;
@@ -560,7 +575,7 @@ class Core
         }
         
         // 从缓存池读取 URL 缓存
-        $url = $hasPreviewTheme ? null : $this->cache->get($this->url_cache_key);
+        $url = ($hasPreviewTheme || $isFrontendRootRequest) ? null : $this->cache->get($this->url_cache_key);
         {
             # 如果后缀是静态文件后缀 .css,.js,.jpg,.png,.jpeg,.gif,.svg,.ico,.woff,.woff2,.eot,.ttf,.otf,.ttf2,.woff3,.mp4,.mp3,.m3u8,.webp
             $isStaticFile = $this->isStaticFile();
@@ -584,7 +599,7 @@ class Core
             $ruleCache = $this->cache->get($this->rule_cache_key);
             [$ruleFromCache, $cachedGeneratedGetParams] = $this->normalizeRuleCache($ruleCache);
             // 修复：验证缓存的有效性，确保 rule 不为空且包含必要信息
-            if (PROD && $url && !empty($ruleFromCache)) {
+            if (!$isFrontendRootRequest && PROD && $url && !empty($ruleFromCache)) {
                 $this->url_cache_data = $url;
                 $this->rule_cache_data = $ruleFromCache;
                 $this->routerGeneratedGetParams = $cachedGeneratedGetParams;

@@ -683,6 +683,37 @@ const CustomerServiceWidget = (function() {
     }
     
     /**
+     * Lazily create the bind-email modal only after the guest shows intent.
+     */
+    function ensureBindModal() {
+        let modal = document.getElementById('cs-bind-modal');
+        if (modal) {
+            return modal;
+        }
+
+        const template = document.getElementById('cs-bind-modal-template');
+        if (!template) {
+            return null;
+        }
+
+        const wrapper = document.createElement('div');
+        try {
+            wrapper.innerHTML = JSON.parse(template.textContent || '""');
+        } catch (error) {
+            console.error('CustomerService: bind modal template parse failed', error);
+            return null;
+        }
+
+        modal = wrapper.querySelector('#cs-bind-modal');
+        if (!modal) {
+            return null;
+        }
+
+        document.body.appendChild(modal);
+        return modal;
+    }
+
+    /**
      * Show the bind-email prompt only for eligible guest sessions.
      */
     function showBindPrompt() {
@@ -690,7 +721,7 @@ const CustomerServiceWidget = (function() {
             return;
         }
 
-        const modal = document.getElementById('cs-bind-modal');
+        const modal = ensureBindModal();
         if (modal) {
             modal.style.display = 'flex';
         }
@@ -722,7 +753,16 @@ const CustomerServiceWidget = (function() {
      * 閸欐垿鈧胶绮︾€规岸鍋栨禒?
      */
     async function sendBindEmail() {
-        const emailInput = document.getElementById('cs-bind-email');
+        const modal = ensureBindModal();
+        if (!modal) {
+            return;
+        }
+
+        const emailInput = modal.querySelector('#cs-bind-email');
+        if (!emailInput) {
+            return;
+        }
+
         const email = emailInput.value.trim();
         
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

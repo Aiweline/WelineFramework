@@ -20,6 +20,23 @@
         return raw === true || raw === 1 || raw === '1'
             || (typeof raw === 'string' && ['true', 'yes', 'on'].indexOf(raw.trim().toLowerCase()) >= 0);
     }
+    function hasRuntimeBuildPlanV2Evidence(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var planBlock = state.plan && typeof state.plan === 'object' ? state.plan : {};
+        var api = resolveWorkspaceApi();
+        if (typeof api.hasBuildPlanV2FlowEvidence === 'function' && api.hasBuildPlanV2FlowEvidence()) {
+            return true;
+        }
+        return runtimeTruthyFlag(state.has_build_plan_v2)
+            || runtimeTruthyFlag(scope.has_build_plan_v2)
+            || !!(state.build_plan_v2 && typeof state.build_plan_v2 === 'object' && Object.keys(state.build_plan_v2).length > 0)
+            || !!(scope.build_plan_v2 && typeof scope.build_plan_v2 === 'object' && Object.keys(scope.build_plan_v2).length > 0)
+            || !!(planBlock.build_plan_v2 && typeof planBlock.build_plan_v2 === 'object' && Object.keys(planBlock.build_plan_v2).length > 0)
+            || !!(state.plan_projection && typeof state.plan_projection === 'object' && Object.keys(state.plan_projection).length > 0)
+            || !!(scope.plan_projection && typeof scope.plan_projection === 'object' && Object.keys(scope.plan_projection).length > 0)
+            || !!(planBlock.plan_projection && typeof planBlock.plan_projection === 'object' && Object.keys(planBlock.plan_projection).length > 0);
+    }
     function getRuntimeWorkspaceStateForPublishGate() {
         if (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') {
             return window.__pbWorkspaceState;
@@ -521,7 +538,7 @@
             return Promise.resolve(false);
         }
         var title = String(operation || '').toLowerCase() === 'plan'
-            ? <?= \json_encode((string)__('第一阶段方案生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            ? <?= \json_encode((string)__('建站方案生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
             : <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
         var body = lines.join('\n\n');
         if (opts.extraMessage) {
@@ -868,8 +885,8 @@
         return code === '409'
             && (
                 message.indexOf('正在生成阶段一方案') >= 0
-                || message.indexOf('正在执行的第一阶段') >= 0
-                || message.indexOf('第一阶段主题规划') >= 0
+                || message.indexOf('正在执行的建站方案') >= 0
+                || message.indexOf('建站方案生成') >= 0
                 || message.indexOf('阶段一方案任务已在执行') >= 0
                 || message.indexOf('stage-1') >= 0
                 || message.indexOf('stage 1') >= 0
@@ -2587,8 +2604,8 @@
                 if (settled) {
                     return;
                 }
-                settled = true;
                 closeOperationSource(source);
+                settled = true;
                 markBuildOperationTerminalForRuntimeUi(operation, 'error', lastServerError);
                 resetOperationUiOnFailure(operation);
                 if (typeof enableNavigationAfterOperation === 'function') {
@@ -3037,10 +3054,7 @@
                     payload,
                     'warning',
                     softMsg || softMsgRaw || <?= \json_encode((string)__('操作已中断'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                ); catch (e) {
-                        // ignore
-                    }
-                }
+                );
                 finishOperation(normalizedDonePayload);
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
@@ -3239,8 +3253,8 @@
                 return;
             }
             if (lastServerError) {
-                settled = true;
                 closeOperationSource(source);
+                settled = true;
                 var failurePayload = lastFailurePayloadByOperation[String(operation || '').trim().toLowerCase()];
                 if (!failurePayload || typeof failurePayload !== 'object') {
                     failurePayload = {
@@ -3362,7 +3376,7 @@
         if (!operation || ['queued', 'pending', 'running', 'processing'].indexOf(status) === -1) {
             return;
         }
-        if (operation !== 'plan' && operation !== 'build' && operation !== 'image_asset') {
+        if (operation !== 'plan' && operation !== 'build' && operation !== 'publish' && operation !== 'image_asset') {
             return;
         }
         var hasExecutionToken = !!String(active.execution_token || '').trim();
@@ -3380,6 +3394,7 @@
 
     function startPublishFlow(triggerButton, options) {
         var opts = options && typeof options === 'object' ? options : {};
+        var retryAttempt = parseInt(opts.retryAttempt || 0, 10) || 0;
         if (hasPublishBlockingAiStateForRuntime()) {
             syncPublishStartButtonForRuntime();
             toast('warning', messages.publishBlockedLatestBuildFailure || messages.publishRunning || '');
@@ -3401,6 +3416,26 @@
         }
         submitWorkspaceForm(startPublishUrl, { public_id: publicId, confirm_visual_theme: '1' }).then(function (data) {
             if (!data || !data.success) {
+                var errorCode = String((data && (data.code || (data.data && data.data.code))) || '').toUpperCase();
+                if (errorCode === 'WORKSPACE_NOT_READY' && retryAttempt < 3) {
+                    fetchWorkspaceSnapshotState().then(function (workspaceState) {
+                        syncDeferredQueueWorkspaceState('publish', workspaceState);
+                        window.setTimeout(function () {
+                            startPublishFlow(triggerButton, {
+                                skipDisabledGuard: true,
+                                retryAttempt: retryAttempt + 1
+                            });
+                        }, 1000);
+                    }).catch(function () {
+                        window.setTimeout(function () {
+                            startPublishFlow(triggerButton, {
+                                skipDisabledGuard: true,
+                                retryAttempt: retryAttempt + 1
+                            });
+                        }, 1000);
+                    });
+                    return;
+                }
                 if (triggerButton) {
                     triggerButton.disabled = false;
                 }
@@ -3447,23 +3482,15 @@
                     triggerButton.disabled = false;
                 }
                 var items = Array.isArray(payload.items) ? payload.items : [];
-                var siteReadyItem = null;
                 var firstFailedItem = null;
                 items.forEach(function (item) {
                     if (!item || typeof item !== 'object') {
                         return;
                     }
-                    if (String(item.key || '') === 'site_ready') {
-                        siteReadyItem = item;
-                    }
                     if (!firstFailedItem && !item.ok) {
                         firstFailedItem = item;
                     }
                 });
-                if (siteReadyItem && !siteReadyItem.ok) {
-                    toast('warning', <?= \json_encode((string)__('域名尚未就绪，请先等待域名流程完成后再确认建站。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-                    return;
-                }
                 if (firstFailedItem && firstFailedItem.label) {
                     toast('warning', <?= \json_encode((string)__('发布前仍有未完成项：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + String(firstFailedItem.label));
                     return;
@@ -3502,7 +3529,7 @@
         });
 
         // 禁用切换到其他页面的按钮（如 expert/guided 切换）
-        document.querySelectorAll('.pb-ai-workspace-track-btn, .pb-ai-expert-toggle, [data-switch-workspace]').forEach(function(btn) {
+        document.querySelectorAll('.pb-ai-expert-toggle, [data-switch-workspace]').forEach(function(btn) {
             btn.setAttribute('data-disabled-during-operation', 'true');
             btn.setAttribute('disabled', 'disabled');
             btn.style.opacity = '0.5';

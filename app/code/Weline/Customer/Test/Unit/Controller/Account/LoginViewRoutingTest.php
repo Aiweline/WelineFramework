@@ -103,6 +103,30 @@ class LoginViewRoutingTest extends TestCase
         $this->assertFalse($method->invoke($controller, '?redirect=/catalog'));
     }
 
+    public function testNormalizeRedirectTargetDecodesEncodedInternalPath(): void
+    {
+        $controller = new Login($this->createMock(Template::class));
+        $method = new \ReflectionMethod(Login::class, 'normalizeRedirectTarget');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            'customer/account',
+            $method->invoke($controller, 'customer%2Faccount')
+        );
+    }
+
+    public function testFormatClientRedirectDecodesEncodedInternalPath(): void
+    {
+        $controller = new Login($this->createMock(Template::class));
+        $method = new \ReflectionMethod(Login::class, 'formatClientRedirect');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            '/customer/account',
+            $method->invoke($controller, 'customer%2Faccount')
+        );
+    }
+
     private function setProtectedProperty(object $target, string $property, mixed $value): void
     {
         $reflection = new \ReflectionObject($target);
