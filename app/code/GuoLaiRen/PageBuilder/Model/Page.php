@@ -998,6 +998,11 @@ class Page extends Model
                 [
                     'subject_type' => 'page',
                     'subject_id'   => (int)$this->getId(),
+                    'title' => (string)($this->getData(self::schema_fields_META_TITLE) ?: $this->getData(self::schema_fields_TITLE) ?: $this->getData(self::schema_fields_NAME)),
+                    'description' => (string)($this->getData(self::schema_fields_META_DESCRIPTION) ?: $this->getData(self::schema_fields_AI_DESCRIPTION) ?: ''),
+                    'content' => (string)($this->getData(self::schema_fields_CONTENT) ?: $this->getData(self::schema_fields_AI_DESCRIPTION) ?: ''),
+                    'tags' => array_filter(array_map('trim', explode(',', (string)$this->getData(self::schema_fields_META_KEYWORDS)))),
+                    'updated_at' => (string)$this->getData(self::schema_fields_UPDATE_TIME),
                 ]
             );
         } catch (\Throwable $e) {

@@ -40,13 +40,11 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $method->setAccessible(true);
 
         $planKey = (string)$method->invoke($controller, 123, 'plan');
-        $taskPlanKey = (string)$method->invoke($controller, 123, 'task_plan');
         $buildKey = (string)$method->invoke($controller, 123, 'build');
 
         self::assertSame('glr_aisite:session:123:queue_slot:plan', $planKey);
-        self::assertSame('glr_aisite:session:123:queue_slot:task_plan', $taskPlanKey);
         self::assertSame('glr_aisite:session:123:queue_slot:build', $buildKey);
-        self::assertNotSame($planKey, $taskPlanKey);
+        self::assertNotSame($planKey, $buildKey);
     }
 
     public function testDuplicateOperationObserverIdleTimeoutIsDisabled(): void
@@ -420,14 +418,14 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertTrue((bool)$method->invoke($controller, ['operation' => 'build']));
     }
 
-    public function testOperationLookupUsesActiveOperationsWhenBuildOverwritesCurrentOperation(): void
+    public function testOperationLookupUsesActiveOperationsWhenBuildOverwritesBlockOperation(): void
     {
         /** @var AiSiteAgent $controller */
         $controller = ObjectManager::getInstance(AiSiteAgent::class);
         $method = new ReflectionMethod(AiSiteAgent::class, 'resolveActiveOperationForExecutionToken');
         $method->setAccessible(true);
 
-        $taskPlanToken = 'task-plan-overwritten-token';
+        $blockToken = 'block-patch-overwritten-token';
         $scope = [
             'active_operation' => [
                 'operation' => 'build',
@@ -436,9 +434,9 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                 'queue_id' => 83,
             ],
             'active_operations' => [
-                'task_plan' => [
-                    'operation' => 'task_plan',
-                    'execution_token' => $taskPlanToken,
+                'block_partial_patch' => [
+                    'operation' => 'block_partial_patch',
+                    'execution_token' => $blockToken,
                     'status' => 'running',
                     'queue_id' => 79,
                 ],
@@ -451,15 +449,15 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             ],
         ];
 
-        $operation = $method->invoke($controller, $scope, $taskPlanToken);
+        $operation = $method->invoke($controller, $scope, $blockToken);
 
         self::assertIsArray($operation);
-        self::assertSame('task_plan', (string)($operation['operation'] ?? ''));
-        self::assertSame($taskPlanToken, (string)($operation['execution_token'] ?? ''));
+        self::assertSame('block_partial_patch', (string)($operation['operation'] ?? ''));
+        self::assertSame($blockToken, (string)($operation['execution_token'] ?? ''));
         self::assertSame(79, (int)($operation['queue_id'] ?? 0));
     }
 
-    public function testUpdatingTaskPlanOperationDoesNotOverwriteCurrentBuildOperation(): void
+    public function testUpdatingBlockOperationDoesNotOverwriteCurrentBuildOperation(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -474,7 +472,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $session = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($session);
 
-        $taskPlanToken = 'task-plan-update-token';
+        $blockToken = 'block-patch-update-token';
         $buildToken = 'build-current-token';
         $scope = $session->getScopeArray();
         $scope['active_operation'] = [
@@ -484,9 +482,9 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             'queue_id' => 83,
         ];
         $scope['active_operations'] = [
-            'task_plan' => [
-                'operation' => 'task_plan',
-                'execution_token' => $taskPlanToken,
+            'block_partial_patch' => [
+                'operation' => 'block_partial_patch',
+                'execution_token' => $blockToken,
                 'status' => 'running',
                 'queue_id' => 79,
             ],
@@ -498,15 +496,15 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $controller = ObjectManager::getInstance(AiSiteAgent::class);
         $method = new ReflectionMethod(AiSiteAgent::class, 'updateActiveOperation');
         $method->setAccessible(true);
-        $method->invoke($controller, $session, 1, ['operation' => 'task_plan', 'status' => 'done', 'message' => 'task plan done']);
+        $method->invoke($controller, $session, 1, ['operation' => 'block_partial_patch', 'status' => 'done', 'message' => 'block patch done']);
 
         $fresh = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($fresh);
         $freshScope = $fresh->getScopeArray();
         self::assertSame('build', (string)($freshScope['active_operation']['operation'] ?? ''));
         self::assertSame($buildToken, (string)($freshScope['active_operation']['execution_token'] ?? ''));
-        self::assertSame('done', (string)($freshScope['active_operations']['task_plan']['status'] ?? ''));
-        self::assertSame($taskPlanToken, (string)($freshScope['active_operations']['task_plan']['execution_token'] ?? ''));
+        self::assertSame('done', (string)($freshScope['active_operations']['block_partial_patch']['status'] ?? ''));
+        self::assertSame($blockToken, (string)($freshScope['active_operations']['block_partial_patch']['execution_token'] ?? ''));
     }
 
     public function testAiSiteQueueOperationsAreSchedulerOwned(): void
@@ -541,8 +539,8 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             'site_title' => 'Session queue reuse',
             'site_tagline' => 'Each operation queue should be isolated and reused only for the same operation',
             'target_domain' => 'session-queue-reuse.local.test',
-            'brief_description' => 'Ensure plan, task_plan, and build each keep their own reusable queue row.',
-            'user_description' => 'Ensure plan, task_plan, and build each keep their own reusable queue row.',
+            'brief_description' => 'Ensure plan and build each keep their own reusable queue row.',
+            'user_description' => 'Ensure plan and build each keep their own reusable queue row.',
             'page_types' => [Page::TYPE_HOME],
         ];
         $mergePayload = $this->invokeJsonAction(
@@ -563,7 +561,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
 
         RequestContext::set('pagebuilder.ai.queue.dispatcher', static function (string $processName, array $meta): array {
             self::assertStringContainsString('queue:run --id=', $processName);
-            self::assertContains((string)($meta['operation'] ?? ''), ['plan', 'task_plan', 'build']);
+            self::assertContains((string)($meta['operation'] ?? ''), ['plan', 'build']);
 
             return ['started' => true, 'pid' => 13579];
         });
@@ -617,54 +615,48 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             ];
             $this->sessionService->replaceScope($session->getId(), 1, $scope);
 
-            $taskPlanPayload = $this->invokeJsonAction(
-                '/pagebuilder/backend/ai-site-agent/post-start-task-plan',
-                'POST',
-                'postStartTaskPlan',
-                [],
-                ['public_id' => $publicId]
-            );
-            self::assertTrue((bool)($taskPlanPayload['success'] ?? false), \json_encode($taskPlanPayload, \JSON_UNESCAPED_UNICODE));
-            $taskPlanQueueId = (int)($taskPlanPayload['queue_id'] ?? 0);
-            self::assertGreaterThan(0, $taskPlanQueueId);
-            self::assertNotSame($planQueueId, $taskPlanQueueId, 'Task plan should not reuse the plan queue row.');
-
-            w_query('queue', 'update', [
-                'queue_id' => $taskPlanQueueId,
-                'patch' => [
-                    'status' => 'done',
-                    'pid' => 0,
-                    'finished' => 1,
-                ],
-            ]);
             $session = $this->sessionService->loadByPublicId($publicId, 1);
             self::assertNotNull($session);
             $scope = $session->getScopeArray();
-            $scope['active_operation'] = [
-                'operation' => 'task_plan',
-                'execution_token' => (string)($taskPlanPayload['execution_token'] ?? ''),
-                'status' => 'done',
-                'queue_id' => $taskPlanQueueId,
-                'message' => 'task plan done',
+            $buildPlanTask = [
+                'task_key' => 'page:home:hero',
+                'task_type' => 'page_section',
+                'scope_key' => 'page_sections.home.hero',
+                'group_key' => Page::TYPE_HOME,
+                'page_type' => Page::TYPE_HOME,
+                'region' => 'content',
+                'section_code' => 'hero',
+                'label' => 'Hero',
+                'sort_order' => 1000,
             ];
-            $scope['active_operations']['task_plan'] = $scope['active_operation'];
-            $scope['task_plan_confirmed'] = 1;
-            $scope['build_blueprint'] = [
-                'source' => 'stage2_confirmed_task_plan',
-                'signature' => 'queue-reuse-confirmed-task-plan',
-                'tasks' => [
-                    [
-                        'task_key' => 'page:home:hero',
-                        'task_type' => 'page_section',
-                        'scope_key' => 'page_sections.home.hero',
-                        'group_key' => Page::TYPE_HOME,
+            $scope['build_plan_v2'] = [
+                'contract_meta' => [
+                    'version' => '2.2',
+                    'status' => 'confirmed',
+                    'confirmed_at' => \date('Y-m-d H:i:s'),
+                ],
+                'signature' => 'queue-reuse-confirmed-build-plan',
+                'tasks' => [$buildPlanTask],
+                'pages' => [
+                    Page::TYPE_HOME => [
                         'page_type' => Page::TYPE_HOME,
-                        'region' => 'content',
-                        'section_code' => 'hero',
-                        'label' => 'Hero',
-                        'sort_order' => 1000,
+                        'title' => 'Home',
                     ],
                 ],
+                'blocks' => [
+                    Page::TYPE_HOME => [
+                        [
+                            'block_id' => 'hero',
+                            'section_code' => 'hero',
+                        ],
+                    ],
+                ],
+            ];
+            $scope['build_plan_confirmed'] = 1;
+            $scope['build_blueprint'] = [
+                'source' => 'build_plan_v2',
+                'signature' => 'queue-reuse-confirmed-build-plan',
+                'tasks' => [$buildPlanTask],
             ];
             $this->sessionService->replaceScope($session->getId(), 1, $scope);
 
@@ -681,7 +673,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             self::assertTrue((bool)($buildPayload['success'] ?? false), \json_encode($buildPayload, \JSON_UNESCAPED_UNICODE));
             $buildQueueId = (int)($buildPayload['queue_id'] ?? 0);
             self::assertGreaterThan(0, $buildQueueId);
-            self::assertNotSame($taskPlanQueueId, $buildQueueId, 'Build should keep its own queue row.');
+            self::assertNotSame($planQueueId, $buildQueueId, 'Build should keep its own queue row.');
 
             w_query('queue', 'update', [
                 'queue_id' => $buildQueueId,
@@ -727,16 +719,6 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             self::assertIsArray($planQueueContent);
             self::assertSame('plan', (string)($planQueueContent['operation'] ?? ''));
             self::assertSame('stage1.requirement_expand', (string)($planQueueContent['job_type'] ?? ''));
-
-            $taskPlanQueue = w_query('queue', 'get', ['queue_id' => $taskPlanQueueId]);
-            self::assertIsArray($taskPlanQueue);
-            self::assertSame('glr_aisite:session:' . $sessionId . ':queue_slot:task_plan', (string)($taskPlanQueue['biz_key'] ?? ''));
-            $taskPlanQueueContent = \is_array($taskPlanQueue['content'] ?? null)
-                ? $taskPlanQueue['content']
-                : \json_decode((string)($taskPlanQueue['content'] ?? ''), true);
-            self::assertIsArray($taskPlanQueueContent);
-            self::assertSame('task_plan', (string)($taskPlanQueueContent['operation'] ?? ''));
-            self::assertSame('stage2.shared.tasks', (string)($taskPlanQueueContent['job_type'] ?? ''));
 
             $buildQueue = w_query('queue', 'get', ['queue_id' => $buildQueueId]);
             self::assertIsArray($buildQueue);
@@ -1459,9 +1441,6 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
-        $taskPlanFlow = $this->seedAndConfirmTaskPlan($publicId, $scopePatch);
-        self::assertSame(1, (int)($taskPlanFlow['confirm_task_plan']['data']['task_plan_confirmed'] ?? 0));
-
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',

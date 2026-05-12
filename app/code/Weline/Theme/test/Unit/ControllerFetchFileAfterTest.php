@@ -61,6 +61,42 @@ class ControllerFetchFileAfterTest extends TestCase
         $this->assertSame('templates/frontend/home/index.phtml', $meta['contentTemplate'] ?? null);
     }
 
+    public function testTemplateRootContentDoesNotOverrideWrappedPageContentMeta(): void
+    {
+        $template = new ControllerFetchFileAfterTestTemplateStub();
+        $template->setData('content', '<div>component card content</div>');
+        $template->setFetchResponse('theme/frontend/layouts/account/dashboard.phtml', '<html>account wrapped</html>');
+
+        $observer = new class($template) extends ControllerFetchFileAfter {
+            public function __construct(private readonly Template $template)
+            {
+            }
+
+            protected function getTemplateInstance(): Template
+            {
+                return $this->template;
+            }
+        };
+
+        $eventData = new DataObject([
+            'layoutType' => 'account',
+            'contentTemplate' => 'Weline_Customer::templates/frontend/account/index.phtml',
+            'layoutTemplate' => 'theme/frontend/layouts/account/dashboard.phtml',
+            'fileName' => 'Weline_Customer::templates/frontend/account/index.phtml',
+            'content' => '<section class="account-index">page content</section>',
+        ]);
+        $event = new Event(['data' => $eventData]);
+        $event->setName('test');
+
+        $observer->execute($event);
+
+        $meta = $template->getData('meta');
+        $this->assertIsArray($meta);
+        $this->assertSame('<section class="account-index">page content</section>', $meta['content'] ?? null);
+        $this->assertSame('<section class="account-index">page content</section>', $template->getData('content'));
+        $this->assertSame('<html>account wrapped</html>', $eventData->getData('content'));
+    }
+
     public function testBackendLayoutUsesPreparedContentKeyInsteadOfEmbeddingContentHtml(): void
     {
         $template = new ControllerFetchFileAfterTestTemplateStub();

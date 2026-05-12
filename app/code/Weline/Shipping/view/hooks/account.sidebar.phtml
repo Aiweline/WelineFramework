@@ -1,26 +1,43 @@
 <?php
+/**
+ * @hook-priority 50
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
 
- * 
- * @hook-priority 50   Hook优先级：50（默认值）
- * @hook-sort-order 0  Hook排序顺序：0（默认值）
- * @hook-solo false    Hook独享：false（不独占）
- * */
-/**@var \Weline\Framework\View\Template $this */
-
-// 获取当前用户（从模板数据中获取）
 $user = $this->getData('user');
 if (!$user) {
     return;
 }
 
-$frontendUrl = $this->getUrl('');
+$accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
+if (!is_string($accountIndexPath) || $accountIndexPath === '') {
+    $accountIndexPath = '/customer/account/index';
+}
+$accountIndexPath = rtrim($accountIndexPath, '/');
 ?>
-<a class="nav-link" href="<?= htmlspecialchars($frontendUrl) ?>shipping/address/index" data-section="shipping-address">
-    <i class="ri-truck-line"></i> 
-    <span><?= __('发货地址') ?></span>
+<a class="account-hook-nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#shipping-address" data-section="shipping-address" data-account-nav-link="true">
+    <span class="account-hook-nav-link__label">
+        <i class="ri-truck-line" aria-hidden="true"></i>
+        <span class="account-hook-nav-link__text">
+            <strong><lang>发货地址</lang></strong>
+            <span><lang>管理发货地址</lang></span>
+        </span>
+    </span>
+    <span class="account-hook-nav-link__arrow" aria-hidden="true">
+        <i class="fa fa-angle-right"></i>
+    </span>
 </a>
-<a class="nav-link" href="<?= htmlspecialchars($frontendUrl) ?>shipping/delivery/index" data-section="delivery-address">
-    <i class="ri-map-pin-line"></i> 
-    <span><?= __('收货地址') ?></span>
+<a class="account-hook-nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#delivery-address" data-section="delivery-address" data-account-nav-link="true">
+    <span class="account-hook-nav-link__label">
+        <i class="ri-map-pin-line" aria-hidden="true"></i>
+        <span class="account-hook-nav-link__text">
+            <strong><lang>收货地址</lang></strong>
+            <span><lang>管理配送收货地址</lang></span>
+        </span>
+    </span>
+    <span class="account-hook-nav-link__arrow" aria-hidden="true">
+        <i class="fa fa-angle-right"></i>
+    </span>
 </a>
-

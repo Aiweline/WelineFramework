@@ -16,5 +16,28 @@
     <event name="Weline_Seo::domain::website_account_bind">
         <observer name="Weline_Seo::website_account_bind" instance="Weline\Seo\Observer\WebsiteAccountBind" />
     </event>
+
+    <!-- 根协议文件：/robots.txt、/sitemap.xml -->
+    <event name="Weline_Websites::website_save_after">
+        <observer name="Weline_Seo::website_save_after" instance="Weline\Seo\Observer\WebsiteSaveAfter" disabled="false" shared="true" sort="20" />
+    </event>
+
+    <event name="Weline_Framework_Router::process_uri_before">
+        <observer name="Weline_Seo::protocol_route_rewrite" instance="Weline\Seo\Observer\ProtocolRouteRewrite" disabled="false" shared="true" sort="-100" />
+    </event>
+
+    <!-- Business URL production: submit fresh product/category URLs into SEO push queue. -->
+    <event name="WeShop_Product::product_save_after">
+        <observer name="Weline_Seo::business_url_submit_product" instance="Weline\Seo\Observer\BusinessUrlSubmitObserver" disabled="false" shared="true" sort="900" />
+    </event>
+    <event name="WeShop_Catalog_Model_Category_model_save_after">
+        <observer name="Weline_Seo::business_url_submit_catalog_category_model" instance="Weline\Seo\Observer\BusinessUrlSubmitObserver" disabled="false" shared="true" sort="900" />
+    </event>
+    <event name="WeShop_Catalog::category_save_after">
+        <observer name="Weline_Seo::business_url_submit_catalog_category" instance="Weline\Seo\Observer\BusinessUrlSubmitObserver" disabled="false" shared="true" sort="900" />
+    </event>
+    <event name="WeShop_Product::category_save_after">
+        <observer name="Weline_Seo::business_url_submit_product_category" instance="Weline\Seo\Observer\BusinessUrlSubmitObserver" disabled="false" shared="true" sort="900" />
+    </event>
 </config>
 

@@ -175,7 +175,7 @@ class AiSiteBuildQueue implements QueueInterface
                 throw new \RuntimeException('请先确认方案1生成的 build_plan_v2，再开始执行构建。');
             }
 
-            $allowStubAiInTest = (int)($scope['fake_mode'] ?? 0) === 1;
+            $allowStubAiInTest = false;
 
             $sse = new QueueDbWriter(
                 (int)$session->getId(),

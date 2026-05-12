@@ -6,19 +6,11 @@
  * 字段
  * @meta.name {default="Head头部片段",name="Head头部片段",description="Head头部片段，用于描述片段的名称"}
  * @meta.description {default="页面头部区域（meta标签、CSS、JS初始化等）",name="页面头部区域（meta标签、CSS、JS初始化等）",description="页面头部区域（meta标签、CSS、JS初始化等），用于描述片段的用途"}
- * @param.title {default="欢迎使用WelineFramework框架！",name="页面标题",description="页面标题，用于设置页面标题"}
- * @param.description {default="Weline Framework - 现代化的PHP框架",name="页面描述",description="页面描述，用于设置SEO描述"}
- * @param.keywords {default="Weline, Framework, PHP",name="页面关键词",description="页面关键词，用于设置SEO关键词"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  *
  * 参数配置说明：
- * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
- * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
  * - 参数配置由 Block\Partials 在渲染时自动加载
- * - 模板中使用 {{meta.参数}} 输出 partials 的参数，使用 {{layout.参数}} 输出 layout 的参数
  */
-$meta = $this->getData('meta') ?? [];
-$layout = $this->getData('layout') ?? [];
 // 主题相关数据由 ControllerFetchFileBefore Observer 设置
 $themeData = $this->getData('theme') ?? [];
 
@@ -33,6 +25,8 @@ $frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 <link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
 <link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
 </w:hook>
+<w:seo slot="head"/>
+<w:geo slot="head"/>
 <!-- 
     Theme Head Partial - 只负责加载 Theme 资源
     注意：
@@ -116,9 +110,6 @@ if ($isDev) {
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $currentCurrency = \w_env('user.currency', 'CNY');
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
-$pageTitle = $meta['title'] ?? $this->getData('title') ?? __('欢迎使用WelineFramework框架！');
-$pageDescription = $meta['description'] ?? __('Weline Framework - 现代化的PHP框架');
-$pageKeywords = $meta['keywords'] ?? __('Weline, Framework, PHP');
 $welineThemeColorMode = $themeData['colorMode'] ?? 'default';
 
 $envConfig = [
@@ -137,9 +128,6 @@ $themeConfigPayload = [
     'debug' => DEV,
     'site' => [
         'name' => $siteName,
-        'title' => $pageTitle,
-        'description' => $pageDescription,
-        'keywords' => $pageKeywords,
     ],
     // i18n 模块配置由 i18n 模块内部自动处理，无需在此处配置
     // i18n 模块会自动从全局配置读取所需配置，并处理 URL 解析

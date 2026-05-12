@@ -141,15 +141,7 @@ class AiSiteAgentRegeneratePageOperationService
         }
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope['preview_page_type'] = $pageType;
-        $materialized = ($ports->materializeGeneratedPages)(
-            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-            \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
-            $scope['website_profile'],
-            \array_keys($virtualPages),
-            $scope['page_type_layouts'] ?? [],
-            $virtualPages
-        );
-        $scope = ($ports->mergeMaterializedPagesIntoScope)($scope, $materialized);
+        $scope = $this->dropPrePublishMaterializedPagesFromVirtualThemeScope($scope, $session);
         $scope['build_summary'] = \array_replace(
             \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
             ['task_summary' => ($ports->summarizeBuildTasks)($scope)]
@@ -177,5 +169,31 @@ class AiSiteAgentRegeneratePageOperationService
 
         ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('页面重建完成，可继续调整组件'), 100, $pageType);
         return ['message' => (string)__('页面重建完成'), 'page_type' => $pageType, 'virtual_theme_id' => (int)$theme['virtual_theme_id']];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function dropPrePublishMaterializedPagesFromVirtualThemeScope(array $scope, AiSiteAgentSession $session): array
+    {
+        if ($session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED) {
+            return $scope;
+        }
+
+        $scope['pagebuilder_pages_by_type'] = [];
+        $scope['materialized_pages_by_type'] = [];
+        $scope['preview_page_id'] = 0;
+        if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
+            foreach ($scope['virtual_pages_by_type'] as $pageType => $pageData) {
+                if (!\is_array($pageData)) {
+                    continue;
+                }
+                unset($pageData['page_id'], $pageData['materialized_page_id']);
+                $scope['virtual_pages_by_type'][$pageType] = $pageData;
+            }
+        }
+
+        return $scope;
     }
 }

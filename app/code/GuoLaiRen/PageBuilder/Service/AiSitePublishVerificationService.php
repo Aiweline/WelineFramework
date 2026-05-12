@@ -35,9 +35,7 @@ class AiSitePublishVerificationService
             throw new \RuntimeException((string)__('AI publish verification failed: no materialized pages were produced.'));
         }
 
-        $track = $workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS
-            ? AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS
-            : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
+        $track = AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
         $reports = [];
 
         foreach ($pagesByType as $pageType => $row) {
