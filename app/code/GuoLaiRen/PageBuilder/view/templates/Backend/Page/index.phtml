@@ -90,6 +90,7 @@
                 $parentPages = $this->getData('parent_pages') ?: [];
                 $childPages = $this->getData('child_pages') ?: [];
                 $pagination = $this->getData('pagination');
+                $pagination = \is_array($pagination) ? $pagination : [];
                 ?>
                 
                 <?php if (empty($parentPages)): ?>

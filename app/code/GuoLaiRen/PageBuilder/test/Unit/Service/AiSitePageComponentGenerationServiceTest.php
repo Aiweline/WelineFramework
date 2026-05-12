@@ -158,7 +158,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         })->call($service);
     }
 
-    public function testProductionFallbackComponentGenerationBuildsPlanDerivedBaseline(): void
+    public function testPlanDerivedFallbackComponentCannotPassProductionQualityPolicy(): void
     {
         $service = new AiSitePageComponentGenerationService(
             frameworkBuilder: new FrameworkBuilder(),
@@ -166,7 +166,10 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
             codeValidator: new CodeValidator(),
         );
 
-        $artifact = (function (): array {
+        self::expectException(\RuntimeException::class);
+        self::expectExceptionMessage('plan-derived fallback visual leaked');
+
+        (function (): array {
             return $this->buildFallbackComponent(
                 'content/home-page-featured-plugins-grid',
                 'Featured plugin grid',
@@ -179,14 +182,6 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
                 ['_content_locale' => 'en_US']
             );
         })->call($service);
-
-        self::assertSame('content/home-page-featured-plugins-grid', $artifact['code']);
-        self::assertSame('content', $artifact['region']);
-        self::assertNotSame('', trim((string)$artifact['phtml']));
-        self::assertNotSame('', trim((string)$artifact['html']));
-        self::assertStringContainsString('AI Plugin Hub', $artifact['html']);
-        self::assertStringContainsString('ai-site-fallback-stage', $artifact['html']);
-        self::assertStringNotContainsString('Built from plan', $artifact['html']);
     }
 
     public function testRetryPromptPreservesVisualQualityFloor(): void
@@ -380,7 +375,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         })->call($service);
     }
 
-    public function testGenerateComponentRetriesRecoverableErrorsThenUsesPlanDerivedBaseline(): void
+    public function testGenerateComponentRetriesRecoverableErrorsThenFailsWithoutPlanDerivedBaseline(): void
     {
         $aiService = $this->createMock(AiService::class);
         $aiService->expects(self::exactly(2))
@@ -396,7 +391,10 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
             aiService: $aiService,
         );
 
-        $artifact = (function (): array {
+        self::expectException(\RuntimeException::class);
+        self::expectExceptionMessage('AI component generation failed after 2 real-AI attempts');
+
+        (function (): array {
             return $this->generateComponent(
                 'content/home-page-featured-plugins-grid',
                 'Featured plugin grid',
@@ -406,13 +404,6 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
                 ['_content_locale' => 'en_US']
             );
         })->call($service);
-
-        self::assertSame('content/home-page-featured-plugins-grid', $artifact['code']);
-        self::assertSame('content', $artifact['region']);
-        self::assertNotSame('', trim((string)$artifact['phtml']));
-        self::assertNotSame('', trim((string)$artifact['html']));
-        self::assertStringContainsString('ai-site-fallback-stage', $artifact['html']);
-        self::assertStringNotContainsString('Built from plan', $artifact['html']);
     }
 
     public function testGenerateComponentStillFailsForApiKeyConfigurationErrors(): void

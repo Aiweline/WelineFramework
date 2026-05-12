@@ -35,7 +35,7 @@ class Index extends BaseController
             $this->assign($key, $value);
         }
 
-        $this->assign('title', __('My Subscriptions'));
+        $this->assign('title', __('我的订阅服务'));
         return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }

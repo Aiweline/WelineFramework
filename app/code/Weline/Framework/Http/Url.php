@@ -1394,6 +1394,11 @@ class Url implements UrlInterface
             $event = ObjectManager::getInstance(EventsManager::class);
             $origin_url = $url;
             $event->dispatch('Weline_Framework_Url::seo_decode', $url);
+            if (!\is_scalar($url)) {
+                $url = $origin_url;
+            } else {
+                $url = (string)$url;
+            }
             
             // 缓存原始URL到解码后URL的映射
             self::$decode_urls[$origin_url] = $url;

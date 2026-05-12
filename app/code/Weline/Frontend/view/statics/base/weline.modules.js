@@ -48,11 +48,11 @@
             globalVar: null,
             description: "Cookie操作工具函数"
         },
-        geo: {
-            origin_paths: ["app/code/Weline/Geo/view/statics/statics/frontend/js/geo.js"],
-            paths: ["/Weline/Geo/view/statics/statics/frontend/js/geo.js"],
-            globalVar: "WelineGeo",
-            description: "Geo定位模块（浏览器定位和IP定位）"
+        location: {
+            origin_paths: ["app/code/Weline/Location/view/statics/frontend/js/location.js"],
+            paths: ["/Weline/Location/view/statics/frontend/js/location.js"],
+            globalVar: "WelineLocation",
+            description: "Location定位模块（浏览器定位和IP定位）"
         },
         currency: {
             origin_paths: ["app/code/Weline/Currency/view/statics/js/currency.js"],
@@ -78,7 +78,7 @@
         tokenStorage: "weline-api-token-storage",
         worker: "weline-api-worker",
         switcher: "weline-switcher",
-        geolocation: "geo",
+        geolocation: "location",
         money: "currency",
         language: "i18n",
         lang: "i18n"

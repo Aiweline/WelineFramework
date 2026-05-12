@@ -366,6 +366,8 @@ public function handle($request, $next)
 php vendor/bin/phpunit tests/Unit/TwoFactorAuthHelperTest.php
 ```
 
+Test status: covered `UserTwoFactor::getByUserId()` regression where ORM `find()->fetch()` can return an empty model object instead of `null`.
+
 ### 集成测试
 
 ```bash

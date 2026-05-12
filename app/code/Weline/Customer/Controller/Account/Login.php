@@ -6,6 +6,7 @@ namespace Weline\Customer\Controller\Account;
 
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
+use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
@@ -139,6 +140,22 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 );
             }
 
+            /** @var CustomerLoginChallengeHandlerInterface $challengeHandler */
+            $challengeHandler = ObjectManager::getInstance(CustomerLoginChallengeHandlerInterface::class);
+            if (method_exists($challengeHandler, 'createChallenge')) {
+                $challenge = $challengeHandler->createChallenge($user, $redirectUrl);
+                if (is_array($challenge) && !empty($challenge['redirect'])) {
+                    return $this->respondChallenge(
+                        (string)__('Please complete two-factor verification.'),
+                        (string)$challenge['redirect'],
+                        [
+                            'challenge_token' => (string)($challenge['challenge_token'] ?? ''),
+                            'expires_at' => (int)($challenge['expires_at'] ?? 0),
+                        ]
+                    );
+                }
+            }
+
             $this->session->login($user);
             $user->setSessionId($this->session->getId())
                 ->setLoginIp($this->request->clientIP())
@@ -246,7 +263,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
     private function normalizeRedirectTarget(string $redirectUrl): string
     {
-        $redirectUrl = trim($redirectUrl);
+        $redirectUrl = $this->decodeRedirectTarget($redirectUrl);
         if ($redirectUrl === '' || str_starts_with($redirectUrl, '//')) {
             return '';
         }
@@ -287,7 +304,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
     private function formatClientRedirect(string $redirectUrl): string
     {
-        $redirectUrl = trim($redirectUrl);
+        $redirectUrl = $this->decodeRedirectTarget($redirectUrl);
         if ($redirectUrl === '') {
             return '/customer/account';
         }
@@ -302,6 +319,24 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         }
 
         return '/' . $normalized;
+    }
+
+    private function decodeRedirectTarget(string $redirectUrl): string
+    {
+        $redirectUrl = trim($redirectUrl);
+        if ($redirectUrl === '') {
+            return '';
+        }
+
+        for ($i = 0; $i < 2; $i++) {
+            $decoded = rawurldecode($redirectUrl);
+            if ($decoded === $redirectUrl) {
+                break;
+            }
+            $redirectUrl = trim($decoded);
+        }
+
+        return $redirectUrl;
     }
 
     private function buildLoginPageUrl(string $redirectUrl = ''): string
@@ -337,6 +372,25 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
         if ($message !== '') {
             $this->getMessageManager()->addSuccess($message);
+        }
+
+        return (string) $this->redirect($formattedRedirect);
+    }
+
+    private function respondChallenge(string $message, string $redirectUrl, array $extra = []): string
+    {
+        $formattedRedirect = $this->formatClientRedirect($redirectUrl);
+        if ($this->expectsJsonResponse()) {
+            return $this->json(array_merge([
+                'success' => true,
+                'status' => 'challenge_required',
+                'message' => $message,
+                'redirect' => $formattedRedirect,
+            ], $extra));
+        }
+
+        if ($message !== '') {
+            $this->getMessageManager()->addWarning($message);
         }
 
         return (string) $this->redirect($formattedRedirect);

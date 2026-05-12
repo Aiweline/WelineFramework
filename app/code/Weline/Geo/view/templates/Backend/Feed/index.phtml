@@ -1,0 +1,76 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Framework\DataObject\DataObject $feeds
+ * @var \Weline\Framework\DataObject\DataObject $pagination
+ */
+?>
+<div class="content-header">
+    <h1><?= __('Feed管理') ?></h1>
+    <div class="action-bar">
+        <a href="<?= $this->getUrl('geo/backend/feed/edit') ?>" class="btn btn-primary">
+            <i class="mdi mdi-plus"></i> <?= __('添加Feed') ?>
+        </a>
+    </div>
+</div>
+
+<div class="content-body">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th><?= __('ID') ?></th>
+                <th><?= __('Feed名称') ?></th>
+                <th><?= __('Feed类型') ?></th>
+                <th><?= __('数据源') ?></th>
+                <th><?= __('更新频率') ?></th>
+                <th><?= __('自动推送') ?></th>
+                <th><?= __('状态') ?></th>
+                <th><?= __('最后生成') ?></th>
+                <th><?= __('操作') ?></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($feeds)): ?>
+                <tr>
+                    <td colspan="9" class="text-center"><?= __('暂无数据') ?></td>
+                </tr>
+            <?php else: ?>
+                <?php foreach ($feeds as $feed): ?>
+                    <tr>
+                        <td><?= $feed['id'] ?></td>
+                        <td><?= htmlspecialchars($feed['feed_name']) ?></td>
+                        <td><?= htmlspecialchars($feed['feed_type']) ?></td>
+                        <td><?= htmlspecialchars($feed['source_type']) ?></td>
+                        <td><?= htmlspecialchars($feed['update_frequency']) ?></td>
+                        <td>
+                            <?php if ($feed['is_auto_push']): ?>
+                                <span class="badge badge-info"><?= __('是') ?></span>
+                            <?php else: ?>
+                                <span class="badge badge-secondary"><?= __('否') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($feed['is_enabled']): ?>
+                                <span class="badge badge-success"><?= __('启用') ?></span>
+                            <?php else: ?>
+                                <span class="badge badge-secondary"><?= __('禁用') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $feed['last_generated_at'] ? date('Y-m-d H:i:s', $feed['last_generated_at']) : '-' ?></td>
+                        <td>
+                            <a href="<?= $this->getUrl('geo/backend/feed/edit', ['id' => $feed['id']]) ?>" class="btn btn-sm btn-primary">
+                                <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                            </a>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+    </table>
+
+    <?php if ($pagination && $pagination->getTotalPages() > 1): ?>
+        <div class="pagination">
+            <?= $this->getPaginationHtml($pagination) ?>
+        </div>
+    <?php endif; ?>
+</div>

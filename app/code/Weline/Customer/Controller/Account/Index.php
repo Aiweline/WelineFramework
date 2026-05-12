@@ -63,7 +63,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
     public function postUpdate()
     {
         if (!$this->isLoggedIn()) {
-            return $this->json([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
             ]);
@@ -84,28 +84,28 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
 
         if ($newPassword) {
             if (empty($oldPassword)) {
-                return $this->json([
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('请输入原密码')
                 ]);
             }
 
             if (!password_verify($oldPassword, $user->getPassword())) {
-                return $this->json([
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('原密码错误')
                 ]);
             }
 
             if (strlen($newPassword) < 6) {
-                return $this->json([
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('新密码长度不能少于6位')
                 ]);
             }
 
             if ($newPassword !== $confirmPassword) {
-                return $this->json([
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('两次输入的新密码不一致')
                 ]);
@@ -116,25 +116,17 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
 
         try {
             $user->save();
-            return $this->json([
-                'success' => true,
-                'message' => __('更新成功')
-            ]);
         } catch (\Throwable $throwable) {
-            return $this->json([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => $this->buildUpdateFailureMessage($throwable)
             ]);
         }
-    }
 
-    /**
-     * 返回JSON响应
-     */
-    private function json(array $data): string
-    {
-        header('Content-Type: application/json');
-        return json_encode($data, JSON_UNESCAPED_UNICODE);
+        return $this->fetchJson([
+            'success' => true,
+            'message' => __('更新成功')
+        ]);
     }
 
     private function buildUpdateFailureMessage(\Throwable $throwable): string

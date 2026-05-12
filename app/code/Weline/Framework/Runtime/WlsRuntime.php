@@ -575,6 +575,30 @@ class WlsRuntime implements RuntimeInterface
     /**
      * 处理 URL 解析结果
      */
+    private function normalizeParsedUri(mixed $uri): string
+    {
+        if (\is_array($uri)) {
+            $path = $uri['path'] ?? $uri['uri'] ?? $uri['REQUEST_URI'] ?? $uri['data'] ?? '';
+            if (!\is_scalar($path)) {
+                $path = '';
+            }
+            $path = (string)$path;
+
+            $query = $uri['query'] ?? '';
+            if (\is_array($query)) {
+                $query = \http_build_query($query);
+            }
+            if (\is_scalar($query) && $query !== '') {
+                $query = (string)$query;
+                $path .= (\str_contains($path, '?') ? '&' : '?') . \ltrim($query, '?');
+            }
+
+            return $path;
+        }
+
+        return \is_scalar($uri) ? (string)$uri : '';
+    }
+
     private function processUrlParse(array $parse): void
     {
         // 防御性检查：如果 parse 缺少 server 字段（如 parserMatchs 早期返回），
@@ -594,7 +618,7 @@ class WlsRuntime implements RuntimeInterface
         WelineEnv::set('area', $area, 'WlsRuntime processUrlParse');
         $isBackendArea = ($area === 'backend' || $area === 'rest_backend');
         if (isset($parse['uri'])) {
-            $uri = \Weline\Framework\Http\Url::decode_url($parse['uri']);
+            $uri = \Weline\Framework\Http\Url::decode_url($this->normalizeParsedUri($parse['uri']));
             // 后台/API 后台不覆盖 REQUEST_URI，保留 parser 已设置的带 /admin/ 前缀的路径，否则 Router 会拿到 pure_uri 导致 404
             if (!$isBackendArea) {
                 $parse['server']['REQUEST_URI'] = $uri;
@@ -605,7 +629,7 @@ class WlsRuntime implements RuntimeInterface
         // 否则前一个 frontend/preview 请求可能残留，导致后台路由命中错误页面（需手动刷新才恢复）。
         if (!isset($parse['server']['REQUEST_URI']) || $parse['server']['REQUEST_URI'] === '') {
             if (isset($parse['uri']) && $parse['uri'] !== '') {
-                $parse['server']['REQUEST_URI'] = \Weline\Framework\Http\Url::decode_url((string)$parse['uri']);
+                $parse['server']['REQUEST_URI'] = \Weline\Framework\Http\Url::decode_url($this->normalizeParsedUri($parse['uri']));
             } else {
                 $parse['server']['REQUEST_URI'] = (string)($_SERVER['REQUEST_URI'] ?? '/');
             }
@@ -627,7 +651,7 @@ class WlsRuntime implements RuntimeInterface
         // 每次请求都基于当前解析结果重建完整 URI，避免 Fiber/长连接恢复旧值后污染统一路由缓存键。
         $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? 'http');
         $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
-        $currentUri = (string)($parse['uri'] ?? ($_SERVER['REQUEST_URI'] ?? '/'));
+        $currentUri = $this->normalizeParsedUri($parse['uri'] ?? ($_SERVER['REQUEST_URI'] ?? '/'));
         if ($currentUri === '') {
             $currentUri = '/';
         }

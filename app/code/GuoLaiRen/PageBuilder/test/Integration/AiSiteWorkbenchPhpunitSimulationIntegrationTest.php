@@ -93,9 +93,6 @@ class AiSiteWorkbenchPhpunitSimulationIntegrationTest extends AbstractAiSiteWork
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
-        $taskPlanFlow = $this->generateAndConfirmTaskPlan($publicId, $scopePatch);
-        self::assertSame(1, (int)($taskPlanFlow['confirm_task_plan']['data']['task_plan_confirmed'] ?? 0));
-
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',

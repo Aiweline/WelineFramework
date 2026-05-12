@@ -18,6 +18,9 @@ $mergeScopeUrl = (string)($this->getData('merge_scope_url') ?? '');
 $replaceScopeUrl = (string)($this->getData('replace_scope_url') ?? '');
 $setStageUrl = (string)($this->getData('set_stage_url') ?? '');
 $startPlanUrl = (string)($this->getData('start_plan_url') ?? '');
+$skillListUrl = (string)($this->getData('skill_list_url') ?? '');
+$skillSaveUrl = (string)($this->getData('skill_save_url') ?? '');
+$skillDisableUrl = (string)($this->getData('skill_disable_url') ?? '');
 $confirmPlanUrl = (string)($this->getData('confirm_plan_url') ?? '');
 $sortPlanBlocksUrl = (string)($this->getData('sort_plan_blocks_url') ?? '');
 $mutatePlanBlockUrl = (string)($this->getData('mutate_plan_block_url') ?? '');
@@ -28,8 +31,6 @@ $runVirtualThemeUrl = (string)($this->getData('run_virtual_theme_url') ?? $this-
 $startRegeneratePageUrl = (string)($this->getData('start_regenerate_page_url') ?? '');
 $startRefineComponentUrl = (string)($this->getData('start_refine_component_url') ?? '');
 $startPatchBlockUrl = (string)($this->getData('start_patch_block_url') ?? '');
-$startBlockRefineSseUrl = (string)($this->getData('start_block_refine_sse_url') ?? '');
-$startBlockRegenerateSseUrl = (string)($this->getData('start_block_regenerate_sse_url') ?? '');
 $updateBlockConfigUrl = (string)($this->getData('update_block_config_url') ?? '');
 $startPublishUrl = (string)($this->getData('start_publish_url') ?? '');
 $operationSseUrl = (string)($this->getData('operation_sse_url') ?? '');
@@ -249,7 +250,7 @@ if ($previewPageType !== '' && \is_array($virtualPagesByType[$previewPageType] ?
     ];
 }
 $workspaceTrack = (string)($state['workspace_track'] ?? \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME);
-$siteReadyFlag = (int)($state['site_ready'] ?? 1);
+$isVirtualThemeTrack = $workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
 $buildTaskSummary = \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [];
 $buildTaskGroups = \is_array($buildTaskSummary['groups'] ?? null) ? $buildTaskSummary['groups'] : [];
 

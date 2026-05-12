@@ -1,37 +1,50 @@
-# Weline Theme 模块 - Hook 文档
+# Weline Theme - Account Sidebar Hook
 
 ## Hook 信息
 
 - **Hook 名称**：`account.sidebar`
-- **显示名称**：账户侧边栏
-- **Hook 类型**：简单格式 Hook（向后兼容）
-- **功能说明**：在账户页面的侧边栏导航中注入内容，允许其他模块添加自定义导航项。
+- **显示名称**：账户侧栏
+- **功能说明**：在账户页面侧栏导航中注入内容。扩展模块可以直接输出自己的父子菜单结构。
 
 ## 使用方法
 
-在模块的 `view/hooks/` 目录下创建文件：`view/hooks/account.sidebar.phtml`
+在模块的 `view/hooks/` 目录中创建文件：
 
-## 使用场景
-
-- 在账户侧边栏添加自定义导航项
-- 添加模块特定的功能入口
-- 根据用户权限显示不同的导航项
-
-## 示例代码
-
-```html
-<!-- 在模块的 view/hooks/account.sidebar.phtml 文件中 -->
-<a class="nav-link" href="/custom/feature">
-    <i class="ri-settings-line"></i> <span><lang>自定义功能</lang></span>
-</a>
+```text
+view/hooks/account.sidebar.phtml
 ```
 
-## HTML 结构
+## 父子菜单结构
 
-此 hook 应该返回导航链接元素（`<a>` 标签），这些元素会被包裹在账户侧边栏的导航区域中。
+扩展方如果需要分组，直接在 hook 文件中输出分组容器：
 
-## 注意事项
+```html
+<div class="account-hook-nav-group">
+    <div class="account-hook-nav-title"><lang>订单与服务</lang></div>
+    <a class="account-hook-nav-link" href="/customer/account/index#orders" data-section="orders" data-account-nav-link="true">
+        <span class="account-hook-nav-link__label">
+            <i class="ri-shopping-bag-line" aria-hidden="true"></i>
+            <span class="account-hook-nav-link__text">
+                <strong><lang>我的订单</lang></strong>
+                <span><lang>查看订单进度与支付状态</lang></span>
+            </span>
+        </span>
+    </a>
+</div>
+```
 
-- 此 hook 用于账户页面的侧边栏导航
-- 建议使用与主题一致的导航样式类
-- 可以使用图标和文字组合显示
+默认布局不会为扩展 hook 额外包分组。需要父级标题、子项、外链或内容区切换时，由注入方自己决定。
+
+## 内容区切换约定
+
+如果菜单项用于切换账户页内容区，链接需要包含：
+
+- `data-account-nav-link="true"`
+- `data-section="section-id"`
+
+对应内容区通过 `account.sidebar.content` 输出，并设置：
+
+- `data-account-section="section-id"`
+- 默认 `hidden` 或 `d-none`
+
+如果菜单项只是跳转到其他页面，不要添加 `data-account-nav-link` 和 `data-section`。
