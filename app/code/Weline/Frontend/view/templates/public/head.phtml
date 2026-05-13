@@ -1,13 +1,9 @@
 ﻿<?php
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Frontend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Block\ThemeConfig::class);
-?>
-<?php
-/**@var \Weline\Framework\View\Template $this */
 ?>
 <meta charset="UTF-8">
 <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, shrink-to-fit=no'>
+<?php echo \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Service\Head\HeadRenderer::class)->render($this, ['slot' => 'title']); ?>
 <w:seo slot="head"/>
 <w:geo slot="head"/>
 <link rel="Shortcut Icon" href="@static(Weline_Frontend::img/favicon.png)">
