@@ -43,24 +43,25 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertSame('<div>AI generated header</div>', $payload['html_extra'] ?? null);
     }
 
-    public function testRunAiGenerationThrowsWhenStreamFailsBeforeParseablePayload(): void
+    public function testRunAiGenerationFallsBackToNonStreamWhenStreamFailsBeforeParseablePayload(): void
     {
         $aiService = $this->createMock(AiService::class);
         $aiService->expects(self::once())
             ->method('generateStream')
             ->willThrowException(new \RuntimeException('AI流式生成失败: 流式API调用失败: TLS connect error: error:0A000126:SSL routines::unexpected eof while reading'));
-        $aiService->expects(self::never())->method('generate');
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->willReturn('{"html_extra":"<div>Recovered component</div>","css_extra":"","php_variables":"","extra_fields":"","js_content":""}');
 
         $service = new AiSitePageComponentGenerationService(
             aiService: $aiService,
         );
 
-        self::expectException(\RuntimeException::class);
-        self::expectExceptionMessage('automatic non-stream recovery disabled');
-
-        (function (string $region, string $prompt): array {
+        $payload = (function (string $region, string $prompt): array {
             return $this->runAiGeneration($region, $prompt);
         })->call($service, 'header', 'Generate a simple header');
+
+        self::assertSame('<div>Recovered component</div>', $payload['html_extra'] ?? null);
     }
 
     public function testCliStreamUsesUnlimitedTransportButNonStreamFallbackKeepsFiniteTimeout(): void
@@ -158,7 +159,94 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         })->call($service);
     }
 
-    public function testPlanDerivedFallbackComponentCannotPassProductionQualityPolicy(): void
+    public function testSharedFooterUsesContractRescueWhenAiReturnsInvalidJson(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(static function (string $prompt, callable $callback): void {
+                $callback('this is not valid component json');
+            });
+        $aiService->expects(self::never())
+            ->method('generate');
+
+        $service = new AiSitePageComponentGenerationService(
+            frameworkBuilder: new FrameworkBuilder(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+            aiService: $aiService,
+        );
+
+        $component = (function (): array {
+            return $this->generateComponent(
+                'footer/ai-site-footer',
+                'AI Site Footer',
+                'footer',
+                'Generate a premium footer',
+                [
+                    'runtime.shared_region' => 'footer',
+                    'site_title' => 'Royal Indian Card Games',
+                    'brand.summary' => 'Fast and secure card game downloads for Indian players.',
+                    'links.column1_items' => \json_encode([
+                        ['title' => 'Home', 'url' => '/'],
+                        ['title' => 'Games', 'url' => '/games'],
+                    ], \JSON_UNESCAPED_UNICODE),
+                    'links.column2_items' => \json_encode([
+                        ['title' => 'Support', 'url' => '/support'],
+                        ['title' => 'Privacy', 'url' => '/privacy'],
+                    ], \JSON_UNESCAPED_UNICODE),
+                ],
+                ['_content_locale' => 'en_US']
+            );
+        })->call($service);
+
+        self::assertSame('footer', $component['region'] ?? null);
+        self::assertStringContainsString('AI Site Footer', (string)($component['name'] ?? ''));
+        self::assertStringContainsString('Content can be maintained after publishing', (string)($component['ai_data']['footer_extra_text'] ?? ''));
+        self::assertStringContainsString('box-shadow', (string)($component['ai_data']['css_extra'] ?? ''));
+    }
+
+    public function testRequiredInlineImageGenerationRetriesTransientTimeoutBeforeFailingBlock(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $calls = 0;
+        $slotId = 'page:home_page:content-home-page-hero-download';
+
+        $spec = (function (array $spec) use (&$calls, $slotId): array {
+            return $this->prepareInlineImageAssetForComponentSpec($spec);
+        })->call($service, [
+            'region' => 'content',
+            'defaultConfig' => [
+                'runtime.section_image_required' => '1',
+                'runtime.section_image_slot_id' => $slotId,
+                'runtime.inline_image_generation_max_attempts' => '2',
+            ],
+            'renderContext' => [
+                '_visual_contract' => [
+                    'required' => 1,
+                    'slot_id' => $slotId,
+                ],
+                '_inline_image_asset_generator' => static function (string $requestedSlotId) use (&$calls, $slotId): array {
+                    self::assertSame($slotId, $requestedSlotId);
+                    $calls++;
+                    if ($calls === 1) {
+                        throw new \RuntimeException('VectorEngine API failed (HTTP: 0): Operation timed out after 180010 milliseconds with 0 bytes received');
+                    }
+
+                    return ['final_url' => '/pub/media/page-build/generated/hero.jpg'];
+                },
+            ],
+        ]);
+
+        self::assertSame(2, $calls);
+        self::assertSame('/pub/media/page-build/generated/hero.jpg', $spec['defaultConfig']['visual.image_url'] ?? null);
+        self::assertSame(
+            '/pub/media/page-build/generated/hero.jpg',
+            $spec['renderContext']['_required_image_assets'][$slotId] ?? null
+        );
+    }
+
+    public function testPlanDerivedFallbackComponentUsesCssOnlyVisualPolicy(): void
     {
         $service = new AiSitePageComponentGenerationService(
             frameworkBuilder: new FrameworkBuilder(),
@@ -166,10 +254,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
             codeValidator: new CodeValidator(),
         );
 
-        self::expectException(\RuntimeException::class);
-        self::expectExceptionMessage('plan-derived fallback visual leaked');
-
-        (function (): array {
+        $component = (function (): array {
             return $this->buildFallbackComponent(
                 'content/home-page-featured-plugins-grid',
                 'Featured plugin grid',
@@ -182,6 +267,12 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
                 ['_content_locale' => 'en_US']
             );
         })->call($service);
+
+        $html = (string)($component['html'] ?? '');
+        self::assertStringContainsString('ai-site-contract', $html);
+        self::assertStringContainsString('ai-site-css-visual', $html);
+        self::assertStringNotContainsString('<svg', $html);
+        self::assertStringNotContainsString('ai-site-fallback', $html);
     }
 
     public function testRetryPromptPreservesVisualQualityFloor(): void
@@ -205,6 +296,11 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertStringContainsString('plain cards or a flat strip', $prompt);
         self::assertStringContainsString('For link/contact/social blocks', $prompt);
         self::assertStringContainsString('For blog/article/category blocks', $prompt);
+        self::assertStringContainsString('1920x750-style banner', $prompt);
+        self::assertStringContainsString('If explicit user adjustment conflicts', $prompt);
+        self::assertStringContainsString('Get started', $prompt);
+        self::assertStringContainsString('Game suite', $prompt);
+        self::assertStringContainsString('Download path', $prompt);
         self::assertStringContainsString('Fix contrast explicitly', $prompt);
         self::assertStringContainsString('Fix page hierarchy explicitly', $prompt);
         self::assertStringContainsString('Fix HTML structure explicitly', $prompt);
@@ -214,6 +310,77 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertStringNotContainsString('reduced', \strtolower($prompt));
         self::assertStringNotContainsString('Keep the structure compact', $prompt);
         self::assertStringNotContainsString('Prefer one small section', $prompt);
+    }
+
+    public function testHeroVisualContractAllowsPremiumUserOverrideMediaLayout(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+
+        (function (): void {
+            $this->assertRenderedHtmlPassesBuildQualityGate(
+                'content/home-page-hero',
+                '<div class="ai-site-hero"><img class="ai-site-hero-image" style="position:absolute;top:50%;right:5%;width:min(44vw,560px);aspect-ratio:3/2;transform:translateY(-50%);object-fit:cover"><article style="background:rgba(7,13,25,.68);backdrop-filter:blur(12px)"><h2>Play Teen Patti Like a Royal</h2><p>Fast secure APK download.</p></article></div>'
+            );
+        })->call($service);
+
+        self::assertTrue(true);
+    }
+
+    public function testLowQualityGateRejectsRepeatedGenericThreeCardScaffold(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $method = new \ReflectionMethod($service, 'detectLowQualityGeneratedSectionHtmlReason');
+        $method->setAccessible(true);
+
+        $reason = $method->invoke(
+            $service,
+            '<div class="pb-sample-grid"><article><h3>Get started</h3><p>Bring the download offer.</p></article><article><h3>Game suite</h3><p>Card games and quick entry.</p></article><article><h3>Download path</h3><p>Get started</p></article></div>'
+        );
+
+        self::assertSame('generic repeated three-card scaffold leaked into generated content', $reason);
+    }
+
+    public function testSectionPromptIncludesPremiumHeroAndAntiMonotonyRules(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $prompt = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): string {
+            return $this->buildSectionGenerationPrompt($pageType, $section, $blueprint, $websiteProfile, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Hero',
+                'template' => 'hero',
+                'config' => [],
+            ],
+            [
+                'page_label' => 'Home',
+                'page_title' => 'Premium Hero Test',
+                'ai_description' => 'Explain value',
+            ],
+            [
+                'site_title' => 'Premium Hero Test',
+                'brief_description' => 'Indian real-money card game APK landing page',
+                'content_locale' => 'en_US',
+                'default_locale' => 'en_US',
+            ],
+            [
+                'content_locale' => 'en_US',
+                'default_locale' => 'en_US',
+            ]
+        );
+
+        self::assertStringContainsString('Premium site design contract', $prompt);
+        self::assertStringContainsString('HERO/BANNER DEFAULT BASELINE', $prompt);
+        self::assertStringContainsString('explicit user/design instruction wins', $prompt);
+        self::assertStringContainsString('image or visual layer covers', $prompt);
+        self::assertStringContainsString('Anti-monotony rule', $prompt);
+        self::assertStringContainsString('tiny cartoon/SVG-looking media', $prompt);
     }
 
     public function testThemeStyleDefaultsCorrectUnreadableDarkPaletteText(): void
@@ -583,6 +750,49 @@ PHP,
         self::assertStringNotContainsString('默认页面模板', (string)($validated['html_content'] ?? ''));
     }
 
+    public function testFrameworkBuilderRendersComponentIdCssScopeForGeneratedContent(): void
+    {
+        $componentInfo = [
+            'name' => 'Scoped Content Block',
+            'name_en' => 'Scoped Content Block',
+            'description' => 'renders scoped css selector',
+        ];
+        $aiData = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-scoped-panel { display:grid; gap:16px; }',
+            'css_responsive' => '#componentId .pb-scoped-panel { grid-template-columns:1fr; }',
+            'html_content' => '<div class="pb-scoped-panel"><h2>Scoped preview</h2><p>Generated section copy.</p></div>',
+            'js_content' => '',
+        ];
+
+        $phtml = (new FrameworkBuilder())->buildComponent('content', $componentInfo, $aiData);
+
+        self::assertStringContainsString('#<?= $componentId ?> .pb-scoped-panel', $phtml);
+        self::assertStringNotContainsString('#componentId .pb-scoped-panel', $phtml);
+    }
+
+    public function testFrameworkBuilderRepairsMalformedComponentIdCssScopeForGeneratedContent(): void
+    {
+        $componentInfo = [
+            'name' => 'Scoped Content Block',
+            'name_en' => 'Scoped Content Block',
+            'description' => 'repairs malformed scoped css selector',
+        ];
+        $aiData = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#= $componentId .pb-scoped-panel { display:grid; gap:16px; }',
+            'html_content' => '<div class="pb-scoped-panel"><h2>Scoped preview</h2><p>Generated section copy.</p></div>',
+            'js_content' => '',
+        ];
+
+        $phtml = (new FrameworkBuilder())->buildComponent('content', $componentInfo, $aiData);
+
+        self::assertStringContainsString('#<?= $componentId ?> .pb-scoped-panel', $phtml);
+        self::assertStringNotContainsString('#= $componentId', $phtml);
+    }
+
     public function testAttemptSyntaxFixRepairsMalformedPhpEchoTagInRequiredHtmlContent(): void
     {
         $service = new AiSitePageComponentGenerationService(
@@ -804,7 +1014,8 @@ HTML,
         self::assertStringContainsString('Visitors see', $prompt);
         self::assertStringContainsString('访客看到', $prompt);
         self::assertStringContainsString('Never render broken image placeholders', $prompt);
-        self::assertStringContainsString('inline SVG or CSS shapes', $prompt);
+        self::assertStringContainsString('CSS-only shapes/pseudo-elements', $prompt);
+        self::assertStringNotContainsString('inline SVG or CSS shapes', $prompt);
         self::assertStringContainsString('Images: never output broken image placeholders', $prompt);
         self::assertStringContainsString('Visual excellence system prompt for section', $prompt);
         self::assertStringContainsString('Section quality floor', $prompt);
@@ -1257,7 +1468,7 @@ HTML,
             'extra_fields' => '',
             'php_variables' => '',
             'css_extra' => $css,
-            'html_content' => '<div class="pb-rich-0 pb-rich-sentinel"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/></svg><h2>Teenipiya APK Rewards</h2><p>Compare safe download paths, payout records, and support options before installing.</p></div>',
+            'html_content' => '<div class="pb-rich-0 pb-rich-sentinel"><span class="pb-rich-css-orb" aria-hidden="true"></span><h2>Teenipiya APK Rewards</h2><p>Compare safe download paths, payout records, and support options before installing.</p></div>',
             'js_content' => '',
         ];
 
@@ -1287,6 +1498,30 @@ HTML,
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('AI component HTML structure invalid');
+
+        (function (array $payload, string $region): array {
+            return $this->ensureAiPayloadValid($payload, $region);
+        })->call($service, $payload, 'content');
+    }
+
+    public function testVirtualThemeComponentPolicyRejectsMissingTagNameBeforeAttributes(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-card { display:grid; gap:18px; padding:28px; }',
+            'html_content' => '<div class="pb-card">< class="pb-card-icon" aria-hidden="true"></class><h2>Safe tables</h2><p>Download trusted card games with clear proof.</p></div>',
+            'js_content' => '',
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('opening tag is missing an element name');
 
         (function (array $payload, string $region): array {
             return $this->ensureAiPayloadValid($payload, $region);
@@ -1981,6 +2216,64 @@ HTML,
         self::assertStringNotContainsString('<svg class="ai-site-svg-visual"', $html, 'Verified image must replace placeholder SVG visual when contract image is available.');
     }
 
+    public function testHeroGeneratedComponentPersistsFullBleedLayoutDefaults(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $defaultConfig = [
+            'content.title' => 'Home Hero',
+            'content.description' => 'Anchor the home story with a confirmed visual.',
+            'visual.image_url' => '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg',
+            'runtime.section_template' => 'hero',
+            'runtime.section_image_url' => '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg',
+            'runtime.section_image_slot_id' => 'page:home_page:content-home-page-hero',
+        ];
+
+        $persisted = (function (array $config): array {
+            return $this->sanitizeGeneratedComponentDefaultConfig($config, 'content');
+        })->call($service, $defaultConfig);
+
+        self::assertSame('full', (string)($persisted['layout.container_width'] ?? ''));
+        self::assertSame('0', (string)($persisted['layout.padding_top'] ?? ''));
+        self::assertSame('0', (string)($persisted['layout.padding_bottom'] ?? ''));
+        self::assertSame('image', (string)($persisted['style.bg_type'] ?? ''));
+        self::assertSame(
+            '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg',
+            (string)($persisted['style.bg_image'] ?? '')
+        );
+        self::assertArrayNotHasKey('runtime.section_template', $persisted);
+    }
+
+    public function testStrictHeroBannerCssBreaksOutOfFrameworkContainer(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $defaultConfig = [
+            'content.title' => 'Home Hero',
+            'content.description' => 'Anchor the home story with a confirmed visual.',
+            'runtime.section_image_slot_id' => 'page:home_page:content-home-page-hero',
+        ];
+
+        $payload = (function (array $aiData, array $defaultConfig, string $imageUrl): array {
+            return $this->buildStrictHeroBannerPayload($aiData, $defaultConfig, $imageUrl);
+        })->call(
+            $service,
+            ['css_extra' => '', 'css_responsive' => '', 'js_content' => ''],
+            $defaultConfig,
+            '/pub/media/page-build/example/ai-generated/page-home_page-content-home-page-hero-abc123.jpg'
+        );
+
+        $css = (string)($payload['css_extra'] ?? '');
+        self::assertStringContainsString('width:100vw!important', $css);
+        self::assertStringContainsString('margin-left:calc(50% - 50vw)!important', $css);
+        self::assertStringContainsString('>[class$="-container"]', $css);
+        self::assertStringContainsString('[class$="-body"]', $css);
+    }
+
     /**
      * 强行契约：hero/banner stub 必须输出 banner 风格 + 多 slide 自动轮播结构，
      * 不再退化为通用的"卡片网格 + 视觉面板"。
@@ -2456,7 +2749,7 @@ HTML,
         $html = (string)($payload['html_content'] ?? '');
         self::assertStringContainsString('<img class="ai-site-visual-image"', $html);
         self::assertStringContainsString('data-pb-ai-asset-slot="page:about_page:content-about-page-hero"', $html);
-        self::assertStringContainsString('ai-site-fallback-art--image', $html);
+        self::assertStringContainsString('ai-site-contract-art--image', $html);
         self::assertStringNotContainsString('<svg viewBox="0 0 520 360"', $html, 'Production fallback must not draw placeholder SVG when verified asset URL is provided.');
     }
 
@@ -2537,7 +2830,7 @@ HTML,
             'php_variables' => '',
             'css_extra' => '#componentId .pb-royal-panel { display:grid; gap:18px; padding:28px; border-radius:28px; background:linear-gradient(135deg,#1A1A1A,#E67E22); box-shadow:0 24px 60px rgba(0,0,0,.2); transition:transform .2s ease; }',
             'css_responsive' => '#componentId .pb-royal-panel { grid-template-columns:1fr; }',
-            'html_content' => '<section class="pb-royal-panel"><svg viewBox="0 0 10 10"></svg><h2>访客看到三张精致卡片，从而产生下载兴趣。</h2><p>真实玩家对战，赢取真金奖励。</p></section>',
+            'html_content' => '<section class="pb-royal-panel"><span class="pb-royal-css-token" aria-hidden="true"></span><h2>访客看到三张精致卡片，从而产生下载兴趣。</h2><p>真实玩家对战，赢取真金奖励。</p></section>',
             'js_content' => '',
         ];
 

@@ -454,9 +454,9 @@ class FrameworkBuilder
             }
         }
         $replacements['PHP_VARIABLES'] = implode("\n", $pvSafe);
-        $replacements['CSS_EXTRA'] = $aiData['css_extra'] ?? '';
-        $replacements['CSS_RESPONSIVE'] = $aiData['css_responsive'] ?? '';
-        $replacements['CSS_CONTENT'] = $aiData['css_content'] ?? '';
+        $replacements['CSS_EXTRA'] = $this->renderComponentScopedCss($aiData['css_extra'] ?? '');
+        $replacements['CSS_RESPONSIVE'] = $this->renderComponentScopedCss($aiData['css_responsive'] ?? '');
+        $replacements['CSS_CONTENT'] = $this->renderComponentScopedCss($aiData['css_content'] ?? '');
         $replacements['HTML_CONTENT'] = $aiData['html_content'] ?? '';
         $replacements['HTML_EXTRA'] = $aiData['html_extra'] ?? '';
         $replacements['HTML_EXTRA_COLUMN'] = $aiData['html_extra_column'] ?? '';
@@ -464,6 +464,18 @@ class FrameworkBuilder
         $replacements['JS_CONTENT'] = $aiData['js_content'] ?? '';
         
         return $replacements;
+    }
+
+    private function renderComponentScopedCss(string $css): string
+    {
+        if ($css === '') {
+            return '';
+        }
+
+        $componentSelector = '#<' . '?= $componentId ?' . '>';
+        $css = preg_replace('/#=\s*\$componentId\b/', $componentSelector, $css) ?? $css;
+
+        return str_replace('#componentId', $componentSelector, $css);
     }
     
     /**

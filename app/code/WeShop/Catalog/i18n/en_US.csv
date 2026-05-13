@@ -4,6 +4,8 @@
 分类页面加载后触发，筛选模块可监听以收集筛选器。,分类页面加载后触发，筛选模块可监听以收集筛选器。
 分类保存后,分类保存后
 分类保存后触发，筛选模块可监听以清除分类筛选缓存。,分类保存后触发，筛选模块可监听以清除分类筛选缓存。
+"Skipped category %{1}: missing parent %{2}","Skipped category %{1}: missing parent %{2}"
+"Failed to resolve category after save: %{1}","Failed to resolve category after save: %{1}"
 "Catalog 查询器不支持的操作：%{1}","Catalog 查询器不支持的操作：%{1}"
 分类查询,分类查询
 提供分类信息查询能力,提供分类信息查询能力

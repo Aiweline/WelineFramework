@@ -14269,20 +14269,36 @@
         toast(level === 'error' ? 'error' : (level === 'success' ? 'success' : 'warning'), message);
     }
 
-    if (initialWorkspaceState && typeof initialWorkspaceState === 'object') {
-        hydrateInitialWorkspaceStateOnce();
-        showWorkspaceEntryQueueNotice(initialWorkspaceState);
+    function safeWorkspaceBootStep(label, callback) {
+        try {
+            if (typeof callback === 'function') {
+                callback();
+            }
+        } catch (error) {
+            console.error('[PageBuilder AI workspace boot]', label, error);
+        }
     }
-    bindAssetPanelLogic();
-    bindReferenceImageUploadLogic();
-    syncReferenceImagePanelFromWorkspaceState(initialWorkspaceState);
+
+    if (initialWorkspaceState && typeof initialWorkspaceState === 'object') {
+        safeWorkspaceBootStep('hydrate_initial_state', function () {
+            hydrateInitialWorkspaceStateOnce();
+        });
+        safeWorkspaceBootStep('entry_queue_notice', function () {
+            showWorkspaceEntryQueueNotice(initialWorkspaceState);
+        });
+    }
+    safeWorkspaceBootStep('asset_panel', bindAssetPanelLogic);
+    safeWorkspaceBootStep('reference_image_upload', bindReferenceImageUploadLogic);
+    safeWorkspaceBootStep('reference_image_sync', function () {
+        syncReferenceImagePanelFromWorkspaceState(initialWorkspaceState);
+    });
     var bootStage = String(currentStageCode || currentWorkspaceStage || '').trim().toLowerCase();
     if (bootStage === 'visual_edit') {
-        bindVisualEditStageLogic();
+        safeWorkspaceBootStep('visual_edit_stage', bindVisualEditStageLogic);
     } else if (bootStage === 'publish') {
-        bindPublishStageLogic();
+        safeWorkspaceBootStep('publish_stage', bindPublishStageLogic);
     } else {
-        bindPlanStageLogic();
+        safeWorkspaceBootStep('plan_stage', bindPlanStageLogic);
     }
 })();
 </script>

@@ -1600,10 +1600,10 @@ class Start extends CommandAbstract
             return (int) \round(\max(0.5, \min(60.0, $configuredSec)) * 1000);
         }
 
-        // Once Windows Start-Process returns a concrete PID, the CLI has already handed off
-        // the background Master. Keep the metadata/control-plane wait short so a slow
-        // framework bootstrap does not make server:start look hung.
-        return $spawnedMasterPid > 0 ? 1200 : 5000;
+        // Windows Start-Process can return the Master PID before the control plane writes
+        // instance metadata. Keep a bounded wait so normal starts still print the final
+        // access URL table instead of returning at the "control plane initializing" hint.
+        return $spawnedMasterPid > 0 ? 8000 : 5000;
     }
 
     protected function isSpawnedBackgroundMasterAlive(int $pid): bool

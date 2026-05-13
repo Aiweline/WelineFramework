@@ -87,6 +87,7 @@ class AiSiteAgent extends BaseController
     private const STALE_ACTIVE_OPERATION_TTL_SEC = 600;
     private const OBSERVER_QUEUE_SETTLE_DELAY_MS = 3000;
     private const BUILD_TASK_MAX_GENERATION_ATTEMPTS = 3;
+    private const PAGE_SECTION_BUILD_DISPATCH_WINDOW = 3;
 
     private readonly AiSiteAgentSessionService $sessionService;
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
@@ -2491,8 +2492,9 @@ class AiSiteAgent extends BaseController
     {
         $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
         $buildPlanMeta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
-        $hasConfirmedBuildPlan = $buildPlan !== []
-            && ((int)($scope['build_plan_confirmed'] ?? 0) === 1 || \strtolower(\trim((string)($buildPlanMeta['status'] ?? ''))) === 'confirmed');
+        $hasConfirmedBuildPlan = (int)($scope['build_plan_confirmed'] ?? 0) === 1
+            || (int)($scope['plan_confirmed'] ?? 0) === 1
+            || \strtolower(\trim((string)($buildPlanMeta['status'] ?? ''))) === 'confirmed';
         return $hasConfirmedBuildPlan && $this->buildTaskServiceForRead()->hasConfirmedBuildPlanForBuild($scope);
     }
 
@@ -3453,7 +3455,16 @@ class AiSiteAgent extends BaseController
             }
         } else {
             $generateStartedAt = \microtime(true);
-            $sectionComponent = $pageComponentGenerationService->generatePageSection($pageType, $sectionCode, $scope['website_profile'], $scope);
+            $generationScope = $scope;
+            $generationScope['_inline_image_asset_generator'] = $this->buildInlineImageAssetGenerator(
+                $session,
+                $adminId,
+                $scope,
+                $pageType,
+                $sectionCode,
+                $componentCode
+            );
+            $sectionComponent = $pageComponentGenerationService->generatePageSection($pageType, $sectionCode, $scope['website_profile'], $generationScope);
             $this->logHotPathStage('block_regenerate.generate_page_section', $generateStartedAt, [
                 'page_type' => $pageType,
                 'component_code' => $componentCode,
@@ -3523,6 +3534,7 @@ class AiSiteAgent extends BaseController
                 $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
                 $this->virtualThemeService->saveGeneratedContentComponent((int)($scope['virtual_theme_id'] ?? 0), $pageType, $sectionComponent);
                 $layout = $this->virtualThemeService->mergeGeneratedContentIntoLayout($layout, $sectionComponent);
+                $layout = $this->sortVirtualThemeLayoutContentByBuildTasks($layout, $scope, $pageType);
                 $this->virtualThemeService->saveGeneratedPageLayout((int)($scope['virtual_theme_id'] ?? 0), $pageType, $layout);
                 $pageTypeLayouts[$pageType] = $layout;
 
@@ -6768,9 +6780,16 @@ class AiSiteAgent extends BaseController
      */
     private function prepareBuildImageAssets(AiSiteAgentSession $session, int $adminId, array $scope): array
     {
-        /** @var AiSiteAutoAssetGenerationService $service */
-        $service = ObjectManager::getInstance(AiSiteAutoAssetGenerationService::class);
-        return $service->prepareBuildAssets($session, $adminId, $scope);
+        $scope['build_summary'] = \array_replace(
+            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
+            ['task_summary' => $this->buildTaskService->summarize($scope)]
+        );
+
+        return [
+            'scope' => $scope,
+            'generated_slots' => [],
+            'failed_slots' => [],
+        ];
     }
 
     /**
@@ -10964,8 +10983,8 @@ class AiSiteAgent extends BaseController
         $scope = $this->buildTaskService->applyPagesMarkedSkipRemaining($scope);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $pageTypeLabels = Page::getPageTypes();
-        // Webpage sections must be real AI output. Keep build retries serial so empty streams or bad JSON stay isolated.
-        $dispatchWindow = 1;
+        // Keep one queue owner, but generate independent page sections in bounded parallel batches.
+        $dispatchWindow = self::PAGE_SECTION_BUILD_DISPATCH_WINDOW;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
         $totalSteps = \max(1, \count($initialPendingTasks) + 1);
         $currentStep = 0;
@@ -11110,7 +11129,9 @@ class AiSiteAgent extends BaseController
                 $pageTasks,
                 \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
                 $scope,
-                $pageTypeLabels
+                $pageTypeLabels,
+                $session,
+                $adminId
             );
             $componentSpecs = \is_array($batchSpecs['components'] ?? null) ? $batchSpecs['components'] : [];
             $taskMeta = \is_array($batchSpecs['meta'] ?? null) ? $batchSpecs['meta'] : [];
@@ -11749,6 +11770,60 @@ class AiSiteAgent extends BaseController
         }
     }
 
+    /**
+     * @param array<string,mixed> $layout
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function sortVirtualThemeLayoutContentByBuildTasks(array $layout, array $scope, string $pageType): array
+    {
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        if ($content === []) {
+            return $layout;
+        }
+
+        $taskOrder = [];
+        $index = 0;
+        foreach ($this->buildTaskService->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
+            $definition = $this->buildTaskService->getTaskDefinition($scope, (string)$taskKey);
+            if (!\is_array($definition)) {
+                continue;
+            }
+            $sectionCode = \trim((string)($definition['section_code'] ?? ''));
+            if ($sectionCode === '') {
+                continue;
+            }
+            $taskOrder[$sectionCode] = $index;
+            $taskOrder[\str_replace('/', '-', $sectionCode)] = $index;
+            $index++;
+        }
+        if ($taskOrder === []) {
+            return $layout;
+        }
+
+        \usort($content, static function (array $left, array $right) use ($taskOrder): int {
+            $leftCode = \trim((string)($left['code'] ?? $left['component'] ?? ''));
+            $rightCode = \trim((string)($right['code'] ?? $right['component'] ?? ''));
+            $leftOrder = $taskOrder[$leftCode] ?? $taskOrder[\str_replace('/', '-', $leftCode)] ?? 100000;
+            $rightOrder = $taskOrder[$rightCode] ?? $taskOrder[\str_replace('/', '-', $rightCode)] ?? 100000;
+            if ($leftOrder !== $rightOrder) {
+                return $leftOrder <=> $rightOrder;
+            }
+
+            return ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0));
+        });
+
+        foreach ($content as $offset => &$row) {
+            if (\is_array($row)) {
+                $row['sort_order'] = ($offset + 1) * 10;
+            }
+        }
+        unset($row);
+        $layout['content'] = \array_values($content);
+
+        return $layout;
+    }
+
     private function emitBuildInfoEvent(SseWriter $sse, string $message, array $payload = []): void
     {
         if (!$sse->isAlive()) {
@@ -11824,7 +11899,9 @@ class AiSiteAgent extends BaseController
         array $tasks,
         array $websiteProfile,
         array $scope,
-        array $pageTypeLabels
+        array $pageTypeLabels,
+        ?AiSiteAgentSession $session = null,
+        int $adminId = 0
     ): array {
         $pageSpecCache = [];
         $components = [];
@@ -11898,13 +11975,26 @@ class AiSiteAgent extends BaseController
             $resolvedSectionCode = \trim((string)($sectionSpec['code'] ?? $sectionCode));
             $resolvedSectionCode = $resolvedSectionCode !== '' ? $resolvedSectionCode : $sectionCode;
 
+            $defaultConfig = \is_array($sectionSpec['default_config'] ?? null) ? $sectionSpec['default_config'] : [];
+            $renderContext = \is_array($sectionSpec['render_context'] ?? null) ? $sectionSpec['render_context'] : [];
+            if ($session instanceof AiSiteAgentSession && $adminId > 0) {
+                $renderContext['_inline_image_asset_generator'] = $this->buildInlineImageAssetGenerator(
+                    $session,
+                    $adminId,
+                    $scope,
+                    $pageType,
+                    $resolvedSectionCode,
+                    (string)($sectionSpec['name'] ?? $resolvedSectionCode)
+                );
+            }
+
             $components[$taskKey] = [
                 'componentCode' => $resolvedSectionCode,
                 'name' => (string)($sectionSpec['name'] ?? $resolvedSectionCode),
                 'region' => (string)($sectionSpec['region'] ?? 'content'),
                 'prompt' => (string)($sectionSpec['prompt'] ?? ''),
-                'defaultConfig' => \is_array($sectionSpec['default_config'] ?? null) ? $sectionSpec['default_config'] : [],
-                'renderContext' => \is_array($sectionSpec['render_context'] ?? null) ? $sectionSpec['render_context'] : [],
+                'defaultConfig' => $defaultConfig,
+                'renderContext' => $renderContext,
             ];
             $meta[$taskKey] = [
                 'task_key' => $taskKey,
@@ -11921,6 +12011,101 @@ class AiSiteAgent extends BaseController
             'meta' => $meta,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function buildInlineImageAssetGenerator(
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $scope,
+        string $pageType,
+        string $sectionCode,
+        string $sectionName
+    ): \Closure {
+        return function (string $slotId, array $defaultConfig = [], array $renderContext = []) use (
+            $session,
+            $adminId,
+            $scope,
+            $pageType,
+            $sectionCode,
+            $sectionName
+        ): array {
+            /** @var AiSiteAutoAssetGenerationService $assetService */
+            $assetService = ObjectManager::getInstance(AiSiteAutoAssetGenerationService::class);
+            $visualContract = [];
+            $visualContractRaw = $defaultConfig['runtime.visual_contract_json'] ?? null;
+            if (\is_string($visualContractRaw) && \trim($visualContractRaw) !== '') {
+                $decodedVisualContract = \json_decode($visualContractRaw, true);
+                $visualContract = \is_array($decodedVisualContract) ? $decodedVisualContract : [];
+            } elseif (\is_array($renderContext['_visual_contract'] ?? null)) {
+                $visualContract = $renderContext['_visual_contract'];
+            }
+            $promptBrief = \trim((string)($defaultConfig['content.description'] ?? $defaultConfig['content.body'] ?? $defaultConfig['runtime.section_goal'] ?? ''));
+            $visualSubject = \trim((string)($visualContract['subject'] ?? ''));
+            $visualStyle = \trim((string)($visualContract['style'] ?? ''));
+            if ($visualSubject !== '') {
+                $promptBrief = \trim($visualSubject . ($visualStyle !== '' ? "\nStyle: " . $visualStyle : ''));
+            }
+            if ($promptBrief === '') {
+                $promptBrief = 'Premium website section visual for ' . ($sectionName !== '' ? $sectionName : $sectionCode);
+            }
+            $slotType = \trim((string)($visualContract['slot_type'] ?? ''));
+            if ($slotType === '') {
+                $slotType = $this->isHeroLikeSection($sectionCode, $sectionName) ? 'hero_banner' : 'section_image';
+            }
+            $slotSeed = [
+                'slot_id' => $slotId,
+                'slot_type' => $slotType,
+                'kind' => $slotType === 'hero_banner' ? 'hero_banner' : 'section_visual',
+                'page_type' => $pageType,
+                'section_code' => $sectionCode,
+                'label' => $sectionName !== '' ? $sectionName : $sectionCode,
+                'prompt_brief' => $promptBrief,
+                'visual_contract' => $visualContract,
+                'status' => 'pending',
+                'source' => 'planned',
+                'final_url' => '',
+                'locked_by_user' => 0,
+            ];
+            $result = $assetService->generateSlotAsset($session, $adminId, $scope, $slotId, $slotSeed);
+            if (\trim((string)($result['final_url'] ?? '')) === '' && \is_array($result['failed_slot'] ?? null)) {
+                throw new \RuntimeException('Inline block image generation failed for ' . $slotId . ': ' . (string)($result['failed_slot']['message'] ?? 'unknown error'));
+            }
+            $resultScope = \is_array($result['scope'] ?? null) ? $result['scope'] : [];
+            if ($resultScope !== []) {
+                $this->persistInlineImageScopePatch($session, $adminId, $resultScope);
+            }
+
+            return $result;
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $resultScope
+     */
+    private function persistInlineImageScopePatch(AiSiteAgentSession $session, int $adminId, array $resultScope): void
+    {
+        $patch = [];
+        foreach (['asset_manifest', 'verified_assets', 'asset_image_generation_failures'] as $key) {
+            if (\array_key_exists($key, $resultScope)) {
+                $patch[$key] = $resultScope[$key];
+            }
+        }
+        foreach (['brand_assets', 'identity_assets', 'website_profile'] as $key) {
+            if (\array_key_exists($key, $resultScope) && \is_array($resultScope[$key])) {
+                $patch[$key] = $resultScope[$key];
+            }
+        }
+        if ($patch !== []) {
+            $this->sessionService->mergeScope((int)$session->getId(), $adminId, $patch);
+        }
+    }
+
+    private function isHeroLikeSection(string $sectionCode, string $sectionName): bool
+    {
+        return \preg_match('/hero|banner|cover|first[-_ ]screen/i', $sectionCode . ' ' . $sectionName) === 1;
     }
 
     /**
@@ -12245,8 +12430,8 @@ class AiSiteAgent extends BaseController
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
         $pageTypeLabels = Page::getPageTypes();
-        // Webpage sections must be real AI output. Keep build retries serial so empty streams or bad JSON stay isolated.
-        $dispatchWindow = 1;
+        // Keep one queue owner, but generate independent virtual-theme sections in bounded parallel batches.
+        $dispatchWindow = self::PAGE_SECTION_BUILD_DISPATCH_WINDOW;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
         $totalSteps = \max(1, \count($initialPendingTasks) + 1);
         $currentStep = 0;
@@ -12400,7 +12585,9 @@ class AiSiteAgent extends BaseController
                 $pageTasks,
                 \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
                 $scope,
-                $pageTypeLabels
+                $pageTypeLabels,
+                $session,
+                $adminId
             );
             $componentSpecs = \is_array($batchSpecs['components'] ?? null) ? $batchSpecs['components'] : [];
             $taskMeta = \is_array($batchSpecs['meta'] ?? null) ? $batchSpecs['meta'] : [];
@@ -12571,6 +12758,7 @@ class AiSiteAgent extends BaseController
                     ];
                 }
                 $layout = $this->virtualThemeService->mergeGeneratedContentIntoLayout($layout, $sectionComponent);
+                $layout = $this->sortVirtualThemeLayoutContentByBuildTasks($layout, $scope, $pageType);
                 $this->virtualThemeService->saveGeneratedPageLayout((int)$scope['virtual_theme_id'], $pageType, $layout);
                 $pageTypeLayouts[$pageType] = $layout;
 
@@ -12906,6 +13094,7 @@ class AiSiteAgent extends BaseController
             if (
                 \in_array($operation, ['build', 'regenerate_page'], true)
                 && $resolvedWorkspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+                && $this->isBuildTaskSummaryTerminal($scope)
             ) {
                 $operationStatus = 'done';
                 $workspaceStatus ??= AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -13055,6 +13244,24 @@ class AiSiteAgent extends BaseController
         if ($publishStatus !== null) {
             $this->sessionService->setPublishStatus($fresh->getId(), $adminId, $publishStatus);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function isBuildTaskSummaryTerminal(array $scope): bool
+    {
+        $summary = $this->buildTaskService->summarize($scope);
+        $total = (int)($summary['total'] ?? 0);
+        if ($total <= 0 || $this->buildTaskService->hasUnfinishedBlueprintTasks($scope)) {
+            return false;
+        }
+
+        return (int)($summary['pending'] ?? 0) === 0
+            && (int)($summary['running'] ?? 0) === 0
+            && (int)($summary['failed'] ?? 0) === 0
+            && (int)($summary['cancelled'] ?? 0) === 0
+            && (int)($summary['done'] ?? 0) >= $total;
     }
 
     private function touchStreamLeaseState(AiSiteAgentSession $session, int $adminId, string $leaseToken, string $tabToken = ''): int

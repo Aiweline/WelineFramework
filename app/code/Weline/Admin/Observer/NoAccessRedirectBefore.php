@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Observer;
 
+use Weline\Admin\Service\BackendLoginReturnUrlService;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -21,12 +22,15 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
      * @var \Weline\Framework\Http\Request
      */
     private Request $request;
+    private BackendLoginReturnUrlService $returnUrlService;
 
     function __construct(
-        Request $request
+        Request $request,
+        BackendLoginReturnUrlService $returnUrlService
     )
     {
         $this->request = $request;
+        $this->returnUrlService = $returnUrlService;
     }
 
     /**
@@ -48,11 +52,11 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
                 $data = $event->getData('data') ?? [];
                 $reason = $data['reason'] ?? '';
                 // 通过 URL 参数传递原因，登录页当次请求显示一次；不写 Session，避免刷新后仍重复显示
-                $loginUrl = $this->getBackendLoginUrlSameOrigin();
-                if ($reason !== '') {
-                    $separator = str_contains($loginUrl, '?') ? '&' : '?';
-                    $loginUrl .= $separator . 'no_access_reason=' . rawurlencode($reason);
-                }
+                $loginUrl = $this->returnUrlService->buildLoginUrlWithReturn(
+                    $this->getBackendLoginUrlSameOrigin(),
+                    $this->request->getUrlBuilder()->getCurrentUrl(),
+                    (string)$reason
+                );
                 $response = $this->request->getResponse();
                 $response->redirect($loginUrl);
             } catch (\Throwable $e) {

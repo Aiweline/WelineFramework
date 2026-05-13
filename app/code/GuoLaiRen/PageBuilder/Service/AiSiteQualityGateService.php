@@ -19,7 +19,7 @@ final class AiSiteQualityGateService
         'content_quality' => ['label' => '页面无内部标识/方案说明/demo 文案', 'page_report_field' => 'bad_matches'],
         'stage1_content_visible' => ['label' => '页面包含阶段一确认内容', 'page_report_field' => 'stage1_hits'],
         'theme_visible' => ['label' => '页面包含阶段一主题色/视觉 token', 'page_report_field' => 'theme_hits'],
-        'visual_assets_safe' => ['label' => '图片/视觉资源无破图且有 SVG/CSS 视觉', 'page_report_field' => 'visuals'],
+        'visual_assets_safe' => ['label' => '图片资源无破图且真实图片插槽已生成并被页面使用', 'page_report_field' => 'visuals'],
         'visual_depth' => ['label' => '页面块具备视觉层次与美术分层', 'page_report_field' => 'visual_depth_signals'],
     ];
 
@@ -148,7 +148,7 @@ final class AiSiteQualityGateService
             $this->buildItem('content_quality', '页面无内部标识/方案说明/demo 文案', $allContentClean, $this->extractPageValues($pageReports, 'bad_matches')),
             $this->buildItem('stage1_content_visible', '页面包含阶段一确认内容', $allStageOneContentVisible, $this->extractPageValues($pageReports, 'stage1_hits')),
             $this->buildItem('theme_visible', '页面包含阶段一主题色/视觉 token', $allThemeVisible, $this->extractPageValues($pageReports, 'theme_hits')),
-            $this->buildItem('visual_assets_safe', '图片/视觉资源无破图且有 SVG/CSS 视觉', $allVisualsSafe, $this->extractPageValues($pageReports, 'visuals')),
+            $this->buildItem('visual_assets_safe', '图片资源无破图且真实图片插槽已生成并被页面使用', $allVisualsSafe, $this->extractPageValues($pageReports, 'visuals')),
             $this->buildItem('visual_depth', '页面块具备视觉层次与美术分层', $allVisualDepth, $this->extractPageValues($pageReports, 'visual_depth_signals')),
         ], $pageReports);
 
@@ -170,6 +170,52 @@ final class AiSiteQualityGateService
     }
 
     /**
+     * Inspect only the content-side quality gates. Image assets and visual depth
+     * are intentionally excluded so content failures cannot be masked by images.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, string> $renderedHtmlByPageType Optional test/runtime override.
+     * @return array{passed:bool,items:list<array<string,mixed>>,page_reports:array<string,array<string,mixed>>,quality_gate:array<string,mixed>}
+     */
+    public function inspectContentGate(array $scope, array $renderedHtmlByPageType = []): array
+    {
+        $qualityGate = $this->inspectScope($scope, $renderedHtmlByPageType);
+        $contentKeys = [
+            'build_tasks_done' => true,
+            'required_pages_render' => true,
+            'shared_blocks_ready' => true,
+            'content_quality' => true,
+            'stage1_content_visible' => true,
+            'theme_visible' => true,
+        ];
+        $items = [];
+        foreach (\is_array($qualityGate['items'] ?? null) ? $qualityGate['items'] : [] as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $key = (string)($item['key'] ?? '');
+            if (isset($contentKeys[$key])) {
+                $items[] = $item;
+            }
+        }
+
+        $passed = true;
+        foreach ($items as $item) {
+            if (!empty($item['blocking']) && empty($item['ok'])) {
+                $passed = false;
+                break;
+            }
+        }
+
+        return [
+            'passed' => $passed,
+            'items' => $items,
+            'page_reports' => \is_array($qualityGate['page_reports'] ?? null) ? $qualityGate['page_reports'] : [],
+            'quality_gate' => $qualityGate,
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $layout
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
@@ -184,7 +230,10 @@ final class AiSiteQualityGateService
     ): array {
         $layoutJson = (string)\json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
         $combined = $html . "\n" . $layoutJson;
-        $badMatches = $this->matchBadContent($this->stripNonVisibleQualityGateHtml($html));
+        $badMatches = \array_merge(
+            $this->matchBadContent($this->stripNonVisibleQualityGateHtml($html)),
+            $this->matchMalformedGeneratedHtml($html)
+        );
         if (\preg_match('/\bai-site-fallback\b|<svg\s+[^>]*viewBox=["\']0 0 520 360["\']|Image Placeholder|Text-to-image is not connected yet/iu', $html) === 1) {
             $badMatches[] = 'plan-derived fallback visual';
         }
@@ -196,12 +245,20 @@ final class AiSiteQualityGateService
         $hasSvgVisual = \preg_match('/<svg\b|data:image\/svg\+xml|ai-site-svg-visual/i', $html) === 1;
         $hasAnyImageNeed = \preg_match('/\b(?:image|visual|media|asset|logo|icon|cards?|board|avatar|shield)\b/iu', $combined) === 1;
         $visualDepthSignals = $this->matchVisualDepthSignals($html);
-        $realAssetUrls = $this->extractRealVerifiedAssetUrlsFromScope($scope);
+        $requiredRealImageSlots = $this->extractRequiredRealImageSlotsFromScope($scope, $pageType);
+        $requiredRealImageSlotIds = \array_keys($requiredRealImageSlots);
+        $usedRequiredImageSlotIds = $this->matchUsedRequiredImageSlotIds($html, $requiredRealImageSlots);
+        $unresolvedRequiredImageSlotIds = $this->matchUnresolvedRequiredImageSlotIds($requiredRealImageSlots);
+        $missingRequiredImageSlotIds = \array_values(\array_unique(\array_merge(
+            \array_diff($requiredRealImageSlotIds, $usedRequiredImageSlotIds),
+            $unresolvedRequiredImageSlotIds
+        )));
+        $realAssetUrls = $this->extractRealVerifiedAssetUrlsFromScope($scope, $pageType);
         $usedRealAssetUrls = $this->matchUsedVerifiedAssets($html, $realAssetUrls);
-        $requiresRealImageAssets = $this->scopeRequiresRealImageAssets($scope);
+        $requiresRealImageAssets = $requiredRealImageSlotIds !== [];
         $visualsSafe = $brokenImages === []
             && (!$hasAnyImageNeed || $hasSvgVisual || \preg_match('/<img\b/i', $html) === 1)
-            && (!$requiresRealImageAssets || $usedRealAssetUrls !== []);
+            && (!$requiresRealImageAssets || $missingRequiredImageSlotIds === []);
 
         return [
             'page_id' => $pageId,
@@ -221,6 +278,10 @@ final class AiSiteQualityGateService
                 'has_svg_visual' => $hasSvgVisual,
                 'has_image_need' => $hasAnyImageNeed,
                 'requires_real_image_assets' => $requiresRealImageAssets,
+                'required_real_image_slot_ids' => $requiredRealImageSlotIds,
+                'used_required_image_slot_ids' => $usedRequiredImageSlotIds,
+                'unresolved_required_image_slot_ids' => $unresolvedRequiredImageSlotIds,
+                'missing_required_image_slot_ids' => $missingRequiredImageSlotIds,
                 'real_asset_urls' => $realAssetUrls,
                 'used_real_asset_urls' => $usedRealAssetUrls,
             ],
@@ -398,6 +459,26 @@ final class AiSiteQualityGateService
     }
 
     /**
+     * @return list<string>
+     */
+    private function matchMalformedGeneratedHtml(string $html): array
+    {
+        $patterns = [
+            'malformed opening tag' => '/<\s+(?:class|id|style|href|src|alt|title|role|aria-[a-z0-9_-]+|data-[a-z0-9_-]+)\s*=/iu',
+            'invalid class tag' => '/<\/class>/iu',
+            'malformed aria/data attribute' => '/["\']-(?:hidden|label|expanded|controls|pressed|selected|current|describedby|labelledby)\s*=/iu',
+        ];
+        $matches = [];
+        foreach ($patterns as $label => $pattern) {
+            if (\preg_match($pattern, $html) === 1) {
+                $matches[] = $label;
+            }
+        }
+
+        return $matches;
+    }
+
+    /**
      * @param array<string,mixed> $scope
      * @return list<string>
      */
@@ -431,23 +512,31 @@ final class AiSiteQualityGateService
      * @param array<string,mixed> $scope
      * @return list<string>
      */
-    private function extractRealVerifiedAssetUrlsFromScope(array $scope): array
+    private function extractRealVerifiedAssetUrlsFromScope(array $scope, string $pageType = ''): array
     {
         $urls = [];
-        $verified = \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [];
-        foreach ($verified as $value) {
-            if (!\is_scalar($value)) {
-                continue;
-            }
-            $url = \trim((string)$value);
-            if ($this->isRealImageAssetUrl($url)) {
-                $urls[] = $url;
+        $manifestSlots = $this->normalizeManifestSlots($scope);
+        if ($manifestSlots === []) {
+            $verified = \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [];
+            foreach ($verified as $value) {
+                if (!\is_scalar($value)) {
+                    continue;
+                }
+                $url = \trim((string)$value);
+                if ($this->isRealImageAssetUrl($url)) {
+                    $urls[] = $url;
+                }
             }
         }
 
-        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
-        foreach (\is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [] as $slot) {
-            if (!\is_array($slot) || $this->isPlaceholderManifestSlot($slot)) {
+        foreach ($manifestSlots as $slot) {
+            if (
+                !\is_array($slot)
+                || !$this->manifestSlotBelongsToPage($slot, $pageType)
+                || !$this->isCanonicalPageImageSlot($slot, $pageType)
+                || $this->isPlaceholderManifestSlot($slot)
+                || $this->isFallbackOnlyManifestSlot($slot)
+            ) {
                 continue;
             }
             $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
@@ -461,6 +550,164 @@ final class AiSiteQualityGateService
         }
 
         return \array_values(\array_unique($urls));
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,array<string,mixed>>
+     */
+    private function extractRequiredRealImageSlotsFromScope(array $scope, string $pageType): array
+    {
+        $slots = [];
+        foreach ($this->normalizeManifestSlots($scope) as $slot) {
+            if (
+                !\is_array($slot)
+                || !$this->manifestSlotBelongsToPage($slot, $pageType)
+                || !$this->isCanonicalPageImageSlot($slot, $pageType)
+            ) {
+                continue;
+            }
+            $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
+            if (!$this->isRequiredRealImageSlotType($slotType)) {
+                continue;
+            }
+            $slotId = \trim((string)($slot['slot_id'] ?? ''));
+            if ($slotId === '') {
+                continue;
+            }
+            $slots[$slotId] = $slot;
+        }
+
+        return $slots;
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $slotsById
+     * @return list<string>
+     */
+    private function matchUnresolvedRequiredImageSlotIds(array $slotsById): array
+    {
+        $unresolved = [];
+        foreach ($slotsById as $slotId => $slot) {
+            if (
+                $this->isPlaceholderManifestSlot($slot)
+                || $this->isFallbackOnlyManifestSlot($slot)
+                || !$this->isRealImageAssetUrl((string)($slot['final_url'] ?? ''))
+            ) {
+                $unresolved[] = (string)$slotId;
+            }
+        }
+
+        return \array_values(\array_unique($unresolved));
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $slotsById
+     * @return list<string>
+     */
+    private function matchUsedRequiredImageSlotIds(string $html, array $slotsById): array
+    {
+        if ($html === '' || $slotsById === []) {
+            return [];
+        }
+
+        $declared = [];
+        if (\preg_match_all('/\bdata-pb-ai-asset-slot\s*=\s*(["\'])(.*?)\1/iu', $html, $quoted, \PREG_SET_ORDER) > 0) {
+            foreach ($quoted as $row) {
+                $slotId = \trim(\html_entity_decode((string)($row[2] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'));
+                if ($slotId !== '') {
+                    $declared[$slotId] = true;
+                }
+            }
+        }
+        if (\preg_match_all('/\bdata-pb-ai-asset-slot\s*=\s*([^\s>]+)/iu', $html, $unquoted, \PREG_SET_ORDER) > 0) {
+            foreach ($unquoted as $row) {
+                $slotId = \trim(\html_entity_decode((string)($row[1] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'), " \t\n\r\0\x0B\"'");
+                if ($slotId !== '') {
+                    $declared[$slotId] = true;
+                }
+            }
+        }
+
+        $used = [];
+        foreach (\array_keys($slotsById) as $slotId) {
+            if (isset($declared[$slotId])) {
+                $used[] = $slotId;
+            }
+        }
+
+        return $used;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<array<string,mixed>>
+     */
+    private function normalizeManifestSlots(array $scope): array
+    {
+        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        $rawSlots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        $slots = [];
+        foreach ($rawSlots as $key => $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            if (\trim((string)($slot['slot_id'] ?? '')) === '' && \is_string($key) && \trim($key) !== '') {
+                $slot['slot_id'] = \trim($key);
+            }
+            $slots[] = $slot;
+        }
+
+        return $slots;
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function manifestSlotBelongsToPage(array $slot, string $pageType): bool
+    {
+        $pageType = \trim($pageType);
+        if ($pageType === '') {
+            return true;
+        }
+        foreach (['page_type', 'page_key', 'page'] as $key) {
+            $slotPage = \trim((string)($slot[$key] ?? ''));
+            if ($slotPage !== '') {
+                return $slotPage === $pageType;
+            }
+        }
+        $slotId = \trim((string)($slot['slot_id'] ?? ''));
+        if ($slotId === '') {
+            return true;
+        }
+        if (\str_starts_with($slotId, 'page:')) {
+            return \str_starts_with($slotId, 'page:' . $pageType . ':');
+        }
+
+        return true;
+    }
+
+    /**
+     * Refactored image slots are component-scoped: page:{page_type}:content-...
+     * Old task/block-key slots are intentionally ignored instead of kept as a
+     * compatibility surface, otherwise audits require images that the renderer
+     * can no longer bind to a concrete generated component.
+     *
+     * @param array<string,mixed> $slot
+     */
+    private function isCanonicalPageImageSlot(array $slot, string $pageType): bool
+    {
+        $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
+        if (!\str_starts_with($slotId, 'page:')) {
+            return true;
+        }
+        $prefix = 'page:' . \strtolower(\trim($pageType)) . ':';
+        if ($prefix === 'page::' || !\str_starts_with($slotId, $prefix)) {
+            return false;
+        }
+        $tail = \substr($slotId, \strlen($prefix));
+
+        return \str_starts_with($tail, 'content-');
     }
 
     /**
@@ -485,8 +732,7 @@ final class AiSiteQualityGateService
      */
     private function scopeRequiresRealImageAssets(array $scope): bool
     {
-        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
-        foreach (\is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [] as $slot) {
+        foreach ($this->normalizeManifestSlots($scope) as $slot) {
             if (!\is_array($slot)) {
                 continue;
             }
@@ -540,6 +786,50 @@ final class AiSiteQualityGateService
         }
 
         return \str_contains($url, 'placeholder') || \str_ends_with($url, '.svg');
+    }
+
+    /**
+     * Local/programmatic fallback visuals are build diagnostics, not acceptable
+     * final image assets. They must keep the visual gate red until real AI or
+     * operator-provided imagery replaces them.
+     *
+     * @param array<string,mixed> $slot
+     */
+    private function isFallbackOnlyManifestSlot(array $slot): bool
+    {
+        foreach (['source', 'mode', 'model'] as $key) {
+            if ($this->isFallbackOnlyAssetMarker((string)($slot[$key] ?? ''))) {
+                return true;
+            }
+        }
+
+        foreach (\is_array($slot['variants'] ?? null) ? $slot['variants'] : [] as $variant) {
+            if (!\is_array($variant)) {
+                continue;
+            }
+            if (\trim((string)($variant['generation_fallback_reason'] ?? '')) !== '') {
+                return true;
+            }
+            foreach (['source', 'mode', 'model'] as $key) {
+                if ($this->isFallbackOnlyAssetMarker((string)($variant[$key] ?? ''))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function isFallbackOnlyAssetMarker(string $value): bool
+    {
+        $value = \strtolower(\trim($value));
+        if ($value === '') {
+            return false;
+        }
+
+        return \in_array($value, ['local_composed', 'local-premium-composition-v1'], true)
+            || \str_contains($value, 'local_composition')
+            || \str_contains($value, 'fallback');
     }
 
     /**
