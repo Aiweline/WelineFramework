@@ -13,6 +13,7 @@ namespace Weline\Shipping\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\ShippingAddressService;
 
 /**
@@ -23,11 +24,13 @@ class ShippingAddress extends FrontendController
     protected ?string $layoutType = 'account.dashboard';
     
     private ShippingAddressService $service;
+    private AddressFormatter $addressFormatter;
 
     public function __construct(
         ObjectManager $objectManager
     ) {
         $this->service = $objectManager->getInstance(ShippingAddressService::class);
+        $this->addressFormatter = $objectManager->getInstance(AddressFormatter::class);
     }
 
     /**
@@ -87,7 +90,7 @@ class ShippingAddress extends FrontendController
                 return $this->json([
                     'success' => true,
                     'message' => $message,
-                    'data' => $address->getData()
+                    'data' => $this->addressFormatter->toPayload($address->getData())
                 ]);
             }
             

@@ -336,9 +336,10 @@ final class AiSiteAssetManifestService
         if ($isLogoSlot) {
             $parts[] = 'Logo output requirements: generate a PNG logo with a transparent alpha background. Keep the logo isolated on transparency; do not place it on a card, wall, photo scene, colored rectangle, gradient backdrop, website mockup, or screenshot frame.';
         } elseif ($isHeroSlot) {
-            $parts[] = 'Hero banner output requirements: fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed — cover the full canvas with the subject matter.';
+            $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed — cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
+            $parts[] = 'Hero visual quality bar (CRITICAL): premium cinematic website banner background, very wide horizontal composition, edge-to-edge coverage, strong depth, realistic lighting, high-end commercial art direction. Do NOT generate flat vector art, SVG-like shapes, childish cartoon, icon collage, clip-art, rough geometric placeholder art, cardboard-looking cards, UI mockups, or simplistic low-detail illustration. Prefer realistic/editorial photography or photoreal premium 3D only when the subject cannot be photographed.';
             $parts[] = 'Block-only visual constraints (very important):'
-                . ' generate a single self-contained illustration or photograph filling the whole canvas.'
+                . ' generate a single self-contained premium cinematic scene filling the whole canvas.'
                 . ' DO NOT draw a website mockup, screenshot frame, browser chrome, mobile-app frame, or any UI surface.'
                 . ' DO NOT include a website header, top navigation bar, brand logo, navigation menu, hamburger icon, or language switcher.'
                 . ' DO NOT include a website footer, copyright row, or footer link columns.'
@@ -347,8 +348,8 @@ final class AiSiteAssetManifestService
                 . ' DO NOT show multiple separate page sections stitched together (no two-column site previews, no "as seen on" rows, no website screenshots).'
                 . ' Only render the subject-matter visual that fits inside one rectangular block area; treat the canvas as the inside of a single content block, not as a whole web page.';
         } else {
-            $parts[] = 'Transparent background required: generate the subject with a transparent alpha/PNG background. Keep the subject isolated on full transparency; do not place it on a colored rectangle, gradient backdrop, solid color fill, photo scene background, or any artificial backdrop.';
-            $parts[] = 'Style-match requirement (CRITICAL): the visual style, color temperature, lighting, and composition MUST align with the overall brand aesthetic described in the reference style keywords/color palette above. Do NOT generate a generic stock photo, overly saturated 3D render, cartoon illustration, or dark/gritty image unless those match the brand style. Keep the rendering quality consistent with a premium brand website.';
+            $parts[] = 'Section image output requirements: generate a premium editorial/commercial website image that fills the whole rectangular canvas with intentional composition, depth, and lighting. Do not use transparent cutouts unless the slot explicitly says logo/icon.';
+            $parts[] = 'Style-match requirement (CRITICAL): the visual style, color temperature, lighting, and composition MUST align with the overall brand aesthetic described in the reference style keywords/color palette above. Do NOT generate a generic stock photo, overly saturated 3D render, childish cartoon illustration, flat vector/SVG-like shapes, clip-art, rough geometric placeholder art, or dark/gritty image unless those match the brand style. Keep the rendering quality consistent with a premium brand website.';
             $parts[] = 'Block-only visual constraints (very important):'
                 . ' generate a single self-contained illustration or photograph filling the whole canvas.'
                 . ' DO NOT draw a website mockup, screenshot frame, browser chrome, mobile-app frame, or any UI surface.'
@@ -476,7 +477,9 @@ final class AiSiteAssetManifestService
      */
     public function syncFromBuildPlan(array $scope): array
     {
-        $manifest = $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : []);
+        $manifest = $this->dropLegacyUnscopedBlockSlots(
+            $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [])
+        );
         foreach ($this->extractSlotsFromScope($scope) as $slot) {
             $manifest = $this->upsert($manifest, $slot);
         }
@@ -486,6 +489,43 @@ final class AiSiteAssetManifestService
         foreach ($this->buildRequiredHeroBannerSlots($scope) as $slot) {
             $manifest = $this->upsert($manifest, $slot);
         }
+        foreach ($this->buildRequiredContentBlockSlots($scope) as $slot) {
+            $manifest = $this->upsert($manifest, $slot);
+        }
+
+        return $manifest;
+    }
+
+    /**
+     * Full refactor cleanup: page block image slots must be page-scoped.
+     * Old stage-one slots such as "hero_download" or "trust_badges" are not
+     * valid production slots and must not leak into prompt/quality contracts.
+     *
+     * @param array<string,mixed> $manifest
+     * @return array<string,mixed>
+     */
+    private function dropLegacyUnscopedBlockSlots(array $manifest): array
+    {
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        foreach ($slots as $slotId => $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $normalizedSlotId = \trim((string)($slot['slot_id'] ?? $slotId));
+            $pageType = \trim((string)($slot['page_type'] ?? ''));
+            $slotType = \trim((string)($slot['slot_type'] ?? ''));
+            if (!\in_array($slotType, self::SLOT_TYPES, true)) {
+                continue;
+            }
+            if ($pageType === '' && !$this->isScopedSlotId($normalizedSlotId)) {
+                unset($slots[$slotId]);
+                continue;
+            }
+            if ($this->isLegacyPageBlockSlot($normalizedSlotId)) {
+                unset($slots[$slotId]);
+            }
+        }
+        $manifest['slots'] = $slots;
 
         return $manifest;
     }
@@ -554,9 +594,17 @@ final class AiSiteAssetManifestService
             $this->collectRequirementRows($node['media_assets'], $slots, $context);
         }
 
-        foreach ($node as $value) {
+        foreach ($node as $key => $value) {
             if (\is_array($value)) {
-                $this->collectSlotsRecursive($value, $slots, $context);
+                $childContext = $context;
+                if (
+                    \is_string($key)
+                    && \preg_match('/^[a-z0-9_]+_page$/i', $key) === 1
+                    && \trim((string)($childContext['page_type'] ?? '')) === ''
+                ) {
+                    $childContext['page_type'] = $key;
+                }
+                $this->collectSlotsRecursive($value, $slots, $childContext);
             }
         }
     }
@@ -601,15 +649,39 @@ final class AiSiteAssetManifestService
             if ($slotId === '') {
                 $slotId = $this->normalizeSlotId($slotType . '-' . \substr(\sha1($brief), 0, 10));
             }
+            $pageType = $this->firstString([$row['page_type'] ?? null, $context['page_type'] ?? '']);
+            $sectionCode = $this->firstString([$row['section_code'] ?? null, $context['section_code'] ?? '']);
+            $blockKeyForSection = $this->firstString([
+                $row['block_key'] ?? null,
+                $context['block_key'] ?? null,
+                $row['key'] ?? null,
+                (string)$key,
+                $this->extractLegacyPageSlotTail($slotId),
+            ]);
+            if ($pageType !== '' && !$this->isScopedSlotId($slotId)) {
+                if ($sectionCode === '') {
+                    $sectionCode = $this->buildSectionCodeFromBlockKey($pageType, $blockKeyForSection);
+                }
+                $slotId = $this->normalizeSlotId('page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode));
+            }
+            if ($pageType !== '' && $this->isLegacyPageBlockSlot($slotId)) {
+                if ($sectionCode === '') {
+                    $sectionCode = $this->buildSectionCodeFromBlockKey($pageType, $blockKeyForSection);
+                }
+                $slotId = $this->normalizeSlotId('page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode));
+            }
+            if ($pageType === '' && !$this->isScopedSlotId($slotId)) {
+                continue;
+            }
             $slots[$slotId] = [
                 'slot_id' => $slotId,
                 'slot_type' => $slotType,
                 'kind' => $slotType,
-                'page_type' => $this->firstString([$row['page_type'] ?? null, $context['page_type'] ?? '']),
+                'page_type' => $pageType,
                 'block_key' => $this->firstString([$row['block_key'] ?? null, $context['block_key'] ?? '']),
                 'field' => $this->firstString([$row['field'] ?? null, $row['field_key'] ?? null, 'image']),
                 'task_key' => $this->firstString([$row['task_key'] ?? null, $context['task_key'] ?? '']),
-                'section_code' => $this->firstString([$row['section_code'] ?? null, $context['section_code'] ?? '']),
+                'section_code' => $sectionCode,
                 'label' => $this->firstString([$row['label'] ?? null, $row['title'] ?? null, (string)$key]),
                 'brief' => $brief,
                 'prompt_brief' => $brief,
@@ -755,7 +827,7 @@ final class AiSiteAssetManifestService
                 $briefParts[] = 'PRIMARY SUBJECT for the hero banner background (CRITICAL — the entire scene MUST depict this business and culture; do not substitute a generic abstract gradient, generic stock photo, or off-topic figures): '
                     . $businessContext;
             }
-            $briefParts[] = 'Format: full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Fill the entire canvas edge-to-edge with one immersive scene. Apply a subtle gradient overlay at top and bottom edges (dark-to-transparent) so text and page content can overlay the image naturally. The style and color temperature MUST match the brand identity — not a generic stock photo.';
+            $briefParts[] = 'Format default: 1920x750-style full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Unless the user explicitly requests a different hero visual composition, fill the entire canvas edge-to-edge with one immersive wide scene and keep important subjects within the center-safe crop area. Apply a subtle gradient overlay at top and bottom edges (dark-to-transparent) so text and page content can overlay the image naturally. The style and color temperature MUST match the brand identity — not a generic stock photo.';
             if ($title !== '') {
                 $briefParts[] = 'Section headline context (do not render as readable slogan text inside the image): ' . $title;
             }
@@ -769,6 +841,8 @@ final class AiSiteAssetManifestService
                 'section_code' => $sectionCode,
                 'field' => 'image',
                 'label' => 'Hero banner background',
+                'target_size' => '1920x750',
+                'aspect_ratio' => '1920:750',
                 'brief' => $brief,
                 'prompt_brief' => $brief,
                 'status' => 'pending',
@@ -776,6 +850,77 @@ final class AiSiteAssetManifestService
                 'final_url' => '',
                 'locked_by_user' => 0,
             ];
+        }
+
+        return $slots;
+    }
+
+    /**
+     * Every non-hero block needs a page-scoped visual candidate. Otherwise the
+     * renderer falls back to the first image on the page and separate blocks
+     * become visually identical.
+     *
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function buildRequiredContentBlockSlots(array $scope): array
+    {
+        $slots = [];
+        $businessContext = $this->firstString([
+            $scope['website_profile']['brief_description'] ?? null,
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+        ]);
+        $pages = \is_array($scope['execution_blueprint']['pages'] ?? null) ? $scope['execution_blueprint']['pages'] : [];
+        foreach ($pages as $pageType => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $blockKey = $this->normalizeSlotId($this->firstString([$block['block_key'] ?? null, $block['key'] ?? null]));
+                if ($blockKey === '' || \preg_match('/hero|banner|opening/i', $blockKey) === 1) {
+                    continue;
+                }
+                $sectionCode = $this->buildSectionCodeFromBlockKey((string)$pageType, $blockKey);
+                $slotId = $this->normalizeSlotId('page:' . (string)$pageType . ':' . \str_replace('/', '-', $sectionCode));
+                $brief = $this->firstString([
+                    $block['execution_script']['media_assets'][0] ?? null,
+                    $block['design_tags']['visual'][0] ?? null,
+                    $block['content'] ?? null,
+                    $block['goal'] ?? null,
+                    $blockKey,
+                ]);
+                $briefParts = [];
+                if ($businessContext !== '') {
+                    $briefParts[] = 'PRIMARY SUBJECT: ' . $businessContext;
+                }
+                $briefParts[] = 'Block visual for "' . $blockKey . '": ' . ($brief !== '' ? $brief : $blockKey);
+                $briefParts[] = 'One polished subject-matter image for this single section only; no website mockup, no text bars, no placeholder UI, no duplicated neighboring block composition.';
+                $brief = \implode("\n", $briefParts);
+                $slotType = \preg_match('/trust|badge|testimonial|review|client|rating|certificate/i', $blockKey . ' ' . $brief) === 1
+                    ? 'trust_brand_image'
+                    : 'section_image';
+                $slots[] = [
+                    'slot_id' => $slotId,
+                    'slot_type' => $slotType,
+                    'kind' => $slotType,
+                    'page_type' => (string)$pageType,
+                    'block_key' => $blockKey,
+                    'field' => 'image',
+                    'task_key' => 'page:' . (string)$pageType . ':' . $blockKey,
+                    'section_code' => $sectionCode,
+                    'label' => $this->firstString([$block['goal'] ?? null, $blockKey]),
+                    'brief' => $brief,
+                    'prompt_brief' => $brief,
+                    'status' => 'pending',
+                    'source' => 'planned',
+                    'final_url' => '',
+                    'locked_by_user' => 0,
+                ];
+            }
         }
 
         return $slots;
@@ -887,6 +1032,11 @@ final class AiSiteAssetManifestService
         $value = \trim($value, '-');
 
         return $value !== '' ? $value : 'section';
+    }
+
+    private function buildSectionCodeFromBlockKey(string $pageType, string $blockKey): string
+    {
+        return 'content/' . $this->slugifySectionToken($pageType) . '-' . $this->slugifySectionToken($blockKey);
     }
 
     /**
@@ -1112,6 +1262,38 @@ final class AiSiteAssetManifestService
         return $slotId;
     }
 
+    private function isScopedSlotId(string $slotId): bool
+    {
+        $slotId = \strtolower(\trim($slotId));
+
+        return \str_starts_with($slotId, 'page:')
+            || \str_starts_with($slotId, 'identity:')
+            || \str_starts_with($slotId, 'shared:');
+    }
+
+    private function isLegacyPageBlockSlot(string $slotId): bool
+    {
+        $slotId = \strtolower(\trim($slotId));
+        if (!\str_starts_with($slotId, 'page:')) {
+            return false;
+        }
+        $parts = \explode(':', $slotId, 3);
+        $slotTail = \trim((string)($parts[2] ?? ''));
+
+        return $slotTail !== '' && !\str_starts_with($slotTail, 'content-');
+    }
+
+    private function extractLegacyPageSlotTail(string $slotId): string
+    {
+        $slotId = \strtolower(\trim($slotId));
+        if (!\str_starts_with($slotId, 'page:')) {
+            return $slotId;
+        }
+        $parts = \explode(':', $slotId, 3);
+
+        return \trim((string)($parts[2] ?? ''));
+    }
+
     /**
      * @param array<string,mixed> $slot
      */
@@ -1144,9 +1326,17 @@ final class AiSiteAssetManifestService
             return true;
         }
         foreach (['mode', 'model', 'source'] as $key) {
-            if (\strtolower(\trim((string)($variant[$key] ?? ''))) === 'placeholder') {
+            $value = \strtolower(\trim((string)($variant[$key] ?? '')));
+            if ($value === 'placeholder'
+                || $value === 'local_composed'
+                || $value === 'local-premium-composition-v1'
+                || \str_contains($value, 'local_composition')
+            ) {
                 return true;
             }
+        }
+        if (\trim((string)($variant['generation_fallback_reason'] ?? '')) !== '') {
+            return true;
         }
 
         return \str_contains((string)($variant['revised_prompt'] ?? ''), 'Text-to-image is not connected yet');

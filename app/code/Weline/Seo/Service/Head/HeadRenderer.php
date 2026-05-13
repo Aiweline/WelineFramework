@@ -94,7 +94,11 @@ class HeadRenderer
             if (!is_string($locale) || !is_string($url) || trim($url) === '') {
                 continue;
             }
-            $html[] = '<link rel="alternate" hreflang="' . $this->escape($locale) . '" href="' . $this->escape($url) . '">';
+            $hreflang = $this->normalizeHreflang($locale);
+            if ($hreflang === '') {
+                continue;
+            }
+            $html[] = '<link rel="alternate" hreflang="' . $this->escape($hreflang) . '" href="' . $this->escape($url) . '">';
         }
         return implode("\n", $html);
     }
@@ -111,6 +115,10 @@ class HeadRenderer
         $html = [
             '<meta property="og:type" content="' . $this->escape($type) . '">',
         ];
+        $ogLocale = $this->toOgLocale((string) ($context['og_locale'] ?? $context['html_locale'] ?? $context['locale'] ?? ''));
+        if ($ogLocale !== '') {
+            $html[] = '<meta property="og:locale" content="' . $this->escape($ogLocale) . '">';
+        }
         if ($title !== '') {
             $html[] = '<meta property="og:title" content="' . $this->escape($title) . '">';
             $html[] = '<meta name="twitter:title" content="' . $this->escape($title) . '">';
@@ -128,6 +136,9 @@ class HeadRenderer
             $html[] = '<meta name="twitter:card" content="summary_large_image">';
         } else {
             $html[] = '<meta name="twitter:card" content="summary">';
+        }
+        foreach ($this->alternateOgLocales($context, $ogLocale) as $alternateLocale) {
+            $html[] = '<meta property="og:locale:alternate" content="' . $this->escape($alternateLocale) . '">';
         }
         return implode("\n", $html);
     }
@@ -184,6 +195,10 @@ class HeadRenderer
         if (!empty($organization['address'])) {
             $graph[0]['address'] = $organization['address'];
         }
+        $availableLanguages = $this->availableLanguages($context);
+        if ($availableLanguages !== []) {
+            $graph[1]['availableLanguage'] = $availableLanguages;
+        }
 
         $graph[] = $this->webPageNode($context, $orgId);
 
@@ -223,7 +238,7 @@ class HeadRenderer
      */
     private function webPageNode(array $context, string $orgId): array
     {
-        return [
+        $node = [
             '@type' => 'WebPage',
             '@id' => (string) ($context['canonical_url'] ?? $context['url'] ?? '') . '#webpage',
             'url' => (string) ($context['canonical_url'] ?? $context['url'] ?? ''),
@@ -232,6 +247,11 @@ class HeadRenderer
             'isPartOf' => ['@id' => $this->siteRoot((string) ($context['canonical_url'] ?? '')) . '#website'],
             'publisher' => ['@id' => $orgId],
         ];
+        $language = $this->htmlLanguage($context);
+        if ($language !== '') {
+            $node['inLanguage'] = $language;
+        }
+        return $node;
     }
 
     /**
@@ -403,6 +423,100 @@ class HeadRenderer
         }
         $time = strtotime((string) $value);
         return date('c', $time ?: time());
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return string[]
+     */
+    private function availableLanguages(array $context): array
+    {
+        $languages = [];
+        foreach ((array) ($context['available_languages'] ?? []) as $language) {
+            if (!is_string($language)) {
+                continue;
+            }
+            $normalized = $this->normalizeHreflang($language);
+            if ($normalized !== '' && $normalized !== 'x-default') {
+                $languages[$normalized] = true;
+            }
+        }
+        foreach ((array) ($context['alternates'] ?? []) as $locale => $_url) {
+            if (!is_string($locale)) {
+                continue;
+            }
+            $normalized = $this->normalizeHreflang($locale);
+            if ($normalized !== '' && $normalized !== 'x-default') {
+                $languages[$normalized] = true;
+            }
+        }
+        return array_keys($languages);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function htmlLanguage(array $context): string
+    {
+        foreach (['html_locale', 'locale'] as $key) {
+            $language = $this->normalizeHreflang((string) ($context[$key] ?? ''));
+            if ($language !== '' && $language !== 'x-default') {
+                return $language;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return string[]
+     */
+    private function alternateOgLocales(array $context, string $currentOgLocale): array
+    {
+        $alternates = [];
+        foreach ((array) ($context['alternates'] ?? []) as $locale => $_url) {
+            if (!is_string($locale) || strtolower($locale) === 'x-default') {
+                continue;
+            }
+            $ogLocale = $this->toOgLocale($locale);
+            if ($ogLocale === '' || $ogLocale === $currentOgLocale) {
+                continue;
+            }
+            $alternates[$ogLocale] = true;
+        }
+        return array_keys($alternates);
+    }
+
+    private function normalizeHreflang(string $locale): string
+    {
+        $locale = trim($locale);
+        if ($locale === '') {
+            return '';
+        }
+        if (strtolower($locale) === 'x-default') {
+            return 'x-default';
+        }
+        $parts = array_values(array_filter(preg_split('/[-_]/', $locale) ?: [], static fn (string $part): bool => $part !== ''));
+        if ($parts === []) {
+            return '';
+        }
+        $normalized = [strtolower($parts[0])];
+        for ($i = 1, $count = count($parts); $i < $count; $i++) {
+            $part = $parts[$i];
+            $normalized[] = strlen($part) === 4
+                ? ucfirst(strtolower($part))
+                : strtoupper($part);
+        }
+        return implode('-', $normalized);
+    }
+
+    private function toOgLocale(string $locale): string
+    {
+        $hreflang = $this->normalizeHreflang($locale);
+        if ($hreflang === '' || $hreflang === 'x-default') {
+            return '';
+        }
+        return str_replace('-', '_', $hreflang);
     }
 
     private function escape(string $value): string

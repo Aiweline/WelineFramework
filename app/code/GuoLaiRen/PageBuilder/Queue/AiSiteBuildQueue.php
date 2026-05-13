@@ -63,9 +63,11 @@ class AiSiteBuildQueue implements QueueInterface
         $executionToken = \trim((string)($content['execution_token'] ?? ''));
         $operation = $this->normalizeQueuedOperation((string)($content['operation'] ?? 'build'));
         $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
-        $forceRebuild = $operation === 'build' && (int)($content['_force_rebuild'] ?? 0) === 1;
+        $forceNewExecutionToken = \in_array($operation, ['build', 'regenerate_page'], true)
+            && (int)($content['_force_rebuild'] ?? 0) === 1;
+        $forceFullBuildRegeneration = $operation === 'build' && $forceNewExecutionToken;
         $effectiveExecutionToken = $executionToken;
-        if ($forceRebuild) {
+        if ($forceNewExecutionToken) {
             $effectiveExecutionToken = \sprintf(
                 '%s-force-%s',
                 $executionToken !== '' ? $executionToken : 'queue',
@@ -122,7 +124,7 @@ class AiSiteBuildQueue implements QueueInterface
 
                 return $message;
             }
-            if ($forceRebuild) {
+            if ($forceFullBuildRegeneration) {
                 $session = $this->applyForceBuildQueuePreset($sessionService, $scopeService, $session, $adminId);
                 $this->appendQueueLifecycleLine(
                     $queue,
@@ -154,7 +156,7 @@ class AiSiteBuildQueue implements QueueInterface
                     $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 }
                 $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
-                if ($forceRebuild) {
+                if ($forceFullBuildRegeneration) {
                     $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
                     $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope);
                 }
@@ -172,7 +174,7 @@ class AiSiteBuildQueue implements QueueInterface
                 $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
             }
             if (!$buildTaskService->hasConfirmedBuildPlanForBuild($scope)) {
-                throw new \RuntimeException('请先确认方案1生成的 build_plan_v2，再开始执行构建。');
+                throw new \RuntimeException('请先确认建站方案，再开始执行构建。');
             }
 
             $allowStubAiInTest = false;
@@ -225,7 +227,7 @@ class AiSiteBuildQueue implements QueueInterface
                 $resumeScope = $scopeService->normalizeScope(
                     $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
                 );
-                if ($forceRebuild) {
+                if ($forceFullBuildRegeneration) {
                     $resetScope = $buildTaskService->clearBuildArtifactsForRegeneration($resumeScope);
                     $resetScope = $buildTaskService->resetBuildTasksToPendingForRebuild($resetScope);
                     if ($resetScope !== $resumeScope) {
@@ -296,8 +298,11 @@ class AiSiteBuildQueue implements QueueInterface
             }
             $this->queueTrace($sse, '队列操作已返回 operation=' . $operation);
 
-            if ($forceRebuild) {
+            if ($forceNewExecutionToken) {
                 $this->clearQueueForceBuildMarker($sessionService, (int)$session->getId(), $adminId);
+            }
+            if (\in_array($operation, ['build', 'regenerate_page'], true)) {
+                $this->assertQueueBuildTasksComplete($sessionService, $scopeService, $buildTaskService, $session, $adminId, $operation);
             }
 
             $this->queueTrace($sse, '队列执行成功：构建完成');
@@ -336,6 +341,7 @@ class AiSiteBuildQueue implements QueueInterface
 
     /**
      * -f：换新 execution_token + 将 build_tasks 全部置回 pending，否则任务已 done 会秒结束且不调 AI。
+     * 页面重建也必须支持该语义，否则 regenerate_page 失败后会复用旧 token 并触发 duplicate_stream。
      */
     private function normalizeQueuedOperation(string $operation): string
     {
@@ -365,7 +371,27 @@ class AiSiteBuildQueue implements QueueInterface
             $activeDetails['page_type'] ?? null,
             $active['page_key'] ?? null,
             $activeDetails['page_key'] ?? null,
+            $scope['preview_page_type'] ?? null,
+            $scope['preview_page_key'] ?? null,
         ]);
+        if ($pageType === '') {
+            $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [];
+            $normalizedPageTypes = [];
+            foreach ($pageTypes as $candidate) {
+                if (!\is_scalar($candidate)) {
+                    continue;
+                }
+                $candidate = \trim((string)$candidate);
+                if ($candidate !== '') {
+                    $normalizedPageTypes[] = $candidate;
+                }
+            }
+            if (\in_array('home_page', $normalizedPageTypes, true)) {
+                $pageType = 'home_page';
+            } elseif ($normalizedPageTypes !== []) {
+                $pageType = (string)$normalizedPageTypes[0];
+            }
+        }
         if ($pageType === '') {
             throw new \RuntimeException('Page regenerate queue context is missing page_type.');
         }
@@ -632,6 +658,40 @@ class AiSiteBuildQueue implements QueueInterface
         ]);
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+    }
+
+    private function assertQueueBuildTasksComplete(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteBuildTaskService $buildTaskService,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $operation
+    ): void {
+        $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+        $summary = $buildTaskService->summarize($scope);
+        $total = (int)($summary['total'] ?? 0);
+        $pending = (int)($summary['pending'] ?? 0);
+        $running = (int)($summary['running'] ?? 0);
+        $failed = (int)($summary['failed'] ?? 0);
+        $cancelled = (int)($summary['cancelled'] ?? 0);
+        if ($total <= 0) {
+            throw new \RuntimeException('Build queue returned without any build task summary.');
+        }
+        if ($buildTaskService->hasUnfinishedBlueprintTasks($scope) || $pending > 0 || $running > 0 || $failed > 0 || $cancelled > 0) {
+            throw new \RuntimeException(\sprintf(
+                'Build queue operation %s cannot finish while tasks are incomplete: total=%d pending=%d running=%d failed=%d cancelled=%d.',
+                $operation,
+                $total,
+                $pending,
+                $running,
+                $failed,
+                $cancelled
+            ));
+        }
     }
 
     private function clearQueueForceBuildMarker(AiSiteAgentSessionService $sessionService, int $sessionId, int $adminId): void

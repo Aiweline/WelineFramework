@@ -45,7 +45,9 @@ final class StartBackgroundStartupReadyTest extends TestCase
         $start = new class extends Start {
             protected function getEnvironmentValue(string $path, mixed $default = null): mixed
             {
-                unset($path);
+                if ($path === 'wls.orchestrator.startup_timeout_sec') {
+                    return 5;
+                }
                 return $default;
             }
         };
@@ -69,7 +71,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
         self::assertGreaterThan($singleWorkerWait, $multiServiceWait);
     }
 
-    public function testResolveBackgroundMasterConfirmWaitShortensWhenSpawnPidKnown(): void
+    public function testResolveBackgroundMasterConfirmWaitAllowsControlPlaneMetadataWhenSpawnPidKnown(): void
     {
         $start = new class extends Start {
             protected function getEnvironmentValue(string $path, mixed $default = null): mixed
@@ -80,7 +82,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
         };
 
         self::assertSame(5000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
-        self::assertSame(1200, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+        self::assertSame(8000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
     }
 
     public function testResolveBackgroundMasterConfirmWaitHonorsEnvironmentOverride(): void

@@ -8,7 +8,7 @@ use WeShop\Auth\Data\ActorContext;
 use WeShop\Auth\Model\PendingAuthChallenge;
 use WeShop\Auth\Service\PendingAuthChallengeService;
 use WeShop\Auth\Service\WeShopAuth2FAOrchestrator;
-use Weline\Admin\Helper\MenuUrlValidator;
+use Weline\Admin\Service\BackendLoginReturnUrlService;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Service\MenuServiceInterface;
@@ -16,6 +16,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\Strategy\WlsStrategy;
@@ -23,6 +24,8 @@ use Weline\Framework\System\Text;
 
 class BackendWebAuthService
 {
+    private BackendLoginReturnUrlService $returnUrlService;
+
     public function __construct(
         private readonly WeShopAuth2FAOrchestrator $twoFactorOrchestrator,
         private readonly PendingAuthChallengeService $pendingAuthChallengeService,
@@ -30,8 +33,10 @@ class BackendWebAuthService
         private readonly BackendUserToken $backendUserToken,
         private readonly BackendUser $backendUser,
         private readonly Url $url,
-        private readonly Request $request
+        private readonly Request $request,
+        ?BackendLoginReturnUrlService $returnUrlService = null
     ) {
+        $this->returnUrlService = $returnUrlService ?? ObjectManager::getInstance(BackendLoginReturnUrlService::class);
     }
 
     public function beginLoginForBackendUser(
@@ -205,52 +210,12 @@ class BackendWebAuthService
 
     private function normalizeRedirectTarget(BackendUser $user, string $redirectUrl = ''): string
     {
-        $candidate = $this->validateRedirectTarget($user, $redirectUrl);
-        if ($candidate !== null) {
-            return $candidate;
+        $target = $this->returnUrlService->resolveForUser($user, $redirectUrl);
+        if ($target !== null) {
+            return $target;
         }
 
-        $session = $this->getBackendSession()->getSession();
-        foreach (['backend_login_referer', 'referer'] as $key) {
-            $stored = (string) ($session->get($key) ?? '');
-            $session->delete($key);
-
-            $validated = $this->validateRedirectTarget($user, $stored);
-            if ($validated !== null) {
-                return $validated;
-            }
-        }
-
-        return $this->url->getBackendUrl($this->resolveDefaultRedirectTarget($user));
-    }
-
-    private function validateRedirectTarget(BackendUser $user, string $candidate): ?string
-    {
-        $candidate = trim($candidate);
-        if ($candidate === '') {
-            return null;
-        }
-
-        $routePath = trim((string) (Url::parser($candidate)['uri'] ?? ''), '/');
-        if (
-            $routePath === ''
-            || !MenuUrlValidator::isValidLoginRedirectTarget($routePath)
-            || !$this->userHasRoutePermission($user, $routePath)
-        ) {
-            return null;
-        }
-
-        if ($this->url->isLink($candidate)) {
-            return Url::is_same_site($candidate) ? $candidate : null;
-        }
-
-        $query = [];
-        $queryString = (string) (parse_url($candidate, PHP_URL_QUERY) ?? '');
-        if ($queryString !== '') {
-            parse_str($queryString, $query);
-        }
-
-        return $this->url->getBackendUrl($routePath, $query, false);
+        return $this->url->getBackendUrl($this->returnUrlService->resolveDefaultRedirectTarget($user));
     }
 
     private function assertUserCanLogin(BackendUser $user): void
@@ -267,27 +232,9 @@ class BackendWebAuthService
         }
     }
 
-    private function userHasRoutePermission(BackendUser $user, string $routePath): bool
-    {
-        $role = $user->getRoleModel();
-        if (!$role || !$role->getId()) {
-            return (int) $user->getId() === 1;
-        }
-
-        return $this->menuService->findMenuNodeByRoute((int) $role->getId(), $routePath) !== null;
-    }
-
     private function resolveDefaultRedirectTarget(BackendUser $user): string
     {
-        $role = $user->getRoleModel();
-        if ($role && $role->getId()) {
-            $defaultRoute = $this->menuService->getDefaultEntryRoute((int) $role->getId());
-            if ($defaultRoute !== null && $defaultRoute !== '') {
-                return $defaultRoute;
-            }
-        }
-
-        return 'admin';
+        return $this->returnUrlService->resolveDefaultRedirectTarget($user);
     }
 
     private function getBackendSession(): \Weline\Framework\Session\Auth\AuthenticatedSessionInterface
