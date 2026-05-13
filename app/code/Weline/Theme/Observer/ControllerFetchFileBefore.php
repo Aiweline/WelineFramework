@@ -309,6 +309,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                     if (!is_array($existingMeta)) {
                         $existingMeta = [];
                     }
+                    $existingMeta = $this->preserveAssignedTitleInMeta($existingMeta, $template, $request);
                     $template->setData('meta', array_merge(
                         $requestCache->layoutParamsRequestCache[$paramsCacheKey],
                         $existingMeta
@@ -321,7 +322,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $template->setData('contentTemplate', $fileName);
                     $template->setData('layoutTemplate', $resolvedLayoutPath);
                     $template->setData('fileName', $fileName);
-                    if (!$template->getData('title') && !empty($requestCache->layoutParamsRequestCache[$paramsCacheKey]['title'])) {
+                    if ($this->shouldUseMetaTitle($template, $request) && !empty($requestCache->layoutParamsRequestCache[$paramsCacheKey]['title'])) {
                         $template->assign('title', $requestCache->layoutParamsRequestCache[$paramsCacheKey]['title']);
                     }
                     $this->logThemeLayoutResolved($eventData, (string)$fileName, (string)$resolvedLayoutPath, (string)$fileName, $controller);
@@ -360,12 +361,13 @@ class ControllerFetchFileBefore implements ObserverInterface
                 
                 // 读取布局文件的参数配置值
                 // 注意：getFileParams 内部会处理 identify 格式，但需要确保 ThemeData 已正确初始化
+                $layoutFilePath = LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
+                $layoutMetaIdentity = $this->extractLayoutMetaIdentity($layoutFilePath, $resolvedLayoutPath, $area);
                 $layoutParams = ThemeData::getFileParams($metaIdentify, $scope);
                 
                 // 如果从 Meta 表中没有读取到参数，尝试从文件直接解析
                 if (empty($layoutParams)) {
                     // 获取布局文件的完整路径
-                    $layoutFilePath = LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
                     if ($layoutFilePath && is_file($layoutFilePath)) {
                         // 使用 ComponentMetaParser 从文件解析参数定义
                         $parsedMeta = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath);
@@ -400,7 +402,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if (!is_array($existingMeta)) {
                     $existingMeta = [];
                 }
-                $metaData = array_merge($layoutParams, $existingMeta);
+                $existingMeta = $this->preserveAssignedTitleInMeta($existingMeta, $template, $request);
+                $metaData = array_merge($layoutMetaIdentity, $layoutParams, $existingMeta);
                 // 关于主题的元数据传递给模板数据（performanceLoad 已在前面统一调用）
                 // 注意：必须使用 getMeta() 而不是 get()
                 // get() 方法用于获取 .value 格式的配置值，对于非 .value 格式会调用 MetaData::get()
@@ -410,6 +413,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if ($themeMetaDataObj && !empty($themeMetaDataObj['meta_data'])) {
                     // 合并 meta_data 中的配置值到 metaData
                     $metaData = array_merge($metaData, $themeMetaDataObj['meta_data']);
+                    $metaData = $this->mergeLayoutMetaIdentity($metaData, $themeMetaDataObj['meta_data']);
                 }
                 
                 // 将 meta 数据设置到模板中（转义处理由模板自行决定）
@@ -417,7 +421,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $metaData;
 
                 // 如果控制器没有设置标题，则从 meta 中获取默认标题并设置
-                if (!$template->getData('title') && !empty($metaData['title'])) {
+                if ($this->shouldUseMetaTitle($template, $request) && !empty($metaData['title'])) {
                     $template->assign('title', $metaData['title']);
                 }
                 $this->logThemeLayoutResolved(
@@ -458,6 +462,132 @@ class ControllerFetchFileBefore implements ObserverInterface
             // 保持原路径，不影响原有功能
             return;
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function extractLayoutMetaIdentity(?string $layoutFilePath, string $resolvedLayoutPath = '', string $area = 'frontend'): array
+    {
+        $identity = $this->extractLayoutMetaIdentityFromFile($layoutFilePath);
+        if (!empty($identity['layout_name'])) {
+            return $identity;
+        }
+
+        if (strpos($resolvedLayoutPath, '::') !== false) {
+            [, $relativePath] = explode('::', $resolvedLayoutPath, 2);
+            $defaultPath = LayoutPathResolver::getDefaultLayoutPath($relativePath, $area);
+            $defaultIdentity = $this->extractLayoutMetaIdentityFromFile($defaultPath);
+            if (!empty($defaultIdentity['layout_name'])) {
+                return array_merge($defaultIdentity, $identity);
+            }
+        }
+
+        return $identity;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function extractLayoutMetaIdentityFromFile(?string $layoutFilePath): array
+    {
+        if (!$layoutFilePath || !is_file($layoutFilePath)) {
+            return [];
+        }
+
+        try {
+            $parsed = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $this->mergeLayoutMetaIdentity([], $parsed['meta'] ?? []);
+    }
+
+    /**
+     * @param array<string, mixed> $metaData
+     * @param array<string, mixed> $source
+     * @return array<string, mixed>
+     */
+    private function mergeLayoutMetaIdentity(array $metaData, array $source): array
+    {
+        $name = $this->normalizeMetaAttribute($source['name'] ?? null);
+        if ($name !== '') {
+            $metaData['layout_name'] = $name;
+            $metaData['name'] = $name;
+        }
+
+        $description = $this->normalizeMetaAttribute($source['description'] ?? null);
+        if ($description !== '') {
+            $metaData['layout_description'] = $description;
+            if (empty($metaData['description']) || is_array($metaData['description'])) {
+                $metaData['description'] = $description;
+            }
+        }
+
+        return $metaData;
+    }
+
+    private function normalizeMetaAttribute(mixed $value): string
+    {
+        if (is_array($value)) {
+            foreach (['default', 'name', 'value', 'label'] as $key) {
+                if (isset($value[$key]) && trim((string)$value[$key]) !== '') {
+                    return trim((string)$value[$key]);
+                }
+            }
+            return '';
+        }
+
+        return trim((string)$value);
+    }
+
+    /**
+     * Keep a controller-assigned page title in meta before layout rendering
+     * reinitializes Template::title to the module fallback.
+     *
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    private function preserveAssignedTitleInMeta(array $meta, Template $template, ?Request $request): array
+    {
+        if ($this->hasMetaTitle($meta)) {
+            return $meta;
+        }
+
+        $title = trim((string)$template->getData('title'));
+        if ($title === '' || $this->isModuleDefaultTitle($title, $request)) {
+            return $meta;
+        }
+
+        $meta['controller_title'] = $meta['controller_title'] ?? $title;
+        $meta['title'] = $title;
+        return $meta;
+    }
+
+    private function shouldUseMetaTitle(Template $template, ?Request $request): bool
+    {
+        $title = trim((string)$template->getData('title'));
+        return $title === '' || $this->isModuleDefaultTitle($title, $request);
+    }
+
+    private function isModuleDefaultTitle(string $title, ?Request $request): bool
+    {
+        $moduleTitle = trim((string)($request?->getModuleName() ?? ''));
+        return $moduleTitle !== '' && $title === $moduleTitle;
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function hasMetaTitle(array $meta): bool
+    {
+        foreach (['title', 'meta_title'] as $key) {
+            if (array_key_exists($key, $meta) && trim((string)$meta[$key]) !== '') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

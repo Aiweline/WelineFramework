@@ -1,7 +1,13 @@
 
-<has name="layoutType">
-    <w:theme:template layout="partials.header">Weline_Theme::theme/frontend/partials/header/@meta{partials.header.value|default}.phtml</w:theme:template>
-<else/>
+<?php if ($this->getData('layoutType') && class_exists(\Weline\Theme\Block\Partials::class)): ?>
+    <?php
+    $headerPartials = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
+    $headerPartials->setData('area', 'frontend');
+    $headerPartials->setData('type', 'header');
+    $headerPartials->setData('default-option', 'default');
+    echo $headerPartials->render();
+    ?>
+<?php else: ?>
     <header class="weline-header-default">
         <div class="header-container">
             <!-- Logo -->
@@ -182,4 +188,4 @@
         }
     }
     </style>
-</has>
+<?php endif; ?>

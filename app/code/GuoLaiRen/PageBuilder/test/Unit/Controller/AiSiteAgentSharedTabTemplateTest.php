@@ -18,40 +18,39 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('planRoot.theme_design', $script);
         self::assertStringContainsString('themeDesign && themeDesign.theme_purpose', $script);
         self::assertStringContainsString('themeDesign && themeDesign.color_scheme', $script);
-        self::assertStringContainsString('themeDesign && themeDesign.selection_reason', $script);
         self::assertStringContainsString('themeDesign && themeDesign.forbidden_styles', $script);
         self::assertStringContainsString('previewLabels.themePurpose', $script);
         self::assertStringContainsString('previewLabels.colorSystem', $script);
-        self::assertStringContainsString('previewLabels.selectionReason', $script);
         self::assertStringContainsString('previewLabels.forbiddenStyles', $script);
     }
 
-    public function testSharedThemeTabRendersReasonDisclosureEntrypoints(): void
+    public function testSharedThemeTabDoesNotRenderReasonDisclosureEntrypoints(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
 
         self::assertIsString($script);
-        self::assertStringContainsString('function renderPreviewReasonDisclosure(label, reasonItems)', $script);
-        self::assertStringContainsString('class="pb-ai-reason-disclosure d-inline-block ms-2"', $script);
-        self::assertStringContainsString('>?</summary>', $script);
-        self::assertStringContainsString('renderPreviewSectionHeadingWithReason(previewLabels.themeSummary, selectionReason)', $script);
-        self::assertStringContainsString('reasonItems: collectPreviewReasonItems(headerPlan)', $script);
-        self::assertStringContainsString('reasonItems: collectPreviewReasonItems(footerPlan)', $script);
+        self::assertStringNotContainsString('function renderPreviewReasonDisclosure(label, reasonItems)', $script);
+        self::assertStringNotContainsString('class="pb-ai-reason-disclosure d-inline-block ms-2"', $script);
+        self::assertStringNotContainsString('reasonItems: collectPreviewReasonItems(headerPlan)', $script);
+        self::assertStringNotContainsString('reasonItems: collectPreviewReasonItems(footerPlan)', $script);
+        self::assertStringContainsString('renderPreviewSectionHeadingWithReason(previewLabels.themeSummary)', $script);
     }
 
-    public function testBuildPlanPreviewRendersQuestionMarkReasonEntrypointsWithoutStageTwoTaskPlan(): void
+    public function testBuildPlanPreviewRendersSingleStageDesignDetailsWithoutStageTwoTaskPlan(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
 
         self::assertIsString($script);
         self::assertStringContainsString('function buildPlanPreviewHtml(markdownText, payload, options)', $script);
-        self::assertStringContainsString('function renderPreviewReasonDisclosure(label, reasonItems)', $script);
-        self::assertStringContainsString('function collectPreviewReasonItems(value)', $script);
-        self::assertStringContainsString("['reason', 'why', 'selection_reason', 'decision_reason', 'planning_reason', 'rationale', 'explanation']", $script);
-        self::assertStringContainsString('renderPreviewReasonDisclosure(previewLabels.reason, reasonItems)', $script);
-        self::assertStringContainsString('>?</summary>', $script);
+        self::assertStringContainsString('previewLabels.designDetails', $script);
+        self::assertStringContainsString('previewLabels.implementationNote', $script);
+        self::assertStringContainsString('function normalizePlanSharedBlocks(planRoot)', $script);
+        self::assertStringContainsString('function buildSharedBlockFromStageOnePlan', $script);
+        self::assertStringNotContainsString('function renderPreviewReasonDisclosure(label, reasonItems)', $script);
+        self::assertStringNotContainsString('function collectPreviewReasonItems(value)', $script);
+        self::assertStringNotContainsString('renderPreviewReasonDisclosure(previewLabels.reason, reasonItems)', $script);
         self::assertStringNotContainsString('collectTaskPlanPlanningReasonItems', $script);
         self::assertStringNotContainsString('renderTaskPlan', $script);
     }
@@ -139,6 +138,7 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('data-task-progress-summary="build"', $layout);
         self::assertStringContainsString('buildPlanConfirmedState = true;', $script);
         self::assertStringNotContainsString('window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion', $script);
+        self::assertStringContainsString('function setRunVirtualThemeButtonsDisabled(disabled)', $script);
         self::assertStringContainsString('ensureBuildPlanConfirmedBeforeBuild(triggerBtn, selectedTypes, options)', $script);
         self::assertStringContainsString('startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, Object.assign({}, opts, {}));', $script);
         self::assertStringContainsString("window.__pbBuildQueueProgress = {", $buildQueueScript);

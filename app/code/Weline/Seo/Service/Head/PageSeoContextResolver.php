@@ -35,14 +35,22 @@ class PageSeoContextResolver
             'Weline Framework',
         ]);
 
+        $layoutName = $this->layoutName($meta);
+        $controllerTitle = $this->firstNonEmpty([
+            $this->read($meta, ['controller_title']),
+            $this->meaningfulTemplateTitle($template),
+        ]);
+        $layoutAwareTitle = $this->combineTitleAndLayoutName((string) $controllerTitle, (string) $layoutName);
         $title = $this->firstNonEmpty([
             $this->read($seo, ['title', 'meta_title']),
             $this->readTemplate($template, 'meta_title'),
-            $this->read($meta, ['meta_title', 'title']),
+            $this->read($meta, ['meta_title']),
             $this->read($product, ['meta_name', 'meta_title', 'name', 'title']),
             $this->read($category, ['meta_title', 'name', 'title']),
             $this->read($page, ['meta_title', 'title', 'name']),
-            $this->readTemplate($template, 'title'),
+            $layoutAwareTitle,
+            $this->read($meta, ['title']),
+            $this->routeTitle($template),
             $siteName,
         ]);
 
@@ -184,6 +192,153 @@ class PageSeoContextResolver
             return $this->normalizeDescription($title . ' - ' . $siteName);
         }
         return $this->normalizeDescription($title ?: $siteName);
+    }
+
+    private function meaningfulTemplateTitle($template): string
+    {
+        $title = trim((string) $this->readTemplate($template, 'title'));
+        if ($title === '') {
+            return '';
+        }
+
+        $moduleTitle = $this->requestModuleName();
+        if (($moduleTitle !== '' && $title === $moduleTitle) || $this->isModuleCodeTitle($title)) {
+            return '';
+        }
+
+        return $title;
+    }
+
+    private function isModuleCodeTitle(string $title): bool
+    {
+        return (bool) preg_match('/^[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9_]*$/', $title);
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function layoutName(array $meta): string
+    {
+        return (string) $this->firstNonEmpty([
+            $this->normalizeMetaText($meta['layout_name'] ?? null),
+            $this->normalizeMetaText($meta['name'] ?? null),
+        ]);
+    }
+
+    private function normalizeMetaText(mixed $value): string
+    {
+        if (is_array($value)) {
+            foreach (['default', 'name', 'value', 'label'] as $key) {
+                if (isset($value[$key]) && trim((string) $value[$key]) !== '') {
+                    return trim((string) $value[$key]);
+                }
+            }
+            return '';
+        }
+
+        return trim((string) $value);
+    }
+
+    private function combineTitleAndLayoutName(string $title, string $layoutName): string
+    {
+        $title = trim($title);
+        $layoutName = trim($layoutName);
+        if ($title === '') {
+            return $layoutName;
+        }
+        if ($layoutName === '' || mb_strtolower($title) === mb_strtolower($layoutName)) {
+            return $title;
+        }
+        if (mb_strpos(mb_strtolower($title), mb_strtolower($layoutName)) !== false) {
+            return $title;
+        }
+        return $title . ' | ' . $layoutName;
+    }
+
+    private function requestModuleName(): string
+    {
+        $request = $this->currentRequest();
+        if (is_object($request) && method_exists($request, 'getModuleName')) {
+            return trim((string) $request->getModuleName());
+        }
+        return '';
+    }
+
+    private function routeTitle($template): string
+    {
+        $path = $this->requestPath($template);
+        if ($path === '') {
+            return '';
+        }
+
+        $path = (string) (parse_url($path, PHP_URL_PATH) ?: $path);
+        $segments = array_values(array_filter(explode('/', trim($path, '/')), static function (string $segment): bool {
+            return $segment !== '' && !is_numeric($segment);
+        }));
+        if ($segments === []) {
+            return '';
+        }
+
+        return $this->humanizeRouteSegment((string) end($segments));
+    }
+
+    private function requestPath($template): string
+    {
+        $fullUri = (string) ($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        if ($fullUri !== '' && preg_match('/^https?:\/\//i', $fullUri)) {
+            return (string) (parse_url($fullUri, PHP_URL_PATH) ?: '');
+        }
+
+        $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+        if ($uri !== '') {
+            return (string) (parse_url($uri, PHP_URL_PATH) ?: $uri);
+        }
+
+        $request = $this->currentRequest();
+        if (is_object($request) && method_exists($request, 'getUrlPath')) {
+            try {
+                return trim((string) $request->getUrlPath());
+            } catch (\Throwable) {
+            }
+        }
+
+        $currentPage = $this->readTemplate($template, 'current_page');
+        return is_string($currentPage) ? trim($currentPage) : '';
+    }
+
+    private function currentRequest(): mixed
+    {
+        try {
+            if (class_exists(\Weline\Framework\Manager\ObjectManager::class)
+                && class_exists(\Weline\Framework\Http\Request::class)) {
+                return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    private function humanizeRouteSegment(string $segment): string
+    {
+        $segment = strtolower(trim($segment));
+        if ($segment === '') {
+            return '';
+        }
+
+        $labels = [
+            'login' => 'Sign In',
+            'signin' => 'Sign In',
+            'sign-in' => 'Sign In',
+            'register' => 'Register',
+            'forgot-password' => 'Forgot Password',
+            'reset-password' => 'Reset Password',
+        ];
+        if (isset($labels[$segment])) {
+            return $labels[$segment];
+        }
+
+        return ucwords(preg_replace('/[-_]+/', ' ', $segment) ?: $segment);
     }
 
     private function currentUrl($template): string
