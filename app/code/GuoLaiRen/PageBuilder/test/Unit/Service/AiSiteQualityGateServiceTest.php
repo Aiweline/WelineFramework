@@ -78,6 +78,21 @@ final class AiSiteQualityGateServiceTest extends TestCase
         self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
     }
 
+    public function testInspectScopeRejectsMalformedGeneratedHtmlTags(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><h1>专为印度玩家打造的棋牌娱乐殿堂</h1>< class="pb-card-icon" aria-hidden="true"></class><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>Footer</footer>',
+        ]);
+
+        $contentItem = $this->findItem($report['items'], 'content_quality');
+        self::assertFalse((bool)($contentItem['ok'] ?? true));
+        self::assertContains('malformed opening tag', $report['page_reports']['home_page']['bad_matches'] ?? []);
+        self::assertContains('invalid class tag', $report['page_reports']['home_page']['bad_matches'] ?? []);
+    }
+
     public function testInspectScopePassesForVirtualDraftRenderedOverrideWithoutEntityPageId(): void
     {
         $service = $this->createService();
@@ -99,7 +114,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         $scope = $this->buildScope();
         $scope['asset_manifest'] = [
             'slots' => [
-                ['slot_id' => 'hero', 'slot_type' => 'hero_image', 'final_url' => ''],
+                ['slot_id' => 'page:home_page:content-home-page-hero-banner', 'slot_type' => 'hero_image', 'final_url' => ''],
             ],
         ];
 
@@ -108,6 +123,91 @@ final class AiSiteQualityGateServiceTest extends TestCase
         ]);
 
         self::assertFalse((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? true));
+    }
+
+    public function testInspectScopeRejectsGeneratedImageWhenRequiredSlotMarkerIsMissing(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['asset_manifest'] = [
+            'slots' => [
+                'page:home_page:content-home-page-hero-banner' => [
+                    'slot_type' => 'hero_image',
+                    'status' => 'done',
+                    'source' => 'generated',
+                    'final_url' => '/pub/media/page-build/site/ai-generated/hero.webp',
+                ],
+            ],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><img src="/pub/media/page-build/site/ai-generated/hero.webp" alt="Premium Teen Patti table"><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>Footer</footer>',
+        ]);
+
+        $visuals = $report['page_reports']['home_page']['visuals'] ?? [];
+        self::assertFalse((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? true));
+        self::assertSame(
+            ['page:home_page:content-home-page-hero-banner'],
+            $visuals['missing_required_image_slot_ids'] ?? []
+        );
+    }
+
+    public function testInspectScopePassesWhenRequiredGeneratedImageSlotIsUsed(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['asset_manifest'] = [
+            'slots' => [
+                'page:home_page:content-home-page-hero-banner' => [
+                    'slot_type' => 'hero_image',
+                    'status' => 'done',
+                    'source' => 'generated',
+                    'final_url' => '/pub/media/page-build/site/ai-generated/hero.webp',
+                ],
+            ],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><img data-pb-ai-asset-slot="page:home_page:content-home-page-hero-banner" src="/pub/media/page-build/site/ai-generated/hero.webp" alt="Premium Teen Patti table"><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>Footer</footer>',
+        ]);
+
+        $visuals = $report['page_reports']['home_page']['visuals'] ?? [];
+        self::assertTrue((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? false), \json_encode($visuals, \JSON_UNESCAPED_UNICODE));
+        self::assertSame(
+            ['page:home_page:content-home-page-hero-banner'],
+            $visuals['used_required_image_slot_ids'] ?? []
+        );
+    }
+
+    public function testInspectScopeRejectsLocalComposedFallbackAsRealImageAsset(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['asset_manifest'] = [
+            'slots' => [
+                [
+                    'slot_id' => 'hero',
+                    'slot_type' => 'hero_image',
+                    'status' => 'done',
+                    'final_url' => '/pub/media/page-build/site/ai-generated/hero-local.jpg',
+                    'variants' => [[
+                        'url' => '/pub/media/page-build/site/ai-generated/hero-local.jpg',
+                        'mode' => 'local_composed',
+                        'model' => 'local-premium-composition-v1',
+                        'generation_fallback_reason' => 'No bounded text-to-image generator is configured.',
+                    ]],
+                ],
+            ],
+        ];
+        $scope['verified_assets'] = ['hero' => '/pub/media/page-build/site/ai-generated/hero-local.jpg'];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><img src="/pub/media/page-build/site/ai-generated/hero-local.jpg" alt="Premium Teen Patti table"><h1>娑撴挷璐熼崡鏉垮閻溾晛顔嶉幍鎾烩偓鐘垫畱濡澧濇繛鍙樼濞堝灝鐖?/h1><p>娴ｆ捇鐛橳een Patti閵嗕阜ummy缁涘绮￠崗鍛婄埗閹村骏绱濒禍顐㈠綀鐎瑰鍙忛崗顒€閽╅惃鍕箛娴狅絽瀵茬粈鎯у隘</p></section></main><footer>Footer</footer>',
+        ]);
+
+        $visualItem = $this->findItem($report['items'], 'visual_assets_safe');
+        self::assertFalse((bool)($visualItem['ok'] ?? true));
+        self::assertSame([], $report['page_reports']['home_page']['visuals']['real_asset_urls'] ?? ['unexpected']);
     }
 
     public function testNormalizeQualityItemsReconnectsCanonicalFieldAndDropsUnknownItems(): void

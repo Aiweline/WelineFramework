@@ -126,7 +126,7 @@ class BackendController extends PcController
                 }
                 
                 if ($no_login_redirect_url) {
-                    $this->redirect($no_login_redirect_url);
+                    $this->redirect($this->withBackendLoginReturnUrl((string)$no_login_redirect_url, $routeUrlPath));
                 }
                 
                 $this->noRouter();
@@ -149,6 +149,46 @@ class BackendController extends PcController
         }
 
         return false;
+    }
+
+    private function withBackendLoginReturnUrl(string $loginUrl, string $routeUrlPath): string
+    {
+        if (!$this->request->isGet() || $this->request->isAjax() || $this->request->isIframe()) {
+            return $loginUrl;
+        }
+
+        $normalizedRoute = \strtolower(\trim($routeUrlPath, '/'));
+        if ($normalizedRoute === ''
+            || $normalizedRoute === 'admin/login'
+            || $normalizedRoute === 'admin/login/post'
+            || $normalizedRoute === 'admin/login/logout'
+        ) {
+            return $loginUrl;
+        }
+
+        $returnUrl = $this->getCurrentRequestUrl();
+        if ($returnUrl === '') {
+            return $loginUrl;
+        }
+
+        $query = [
+            'no_access_reason' => 'not_logged_in',
+            'return_url' => $returnUrl,
+        ];
+
+        return $loginUrl . (\str_contains($loginUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function getCurrentRequestUrl(): string
+    {
+        $uri = (string)($this->request->getServer('WELINE_ORIGIN_REQUEST_URI') ?: $this->request->getServer('REQUEST_URI'));
+        if ($uri === '') {
+            return '';
+        }
+
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost');
+        return $scheme . '://' . $host . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
     }
 
     private function isSseLikeRequest(): bool

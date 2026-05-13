@@ -14,6 +14,7 @@ namespace Weline\Shipping\Controller\Frontend;
 use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\DeliveryAddressService;
 
 /**
@@ -25,13 +26,16 @@ class DeliveryAddress extends FrontendRestController
 {
     private SessionFactory $sessionFactory;
     private DeliveryAddressService $deliveryAddressService;
+    private AddressFormatter $addressFormatter;
 
     public function __construct(
         SessionFactory $sessionFactory,
-        DeliveryAddressService $deliveryAddressService
+        DeliveryAddressService $deliveryAddressService,
+        AddressFormatter $addressFormatter
     ) {
         $this->sessionFactory = $sessionFactory;
         $this->deliveryAddressService = $deliveryAddressService;
+        $this->addressFormatter = $addressFormatter;
     }
 
     /**
@@ -67,9 +71,16 @@ class DeliveryAddress extends FrontendRestController
             // 构建配送地址数据
             $deliveryAddress = [
                 'country' => $body['country'] ?? '',
+                'country_code' => $body['country_code'] ?? '',
                 'province' => $body['province'] ?? '',
+                'province_code' => $body['province_code'] ?? '',
+                'province_region_id' => $body['province_region_id'] ?? null,
                 'city' => $body['city'] ?? '',
+                'city_code' => $body['city_code'] ?? '',
+                'city_region_id' => $body['city_region_id'] ?? null,
                 'district' => $body['district'] ?? '',
+                'district_code' => $body['district_code'] ?? '',
+                'district_region_id' => $body['district_region_id'] ?? null,
                 'street' => $body['street'] ?? '',
                 'postal_code' => $body['postal_code'] ?? '',
                 'latitude' => $body['latitude'] ?? null,
@@ -196,9 +207,16 @@ class DeliveryAddress extends FrontendRestController
                 // 更新现有默认地址
                 $updateData = [
                     'country' => $addressData['country'],
+                    'country_code' => $addressData['country_code'] ?? '',
                     'province' => $addressData['province'],
+                    'province_code' => $addressData['province_code'] ?? '',
+                    'province_region_id' => $addressData['province_region_id'] ?? null,
                     'city' => $addressData['city'],
+                    'city_code' => $addressData['city_code'] ?? '',
+                    'city_region_id' => $addressData['city_region_id'] ?? null,
                     'district' => $addressData['district'],
+                    'district_code' => $addressData['district_code'] ?? '',
+                    'district_region_id' => $addressData['district_region_id'] ?? null,
                     'street' => $addressData['street'],
                     'postal_code' => $addressData['postal_code'],
                 ];
@@ -240,13 +258,6 @@ class DeliveryAddress extends FrontendRestController
      */
     private function buildFullAddress(array $address): string
     {
-        $parts = array_filter([
-            $address['country'] ?? '',
-            $address['province'] ?? '',
-            $address['city'] ?? '',
-            $address['district'] ?? '',
-            $address['street'] ?? '',
-        ]);
-        return implode('', $parts);
+        return $this->addressFormatter->formatSingleLine($address);
     }
 }

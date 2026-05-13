@@ -143,7 +143,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             /** @var CustomerLoginChallengeHandlerInterface $challengeHandler */
             $challengeHandler = ObjectManager::getInstance(CustomerLoginChallengeHandlerInterface::class);
             if (method_exists($challengeHandler, 'createChallenge')) {
-                $challenge = $challengeHandler->createChallenge($user, $redirectUrl);
+                $challenge = $challengeHandler->createChallenge($user, $redirectUrl, $rememberDuration);
                 if (is_array($challenge) && !empty($challenge['redirect'])) {
                     return $this->respondChallenge(
                         (string)__('Please complete two-factor verification.'),

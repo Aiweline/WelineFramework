@@ -933,6 +933,367 @@
         });
     }
 
+    const ThemeNotice = (function () {
+        let styleInjected = false;
+        let toastRegion = null;
+        let activeDialog = null;
+
+        const defaults = {
+            duration: 3600,
+            position: 'top-right',
+            confirmText: '确认',
+            cancelText: '取消',
+            closeText: '关闭',
+        };
+
+        function mergeOptions(options) {
+            return Object.assign({}, defaults, runtimeConfig.theme?.notice || {}, options || {});
+        }
+
+        function injectStyle() {
+            if (styleInjected) {
+                return;
+            }
+            styleInjected = true;
+
+            const style = document.createElement('style');
+            style.id = 'weline-theme-notice-style';
+            style.textContent = `
+                .weline-notice-region {
+                    position: fixed;
+                    z-index: var(--z-index-toast, 100000);
+                    display: grid;
+                    gap: var(--spacing-sm, 0.75rem);
+                    width: min(26rem, calc(100vw - 2rem));
+                    pointer-events: none;
+                }
+                .weline-notice-region--top-right {
+                    top: var(--spacing-lg, 1.5rem);
+                    right: var(--spacing-lg, 1.5rem);
+                }
+                .weline-notice-toast {
+                    display: grid;
+                    grid-template-columns: auto 1fr auto;
+                    gap: var(--spacing-sm, 0.75rem);
+                    align-items: flex-start;
+                    padding: var(--spacing-md, 1rem);
+                    border: var(--border-card, 1px solid var(--color-border-default));
+                    border-left: var(--border-width-thick, 3px) var(--border-style-solid, solid) var(--notice-accent);
+                    border-radius: var(--border-radius-xl, 12px);
+                    background: var(--color-bg-primary);
+                    color: var(--color-text-primary);
+                    box-shadow: var(--shadow-dropdown, var(--shadow-lg));
+                    pointer-events: auto;
+                    transform: translateY(-0.5rem);
+                    opacity: 0;
+                    transition: opacity 0.18s ease, transform 0.18s ease;
+                }
+                .weline-notice-toast.is-visible {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+                .weline-notice-toast--success { --notice-accent: var(--color-success); }
+                .weline-notice-toast--error { --notice-accent: var(--color-error); }
+                .weline-notice-toast--warning { --notice-accent: var(--color-warning); }
+                .weline-notice-toast--info { --notice-accent: var(--color-info); }
+                .weline-notice-toast__mark {
+                    width: 0.8rem;
+                    height: 0.8rem;
+                    margin-top: 0.25rem;
+                    border-radius: var(--border-radius-full, 9999px);
+                    background: var(--notice-accent);
+                    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--notice-accent) 16%, transparent);
+                }
+                .weline-notice-toast__content {
+                    display: grid;
+                    gap: var(--spacing-xs, 0.35rem);
+                    min-width: 0;
+                }
+                .weline-notice-toast__title {
+                    margin: 0;
+                    font-size: var(--font-size-sm, 0.95rem);
+                    font-weight: var(--font-weight-semibold, 600);
+                    color: var(--color-text-primary);
+                }
+                .weline-notice-toast__message {
+                    margin: 0;
+                    font-size: var(--font-size-sm, 0.9rem);
+                    line-height: var(--line-height-normal, 1.5);
+                    color: var(--color-text-secondary);
+                }
+                .weline-notice-toast__close,
+                .weline-notice-dialog__close {
+                    border: 0;
+                    background: transparent;
+                    color: var(--color-text-tertiary);
+                    font: inherit;
+                    line-height: 1;
+                    cursor: pointer;
+                }
+                .weline-notice-toast__close:hover,
+                .weline-notice-dialog__close:hover {
+                    color: var(--color-text-primary);
+                }
+                .weline-notice-overlay {
+                    position: fixed;
+                    inset: 0;
+                    z-index: var(--z-index-modal, 100001);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: var(--spacing-lg, 1.5rem);
+                    background: color-mix(in srgb, var(--color-text-primary) 42%, transparent);
+                }
+                .weline-notice-dialog {
+                    width: min(28rem, 100%);
+                    border: var(--border-card, 1px solid var(--color-border-default));
+                    border-radius: var(--border-radius-2xl, 16px);
+                    background: var(--color-bg-primary);
+                    color: var(--color-text-primary);
+                    box-shadow: var(--shadow-modal, var(--shadow-xl));
+                    overflow: hidden;
+                    transform: translateY(0.5rem) scale(0.98);
+                    opacity: 0;
+                    transition: opacity 0.18s ease, transform 0.18s ease;
+                }
+                .weline-notice-overlay.is-visible .weline-notice-dialog {
+                    transform: translateY(0) scale(1);
+                    opacity: 1;
+                }
+                .weline-notice-dialog__header {
+                    display: flex;
+                    gap: var(--spacing-md, 1rem);
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    padding: var(--spacing-lg, 1.5rem) var(--spacing-lg, 1.5rem) var(--spacing-sm, 0.75rem);
+                }
+                .weline-notice-dialog__title {
+                    margin: 0;
+                    color: var(--color-text-primary);
+                    font-size: var(--font-size-lg, 1.2rem);
+                    font-weight: var(--font-weight-bold, 700);
+                }
+                .weline-notice-dialog__body {
+                    padding: 0 var(--spacing-lg, 1.5rem) var(--spacing-lg, 1.5rem);
+                    color: var(--color-text-secondary);
+                    line-height: var(--line-height-relaxed, 1.7);
+                }
+                .weline-notice-dialog__actions {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: var(--spacing-sm, 0.75rem);
+                    justify-content: flex-end;
+                    padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
+                    border-top: var(--border-width-thin, 1px) var(--border-style-solid, solid) var(--color-border-light);
+                    background: var(--color-bg-secondary);
+                }
+                .weline-notice-dialog__button {
+                    min-height: 2.6rem;
+                    padding: 0 var(--spacing-lg, 1.5rem);
+                    border-radius: var(--border-radius-lg, 8px);
+                    border: var(--border-button, 1px solid var(--color-primary-border));
+                    background: var(--color-bg-primary);
+                    color: var(--color-text-primary);
+                    font: inherit;
+                    font-weight: var(--font-weight-semibold, 600);
+                    cursor: pointer;
+                }
+                .weline-notice-dialog__button--primary {
+                    background: var(--color-primary);
+                    border-color: var(--color-primary-border);
+                    color: var(--color-text-dark);
+                }
+                .weline-notice-dialog__button--danger {
+                    background: var(--color-error);
+                    border-color: var(--color-error);
+                    color: var(--color-text-light);
+                }
+                .weline-notice-dialog__button:hover {
+                    box-shadow: var(--shadow-button, var(--shadow-sm));
+                }
+                @media (max-width: 640px) {
+                    .weline-notice-region {
+                        top: var(--spacing-md, 1rem);
+                        right: var(--spacing-md, 1rem);
+                        left: var(--spacing-md, 1rem);
+                        width: auto;
+                    }
+                    .weline-notice-dialog__actions {
+                        display: grid;
+                    }
+                    .weline-notice-dialog__button {
+                        width: 100%;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        function ensureToastRegion(options) {
+            injectStyle();
+            if (toastRegion && document.body.contains(toastRegion)) {
+                return toastRegion;
+            }
+            toastRegion = document.createElement('div');
+            toastRegion.className = 'weline-notice-region weline-notice-region--' + (options.position || 'top-right');
+            toastRegion.setAttribute('data-theme-notice-region', '');
+            toastRegion.setAttribute('aria-live', 'polite');
+            toastRegion.setAttribute('aria-atomic', 'true');
+            document.body.appendChild(toastRegion);
+            return toastRegion;
+        }
+
+        function normalizeType(type) {
+            if (type === 'danger') {
+                return 'error';
+            }
+            return ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info';
+        }
+
+        function show(options) {
+            options = mergeOptions(typeof options === 'string' ? { message: options } : options);
+            const type = normalizeType(options.type);
+            const region = ensureToastRegion(options);
+            const toast = document.createElement('div');
+            toast.className = 'weline-notice-toast weline-notice-toast--' + type;
+            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+            const closeText = options.closeText || defaults.closeText;
+            toast.innerHTML = [
+                '<span class="weline-notice-toast__mark" aria-hidden="true"></span>',
+                '<div class="weline-notice-toast__content">',
+                options.title ? '<strong class="weline-notice-toast__title"></strong>' : '',
+                '<p class="weline-notice-toast__message"></p>',
+                '</div>',
+                '<button type="button" class="weline-notice-toast__close" aria-label="' + closeText + '">&times;</button>'
+            ].join('');
+
+            if (options.title) {
+                toast.querySelector('.weline-notice-toast__title').textContent = options.title;
+            }
+            toast.querySelector('.weline-notice-toast__message').textContent = options.message || '';
+            toast.querySelector('.weline-notice-toast__close').addEventListener('click', function () {
+                closeToast(toast);
+            });
+
+            region.appendChild(toast);
+            requestAnimationFrame(function () {
+                toast.classList.add('is-visible');
+            });
+
+            if (options.duration !== 0) {
+                setTimeout(function () {
+                    closeToast(toast);
+                }, Number(options.duration) || defaults.duration);
+            }
+            return toast;
+        }
+
+        function closeToast(toast) {
+            if (!toast || !toast.parentNode) {
+                return;
+            }
+            toast.classList.remove('is-visible');
+            setTimeout(function () {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 180);
+        }
+
+        function closeDialog(result) {
+            if (!activeDialog) {
+                return;
+            }
+            const dialog = activeDialog;
+            activeDialog = null;
+            dialog.overlay.classList.remove('is-visible');
+            document.removeEventListener('keydown', dialog.onKeydown);
+            setTimeout(function () {
+                if (dialog.overlay.parentNode) {
+                    dialog.overlay.remove();
+                }
+                dialog.resolve(result);
+            }, 180);
+        }
+
+        function confirm(options) {
+            options = mergeOptions(options);
+            injectStyle();
+            if (activeDialog) {
+                closeDialog(false);
+            }
+
+            return new Promise(function (resolve) {
+                const overlay = document.createElement('div');
+                overlay.className = 'weline-notice-overlay';
+                overlay.setAttribute('data-theme-notice-confirm', '');
+                overlay.innerHTML = [
+                    '<section class="weline-notice-dialog" role="dialog" aria-modal="true" aria-labelledby="weline-notice-dialog-title">',
+                    '<header class="weline-notice-dialog__header">',
+                    '<h2 class="weline-notice-dialog__title" id="weline-notice-dialog-title"></h2>',
+                    '<button type="button" class="weline-notice-dialog__close" data-notice-cancel aria-label="' + (options.closeText || defaults.closeText) + '">&times;</button>',
+                    '</header>',
+                    '<div class="weline-notice-dialog__body"></div>',
+                    '<footer class="weline-notice-dialog__actions">',
+                    '<button type="button" class="weline-notice-dialog__button" data-notice-cancel></button>',
+                    '<button type="button" class="weline-notice-dialog__button weline-notice-dialog__button--danger" data-notice-confirm></button>',
+                    '</footer>',
+                    '</section>'
+                ].join('');
+
+                overlay.querySelector('.weline-notice-dialog__title').textContent = options.title || '';
+                overlay.querySelector('.weline-notice-dialog__body').textContent = options.message || '';
+                overlay.querySelector('[data-notice-confirm]').textContent = options.confirmText || defaults.confirmText;
+                overlay.querySelector('.weline-notice-dialog__actions [data-notice-cancel]').textContent = options.cancelText || defaults.cancelText;
+
+                const onKeydown = function (event) {
+                    if (event.key === 'Escape') {
+                        closeDialog(false);
+                    }
+                };
+
+                activeDialog = { overlay, resolve, onKeydown };
+                overlay.addEventListener('click', function (event) {
+                    if (event.target === overlay || event.target.closest('[data-notice-cancel]')) {
+                        closeDialog(false);
+                        return;
+                    }
+                    if (event.target.closest('[data-notice-confirm]')) {
+                        closeDialog(true);
+                    }
+                });
+                document.addEventListener('keydown', onKeydown);
+                document.body.appendChild(overlay);
+                requestAnimationFrame(function () {
+                    overlay.classList.add('is-visible');
+                    const confirmButton = overlay.querySelector('[data-notice-confirm]');
+                    if (confirmButton) {
+                        confirmButton.focus();
+                    }
+                });
+            });
+        }
+
+        return {
+            show: show,
+            success: function (message, options) {
+                return show(Object.assign({}, options || {}, { type: 'success', message: message }));
+            },
+            error: function (message, options) {
+                return show(Object.assign({}, options || {}, { type: 'error', message: message }));
+            },
+            warning: function (message, options) {
+                return show(Object.assign({}, options || {}, { type: 'warning', message: message }));
+            },
+            info: function (message, options) {
+                return show(Object.assign({}, options || {}, { type: 'info', message: message }));
+            },
+            confirm: confirm,
+            close: closeDialog
+        };
+    })();
+
     /**
      * Weline 主对象（轻量级，只包含基础功能）
      */
@@ -1440,7 +1801,9 @@
             bootstrap: function (config) {
                 mergeConfig(config);
                 return this;
-            }
+            },
+
+            Notice: ThemeNotice
         },
 
         /**
@@ -1565,6 +1928,7 @@
     })();
 
     window.Weline = Weline;
+    window.Theme = Weline.Theme;
     window.w_query = function (provider, operation, params = {}, options = {}) {
         return Weline.Query.request(provider, operation, params, options);
     };

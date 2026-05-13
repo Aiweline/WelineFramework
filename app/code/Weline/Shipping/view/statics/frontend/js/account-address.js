@@ -28,7 +28,7 @@
     }
 
     function fullAddress(data) {
-        return [data.country, data.province, data.city, data.district, data.street].map(text).filter(Boolean).join('');
+        return [data.country, data.province, data.city, data.district, data.street].map(text).filter(Boolean).join(' / ');
     }
 
     function normalize(data, panel) {
@@ -53,13 +53,50 @@
         box.hidden = !message;
     }
 
+    function escapeHtml(value) {
+        return text(value).replace(/[&<>"']/g, function (ch) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[ch];
+        });
+    }
+
+    function renderAddressParts(data) {
+        var icons = {
+            country: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M3.8 12h16.4M12 3.5c2.2 2.3 3.3 5.2 3.3 8.5S14.2 18.2 12 20.5M12 3.5C9.8 5.8 8.7 8.7 8.7 12s1.1 6.2 3.3 8.5"></path></svg>',
+            region: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5 9 3.8l6 2.2 4.5-1.7v14.2L15 20.2 9 18l-4.5 1.7V5.5Z"></path><path d="M9 3.8V18M15 6v14.2"></path></svg>',
+            city: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 20V8.5h5V20M9.5 20V4h5v16M14.5 20v-9h5v9"></path><path d="M6.5 11h1M6.5 14h1M11.5 7h1M11.5 10h1M11.5 13h1M16.5 14h1"></path></svg>',
+            district: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.7 6.5-11A6.5 6.5 0 0 0 5.5 10c0 5.3 6.5 11 6.5 11Z"></path><circle cx="12" cy="10" r="2.3"></circle></svg>',
+            street: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5"></path><path d="M6.5 10.5V20h11v-9.5"></path><path d="M10 20v-5h4v5"></path></svg>',
+            postal: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h14v11H5z"></path><path d="m5.5 7 6.5 5 6.5-5"></path></svg>'
+        };
+        var parts = Array.isArray(data.address_tokens) && data.address_tokens.length ? data.address_tokens : [
+            {icon: 'country', label: '国家/地区', value: data.country},
+            {icon: 'region', label: '省/州', value: data.province},
+            {icon: 'city', label: '城市', value: data.city},
+            {icon: 'district', label: '区县', value: data.district},
+            {icon: 'street', label: '详细地址', value: data.street}
+        ];
+
+        return parts.filter(function (part) {
+            return text(part.value) !== '';
+        }).map(function (part) {
+            return '<span class="account-address-part" title="' + escapeHtml(part.label) + '" data-address-part="' + escapeHtml(part.label) + '">'
+                + '<span class="account-address-part__icon">' + (icons[part.icon] || icons.street) + '</span>'
+                + '<span class="account-address-part__text">' + escapeHtml(part.value) + '</span>'
+                + '</span>';
+        }).join('');
+    }
+
     function setCardData(card, panel, data) {
         data = normalize(data, panel);
         card.dataset.addressId = data.id;
         card.querySelector('[data-address-name]').textContent = text(data.name);
         card.querySelector('[data-address-contact]').textContent = text(data.contact_name);
         card.querySelector('[data-address-phone]').textContent = text(data.contact_phone);
-        card.querySelector('[data-address-full]').textContent = text(data.full_address);
+        var full = card.querySelector('[data-address-full]');
+        if (full) {
+            full.setAttribute('aria-label', data.full_address || fullAddress(data));
+            full.innerHTML = renderAddressParts(data);
+        }
         card.querySelector('[data-address-contact-label]').textContent = panel.dataset.addressPanel === 'delivery' ? labels.deliveryContact : labels.contact;
 
         var postal = card.querySelector('[data-address-postal]');
@@ -133,7 +170,7 @@
         data = normalize(data || {}, panel);
         form.reset();
         form.querySelector('[name="' + panel.getAttribute('data-id-field') + '"]').value = data.id || '';
-        ['name', 'contact_name', 'contact_phone', 'country', 'province', 'city', 'district', 'street', 'postal_code'].forEach(function (field) {
+        ['name', 'contact_name', 'contact_phone', 'country', 'country_code', 'province', 'province_code', 'province_region_id', 'city', 'city_code', 'city_region_id', 'district', 'district_code', 'district_region_id', 'street', 'postal_code'].forEach(function (field) {
             var input = form.querySelector('[name="' + field + '"]');
             if (input) {
                 input.value = data[field] || (field === 'country' ? labels.country : '');
