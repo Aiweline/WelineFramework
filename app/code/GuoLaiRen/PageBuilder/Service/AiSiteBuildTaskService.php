@@ -328,6 +328,9 @@ class AiSiteBuildTaskService
         if ($this->hasConfirmedBuildPlanV2ForBuild($scope)) {
             return true;
         }
+        if ($this->hasConfirmedExecutionBlueprintForBuild($scope)) {
+            return true;
+        }
 
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
@@ -362,6 +365,30 @@ class AiSiteBuildTaskService
             && $contract['pages'] !== []
             && \is_array($contract['blocks'] ?? null)
             && $contract['blocks'] !== [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function hasConfirmedExecutionBlueprintForBuild(array $scope): bool
+    {
+        $blueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        if ($blueprint === []) {
+            return false;
+        }
+
+        $confirmed = (int)($scope['plan_confirmed'] ?? 0) === 1
+            || \trim((string)($scope['execution_blueprint_confirmed_at'] ?? '')) !== ''
+            || \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? '')) !== '';
+        if (!$confirmed) {
+            return false;
+        }
+
+        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
+        $pages = \is_array($blueprint['pages'] ?? null) ? $blueprint['pages'] : [];
+        $pageBlueprints = \is_array($blueprint['page_blueprints'] ?? null) ? $blueprint['page_blueprints'] : [];
+
+        return $tasks !== [] && ($pages !== [] || $pageBlueprints !== []);
     }
 
     /**

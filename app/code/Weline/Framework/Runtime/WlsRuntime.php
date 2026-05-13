@@ -433,7 +433,7 @@ class WlsRuntime implements RuntimeInterface
             // 同步到 WelineEnv
             WelineEnv::set('wls.redirect_count', (string) $redirectCount, 'WlsRuntime catch RedirectException');
             WelineEnv::set('request.uri', $currentUri, 'WlsRuntime catch RedirectException');
-            $redirectUrl = $redirectEx->getRedirectUrl();
+            $redirectUrl = $this->withBackendLoginReturnUrl($redirectEx->getRedirectUrl(), $request);
             
             // 如果重定向次数过多，记录警告
             if ($redirectCount > 5) {
@@ -1137,6 +1137,84 @@ class WlsRuntime implements RuntimeInterface
      *
      * @param Request|null $request 请求对象，如果为 null 则从 $_SERVER 读取（兜底）
      */
+    private function withBackendLoginReturnUrl(string $redirectUrl, ?Request $request): string
+    {
+        $method = strtoupper((string)($request?->getMethod() ?: ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return $redirectUrl;
+        }
+
+        $redirectPath = (string)(parse_url($redirectUrl, PHP_URL_PATH) ?: '');
+        $normalizedRedirectPath = strtolower($redirectPath);
+        if ($normalizedRedirectPath === ''
+            || !str_ends_with($normalizedRedirectPath, '/admin/login')
+        ) {
+            return $redirectUrl;
+        }
+
+        $uri = (string)(
+            ($request?->getServer('WELINE_ORIGIN_REQUEST_URI') ?: null)
+            ?: ($request?->getServer('REQUEST_URI') ?: null)
+            ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? null)
+            ?: ($_SERVER['REQUEST_URI'] ?? '')
+        );
+        if ($uri === '') {
+            return $redirectUrl;
+        }
+        $queryString = (string)($_SERVER['QUERY_STRING'] ?? $request?->getServer('QUERY_STRING') ?? '');
+        if ($queryString !== '' && !str_contains($uri, '?')) {
+            $uri .= '?' . $queryString;
+        }
+
+        $currentPath = strtolower((string)(parse_url($uri, PHP_URL_PATH) ?: ''));
+        if ($currentPath === ''
+            || str_ends_with($currentPath, '/admin/login')
+            || str_ends_with($currentPath, '/admin/login/post')
+            || str_ends_with($currentPath, '/admin/login/logout')
+        ) {
+            return $redirectUrl;
+        }
+
+        $backendPrefix = substr($redirectPath, 0, -strlen('/admin/login'));
+        $uriPath = (string)(parse_url($uri, PHP_URL_PATH) ?: '');
+        if ($backendPrefix !== '' && $uriPath !== '' && !str_starts_with($uriPath, $backendPrefix . '/')) {
+            $uri = $backendPrefix . (str_starts_with($uri, '/') ? $uri : '/' . $uri);
+        }
+
+        $scheme = $request?->isSecure() ? 'https' : 'http';
+        $host = (string)(
+            ($request?->getServer('HTTP_HOST') ?: null)
+            ?: ($request?->getServer('SERVER_NAME') ?: null)
+            ?: ($_SERVER['HTTP_HOST'] ?? null)
+            ?: ($_SERVER['SERVER_NAME'] ?? 'localhost')
+        );
+        $returnUrl = $scheme . '://' . $host . (str_starts_with($uri, '/') ? $uri : '/' . $uri);
+        $query = [
+            'no_access_reason' => 'not_logged_in',
+            'return_url' => $returnUrl,
+        ];
+
+        return $this->removeBackendLoginReturnParams($redirectUrl) . (str_contains($this->removeBackendLoginReturnParams($redirectUrl), '?') ? '&' : '?') . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function removeBackendLoginReturnParams(string $url): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['query'])) {
+            return $url;
+        }
+
+        parse_str((string)$parts['query'], $params);
+        unset($params['no_access_reason'], $params['return_url']);
+        $query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+        $base = ($parts['scheme'] ?? 'http') . '://' . ($parts['host'] ?? 'localhost');
+        if (isset($parts['port'])) {
+            $base .= ':' . $parts['port'];
+        }
+        $base .= $parts['path'] ?? '';
+        return $query === '' ? $base : $base . '?' . $query;
+    }
+
     private function isSseRequest(?Request $request = null): bool
     {
         // 优先从 Request 对象获取 Accept 头，避免 WLS 并发下 $_SERVER 污染

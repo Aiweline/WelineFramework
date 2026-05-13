@@ -166,6 +166,8 @@ class PageRenderService
         $this->assign('style', $finalSettings);
         $this->assign('is_preview', $mode !== self::MODE_LIVE);
         $this->assign('is_virtual_page', $isVirtualPage); // 标记为虚拟页面
+        $this->assign('lang', $currentLocale);
+        $this->assign('lang_local', $currentLocale);
         $this->assign('current_locale', $currentLocale);
         $this->assign('layout_config', $layoutConfig);
         $this->assign('render_mode', $mode);
@@ -1066,6 +1068,7 @@ class PageRenderService
             return '<!-- Error rendering virtual theme component ' . \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
                 . ': ' . \htmlspecialchars($throwable->getMessage(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . " -->\n";
         }
+        $componentHtml = $this->sanitizeVirtualThemeComponentHtml($componentHtml);
 
         $marker = "<!-- Component {$code} resolved via Weline_Theme virtual theme -->\n";
         if ($isVisualEditor) {
@@ -1075,6 +1078,164 @@ class PageRenderService
         }
 
         return $marker . $componentHtml . "\n<!-- Component {$code} rendered successfully -->\n";
+    }
+
+    private function sanitizeVirtualThemeComponentHtml(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        $html = \preg_replace_callback(
+            '/<strong>\s*(?:Game Card|Category|Badge)\s+\d+\s*<\/strong>\s*<p>(.*?)<\/p>/isu',
+            static function (array $matches): string {
+                $body = \trim((string)\strip_tags((string)($matches[1] ?? '')));
+                if ($body === '') {
+                    return '';
+                }
+                $title = $body;
+                $description = 'A focused highlight from this section.';
+                if (\str_contains($body, '–')) {
+                    [$title, $description] = \array_map('trim', \explode('–', $body, 2));
+                } elseif (\str_contains($body, '-')) {
+                    [$title, $description] = \array_map('trim', \explode('-', $body, 2));
+                }
+
+                return '<strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong>'
+                    . '<p>' . \htmlspecialchars($description !== '' ? $description : $body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p>';
+            },
+            $html
+        ) ?? $html;
+
+        $html = $this->sanitizeGeneratedBrandCopy($html);
+        $html = $this->sanitizeGeneratedLogoImages($html);
+        $html = $this->sanitizePersistedHeroImageLayout($html);
+
+        return $html;
+    }
+
+    private function sanitizeGeneratedBrandCopy(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        return \preg_replace('/\b([A-Z][A-Za-z0-9-]{2,40})\s+(?:websiteProfile|WebsiteProfile|Website Profile)\b/u', '$1', $html) ?? $html;
+    }
+
+    private function sanitizeGeneratedLogoImages(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        $html = \preg_replace('/<img\b[^>]*\bsrc=(["\'])[^"\']*\/ai-generated\/\1[^>]*>\s*/iu', '', $html) ?? $html;
+
+        return \preg_replace_callback(
+            '/<a\b([^>]*\bclass=(["\'])(?=[^"\']*\blogo\b)[^"\']*\2[^>]*)>(.*?)<\/a>/isu',
+            static function (array $matches): string {
+                $attrs = (string)($matches[1] ?? '');
+                $inner = (string)($matches[3] ?? '');
+                $inner = \preg_replace_callback(
+                    '/<img\b[^>]*\bsrc=(["\'])([^"\']+)\1[^>]*>\s*/iu',
+                    static function (array $imgMatches): string {
+                        $src = \strtolower((string)($imgMatches[2] ?? ''));
+                        if (\str_contains($src, '/ai-generated/') && !\str_contains($src, 'logo') && !\str_contains($src, 'identity')) {
+                            return '';
+                        }
+
+                        return (string)($imgMatches[0] ?? '');
+                    },
+                    $inner
+                ) ?? $inner;
+
+                return '<a ' . $attrs . '>' . $inner . '</a>';
+            },
+            $html
+        ) ?? $html;
+    }
+
+    private function sanitizePersistedHeroImageLayout(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        $html = \str_replace('class="ai-site-hero-image ai-site-visual-image"', 'class="ai-site-visual-image ai-site-hero-image"', $html);
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-image)\s*\{[^}]*\}/iu',
+            static fn(array $matches): string => (string)$matches[1] . ' { position:absolute !important; inset:0 !important; top:0 !important; right:0 !important; bottom:0 !important; left:0 !important; width:100% !important; height:100% !important; max-width:none !important; aspect-ratio:auto !important; transform:none !important; object-fit:cover !important; object-position:center !important; z-index:0 !important; border-radius:0 !important; border:0 !important; box-shadow:none !important; filter:saturate(1.08) contrast(1.05) brightness(.84) !important; }',
+            $html
+        ) ?? $html;
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero)\s*\{[^}]*\}/iu',
+            static function (array $matches): string {
+                $selector = (string)($matches[1] ?? '.ai-site-hero');
+                $rule = (string)($matches[0] ?? '');
+                $rule = \preg_replace('/min-height\s*:\s*[^;]+;?/iu', '', $rule) ?? $rule;
+                $body = \trim((string)\preg_replace('/^[^{]+\{/u', '', \substr($rule, 0, -1)));
+                return $selector . ' { ' . $body . ' width:100vw !important; margin-left:calc(50% - 50vw) !important; margin-right:calc(50% - 50vw) !important; min-height:clamp(620px,78vh,820px) !important; }';
+            },
+            $html
+        ) ?? $html;
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-track)\s*\{[^}]*\}/iu',
+            static fn(array $matches): string => (string)$matches[1] . ' { position:relative !important; z-index:2 !important; display:grid !important; grid-template-areas:"slide" !important; min-height:inherit !important; width:min(1200px,calc(100% - 48px)) !important; max-width:none !important; margin:0 auto !important; padding:clamp(72px,9vw,128px) 0 !important; }',
+            $html
+        ) ?? $html;
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-slide)\s*\{[^}]*\}/iu',
+            static function (array $matches): string {
+                $selector = (string)($matches[1] ?? '.ai-site-hero-slide');
+                $rule = (string)($matches[0] ?? '');
+                $rule = \preg_replace('/max-width\s*:\s*[^;]+;?/iu', '', $rule) ?? $rule;
+                $body = \trim((string)\preg_replace('/^[^{]+\{/u', '', \substr($rule, 0, -1)));
+                return $selector . ' { ' . $body . ' max-width:min(720px,58vw) !important; }';
+            },
+            $html
+        ) ?? $html;
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero--has-photo:after)\s*\{[^}]*\}/iu',
+            static fn(array $matches): string => (string)$matches[1] . ' { content:"" !important; position:absolute !important; inset:0 !important; background:linear-gradient(100deg,rgba(5,10,20,.88) 0%,rgba(5,10,20,.66) 42%,rgba(5,10,20,.20) 72%,rgba(5,10,20,.42) 100%) !important; z-index:1 !important; pointer-events:none !important; }',
+            $html
+        ) ?? $html;
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-slide\[aria-hidden="false"\])\s*\{[^}]*\}/iu',
+            static fn(array $matches): string => (string)$matches[1] . ' { opacity:1 !important; transform:translateX(0) !important; pointer-events:auto !important; padding:clamp(30px,4vw,52px) !important; border-radius:34px !important; background:linear-gradient(135deg,rgba(4,10,22,.78),rgba(4,10,22,.44)) !important; border:1px solid rgba(255,255,255,.22) !important; box-shadow:0 34px 110px rgba(0,0,0,.36) !important; backdrop-filter:blur(14px) !important; color:#fff !important; text-align:left !important; }',
+            $html
+        ) ?? $html;
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-title)\s*\{[^}]*\}/iu',
+            static fn(array $matches): string => (string)$matches[1] . ' { margin:0 0 18px !important; font-size:clamp(48px,6.2vw,88px) !important; line-height:.98 !important; letter-spacing:-.055em !important; font-weight:900 !important; color:#fff !important; text-shadow:0 4px 0 rgba(0,0,0,.18),0 20px 54px rgba(0,0,0,.70) !important; }',
+            $html
+        ) ?? $html;
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-body)\s*\{[^}]*\}/iu',
+            static fn(array $matches): string => (string)$matches[1] . ' { margin:0 0 30px !important; max-width:58ch !important; font-size:clamp(18px,1.45vw,22px) !important; line-height:1.62 !important; color:rgba(255,255,255,.94) !important; text-shadow:0 8px 26px rgba(0,0,0,.56) !important; }',
+            $html
+        ) ?? $html;
+        $html = \preg_replace_callback(
+            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-eyebrow)\s*\{[^}]*\}/iu',
+            static fn(array $matches): string => (string)$matches[1] . ' { display:inline-flex !important; padding:7px 15px !important; margin-bottom:20px !important; border-radius:999px !important; background:rgba(255,255,255,.18) !important; color:#fff !important; font-size:12px !important; font-weight:800 !important; letter-spacing:.16em !important; text-transform:uppercase !important; }',
+            $html
+        ) ?? $html;
+        $html = \str_replace(
+            '.ai-site-hero-slide[aria-hidden="false"] { opacity:1; transform:translateX(0); pointer-events:auto; }',
+            '.ai-site-hero-slide[aria-hidden="false"] { opacity:1; transform:translateX(0); pointer-events:auto; padding:34px 36px; border-radius:32px; background:linear-gradient(135deg,rgba(7,13,25,.68),rgba(7,13,25,.30)); border:1px solid rgba(255,255,255,.14); box-shadow:0 30px 90px rgba(0,0,0,.28); backdrop-filter:blur(12px); }',
+            $html
+        );
+        $html = \str_replace(
+            'font-size:clamp(36px,5vw,64px); line-height:1.05; letter-spacing:-.02em; font-weight:800; color:#fff; text-shadow:0 12px 34px rgba(0,0,0,.42);',
+            'font-size:clamp(40px,5.6vw,76px); line-height:1.02; letter-spacing:-.045em; font-weight:900; color:#fff; text-shadow:0 3px 0 rgba(0,0,0,.16),0 18px 42px rgba(0,0,0,.58);',
+            $html
+        );
+        $html = \str_replace(
+            'max-width:62ch; font-size:clamp(16px,1.4vw,20px); line-height:1.6; color:rgba(255,255,255,.96); text-shadow:0 8px 24px rgba(0,0,0,.36);',
+            'max-width:58ch; font-size:clamp(17px,1.45vw,21px); line-height:1.62; color:rgba(255,255,255,.98); text-shadow:0 8px 24px rgba(0,0,0,.42);',
+            $html
+        );
+
+        return $html;
     }
 
     /**
@@ -1290,7 +1451,7 @@ class PageRenderService
         }
         
         // preview 和 live 模式：纯净输出
-        return $previewBoot . $headerHtml . $contentHtml . $footerHtml;
+        return $this->renderStandardDocument($headerHtml, $contentHtml, $footerHtml, $previewBoot, $page);
     }
 
     private function renderAiHtmlDocument(
@@ -1302,7 +1463,6 @@ class PageRenderService
         ?int $virtualThemeId = null
     ): string
     {
-        $pageTitle = (string)($page->getData('title') ?: $page->getData('name') ?: 'Preview');
         $effectiveVirtualThemeId = (int)($virtualThemeId ?? 0);
         if ($effectiveVirtualThemeId <= 0) {
             $effectiveVirtualThemeId = (int)$page->getData('virtual_theme_id');
@@ -1314,21 +1474,249 @@ class PageRenderService
             ? '<!-- theme_id=' . $effectiveVirtualThemeId . ' -->'
             : '';
 
+        return $this->renderStandardDocument($themeMarker . $headerHtml, $aiHtml, $footerHtml, $previewBoot, $page);
+    }
+
+    private function renderStandardDocument(
+        string $headerHtml,
+        string $contentHtml,
+        string $footerHtml,
+        string $previewBoot,
+        Page $page
+    ): string {
+        $headerHtml = $this->cleanHtmlDocumentTags($headerHtml);
+        $contentHtml = $this->cleanHtmlDocumentTags($contentHtml);
+        $footerHtml = $this->cleanHtmlDocumentTags($footerHtml);
+
+        $headerCustomCode = (string)($page->getData(Page::schema_fields_HEADER_CUSTOM_CODE) ?? '');
+        $footerCustomCode = (string)($page->getData(Page::schema_fields_FOOTER_CUSTOM_CODE) ?? '');
+        $headHtml = $this->buildSeoHeadHtml($page);
+        $htmlLang = $this->resolveDocumentLanguage();
+
         return '<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="' . \htmlspecialchars($htmlLang, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>' . \htmlspecialchars($pageTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</title>
+    ' . $headHtml . '
+    ' . $headerCustomCode . '
 </head>
 <body>
-    ' . $themeMarker . '
     ' . $previewBoot . '
     ' . $headerHtml . '
-    ' . $aiHtml . '
+    ' . $contentHtml . '
     ' . $footerHtml . '
+    ' . $footerCustomCode . '
 </body>
 </html>';
+    }
+
+    private function buildSeoHeadHtml(Page $page): string
+    {
+        $template = $this->getTemplate();
+        $currentLocale = $this->resolveCurrentLocale();
+        $canonicalUrl = $this->resolveCanonicalUrl($page);
+
+        $seo = $template->getData('seo');
+        $seo = \is_array($seo) ? $seo : [];
+        if (($seo['canonical_url'] ?? '') === '' && $canonicalUrl !== '') {
+            $seo['canonical_url'] = $canonicalUrl;
+        }
+        if (($seo['title'] ?? '') === '') {
+            $seo['title'] = $this->readPageString($page, ['meta_title', 'title', 'name']);
+        }
+        if (($seo['description'] ?? '') === '') {
+            $seo['description'] = $this->readPageString($page, ['meta_description', 'ai_description', 'description', 'excerpt']);
+        }
+        if (($seo['image'] ?? '') === '') {
+            $seo['image'] = $this->readPageString($page, ['image', 'cover_image', 'featured_image']);
+        }
+
+        $template->assign('page', $page);
+        $template->assign('seo', $seo);
+        $template->assign('title', $seo['title'] ?? '');
+        $template->assign('lang', $currentLocale);
+        $template->assign('lang_local', $currentLocale);
+        $template->assign('current_locale', $currentLocale);
+        if ($canonicalUrl !== '') {
+            $template->assign('canonical_url', $canonicalUrl);
+        }
+
+        try {
+            $providerRegistry = ObjectManager::getInstance(\Weline\Seo\Service\Head\HeadProviderRegistry::class);
+            $resolver = new \Weline\Seo\Service\Head\PageSeoContextResolver($providerRegistry);
+            $renderer = new \Weline\Seo\Service\Head\HeadRenderer($resolver, $providerRegistry);
+            $html = $renderer->render($template, ['slot' => 'head']);
+            return \trim(\is_string($html) ? $html : '');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function resolveCurrentLocale(): string
+    {
+        $template = $this->getTemplate();
+        foreach ([
+            $template->getData('lang_local'),
+            $template->getData('current_locale'),
+            $template->getData('lang'),
+            \w_env('user.lang', ''),
+            $_SERVER['WELINE_USER_LANG'] ?? '',
+            'zh_Hans_CN',
+        ] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return 'zh_Hans_CN';
+    }
+
+    private function resolveDocumentLanguage(): string
+    {
+        return \str_replace('_', '-', $this->resolveCurrentLocale());
+    }
+
+    private function resolveCanonicalUrl(Page $page): string
+    {
+        $url = '';
+        try {
+            if ($this->request) {
+                $url = (string)$this->request->getUrlBuilder()->getCurrentUrl([], true);
+            }
+        } catch (\Throwable) {
+        }
+
+        if ($url === '') {
+            $fullUrl = \trim((string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? ''));
+            if ($fullUrl !== '' && \preg_match('/^https?:\/\//i', $fullUrl)) {
+                $url = $fullUrl;
+            }
+        }
+
+        if ($url === '') {
+            $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? '');
+            if ($scheme === '') {
+                $https = \strtolower((string)($_SERVER['HTTPS'] ?? ''));
+                $scheme = ($https !== '' && $https !== 'off') ? 'https' : 'http';
+            }
+            $host = (string)($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
+            if ($host === '') {
+                return '';
+            }
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '/');
+            if ($uri === '') {
+                $uri = '/';
+            }
+            $url = $scheme . '://' . $host . $uri;
+        }
+
+        return $this->normalizeLocaleCanonicalUrl(
+            $url,
+            $this->resolveCurrentLocale(),
+            'zh_Hans_CN',
+            $page
+        );
+    }
+
+    private function normalizeLocaleCanonicalUrl(string $url, string $currentLocale, string $defaultLocale, Page $page): string
+    {
+        if ($url === '' || !\preg_match('/^https?:\/\//i', $url)) {
+            return $url;
+        }
+
+        $parts = \parse_url($url);
+        if (!\is_array($parts) || empty($parts['host'])) {
+            return $url;
+        }
+
+        $query = [];
+        if (!empty($parts['query'])) {
+            \parse_str((string)$parts['query'], $query);
+        }
+
+        $path = (string)($parts['path'] ?? '/');
+        if ($this->isInternalPageBuilderPath($path)) {
+            $path = $this->publicPagePath($page, $query);
+        }
+        $segments = \array_values(\array_filter(\explode('/', \trim($path, '/')), static fn(string $segment): bool => $segment !== ''));
+        while ($segments !== [] && $this->isLocalePathSegment((string)$segments[0])) {
+            \array_shift($segments);
+        }
+
+        $currentLocale = $this->normalizeLocaleCode($currentLocale);
+        $defaultLocale = $this->normalizeLocaleCode($defaultLocale) ?: 'zh_Hans_CN';
+        if ($currentLocale !== '' && $currentLocale !== $defaultLocale && $currentLocale !== 'zh_Hans_CN') {
+            \array_unshift($segments, $currentLocale);
+        }
+
+        if ($query !== []) {
+            unset(
+                $query['lang'],
+                $query['locale'],
+                $query['page_id'],
+                $query['handle'],
+                $query['website_id'],
+                $query['preview'],
+                $query['style_code']
+            );
+        }
+
+        $scheme = (string)($parts['scheme'] ?? 'https');
+        $port = isset($parts['port']) ? ':' . (string)$parts['port'] : '';
+        $normalizedPath = $segments === [] ? '/' : '/' . \implode('/', $segments);
+        $queryString = $query === [] ? '' : '?' . \http_build_query($query);
+
+        return $scheme . '://' . (string)$parts['host'] . $port . $normalizedPath . $queryString;
+    }
+
+    private function isInternalPageBuilderPath(string $path): bool
+    {
+        return \strtolower('/' . \trim($path, '/')) === '/pagebuilder/frontend/page/view';
+    }
+
+    /**
+     * @param array<string,mixed> $query
+     */
+    private function publicPagePath(Page $page, array $query): string
+    {
+        if ((string)$page->getData(Page::schema_fields_TYPE) === Page::TYPE_HOME) {
+            return '/';
+        }
+
+        $handle = \trim((string)($page->getData(Page::schema_fields_HANDLE) ?: ($query['handle'] ?? '')));
+        if ($handle === '') {
+            return '/';
+        }
+
+        return '/' . \ltrim($handle, '/');
+    }
+
+    private function isLocalePathSegment(string $segment): bool
+    {
+        $segment = $this->normalizeLocaleCode($segment);
+        return $segment !== '' && (bool)\preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(?:_[A-Z]{2})?$/', $segment);
+    }
+
+    private function normalizeLocaleCode(string $locale): string
+    {
+        return \str_replace('-', '_', \trim($locale));
+    }
+
+    /**
+     * @param string[] $keys
+     */
+    private function readPageString(Page $page, array $keys): string
+    {
+        foreach ($keys as $key) {
+            $value = \trim((string)$page->getData($key));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     private function resolveActiveAiVirtualThemeId(int $websiteId): int

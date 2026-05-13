@@ -3506,6 +3506,11 @@ function handleRequest(
         }
         
         // 临时禁用 gzip 压缩以排除压缩问题
+        $responseLocation = (string)($response->getHeader('Location') ?? '');
+        if ($responseLocation !== '') {
+            $response->setHeader('Location', appendBackendLoginReturnUrl($responseLocation, $request, $method, $rawRequest));
+        }
+
         $responseBody = (string)$response->getBody();
         $responseContentType = \strtolower((string)($response->getHeader('Content-Type') ?? ''));
         $responseLocation = (string)($response->getHeader('Location') ?? '');
@@ -3604,6 +3609,93 @@ function handleRequest(
  * @param string $rawRequest 原始请求（用于获取 If-Modified-Since 等头部）
  * @return string|null 如果是静态文件则返回 HTTP 响应字符串，否则返回 null
  */
+function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http\Request $request, string $method, string $rawRequest): string
+{
+    $method = \strtoupper($method);
+    if ($method !== 'GET' && $method !== 'HEAD') {
+        return $redirectUrl;
+    }
+
+    $redirectPath = (string)(\parse_url($redirectUrl, PHP_URL_PATH) ?: '');
+    $normalizedRedirectPath = \strtolower($redirectPath);
+    if ($normalizedRedirectPath === ''
+        || !\str_ends_with($normalizedRedirectPath, '/admin/login')
+    ) {
+        return $redirectUrl;
+    }
+
+    $uri = extractUriFromRawRequest($rawRequest);
+    if ($uri === '') {
+        $uri = (string)($request->getServer('WELINE_ORIGIN_REQUEST_URI') ?: $request->getServer('REQUEST_URI'));
+    }
+    $queryString = (string)$request->getServer('QUERY_STRING');
+    if ($queryString !== '' && !\str_contains($uri, '?')) {
+        $uri .= '?' . $queryString;
+    }
+    if ($uri === '') {
+        return $redirectUrl;
+    }
+
+    $currentPath = \strtolower((string)(\parse_url($uri, PHP_URL_PATH) ?: ''));
+    if ($currentPath === ''
+        || \str_ends_with($currentPath, '/admin/login')
+        || \str_ends_with($currentPath, '/admin/login/post')
+        || \str_ends_with($currentPath, '/admin/login/logout')
+    ) {
+        return $redirectUrl;
+    }
+
+    $backendPrefix = \substr($redirectPath, 0, -\strlen('/admin/login'));
+    $uriPath = (string)(\parse_url($uri, PHP_URL_PATH) ?: '');
+    if ($backendPrefix !== '' && $uriPath !== '' && !\str_starts_with($uriPath, $backendPrefix . '/')) {
+        $uri = $backendPrefix . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
+    }
+
+    $scheme = $request->isSecure() ? 'https' : 'http';
+    $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost');
+    $returnUrl = $scheme . '://' . $host . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
+    $query = [
+        'no_access_reason' => 'not_logged_in',
+        'return_url' => $returnUrl,
+    ];
+
+    $redirectUrl = removeBackendLoginReturnParams($redirectUrl);
+    return $redirectUrl . (\str_contains($redirectUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+}
+
+function removeBackendLoginReturnParams(string $url): string
+{
+    $parts = \parse_url($url);
+    if (!\is_array($parts) || empty($parts['query'])) {
+        return $url;
+    }
+
+    \parse_str((string)$parts['query'], $params);
+    unset($params['no_access_reason'], $params['return_url']);
+    $query = \http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+    $base = ($parts['scheme'] ?? 'http') . '://' . ($parts['host'] ?? 'localhost');
+    if (isset($parts['port'])) {
+        $base .= ':' . $parts['port'];
+    }
+    $base .= $parts['path'] ?? '';
+    return $query === '' ? $base : $base . '?' . $query;
+}
+
+function extractUriFromRawRequest(string $rawRequest): string
+{
+    $requestLine = \strtok($rawRequest, "\r\n");
+    if (!\is_string($requestLine) || $requestLine === '') {
+        return '';
+    }
+
+    $parts = \explode(' ', $requestLine, 3);
+    if (\count($parts) < 2) {
+        return '';
+    }
+
+    return (string)$parts[1];
+}
+
 function handleStaticFile(string $uri, string $rawRequest): ?string
 {
     \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache(null);
