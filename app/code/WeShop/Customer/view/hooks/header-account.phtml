@@ -30,7 +30,7 @@ if ($isLoggedIn) {
 
 <?php if ($isLoggedIn && $customer): ?>
     <!-- 已登录状态：显示用户信息 -->
-    <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" 
+    <a href="<?= $this->getUrl('customer/account/index') ?>"
        class="action-link header-account-link" 
        title="<?= __('我的账户') ?>" 
        aria-label="<?= __('我的账户') ?>"
@@ -48,11 +48,14 @@ if ($isLoggedIn) {
     <!-- 账户下拉菜单 -->
     <div class="account-dropdown" id="account-dropdown">
         <div class="dropdown-content">
-            <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="dropdown-item">
+            <ul class="dropdown-account-links" role="menu">
+                <w:hook>header-account-links</w:hook>
+            </ul>
+            <a href="<?= $this->getUrl('customer/account/index') ?>#overview" class="dropdown-item dropdown-item--legacy">
                 <span class="material-symbols-outlined">account_circle</span>
                 <?= __('我的账户') ?>
             </a>
-            <a href="<?= $this->getUrl('weshop/order/list') ?>" class="dropdown-item">
+            <a href="<?= $this->getUrl('customer/account/index') ?>#orders" class="dropdown-item dropdown-item--legacy">
                 <span class="material-symbols-outlined">receipt_long</span>
                 <?= __('我的订单') ?>
                 <!-- 未支付订单提示 -->
@@ -60,12 +63,12 @@ if ($isLoggedIn) {
                     <span class="indicator-count" id="indicator-count">0</span>
                 </span>
             </a>
-            <a href="<?= $this->getUrl('weshop/wishlist') ?>" class="dropdown-item">
+            <a href="<?= $this->getUrl('weshop/wishlist') ?>" class="dropdown-item dropdown-item--legacy">
                 <span class="material-symbols-outlined">favorite</span>
                 <?= __('我的收藏') ?>
             </a>
-            <div class="dropdown-divider"></div>
-            <a href="<?= $this->getUrl('weshop/customer/account/logout') ?>" class="dropdown-item">
+            <div class="dropdown-divider dropdown-item--legacy"></div>
+            <a href="<?= $this->getUrl('customer/account/logout') ?>" class="dropdown-item dropdown-item--legacy">
                 <span class="material-symbols-outlined">logout</span>
                 <?= __('退出登录') ?>
             </a>
@@ -249,6 +252,37 @@ if ($isLoggedIn) {
             border-radius: var(--weshop-border-radius-lg);
             box-shadow: var(--weshop-shadow-xl);
             z-index: 1000;
+        }
+
+        .dropdown-account-links {
+            list-style: none;
+            margin: 0;
+            padding: 0.5rem 0;
+        }
+
+        .dropdown-account-links li.divider {
+            height: 1px;
+            background-color: var(--weshop-border);
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-account-links a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: var(--weshop-text-primary);
+            text-decoration: none;
+            font-size: var(--weshop-font-size-sm);
+            transition: background-color 0.2s;
+        }
+
+        .dropdown-account-links a:hover {
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+        }
+
+        .dropdown-item--legacy {
+            display: none !important;
         }
         
         .dropdown-item {

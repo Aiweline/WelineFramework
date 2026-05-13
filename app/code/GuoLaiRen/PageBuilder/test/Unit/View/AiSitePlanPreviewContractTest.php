@@ -17,13 +17,14 @@ final class AiSitePlanPreviewContractTest extends TestCase
         self::assertStringContainsString('pb-ai-plan-preview-details', $script);
         self::assertStringContainsString('var pageDetails = renderPlanAuxiliaryDisclosure', $script);
         self::assertStringContainsString('var blockDetails = renderPlanAuxiliaryDisclosure', $script);
-        self::assertStringContainsString('renderFieldPlanTable(block.field_plan, { hideReason: true })', $script);
         self::assertStringContainsString('renderFieldPlanTable(block.field_plan);', $script);
         self::assertStringContainsString("+ (content ? '<div class=\"small mt-2\">' + content + '</div>' : '')", $script);
 
         self::assertStringNotContainsString("+ (blockGoal ? '<div class=\"small text-muted mt-2\">' + blockGoal + '</div>' : '')", $script);
         self::assertStringNotContainsString("+ (goal ? '<div class=\"small mt-2\">' + goal + '</div>' : '')", $script);
-        self::assertStringNotContainsString('renderKeywordBadges(keywords)', $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
+        self::assertStringContainsString('renderKeywordBadges(keywords)', $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
+        self::assertStringContainsString("previewLabels.designDetails || 'Details'", $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
+        self::assertStringContainsString('previewLabels.implementationNote', $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
 
         self::assertStringContainsString('function normalizeStageOneStructuredRootForPreview', $script);
         self::assertStringContainsString('conf.plan_book.structured', $script);

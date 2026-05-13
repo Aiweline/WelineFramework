@@ -884,10 +884,10 @@
         var message = String(parsed.message || fallbackMessage || '').toLowerCase();
         return code === '409'
             && (
-                message.indexOf('正在生成阶段一方案') >= 0
+                message.indexOf('正在生成建站方案') >= 0
                 || message.indexOf('正在执行的建站方案') >= 0
                 || message.indexOf('建站方案生成') >= 0
-                || message.indexOf('阶段一方案任务已在执行') >= 0
+                || message.indexOf('建站方案任务已在执行') >= 0
                 || message.indexOf('stage-1') >= 0
                 || message.indexOf('stage 1') >= 0
                 || message.indexOf('already running') >= 0

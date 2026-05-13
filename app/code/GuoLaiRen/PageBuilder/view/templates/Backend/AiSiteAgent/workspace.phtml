@@ -133,7 +133,7 @@ if ($sessionResolvedTargetDomain === '' && \is_array($scope['recommended_domain_
     }
 }
 
-/** 阶段一建站方案是否已在会话中存在（用于方案1确认后直接进入构建的门闩） */
+/** 建站方案是否已在会话中存在（用于方案确认后直接进入构建的门闩） */
 $statePlanBlock = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
 $scopePlanMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
 $statePlanMarkdown = \trim((string)($statePlanBlock['markdown'] ?? ''));
@@ -271,19 +271,19 @@ $extraPageTypesOpenByDefault = (int)($scope['extra_page_types_panel_open'] ?? 0)
 $guidedSteps = [
     [
         'key' => 'plan',
-        'label' => __('1 说说你的网站'),
+        'label' => __('填写建站需求'),
         'icon' => 'mdi-pencil-outline',
         'done_when' => $draftWebsiteId > 0,
     ],
     [
         'key' => 'visual_edit',
-        'label' => __('2 确认方案并生成网站'),
+        'label' => __('确认方案并生成'),
         'icon' => 'mdi-eye-outline',
         'done_when' => $visualPreviewUrl !== '',
     ],
     [
         'key' => 'publish',
-        'label' => __('3 确认发布'),
+        'label' => __('发布确认'),
         'icon' => 'mdi-rocket-launch-outline',
         'done_when' => $currentStage === 'publish',
     ],

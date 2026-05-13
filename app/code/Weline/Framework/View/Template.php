@@ -316,8 +316,72 @@ class Template extends DataObject
      */
     public function assign(string|array $key, mixed $value = null): static
     {
+        if (is_array($key)) {
+            if (isset($key['meta']) && is_array($key['meta'])) {
+                $key['meta'] = $this->withAssignedTitleInMeta($key['meta'], $key['title'] ?? null);
+            }
+            $this->setData($key, $value);
+            if (array_key_exists('title', $key)) {
+                $this->syncAssignedTitleToMeta($key['title']);
+            }
+            return $this;
+        }
+
+        if ($key === 'meta' && is_array($value)) {
+            $value = $this->withAssignedTitleInMeta($value);
+        }
+
         $this->setData($key, $value);
+        if ($key === 'title') {
+            $this->syncAssignedTitleToMeta($value);
+        }
         return $this;
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    private function withAssignedTitleInMeta(array $meta, mixed $title = null): array
+    {
+        $title = trim((string)($title ?? $this->getData('title')));
+        if ($title !== '') {
+            $meta['controller_title'] = $meta['controller_title'] ?? $title;
+            if (!$this->hasHeadTitle($meta)) {
+                $meta['title'] = $title;
+            }
+        }
+
+        return $meta;
+    }
+
+    private function syncAssignedTitleToMeta(mixed $title): void
+    {
+        $title = trim((string)$title);
+        if ($title === '') {
+            return;
+        }
+
+        $meta = $this->getData('meta');
+        $meta = is_array($meta) ? $meta : [];
+        $meta['controller_title'] = $meta['controller_title'] ?? $title;
+        if (!$this->hasHeadTitle($meta)) {
+            $meta['title'] = $title;
+        }
+        $this->setData('meta', $meta);
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function hasHeadTitle(array $meta): bool
+    {
+        foreach (['title', 'meta_title'] as $key) {
+            if (array_key_exists($key, $meta) && trim((string)$meta[$key]) !== '') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

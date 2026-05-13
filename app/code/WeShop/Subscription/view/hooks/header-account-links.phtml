@@ -1,0 +1,16 @@
+<?php
+/**
+ * @hook-priority 150
+ * @hook-sort-order 20
+ * @hook-solo false
+ */
+
+use Weline\Framework\Session\SessionFactory;
+
+$session = SessionFactory::getInstance()->createFrontendSession();
+$isLoggedIn = $session->isLoggedIn();
+?>
+
+<?php if ($isLoggedIn): ?>
+    <li role="none"><a href="@url{'customer/account/index'}#subscriptions" role="menuitem"><?= __('订阅') ?></a></li>
+<?php endif; ?>

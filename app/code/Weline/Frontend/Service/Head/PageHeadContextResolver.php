@@ -1,0 +1,381 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Frontend\Service\Head;
+
+class PageHeadContextResolver
+{
+    public function __construct(
+        private readonly ?HeadProviderRegistry $providerRegistry = null
+    ) {
+    }
+
+    /**
+     * @param mixed $template
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    public function resolve($template, array $options = []): array
+    {
+        $meta = $this->toArray($this->readTemplate($template, 'meta'));
+        $seo = $this->toArray($this->readTemplate($template, 'seo'));
+        $product = $this->readTemplate($template, 'product');
+        $category = $this->readTemplate($template, 'category');
+        $page = $this->readTemplate($template, 'page') ?: $this->readTemplate($template, 'current_post');
+
+        $siteName = $this->firstNonEmpty([
+            $options['site_name'] ?? null,
+            $this->readTemplate($template, 'site_name'),
+            $this->read($seo, ['site_name', 'siteName']),
+            $this->read($meta, ['site_name', 'siteName']),
+            'Weline Framework',
+        ]);
+
+        $metaTitle = $this->firstNonEmpty([
+            $options['meta_title'] ?? null,
+            $this->read($seo, ['meta_title']),
+            $this->readTemplate($template, 'meta_title'),
+            $this->read($meta, ['meta_title']),
+        ]);
+
+        $layoutName = $this->layoutName($meta);
+        $controllerTitle = $this->firstNonEmpty([
+            $this->read($meta, ['controller_title']),
+            $this->meaningfulTemplateTitle($template),
+        ]);
+        $layoutAwareTitle = $this->combineTitleAndLayoutName((string)$controllerTitle, (string)$layoutName);
+        $pageTitle = $this->firstNonEmpty([
+            $options['title'] ?? null,
+            $this->read($seo, ['title']),
+            $this->read($product, ['meta_name', 'name', 'title']),
+            $this->read($category, ['name', 'title']),
+            $this->read($page, ['title', 'name']),
+            $layoutAwareTitle,
+            $this->read($meta, ['title']),
+            $this->routeTitle($template),
+        ]);
+
+        $pageType = $this->detectPageType($product, $category, $page, $meta, $seo);
+
+        $context = [
+            'site_name' => (string)$siteName,
+            'meta_title' => (string)$metaTitle,
+            'title' => (string)$pageTitle,
+            'page_title' => (string)$pageTitle,
+            'page_type' => $pageType,
+            'is_homepage' => $this->isHomepage($template, $pageType),
+            'current_page' => $this->currentPage($template, $options, $meta, $seo),
+            'breadcrumbs' => $this->firstNonEmpty([
+                $this->readTemplate($template, 'breadcrumbs'),
+                $this->read($seo, ['breadcrumbs']),
+                $this->read($meta, ['breadcrumbs']),
+            ]),
+            'product' => $product,
+            'category' => $category,
+            'page' => $page,
+        ];
+
+        return $this->applyContextProviders($template, $context);
+    }
+
+    private function readTemplate($template, string $key): mixed
+    {
+        if (is_object($template) && method_exists($template, 'getData')) {
+            return $template->getData($key);
+        }
+        return null;
+    }
+
+    /**
+     * @param mixed $source
+     * @param string[] $keys
+     */
+    private function read(mixed $source, array $keys): mixed
+    {
+        foreach ($keys as $key) {
+            if (is_array($source) && array_key_exists($key, $source)) {
+                return $source[$key];
+            }
+            if (is_object($source)) {
+                if (method_exists($source, 'getData')) {
+                    $value = $source->getData($key);
+                    if ($value !== null && $value !== '') {
+                        return $value;
+                    }
+                }
+                $method = 'get' . str_replace(' ', '', ucwords(str_replace('_', ' ', $key)));
+                if (method_exists($source, $method)) {
+                    return $source->{$method}();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @param mixed[] $values
+     */
+    private function firstNonEmpty(array $values): mixed
+    {
+        foreach ($values as $value) {
+            if (is_array($value) && $value !== []) {
+                return $value;
+            }
+            if (is_object($value) && !method_exists($value, '__toString')) {
+                continue;
+            }
+            if (!is_array($value) && $value !== null && trim((string)$value) !== '') {
+                return $value;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function toArray(mixed $value): array
+    {
+        return is_array($value) ? $value : [];
+    }
+
+    private function meaningfulTemplateTitle($template): string
+    {
+        $title = trim((string)$this->readTemplate($template, 'title'));
+        if ($title === '') {
+            return '';
+        }
+
+        $moduleTitle = $this->requestModuleName();
+        if (($moduleTitle !== '' && $title === $moduleTitle) || $this->isModuleCodeTitle($title)) {
+            return '';
+        }
+
+        return $title;
+    }
+
+    private function isModuleCodeTitle(string $title): bool
+    {
+        return (bool)preg_match('/^[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9_]*$/', $title);
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function layoutName(array $meta): string
+    {
+        return (string)$this->firstNonEmpty([
+            $this->normalizeMetaText($meta['layout_name'] ?? null),
+            $this->normalizeMetaText($meta['name'] ?? null),
+        ]);
+    }
+
+    private function normalizeMetaText(mixed $value): string
+    {
+        if (is_array($value)) {
+            foreach (['default', 'name', 'value', 'label'] as $key) {
+                if (isset($value[$key]) && trim((string)$value[$key]) !== '') {
+                    return trim((string)$value[$key]);
+                }
+            }
+            return '';
+        }
+
+        return trim((string)$value);
+    }
+
+    private function combineTitleAndLayoutName(string $title, string $layoutName): string
+    {
+        $title = trim($title);
+        $layoutName = trim($layoutName);
+        if ($title === '') {
+            return $layoutName;
+        }
+        if ($layoutName === '' || mb_strtolower($title) === mb_strtolower($layoutName)) {
+            return $title;
+        }
+        if (mb_strpos(mb_strtolower($title), mb_strtolower($layoutName)) !== false) {
+            return $title;
+        }
+        return $title . ' | ' . $layoutName;
+    }
+
+    private function requestModuleName(): string
+    {
+        $request = $this->currentRequest();
+        if (is_object($request) && method_exists($request, 'getModuleName')) {
+            return trim((string)$request->getModuleName());
+        }
+        return '';
+    }
+
+    private function routeTitle($template): string
+    {
+        $path = $this->requestPath($template);
+        if ($path === '') {
+            return '';
+        }
+
+        $path = (string)(parse_url($path, PHP_URL_PATH) ?: $path);
+        $segments = array_values(array_filter(explode('/', trim($path, '/')), static function (string $segment): bool {
+            return $segment !== '' && !is_numeric($segment);
+        }));
+        if ($segments === []) {
+            return '';
+        }
+
+        return $this->humanizeRouteSegment((string)end($segments));
+    }
+
+    private function requestPath($template): string
+    {
+        $fullUri = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        if ($fullUri !== '' && preg_match('/^https?:\/\//i', $fullUri)) {
+            return (string)(parse_url($fullUri, PHP_URL_PATH) ?: '');
+        }
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        if ($uri !== '') {
+            return (string)(parse_url($uri, PHP_URL_PATH) ?: $uri);
+        }
+
+        $request = $this->currentRequest();
+        if (is_object($request) && method_exists($request, 'getUrlPath')) {
+            try {
+                return trim((string)$request->getUrlPath());
+            } catch (\Throwable) {
+            }
+        }
+
+        $currentPage = $this->readTemplate($template, 'current_page');
+        return is_string($currentPage) ? trim($currentPage) : '';
+    }
+
+    private function currentRequest(): mixed
+    {
+        try {
+            if (class_exists(\Weline\Framework\Manager\ObjectManager::class)
+                && class_exists(\Weline\Framework\Http\Request::class)) {
+                return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    private function humanizeRouteSegment(string $segment): string
+    {
+        $segment = strtolower(trim($segment));
+        if ($segment === '') {
+            return '';
+        }
+
+        $labels = [
+            'login' => 'Sign In',
+            'signin' => 'Sign In',
+            'sign-in' => 'Sign In',
+            'register' => 'Register',
+            'forgot-password' => 'Forgot Password',
+            'reset-password' => 'Reset Password',
+        ];
+        if (isset($labels[$segment])) {
+            return $labels[$segment];
+        }
+
+        return ucwords(preg_replace('/[-_]+/', ' ', $segment) ?: $segment);
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     * @param array<string, mixed> $seo
+     */
+    private function detectPageType(mixed $product, mixed $category, mixed $page, array $meta, array $seo): string
+    {
+        $explicit = (string)$this->firstNonEmpty([
+            $this->read($seo, ['page_type', 'type']),
+            $this->read($meta, ['page_type', 'type']),
+        ]);
+        if ($explicit !== '') {
+            return $explicit;
+        }
+        if ($product) {
+            return 'product';
+        }
+        if ($category) {
+            return 'category';
+        }
+        if ($page) {
+            return 'page';
+        }
+        return 'default';
+    }
+
+    private function isHomepage($template, string $pageType): bool
+    {
+        if (in_array($pageType, ['home', 'homepage'], true)) {
+            return true;
+        }
+
+        try {
+            if (is_object($template) && isset($template->request)) {
+                $path = (string)$template->request->getServer('REQUEST_URI');
+                return $path === '' || $path === '/' || $path === '/index.php';
+            }
+        } catch (\Throwable) {
+        }
+
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        if ($uri === '') {
+            return false;
+        }
+        $path = parse_url($uri, PHP_URL_PATH);
+        return $path === '/' || $path === '/index.php';
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     * @param array<string, mixed> $meta
+     * @param array<string, mixed> $seo
+     */
+    private function currentPage($template, array $options, array $meta, array $seo): int
+    {
+        $value = $this->firstNonEmpty([
+            $options['current_page'] ?? null,
+            $this->readTemplate($template, 'current_page'),
+            $this->read($seo, ['current_page', 'page']),
+            $this->read($meta, ['current_page', 'page']),
+            $_GET['p'] ?? null,
+            $_GET['page'] ?? null,
+        ]);
+
+        if (is_numeric($value)) {
+            return max(1, (int)$value);
+        }
+
+        return 1;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function applyContextProviders($template, array $context): array
+    {
+        if (!$this->providerRegistry) {
+            return $context;
+        }
+
+        foreach ($this->providerRegistry->getContextProviders() as $provider) {
+            try {
+                $provided = $provider->provide($template, $context);
+                if ($provided !== []) {
+                    $context = array_replace_recursive($context, $provided);
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return $context;
+    }
+}

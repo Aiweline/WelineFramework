@@ -34,4 +34,15 @@ class HeaderAccountHookTemplateTest extends TestCase
         $this->assertStringNotContainsString('$frontendUrl ?>weshop', $template);
         $this->assertStringNotContainsString('pagebuilder/frontend/page/viewweshop', $template);
     }
+
+    public function testHeaderAccountDropdownUsesSharedAccountLinksHook(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../../../view/hooks/header-account.phtml');
+        $this->assertIsString($template);
+
+        $this->assertStringContainsString('<w:hook>header-account-links</w:hook>', $template);
+        $this->assertStringContainsString("getUrl('customer/account/index')", $template);
+        $this->assertStringNotContainsString("getUrl('weshop/customer/account/index')", $template);
+        $this->assertStringNotContainsString("getUrl('weshop/customer/account/logout')", $template);
+    }
 }

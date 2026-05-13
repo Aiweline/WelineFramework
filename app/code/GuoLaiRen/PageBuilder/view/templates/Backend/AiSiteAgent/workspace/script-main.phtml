@@ -384,7 +384,7 @@
         panel.classList.remove('d-none');
         panel.innerHTML = '<div class="border rounded bg-light p-3 pb-ai-build-plan-v2-projection-card">'
             + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
-            + '<div class="fw-semibold">' + <?= \json_encode((string)__('方案1执行蓝图'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + '</div>'
+            + '<div class="fw-semibold">' + <?= \json_encode((string)__('执行蓝图'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + '</div>'
             + '<span class="badge text-bg-success">' + (artifacts.confirmed
                 ? <?= \json_encode((string)__('已确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
                 : <?= \json_encode((string)__('待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>) + '</span>'
@@ -830,14 +830,14 @@
         planRegeneratingByPageTypesAndLocale: <?= \json_encode((string)__('正在根据当前页面类型和方案语言重新生成建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planGenerated: <?= \json_encode((string)__('建站方案已生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planConfirmRequired: <?= \json_encode((string)__('请先确认建站方案，再进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        buildPlanV2ConfirmRequired: <?= \json_encode((string)__('请先确认方案1，系统会直接基于执行蓝图进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildPlanV2ConfirmRequired: <?= \json_encode((string)__('请先确认建站方案，系统会直接基于执行蓝图进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planConfirmSaved: <?= \json_encode((string)__('建站方案已确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planConfirmStartBuildQuestion: <?= \json_encode((string)__('方案1已确认，是否立即进入后台构建？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmStartBuildQuestion: <?= \json_encode((string)__('建站方案已确认，是否立即进入后台构建？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planDeferred: <?= \json_encode((string)__('已保留当前方案草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planDraftSaved: <?= \json_encode((string)__('方案草稿已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planDraftSaveFailed: <?= \json_encode((string)__('方案草稿保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        stageOneFieldEditPending: <?= \json_encode((string)__('已修改阶段一综述/主题信息，系统会自动保存草稿。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        stageOneFieldAutosaved: <?= \json_encode((string)__('阶段一综述/主题微调已自动保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneFieldEditPending: <?= \json_encode((string)__('已修改方案综述/主题信息，系统会自动保存草稿。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneFieldAutosaved: <?= \json_encode((string)__('方案综述/主题微调已自动保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSortSaved: <?= \json_encode((string)__('方案块顺序已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSortSaveFailed: <?= \json_encode((string)__('方案块顺序保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSortUnavailable: <?= \json_encode((string)__('方案排序接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -953,26 +953,26 @@
         publishRunning: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishPreviewUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryPendingBadge: <?= \json_encode((string)__('等待构建完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryPendingTitle: <?= \json_encode((string)__('第三阶段确认发布入口会在虚拟主题就绪后开放'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryPendingHint: <?= \json_encode((string)__('当前仍可继续预览和编辑；当虚拟主题构建完成后，这里会直接提供进入第三阶段的按钮。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPendingTitle: <?= \json_encode((string)__('发布确认入口会在虚拟主题就绪后开放'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPendingHint: <?= \json_encode((string)__('当前仍可继续预览和编辑；当虚拟主题构建完成后，这里会直接提供发布确认按钮。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryBuildingBadge: <?= \json_encode((string)__('正在构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryBuildingTitle: <?= \json_encode((string)__('虚拟主题构建进行中，完成后即可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryBuildingTitle: <?= \json_encode((string)__('虚拟主题构建进行中，完成后即可发布确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryBuildingHint: <?= \json_encode((string)__('后台仍在处理页面和区块，当前入口先锁定；构建结束后会自动变为可点击。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryFailedBadge: <?= \json_encode((string)__('最新 AI 生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryFailedTitle: <?= \json_encode((string)__('最新 AI 生成未成功，禁止进入发布以避免发布旧内容'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryFailedHint: <?= \json_encode((string)__('请先等待真实 AI 队列成功完成后再进入第三阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryFailedHint: <?= \json_encode((string)__('请先等待真实 AI 队列成功完成后再发布确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishBlockedLatestBuildFailure: <?= \json_encode((string)__('最新 AI 生成失败或仍在运行，禁止发布旧站点；请先重新生成并等待成功完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryReadyBadge: <?= \json_encode((string)__('可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryReadyBadge: <?= \json_encode((string)__('可发布确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyTitle: <?= \json_encode((string)__('虚拟主题已就绪，下一步进入确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryReadyHint: <?= \json_encode((string)__('进入第三阶段后可先运行发布前预检，再确认准备发布。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryReadyHint: <?= \json_encode((string)__('发布确认前可先运行发布前预检，再确认准备发布。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryPublishedBadge: <?= \json_encode((string)__('已发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryPublishedTitle: <?= \json_encode((string)__('站点已经发布，仍可进入第三阶段查看发布状态'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryPublishedHint: <?= \json_encode((string)__('如果需要复查发布前清单、预览或发布结果，可以从这里进入第三阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryButton: <?= \json_encode((string)__('进入第三阶段确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPublishedTitle: <?= \json_encode((string)__('站点已经发布，仍可查看发布状态'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPublishedHint: <?= \json_encode((string)__('如果需要复查发布前清单、预览或发布结果，可以从这里进入发布状态。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryButton: <?= \json_encode((string)__('发布确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFullscreenTitle: <?= \json_encode((string)__('主题预览放大查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFullscreenOpen: <?= \json_encode((string)__('放大预览'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planPreviewFullscreenTitle: <?= \json_encode((string)__('阶段一建站方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPreviewFullscreenTitle: <?= \json_encode((string)__('建站方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
     };
     function getLatestWorkspaceStateForQueuePrompt() {
@@ -1452,7 +1452,12 @@
         visualPreviewEmpty: <?= \json_encode((string)__('暂无可预览页面，请先完成页面生成或选择预览页。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         field: <?= \json_encode((string)__('字段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         sample: <?= \json_encode((string)__('示例'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        reason: <?= \json_encode((string)__('原因'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reason: <?= \json_encode((string)__('设计细节'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        implementationNote: <?= \json_encode((string)__('实现说明'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        contentStructure: <?= \json_encode((string)__('内容结构'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        designDetails: <?= \json_encode((string)__('设计细节'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        links: <?= \json_encode((string)__('链接'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        cta: <?= \json_encode((string)__('行动入口'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         featurePoints: <?= \json_encode((string)__('执行要点'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         mediaAssets: <?= \json_encode((string)__('素材建议'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         palette: <?= \json_encode((string)__('色系'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1466,18 +1471,17 @@
         overviewBusinessGoals: <?= \json_encode((string)__('业务目标（每行一项）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         overviewContentFocus: <?= \json_encode((string)__('内容重点'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         overviewDomainStrategy: <?= \json_encode((string)__('转化策略与主 CTA'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        overviewEditHint: <?= \json_encode((string)__('可直接修改，修改后自动写入阶段一草稿。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewEditHint: <?= \json_encode((string)__('可直接修改，修改后自动写入方案草稿。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeTab: <?= \json_encode((string)__('主题'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeTabEmpty: <?= \json_encode((string)__('当前方案暂未写入主题级全局信息，请先生成或微调方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themePurpose: <?= \json_encode((string)__('主题宗旨'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         colorSystem: <?= \json_encode((string)__('色系系统'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        selectionReason: <?= \json_encode((string)__('风格选择原因'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         forbiddenStyles: <?= \json_encode((string)__('禁用风格'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualKeywords: <?= \json_encode((string)__('视觉关键词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         toneOfVoice: <?= \json_encode((string)__('内容语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         ctaTone: <?= \json_encode((string)__('CTA 语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeDirectEditTitle: <?= \json_encode((string)__('主题微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        themeDirectEditHint: <?= \json_encode((string)__('支持直接编辑主题宗旨、视觉关键词、内容语气与选择原因。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        themeDirectEditHint: <?= \json_encode((string)__('支持直接编辑主题宗旨、视觉关键词与内容语气。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         stageToolbarHint: <?= \json_encode((string)__('悬停后可直接微调、重建、删除或新增块；拖动排序后会自动保存；也可以对整个阶段重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineAction: <?= \json_encode((string)__('微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         rebuildAction: <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1513,9 +1517,9 @@
         blockTaskColorPlan: <?= \json_encode((string)__('Color details'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockTaskFontPlan: <?= \json_encode((string)__('Font details'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         acceptance: <?= \json_encode((string)__('验收标准'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        stage3Directive: <?= \json_encode((string)__('第三阶段执行指令'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stage3Directive: <?= \json_encode((string)__('构建执行细节'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskScriptBrief: <?= \json_encode((string)__('任务脚本概览'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        sharedTasks: <?= \json_encode((string)__('共享任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        sharedTasks: <?= \json_encode((string)__('共享块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         tasksUnit: <?= \json_encode((string)__('项任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         riskNotes: <?= \json_encode((string)__('风险提示'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         headerPlan: <?= \json_encode((string)__('页头规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -3037,6 +3041,11 @@
         return Array.prototype.slice.call(document.querySelectorAll('.pb-ai-run-virtual-theme'));
     }
 
+    function setRunVirtualThemeButtonsDisabled(disabled) {
+        globalRunVirtualThemeDisabled = !!disabled;
+        applyRunVirtualThemeButtonsDisabledState();
+    }
+
     function applyRunVirtualThemeButtonsDisabledState() {
         var disabled = !!globalRunVirtualThemeDisabled
             || !!planGenerationActionLockActive
@@ -3622,7 +3631,7 @@
         var typeLabel = '';
 
         if (planType === 'stage1') {
-            typeLabel = <?= \json_encode((string)__('阶段一方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            typeLabel = <?= \json_encode((string)__('建站方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             planData = window.__pbWorkspaceConfirmedPlan || {};
             markdown = planData.markdown || planData.markdown_content || '';
             confirmedAt = planData.confirmed_at || '';
@@ -3632,7 +3641,7 @@
             var stateForBuildPlan = getLatestWorkspaceStateForQueuePrompt();
             var buildPlanArtifacts = resolveBuildPlanV2ArtifactsFromWorkspaceState(stateForBuildPlan);
             if (buildPlanArtifacts.hasEvidence) {
-                typeLabel = <?= \json_encode((string)__('方案1执行蓝图'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+                typeLabel = <?= \json_encode((string)__('执行蓝图'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
                 planData = hasNonEmptyPlanArtifact(buildPlanArtifacts.projection) ? buildPlanArtifacts.projection : buildPlanArtifacts.buildPlan;
                 markdown = '';
                 confirmedAt = String(stateForBuildPlan.build_plan_confirmed_at || '');
@@ -8398,7 +8407,7 @@
     var currentPlanMode = 'refine';
     var currentPlanModeTargetScope = '';
     var currentPlanModeActionContext = null;
-    var rebuildPlanDefaultPrompt = <?= \json_encode((string)__('请完整重建当前阶段一方案，保持目标页类型覆盖，但允许重写结构与表达。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var rebuildPlanDefaultPrompt = <?= \json_encode((string)__('请完整重建当前建站方案，保持目标页类型覆盖，但允许重写结构与表达。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var planSseHandlersBound = false;
     var planSseRunning = false;
     var planModeLastSuccessNotifyFingerprint = '';
@@ -8672,12 +8681,12 @@
             'surface'              => (string)__('表面色'),
             'text'                 => (string)__('文本色'),
             'implementation_note'  => (string)__('实现说明'),
-            'reason'               => (string)__('说明原因'),
-            'planning_reason'      => (string)__('规划原因'),
+            'reason'               => (string)__('设计细节'),
+            'planning_reason'      => (string)__('构建说明'),
             'page_goal'            => (string)__('页面目标'),
             'block_goal'           => (string)__('区块目标'),
             'content_fill_rule'    => (string)__('内容填充规则'),
-            'stage3_directive'     => (string)__('第三阶段指令'),
+            'stage3_directive'     => (string)__('构建执行细节'),
             'media_assets'         => (string)__('媒体素材'),
             'task'                 => (string)__('任务'),
             'task_key'             => (string)__('任务键'),
@@ -8778,7 +8787,7 @@
         if (!row || typeof row !== 'object') {
             return '';
         }
-        return sanitizePreviewText(row.implementation_note || row.delivery_note || row.reason || '', '');
+        return sanitizePreviewText(row.implementation_note || row.delivery_note || '', '');
     }
 
     function fallbackExecutionValue(key, pageLabel, blockKey) {
@@ -8838,16 +8847,16 @@
             if (looksLikePreviewMetaInstruction(noteText)) {
                 noteText = '';
             }
-            var reason = escapeHtml(noteText || fallbackFieldReason(fieldRaw)).replace(/\n/g, '<br>');
-            if (!field && !sample && !reason) {
+            var implementationNote = escapeHtml(noteText || fallbackFieldReason(fieldRaw)).replace(/\n/g, '<br>');
+            if (!field && !sample && !implementationNote) {
                 return '';
             }
             var sampleCell = '<div class="small">' + (sample || '-') + '</div>';
-            var reasonCell = hideReason ? '' : '<div class="small text-muted">' + (reason || '-') + '</div>';
+            var implementationNoteCell = hideReason ? '' : '<div class="small text-muted">' + (implementationNote || '-') + '</div>';
             return '<tr>'
                 + '<td class="text-muted small" style="width:160px;vertical-align:top;">' + (field || '-') + '</td>'
                 + '<td style="vertical-align:top;">' + sampleCell + '</td>'
-                + (hideReason ? '' : '<td style="vertical-align:top;">' + reasonCell + '</td>')
+                + (hideReason ? '' : '<td style="vertical-align:top;">' + implementationNoteCell + '</td>')
                 + '</tr>';
         }).filter(Boolean).join('');
         if (!rows) {
@@ -8859,7 +8868,7 @@
             + '<thead><tr>'
             + '<th class="small text-muted">' + escapeHtml(previewLabels.field) + '</th>'
             + '<th class="small text-muted">' + escapeHtml(previewLabels.sample) + '</th>'
-            + (hideReason ? '' : '<th class="small text-muted">' + escapeHtml(previewLabels.reason) + '</th>')
+            + (hideReason ? '' : '<th class="small text-muted">' + escapeHtml(previewLabels.implementationNote || previewLabels.designDetails || 'Implementation note') + '</th>')
             + '</tr></thead>'
             + '<tbody>' + rows + '</tbody>'
             + '</table>'
@@ -8893,7 +8902,7 @@
             return {
                 field: row.field || row.name || row.key || row.code || row.handle || '',
                 sample: row.sample || row.example || row.default_value || row.default || row.placeholder || row.value || '',
-                implementation_note: row.implementation_note || row.delivery_note || row.reason || row.why || row.description || row.type || ''
+                implementation_note: row.implementation_note || row.delivery_note || row.description || row.type || ''
             };
         }).filter(function (row) {
             return !!(row && (String(row.field || '').trim() || String(row.sample || '').trim() || String(row.implementation_note || '').trim()));
@@ -9026,7 +9035,7 @@
         return ''
             + '<div class="card border-0 shadow-sm mb-3">'
             + '<div class="card-body">'
-            + renderPreviewSectionHeadingWithReason(title, Object.prototype.hasOwnProperty.call(opts, 'reasonItems') ? opts.reasonItems : [])
+            + renderPreviewSectionHeadingWithReason(title)
             + '<div class="mt-2">' + body + '</div>'
             + '</div>'
             + '</div>';
@@ -9084,82 +9093,10 @@
         return '<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(String(title || '')) + '</div><div class="small">' + escapeHtml(text).replace(/\n/g, '<br>') + '</div></div>';
     }
 
-    function collectPreviewReasonItems(value) {
-        var reasons = [];
-        var seen = {};
-        function pushReason(raw) {
-            var text = sanitizePreviewText(raw, '');
-            if (!text || seen[text]) {
-                return;
-            }
-            seen[text] = true;
-            reasons.push(text);
-        }
-        function visit(candidate, depth) {
-            if (depth > 3 || candidate === null || typeof candidate === 'undefined') {
-                return;
-            }
-            if (Array.isArray(candidate)) {
-                candidate.forEach(function (item) {
-                    visit(item, depth + 1);
-                });
-                return;
-            }
-            if (!candidate || typeof candidate !== 'object') {
-                return;
-            }
-            ['reason', 'why', 'selection_reason', 'decision_reason', 'planning_reason', 'rationale', 'explanation'].forEach(function (key) {
-                if (Object.prototype.hasOwnProperty.call(candidate, key)) {
-                    pushReason(candidate[key]);
-                }
-            });
-            Object.keys(candidate).forEach(function (key) {
-                var normalized = String(key || '').toLowerCase();
-                var child = candidate[key];
-                if (normalized === 'reason' || normalized === 'why' || normalized === 'selection_reason' || normalized === 'decision_reason' || normalized === 'planning_reason' || normalized === 'rationale' || normalized === 'explanation') {
-                    return;
-                }
-                if (child && typeof child === 'object') {
-                    visit(child, depth + 1);
-                }
-            });
-        }
-        visit(value, 0);
-        return reasons;
-    }
-
-    function renderPreviewReasonDisclosure(label, reasonItems) {
-        var items = [];
-        if (Array.isArray(reasonItems)) {
-            items = reasonItems;
-        } else if (reasonItems && typeof reasonItems === 'object') {
-            items = collectPreviewReasonItems(reasonItems);
-        } else {
-            var single = sanitizePreviewText(reasonItems, '');
-            items = single ? [single] : [];
-        }
-        if (items.length === 0) {
-            return '';
-        }
-        var title = sanitizePreviewText(label, previewLabels.reason);
-        var body = items.length === 1
-            ? '<div class="small">' + escapeHtml(items[0]).replace(/\n/g, '<br>') + '</div>'
-            : '<ul class="mb-0 ps-3">' + items.map(function (item) {
-                return '<li class="small">' + escapeHtml(item).replace(/\n/g, '<br>') + '</li>';
-            }).join('') + '</ul>';
-        return ''
-            + '<details class="pb-ai-reason-disclosure d-inline-block ms-2">'
-            + '<summary class="badge rounded-pill text-bg-light border text-muted" role="button" aria-label="' + escapeHtml(title) + '" title="' + escapeHtml(title) + '">?</summary>'
-            + '<div class="mt-2 p-2 border rounded bg-light text-muted">' + body + '</div>'
-            + '</details>';
-    }
-
-    function renderPreviewSectionHeadingWithReason(title, reasonItems) {
-        var reasonDisclosure = renderPreviewReasonDisclosure(previewLabels.reason, reasonItems);
+    function renderPreviewSectionHeadingWithReason(title) {
         return ''
             + '<div class="d-flex flex-wrap align-items-center gap-1">'
             + '<div class="fw-semibold">' + escapeHtml(String(title || '')) + '</div>'
-            + reasonDisclosure
             + '</div>';
     }
 
@@ -9187,10 +9124,10 @@
                 + '</div>';
         }).join('');
         return ''
-            + '<details class="mt-2 pb-ai-plan-preview-details">'
-            + '<summary class="small text-muted" role="button">' + escapeHtml(title) + '</summary>'
-            + '<div class="mt-2 p-2 border rounded bg-light">' + body + '</div>'
-            + '</details>';
+            + '<div class="mt-2 pb-ai-plan-preview-details">'
+            + '<div class="fw-semibold small text-muted mb-1">' + escapeHtml(title) + '</div>'
+            + '<div class="p-2 border rounded bg-light">' + body + '</div>'
+            + '</div>';
     }
 
     function renderThemeListSection(title, value, options) {
@@ -9359,7 +9296,7 @@
             + '</div>';
     }
 
-    function renderThemeDirectEditSection(planRoot, selectionReason) {
+    function renderThemeDirectEditSection(planRoot) {
         var snapshot = pickPreviewObject(planRoot.theme_context_snapshot, planRoot.theme_context, planRoot.shared_theme_context);
         var themeDesign = pickPreviewObject(
             planRoot.theme_design,
@@ -9392,7 +9329,6 @@
             + renderStageOneInlineEditor(previewLabels.themePurpose, themePurpose, 'theme_purpose', { rows: 3, placeholder: previewLabels.themePurpose })
             + renderStageOneInlineEditor(previewLabels.visualKeywords, visualKeywords, 'theme_visual_keywords', { rows: 3, placeholder: previewLabels.visualKeywords })
             + renderStageOneInlineEditor(previewLabels.toneOfVoice, toneOfVoice, 'theme_tone_of_voice', { rows: 3, placeholder: previewLabels.toneOfVoice })
-            + renderStageOneInlineEditor(previewLabels.selectionReason || previewLabels.reason, selectionReason, 'theme_selection_reason', { rows: 3, placeholder: previewLabels.selectionReason || previewLabels.reason })
             + '</div>';
     }
 
@@ -9434,13 +9370,6 @@
             planRoot.site_positioning,
             snapshot && snapshot.theme_purpose,
             snapshot && snapshot.site_positioning
-        );
-        var selectionReason = pickPreviewValue(
-            themeDesign && themeDesign.selection_reason,
-            themeDesign && themeDesign.reason,
-            planRoot.selection_reason,
-            planRoot.decision_reason,
-            snapshot && snapshot.selection_reason
         );
         var forbiddenStyles = pickPreviewValue(
             themeDesign && themeDesign.forbidden_styles,
@@ -9486,24 +9415,19 @@
             parts.push(ctaToneHtml);
         }
 
-        var reasonHtml = renderThemeTextSection(previewLabels.selectionReason || previewLabels.reason, selectionReason);
-        if (reasonHtml) {
-            parts.push(reasonHtml);
-        }
-
         var forbiddenHtml = renderThemeListSection(previewLabels.forbiddenStyles, forbiddenStyles);
         if (forbiddenHtml) {
             parts.push(forbiddenHtml);
         }
 
-        var directEditHtml = renderThemeDirectEditSection(planRoot, selectionReason);
+        var directEditHtml = renderThemeDirectEditSection(planRoot);
         if (parts.length === 0 && directEditHtml === '') {
             return '';
         }
         return ''
             + '<div class="card border-0 shadow-sm mb-3">'
             + '<div class="card-body">'
-            + renderPreviewSectionHeadingWithReason(previewLabels.themeSummary, selectionReason)
+            + renderPreviewSectionHeadingWithReason(previewLabels.themeSummary)
             + parts.join('')
             + directEditHtml
             + '</div>'
@@ -9671,30 +9595,161 @@
             + '</span>';
     }
 
+    function summarizePreviewValueForDetails(value) {
+        return normalizeStructuredItems(value).join('\n');
+    }
+
+    function pickPlanSharedComponent(planRoot, component) {
+        var sharedPlan = planRoot && planRoot.shared_plan && typeof planRoot.shared_plan === 'object' ? planRoot.shared_plan : null;
+        return pickPreviewObject(
+            planRoot && planRoot.shared_components && planRoot.shared_components[component],
+            sharedPlan && sharedPlan.shared_components && sharedPlan.shared_components[component],
+            sharedPlan && sharedPlan[component]
+        );
+    }
+
+    function normalizePlanLinkItems(value) {
+        var rows = [];
+        var seen = {};
+        function pushLink(candidate) {
+            if (!candidate || typeof candidate !== 'object') {
+                return;
+            }
+            var label = sanitizePreviewText(candidate.label || candidate.title || candidate.text || candidate.name || '', '');
+            var href = sanitizePreviewText(candidate.href || candidate.url || candidate.target || candidate.link || '', '');
+            if (!label && !href) {
+                return;
+            }
+            var key = label + '|' + href;
+            if (seen[key]) {
+                return;
+            }
+            seen[key] = true;
+            rows.push({
+                label: label || href,
+                href: href
+            });
+        }
+        function visit(candidate, depth) {
+            if (depth > 4 || candidate === null || typeof candidate === 'undefined') {
+                return;
+            }
+            if (Array.isArray(candidate)) {
+                candidate.forEach(function (item) {
+                    if (item && typeof item === 'object' && !Array.isArray(item)) {
+                        pushLink(item);
+                    } else {
+                        var text = sanitizePreviewText(item, '');
+                        if (text) {
+                            pushLink({ label: text, href: '' });
+                        }
+                    }
+                    visit(item, depth + 1);
+                });
+                return;
+            }
+            if (candidate && typeof candidate === 'object') {
+                pushLink(candidate);
+                Object.keys(candidate).forEach(function (key) {
+                    var child = candidate[key];
+                    if (child && typeof child === 'object') {
+                        visit(child, depth + 1);
+                    }
+                });
+            }
+        }
+        visit(value, 0);
+        return rows;
+    }
+
+    function summarizePlanLinksForPreview(links) {
+        if (!Array.isArray(links) || links.length === 0) {
+            return '';
+        }
+        return links.map(function (link) {
+            var label = sanitizePreviewText(link && link.label, '');
+            var href = sanitizePreviewText(link && link.href, '');
+            if (!label && !href) {
+                return '';
+            }
+            return href ? (label + ' -> ' + href) : label;
+        }).filter(Boolean).join('\n');
+    }
+
+    function buildSharedBlockFromStageOnePlan(planRoot, component, componentPlan, auxiliaryPlan, fallbackOrder, fallbackLabel) {
+        var plan = componentPlan && typeof componentPlan === 'object' ? componentPlan : {};
+        var realtime = pickPreviewObject(plan.realtime_content) || {};
+        var linkItems = normalizePlanLinkItems(pickPreviewValue(
+            plan.link_items,
+            plan.links,
+            plan.navigation_items,
+            plan.header_items,
+            auxiliaryPlan
+        ));
+        var ctaItems = normalizePlanLinkItems(pickPreviewValue(
+            plan.cta_items,
+            realtime && realtime.cta,
+            plan.cta
+        ));
+        var contentSummary = [
+            sanitizePreviewText(plan.content || plan.content_brief && plan.content_brief.summary || '', ''),
+            summarizePreviewValueForDetails(realtime),
+            summarizePlanLinksForPreview(linkItems),
+            summarizePlanLinksForPreview(ctaItems)
+        ].filter(Boolean).join('\n');
+        return Object.assign({}, plan, {
+            block_key: 'shared:' + component,
+            component: component,
+            label: String(plan.title || plan.label || fallbackLabel || component),
+            sort_order: Number(plan.sort_order || fallbackOrder || 0),
+            goal: sanitizePreviewText(plan.goal || '', component === 'header'
+                ? '展示品牌、导航和主下载入口。'
+                : '提供底部导航、政策链接和信任信息。'),
+            content: contentSummary,
+            link_items: linkItems,
+            cta_items: ctaItems,
+            implementation_detail: sanitizePreviewText(plan.implementation_detail || plan.implementation_note || '', '')
+        });
+    }
+
     function normalizePlanSharedBlocks(planRoot) {
         if (!planRoot || typeof planRoot !== 'object') {
             return [];
         }
         var blocks = Array.isArray(planRoot.shared_blocks) ? planRoot.shared_blocks.slice() : [];
-        if (blocks.length === 0) {
-            if (planRoot.navigation_plan || planRoot.header_plan || planRoot.header) {
-                blocks.push({
-                    block_key: 'shared:header',
-                    component: 'header',
-                    label: previewLabels.headerPlan || 'Header',
-                    sort_order: 10,
-                    goal: ''
-                });
+        var existingComponents = {};
+        blocks.forEach(function (block) {
+            if (!block || typeof block !== 'object') {
+                return;
             }
-            if (planRoot.footer_plan || planRoot.footer) {
-                blocks.push({
-                    block_key: 'shared:footer',
-                    component: 'footer',
-                    label: previewLabels.footerPlan || 'Footer',
-                    sort_order: 20,
-                    goal: ''
-                });
+            var component = String(block.component || block.block_key || '').replace(/^shared:/, '').trim();
+            if (component) {
+                existingComponents[component] = true;
             }
+        });
+        var headerPlan = pickPreviewObject(planRoot.navigation_plan, planRoot.header_plan, planRoot.header);
+        var headerComponent = pickPlanSharedComponent(planRoot, 'header');
+        if (!existingComponents.header && (headerComponent || headerPlan)) {
+            blocks.push(buildSharedBlockFromStageOnePlan(
+                planRoot,
+                'header',
+                headerComponent || {},
+                headerPlan || {},
+                10,
+                previewLabels.headerPlan || 'Header'
+            ));
+        }
+        var footerPlan = pickPreviewObject(planRoot.footer_plan, planRoot.footer);
+        var footerComponent = pickPlanSharedComponent(planRoot, 'footer');
+        if (!existingComponents.footer && (footerComponent || footerPlan)) {
+            blocks.push(buildSharedBlockFromStageOnePlan(
+                planRoot,
+                'footer',
+                footerComponent || {},
+                footerPlan || {},
+                20,
+                previewLabels.footerPlan || 'Footer'
+            ));
         }
         return blocks.filter(function (block) {
             return block && typeof block === 'object';
@@ -9721,8 +9776,17 @@
         var goal = sanitizePreviewText(block.goal || '', '');
         var content = sanitizePreviewText(block.content || '', '');
         var implementation = sanitizePreviewText(block.implementation_note || block.implementation_detail || '', '');
-        var details = renderPlanAuxiliaryDisclosure(previewLabels.reason || 'Details', [
+        var realtime = pickPreviewObject(block.realtime_content) || {};
+        var linkSummary = summarizePlanLinksForPreview(normalizePlanLinkItems(pickPreviewValue(block.link_items, block.links, block.navigation_items, block.header_items, block.footer_items)));
+        var ctaSummary = summarizePlanLinksForPreview(normalizePlanLinkItems(pickPreviewValue(block.cta_items, block.cta, realtime && realtime.cta)));
+        var realtimeSummary = summarizePreviewValueForDetails(realtime);
+        var editableFields = summarizePreviewValueForDetails(block.editable_fields || realtime.editable_slots || []);
+        var details = renderPlanAuxiliaryDisclosure(previewLabels.designDetails || 'Design details', [
             { title: previewLabels.pageGoal || 'Goal', text: goal },
+            { title: previewLabels.contentStructure || 'Content structure', text: content || realtimeSummary },
+            { title: previewLabels.links || 'Links', text: linkSummary },
+            { title: previewLabels.cta || 'CTA', text: ctaSummary },
+            { title: previewLabels.field || 'Editable fields', text: editableFields },
             { title: previewLabels.stage3Directive || 'Implementation', text: implementation }
         ]);
         return ''
@@ -9781,7 +9845,7 @@
         var secondary = Array.isArray(page.secondary_keywords) ? page.secondary_keywords : [];
         var blocks = Array.isArray(page.blocks) ? page.blocks : [];
         var safePageType = escapeHtml(String(pageType));
-        var pageDetails = renderPlanAuxiliaryDisclosure(previewLabels.reason || 'Details', [
+        var pageDetails = renderPlanAuxiliaryDisclosure(previewLabels.designDetails || 'Details', [
             { title: previewLabels.pageGoal || 'Page Goal', text: goal },
             { title: previewLabels.themeTab || 'Theme', text: themeAlignment },
             { title: previewLabels.primaryKeywords || 'Primary Keywords', text: primary.join(', ') },
@@ -9792,19 +9856,30 @@
                 return '';
             }
             var rawBlockKey = String(block.block_key || block.section_code || ('block_' + (idx + 1)));
-            var blockLabel = fallbackBlockLabel(rawBlockKey);
+            var blockLabel = sanitizePreviewText(block.title || block.section_title || block.label || block.name || '', '') || fallbackBlockLabel(rawBlockKey);
             var blockTitle = escapeHtml(blockLabel);
             var blockKey = escapeHtml(rawBlockKey);
-            var blockGoal = sanitizePreviewText(block.goal || '', fallbackPlanBlockGoal(pageType, pageLabel, rawBlockKey));
-            var content = escapeHtml(sanitizePreviewText(block.content || '', fallbackPlanBlockContent(pageType, pageLabel, rawBlockKey))).replace(/\n/g, '<br>');
+            var blockGoal = sanitizePreviewText(block.goal || block.block_goal || '', fallbackPlanBlockGoal(pageType, pageLabel, rawBlockKey));
+            var executionScript = pickPreviewObject(block.execution_script) || {};
+            var contentText = sanitizePreviewText(
+                block.content || (block.content_brief && block.content_brief.summary) || executionScript.core_copy || '',
+                fallbackPlanBlockContent(pageType, pageLabel, rawBlockKey)
+            );
+            var content = escapeHtml(contentText).replace(/\n/g, '<br>');
             var keywords = Array.isArray(block.keywords) ? block.keywords : [];
-            var fieldTable = renderFieldPlanTable(block.field_plan, { hideReason: true });
             var detailFieldTable = renderFieldPlanTable(block.field_plan);
-            var exec = renderExecutionScriptSection(block.execution_script);
-            var blockDetails = renderPlanAuxiliaryDisclosure(previewLabels.reason || 'Details', [
+            var exec = renderExecutionScriptSection(executionScript);
+            var designTagSummary = summarizePreviewValueForDetails(block.design_tags || {});
+            var realtimeSummary = summarizePreviewValueForDetails(block.realtime_content || {});
+            var implementationDetail = sanitizePreviewText(block.implementation_detail || block.implementation_note || '', '');
+            var blockDetails = renderPlanAuxiliaryDisclosure(previewLabels.designDetails || 'Details', [
                 { title: previewLabels.blockGoal || 'Block Goal', text: blockGoal },
+                { title: previewLabels.contentStructure || 'Content structure', text: contentText },
                 { title: previewLabels.primaryKeywords || 'Keywords', text: keywords.join(', ') },
+                { title: previewLabels.designDetails || 'Design details', text: designTagSummary },
+                { title: previewLabels.contentStructure || 'Realtime content', text: realtimeSummary },
                 { title: previewLabels.field || 'Fields', html: detailFieldTable },
+                { title: previewLabels.implementationNote || 'Implementation note', text: implementationDetail },
                 { title: previewLabels.stage3Directive || 'Execution', html: exec }
             ]);
             var targetScope = 'pages.' + String(pageType) + '.blocks.' + rawBlockKey;
@@ -9831,7 +9906,7 @@
                 + '</div>'
                 + '</div>'
                 + (content ? '<div class="small mt-2">' + content + '</div>' : '')
-                + fieldTable
+                + renderKeywordBadges(keywords)
                 + blockDetails
                 + '</div>';
         }).filter(Boolean).join('');
@@ -9897,7 +9972,10 @@
     }
 
     function rerenderCurrentPlanPreview() {
-        updatePlanModalContent(String((currentPlanPayload && currentPlanPayload.markdown) || ''), { persistField: false });
+        updatePlanModalContent(String((currentPlanPayload && currentPlanPayload.markdown) || ''), {
+            persistField: false,
+            payload: currentPlanPayload || {}
+        });
     }
 
     function getCurrentStageOneStructuredRootForEdit() {
@@ -10038,10 +10116,6 @@
             case 'theme_tone_of_voice':
                 structured.tone_of_voice = value;
                 structured.theme_design.tone_of_voice = value;
-                break;
-            case 'theme_selection_reason':
-                structured.selection_reason = value;
-                structured.theme_design.selection_reason = value;
                 break;
             default:
                 return false;
@@ -10431,12 +10505,8 @@
         var sharedBlocksHtml = renderPlanSharedBlocksSection(planRoot);
         var headerPlan = planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null;
         var footerPlan = planRoot.footer_plan || planRoot.footer || null;
-        var headerHtml = renderStructuredListSection(previewLabels.headerPlan, headerPlan, {
-            reasonItems: collectPreviewReasonItems(headerPlan)
-        });
-        var footerHtml = renderStructuredListSection(previewLabels.footerPlan, footerPlan, {
-            reasonItems: collectPreviewReasonItems(footerPlan)
-        });
+        var headerHtml = renderStructuredListSection(previewLabels.headerPlan, headerPlan);
+        var footerHtml = renderStructuredListSection(previewLabels.footerPlan, footerPlan);
         if (themeHtml) {
             themeSections.push(themeHtml);
         }
@@ -10931,11 +11001,11 @@
             var rebuildNote = inlineInstruction || (ctx.summary ? String(ctx.summary) : <?= \json_encode((string)__('本地块级重建请求。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
             blockConfig = {
                 mutation_note: rebuildNote,
-                reason: rebuildNote,
+                implementation_detail: rebuildNote,
                 instruction: inlineInstruction
             };
         } else if (mutationAction === 'delete' && inlineInstruction !== '') {
-            blockConfig = { reason: inlineInstruction };
+            blockConfig = { delete_note: inlineInstruction };
         }
 
         postForm(mutatePlanBlockUrl, {
@@ -10991,7 +11061,7 @@
             block_key: blockKey,
             block_config: JSON.stringify({
                 mutation_note: instruction,
-                reason: instruction,
+                implementation_detail: instruction,
                 instruction: instruction
             }),
             instruction: instruction,
@@ -11330,7 +11400,7 @@
     window.__pbCloseBlockOperationModal = closeBlockOperationModal;
 
     // 统一块级弹窗提交分发器：默认监听 `pb:ai:block-op:submit`，
-    // 把用户意图转发到对应阶段的真正 API 调用，保证弹窗骨架与业务逻辑解耦。
+    // 把用户意图转发到对应块级 API 调用，保证弹窗骨架与业务逻辑解耦。
     function bindBlockOperationModalRouter() {
         var modalEl = document.getElementById('pb-ai-block-op-modal');
         if (!modalEl || modalEl.dataset.pbRouterBound === '1') {
@@ -12014,7 +12084,7 @@
         var text = String(message || parsed.message || '').toLowerCase();
         return code === '409'
             && (
-                text.indexOf('正在生成阶段一方案') >= 0 // i18n: match-with-backend
+                text.indexOf('正在生成建站方案') >= 0 // i18n: match-with-backend
                 || text.indexOf('正在执行的建站方案') >= 0 // i18n: match-with-backend
                 || text.indexOf('建站方案生成') >= 0 // i18n: match-with-backend
                 || text.indexOf('stage-1') >= 0
@@ -12241,12 +12311,29 @@
             var payload = parsePlanTerminalPayload(event);
             var nextPlan = (payload && payload.plan && typeof payload.plan === 'object') ? payload.plan : null;
             var payloadMarkdown = extractPlanMarkdownFromPayload(payload);
+            var mergedPlanPayload = {};
+            if (currentPlanPayload && typeof currentPlanPayload === 'object') {
+                mergedPlanPayload = Object.assign({}, currentPlanPayload);
+            }
             if (nextPlan) {
-                currentPlanPayload = nextPlan;
-                updatePlanModalContent(String(nextPlan.markdown || ''));
-            } else if (String(payloadMarkdown || '').trim() !== '') {
-                currentPlanPayload = Object.assign({}, currentPlanPayload || {}, { markdown: String(payloadMarkdown) });
-                updatePlanModalContent(String(payloadMarkdown));
+                mergedPlanPayload = Object.assign(mergedPlanPayload, nextPlan);
+            }
+            if (payload && typeof payload === 'object') {
+                ['structured', 'json', 'plan_json', 'plan_structured', 'execution_blueprint', 'plan_workbench', 'build_plan_v2'].forEach(function (key) {
+                    if (payload[key] && typeof payload[key] === 'object') {
+                        mergedPlanPayload[key] = payload[key];
+                    }
+                });
+            }
+            if (String(payloadMarkdown || '').trim() !== '') {
+                mergedPlanPayload.markdown = String(payloadMarkdown);
+            }
+            if (Object.keys(mergedPlanPayload).length > 0) {
+                currentPlanPayload = mergedPlanPayload;
+                updatePlanModalContent(String(currentPlanPayload.markdown || ''), {
+                    persistField: false,
+                    payload: currentPlanPayload
+                });
             }
             if (payload && payload.state && typeof payload.state === 'object') {
                 var nextState = Object.assign({}, payload.state);
@@ -12909,7 +12996,7 @@
     }
 
     /**
-     * 判断是否已具备进入构建准备链路的前置条件（阶段一方案/蓝图/工作区状态）。     */
+     * 判断是否已具备进入构建准备链路的前置条件（建站方案/蓝图/工作区状态）。     */
     function extractResponseCode(data) {
         if (!data || typeof data !== 'object') {
             return '';
@@ -13314,7 +13401,7 @@
     }
 
     /**
-     * 处理嵌入预览 iframe 通过 postMessage 发起的「生成页面」请求：切换预览类型并校验阶段一方案。
+     * 处理嵌入预览 iframe 通过 postMessage 发起的「生成页面」请求：切换预览类型并校验建站方案。
      */
     function handleEmbeddedPreviewGenerateRequest(pageType) {
         var pt = String(pageType || '').trim();
