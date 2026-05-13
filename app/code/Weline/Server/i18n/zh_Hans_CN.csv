@@ -232,7 +232,11 @@ P99：%{1},P99：%{1}
 已停止,已停止
 "总计：%{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}","总计：%{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}"
 "[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器 (开发)","[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器 (开发)"
+服务器实例列表,服务器实例列表
+没有找到运行中的服务器实例,没有找到运行中的服务器实例
 没有找到任何服务器实例,没有找到任何服务器实例
+"总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}","总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}"
+"[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)","[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)"
 ═══════════════════════════════════════════════════════════════════════════════,═══════════════════════════════════════════════════════════════════════════════
 服务器实例详细列表,服务器实例详细列表
 "PHP 内置服务器","PHP 内置服务器"
@@ -898,6 +902,8 @@ disabled,disabled
 查看所有实例,查看所有实例
 查看指定实例,查看指定实例
 "实时监控（watch 模式）","实时监控（watch 模式）"
+"`--all` 与 `-pre/--prefix` 不能同时使用。","`--all` 与 `-pre/--prefix` 不能同时使用。"
+请二选一：要么停止所有实例，要么只停止某个前缀。,请二选一：要么停止所有实例，要么只停止某个前缀。
 "另一个 server:stop 任务正在处理中，请稍后再试。","另一个 server:stop 任务正在处理中，请稍后再试。"
 若锁文件长期存在，请确认停止任务是否已结束后再重试。,若锁文件长期存在，请确认停止任务是否已结束后再重试。
 "检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…","检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…"
@@ -921,6 +927,15 @@ disabled,disabled
 "Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.","Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup."
 "IPC 超时，强制终止 Master 并清理该实例下所有进程...","IPC 超时，强制终止 Master 并清理该实例下所有进程..."
 "实例 [%{1}] 已停止 ✓","实例 [%{1}] 已停止 ✓"
+停止服务器实例,停止服务器实例
+"Master PID：","Master PID："
+(未运行),(未运行)
+控制端口：,控制端口：
+(未配置),(未配置)
+"SSL 状态：","SSL 状态："
+"已启用 (HTTPS)","已启用 (HTTPS)"
+"未启用 (HTTP)","未启用 (HTTP)"
+"HTTP 跳转：","HTTP 跳转："
 清理残留进程...,清理残留进程...
 "已处理 %{1} 个进程","已处理 %{1} 个进程"
 无残留进程,无残留进程
@@ -939,13 +954,23 @@ disabled,disabled
 "所有 Weline Server 实例已停止","所有 Weline Server 实例已停止"
 "正在停止 PHP 内置服务器 (cli-server)...","正在停止 PHP 内置服务器 (cli-server)..."
 "PHP 内置服务器已停止","PHP 内置服务器已停止"
+实例前缀不能为空。,实例前缀不能为空。
+"没有找到前缀为 [%{1}] 的实例。","没有找到前缀为 [%{1}] 的实例。"
+"使用 server:listing 查看当前实例列表。","使用 server:listing 查看当前实例列表。"
+按前缀停止服务器实例,按前缀停止服务器实例
+实例前缀：%{1},实例前缀：%{1}
+"发现 %{1} 个匹配实例","发现 %{1} 个匹配实例"
+"进度 [%{1}/%{2}] 正在停止实例 [%{3}]...","进度 [%{1}/%{2}] 正在停止实例 [%{3}]..."
+"前缀 [%{1}] 匹配的实例已处理完成。","前缀 [%{1}] 匹配的实例已处理完成。"
 "停止 Weline Server 或 PHP 内置服务器实例","停止 Weline Server 或 PHP 内置服务器实例"
 "停止正在运行的 Weline Server 或 PHP 内置服务器实例","停止正在运行的 Weline Server 或 PHP 内置服务器实例"
 "实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）","实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）"
 "停止所有运行中的实例（含 Weline Server 与 CLI 服务器）","停止所有运行中的实例（含 Weline Server 与 CLI 服务器）"
+"停止所有实例名以该前缀开头的 Weline Server 实例","停止所有实例名以该前缀开头的 Weline Server 实例"
 "强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc","强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc"
 "与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略","与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略"
 停止默认实例,停止默认实例
+按前缀停止实例,按前缀停止实例
 "停止 PHP 内置服务器","停止 PHP 内置服务器"
 强制停止（本地快速清场）,强制停止（本地快速清场）
 "强制但走 IPC（短超时）","强制但走 IPC（短超时）"

@@ -545,7 +545,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
     {
         $script = $this->workspaceScript();
         $definition = \strpos($script, 'function bindPublishStageLogic()');
-        $boot = \strrpos($script, 'bindPublishStageLogic();');
+        $boot = \strrpos($script, "safeWorkspaceBootStep('publish_stage', bindPublishStageLogic);");
 
         self::assertIsInt($definition);
         self::assertIsInt($boot);
@@ -567,9 +567,9 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertLessThan($boot, $definition, 'Stage binding must run after visual-edit handlers are defined.');
         self::assertStringContainsString("if (bootStage === 'visual_edit')", $script);
         self::assertStringContainsString("['pending', 'queued', 'running', 'processing']", $script);
-        self::assertStringContainsString('bindVisualEditStageLogic();', \substr($script, $boot));
-        self::assertStringContainsString('bindPlanStageLogic();', \substr($script, $boot));
-        self::assertStringContainsString('bindPublishStageLogic();', \substr($script, $boot));
+        self::assertStringContainsString("safeWorkspaceBootStep('visual_edit_stage', bindVisualEditStageLogic);", \substr($script, $boot));
+        self::assertStringContainsString("safeWorkspaceBootStep('plan_stage', bindPlanStageLogic);", \substr($script, $boot));
+        self::assertStringContainsString("safeWorkspaceBootStep('publish_stage', bindPublishStageLogic);", \substr($script, $boot));
     }
 
     public function testStartBuildButtonUsesSingleBuildPlanFlow(): void

@@ -70,7 +70,55 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
-    public function testPrepareBuildAssetsReportsFailureWhenPlaceholderFallbackIsExplicitlyAllowed(): void
+    public function testPrepareBuildAssetsStopsBeforeImagesWhenContentGateFails(): void
+    {
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, 'asset-content-gate');
+
+        $generatorCalled = false;
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static function () use (&$generatorCalled): array {
+                $generatorCalled = true;
+                return ['images' => []];
+            },
+            static fn(): array => [
+                'passed' => false,
+                'items' => [[
+                    'key' => 'content_quality',
+                    'label' => 'content copy has duplicated plan text',
+                    'ok' => false,
+                    'blocking' => true,
+                ]],
+            ]
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Content quality gate must pass before image generation');
+
+        try {
+            $service->prepareBuildAssets($session, 2, [
+                'site_title' => 'Content Gate Test',
+                'content_generation_gate_required' => 1,
+                'asset_manifest' => [
+                    'slots' => [
+                        'home:hero' => [
+                            'slot_id' => 'home:hero',
+                            'slot_type' => 'hero_image',
+                            'page_type' => 'home',
+                            'label' => 'Hero visual',
+                            'brief' => 'A premium hero image.',
+                        ],
+                    ],
+                ],
+            ], 1);
+        } finally {
+            self::assertFalse($generatorCalled);
+        }
+    }
+
+    public function testPrepareBuildAssetsRejectsLocalImageFallbackWhenGenerationFails(): void
     {
         $publicId = 'asset-placeholder-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -79,6 +127,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $scope = [
             'site_title' => 'Asset Placeholder Test',
             'allow_placeholder_image_assets' => 1,
+            'allow_local_image_fallback' => 1,
             'asset_manifest' => [
                 'slots' => [
                     'home:hero' => [
@@ -96,25 +145,25 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             new AiSiteAssetManifestService(),
             null,
             static function (): array {
-                throw new \RuntimeException('Explicit placeholder fallback should not call the image generator.');
+                throw new \RuntimeException('Image provider is not configured.');
             }
         );
         $result = $service->prepareBuildAssets($session, 2, $scope, 1);
         $resultScope = $result['scope'];
         $slot = $resultScope['asset_manifest']['slots']['home:hero'] ?? [];
+        $failures = $resultScope['asset_image_generation_failures'] ?? [];
 
         self::assertSame([], $result['generated_slots']);
         self::assertSame('home:hero', (string)($result['failed_slots'][0]['slot_id'] ?? ''));
-        self::assertStringContainsString(
-            'Explicit placeholder fallback should not call the image generator.',
-            (string)($result['failed_slots'][0]['message'] ?? '')
-        );
-        self::assertSame([], $slot['variants'] ?? []);
         self::assertSame('error', (string)($slot['status'] ?? ''));
-        self::assertSame([], $resultScope['verified_assets'] ?? []);
+        self::assertSame('', (string)($slot['final_url'] ?? ''));
+        self::assertSame([], $slot['variants'] ?? []);
+        self::assertArrayNotHasKey('home:hero', $resultScope['verified_assets'] ?? []);
+        self::assertStringContainsString('Image provider is not configured', (string)($slot['error_message'] ?? ''));
+        self::assertSame('home:hero', (string)($failures[0]['slot_id'] ?? ''));
     }
 
-    public function testPrepareBuildAssetsReportsFailureWhenFakeModeImageGenerationFails(): void
+    public function testPrepareBuildAssetsRejectsLocalImageFallbackInFakeMode(): void
     {
         $publicId = 'asset-fake-mode-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -123,6 +172,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $scope = [
             'site_title' => 'Fake Mode Build Test',
             'fake_mode' => 1,
+            'allow_local_image_fallback' => 1,
             'asset_manifest' => [
                 'slots' => [
                     'home:hero' => [
@@ -149,12 +199,14 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
 
         self::assertSame([], $result['generated_slots']);
         self::assertSame('home:hero', (string)($result['failed_slots'][0]['slot_id'] ?? ''));
+        self::assertSame('error', (string)($slot['status'] ?? ''));
+        self::assertSame('', (string)($slot['final_url'] ?? ''));
+        self::assertSame([], $slot['variants'] ?? []);
+        self::assertArrayNotHasKey('home:hero', $resultScope['verified_assets'] ?? []);
         self::assertStringContainsString(
             'Fake-mode build must not call the image generator',
-            (string)($result['failed_slots'][0]['message'] ?? '')
+            (string)($slot['error_message'] ?? '')
         );
-        self::assertSame([], $slot['variants'] ?? []);
-        self::assertSame('error', (string)($slot['status'] ?? ''));
     }
 
     public function testPrepareBuildAssetsRegeneratesLegacyPlaceholderAssets(): void
@@ -562,6 +614,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         self::assertSame('home:hero', (string)($result['failed_slots'][0]['slot_id'] ?? ''));
         self::assertSame('error', (string)($slot['status'] ?? ''));
         self::assertSame('', (string)($slot['final_url'] ?? ''));
+        self::assertSame([], $slot['variants'] ?? []);
         self::assertSame([], $resultScope['verified_assets'] ?? []);
         self::assertStringContainsString('No text2image model configured.', (string)($slot['error_message'] ?? ''));
 

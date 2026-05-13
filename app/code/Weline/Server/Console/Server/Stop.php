@@ -102,6 +102,7 @@ class Stop extends CommandAbstract
         $this->printWelcome();
 
         $instanceName = $this->parseInstanceName($args);
+        $instancePrefix = $this->parseInstancePrefix($args);
         $stopAll = isset($args['all']) || isset($args['a']);
         $force = isset($args['force']) || isset($args['f']);
         $forceIpc = isset($args['ipc']) || isset($args['force-ipc']) || isset($args['force_ipc']);
@@ -109,8 +110,19 @@ class Stop extends CommandAbstract
             || isset($args['fast_local'])
             || ($force && !$forceIpc);
 
+        if ($stopAll && $instancePrefix !== '') {
+            $this->printer->error(__('`--all` 与 `-pre/--prefix` 不能同时使用。'));
+            $this->printer->note(__('请二选一：要么停止所有实例，要么只停止某个前缀。'));
+            return;
+        }
+
         if ($stopAll) {
             $this->stopAllInstances($force, $fastLocal);
+            return;
+        }
+
+        if ($instancePrefix !== '') {
+            $this->stopInstancesByPrefix($instancePrefix, $force, $fastLocal);
             return;
         }
 
@@ -140,6 +152,16 @@ class Stop extends CommandAbstract
         array_shift($positionalArgs);
         
         return $positionalArgs[0] ?? 'default';
+    }
+
+    protected function parseInstancePrefix(array $args): string
+    {
+        $prefix = $args['pre'] ?? $args['prefix'] ?? '';
+        if (\is_array($prefix)) {
+            $prefix = $prefix[0] ?? '';
+        }
+
+        return \trim((string) $prefix);
     }
 
     protected function acquireStopLock(string $instanceName, int $timeout = self::STOP_LOCK_TIMEOUT): bool
@@ -681,20 +703,21 @@ class Stop extends CommandAbstract
 
     protected function showInstanceInfo(ServerInstanceInfo $info): void
     {
-        $this->printer->note(__('╔══════════════════════════════════════════════════════════════╗'));
-        $this->printer->note(__('║                   停止服务器实例                               ║'));
-        $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
-        $this->printer->note(\sprintf('║  实例名称：%-50s║', $info->name));
-        $this->printer->note(\sprintf('║  Master PID：%-48s║', $info->masterPid > 0 ? $info->masterPid : '(未运行)'));
-        $this->printer->note(\sprintf('║  控制端口：%-50s║', $info->controlPort > 0 ? $info->controlPort : '(未配置)'));
-        $this->printer->note(\sprintf('║  监听地址：%-50s║', $info->getListenAddress()));
-        $this->printer->note(\sprintf('║  SSL 状态：%-50s║', $info->sslEnabled ? '已启用 (HTTPS)' : '未启用 (HTTP)'));
+        $boxInnerWidth = 62;
+        $this->printer->note('╔' . \str_repeat('═', $boxInnerWidth) . '╗');
+        $this->printer->note($this->renderStopBoxContent((string) __('停止服务器实例'), $boxInnerWidth, STR_PAD_BOTH));
+        $this->printer->note('╠' . \str_repeat('═', $boxInnerWidth) . '╣');
+        $this->printer->note($this->renderStopBoxContent('  ' . __('实例名称：') . $info->name, $boxInnerWidth));
+        $this->printer->note($this->renderStopBoxContent('  ' . __('Master PID：') . ($info->masterPid > 0 ? $info->masterPid : __('(未运行)')), $boxInnerWidth));
+        $this->printer->note($this->renderStopBoxContent('  ' . __('控制端口：') . ($info->controlPort > 0 ? $info->controlPort : __('(未配置)')), $boxInnerWidth));
+        $this->printer->note($this->renderStopBoxContent('  ' . __('监听地址：') . $info->getListenAddress(), $boxInnerWidth));
+        $this->printer->note($this->renderStopBoxContent('  ' . __('SSL 状态：') . ($info->sslEnabled ? __('已启用 (HTTPS)') : __('未启用 (HTTP)')), $boxInnerWidth));
         
         if ($info->httpRedirectPort > 0) {
-            $this->printer->note(\sprintf('║  HTTP 跳转：%-49s║', ":{$info->httpRedirectPort} → :{$info->port}"));
+            $this->printer->note($this->renderStopBoxContent('  ' . __('HTTP 跳转：') . ":{$info->httpRedirectPort} -> :{$info->port}", $boxInnerWidth));
         }
         
-        $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
+        $this->printer->note('╠' . \str_repeat('═', $boxInnerWidth) . '╣');
         
         // 显示所有服务实例（已按优先级排序）
         $currentRole = '';
@@ -723,13 +746,57 @@ class Stop extends CommandAbstract
             $pidStr = !empty($pids) ? \implode(',', $pids) : '(无 PID)';
             $portStr = !empty($ports) ? \implode(',', $ports) : '-';
             
-            $line = \sprintf('║  %s (%d): PID=%s, Port=%s', $displayName, $count, $pidStr, $portStr);
-            $this->printer->note(\sprintf('%-63s║', $line));
+            $line = \sprintf('  %s (%d): PID=%s, Port=%s', $displayName, $count, $pidStr, $portStr);
+            $this->printer->note($this->renderStopBoxContent($line, $boxInnerWidth));
         }
         
-        $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
-        $this->printer->note(\sprintf('║  启动时间：%-50s║', $info->startedAt ?: '(未知)'));
-        $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
+        $this->printer->note('╠' . \str_repeat('═', $boxInnerWidth) . '╣');
+        $this->printer->note($this->renderStopBoxContent('  ' . __('启动时间：') . ($info->startedAt ?: __('(未知)')), $boxInnerWidth));
+        $this->printer->note('╚' . \str_repeat('═', $boxInnerWidth) . '╝');
+    }
+
+    protected function renderStopBoxContent(string $content, int $width, int $padType = STR_PAD_RIGHT): string
+    {
+        return '║' . $this->padStopDisplayWidth($content, $width, $padType) . '║';
+    }
+
+    protected function padStopDisplayWidth(string $text, int $width, int $padType = STR_PAD_RIGHT): string
+    {
+        if ($width <= 0) {
+            return '';
+        }
+
+        $displayText = $text;
+        $displayWidth = $this->stopDisplayWidth($displayText);
+        if ($displayWidth > $width) {
+            if (\function_exists('mb_strimwidth')) {
+                $displayText = (string) \mb_strimwidth($displayText, 0, $width, '', 'UTF-8');
+            } else {
+                $displayText = \substr($displayText, 0, $width);
+            }
+            $displayWidth = $this->stopDisplayWidth($displayText);
+        }
+
+        $padding = $width - $displayWidth;
+        if ($padding <= 0) {
+            return $displayText;
+        }
+
+        return match ($padType) {
+            STR_PAD_LEFT => \str_repeat(' ', $padding) . $displayText,
+            STR_PAD_BOTH => \str_repeat(' ', \intdiv($padding, 2)) . $displayText . \str_repeat(' ', $padding - \intdiv($padding, 2)),
+            default => $displayText . \str_repeat(' ', $padding),
+        };
+    }
+
+    protected function stopDisplayWidth(string $text): int
+    {
+        $plainText = \preg_replace('/\e\[[\d;]*m/', '', $text) ?? $text;
+        if (\function_exists('mb_strwidth')) {
+            return \mb_strwidth($plainText, 'UTF-8');
+        }
+
+        return \strlen($plainText);
     }
     
     /**
@@ -3519,6 +3586,47 @@ class Stop extends CommandAbstract
         }
     }
 
+    protected function stopInstancesByPrefix(string $prefix, bool $force = false, bool $fastLocal = false): void
+    {
+        $prefix = \trim($prefix);
+        if ($prefix === '') {
+            $this->printer->warning(__('实例前缀不能为空。'));
+            return;
+        }
+
+        $manager = $this->getInstanceManager();
+        $instances = $this->collectStopPrefixInstanceNames($manager, $prefix);
+
+        if ($instances === []) {
+            $this->printer->warning(__('没有找到前缀为 [%{1}] 的实例。', [$prefix]));
+            $this->printer->note(__('使用 server:listing 查看当前实例列表。'));
+            return;
+        }
+
+        $this->printer->setup(__('按前缀停止服务器实例'));
+        echo "\n";
+        $this->printer->note(__('实例前缀：%{1}', [$prefix]));
+        $this->printer->note(__('发现 %{1} 个匹配实例', [\count($instances)]));
+        echo "\n";
+
+        $totalInstances = \count($instances);
+        foreach ($instances as $index => $name) {
+            $this->printer->note(__('进度 [%{1}/%{2}] 正在停止实例 [%{3}]...', [$index + 1, $totalInstances, $name]));
+            if (!$this->acquireStopLock($name)) {
+                $this->printer->warning(__('实例 [%{1}] 正在被其他 stop 任务处理，已跳过。', [$name]));
+                continue;
+            }
+            try {
+                $this->stopInstance($name, $force, $fastLocal);
+            } finally {
+                $this->releaseStopLock();
+            }
+            echo "\n";
+        }
+
+        $this->printer->success(__('前缀 [%{1}] 匹配的实例已处理完成。', [$prefix]));
+    }
+
     /**
      * @return list<string>
      */
@@ -3539,6 +3647,39 @@ class Stop extends CommandAbstract
             }
         }
 
+        return \array_values(\array_unique($names));
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function collectStopPrefixInstanceNames(ServerInstanceManager $manager, string $prefix): array
+    {
+        $prefixLower = \strtolower(\trim($prefix));
+        if ($prefixLower === '') {
+            return [];
+        }
+
+        $names = [];
+        foreach ($manager->listPersistedInstanceNames() as $name) {
+            if (!\str_starts_with(\strtolower($name), $prefixLower)) {
+                continue;
+            }
+
+            $info = $manager->getInstanceInfo($name, false);
+            if ($info === null) {
+                if ($this->hasRecoverableManagedProcessHint($name) || $this->hasRecoverableConfiguredPortHint($name)) {
+                    $names[] = $name;
+                }
+                continue;
+            }
+
+            if (!$this->isInactiveStoppedInstanceRecord($name, $info)) {
+                $names[] = $name;
+            }
+        }
+
+        \sort($names);
         return \array_values(\array_unique($names));
     }
 
@@ -3613,6 +3754,7 @@ class Stop extends CommandAbstract
             [
                 '[name]' => __('实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）'),
                 '-a, --all' => __('停止所有运行中的实例（含 Weline Server 与 CLI 服务器）'),
+                '-pre, --prefix <prefix>' => __('停止所有实例名以该前缀开头的 Weline Server 实例'),
                 '-f, --force' => __('强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc'),
                 '--ipc, --force-ipc' => __('与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略'),
                 '--help' => __('显示帮助信息'),
@@ -3621,6 +3763,7 @@ class Stop extends CommandAbstract
             [
                 __('停止默认实例') => 'php bin/w server:stop',
                 __('停止指定实例') => 'php bin/w server:stop api-server',
+                __('按前缀停止实例') => 'php bin/w server:stop -pre=ai-test-login',
                 __('停止 PHP 内置服务器') => 'php bin/w server:stop cli-server',
                 __('停止所有实例') => 'php bin/w server:stop --all',
                 __('强制停止（本地快速清场）') => 'php bin/w server:stop -f',
