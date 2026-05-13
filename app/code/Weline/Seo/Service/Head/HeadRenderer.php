@@ -25,6 +25,11 @@ class HeadRenderer
 
         $context = $this->resolver->resolve($template, $options);
         $context['_template'] = $template;
+        $frontendTitle = $this->readTemplateData($template, '__weline_frontend_final_title');
+        if ($frontendTitle !== '') {
+            $context['title'] = $frontendTitle;
+            $context['_frontend_title_rendered'] = true;
+        }
         return match ($slot) {
             'meta' => $this->renderMeta($context),
             'canonical' => $this->renderCanonical($context),
@@ -66,7 +71,7 @@ class HeadRenderer
             $keywords = implode(', ', array_filter(array_map('strval', $keywords)));
         }
 
-        if ($title !== '') {
+        if ($title !== '' && empty($context['_frontend_title_rendered'])) {
             $html[] = '<title>' . $this->escape($title) . '</title>';
         }
         if ($description !== '') {
@@ -79,6 +84,14 @@ class HeadRenderer
             $html[] = '<meta name="robots" content="' . $this->escape((string) $context['robots']) . '">';
         }
         return implode("\n", $html);
+    }
+
+    private function readTemplateData($template, string $key): string
+    {
+        if (is_object($template) && method_exists($template, 'getData')) {
+            return trim((string) $template->getData($key));
+        }
+        return '';
     }
 
     /**

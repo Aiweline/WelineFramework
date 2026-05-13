@@ -62,8 +62,9 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('主题遵守说明', (string)($artifacts['markdown'] ?? ''));
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
         self::assertArrayHasKey('content', $firstBlock);
-        self::assertArrayHasKey('why', $firstBlock);
         self::assertArrayHasKey('implementation_note', $firstBlock);
+        self::assertArrayNotHasKey('why', $firstBlock);
+        self::assertArrayNotHasKey('reason', $firstBlock);
         self::assertStringNotContainsString('围绕', (string)($firstBlock['content'] ?? ''));
         self::assertStringNotContainsString('阶段一仅给方向', (string)($firstBlock['content'] ?? ''));
         self::assertNotEmpty($firstBlock['field_plan'][0]['sample'] ?? '');
@@ -228,13 +229,15 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
         self::assertSame($contracts, $artifacts['plan_workbench']['confirmed']['contracts'] ?? []);
         $sharedTask = $artifacts['execution_blueprint']['tasks'][0] ?? [];
-        foreach (['implementation_detail', 'realtime_content', 'reason', 'completion_rule', 'editable_fields'] as $requiredBlockField) {
+        foreach (['implementation_detail', 'realtime_content', 'completion_rule', 'editable_fields'] as $requiredBlockField) {
             self::assertArrayHasKey($requiredBlockField, $sharedTask);
         }
+        self::assertArrayNotHasKey('reason', $sharedTask);
         $pageTask = $artifacts['execution_blueprint']['tasks'][2] ?? [];
-        foreach (['implementation_detail', 'realtime_content', 'reason', 'completion_rule', 'editable_fields'] as $requiredBlockField) {
+        foreach (['implementation_detail', 'realtime_content', 'completion_rule', 'editable_fields'] as $requiredBlockField) {
             self::assertArrayHasKey($requiredBlockField, $pageTask['block'] ?? []);
         }
+        self::assertArrayNotHasKey('reason', $pageTask['block'] ?? []);
         self::assertSame(
             (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
             (string)($pageTask['source_ref']['shared_context_hash'] ?? '')
@@ -607,7 +610,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame('page:home_page:' . $bookHomeBlocks[0], (string)($firstPageBlock['block_key'] ?? ''));
         self::assertNotSame('', (string)($firstPageBlock['implementation_detail'] ?? ''));
         self::assertIsArray($firstPageBlock['realtime_content'] ?? null);
-        self::assertNotSame('', (string)($firstPageBlock['reason'] ?? ''));
+        self::assertArrayNotHasKey('reason', $firstPageBlock);
         self::assertNotSame('', (string)($firstPageBlock['completion_rule'] ?? ''));
         self::assertNotEmpty($firstPageBlock['editable_fields'] ?? []);
         self::assertNotSame('', (string)($firstPageBlock['context_hash'] ?? ''));
@@ -1425,7 +1428,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Stage-1 REQUIREMENT EXPANSION planner', $capturedPrompts[0]);
         self::assertStringContainsString('expand the user one-line requirement', $capturedPrompts[0]);
         self::assertStringContainsString('Do not generate theme, Header/Footer, or page blocks.', $capturedPrompts[0]);
-        self::assertStringContainsString('Stage-1 THEME planner', $capturedPrompts[1]);
+        self::assertStringContainsString('single-stage THEME planner', $capturedPrompts[1]);
         self::assertStringContainsString('Confirmed requirement expansion from step 1', $capturedPrompts[1]);
         self::assertStringContainsString('shared Header/Footer', $capturedPrompts[1]);
         self::assertStringContainsString('Plan locale: zh_Hans_CN', $capturedPrompts[1]);
@@ -1434,7 +1437,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('theme_design and shared_components.header/footer must be concrete implementation decisions', $capturedPrompts[1]);
         self::assertStringContainsString('page_type_overviews', $capturedPrompts[1]);
         self::assertStringContainsString('Anti-monotony rule', $capturedPrompts[1]);
-        self::assertStringContainsString('Stage-1 PAGE planner', $capturedPrompts[2]);
+        self::assertStringContainsString('single-stage PAGE planner', $capturedPrompts[2]);
         self::assertStringContainsString('Plan locale: zh_Hans_CN', $capturedPrompts[2]);
         self::assertStringContainsString('Website content locale: en_US', $capturedPrompts[2]);
         self::assertStringContainsString('Do not use Plan locale for website copy unless it is identical to Website content locale.', $capturedPrompts[2]);

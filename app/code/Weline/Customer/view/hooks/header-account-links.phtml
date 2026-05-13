@@ -12,12 +12,9 @@ $isLoggedIn = $session->isLoggedIn();
 ?>
 
 <?php if ($isLoggedIn): ?>
-    <li role="none"><a href="@url{'customer/account/index'}" role="menuitem"><?= __('账户') ?></a></li>
-    <li role="none"><a href="@url{'customer/account/orders'}" role="menuitem"><?= __('我的订单') ?></a></li>
-    <li role="none"><a href="@url{'customer/account/settings'}" role="menuitem"><?= __('账户设置') ?></a></li>
-    <li role="none"><a href="@url{'customer/account/profile'}" role="menuitem"><?= __('个人资料') ?></a></li>
-    <li role="none"><a href="@url{'customer/account/address'}" role="menuitem"><?= __('收货地址') ?></a></li>
-    <li role="none"><a href="@url{'customer/account/password'}" role="menuitem"><?= __('修改密码') ?></a></li>
+    <li role="none"><a href="@url{'customer/account/index'}#overview" role="menuitem"><?= __('账户') ?></a></li>
+    <li role="none"><a href="@url{'customer/account/index'}#profile" role="menuitem"><?= __('个人资料') ?></a></li>
+    <li role="none"><a href="@url{'customer/account/index'}#security" role="menuitem"><?= __('安全设置') ?></a></li>
     <li role="none" class="divider"></li>
     <li role="none"><a href="@url{'customer/account/logout'}" role="menuitem"><?= __('退出登录') ?></a></li>
 <?php else: ?>
