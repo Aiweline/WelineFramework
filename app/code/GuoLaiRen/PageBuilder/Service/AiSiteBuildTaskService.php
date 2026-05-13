@@ -898,7 +898,6 @@ class AiSiteBuildTaskService
                 // generates generic/irrelevant content (e.g., white students for an Indian
                 // gaming site).
                 $blockGoal = (string)($block['goal'] ?? $block['implementation_detail'] ?? '');
-                $blockReason = (string)($block['reason'] ?? $block['why'] ?? '');
                 $blockStyleDirection = (string)($block['style_direction'] ?? '');
                 $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
                 // 内联 field_plan → field_content_requirements，避免单独私有方法在合并/缓存不一致时出现 undefined method
@@ -915,7 +914,7 @@ class AiSiteBuildTaskService
                     $fieldContentRequirements[] = [
                         'field' => $fieldKey !== '' ? $fieldKey : 'content',
                         'sample' => $this->stripPlanningLanguage($sampleRaw),
-                        'reason' => (string)($fieldRow['reason'] ?? $fieldRow['requirement'] ?? ''),
+                        'implementation_note' => (string)($fieldRow['implementation_note'] ?? $fieldRow['delivery_note'] ?? $fieldRow['requirement'] ?? ''),
                     ];
                 }
                 $execThemeContext = \is_array($executionBlueprint['theme_context_snapshot'] ?? null)
@@ -967,7 +966,9 @@ class AiSiteBuildTaskService
                         'task_goal' => $blockGoal,
                         'content_plan' => $this->extractContentPlanFromStageOneBlock($block),
                         'style_plan' => $this->extractStylePlanFromStageOneBlock($block),
-                        'planning_reason' => $blockReason,
+                        'implementation_detail' => (string)($block['implementation_detail'] ?? $block['implementation_note'] ?? ''),
+                        'design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
+                        'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
                     ],
                     'runtime_context' => [
                         'theme_context_snapshot' => $execThemeContext,

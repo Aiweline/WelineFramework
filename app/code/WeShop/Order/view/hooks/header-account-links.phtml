@@ -1,0 +1,16 @@
+<?php
+/**
+ * @hook-priority 160
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+
+use Weline\Framework\Session\SessionFactory;
+
+$session = SessionFactory::getInstance()->createFrontendSession();
+$isLoggedIn = $session->isLoggedIn();
+?>
+
+<?php if ($isLoggedIn): ?>
+    <li role="none"><a href="@url{'customer/account/index'}#orders" role="menuitem"><?= __('我的订单') ?></a></li>
+<?php endif; ?>

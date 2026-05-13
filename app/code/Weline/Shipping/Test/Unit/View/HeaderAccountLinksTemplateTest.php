@@ -17,8 +17,10 @@ final class HeaderAccountLinksTemplateTest extends TestCase
 
         $this->assertStringNotContainsString("\$frontendUrl = \$this->getUrl('');", $content);
         $this->assertStringNotContainsString('<?= $frontendUrl ?>shipping/', $content);
+        $this->assertStringNotContainsString("@url{'shipping/address/index'}", $content);
+        $this->assertStringNotContainsString("@url{'shipping/delivery/index'}", $content);
         $this->assertStringNotContainsString("\$this->getFrontendUrl('shipping/", $content);
-        $this->assertStringContainsString("@url{'shipping/address/index'}", $content);
-        $this->assertStringContainsString("@url{'shipping/delivery/index'}", $content);
+        $this->assertStringContainsString("@url{'customer/account/index'}#shipping-address", $content);
+        $this->assertStringContainsString("@url{'customer/account/index'}#delivery-address", $content);
     }
 }
