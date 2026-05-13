@@ -45,5 +45,6 @@ class ActiveLocaleCodeProviderTest extends TestCase
             ],
             $provider->getInstalledActiveCodeMap()
         );
+        self::assertSame(['zh_Hans_CN', 'en_US'], $provider->getInstalledActiveCodes());
     }
 }

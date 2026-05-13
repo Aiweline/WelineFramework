@@ -16,8 +16,9 @@
 "Resume failed: %{error}","Resume failed: %{error}"
 "Please login first.",请先登录。
 "Unable to cancel this subscription right now.",暂时无法取消该订阅。
-"My Subscriptions",我的订阅
+我的订阅服务,我的订阅服务
 "Unable to resume this subscription right now.",暂时无法恢复该订阅。
+订阅服务详情,订阅服务详情
 "Subscription page before content",订阅页前置扩展内容
 "Inject content before the subscription list on the storefront subscription page.",在前台订阅列表前注入扩展内容。
 "Subscription item after content",订阅卡片后置扩展内容
@@ -62,11 +63,10 @@
 当前订阅状态不允许恢复,当前订阅状态不允许恢复
 支付失败，订阅已逾期,支付失败，订阅已逾期
 订阅已过期,订阅已过期
-订阅服务,订阅服务
 订阅,订阅
 管理周期性订阅与方案,管理周期性订阅与方案
-管理周期性订阅方案,管理周期性订阅方案
-前往,前往
+订阅信息暂不可用,订阅信息暂不可用
+订阅服务暂时无法加载，请稍后重试。,订阅服务暂时无法加载，请稍后重试。
 "Recurring Orders",周期订单
 Subscriptions,Subscriptions
 "Open Subscriptions",打开订阅中心
@@ -129,4 +129,13 @@ Subscriptions,Subscriptions
 确认暂停此订阅？,确认暂停此订阅？
 确认恢复,确认恢复
 确认恢复此订阅？,确认恢复此订阅？
-我的订阅,我的订阅
+订阅服务,订阅服务
+查看会员、VIP、定期购和自动续费服务，续费周期、状态和取消操作都可以在当前页面完成。,查看会员、VIP、定期购和自动续费服务，续费周期、状态和取消操作都可以在当前页面完成。
+全部订阅,全部订阅
+需关注,需关注
+暂无订阅服务,暂无订阅服务
+您当前还没有开通会员、VIP、定期购或其他周期性服务。开通后，会在这里展示服务计划、价格、周期、下次计费和可执行操作。,您当前还没有开通会员、VIP、定期购或其他周期性服务。开通后，会在这里展示服务计划、价格、周期、下次计费和可执行操作。
+返回账户中心,返回账户中心
+查看详情,查看详情
+可选，说明取消原因,可选，说明取消原因
+收起,收起

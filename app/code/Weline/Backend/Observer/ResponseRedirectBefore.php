@@ -140,7 +140,7 @@ class ResponseRedirectBefore implements ObserverInterface
                 $hint = $sessId !== '' ? \substr($sessId, 0, 8) . '...' : 'none';
                 w_log_warning('[Backend] Redirect to login: cookie_sid=' . $hint . ' (session empty or not logged in)', [], 'session');
                 // 未登录用户重定向到登录页（同源 URL，避免 admin ↔ login 循环重定向）
-                $loginUrl = $this->getBackendLoginUrlSameOrigin();
+                $loginUrl = $this->withBackendLoginReturnUrl($this->getBackendLoginUrlSameOrigin());
                 $data->setData('url', $loginUrl);
                 $data->setData('code', 302);
                 return;
@@ -313,6 +313,45 @@ class ResponseRedirectBefore implements ObserverInterface
         $scheme = $this->request->isSecure() ? 'https' : 'http';
         $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
         return $scheme . '://' . $host . $pathPart;
+    }
+
+    private function withBackendLoginReturnUrl(string $loginUrl): string
+    {
+        if (!$this->request->isGet() || $this->request->isAjax() || $this->request->isIframe()) {
+            return $loginUrl;
+        }
+
+        $currentRequestUrl = $this->getCurrentRequestUrl();
+        if ($currentRequestUrl === '') {
+            return $loginUrl;
+        }
+
+        $currentPath = strtolower((string)(parse_url($currentRequestUrl, PHP_URL_PATH) ?: ''));
+        if ($currentPath === ''
+            || str_ends_with($currentPath, '/admin/login')
+            || str_ends_with($currentPath, '/admin/login/post')
+            || str_ends_with($currentPath, '/admin/login/logout')
+        ) {
+            return $loginUrl;
+        }
+
+        $query = [
+            'no_access_reason' => 'not_logged_in',
+            'return_url' => $currentRequestUrl,
+        ];
+        return $loginUrl . (str_contains($loginUrl, '?') ? '&' : '?') . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function getCurrentRequestUrl(): string
+    {
+        $uri = (string)($this->request->getServer('WELINE_ORIGIN_REQUEST_URI') ?: $this->request->getServer('REQUEST_URI'));
+        if ($uri === '') {
+            return '';
+        }
+
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost');
+        return $scheme . '://' . $host . (str_starts_with($uri, '/') ? $uri : '/' . $uri);
     }
 
     /**

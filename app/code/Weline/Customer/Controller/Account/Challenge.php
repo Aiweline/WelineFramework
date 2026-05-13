@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Customer\Controller\Account;
 
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
+use Weline\Framework\Http\ResponseTerminateException;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\View\Template;
 
 class Challenge extends \Weline\Framework\App\Controller\FrontendController
@@ -21,13 +23,13 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
     {
         $challengeToken = trim((string) ($this->request->getParam('challenge_token') ?? ''));
         if ($challengeToken === '') {
-            $this->getMessageManager()->addError(__('The login challenge token is missing.'));
+            MessageManager::error((string)__('The login challenge token is missing.'));
             return $this->redirect('/customer/account/login');
         }
 
         $expiresAt = $this->challengeHandler->getChallengeExpiresAt($challengeToken);
         if ($expiresAt === null) {
-            $this->getMessageManager()->addError(__('The login challenge is invalid or has expired.'));
+            MessageManager::error((string)__('The login challenge is invalid or has expired.'));
             return $this->redirect('/customer/account/login');
         }
 
@@ -44,23 +46,78 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
         $code = trim((string) ($this->request->getPost('code') ?? ''));
 
         if ($challengeToken === '' || $code === '') {
-            $this->getMessageManager()->addError(__('Please enter the verification code.'));
-            return $this->redirect('/customer/account/challenge?challenge_token=' . urlencode($challengeToken));
+            return $this->respondFailure(
+                (string)__('Please enter the verification code.'),
+                $challengeToken
+            );
         }
 
         try {
             $result = $this->challengeHandler->completeChallenge($challengeToken, $code);
-            $this->getMessageManager()->addSuccess(__('Two-factor verification succeeded.'));
-            return $this->redirect($this->normalizeRedirectPath((string) ($result['redirect_url'] ?? 'customer/account')));
+            return $this->respondSuccess(
+                (string)__('Two-factor verification succeeded.'),
+                (string)($result['redirect_url'] ?? 'customer/account')
+            );
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $throwable) {
-            $this->getMessageManager()->addError($throwable->getMessage());
-            return $this->redirect('/customer/account/challenge?challenge_token=' . urlencode($challengeToken));
+            return $this->respondFailure($throwable->getMessage(), $challengeToken);
         }
+    }
+
+    private function respondSuccess(string $message, string $redirectUrl): string
+    {
+        $redirect = $this->normalizeRedirectPath($redirectUrl);
+        if ($this->expectsJsonResponse()) {
+            return $this->fetchJson([
+                'success' => true,
+                'status' => 'authenticated',
+                'message' => $message,
+                'redirect' => $redirect,
+            ]);
+        }
+
+        MessageManager::success($message);
+        return $this->redirect($redirect);
+    }
+
+    private function respondFailure(string $message, string $challengeToken): string
+    {
+        if ($this->expectsJsonResponse()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $message,
+            ]);
+        }
+
+        MessageManager::error($message);
+        return $this->redirect('/customer/account/challenge?challenge_token=' . rawurlencode($challengeToken));
+    }
+
+    private function expectsJsonResponse(): bool
+    {
+        if ($this->request->isAjax()) {
+            return true;
+        }
+
+        $acceptHeader = strtolower((string)($this->request->getHeader('Accept') ?? ''));
+        return str_contains($acceptHeader, 'application/json');
     }
 
     private function normalizeRedirectPath(string $redirectUrl): string
     {
-        $normalized = ltrim(trim($redirectUrl), '/');
+        $redirectUrl = trim($redirectUrl);
+        if ($redirectUrl === '') {
+            return '/customer/account';
+        }
+
+        if ((bool)preg_match('/^[a-z][a-z0-9+.-]*:/i', $redirectUrl)) {
+            $path = trim((string)(parse_url($redirectUrl, PHP_URL_PATH) ?? ''), '/');
+            $query = trim((string)(parse_url($redirectUrl, PHP_URL_QUERY) ?? ''));
+            $redirectUrl = $path . ($query !== '' ? '?' . $query : '');
+        }
+
+        $normalized = ltrim($redirectUrl, '/');
         if ($normalized === '' || $normalized === 'customer/account/index') {
             return '/customer/account';
         }

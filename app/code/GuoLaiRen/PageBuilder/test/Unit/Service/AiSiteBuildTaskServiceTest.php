@@ -179,6 +179,24 @@ class AiSiteBuildTaskServiceTest extends TestCase
         ]));
     }
 
+    public function testHasConfirmedBuildPlanForBuildAcceptsConfirmedExecutionBlueprint(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $this->assertTrue($service->hasConfirmedBuildPlanForBuild([
+            'plan_confirmed' => 1,
+            'execution_blueprint_confirmed_signature' => 'stage-one-confirmed',
+            'execution_blueprint' => [
+                'pages' => [
+                    ['page_type' => 'home_page', 'title' => 'Home'],
+                ],
+                'tasks' => [
+                    ['task_key' => 'page:home_page:hero', 'page_type' => 'home_page'],
+                ],
+            ],
+        ]));
+    }
+
     public function testNormalizeConfirmedBuildPlanFlagRepairsStaleBuildPlanConfirmedFlag(): void
     {
         $buildPlanService = new AiSiteBuildPlanService();

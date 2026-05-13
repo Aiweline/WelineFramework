@@ -1,100 +1,170 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
+
+$loginSiteName = (string) ($this->getData('login_site_name') ?: 'Weline');
+$defaultLoginLogo = (string) (
+    $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-weline-default.svg')
+    ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png')
+    ?: $this->fetchTagSourceFile('statics', 'Weline_Backend::img/logo.png')
+);
+$configuredLoginLogoDark = (string) $this->getData('login_logo_dark');
+$configuredLoginLogoLight = (string) $this->getData('login_logo_light');
+$loginLogoDark = $configuredLoginLogoDark && !str_contains($configuredLoginLogoDark, '/media/image/backend/logo/logo.png')
+    ? $configuredLoginLogoDark
+    : $defaultLoginLogo;
+$loginLogoLight = $configuredLoginLogoLight && !str_contains($configuredLoginLogoLight, '/media/image/backend/logo/logo.png')
+    ? $configuredLoginLogoLight
+    : $defaultLoginLogo;
+$loginHighlights = [
+    [
+        'icon' => 'ri-shield-keyhole-line',
+        'title' => __('登录保护'),
+        'body' => __('连续异常登录会自动提高验证强度，减少后台入口暴露面。'),
+    ],
+    [
+        'icon' => 'ri-settings-4-line',
+        'title' => __('统一工作台'),
+        'body' => __('内容、配置、权限和模块操作都在同一后台闭环处理。'),
+    ],
+    [
+        'icon' => 'ri-radar-line',
+        'title' => __('可信发布'),
+        'body' => __('后台入口、品牌标识和基础样式都保持统一的可回退策略。'),
+    ],
+];
+$loginSignals = [
+    [
+        'icon' => 'ri-user-settings-line',
+        'title' => __('权限边界清晰'),
+        'body' => __('角色、菜单与访问入口统一受控。'),
+    ],
+    [
+        'icon' => 'ri-rocket-2-line',
+        'title' => __('发布动作集中'),
+        'body' => __('配置调整、内容发布和模块维护在同一工作流里完成。'),
+    ],
+    [
+        'icon' => 'ri-fingerprint-line',
+        'title' => __('受信任环境'),
+        'body' => __('仅在可信设备和网络环境中保存登录状态。'),
+    ],
+];
+$supportTags = [
+    __('账号开通'),
+    __('密码重置'),
+    __('权限分配'),
+];
+$currentYear = date('Y');
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <title><lang>Weline 登录面板</lang></title>
+    <title><?= htmlspecialchars((string) __('登录 %{name} 管理面板', ['name' => $loginSiteName]), ENT_QUOTES, 'UTF-8') ?></title>
     @template(Weline_Admin::common/head.phtml)
     <style>
     :root {
         --login-custom-bg: none;
-        --login-page-bg: linear-gradient(135deg, #edf4ff 0%, #f8fbff 32%, #eff6ff 66%, #eef8f5 100%);
-        --login-page-blur: rgba(255, 255, 255, 0.7);
+        --login-page-bg: linear-gradient(135deg, #eef4ff 0%, #f8fbff 34%, #edf6f2 100%);
+        --login-page-overlay: rgba(255, 255, 255, 0.72);
+        --login-page-grid: rgba(15, 23, 42, 0.05);
+        --login-shell-shadow: 0 36px 110px rgba(15, 23, 42, 0.16);
+        --login-shell-border: rgba(148, 163, 184, 0.2);
         --login-card-bg: rgba(255, 255, 255, 0.88);
-        --login-card-border: rgba(148, 163, 184, 0.18);
-        --login-brand-bg: linear-gradient(155deg, #163b72 0%, #145da7 42%, #0f8cb2 100%);
-        --login-brand-accent: rgba(255, 255, 255, 0.14);
-        --login-brand-border: rgba(255, 255, 255, 0.16);
-        --login-brand-text: rgba(255, 255, 255, 0.9);
-        --login-brand-muted: rgba(219, 234, 254, 0.78);
-        --login-panel-bg: rgba(255, 255, 255, 0.78);
-        --login-panel-shadow: 0 28px 80px rgba(15, 23, 42, 0.16);
+        --login-stage-bg: linear-gradient(160deg, #10233f 0%, #184b7a 46%, #11849b 100%);
+        --login-stage-badge: rgba(255, 255, 255, 0.12);
+        --login-stage-border: rgba(255, 255, 255, 0.15);
+        --login-stage-text: rgba(255, 255, 255, 0.94);
+        --login-stage-muted: rgba(219, 234, 254, 0.82);
+        --login-panel-bg: rgba(249, 251, 255, 0.86);
+        --login-panel-border: rgba(148, 163, 184, 0.16);
+        --login-surface-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(245, 248, 255, 0.9) 100%);
+        --login-surface-border: rgba(148, 163, 184, 0.18);
         --login-text-primary: #0f172a;
         --login-text-secondary: #475569;
         --login-text-muted: #94a3b8;
-        --login-divider-color: rgba(148, 163, 184, 0.22);
-        --login-input-bg: rgba(248, 250, 252, 0.96);
-        --login-input-border: rgba(148, 163, 184, 0.3);
-        --login-input-focus-border: var(--backend-color-primary, #2563eb);
+        --login-divider: rgba(148, 163, 184, 0.22);
+        --login-input-bg: rgba(255, 255, 255, 0.94);
+        --login-input-border: rgba(148, 163, 184, 0.32);
+        --login-input-focus-border: #2563eb;
         --login-input-focus-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
-        --login-btn-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 48%, #0f766e 100%);
-        --login-btn-shadow: 0 18px 36px rgba(37, 99, 235, 0.26);
-        --login-btn-hover-shadow: 0 24px 44px rgba(37, 99, 235, 0.34);
+        --login-button-bg: linear-gradient(135deg, #1f4fd8 0%, #2563eb 45%, #0f7a83 100%);
+        --login-button-shadow: 0 20px 42px rgba(37, 99, 235, 0.28);
+        --login-button-shadow-hover: 0 26px 50px rgba(37, 99, 235, 0.34);
+        --login-accent: #2563eb;
+        --login-accent-soft: rgba(37, 99, 235, 0.12);
     }
 
     [data-layout-mode="dark"] {
-        --login-page-bg: linear-gradient(145deg, #08101d 0%, #0f172a 36%, #0f2237 100%);
-        --login-page-blur: rgba(8, 15, 29, 0.72);
-        --login-card-bg: rgba(8, 15, 29, 0.86);
-        --login-card-border: rgba(71, 85, 105, 0.4);
-        --login-brand-bg: linear-gradient(160deg, #06162e 0%, #123768 40%, #0b6174 100%);
-        --login-brand-accent: rgba(15, 23, 42, 0.22);
-        --login-brand-border: rgba(255, 255, 255, 0.1);
-        --login-brand-muted: rgba(191, 219, 254, 0.76);
-        --login-panel-bg: rgba(8, 15, 29, 0.7);
-        --login-panel-shadow: 0 32px 90px rgba(2, 6, 23, 0.4);
+        --login-page-bg: linear-gradient(145deg, #07111f 0%, #0b1730 34%, #0e2537 100%);
+        --login-page-overlay: rgba(7, 17, 31, 0.64);
+        --login-page-grid: rgba(148, 163, 184, 0.08);
+        --login-shell-shadow: 0 38px 110px rgba(2, 6, 23, 0.5);
+        --login-shell-border: rgba(71, 85, 105, 0.46);
+        --login-card-bg: rgba(8, 15, 29, 0.88);
+        --login-stage-bg: linear-gradient(165deg, #06162b 0%, #0f365c 44%, #0b6875 100%);
+        --login-stage-badge: rgba(15, 23, 42, 0.28);
+        --login-stage-border: rgba(255, 255, 255, 0.08);
+        --login-stage-text: rgba(241, 245, 249, 0.96);
+        --login-stage-muted: rgba(191, 219, 254, 0.78);
+        --login-panel-bg: rgba(10, 17, 31, 0.74);
+        --login-panel-border: rgba(71, 85, 105, 0.4);
+        --login-surface-bg: linear-gradient(180deg, rgba(10, 17, 31, 0.92) 0%, rgba(12, 22, 39, 0.86) 100%);
+        --login-surface-border: rgba(71, 85, 105, 0.34);
         --login-text-primary: #e2e8f0;
         --login-text-secondary: #cbd5e1;
         --login-text-muted: #94a3b8;
-        --login-divider-color: rgba(71, 85, 105, 0.42);
-        --login-input-bg: rgba(15, 23, 42, 0.85);
+        --login-divider: rgba(71, 85, 105, 0.44);
+        --login-input-bg: rgba(15, 23, 42, 0.82);
         --login-input-border: rgba(100, 116, 139, 0.42);
         --login-input-focus-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18);
+        --login-accent-soft: rgba(59, 130, 246, 0.18);
     }
 
-    .weline-admin-login-page {
+    body.weline-admin-login-page {
         position: relative;
         min-height: 100vh;
+        margin: 0;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        overflow-x: hidden;
         background: var(--login-page-bg);
+        color: var(--login-text-primary);
     }
 
-    .weline-admin-login-page::before,
-    .weline-admin-login-page::after {
+    body.weline-admin-login-page::before,
+    body.weline-admin-login-page::after {
         content: '';
         position: absolute;
         inset: 0;
         pointer-events: none;
     }
 
-    .weline-admin-login-page::before {
+    body.weline-admin-login-page::before {
         background:
-            radial-gradient(circle at 12% 18%, rgba(37, 99, 235, 0.22) 0, transparent 26%),
-            radial-gradient(circle at 88% 16%, rgba(14, 165, 233, 0.18) 0, transparent 20%),
-            radial-gradient(circle at 78% 78%, rgba(15, 118, 110, 0.16) 0, transparent 24%),
-            linear-gradient(135deg, transparent 0%, var(--login-page-blur) 100%);
+            radial-gradient(circle at 12% 18%, rgba(37, 99, 235, 0.2) 0, transparent 24%),
+            radial-gradient(circle at 88% 14%, rgba(56, 189, 248, 0.18) 0, transparent 18%),
+            radial-gradient(circle at 74% 78%, rgba(20, 184, 166, 0.14) 0, transparent 24%),
+            linear-gradient(135deg, transparent 0%, var(--login-page-overlay) 100%);
         animation: loginAmbientShift 18s ease-in-out infinite alternate;
         z-index: 0;
     }
 
-    .weline-admin-login-page::after {
+    body.weline-admin-login-page::after {
         background-image:
-            linear-gradient(115deg, rgba(15, 23, 42, 0.05) 0, transparent 32%, transparent 70%, rgba(37, 99, 235, 0.08) 100%),
+            linear-gradient(var(--login-page-grid) 1px, transparent 1px),
+            linear-gradient(90deg, var(--login-page-grid) 1px, transparent 1px),
             var(--login-custom-bg);
+        background-size: 32px 32px, 32px 32px, cover;
         background-position: center;
-        background-repeat: no-repeat;
-        background-size: cover;
+        background-repeat: repeat, repeat, no-repeat;
+        opacity: 0.3;
         mix-blend-mode: multiply;
-        opacity: 0.2;
         z-index: 0;
     }
 
-    [data-layout-mode="dark"] .weline-admin-login-page::after {
+    [data-layout-mode="dark"] body.weline-admin-login-page::after {
         mix-blend-mode: screen;
-        opacity: 0.18;
+        opacity: 0.16;
     }
 
     @keyframes loginAmbientShift {
@@ -102,11 +172,11 @@
             transform: translate3d(0, 0, 0) scale(1);
         }
         100% {
-            transform: translate3d(-1.5%, 1.5%, 0) scale(1.06);
+            transform: translate3d(-1.4%, 1.6%, 0) scale(1.06);
         }
     }
 
-    .weline-admin-login-page .account-pages {
+    .weline-admin-login-viewport {
         position: relative;
         z-index: 1;
         flex: 1 1 auto;
@@ -114,310 +184,395 @@
         align-items: center;
         justify-content: center;
         width: 100%;
-        padding: 2.25rem 1rem;
+        padding: 2.2rem 1rem 1.4rem;
     }
 
-    .weline-admin-login-page .container {
+    .weline-admin-login-shell {
         width: 100%;
-        max-width: 1180px;
-    }
-
-    .weline-admin-login-page > .container-fluid {
-        position: relative;
-        z-index: 1;
-        flex: 0 0 auto;
-        width: 100%;
-        max-width: 100%;
-        padding: 0 1rem 1.25rem;
-        text-align: center;
-    }
-
-    .weline-admin-login-page > .container-fluid .footer-wapper {
-        text-align: center;
+        max-width: 1320px;
     }
 
     .weline-admin-login-card {
         position: relative;
         overflow: hidden;
-        border: 1px solid var(--login-card-border);
-        border-radius: 32px;
+        border: 1px solid var(--login-shell-border);
+        border-radius: 2.25rem;
         background: var(--login-card-bg);
-        box-shadow: var(--login-panel-shadow);
-        backdrop-filter: blur(24px);
+        box-shadow: var(--login-shell-shadow);
+        backdrop-filter: blur(26px);
+        isolation: isolate;
     }
 
     .weline-admin-login-layout {
         display: grid;
-        grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
-        min-height: 680px;
+        grid-template-columns: minmax(0, 1fr) minmax(27rem, 31rem);
+        grid-template-areas: "stage panel";
+        min-height: 740px;
     }
 
-    .weline-admin-login-brand {
+    .weline-admin-login-stage {
+        grid-area: stage;
         position: relative;
-        padding: 2.75rem 2.75rem 2.5rem;
-        background: var(--login-brand-bg);
-        color: #ffffff;
+        display: flex;
+        flex-direction: column;
+        gap: 1.65rem;
+        padding: 2.55rem 2.45rem 2.3rem;
+        background: var(--login-stage-bg);
+        color: var(--login-stage-text);
         overflow: hidden;
     }
 
-    .weline-admin-login-brand::before,
-    .weline-admin-login-brand::after {
+    .weline-admin-login-stage::before,
+    .weline-admin-login-stage::after {
         content: '';
         position: absolute;
         pointer-events: none;
     }
 
-    .weline-admin-login-brand::before {
-        width: 24rem;
-        height: 24rem;
-        top: -8rem;
-        right: -8rem;
+    .weline-admin-login-stage::before {
+        top: -7rem;
+        right: -6rem;
+        width: 22rem;
+        height: 22rem;
         border-radius: 999px;
-        background: radial-gradient(circle, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 68%);
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 70%);
     }
 
-    .weline-admin-login-brand::after {
-        inset: auto -8% -18% auto;
-        width: 17rem;
-        height: 17rem;
+    .weline-admin-login-stage::after {
+        right: 3rem;
+        bottom: -4rem;
+        width: 18rem;
+        height: 18rem;
         border-radius: 2.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        opacity: 0.28;
         transform: rotate(24deg);
-        opacity: 0.3;
     }
 
-    .weline-admin-login-brand-inner {
+    .weline-admin-login-stage-top,
+    .weline-admin-login-stage-body,
+    .weline-admin-login-stage-bottom {
         position: relative;
         z-index: 1;
-        display: flex;
-        flex-direction: column;
-        min-height: 100%;
     }
 
-    .weline-admin-login-brand-badge {
+    .weline-admin-login-stage-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.8rem;
+    }
+
+    .weline-admin-login-stage-badge,
+    .weline-admin-login-stage-site {
         display: inline-flex;
         align-items: center;
-        gap: 0.65rem;
-        width: fit-content;
-        padding: 0.6rem 0.95rem;
-        border: 1px solid var(--login-brand-border);
+        gap: 0.6rem;
+        padding: 0.72rem 1rem;
+        border: 1px solid var(--login-stage-border);
         border-radius: 999px;
-        background: var(--login-brand-accent);
+        background: var(--login-stage-badge);
         color: #ffffff;
         font-size: 0.82rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
+        font-weight: 700;
+        letter-spacing: 0.04em;
     }
 
-    .weline-admin-login-brand-badge-dot {
-        width: 0.55rem;
-        height: 0.55rem;
+    .weline-admin-login-stage-badge::before {
+        content: '';
+        width: 0.58rem;
+        height: 0.58rem;
         border-radius: 999px;
-        background: #f8fafc;
+        background: #ffffff;
         box-shadow: 0 0 0 0.35rem rgba(255, 255, 255, 0.12);
     }
 
-    .weline-admin-login-brand-title {
-        margin: 1.4rem 0 0.9rem;
-        font-size: clamp(2rem, 2.8vw, 2.85rem);
-        line-height: 1.08;
-        letter-spacing: -0.04em;
-        font-weight: 800;
-    }
-
-    .weline-admin-login-brand-description {
-        max-width: 28rem;
-        margin: 0;
+    .weline-admin-login-stage-site i {
         font-size: 1rem;
-        line-height: 1.78;
-        color: var(--login-brand-text);
+        opacity: 0.86;
     }
 
-    .weline-admin-login-brand-highlights {
+    .weline-admin-login-stage-title {
+        max-width: 40rem;
+        margin: 0;
+        font-size: clamp(2.2rem, 3vw, 3.35rem);
+        line-height: 1.04;
+        letter-spacing: -0.05em;
+        font-weight: 850;
+        color: #ffffff;
+    }
+
+    .weline-admin-login-stage-description {
+        max-width: 34rem;
+        margin: 1rem 0 0;
+        font-size: 1.02rem;
+        line-height: 1.78;
+        color: var(--login-stage-muted);
+    }
+
+    .weline-admin-login-stage-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1rem;
-        margin: 2rem 0 0;
+        gap: 0.9rem;
     }
 
-    .weline-admin-login-brand-highlight {
-        padding: 1.1rem 1rem;
-        border: 1px solid var(--login-brand-border);
-        border-radius: 1.35rem;
+    .weline-admin-login-stage-card {
+        position: relative;
+        min-height: 10.2rem;
+        padding: 1.1rem 1.05rem 1rem;
+        border: 1px solid var(--login-stage-border);
+        border-radius: 1.5rem;
         background: rgba(255, 255, 255, 0.08);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(14px);
+        backdrop-filter: blur(16px);
     }
 
-    .weline-admin-login-brand-highlight--wide {
+    .weline-admin-login-stage-card--wide {
         grid-column: 1 / -1;
     }
 
-    .weline-admin-login-brand-highlight-label {
+    .weline-admin-login-stage-card-icon {
         display: inline-flex;
         align-items: center;
-        gap: 0.55rem;
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: #f8fafc;
-        letter-spacing: 0.03em;
+        justify-content: center;
+        width: 2.65rem;
+        height: 2.65rem;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        font-size: 1.1rem;
     }
 
-    .weline-admin-login-brand-highlight-label i {
+    .weline-admin-login-stage-card-title {
+        display: block;
+        margin-top: 0.85rem;
         font-size: 1rem;
+        font-weight: 760;
+        color: #ffffff;
     }
 
-    .weline-admin-login-brand-highlight p {
-        margin: 0.85rem 0 0;
+    .weline-admin-login-stage-card-body {
+        margin: 0.7rem 0 0;
         font-size: 0.92rem;
-        line-height: 1.7;
-        color: var(--login-brand-muted);
+        line-height: 1.72;
+        color: var(--login-stage-muted);
     }
 
-    .weline-admin-login-brand-footer {
-        display: flex;
-        gap: 0.9rem;
-        align-items: flex-start;
-        margin-top: auto;
-        padding: 1.2rem 1.15rem;
-        border-radius: 1.45rem;
-        border: 1px solid rgba(255, 255, 255, 0.14);
+    .weline-admin-login-stage-signals {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+
+    .weline-admin-login-stage-signal {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        align-items: start;
+        padding: 0.95rem;
+        border-radius: 1.15rem;
+        border: 1px solid rgba(255, 255, 255, 0.12);
         background: rgba(8, 15, 29, 0.18);
     }
 
-    .weline-admin-login-brand-footer-icon {
-        flex: 0 0 auto;
-        width: 2.6rem;
-        height: 2.6rem;
-        border-radius: 1rem;
+    .weline-admin-login-stage-signal-icon {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        width: 2.35rem;
+        height: 2.35rem;
+        border-radius: 0.95rem;
+        background: rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+        font-size: 1rem;
+    }
+
+    .weline-admin-login-stage-signal strong {
+        display: block;
+        font-size: 0.94rem;
+        font-weight: 740;
+        color: #ffffff;
+    }
+
+    .weline-admin-login-stage-signal p {
+        margin: 0.25rem 0 0;
+        font-size: 0.84rem;
+        line-height: 1.64;
+        color: var(--login-stage-muted);
+    }
+
+    .weline-admin-login-stage-trust {
+        margin-top: auto;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 1rem;
+        align-items: start;
+        padding: 1.2rem 1.15rem;
+        border-radius: 1.45rem;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(8, 15, 29, 0.22);
+    }
+
+    .weline-admin-login-stage-trust-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.8rem;
+        height: 2.8rem;
+        border-radius: 1rem;
         background: rgba(255, 255, 255, 0.12);
         color: #ffffff;
-        font-size: 1.05rem;
+        font-size: 1.1rem;
     }
 
-    .weline-admin-login-brand-footer strong {
+    .weline-admin-login-stage-trust strong {
         display: block;
-        margin-bottom: 0.2rem;
-        font-size: 0.95rem;
-        font-weight: 700;
+        font-size: 0.98rem;
+        font-weight: 780;
+        color: #ffffff;
     }
 
-    .weline-admin-login-brand-footer p {
-        margin: 0;
-        color: var(--login-brand-muted);
-        font-size: 0.86rem;
-        line-height: 1.65;
+    .weline-admin-login-stage-trust p {
+        margin: 0.38rem 0 0;
+        font-size: 0.9rem;
+        line-height: 1.72;
+        color: var(--login-stage-muted);
     }
 
-    .weline-admin-login-form-panel {
-        display: flex;
-        align-items: center;
-        padding: 2.5rem 2.4rem;
-        background: var(--login-panel-bg);
+    .weline-admin-login-panel {
+        grid-area: panel;
+        position: relative;
+        padding: 2.25rem;
+        border-right: 0;
+        border-left: 1px solid var(--login-panel-border);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.36) 0%, transparent 22%),
+            var(--login-panel-bg);
     }
 
-    .weline-admin-login-form-shell {
+    .weline-admin-login-panel-inner {
         width: 100%;
-        max-width: 26rem;
+        max-width: 29rem;
         margin: 0 auto;
+        padding: 1.7rem;
+        border-radius: 1.85rem;
+        border: 1px solid var(--login-surface-border);
+        background: var(--login-surface-bg);
+        box-shadow: 0 16px 42px rgba(15, 23, 42, 0.06);
+        backdrop-filter: blur(16px);
     }
 
-    .weline-admin-login-logo-wrap {
-        display: flex;
+    .weline-admin-login-header {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.9rem;
+        justify-items: center;
         align-items: center;
-        gap: 1rem;
-        margin-bottom: 1.75rem;
+        margin-bottom: 1.35rem;
     }
 
-    .weline-admin-login-logo-badge {
-        flex: 0 0 auto;
+    .weline-admin-login-logo-frame {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 5.75rem;
-        min-height: 5.75rem;
-        padding: 1rem 1.1rem;
-        border-radius: 1.8rem;
-        background: linear-gradient(150deg, rgba(37, 99, 235, 0.12), rgba(14, 165, 233, 0.04));
+        width: 4.8rem;
+        height: 4.8rem;
+        padding: 0.85rem;
+        border-radius: 1.25rem;
         border: 1px solid rgba(148, 163, 184, 0.2);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36);
+        background: linear-gradient(155deg, rgba(37, 99, 235, 0.12), rgba(15, 118, 110, 0.04));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
     }
 
-    [data-layout-mode="dark"] .weline-admin-login-logo-badge {
-        background: linear-gradient(150deg, rgba(37, 99, 235, 0.2), rgba(14, 165, 233, 0.08));
-        border-color: rgba(71, 85, 105, 0.46);
+    [data-layout-mode="dark"] .weline-admin-login-logo-frame {
+        border-color: rgba(71, 85, 105, 0.42);
+        background: linear-gradient(155deg, rgba(37, 99, 235, 0.2), rgba(15, 118, 110, 0.08));
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
-    .weline-admin-login-page .weline-logo {
+    .weline-admin-login-logo {
         display: block;
         width: auto;
-        height: 3.4rem;
-        max-width: 9.5rem;
-        filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.1));
+        max-width: 100%;
+        height: 3rem;
     }
 
-    .weline-admin-login-page .logo-dark {
+    .weline-admin-login-logo--dark {
         display: block;
     }
 
-    .weline-admin-login-page .logo-light {
+    .weline-admin-login-logo--light {
         display: none;
     }
 
-    [data-layout-mode="dark"] .weline-admin-login-page .logo-dark {
+    [data-layout-mode="dark"] .weline-admin-login-logo--dark {
         display: none;
     }
 
-    [data-layout-mode="dark"] .weline-admin-login-page .logo-light {
+    [data-layout-mode="dark"] .weline-admin-login-logo--light {
         display: block;
     }
 
-    .weline-admin-login-logo-copy {
+    .weline-admin-login-header-copy {
         min-width: 0;
+        width: 100%;
     }
 
-    .weline-admin-login-kicker {
+    .weline-admin-login-header-copy > .weline-admin-login-eyebrow {
+        display: flex;
+        margin: 0 auto;
+    }
+
+    .weline-admin-login-eyebrow,
+    .weline-admin-login-security-pill {
         display: inline-flex;
         align-items: center;
-        gap: 0.45rem;
-        margin-bottom: 0.45rem;
-        color: var(--backend-color-primary, #2563eb);
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
+        gap: 0.5rem;
+        width: fit-content;
+        padding: 0.45rem 0.75rem;
+        border-radius: 999px;
+        background: var(--login-accent-soft);
+        color: var(--login-accent);
+        font-size: 0.78rem;
+        font-weight: 750;
+        letter-spacing: 0.04em;
     }
 
-    .weline-admin-login-kicker::before {
+    .weline-admin-login-eyebrow::before {
         content: '';
-        width: 0.6rem;
-        height: 0.6rem;
+        width: 0.55rem;
+        height: 0.55rem;
         border-radius: 999px;
         background: currentColor;
-        box-shadow: 0 0 0 0.35rem rgba(37, 99, 235, 0.12);
+        box-shadow: 0 0 0 0.32rem rgba(37, 99, 235, 0.12);
     }
 
-    .login-welcome-title {
-        margin: 0;
-        font-size: 1.7rem;
-        font-weight: 800;
-        line-height: 1.18;
-        letter-spacing: -0.04em;
+    .weline-admin-login-heading {
+        margin: 0.75rem 0 0;
+        font-size: clamp(1.75rem, 1.55vw, 2.05rem);
+        line-height: 1.16;
+        letter-spacing: 0;
+        font-weight: 840;
         color: var(--login-text-primary);
     }
 
-    .login-welcome-subtitle {
+    .weline-admin-login-subtitle {
         margin: 0.65rem 0 0;
-        font-size: 0.95rem;
-        line-height: 1.72;
+        font-size: 0.98rem;
+        line-height: 1.65;
         color: var(--login-text-secondary);
     }
 
+    .weline-admin-login-security-pill {
+        margin-top: 0.8rem;
+    }
+
+    .weline-admin-login-security-pill i {
+        font-size: 0.95rem;
+    }
+
     .weline-admin-login-messages {
-        margin-bottom: 1.25rem;
+        margin-bottom: 1.2rem;
     }
 
     .weline-admin-login-messages > div:not(:last-child) {
@@ -428,12 +583,20 @@
         margin-bottom: 0;
         border: 1px solid rgba(148, 163, 184, 0.18);
         border-radius: 1rem;
-        background: rgba(255, 255, 255, 0.62);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+        background: rgba(255, 255, 255, 0.7);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
     }
 
     [data-layout-mode="dark"] .weline-admin-login-messages .alert {
-        background: rgba(15, 23, 42, 0.65);
+        background: rgba(15, 23, 42, 0.72);
+    }
+
+    .weline-admin-login-provider-slot {
+        margin-bottom: 1rem;
+    }
+
+    .weline-admin-login-provider-slot > * + * {
+        margin-top: 0.75rem;
     }
 
     .weline-admin-login-form {
@@ -441,15 +604,15 @@
     }
 
     .login-form-group {
-        margin-bottom: 1.05rem;
+        margin-bottom: 1rem;
     }
 
     .login-form-label {
         display: block;
         margin-bottom: 0.48rem;
         color: var(--login-text-primary);
-        font-size: 0.82rem;
-        font-weight: 700;
+        font-size: 0.83rem;
+        font-weight: 760;
         letter-spacing: 0.04em;
     }
 
@@ -472,22 +635,22 @@
     .login-form-input,
     .login-verification-input {
         width: 100%;
-        height: 3.25rem;
-        border-radius: 1rem;
+        height: 3.4rem;
+        border-radius: 1.15rem;
         border: 1px solid var(--login-input-border);
         background: var(--login-input-bg);
         color: var(--login-text-primary);
-        font-size: 0.95rem;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, transform 0.2s ease;
+        font-size: 0.96rem;
         outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
     }
 
     .login-form-input {
-        padding: 0 1rem 0 2.75rem;
+        padding: 0 1rem 0 2.85rem;
     }
 
     .login-verification-input {
-        padding: 0 0.95rem;
+        padding: 0 1rem;
     }
 
     .login-form-input::placeholder,
@@ -499,8 +662,8 @@
     .login-verification-input:focus {
         border-color: var(--login-input-focus-border);
         box-shadow: var(--login-input-focus-shadow);
-        background: #ffffff;
         transform: translateY(-1px);
+        background: #ffffff;
     }
 
     [data-layout-mode="dark"] .login-form-input:focus,
@@ -509,20 +672,32 @@
     }
 
     .login-input-icon-wrap:focus-within .input-icon {
-        color: var(--backend-color-primary, #2563eb);
+        color: var(--login-accent);
     }
 
     .login-verification-row {
-        margin-bottom: 0.35rem;
+        margin-bottom: 1rem;
+    }
+
+    .login-verification-grid {
+        display: grid;
+        grid-template-columns: minmax(9.5rem, 11rem) 1fr;
+        gap: 0.85rem;
+        align-items: end;
+    }
+
+    .login-verification-preview {
+        display: flex;
     }
 
     .login-verification-code-img {
         width: 100%;
-        height: 3.25rem;
+        height: 3.4rem;
         object-fit: cover;
         cursor: pointer;
-        border-radius: 1rem;
+        border-radius: 1.15rem;
         border: 1px solid var(--login-input-border);
+        background: rgba(255, 255, 255, 0.72);
         transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     }
 
@@ -536,97 +711,118 @@
         margin: 1.1rem 0 1.45rem;
     }
 
-    .weline-admin-login-options .form-check {
+    .weline-admin-login-remember {
         display: inline-flex;
         align-items: center;
-        gap: 0.55rem;
-        padding-left: 0;
+        gap: 0.6rem;
+        color: var(--login-text-primary);
+        font-size: 0.9rem;
+        font-weight: 700;
+        cursor: pointer;
     }
 
-    .weline-admin-login-options .form-check-input {
-        margin: 0;
+    .weline-admin-login-checkbox {
         width: 1.05rem;
         height: 1.05rem;
+        margin: 0;
         border-radius: 0.38rem;
         border: 1px solid var(--login-input-border);
         box-shadow: none;
         cursor: pointer;
     }
 
-    .weline-admin-login-options .form-check-input:checked {
-        border-color: var(--backend-color-primary, #2563eb);
-        background-color: var(--backend-color-primary, #2563eb);
+    .weline-admin-login-checkbox:checked {
+        border-color: var(--login-accent);
+        background-color: var(--login-accent);
     }
 
-    .weline-admin-login-options .form-check-label {
+    .weline-admin-login-option-note {
+        margin: 0.55rem 0 0;
+        font-size: 0.84rem;
+        line-height: 1.7;
         color: var(--login-text-secondary);
-        font-size: 0.86rem;
-        cursor: pointer;
-    }
-
-    .weline-admin-login-help-tip {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 1rem;
-        height: 1rem;
-        margin-left: 0.2rem;
-        color: var(--login-text-muted);
-        font-size: 0.85rem;
-    }
-
-    .weline-admin-login-forgot {
-        text-align: right;
-    }
-
-    .weline-admin-login-forgot a {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        color: var(--backend-color-primary, #2563eb);
-        font-size: 0.86rem;
-        font-weight: 600;
-        text-decoration: none;
-        transition: color 0.2s ease, transform 0.2s ease;
-    }
-
-    .weline-admin-login-forgot a:hover {
-        color: var(--backend-color-primary-dark, #1d4ed8);
-        transform: translateX(2px);
     }
 
     .login-submit-btn {
         position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.55rem;
         width: 100%;
-        height: 3.4rem;
+        height: 3.5rem;
         border: none;
-        border-radius: 1rem;
-        background: var(--login-btn-gradient);
+        border-radius: 1.2rem;
+        background: var(--login-button-bg);
         color: #ffffff;
-        font-size: 0.96rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        overflow: hidden;
+        font-size: 0.98rem;
+        font-weight: 780;
+        letter-spacing: 0.05em;
         cursor: pointer;
-        box-shadow: var(--login-btn-shadow);
+        overflow: hidden;
+        box-shadow: var(--login-button-shadow);
         transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+
+    .login-submit-btn-content,
+    .login-submit-btn-loading {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .login-submit-btn-loading {
+        display: none;
+    }
+
+    .login-submit-spinner {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 999px;
+        border: 2px solid rgba(255, 255, 255, 0.42);
+        border-top-color: #ffffff;
+        animation: weline-admin-login-spin 0.7s linear infinite;
+    }
+
+    .login-submit-btn.is-loading {
+        cursor: wait;
+        pointer-events: none;
+        opacity: 0.92;
+        transform: translateY(0);
+    }
+
+    .login-submit-btn.is-loading .login-submit-btn-content {
+        display: none;
+    }
+
+    .login-submit-btn.is-loading .login-submit-btn-loading {
+        display: inline-flex;
+    }
+
+    @keyframes weline-admin-login-spin {
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     .login-submit-btn::after {
         content: '';
         position: absolute;
         inset: 0;
-        background: linear-gradient(105deg, transparent 20%, rgba(255, 255, 255, 0.26) 50%, transparent 80%);
+        background: linear-gradient(105deg, transparent 18%, rgba(255, 255, 255, 0.24) 50%, transparent 82%);
         transform: translateX(-130%);
         transition: transform 0.45s ease;
     }
 
-    .login-submit-btn:hover {
+    .login-submit-btn:not(.is-loading):hover {
         transform: translateY(-2px);
-        box-shadow: var(--login-btn-hover-shadow);
+        box-shadow: var(--login-button-shadow-hover);
     }
 
-    .login-submit-btn:hover::after {
+    .login-submit-btn:not(.is-loading):hover::after {
         transform: translateX(130%);
     }
 
@@ -641,323 +837,409 @@
         box-shadow: none;
     }
 
-    .login-bottom-links {
-        margin-top: 1.6rem;
+    .weline-admin-login-support {
+        margin-top: 1.45rem;
         padding-top: 1.35rem;
-        border-top: 1px solid var(--login-divider-color);
+        border-top: 1px solid var(--login-divider);
     }
 
-    .login-bottom-links p {
-        margin: 0;
+    .weline-admin-login-support-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-bottom: 0.9rem;
+    }
+
+    .weline-admin-login-support-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.42rem 0.72rem;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.12);
         color: var(--login-text-secondary);
-        font-size: 0.84rem;
+        font-size: 0.76rem;
+        font-weight: 720;
+    }
+
+    .weline-admin-login-support-title {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 780;
+        color: var(--login-text-primary);
+    }
+
+    .weline-admin-login-support-copy {
+        margin: 0.45rem 0 0;
+        font-size: 0.86rem;
+        line-height: 1.72;
+        color: var(--login-text-secondary);
+    }
+
+    .weline-admin-login-copyright {
+        margin-top: 1rem;
+        font-size: 0.8rem;
         line-height: 1.7;
+        color: var(--login-text-muted);
     }
 
-    .login-bottom-links p + p {
-        margin-top: 0.38rem;
-    }
-
-    .login-bottom-links a {
-        color: var(--backend-color-primary, #2563eb);
+    .weline-admin-login-copyright a {
+        color: inherit;
+        font-weight: 640;
         text-decoration: none;
-        font-weight: 700;
     }
 
-    .login-bottom-links a:hover {
-        color: var(--backend-color-primary-dark, #1d4ed8);
+    .weline-admin-login-copyright a:hover {
         text-decoration: underline;
     }
 
-    .login-copyright {
-        color: var(--login-text-muted);
-        font-size: 0.8rem;
-        margin-top: 0.85rem;
+    body.weline-admin-login-page > .container-fluid {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 100%;
+        padding: 0 1rem 1.15rem;
+        text-align: center;
     }
 
-    .login-copyright a {
-        color: inherit;
-        font-weight: 600;
+    body.weline-admin-login-page > .container-fluid .footer-wapper {
+        text-align: center;
+    }
+
+    @media (max-width: 1399.98px) {
+        .weline-admin-login-layout {
+            grid-template-columns: minmax(0, 1fr) minmax(25rem, 28rem);
+        }
+
+        .weline-admin-login-stage {
+            padding-left: 2.15rem;
+            padding-right: 2.15rem;
+        }
+
+        .weline-admin-login-panel {
+            padding: 1.8rem;
+        }
     }
 
     @media (max-width: 1199.98px) {
         .weline-admin-login-layout {
             grid-template-columns: 1fr;
+            grid-template-areas:
+                "panel"
+                "stage";
         }
 
-        .weline-admin-login-brand {
-            padding-bottom: 2rem;
+        .weline-admin-login-panel {
+            border-left: 0;
+            border-bottom: 1px solid var(--login-panel-border);
         }
 
-        .weline-admin-login-brand-footer {
-            margin-top: 1.8rem;
+        .weline-admin-login-stage {
+            padding-top: 2.3rem;
+        }
+
+        .weline-admin-login-stage-signals {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .weline-admin-login-stage-trust {
+            margin-top: 0.2rem;
         }
     }
 
     @media (max-width: 767.98px) {
-        .weline-admin-login-page .account-pages {
-            padding: 1.2rem 0.75rem;
+        .weline-admin-login-viewport {
+            padding: 1rem 0.7rem;
         }
 
         .weline-admin-login-card {
-            border-radius: 1.75rem;
+            border-radius: 1.8rem;
         }
 
-        .weline-admin-login-brand,
-        .weline-admin-login-form-panel {
-            padding: 1.6rem;
+        .weline-admin-login-stage,
+        .weline-admin-login-panel {
+            padding: 1.35rem;
         }
 
-        .weline-admin-login-brand-highlights {
+        .weline-admin-login-panel-inner {
+            padding: 1.2rem;
+            border-radius: 1.5rem;
+        }
+
+        .weline-admin-login-header {
             grid-template-columns: 1fr;
         }
 
-        .weline-admin-login-brand-highlight--wide {
+        .weline-admin-login-logo-frame {
+            width: 4.4rem;
+            height: 4.4rem;
+        }
+
+        .weline-admin-login-stage-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .weline-admin-login-stage-signals {
+            grid-template-columns: 1fr;
+        }
+
+        .weline-admin-login-stage-card--wide {
             grid-column: auto;
         }
 
-        .weline-admin-login-logo-wrap {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .weline-admin-login-options .col-12 + .col-12,
-        .weline-admin-login-options .col-12 + .col-sm {
-            margin-top: 0.75rem;
-        }
-
-        .weline-admin-login-forgot {
-            text-align: left;
+        .login-verification-grid {
+            grid-template-columns: 1fr;
         }
     }
 
     @media (max-width: 575.98px) {
-        .weline-admin-login-page > .container-fluid {
-            padding-bottom: 0.95rem;
+        .weline-admin-login-stage-title {
+            font-size: 2rem;
         }
 
-        .login-welcome-title {
-            font-size: 1.45rem;
+        .weline-admin-login-heading {
+            font-size: 1.75rem;
         }
 
         .login-form-input,
         .login-verification-input,
         .login-verification-code-img,
         .login-submit-btn {
-            height: 3.05rem;
+            height: 3.2rem;
+        }
+
+        body.weline-admin-login-page > .container-fluid {
+            padding-bottom: 0.9rem;
         }
     }
     </style>
 </head>
-<?php
-$loginSiteName = (string) ($this->getData('login_site_name') ?: 'Weline');
-$defaultLoginLogo = (string) (
-    $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-weline-default.svg')
-    ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png')
-    ?: $this->fetchTagSourceFile('statics', 'Weline_Backend::img/logo.png')
-);
-$loginLogoDark = (string) ($this->getData('login_logo_dark') ?: $defaultLoginLogo);
-$loginLogoLight = (string) ($this->getData('login_logo_light') ?: $defaultLoginLogo);
-?>
-<body class="bg-pattern weline-admin-login-page"<?php if ($bgUrl = $this->getData('login_bg_url')): ?> style="--login-custom-bg: url('<?= htmlspecialchars((string) $bgUrl, ENT_QUOTES, 'UTF-8') ?>');"<?php endif; ?>>
-<div class="account-pages">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-12 col-xl-10">
-                <div class="card weline-admin-login-card">
-                    <div class="weline-admin-login-layout">
-                        <section class="weline-admin-login-brand">
-                            <div class="weline-admin-login-brand-inner">
-                                <div class="weline-admin-login-brand-badge">
-                                    <span class="weline-admin-login-brand-badge-dot"></span>
-                                    <span><?= __('后台安全入口') ?></span>
-                                </div>
-                                <h1 class="weline-admin-login-brand-title"><?= __('统一管理 %{name} 的站点、权限与发布流程', ['name' => $loginSiteName]) ?></h1>
-                                <p class="weline-admin-login-brand-description"><?= __('从这里进入后台，继续处理内容、配置、权限、模块和日常运营任务。') ?></p>
+<body class="weline-admin-login-page"<?php if ($bgUrl = $this->getData('login_bg_url')): ?> style="--login-custom-bg: url('<?= htmlspecialchars((string) $bgUrl, ENT_QUOTES, 'UTF-8') ?>');"<?php endif; ?>>
+<main class="weline-admin-login-viewport">
+    <div class="weline-admin-login-shell">
+        <div class="weline-admin-login-card">
+            <div class="weline-admin-login-layout">
+                <div class="weline-admin-login-stage">
+                    <div class="weline-admin-login-stage-top">
+                        <span class="weline-admin-login-stage-badge"><?= __('后台安全入口') ?></span>
+                        <span class="weline-admin-login-stage-site">
+                            <i class="ri-server-line"></i>
+                            <?= htmlspecialchars($loginSiteName, ENT_QUOTES, 'UTF-8') ?>
+                        </span>
+                    </div>
 
-                                <div class="weline-admin-login-brand-highlights">
-                                    <article class="weline-admin-login-brand-highlight">
-                                        <span class="weline-admin-login-brand-highlight-label">
-                                            <i class="ri-shield-keyhole-line"></i>
-                                            <?= __('安全验证') ?>
-                                        </span>
-                                        <p><?= __('登录失败次数过多时，系统会自动提升验证强度，降低后台暴露风险。') ?></p>
-                                    </article>
-                                    <article class="weline-admin-login-brand-highlight">
-                                        <span class="weline-admin-login-brand-highlight-label">
-                                            <i class="ri-layout-grid-line"></i>
-                                            <?= __('核心工作区') ?>
-                                        </span>
-                                        <p><?= __('统一进入模块管理、内容配置、权限分配与发布操作。') ?></p>
-                                    </article>
-                                    <article class="weline-admin-login-brand-highlight weline-admin-login-brand-highlight--wide">
-                                        <span class="weline-admin-login-brand-highlight-label">
-                                            <i class="ri-radar-line"></i>
-                                            <?= __('稳定接入') ?>
-                                        </span>
-                                        <p><?= __('若未配置自定义后台 Logo，登录页会自动回退到内置的 Weline SVG 标识，避免出现空白或破图。') ?></p>
-                                    </article>
-                                </div>
+                    <div class="weline-admin-login-stage-body">
+                        <h1 class="weline-admin-login-stage-title"><?= __('把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里', ['name' => $loginSiteName]) ?></h1>
+                        <p class="weline-admin-login-stage-description"><?= __('这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。') ?></p>
+                    </div>
 
-                                <div class="weline-admin-login-brand-footer">
-                                    <span class="weline-admin-login-brand-footer-icon">
-                                        <i class="ri-fingerprint-line"></i>
-                                    </span>
+                    <div class="weline-admin-login-stage-grid">
+                        <?php foreach ($loginHighlights as $index => $highlight): ?>
+                        <article class="weline-admin-login-stage-card<?= $index === 2 ? ' weline-admin-login-stage-card--wide' : '' ?>">
+                            <span class="weline-admin-login-stage-card-icon">
+                                <i class="<?= htmlspecialchars($highlight['icon'], ENT_QUOTES, 'UTF-8') ?>"></i>
+                            </span>
+                            <strong class="weline-admin-login-stage-card-title"><?= $highlight['title'] ?></strong>
+                            <p class="weline-admin-login-stage-card-body"><?= $highlight['body'] ?></p>
+                        </article>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="weline-admin-login-stage-signals">
+                        <?php foreach ($loginSignals as $signal): ?>
+                        <div class="weline-admin-login-stage-signal">
+                            <span class="weline-admin-login-stage-signal-icon">
+                                <i class="<?= htmlspecialchars($signal['icon'], ENT_QUOTES, 'UTF-8') ?>"></i>
+                            </span>
+                            <div>
+                                <strong><?= $signal['title'] ?></strong>
+                                <p><?= $signal['body'] ?></p>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="weline-admin-login-stage-trust">
+                        <span class="weline-admin-login-stage-trust-icon">
+                            <i class="ri-fingerprint-line"></i>
+                        </span>
+                        <div>
+                            <strong><?= __('保持后台环境可信') ?></strong>
+                            <p><?= __('建议仅在受信任设备上保存登录状态；如果检测到异常锁定、账号状态变化或权限缺失，请联系超级管理员处理。') ?></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="weline-admin-login-panel">
+                    <div class="weline-admin-login-panel-inner">
+                        <div class="weline-admin-login-header">
+                            <div class="weline-admin-login-logo-frame">
+                                <img src="<?= htmlspecialchars($loginLogoDark, ENT_QUOTES, 'UTF-8') ?>"
+                                     alt="<?= htmlspecialchars($loginSiteName, ENT_QUOTES, 'UTF-8') ?>"
+                                     class="weline-admin-login-logo weline-admin-login-logo--dark"
+                                     data-fallback-src="<?= htmlspecialchars($defaultLoginLogo, ENT_QUOTES, 'UTF-8') ?>"
+                                     onerror="if(this.dataset.fallbackApplied!=='1'){this.dataset.fallbackApplied='1';this.src=this.dataset.fallbackSrc;}">
+                                <img src="<?= htmlspecialchars($loginLogoLight, ENT_QUOTES, 'UTF-8') ?>"
+                                     alt="<?= htmlspecialchars($loginSiteName, ENT_QUOTES, 'UTF-8') ?>"
+                                     class="weline-admin-login-logo weline-admin-login-logo--light"
+                                     data-fallback-src="<?= htmlspecialchars($defaultLoginLogo, ENT_QUOTES, 'UTF-8') ?>"
+                                     onerror="if(this.dataset.fallbackApplied!=='1'){this.dataset.fallbackApplied='1';this.src=this.dataset.fallbackSrc;}">
+                            </div>
+                            <div class="weline-admin-login-header-copy">
+                                <span class="weline-admin-login-eyebrow"><?= __('欢迎回来') ?></span>
+                                <h2 class="weline-admin-login-heading"><?= __('登录 %{name} 管理面板', ['name' => $loginSiteName]) ?></h2>
+                                <p class="weline-admin-login-subtitle"><?= __('输入管理员账号后即可继续处理后台任务、配置变更与权限操作。') ?></p>
+                                <?php if ($this->getData('need_backend_verification_code')): ?>
+                                <span class="weline-admin-login-security-pill">
+                                    <i class="ri-shield-keyhole-line"></i>
+                                    <?= __('安全验证已启用') ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="weline-admin-login-messages">
+                            <?php if (!empty($this->getData('no_access_message'))): ?>
+                            <div><?= $this->getData('no_access_message') ?></div>
+                            <?php endif; ?>
+                            <?php if ($msg = $this->getData('login_flash_message')): ?>
+                            <div><?= $msg ?></div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="weline-admin-login-provider-slot">
+                            <w:hook name="Weline_Admin::backend::partials::login::providers"/>
+                        </div>
+
+                        <form class="weline-admin-login-form" action="<?= htmlspecialchars((string) $this->getData('post_url'), ENT_QUOTES, 'UTF-8') ?>" method="post" data-login-form>
+                            <?= $this->getFormKey($this->getData('post_url')) ?>
+                            <?php if ((string)$this->getData('return_url') !== ''): ?>
+                            <input type="hidden"
+                                   name="return_url"
+                                   value="<?= htmlspecialchars((string)$this->getData('return_url'), ENT_QUOTES, 'UTF-8') ?>">
+                            <?php endif; ?>
+
+                            <div class="login-form-group">
+                                <label class="login-form-label" for="username"><?= __('管理员') ?></label>
+                                <div class="login-input-icon-wrap">
+                                    <span class="input-icon"><i class="ri-user-3-line"></i></span>
+                                    <input type="text"
+                                           class="login-form-input"
+                                           id="username"
+                                           name="username"
+                                           value=""
+                                           autocomplete="username"
+                                           required
+                                           placeholder="<?= htmlspecialchars((string) __('请输入管理员账号'), ENT_QUOTES, 'UTF-8') ?>">
+                                </div>
+                            </div>
+
+                            <div class="login-form-group">
+                                <label class="login-form-label" for="userpassword"><?= __('密码') ?></label>
+                                <div class="login-input-icon-wrap">
+                                    <span class="input-icon"><i class="ri-lock-2-line"></i></span>
+                                    <input type="password"
+                                           class="login-form-input"
+                                           id="userpassword"
+                                           name="password"
+                                           value=""
+                                           autocomplete="current-password"
+                                           required
+                                           placeholder="<?= htmlspecialchars((string) __('请输入密码'), ENT_QUOTES, 'UTF-8') ?>">
+                                </div>
+                            </div>
+
+                            <?php if ($this->getData('need_backend_verification_code')):
+                                $verificationCodeUrl = (string) $this->getData('backend_verification_code_url');
+                                $escapedVerificationCodeUrl = htmlspecialchars($verificationCodeUrl, ENT_QUOTES, 'UTF-8');
+                                ?>
+                            <div class="login-form-group login-verification-row">
+                                <div class="login-verification-grid">
+                                    <div class="login-verification-preview">
+                                        <img id="verification-code-img"
+                                             src="<?= $escapedVerificationCodeUrl ?>?t=<?= time() ?>"
+                                             data-base-src="<?= $escapedVerificationCodeUrl ?>"
+                                             alt="<?= htmlspecialchars((string) __('验证码'), ENT_QUOTES, 'UTF-8') ?>"
+                                             class="login-verification-code-img"
+                                             title="<?= htmlspecialchars((string) __('点击刷新验证码'), ENT_QUOTES, 'UTF-8') ?>"
+                                             onerror="if(this.dataset.retry!=='1'){this.dataset.retry='1';this.src=(this.dataset.baseSrc||this.src.split('?')[0])+'?t='+Date.now();}"
+                                             onclick="this.src=(this.dataset.baseSrc||'<?= $escapedVerificationCodeUrl ?>')+'?t='+Date.now()">
+                                    </div>
                                     <div>
-                                        <strong><?= __('保持登录环境可信') ?></strong>
-                                        <p><?= __('建议仅在受信任设备上勾选记住我；若检测到异常状态，请先重置密码或联系其他管理员。') ?></p>
+                                        <label class="login-form-label" for="login-code"><?= __('验证码') ?></label>
+                                        <input id="login-code"
+                                               name="code"
+                                               type="text"
+                                               class="login-verification-input"
+                                               value=""
+                                               autocomplete="one-time-code"
+                                               required
+                                               placeholder="<?= htmlspecialchars((string) __('请输入验证码'), ENT_QUOTES, 'UTF-8') ?>">
                                     </div>
                                 </div>
                             </div>
-                        </section>
+                            <?php endif; ?>
 
-                        <section class="weline-admin-login-form-panel">
-                            <div class="weline-admin-login-form-shell">
-                                <div class="weline-admin-login-logo-wrap">
-                                    <div class="weline-admin-login-logo-badge">
-                                        <img src="<?= htmlspecialchars($loginLogoDark, ENT_QUOTES, 'UTF-8') ?>"
-                                             alt="<?= htmlspecialchars($loginSiteName, ENT_QUOTES, 'UTF-8') ?>"
-                                             class="weline-logo auth-logo logo-dark"
-                                             data-fallback-src="<?= htmlspecialchars($defaultLoginLogo, ENT_QUOTES, 'UTF-8') ?>"
-                                             onerror="if(this.dataset.fallbackApplied!=='1'){this.dataset.fallbackApplied='1';this.src=this.dataset.fallbackSrc;}">
-                                        <img src="<?= htmlspecialchars($loginLogoLight, ENT_QUOTES, 'UTF-8') ?>"
-                                             alt="<?= htmlspecialchars($loginSiteName, ENT_QUOTES, 'UTF-8') ?>"
-                                             class="weline-logo auth-logo logo-light"
-                                             data-fallback-src="<?= htmlspecialchars($defaultLoginLogo, ENT_QUOTES, 'UTF-8') ?>"
-                                             onerror="if(this.dataset.fallbackApplied!=='1'){this.dataset.fallbackApplied='1';this.src=this.dataset.fallbackSrc;}">
-                                    </div>
-                                    <div class="weline-admin-login-logo-copy">
-                                        <span class="weline-admin-login-kicker"><?= __('欢迎回来') ?></span>
-                                        <h2 class="login-welcome-title"><?= __('登录 %{name} 管理面板', ['name' => $loginSiteName]) ?></h2>
-                                        <p class="login-welcome-subtitle"><?= __('输入管理员账号后即可继续处理后台任务与配置。') ?></p>
-                                    </div>
-                                </div>
-
-                                <div class="weline-admin-login-messages">
-                                    <?php if (!empty($this->getData('no_access_message'))): ?>
-                                    <div><?= $this->getData('no_access_message') ?></div>
-                                    <?php endif; ?>
-                                    <?php if ($msg = $this->getData('login_flash_message')): ?>
-                                    <div><?= $msg ?></div>
-                                    <?php endif; ?>
-                                </div>
-
-                                <w:hook name="Weline_Admin::backend::partials::login::providers"/>
-
-                                <form class="form-horizontal weline-admin-login-form" action="<?= $this->getData('post_url') ?>" method="post">
-                                    <?= $this->getFormKey($this->getData('post_url')) ?>
-
-                                    <div class="login-form-group">
-                                        <label class="login-form-label" for="username"><?= __('管理员') ?></label>
-                                        <div class="login-input-icon-wrap">
-                                            <span class="input-icon"><i class="ri-user-3-line"></i></span>
-                                            <input type="text"
-                                                   class="login-form-input"
-                                                   id="username"
-                                                   name="username"
-                                                   value=""
-                                                   autocomplete="username"
-                                                   required
-                                                   placeholder="<?= __('输入管理员') ?>">
-                                        </div>
-                                    </div>
-
-                                    <div class="login-form-group">
-                                        <label class="login-form-label" for="userpassword"><?= __('密码') ?></label>
-                                        <div class="login-input-icon-wrap">
-                                            <span class="input-icon"><i class="ri-lock-2-line"></i></span>
-                                            <input type="password"
-                                                   class="login-form-input"
-                                                   id="userpassword"
-                                                   name="password"
-                                                   value=""
-                                                   autocomplete="current-password"
-                                                   required
-                                                   placeholder="<?= __('输入密码') ?>">
-                                        </div>
-                                    </div>
-
-                                    <?php if ($this->getData('need_backend_verification_code')) {
-                                        $verificationCodeUrl = (string) $this->getData('backend_verification_code_url');
-                                        ?>
-                                    <div class="login-form-group login-verification-row">
-                                        <div class="row g-2 align-items-end">
-                                            <div class="col-5">
-                                                <img id="verification-code-img"
-                                                     src="<?= $verificationCodeUrl ?>?t=<?= time() ?>"
-                                                     data-base-src="<?= $verificationCodeUrl ?>"
-                                                     alt="<?= __('验证码') ?>"
-                                                     class="login-verification-code-img"
-                                                     title="<?= __('点击刷新验证码') ?>"
-                                                     onerror="if(this.dataset.retry!=='1'){this.dataset.retry='1';this.src=(this.dataset.baseSrc||this.src.split('?')[0])+'?t='+Date.now();}"
-                                                     onclick="this.src=(this.dataset.baseSrc||'<?= $verificationCodeUrl ?>')+'?t='+Date.now()">
-                                            </div>
-                                            <div class="col-7">
-                                                <label class="login-form-label" for="login-code"><?= __('验证码') ?></label>
-                                                <input id="login-code"
-                                                       name="code"
-                                                       type="text"
-                                                       class="login-verification-input"
-                                                       value=""
-                                                       required
-                                                       placeholder="<?= __('请输入验证码') ?>">
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <?php } ?>
-
-                                    <?php
-                                    /**@var \Weline\Framework\Session\Session $session */
-                                    $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-                                    ?>
-                                    <div class="row weline-admin-login-options align-items-center">
-                                        <div class="col-12 col-sm-auto">
-                                            <div class="form-check">
-                                                <input type="checkbox"
-                                                       class="form-check-input"
-                                                       name="remember"
-                                                       id="customControlInline" <?= $session->getData('remember_expire_time') ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="customControlInline">
-                                                    <?= __('记住我') ?>
-                                                    <span class="weline-admin-login-help-tip"
-                                                          data-bs-toggle="tooltip"
-                                                          title="<?= htmlspecialchars((string) __('保持登录一周。'), ENT_QUOTES, 'UTF-8') ?>">
-                                                        <i class="ri-question-fill"></i>
-                                                    </span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-12 col-sm">
-                                            <div class="weline-admin-login-forgot">
-                                                <a href="auth-recoverpw.html">
-                                                    <i class="ri-lock-line"></i>
-                                                    <?= __('忘记密码？') ?>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <button class="login-submit-btn <?php if ($session->getData('backend_disable_login')) echo 'disable'; ?>" type="submit">
-                                        <?= __('登录') ?>
-                                    </button>
-                                </form>
-
-                                <div class="login-bottom-links">
-                                    <p><?= __('还没有账号？') ?> <a href="auth-register.html"><?= __('注册') ?></a></p>
-                                    <p><?= __('如果账号被锁定或需要开通权限，请联系已有超级管理员处理。') ?></p>
-                                    <p class="login-copyright">&copy;
-                                        <script>document.write(new Date().getFullYear())</script>
-                                        Weline. Crafted with <i class="ri-heart-fill text-danger"></i> By <a href="https://www.aiweline.com/">秋枫雁飞</a>
-                                    </p>
-                                </div>
+                            <?php
+                            /** @var \Weline\Framework\Session\Session $session */
+                            $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+                            ?>
+                            <div class="weline-admin-login-options">
+                                <label class="weline-admin-login-remember" for="customControlInline">
+                                    <input type="checkbox"
+                                           class="weline-admin-login-checkbox"
+                                           name="remember"
+                                           id="customControlInline" <?= $session->getData('remember_expire_time') ? 'checked' : '' ?>>
+                                    <span><?= __('记住我') ?></span>
+                                </label>
+                                <p class="weline-admin-login-option-note"><?= __('仅在你确认可信的设备和网络环境中保存登录状态。') ?></p>
                             </div>
-                        </section>
+
+                            <button class="login-submit-btn<?php if ($session->getData('backend_disable_login')) echo ' disable'; ?>" type="submit" data-login-submit>
+                                <span class="login-submit-btn-content"><?= __('登录') ?></span>
+                                <span class="login-submit-btn-loading" aria-live="polite">
+                                    <span class="login-submit-spinner" aria-hidden="true"></span>
+                                    <?= __('登录中') ?>
+                                </span>
+                            </button>
+                        </form>
+
+                        <div class="weline-admin-login-support">
+                            <div class="weline-admin-login-support-tags">
+                                <?php foreach ($supportTags as $supportTag): ?>
+                                <span class="weline-admin-login-support-tag"><?= $supportTag ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                            <p class="weline-admin-login-support-title"><?= __('管理员账号由超级管理员统一开通与维护') ?></p>
+                            <p class="weline-admin-login-support-copy"><?= __('如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。') ?></p>
+                            <p class="weline-admin-login-support-copy"><?= __('若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。') ?></p>
+                            <p class="weline-admin-login-copyright">&copy; <?= $currentYear ?> Weline. Crafted with <i class="ri-heart-fill text-danger"></i> By <a href="https://www.aiweline.com/">秋枫雁飞</a></p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+</main>
 @template(Weline_Admin::common/footer.phtml)
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.querySelector('[data-login-form]');
+    if (!form) {
+        return;
+    }
+
+    form.addEventListener('submit', function (event) {
+        var button = form.querySelector('[data-login-submit]');
+        if (!button || button.classList.contains('disable')) {
+            event.preventDefault();
+            return;
+        }
+
+        button.classList.add('is-loading');
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+    });
+});
+</script>
 </body>
 </html>

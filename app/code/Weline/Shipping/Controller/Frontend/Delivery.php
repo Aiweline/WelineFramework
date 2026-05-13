@@ -8,6 +8,7 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\DeliveryAddressService;
 
 class Delivery extends FrontendController
@@ -15,11 +16,13 @@ class Delivery extends FrontendController
     protected ?string $layoutType = 'account.dashboard';
 
     private DeliveryAddressService $service;
+    private AddressFormatter $addressFormatter;
     private AuthenticatedSessionInterface $frontendSession;
 
     public function __construct(ObjectManager $objectManager)
     {
         $this->service = $objectManager->getInstance(DeliveryAddressService::class);
+        $this->addressFormatter = $objectManager->getInstance(AddressFormatter::class);
         $this->frontendSession = SessionFactory::getInstance()->createFrontendSession();
     }
 
@@ -48,7 +51,7 @@ class Delivery extends FrontendController
             return $this->json([
                 'success' => true,
                 'message' => $message,
-                'data' => $address->getData(),
+                'data' => $this->addressFormatter->toPayload($address->getData()),
             ]);
         } catch (\Throwable $throwable) {
             return $this->json([

@@ -187,6 +187,10 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
 
         self::assertArrayHasKey('page:home_page:content-home-page-home-hero', $slots);
+        self::assertArrayHasKey('page:home_page:content-home-page-features', $slots);
+        self::assertArrayNotHasKey('home_hero', $slots);
+        self::assertArrayNotHasKey('page:home_page:home_hero', $slots);
+        self::assertArrayNotHasKey('page:home_page:features', $slots);
         $heroSlot = $slots['page:home_page:content-home-page-home-hero'];
         self::assertSame('hero_image', (string)($heroSlot['slot_type'] ?? ''));
         self::assertStringContainsString('Hero banner background', (string)($heroSlot['label'] ?? ''));

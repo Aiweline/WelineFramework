@@ -137,11 +137,13 @@ class Page extends FrontendController
         $previewStyleCode = $isPreview ? trim((string)$this->request->getGet('style_code', '')) : '';
 
         // 获取URL中的语言参数
-        $requestedLocale = $this->request->getGet('lang', $this->request->getGet('locale'));
+        $requestedLocale = $this->normalizeRequestedLocale(
+            $this->request->getGet('lang', $this->request->getGet('locale'))
+        );
         
         // 如果URL中指定了语言，更新Cookie
         if ($requestedLocale) {
-            \Weline\Framework\Http\Cookie::set('WELINE_USER_LANG', $requestedLocale, 3600 * 24 * 30);
+            $this->syncRequestedLocale($requestedLocale);
         }
         
         // 获取当前使用的语言（从Cookie或URL参数）
@@ -331,7 +333,7 @@ class Page extends FrontendController
                     }
                 }
 
-                $html = $this->pageRenderService->render(
+                $html = $this->pageRenderService->setRequest($this->request)->render(
                     $page,
                     $renderMode,
                     $currentLocale,
@@ -370,6 +372,30 @@ class Page extends FrontendController
         }
 
         return null;
+    }
+
+    private function normalizeRequestedLocale(mixed $locale): string
+    {
+        $locale = \trim((string)$locale);
+        if ($locale === '') {
+            return '';
+        }
+
+        $locale = \str_replace('-', '_', $locale);
+        if (!\preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(?:_[A-Z]{2})?$/', $locale)) {
+            return '';
+        }
+
+        return $locale;
+    }
+
+    private function syncRequestedLocale(string $locale): void
+    {
+        Cookie::set('WELINE_USER_LANG', $locale, 3600 * 24 * 30);
+        RequestContext::locale($locale);
+        WelineEnv::set('user.lang', $locale, 'PageBuilder frontend query locale');
+        $_SERVER['WELINE_USER_LANG'] = $locale;
+        $this->request->setServer('WELINE_USER_LANG', $locale);
     }
 
     private function currentHostCandidates(): array

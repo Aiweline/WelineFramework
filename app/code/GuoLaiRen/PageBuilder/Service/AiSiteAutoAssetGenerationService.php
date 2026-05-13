@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteAutoAssetGenerationService
 {
@@ -14,6 +15,7 @@ class AiSiteAutoAssetGenerationService
         private readonly AiSiteAssetManifestService $manifestService,
         private readonly ?AiSiteReferenceImageInsightService $referenceImageInsightService = null,
         private readonly mixed $imageGenerator = null,
+        private readonly mixed $contentGateInspector = null,
     ) {
     }
 
@@ -37,6 +39,7 @@ class AiSiteAutoAssetGenerationService
         }
         $scope['asset_manifest'] = $manifest;
         $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+        $this->assertContentGatePassedBeforeImageGeneration($scope);
 
         $generatedSlots = [];
         $failedSlots = [];
@@ -51,6 +54,7 @@ class AiSiteAutoAssetGenerationService
                 continue;
             }
 
+            $prompt = '';
             try {
                 $prompt = $this->manifestService->buildPrompt($slot, $scope);
                 if ($prompt === '') {
@@ -113,6 +117,162 @@ class AiSiteAutoAssetGenerationService
     }
 
     /**
+     * Generate one image exactly when a block needs it. This keeps image work
+     * inside the block build flow instead of prebuilding a separate asset batch.
+     *
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $slotSeed
+     * @return array{
+     *   scope:array<string,mixed>,
+     *   slot_id:string,
+     *   final_url:string,
+     *   generated:bool,
+     *   failed_slot?:array{slot_id:string,message:string}
+     * }
+     */
+    public function generateSlotAsset(AiSiteAgentSession $session, int $adminId, array $scope, string $slotId, array $slotSeed = []): array
+    {
+        $slotId = \trim($slotId);
+        if ($slotId === '') {
+            return [
+                'scope' => $scope,
+                'slot_id' => '',
+                'final_url' => '',
+                'generated' => false,
+            ];
+        }
+
+        $scope = $this->ensureReferenceImageInsights($scope);
+        $manifest = $this->manifestService->syncFromBuildPlan($scope);
+        $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
+        $manifest = $this->manifestService->discardPlaceholderGeneratedAssets($manifest);
+        if ($placeholderUrls !== []) {
+            $scope = $this->clearPlaceholderIdentityAssetsFromScope($scope, $placeholderUrls);
+        }
+
+        $slot = $this->manifestService->getSlot($manifest, $slotId);
+        if ($slot === []) {
+            $manifest = $this->manifestService->upsert($manifest, \array_replace([
+                'slot_id' => $slotId,
+                'slot_type' => 'section_image',
+                'kind' => 'section_visual',
+                'source' => 'planned',
+                'status' => 'pending',
+                'final_url' => '',
+                'locked_by_user' => 0,
+            ], $slotSeed));
+            $slot = $this->manifestService->getSlot($manifest, $slotId);
+        }
+
+        $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+        if ($finalUrl !== '') {
+            $scope['asset_manifest'] = $manifest;
+            $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+            return [
+                'scope' => $scope,
+                'slot_id' => $slotId,
+                'final_url' => $finalUrl,
+                'generated' => false,
+            ];
+        }
+
+        $scope['asset_manifest'] = $manifest;
+        $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+        if ($this->shouldUsePlaceholderFallback($scope)) {
+            return [
+                'scope' => $scope,
+                'slot_id' => $slotId,
+                'final_url' => '',
+                'generated' => false,
+            ];
+        }
+
+        try {
+            $prompt = $this->manifestService->buildPrompt($slot, $scope);
+            if ($prompt === '') {
+                throw new \RuntimeException('Asset slot prompt brief is empty: ' . $slotId);
+            }
+
+            $manifest = $this->manifestService->markGenerating($manifest, $slotId);
+            $lastImageThrowable = null;
+            $result = [];
+            $image = [];
+            for ($attempt = 1; $attempt <= 2; $attempt++) {
+                try {
+                    $result = $this->generateImage($prompt, $adminId, $slotId);
+                    $image = $this->firstGeneratedImage($result);
+                    $lastImageThrowable = null;
+                    break;
+                } catch (\Throwable $imageThrowable) {
+                    $lastImageThrowable = $imageThrowable;
+                    \w_log_warning('[AI Site Asset Image Retry] slot=' . $slotId . ' attempt=' . $attempt . '/2: ' . $imageThrowable->getMessage());
+                    if ($attempt >= 2) {
+                        throw $imageThrowable;
+                    }
+                }
+            }
+            if ($lastImageThrowable instanceof \Throwable) {
+                throw $lastImageThrowable;
+            }
+            [$bytes, $mimeType] = $this->resolveImageBytes($image);
+            if ($bytes === '') {
+                throw new \RuntimeException('Image generation returned empty image bytes.');
+            }
+
+            $relativePath = $this->buildTargetPath($scope, $session, $slotId, $bytes, $mimeType);
+            $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
+            $directory = \dirname($absolutePath);
+            if (!\is_dir($directory) && !\mkdir($directory, 0755, true) && !\is_dir($directory)) {
+                throw new \RuntimeException('Failed to create image asset directory: ' . $directory);
+            }
+            if (\file_put_contents($absolutePath, $bytes) === false) {
+                throw new \RuntimeException('Failed to write image asset file: ' . $absolutePath);
+            }
+
+            $finalUrl = '/' . \str_replace('\\', '/', $relativePath);
+            $variant = [
+                'url' => $finalUrl,
+                'mime_type' => $mimeType,
+                'path' => $relativePath,
+                'mode' => 'inline_block',
+                'model' => (string)($result['model'] ?? ''),
+                'revised_prompt' => (string)($image['revised_prompt'] ?? ''),
+            ];
+            $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
+            $scope['asset_manifest'] = $manifest;
+            $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+            $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
+            $scope = $this->clearAssetImageGenerationFailureForSlot($scope, $slotId);
+
+            return [
+                'scope' => $scope,
+                'slot_id' => $slotId,
+                'final_url' => $finalUrl,
+                'generated' => true,
+            ];
+        } catch (\Throwable $throwable) {
+            $manifest = $this->manifestService->recordError($manifest, $slotId, $throwable->getMessage());
+            $scope['asset_manifest'] = $manifest;
+            $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+            $scope = $this->recordAssetImageGenerationFailures($scope, [[
+                'slot_id' => $slotId,
+                'message' => $throwable->getMessage(),
+            ]]);
+
+            return [
+                'scope' => $scope,
+                'slot_id' => $slotId,
+                'final_url' => '',
+                'generated' => false,
+                'failed_slot' => [
+                    'slot_id' => $slotId,
+                    'message' => $throwable->getMessage(),
+                ],
+            ];
+        }
+    }
+
+    /**
      * Placeholder image files are an explicit operator fallback only. Normal
      * build flow must call the text-to-image model or expose a visible failure.
      *
@@ -120,6 +280,80 @@ class AiSiteAutoAssetGenerationService
      * 强行契约要求此场景必须沿用第一阶段已落地的 verified_assets，并对剩余孤儿 slot 用占位写盘
      * 回退，而非冒险触发真实图像生成超时把整个构建拖死。
      *
+     * @param array<string,mixed> $scope
+     */
+    private function assertContentGatePassedBeforeImageGeneration(array $scope): void
+    {
+        if (!$this->shouldRequireContentGateBeforeImages($scope)) {
+            return;
+        }
+
+        $report = $this->inspectContentGate($scope);
+        if (!empty($report['passed'])) {
+            return;
+        }
+
+        $failures = [];
+        foreach (\is_array($report['items'] ?? null) ? $report['items'] : [] as $item) {
+            if (!\is_array($item) || empty($item['blocking']) || !empty($item['ok'])) {
+                continue;
+            }
+            $key = \trim((string)($item['key'] ?? ''));
+            $label = \trim((string)($item['label'] ?? ''));
+            $failures[] = $key !== '' ? $key . ($label !== '' ? ': ' . $label : '') : ($label !== '' ? $label : 'unknown');
+        }
+
+        throw new \RuntimeException(
+            'Content quality gate must pass before image generation: '
+            . ($failures !== [] ? \implode('; ', \array_slice($failures, 0, 6)) : 'unknown content failure')
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function shouldRequireContentGateBeforeImages(array $scope): bool
+    {
+        if ((int)($scope['content_generation_gate_required'] ?? 0) === 1) {
+            return true;
+        }
+        if ((int)($scope['content_generation_gate_skip'] ?? 0) === 1) {
+            return false;
+        }
+
+        $summary = [];
+        if (\is_array($scope['build_summary']['task_summary'] ?? null)) {
+            $summary = $scope['build_summary']['task_summary'];
+        } elseif (\is_array($scope['build_task_summary'] ?? null)) {
+            $summary = $scope['build_task_summary'];
+        }
+
+        if ($summary === [] || (int)($summary['total'] ?? 0) <= 0) {
+            return false;
+        }
+
+        return (int)($summary['pending'] ?? 0) <= 0
+            && (int)($summary['running'] ?? 0) <= 0
+            && (int)($summary['failed'] ?? 0) <= 0;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function inspectContentGate(array $scope): array
+    {
+        if (\is_callable($this->contentGateInspector)) {
+            $report = ($this->contentGateInspector)($scope);
+            return \is_array($report) ? $report : ['passed' => false, 'items' => []];
+        }
+
+        /** @var AiSiteQualityGateService $qualityGateService */
+        $qualityGateService = ObjectManager::getInstance(AiSiteQualityGateService::class);
+        return $qualityGateService->inspectContentGate($scope);
+    }
+
+    /**
      * @param array<string,mixed> $scope
      */
     private function shouldUsePlaceholderFallback(array $scope): bool
@@ -132,6 +366,11 @@ class AiSiteAutoAssetGenerationService
      */
     private function generateImage(string $prompt, int $adminId, string $slotId): array
     {
+        $imageSize = \preg_match('/(?:^|[:_\-\/])(hero|banner|cover)(?:$|[:_\-\/])/i', $slotId) === 1
+            ? '1792x1024'
+            : '1024x1024';
+        $isHeroImage = \preg_match('/(?:^|[:_\-\/])(hero|banner|cover)(?:$|[:_\-\/])/i', $slotId) === 1;
+
         if ($this->imageGenerator !== null) {
             if (!\is_callable($this->imageGenerator)) {
                 throw new \RuntimeException('Image generator callback is not callable.');
@@ -147,7 +386,11 @@ class AiSiteAutoAssetGenerationService
                     'is_backend' => true,
                     'user_id' => $adminId,
                     'slot_id' => $slotId,
-                    'size' => '1024x1024',
+                    'size' => $imageSize,
+                    'target_size' => $isHeroImage ? '1920x750' : $imageSize,
+                    'aspect_ratio' => $isHeroImage ? '1920:750' : '1:1',
+                    'timeout' => 180,
+                    'connect_timeout' => 30,
                 ],
             ]);
         }

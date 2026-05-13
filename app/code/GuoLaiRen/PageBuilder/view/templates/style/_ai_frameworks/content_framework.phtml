@@ -23,7 +23,7 @@
  * @fields_start
  * 
  * group:content => 内容设置
- * content.title => 标题:text:Section Title
+ * content.title => 标题:text:
  * content.subtitle => 副标题:text:
  * content.description => 描述:textarea:
  * 
@@ -61,7 +61,7 @@ $componentId = 'content-' . substr(uniqid(), -8);
 $cls = $componentId;
 
 // 内容配置
-$title = $getConfig('content.title', 'Section Title');
+$title = $getConfig('content.title', '');
 $subtitle = $getConfig('content.subtitle', '');
 $description = $getConfig('content.description', '');
 

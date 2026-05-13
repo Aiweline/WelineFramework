@@ -58,6 +58,29 @@ $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
 
+$parseNavItems = function($raw) {
+    $items = [];
+    $lines = preg_split('/\r?\n/', (string)($raw ?? ''));
+    foreach ($lines as $line) {
+        $line = trim((string)$line);
+        if ($line === '') {
+            continue;
+        }
+        if (strpos($line, '=>') !== false) {
+            [$text, $href] = array_pad(explode('=>', $line, 2), 2, '#');
+        } else {
+            $text = $line;
+            $href = '#';
+        }
+        $text = trim((string)$text);
+        $href = trim((string)$href);
+        if ($text !== '') {
+            $items[] = ['text' => $text, 'href' => $href !== '' ? $href : '#'];
+        }
+    }
+    return $items;
+};
+
 $componentId = 'header-' . substr(uniqid(), -8);
 $cls = $componentId;
 
@@ -71,7 +94,23 @@ $logoWidth = (int)$getConfig('logo.width', 40);
 $showNav = $getConfig('navigation.display', 'yes') !== 'no';
 $navItems = [];
 
-if ($page) {
+$configuredNav = $parseNavItems($getConfig('navigation.items', ''));
+if ($configuredNav === [] && isset($config['nav_items']) && is_array($config['nav_items'])) {
+    foreach ($config['nav_items'] as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $text = trim((string)($item['text'] ?? $item['title'] ?? $item['label'] ?? ''));
+        $href = trim((string)($item['href'] ?? $item['url'] ?? '#'));
+        if ($text !== '') {
+            $configuredNav[] = ['text' => $text, 'href' => $href !== '' ? $href : '#'];
+        }
+    }
+}
+
+if ($configuredNav !== []) {
+    $navItems = $configuredNav;
+} elseif ($page) {
     $navigationPages = $page->getNavigationPages([], 10);
     foreach ($navigationPages as $navPage) {
         $navItems[] = [

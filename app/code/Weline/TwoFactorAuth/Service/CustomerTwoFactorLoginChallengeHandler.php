@@ -6,7 +6,9 @@ namespace Weline\TwoFactorAuth\Service;
 
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Customer\Model\Customer;
+use Weline\Customer\Model\CustomerToken;
 use Weline\Customer\Service\CustomerAccountService;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 
@@ -28,7 +30,7 @@ class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHa
      *
      * @return array{challenge_token: string, redirect: string, expires_at: int}|null
      */
-    public function createChallenge(Customer $customer, string $redirectUrl = ''): ?array
+    public function createChallenge(Customer $customer, string $redirectUrl = '', int $rememberDuration = 0): ?array
     {
         $customerId = (int)$customer->getId();
         if ($customerId <= 0 || !$this->twoFactorAuthService->isEnabled($customerId)) {
@@ -44,6 +46,7 @@ class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHa
         $challenges[$token] = [
             'customer_id' => $customerId,
             'redirect_url' => $redirectUrl,
+            'remember_duration' => max(0, $rememberDuration),
             'expires_at' => $expiresAt,
         ];
         $session->set(self::SESSION_KEY, $challenges);
@@ -99,6 +102,7 @@ class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHa
         }
 
         $this->customerAccountService->loginCustomer($customer);
+        $this->persistRememberToken($customer, (int)($challenge['remember_duration'] ?? 0));
         $this->removeChallenge($challengeToken);
 
         return [
@@ -157,5 +161,31 @@ class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHa
 
         $redirectUrl = ltrim($redirectUrl, '/');
         return $redirectUrl !== '' ? $redirectUrl : 'customer/account';
+    }
+
+    private function persistRememberToken(Customer $customer, int $rememberDuration): void
+    {
+        if ($rememberDuration <= 0) {
+            return;
+        }
+
+        $token = CustomerToken::generateToken();
+        $expireTime = time() + $rememberDuration;
+
+        /** @var CustomerToken $userToken */
+        $userToken = ObjectManager::getInstance(CustomerToken::class);
+        $userToken->reset()
+            ->where(CustomerToken::schema_fields_user_id, $customer->getId())
+            ->where(CustomerToken::schema_fields_type, 'remember_me')
+            ->delete();
+
+        $userToken->reset()
+            ->setUserId($customer->getId())
+            ->setToken($token)
+            ->setType('remember_me')
+            ->setTokenExpireTime($expireTime)
+            ->save();
+
+        Cookie::set('w_ut', $token, $rememberDuration, ['path' => '/']);
     }
 }
