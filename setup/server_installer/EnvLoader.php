@@ -9,10 +9,12 @@ declare(strict_types=1);
 final class EnvLoader
 {
     private string $projectRoot;
+    private ?string $envFile;
 
-    public function __construct(string $projectRoot)
+    public function __construct(string $projectRoot, ?string $envFile = null)
     {
         $this->projectRoot = $projectRoot;
+        $this->envFile = $envFile;
     }
 
     /**
@@ -20,7 +22,7 @@ final class EnvLoader
      */
     public function load(bool $putenv = true): array
     {
-        $path = $this->projectRoot . DIRECTORY_SEPARATOR . 'weline.env';
+        $path = $this->resolveEnvFilePath();
         $vars = [];
         if (!is_file($path)) {
             return $vars;
@@ -41,5 +43,26 @@ final class EnvLoader
             }
         }
         return $vars;
+    }
+
+    public function resolveEnvFilePath(): string
+    {
+        $configured = $this->envFile;
+        if ($configured === null || trim($configured) === '') {
+            $fromEnv = getenv('WELINE_ENV_FILE');
+            $configured = is_string($fromEnv) && trim($fromEnv) !== '' ? $fromEnv : 'weline.env';
+        }
+        $configured = trim($configured);
+        if ($this->isAbsolutePath($configured)) {
+            return $configured;
+        }
+        return $this->projectRoot . DIRECTORY_SEPARATOR . $configured;
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return str_starts_with($path, DIRECTORY_SEPARATOR)
+            || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1
+            || str_starts_with($path, '\\\\');
     }
 }
