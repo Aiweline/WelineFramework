@@ -45,7 +45,7 @@ class ApiDocService
         // 检查缓存
         if (!$force) {
             $cached = $this->cache->get($cacheKey);
-            if ($cached !== false) {
+            if (is_array($cached)) {
                 return $cached;
             }
         }
@@ -82,7 +82,6 @@ class ApiDocService
         $apiDirs = [
             $modulePath . '/Api',           // 标准API目录
             $modulePath . '/Controller/Api', // Controller下的Api子目录
-            $modulePath . '/Controller',     // Controller目录（可能包含API控制器）
         ];
         
         foreach ($apiDirs as $apiDir) {

@@ -20,6 +20,9 @@ use Weline\Framework\Register\Register;
  */
 class DocumentScanner
 {
+    private const MODULE_DOC_ROOT_NAME = '模块文档';
+    private const CLEANUP_BATCH_SIZE = 1000;
+
     private Document $documentModel;
     private Catalog $catalogModel;
 
@@ -33,6 +36,7 @@ class DocumentScanner
 
     /** 本次扫描中已处理的文档唯一键集合 */
     private array $seenDocumentKeys = [];
+    private array $seenDisplayDocumentKeys = [];
     private array $documentFieldSupport = [];
 
     public function __construct(Document $documentModel, Catalog $catalogModel)
@@ -61,14 +65,19 @@ class DocumentScanner
      */
     public function scanAllModules(bool $forceRescan = false): array
     {
+        $this->seenCatalogIds = [];
+        $this->seenDocumentKeys = [];
+        $this->seenDisplayDocumentKeys = [];
+
         $result = [
             'scanned' => 0, 'new' => 0, 'updated' => 0,
-            'deleted' => 0, 'cleaned_duplicates' => 0, 'modules' => [],
+            'deleted' => 0, 'cleaned_duplicates' => 0, 'cleaned_legacy_duplicates' => 0, 'modules' => [],
         ];
 
         // 强制重扫时先清空
         if ($forceRescan) {
             $this->progress(__('正在清理旧的自动导入文档和分类...'), 'warning');
+            $result['cleaned_legacy_duplicates'] += $this->cleanupLegacyNullIdentityDocuments();
             $this->documentModel->clear()->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)->delete()->fetch();
             $this->catalogModel->clear()->where(Catalog::schema_fields_is_system, 1)->delete()->fetch();
             $this->progress(__('清理完成'), 'success');
@@ -137,6 +146,7 @@ class DocumentScanner
 
         // API 文档导入
         $this->importApiDocuments($forceRescan, $result);
+        $result['cleaned_legacy_duplicates'] += $this->cleanupLegacyNullIdentityDocuments();
 
         return $result;
     }
@@ -266,7 +276,6 @@ class DocumentScanner
         if (isset($this->seenDocumentKeys[$docKey])) {
             return;
         }
-        $this->seenDocumentKeys[$docKey] = true;
         $result['scanned']++;
 
         // 获取文件修改时间
@@ -275,6 +284,21 @@ class DocumentScanner
             $this->progress("      ⚠️  " . __('无法获取文件时间: %{path}', ['path' => $filePath]), 'warning');
             return;
         }
+
+        $content = $this->readFileUtf8($diskPath);
+        if ($content === false) {
+            $this->progress("      ⚠️  " . __('无法读取文件: %{path}', ['path' => $filePath]), 'warning');
+            return;
+        }
+        $title = $this->extractTitle($content, $fileName);
+        $summary = $this->extractSummary($content);
+        $displayKey = $moduleName . '|' . $catalogId . '|' . $title . '|' . sha1($content);
+        if (isset($this->seenDisplayDocumentKeys[$displayKey])) {
+            $this->progress("      ↷ " . __('跳过重复内容: %{path}', ['path' => $filePath]), 'info');
+            return;
+        }
+        $this->seenDocumentKeys[$docKey] = true;
+        $this->seenDisplayDocumentKeys[$displayKey] = true;
 
         // 查询已有记录
         $existing = ObjectManager::make(Document::class)->clear()
@@ -290,21 +314,23 @@ class DocumentScanner
             if ($supportsFileMtime && $storedMtime === $fileMtime) {
                 // 文件未变化，跳过更新（但仍需确保分类正确）
                 $storedCategoryId = (int)($existing->getCategoryId() ?? 0);
+                $needsSave = false;
                 if ($storedCategoryId !== $catalogId) {
-                    $existing->setCategoryId((string)$catalogId)->save();
+                    $existing->setCategoryId((string)$catalogId);
+                    $needsSave = true;
                     $this->progress("      ⟳ " . __('分类变更: %{path}', ['path' => $filePath]), 'info');
+                }
+                if ((string)$existing->getTitle() !== $title || (string)$existing->getData(Document::schema_fields_summary) !== $summary) {
+                    $existing->setTitle($title)
+                        ->setData(Document::schema_fields_summary, $summary)
+                        ->setFileName($fileName);
+                    $needsSave = true;
+                }
+                if ($needsSave) {
+                    $existing->save();
                 }
                 return;
             }
-
-            // 文件有变化，读取新内容并更新
-            $content = $this->readFileUtf8($diskPath);
-            if ($content === false) {
-                $this->progress("      ⚠️  " . __('无法读取文件: %{path}', ['path' => $filePath]), 'warning');
-                return;
-            }
-            $title = $this->extractTitle($content, $fileName);
-            $summary = $this->extractSummary($content);
 
             $existing->setTitle($title)
                 ->setData(Document::schema_fields_summary, $summary)
@@ -321,15 +347,7 @@ class DocumentScanner
             $result['updated']++;
             $this->progress("      ↻ " . __('更新: %{path}', ['path' => $filePath]), 'info');
         } else {
-            // 新文档，读取内容并插入
-            $content = $this->readFileUtf8($diskPath);
-            if ($content === false) {
-                $this->progress("      ⚠️  " . __('无法读取文件: %{path}', ['path' => $filePath]), 'warning');
-                return;
-            }
-            $title = $this->extractTitle($content, $fileName);
-            $summary = $this->extractSummary($content);
-
+            // 新文档，插入规范化后的源文件标识
             $newDoc = ObjectManager::make(Document::class);
             $newDoc->setTitle($title)
                 ->setData(Document::schema_fields_summary, $summary)
@@ -465,17 +483,35 @@ class DocumentScanner
      */
     private function cleanupUnseenDocuments(): int
     {
+        $pdo = $this->resolvePdo();
+        if (!$pdo instanceof \PDO) {
+            return 0;
+        }
+
+        $catalogIds = $this->collectSystemCatalogTreeIds($pdo, self::MODULE_DOC_ROOT_NAME);
+        $catalogList = $this->intList($catalogIds);
+        if ($catalogList === '') {
+            return 0;
+        }
+
         $totalDeleted = 0;
-        $pageSize = 500;
-        $page = 1;
+        $documentTable = $this->quoteIdentifier($this->documentModel->getTable());
+        $idField = $this->quoteIdentifier(Document::schema_fields_ID);
+        $categoryField = $this->quoteIdentifier(Document::schema_fields_CATEGORY_ID);
+        $moduleField = $this->quoteIdentifier(Document::schema_fields_MODULE_NAME);
+        $filePathField = $this->quoteIdentifier(Document::schema_fields_FILE_PATH);
+        $autoField = $this->quoteIdentifier(Document::schema_fields_IS_AUTO_IMPORTED);
+        $lastId = 0;
 
         while (true) {
-            $docs = $this->documentModel->clear()
-                ->fields([Document::schema_fields_ID, Document::schema_fields_MODULE_NAME, Document::schema_fields_FILE_PATH])
-                ->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
-                ->limit(($page - 1) * $pageSize, $pageSize)
-                ->select()
-                ->fetchArray();
+            $sql = 'SELECT ' . $idField . ', ' . $moduleField . ', ' . $filePathField
+                . ' FROM ' . $documentTable
+                . ' WHERE ' . $idField . ' > ' . (int)$lastId
+                . ' AND ' . $categoryField . ' IN (' . $catalogList . ')'
+                . ' AND ' . $autoField . ' = 1'
+                . ' ORDER BY ' . $idField . ' ASC'
+                . ' LIMIT ' . self::CLEANUP_BATCH_SIZE;
+            $docs = $pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
 
             if (empty($docs)) {
                 break;
@@ -483,20 +519,17 @@ class DocumentScanner
 
             $idsToDelete = [];
             foreach ($docs as $doc) {
+                $id = (int)($doc[Document::schema_fields_ID] ?? 0);
+                $lastId = max($lastId, $id);
                 $key = ($doc[Document::schema_fields_MODULE_NAME] ?? '') . '|' . ($doc[Document::schema_fields_FILE_PATH] ?? '');
                 if (!isset($this->seenDocumentKeys[$key])) {
-                    $idsToDelete[] = (int)$doc[Document::schema_fields_ID];
+                    $idsToDelete[] = $id;
                 }
             }
 
             if (!empty($idsToDelete)) {
-                $this->documentModel->clear()
-                    ->where(Document::schema_fields_ID, $idsToDelete, 'in')
-                    ->delete()
-                    ->fetch();
-                $totalDeleted += count($idsToDelete);
+                $totalDeleted += $this->deleteDocumentIdsWithPdo($pdo, $documentTable, $idField, $idsToDelete);
             }
-            $page++;
         }
 
         if ($totalDeleted > 0) {
@@ -622,6 +655,209 @@ class DocumentScanner
 
     // ─── API 文档导入 ────────────────────────────────────────
 
+    private function cleanupLegacyNullIdentityDocuments(): int
+    {
+        $pdo = $this->resolvePdo();
+        if (!$pdo instanceof \PDO) {
+            return 0;
+        }
+
+        $catalogIds = $this->collectSystemCatalogTreeIds($pdo, self::MODULE_DOC_ROOT_NAME);
+        if ($catalogIds === []) {
+            return 0;
+        }
+
+        $documentTable = $this->quoteIdentifier($this->documentModel->getTable());
+        $idField = $this->quoteIdentifier(Document::schema_fields_ID);
+        $titleField = $this->quoteIdentifier(Document::schema_fields_TITLE);
+        $categoryField = $this->quoteIdentifier(Document::schema_fields_CATEGORY_ID);
+        $contentField = $this->quoteIdentifier(Document::schema_fields_CONTEND);
+        $moduleField = $this->quoteIdentifier(Document::schema_fields_MODULE_NAME);
+        $filePathField = $this->quoteIdentifier(Document::schema_fields_FILE_PATH);
+        $autoField = $this->quoteIdentifier(Document::schema_fields_IS_AUTO_IMPORTED);
+        $catalogList = $this->intList($catalogIds);
+        if ($catalogList === '') {
+            return 0;
+        }
+
+        $autoTitleKeys = $this->collectAutoImportedTitleKeys($pdo, $documentTable, $categoryField, $titleField, $autoField, $catalogList);
+        $seenLegacyContentKeys = [];
+        $deleted = 0;
+        $lastId = 0;
+
+        while (true) {
+            $sql = 'SELECT ' . $idField . ', ' . $titleField . ', ' . $categoryField . ', '
+                . $contentField . ', ' . $moduleField . ', ' . $filePathField
+                . ' FROM ' . $documentTable
+                . ' WHERE ' . $idField . ' > ' . (int)$lastId
+                . ' AND ' . $categoryField . ' IN (' . $catalogList . ')'
+                . ' AND ' . $autoField . ' = 0'
+                . ' ORDER BY ' . $idField . ' ASC'
+                . ' LIMIT ' . self::CLEANUP_BATCH_SIZE;
+            $rows = $pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+            if ($rows === []) {
+                break;
+            }
+
+            $deleteIds = [];
+            foreach ($rows as $row) {
+                $id = (int)($row[Document::schema_fields_ID] ?? 0);
+                $lastId = max($lastId, $id);
+                if ($id <= 0) {
+                    continue;
+                }
+
+                $moduleName = trim((string)($row[Document::schema_fields_MODULE_NAME] ?? ''));
+                $filePath = trim((string)($row[Document::schema_fields_FILE_PATH] ?? ''));
+                if ($moduleName !== '' || $filePath !== '') {
+                    continue;
+                }
+
+                $categoryId = (int)($row[Document::schema_fields_CATEGORY_ID] ?? 0);
+                $title = (string)($row[Document::schema_fields_TITLE] ?? '');
+                $titleKey = $categoryId . '|' . $title;
+                $contentKey = $titleKey . '|' . sha1((string)($row[Document::schema_fields_CONTEND] ?? ''));
+
+                if (isset($autoTitleKeys[$titleKey]) || isset($seenLegacyContentKeys[$contentKey])) {
+                    $deleteIds[] = $id;
+                    continue;
+                }
+
+                $seenLegacyContentKeys[$contentKey] = $id;
+            }
+
+            if ($deleteIds !== []) {
+                $deleted += $this->deleteDocumentIdsWithPdo($pdo, $documentTable, $idField, $deleteIds);
+            }
+        }
+
+        if ($deleted > 0) {
+            $this->progress('   Cleaned legacy duplicate imported documents: ' . $deleted, 'warning');
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function collectSystemCatalogTreeIds(\PDO $pdo, string $rootName): array
+    {
+        $catalogTable = $this->quoteIdentifier($this->catalogModel->getTable());
+        $idField = $this->quoteIdentifier(Catalog::schema_fields_ID);
+        $pidField = $this->quoteIdentifier(Catalog::schema_fields_PID);
+        $nameField = $this->quoteIdentifier(Catalog::schema_fields_NAME);
+        $systemField = $this->quoteIdentifier(Catalog::schema_fields_is_system);
+        $sql = 'SELECT ' . $idField . ', ' . $pidField . ', ' . $nameField
+            . ' FROM ' . $catalogTable
+            . ' WHERE ' . $systemField . ' = 1';
+        $rows = $pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+        if ($rows === []) {
+            return [];
+        }
+
+        $rootIds = [];
+        $childrenByPid = [];
+        foreach ($rows as $row) {
+            $id = (int)($row[Catalog::schema_fields_ID] ?? 0);
+            $pid = (int)($row[Catalog::schema_fields_PID] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            if ((string)($row[Catalog::schema_fields_NAME] ?? '') === $rootName) {
+                $rootIds[] = $id;
+            }
+            $childrenByPid[$pid][] = $id;
+        }
+
+        $ids = [];
+        $queue = $rootIds;
+        while ($queue !== []) {
+            $id = array_shift($queue);
+            if (!is_int($id) || isset($ids[$id])) {
+                continue;
+            }
+            $ids[$id] = true;
+            foreach ($childrenByPid[$id] ?? [] as $childId) {
+                $queue[] = $childId;
+            }
+        }
+
+        return array_keys($ids);
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function collectAutoImportedTitleKeys(
+        \PDO $pdo,
+        string $documentTable,
+        string $categoryField,
+        string $titleField,
+        string $autoField,
+        string $catalogList
+    ): array {
+        $keys = [];
+        $sql = 'SELECT ' . $categoryField . ', ' . $titleField
+            . ' FROM ' . $documentTable
+            . ' WHERE ' . $categoryField . ' IN (' . $catalogList . ')'
+            . ' AND ' . $autoField . ' = 1';
+        foreach ($pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $keys[(int)($row[Document::schema_fields_CATEGORY_ID] ?? 0) . '|' . (string)($row[Document::schema_fields_TITLE] ?? '')] = true;
+        }
+
+        return $keys;
+    }
+
+    private function deleteDocumentIdsWithPdo(\PDO $pdo, string $documentTable, string $idField, array $ids): int
+    {
+        $idList = $this->intList($ids);
+        if ($idList === '') {
+            return 0;
+        }
+
+        $statement = $pdo->prepare('DELETE FROM ' . $documentTable . ' WHERE ' . $idField . ' IN (' . $idList . ')');
+        $statement->execute();
+
+        return $statement->rowCount();
+    }
+
+    private function resolvePdo(): ?\PDO
+    {
+        try {
+            $connector = $this->documentModel->getConnection()->getConnector();
+            if (method_exists($connector, 'create')) {
+                $connector->create();
+            }
+            if (method_exists($connector, 'getLink')) {
+                $pdo = $connector->getLink();
+                return $pdo instanceof \PDO ? $pdo : null;
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    private function quoteIdentifier(string $identifier): string
+    {
+        if (str_contains($identifier, '"')) {
+            return $identifier;
+        }
+
+        $parts = explode('.', $identifier);
+        $parts = array_map(static fn(string $part): string => '"' . str_replace('"', '""', $part) . '"', $parts);
+
+        return implode('.', $parts);
+    }
+
+    private function intList(array $values): string
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $values), static fn(int $value): bool => $value > 0)));
+
+        return implode(',', $ids);
+    }
+
     private function importApiDocuments(bool $forceRescan, array &$result): void
     {
         try {
@@ -643,7 +879,7 @@ class DocumentScanner
             $this->progress("   ✓ " . __('API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}', [
                 'scanned' => $apiResult['scanned'], 'new' => $apiResult['new'], 'updated' => $apiResult['updated'],
             ]), 'success');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->progress("   ⚠️  " . __('API文档导入失败: %{error}', ['error' => $e->getMessage()]), 'warning');
         }
     }
@@ -704,16 +940,30 @@ class DocumentScanner
                 if (preg_match($pattern, $title)) {
                     // 只有当文件名与标题不同时才追加
                     if (mb_stripos($title, $fileName) === false) {
-                        return $title . ' - ' . $fileName;
+                        return $this->applyFileVariantToTitle($title . ' - ' . $fileName, $fallback);
                     }
                     break;
                 }
             }
             
-            return $title;
+            return $this->applyFileVariantToTitle($title, $fallback);
         }
         
         return $fileName;
+    }
+
+    private function applyFileVariantToTitle(string $title, string $fallback): string
+    {
+        if (!preg_match('/\.([a-z]{2}(?:[_-][a-z]{2})?)\.(?:md|markdown|txt)$/i', $fallback, $match)) {
+            return $title;
+        }
+
+        $variant = strtolower(str_replace('_', '-', $match[1]));
+        if (str_contains(strtolower($title), '(' . $variant . ')')) {
+            return $title;
+        }
+
+        return $title . ' (' . $variant . ')';
     }
 
     private function extractSummary(string $content): string
