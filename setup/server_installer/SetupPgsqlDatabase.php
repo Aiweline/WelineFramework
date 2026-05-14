@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * PostgreSQL 安装完成后：根据 weline.env 的 DB_* 检测/创建数据库，并更新 app/etc/env.php。
- * - 使用超管（默认 postgres）连接，创建 weline.env 指定的 DB_USERNAME/DB_DATABASE/DB_PASSWORD。
+ * PostgreSQL 安装完成后：根据 env DB_* 或项目级默认值检测/创建数据库，并更新 app/etc/env.php。
+ * - 使用超管（默认 postgres）连接，创建 env 指定或自动生成的 DB_USERNAME/DB_DATABASE/DB_PASSWORD。
  * - 若在 weline.env 配置了 PGSQL_INIT_USER/PGSQL_INIT_PASSWORD，则初始化 PostgreSQL 实例（initdb、设置 postgres 密码）时须使用相同信息，以便本处可连接。
  */
 final class SetupPgsqlDatabase
@@ -23,16 +23,20 @@ final class SetupPgsqlDatabase
     }
 
     /**
-     * 每次运行安装脚本都会执行：用 weline.env 的 DB_* 检测连接，视情况建库并同步 app/etc/env.php。
+     * 每次运行安装脚本都会执行：用 env DB_* 或项目级默认值检测连接，视情况建库并同步 app/etc/env.php。
      * 超管默认 postgres；未配置 PGSQL_INIT_PASSWORD 时会依次尝试空密码、postgres、weline。
      */
     public function run(): bool
     {
-        $host = trim($this->env['DB_HOST'] ?? '127.0.0.1');
-        $port = trim($this->env['DB_PORT'] ?? '5432');
-        $database = trim($this->env['DB_DATABASE'] ?? 'weline');
-        $username = trim($this->env['DB_USERNAME'] ?? 'weline');
-        $password = trim($this->env['DB_PASSWORD'] ?? 'weline');
+        $db = $this->resolveDatabaseSettings();
+        $host = $db['host'];
+        $port = $db['port'];
+        $database = $db['database'];
+        $username = $db['username'];
+        $password = $db['password'];
+        if ($db['generated']) {
+            echo "  DB_* not fully configured. Using project database \"$database\" (user \"$username\").\n";
+        }
 
         // 超管：仅用于连接并创建 weline 用户/库，不用于应用运行时
         // Mac (Homebrew) 默认只创建当前系统用户为超管、无 postgres 用户，故需回退尝试当前用户+空密码
@@ -166,6 +170,86 @@ final class SetupPgsqlDatabase
         return null;
     }
 
+    private function resolveDatabaseSettings(): array
+    {
+        $existing = $this->readExistingDbMaster();
+        $database = $this->envValue('DB_DATABASE', (string)($existing['database'] ?? $this->buildProjectDatabaseName()));
+        $username = $this->envValue('DB_USERNAME', (string)($existing['username'] ?? $database));
+        $password = $this->envValue('DB_PASSWORD', (string)($existing['password'] ?? $this->generateProjectPassword()));
+
+        return [
+            'host' => $this->envValue('DB_HOST', (string)($existing['hostname'] ?? '127.0.0.1')),
+            'port' => $this->envValue('DB_PORT', (string)($existing['hostport'] ?? $existing['port'] ?? '5432')),
+            'database' => $database,
+            'username' => $username,
+            'password' => $password,
+            'generated' => (!$this->hasEnvValue('DB_DATABASE') && !$this->hasExistingValue($existing, 'database'))
+                || (!$this->hasEnvValue('DB_USERNAME') && !$this->hasExistingValue($existing, 'username'))
+                || (!$this->hasEnvValue('DB_PASSWORD') && !$this->hasExistingValue($existing, 'password')),
+        ];
+    }
+
+    private function envValue(string $key, string $default): string
+    {
+        $value = trim((string)($this->env[$key] ?? ''));
+        return $value !== '' ? $value : $default;
+    }
+
+    private function hasEnvValue(string $key): bool
+    {
+        return isset($this->env[$key]) && trim((string)$this->env[$key]) !== '';
+    }
+
+    private function hasExistingValue(array $existing, string $key): bool
+    {
+        return isset($existing[$key]) && trim((string)$existing[$key]) !== '';
+    }
+
+    private function readExistingDbMaster(): array
+    {
+        $envPath = $this->projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
+        if (!is_file($envPath)) {
+            return [];
+        }
+        $config = @include $envPath;
+        if (!is_array($config)) {
+            return [];
+        }
+        $master = $config['db']['master'] ?? [];
+        return is_array($master) ? $master : [];
+    }
+
+    private function buildProjectDatabaseName(): string
+    {
+        $base = basename($this->projectRoot) ?: 'project';
+        $slug = strtolower((string)preg_replace('/[^A-Za-z0-9]+/', '_', $base));
+        $slug = trim($slug, '_');
+        if ($slug === '') {
+            $slug = 'project';
+        }
+        if (preg_match('/^[0-9]/', $slug) === 1) {
+            $slug = 'p_' . $slug;
+        }
+
+        $hash = substr(sha1(strtolower(str_replace('\\', '/', $this->projectRoot))), 0, 8);
+        $prefix = 'weline_';
+        $maxSlugLength = 63 - strlen($prefix) - 1 - strlen($hash);
+        if (strlen($slug) > $maxSlugLength) {
+            $slug = substr($slug, 0, $maxSlugLength);
+            $slug = rtrim($slug, '_');
+        }
+        return $prefix . $slug . '_' . $hash;
+    }
+
+    private function generateProjectPassword(): string
+    {
+        try {
+            return 'weline_' . bin2hex(random_bytes(16));
+        } catch (\Throwable) {
+            return 'weline_' . substr(hash('sha256', $this->projectRoot . microtime(true)), 0, 32);
+        }
+    }
+
     /**
      * Linux 下连接失败时尝试自动为 postgres 用户设置密码 postgres。
      * extend 内 PostgreSQL 以当前用户运行，直接用 psql 连接即可（无需 sudo）。
@@ -220,7 +304,7 @@ final class SetupPgsqlDatabase
         $isMac = (PHP_OS_FAMILY === 'Darwin');
         echo "\n";
         echo "========================================\n";
-        echo "  未配置时默认使用：用户 postgres、密码 postgres、数据库 weline\n";
+        echo "  未配置 DB_* 时会自动生成项目级数据库，例如：" . $this->buildProjectDatabaseName() . "\n";
         echo "  若连接失败，请在项目根目录 weline.env 中设置：\n";
         echo "========================================\n";
         echo "  - PGSQL_INIT_USER=" . $initUser . "   （超管用户名，默认 postgres）\n";
