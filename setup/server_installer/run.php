@@ -27,6 +27,10 @@ $resolveProjectPhpBin = static function (string $root, string $phpDir): string {
             $bin = (string) PHP_BINARY;
         }
     }
+    $installerIni = $phpDir . DIRECTORY_SEPARATOR . 'php.installer.ini';
+    if (is_file($installerIni)) {
+        $bin .= ' -c "' . $installerIni . '"';
+    }
     return $bin;
 };
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
@@ -34,6 +38,26 @@ require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsqlData.php';
 
 $argv = $GLOBALS['argv'] ?? [];
+$envFileArg = null;
+foreach ($argv as $idx => $arg) {
+    if ($arg === '--env-file' && isset($argv[$idx + 1])) {
+        $envFileArg = (string)$argv[$idx + 1];
+        break;
+    }
+    if (str_starts_with((string)$arg, '--env-file=')) {
+        $envFileArg = substr((string)$arg, strlen('--env-file='));
+        break;
+    }
+}
+if ($envFileArg !== null && trim($envFileArg) !== '') {
+    putenv('WELINE_ENV_FILE=' . trim($envFileArg));
+    $envLoaderForCheck = new EnvLoader($projectRoot, trim($envFileArg));
+    $resolvedEnvFile = $envLoaderForCheck->resolveEnvFilePath();
+    if (!is_file($resolvedEnvFile)) {
+        fwrite(STDERR, "ERROR: env file not found: {$resolvedEnvFile}\n");
+        exit(1);
+    }
+}
 
 // === 检测系统是否已安装（env.php 存在且非空配置） ===
 $envPhpFile = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
@@ -80,6 +104,35 @@ if ($isEnvPhpInstalled($envPhpFile)) {
                 try {
                     $iniCfg = new ConfigurePhpIni($projectRoot, $phpDir);
                     $iniCfg->apply($env);
+                    $installerIni = $phpDir . DIRECTORY_SEPARATOR . 'php.installer.ini';
+                    $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
+                    if (is_file($composerPhar)) {
+                        $composerPhp = is_file($installerIni)
+                            ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe" -c "' . $installerIni . '"'
+                            : '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"';
+                        putenv('WELINE_COMPOSER_COMMAND=' . $composerPhp . ' "' . $composerPhar . '"');
+                    }
+                    $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
+                    $run = function (string $cmd) use ($phpBin): int {
+                        $full = $phpBin . ' ' . $cmd;
+                        echo "鎵ц鍛戒护锛?full\n";
+                        passthru($full, $code);
+                        return (int) $code;
+                    };
+                    $runWithUpgradeRetry = function (string $cmd, string $stage, string $setupLockPath, int $maxWaitSeconds = 120) use ($run): int {
+                        $code = $run($cmd);
+                        if ($code === 0 || !is_file($setupLockPath)) {
+                            return $code;
+                        }
+                        $waitSeconds = max(0, $maxWaitSeconds);
+                        $interval = 2;
+                        while ($waitSeconds > 0 && is_file($setupLockPath)) {
+                            echo "绛夊緟 setup:upgrade 鎵ц涓殑閿侀噴鏀撅紝閲嶈瘯{$stage}锛堝墿浣?{$waitSeconds}s锛?..\n";
+                            sleep($interval);
+                            $waitSeconds -= $interval;
+                        }
+                        return $run($cmd);
+                    };
                 } catch (Throwable $e) {
                     fwrite(STDERR, "WARNING: php.ini config: " . $e->getMessage() . "\n");
                 }
@@ -186,6 +239,14 @@ $fromStep5b = in_array('--from', $argv, true)
 
 $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
+$installerIni = $phpDir . DIRECTORY_SEPARATOR . 'php.installer.ini';
+$composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
+if (is_file($composerPhar)) {
+    $composerPhp = is_file($installerIni)
+        ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe" -c "' . $installerIni . '"'
+        : '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"';
+    putenv('WELINE_COMPOSER_COMMAND=' . $composerPhp . ' "' . $composerPhar . '"');
+}
 $run = function (string $cmd) use ($projectRoot, $phpBin): int {
     $full = $phpBin . ' ' . $cmd;
     echo "执行命令：$full\n";
@@ -229,6 +290,21 @@ if (!$fromStep5b && is_dir($phpDir)) {
     try {
         $iniCfg = new ConfigurePhpIni($projectRoot, $phpDir);
         $iniCfg->apply($env);
+        $installerIni = $phpDir . DIRECTORY_SEPARATOR . 'php.installer.ini';
+        $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
+        if (is_file($composerPhar)) {
+            $composerPhp = is_file($installerIni)
+                ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe" -c "' . $installerIni . '"'
+                : '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"';
+            putenv('WELINE_COMPOSER_COMMAND=' . $composerPhp . ' "' . $composerPhar . '"');
+        }
+        $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
+        $run = function (string $cmd) use ($projectRoot, $phpBin): int {
+            $full = $phpBin . ' ' . $cmd;
+            echo "鎵ц鍛戒护锛?full\n";
+            passthru($full, $code);
+            return (int) $code;
+        };
     } catch (Throwable $e) {
         fwrite(STDERR, "WARNING: php.ini configuration failed: " . $e->getMessage() . "\n");
     }
@@ -312,8 +388,8 @@ if (!extension_loaded('pdo_pgsql')) {
     fwrite(STDERR, "WARNING: env:install pdo_pgsql 未成功。Linux/Mac 请确保有 sudo 权限；Windows 需在 php.ini 启用 extension=pdo_pgsql 并将 extend/server/pgsql/bin 加入 PATH。\n");
 }
 
-// 5b. 每次运行都执行：根据 weline.env 同步 env.php 的 db，并视情况建库/校验连接
-echo "Step 5b: PostgreSQL database init (from weline.env DB_*)...\n";
+// 5b. 每次运行都执行：根据 env DB_* 或项目级默认值同步 env.php 的 db，并视情况建库/校验连接
+echo "Step 5b: PostgreSQL database init (from env DB_* or generated project DB)...\n";
 $setupDb = new SetupPgsqlDatabase($projectRoot, $env);
 $step5bOk = $setupDb->run();
 
@@ -329,7 +405,7 @@ if (!$step5bOk && DIRECTORY_SEPARATOR === '\\' && is_dir($pgsqlBin)) {
 }
 
 if (!$step5bOk) {
-    fwrite(STDERR, "ERROR: PostgreSQL database init failed. 未配置时默认使用 postgres/postgres 与数据库 weline；若连接失败请按上方提示配置后重试。\n");
+    fwrite(STDERR, "ERROR: PostgreSQL database init failed. 未配置 DB_* 时会自动生成项目级数据库；若连接失败请按上方提示配置 PGSQL_INIT_* 后重试。\n");
     exit(1);
 }
 

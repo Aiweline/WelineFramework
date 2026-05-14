@@ -24,12 +24,13 @@ WELINE_USER="${WELINE_USER:-weline}"
 WELINE_REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
 
 usage() {
-  echo "Usage: $0 [--path-only] [--rebuild-php] [-f|--force] [-y|--yes] [-b BRANCH] [php] [pgsql] [mysql]"
+  echo "Usage: $0 [--path-only] [--rebuild-php] [--env-file FILE] [-f|--force] [-y|--yes] [-b BRANCH] [php] [pgsql] [mysql]"
   echo "  No args: install php and pgsql (default)."
   echo "  --path-only: only add extend/server/*/bin to PATH, do not download/install."
   echo "  --rebuild-php: on Linux, remove existing extend/server/php and recompile (e.g. to add missing extensions like xsl)."
   echo "  -f, --force: force reinstall even if env.php exists (will prompt for confirmation)."
   echo "  -y, --yes: when already installed, directly run setup:upgrade without prompting."
+  echo "  --env-file FILE: load DB_* and installer settings from a custom env file."
   echo "  --link-system: create symlinks in /usr/local/bin (php, psql) for system-wide use (uses sudo when needed)."
   echo "  -b BRANCH: when run.php is missing, clone this branch (default: master)."
   exit 0
@@ -43,6 +44,7 @@ BRANCH="master"
 FORCE_INSTALL=false
 AUTO_UPGRADE=false
 LINK_SYSTEM=false
+ENV_FILE_ARG=""
 COMPONENTS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +53,8 @@ while [[ $# -gt 0 ]]; do
     --rebuild-php) REBUILD_PHP=true; shift ;;
     -f|--force) FORCE_INSTALL=true; shift ;;
     -y|--yes) AUTO_UPGRADE=true; shift ;;
+    --env-file) [[ -n "${2:-}" ]] && { ENV_FILE_ARG="$2"; shift 2; } || { echo "--env-file requires a file path" >&2; exit 1; } ;;
+    --env-file=*) ENV_FILE_ARG="${1#--env-file=}"; shift ;;
     --link-system) LINK_SYSTEM=true; shift ;;
     -b) [[ -n "${2:-}" ]] && { BRANCH="$2"; shift 2; } || shift ;;
     php|pgsql|mysql)
@@ -68,7 +72,20 @@ done
 
 # 读取 weline.env 并检查配置完整性（与 Windows 一致）
 WELINE_ENV_INCOMPLETE=false
-if [[ -f "$ROOT/weline.env" ]]; then
+ENV_FILE_PATH="$ROOT/weline.env"
+if [[ -n "$ENV_FILE_ARG" ]]; then
+  case "$ENV_FILE_ARG" in
+    /*) ENV_FILE_PATH="$ENV_FILE_ARG" ;;
+    [A-Za-z]:*) ENV_FILE_PATH="$ENV_FILE_ARG" ;;
+    *) ENV_FILE_PATH="$ROOT/$ENV_FILE_ARG" ;;
+  esac
+  if [[ ! -f "$ENV_FILE_PATH" ]]; then
+    echo "ERROR: env file not found: $ENV_FILE_PATH" >&2
+    exit 1
+  fi
+  export WELINE_ENV_FILE="$ENV_FILE_ARG"
+fi
+if [[ -f "$ENV_FILE_PATH" ]]; then
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ -z "${line//[[:space:]]/}" ]] && continue
@@ -77,7 +94,7 @@ if [[ -f "$ROOT/weline.env" ]]; then
     else
       WELINE_ENV_INCOMPLETE=true
     fi
-  done < "$ROOT/weline.env"
+  done < "$ENV_FILE_PATH"
 fi
 INSTALL_PGSQL_VERSION="${INSTALL_PGSQL_VERSION:-16}"
 INSTALL_MYSQL_VERSION="${INSTALL_MYSQL_VERSION:-8.0}"
@@ -1502,11 +1519,12 @@ fix_project_ownership
 
 # root 阶段已在重执行前设置 safe.directory，此处无需重复
 echo ""
-RUN_ARGS=""
-[[ "$FORCE_INSTALL" == true ]] && RUN_ARGS="-f"
-[[ "$AUTO_UPGRADE" == true ]] && RUN_ARGS="$RUN_ARGS -y"
+RUN_ARGS=()
+[[ "$FORCE_INSTALL" == true ]] && RUN_ARGS+=("-f")
+[[ "$AUTO_UPGRADE" == true ]] && RUN_ARGS+=("-y")
+[[ -n "$ENV_FILE_ARG" ]] && RUN_ARGS+=("--env-file" "$ENV_FILE_ARG")
 # 已通过 root→weline 重执行，此处始终由 weline 执行
-(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
+(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php "${RUN_ARGS[@]}") || exit 1
 echo ""
 cd "$ROOT"
 

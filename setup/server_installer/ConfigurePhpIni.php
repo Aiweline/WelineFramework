@@ -3,11 +3,14 @@
 declare(strict_types=1);
 
 /**
- * Configure php.ini: extension_dir, extensions from composer, remove allowed functions from disable_functions.
- * Single responsibility: php.ini file content only.
+ * Configure php.ini: extension_dir, required extensions, log paths,
+ * and disable_functions adjustments for the installer/runtime.
  */
 final class ConfigurePhpIni
 {
+    private const MANAGED_EXTENSIONS_BEGIN = '; >>> installer managed extensions >>>';
+    private const MANAGED_EXTENSIONS_END = '; <<< installer managed extensions <<<';
+
     private string $projectRoot;
     private string $phpDir;
 
@@ -24,40 +27,39 @@ final class ConfigurePhpIni
     }
 
     /**
-     * 框架必需扩展（与 InstallData env.modules 一致）+ PostgreSQL 驱动 + WLS 必需（sockets 等），Step 1 即尝试启用。
+     * Required extensions for the framework installer/runtime.
+     *
      * @return string[]
      */
     public static function getFrameworkRequiredExtensions(): array
     {
-        return ['PDO', 'exif', 'fileinfo', 'xsl', 'pdo_pgsql', 'pgsql', 'sockets', 'curl', 'mbstring'];
+        return ['PDO', 'openssl', 'curl', 'mbstring', 'exif', 'fileinfo', 'xsl', 'pdo_pgsql', 'pgsql', 'sockets'];
     }
 
     /**
      * Collect ext-* from composer.json and composer.lock.
-     * @return string[] extension names (e.g. ['curl', 'openssl'])
+     *
+     * @return string[]
      */
     public function getExtensionsFromComposer(): array
     {
         $extSet = [];
-        $addFrom = function (object $req) use (&$extSet) {
-            if (!$req) {
-                return;
-            }
-            foreach ((array)$req as $key => $unused) {
-                if (strpos($key, 'ext-') === 0) {
-                    $extSet[substr($key, 4)] = true;
+        $addFrom = function (object $req) use (&$extSet): void {
+            foreach ((array) $req as $key => $unused) {
+                if (strpos((string) $key, 'ext-') === 0) {
+                    $extSet[strtolower(substr((string) $key, 4))] = true;
                 }
             }
         };
 
         $jsonPath = $this->projectRoot . '/composer.json';
         if (is_file($jsonPath)) {
-            $json = json_decode(file_get_contents($jsonPath));
+            $json = json_decode((string) file_get_contents($jsonPath));
             if ($json) {
-                if (isset($json->require)) {
+                if (isset($json->require) && is_object($json->require)) {
                     $addFrom($json->require);
                 }
-                if (isset($json->{'require-dev'})) {
+                if (isset($json->{'require-dev'}) && is_object($json->{'require-dev'})) {
                     $addFrom($json->{'require-dev'});
                 }
             }
@@ -65,23 +67,23 @@ final class ConfigurePhpIni
 
         $lockPath = $this->projectRoot . '/composer.lock';
         if (is_file($lockPath)) {
-            $lock = json_decode(file_get_contents($lockPath));
-            if ($lock && isset($lock->packages)) {
+            $lock = json_decode((string) file_get_contents($lockPath));
+            if ($lock && isset($lock->packages) && is_array($lock->packages)) {
                 foreach ($lock->packages as $pkg) {
-                    if (isset($pkg->require)) {
+                    if (isset($pkg->require) && is_object($pkg->require)) {
                         $addFrom($pkg->require);
                     }
-                    if (isset($pkg->{'require-dev'})) {
+                    if (isset($pkg->{'require-dev'}) && is_object($pkg->{'require-dev'})) {
                         $addFrom($pkg->{'require-dev'});
                     }
                 }
             }
-            if ($lock && isset($lock->{'packages-dev'})) {
+            if ($lock && isset($lock->{'packages-dev'}) && is_array($lock->{'packages-dev'})) {
                 foreach ($lock->{'packages-dev'} as $pkg) {
-                    if (isset($pkg->require)) {
+                    if (isset($pkg->require) && is_object($pkg->require)) {
                         $addFrom($pkg->require);
                     }
-                    if (isset($pkg->{'require-dev'})) {
+                    if (isset($pkg->{'require-dev'}) && is_object($pkg->{'require-dev'})) {
                         $addFrom($pkg->{'require-dev'});
                     }
                 }
@@ -94,15 +96,14 @@ final class ConfigurePhpIni
     }
 
     /**
-     * Get allowed functions list (from env or default).
      * @return string[]
      */
     public function getAllowedFunctions(array $envVars): array
     {
         $raw = $envVars['PHP_FUNCTIONS'] ?? '';
-        if (trim($raw) !== '') {
-            $parsed = array_map('trim', explode(',', $raw));
-            $parsed = array_values(array_filter($parsed));
+        if (trim((string) $raw) !== '') {
+            $parsed = array_map('trim', explode(',', (string) $raw));
+            $parsed = array_values(array_filter($parsed, static fn(string $item): bool => $item !== ''));
             if ($parsed !== []) {
                 return $parsed;
             }
@@ -110,9 +111,6 @@ final class ConfigurePhpIni
         return $this->defaultFunctions;
     }
 
-    /**
-     * Apply configuration to php.ini and save.
-     */
     public function apply(array $envVars): void
     {
         $iniPath = $this->phpDir . '/php.ini';
@@ -125,178 +123,134 @@ final class ConfigurePhpIni
         }
 
         $extDir = $this->phpDir . '/ext';
-        $content = file_get_contents($iniPath);
-
-        // extension_dir
-        $content = preg_replace('/;\s*extension_dir\s*=\s*"ext"/', 'extension_dir = "' . $extDir . '"', $content);
-        $content = preg_replace('/;\s*extension_dir\s*=\s*"\.\/ext"/', 'extension_dir = "' . $extDir . '"', $content);
-        if (!preg_match('/extension_dir\s*=/', $content)) {
-            $content = preg_replace('/(\[PHP\])/', '$1' . "\nextension_dir = \"$extDir\"\n", $content, 1);
-        }
-
-        // extensions: 框架必需(PDO,exif,fileinfo,xsl) + composer ext-* + openssl；Windows 下仅当存在 php_*.dll 时启用
-        $extList = array_merge(
-            self::getFrameworkRequiredExtensions(),
-            $this->getExtensionsFromComposer()
-        );
-        if (!in_array('openssl', $extList, true)) {
-            array_unshift($extList, 'openssl');
-        }
-        $extList = array_values(array_unique($extList));
-
-        $extDirReal = $this->phpDir . '/ext';
+        $extDirReal = str_replace('\\', '/', $extDir);
         $isWindows = (DIRECTORY_SEPARATOR === '\\');
+        $extensionDirValue = $isWindows ? 'ext' : $extDirReal;
+        $content = (string) file_get_contents($iniPath);
 
-        // Windows: 注释掉所有“extension=xxx”且 php_xxx.dll 不存在的行，避免 Unable to load 警告
-        if ($isWindows && is_dir($extDirReal)) {
-            $content = preg_replace_callback(
-                '/^(\s*)(extension\s*=\s*([a-z0-9_]+)\s*)$/mi',
-                function (array $m) use ($extDirReal) {
-                    $ext = strtolower($m[3]);
-                    $dll = $extDirReal . '/' . 'php_' . $ext . '.dll';
-                    if (!is_file($dll)) {
-                        return $m[1] . ';' . $m[2] . '  ; DLL not present, commented by installer';
-                    }
-                    return $m[0];
-                },
-                $content
-            );
+        $content = preg_replace('/^\s*;?\s*extension_dir\s*=.*$/mi', 'extension_dir = "' . $extensionDirValue . '"', $content, -1, $count);
+        if (($count ?? 0) === 0) {
+            $content = preg_replace('/(\[PHP\])/', '$1' . "\nextension_dir = \"" . $extensionDirValue . "\"\n", $content, 1) ?? $content;
         }
+
+        $extList = array_merge(self::getFrameworkRequiredExtensions(), $this->getExtensionsFromComposer());
+        $extList = array_values(array_unique(array_map(static fn(string $ext): string => strtolower(trim($ext)), $extList)));
+        $content = $this->upsertManagedExtensionBlock($content, $extList, $extDirReal, $isWindows);
+
+        $allowed = $this->getAllowedFunctions($envVars);
+        $content = preg_replace_callback(
+            '/^\s*disable_functions\s*=\s*(.*)$/mi',
+            static function (array $matches) use ($allowed): string {
+                $current = array_filter(array_map('trim', preg_split('/\s*,\s*/', trim((string) $matches[1])) ?: []));
+                $allowedLower = array_map('strtolower', $allowed);
+                $newList = array_filter($current, static fn(string $f): bool => !in_array(strtolower($f), $allowedLower, true));
+                return 'disable_functions = ' . implode(', ', $newList);
+            },
+            $content
+        ) ?? $content;
+
+        $content = preg_replace('/^\s*;?\s*memory_limit\s*=.*$/mi', 'memory_limit = 512M', $content, 1, $memCount);
+        if (($memCount ?? 0) === 0) {
+            $content = preg_replace('/(\[PHP\])/', '$1' . "\nmemory_limit = 512M\n", $content, 1) ?? $content;
+        }
+
+        $content = $this->configureLogPaths($content);
+        file_put_contents($iniPath, $content);
+        file_put_contents($this->phpDir . '/php.installer.ini', $this->buildInstallerIni($extList, $extDirReal, $isWindows));
+    }
+
+    private function upsertManagedExtensionBlock(string $content, array $extList, string $extDirReal, bool $isWindows): string
+    {
+        $managedLines = [self::MANAGED_EXTENSIONS_BEGIN];
 
         foreach ($extList as $ext) {
-            if ($isWindows && is_dir($extDirReal)) {
+            if ($ext === '' || $ext === 'pdo') {
+                continue;
+            }
+            if ($isWindows) {
                 $dll = $extDirReal . '/php_' . $ext . '.dll';
                 if (!is_file($dll)) {
                     continue;
                 }
             }
-            $content = preg_replace('/;\s*extension=' . preg_quote($ext, '/') . '\b/', 'extension=' . $ext, $content);
-            if (!preg_match('/(?:^|\r?\n)\s*extension\s*=\s*' . preg_quote($ext, '/') . '\b/m', $content)) {
-                $content = preg_replace('/(\[PHP\])/', '$1' . "\nextension=$ext\n", $content, 1);
-            }
+            $managedLines[] = 'extension=' . $ext;
         }
 
-        // disable_functions: remove allowed functions
-        $allowed = $this->getAllowedFunctions($envVars);
-        $content = preg_replace_callback(
-            '/^\s*disable_functions\s*=\s*(.*)$/m',
-            function (array $m) use ($allowed) {
-                $val = trim($m[1]);
-                $current = array_filter(array_map('trim', preg_split('/\s*,\s*/', $val)));
-                $allowedLower = array_map('strtolower', $allowed);
-                $newList = array_filter($current, function ($f) use ($allowedLower) {
-                    return !in_array(strtolower($f), $allowedLower, true);
-                });
-                return 'disable_functions = ' . implode(', ', $newList);
-            },
-            $content
-        );
-
-        // memory_limit：安装阶段 setup:upgrade 等操作较吃内存，统一 512M 避免耗尽
-        $content = preg_replace(
-            '/^\s*;?\s*memory_limit\s*=.*$/m',
-            'memory_limit = 512M',
-            $content,
-            1,
-            $count
-        );
-        if ($count === 0) {
-            $content = preg_replace('/(\[PHP\])/', '$1' . "\nmemory_limit = 512M\n", $content, 1);
+        if ($isWindows && is_file($extDirReal . '/php_opcache.dll')) {
+            $managedLines[] = 'zend_extension=opcache';
         }
 
-        // 日志路径：统一指向 var/log/php/
-        $content = $this->configureLogPaths($content);
+        $managedLines[] = self::MANAGED_EXTENSIONS_END;
+        $managedBlock = implode("\n", $managedLines) . "\n";
 
-        file_put_contents($iniPath, $content);
-
-        // 真实检测：用 php -m 取实际已加载扩展，注释掉未加载的 extension= 行
-        $loaded = $this->getLoadedExtensions();
-        if ($loaded !== null) {
-            $content = file_get_contents($iniPath);
-            $content = preg_replace_callback(
-                '/^(\s*)(extension\s*=\s*([a-z0-9_]+))\s*(.*)$/mi',
-                function (array $m) use ($loaded) {
-                    if (strpos(ltrim($m[0]), ';') === 0) {
-                        return $m[0];
-                    }
-                    $ext = strtolower($m[3]);
-                    if (isset($loaded[$ext])) {
-                        return $m[0];
-                    }
-                    return $m[1] . ';' . $m[2] . ($m[4] !== '' ? ' ' . $m[4] : '') . "  ; not loaded by php -m, commented by installer";
-                },
-                $content
-            );
-            file_put_contents($iniPath, $content);
+        $pattern = '/' . preg_quote(self::MANAGED_EXTENSIONS_BEGIN, '/') . '.*?' . preg_quote(self::MANAGED_EXTENSIONS_END, '/') . '\R?/s';
+        if (preg_match($pattern, $content)) {
+            return preg_replace($pattern, $managedBlock, $content, 1) ?? $content;
         }
+
+        if (preg_match('/^\s*extension_dir\s*=.*$/mi', $content, $matches, PREG_OFFSET_CAPTURE)) {
+            $fullLine = $matches[0][0];
+            $offset = $matches[0][1] + strlen($fullLine);
+            return substr($content, 0, $offset) . "\n" . $managedBlock . substr($content, $offset);
+        }
+
+        return preg_replace('/(\[PHP\])/', '$1' . "\n" . $managedBlock, $content, 1) ?? $content;
     }
 
-    /**
-     * 运行 php -m 获取实际已加载的扩展列表（小写），失败返回 null。
-     * @return array<string, true>|null
-     */
-    private function getLoadedExtensions(): ?array
-    {
-        $phpExe = (DIRECTORY_SEPARATOR === '\\')
-            ? $this->phpDir . '/php.exe'
-            : $this->phpDir . '/bin/php';
-        if (!is_file($phpExe)) {
-            return null;
-        }
-        $cmd = escapeshellarg($phpExe) . ' -m 2>' . (DIRECTORY_SEPARATOR === '\\' ? 'nul' : '/dev/null');
-        $out = @shell_exec($cmd);
-        if ($out === null || $out === '') {
-            return null;
-        }
-        $loaded = [];
-        foreach (preg_split('/\r?\n/', $out) as $line) {
-            $line = trim($line);
-            if ($line === '' || $line[0] === '[' || strpos($line, ' ') !== false) {
-                continue;
-            }
-            $loaded[strtolower($line)] = true;
-        }
-        return $loaded;
-    }
-
-    /**
-     * 将 PHP 所有日志路径统一配置到 var/log/php/ 下，并确保目录存在。
-     */
     private function configureLogPaths(string $content): string
     {
-        $logDir = $this->projectRoot . '/var/log/php';
+        $logDir = str_replace('\\', '/', $this->projectRoot . '/var/log/php');
         if (!is_dir($logDir)) {
             @mkdir($logDir, 0755, true);
         }
 
         $directives = [
             'error_log' => $logDir . '/php_errors.log',
-            'mail.log'  => $logDir . '/mail.log',
+            'mail.log' => $logDir . '/mail.log',
         ];
 
         foreach ($directives as $key => $path) {
             $escaped = preg_quote($key, '/');
-            $pathValue = str_replace('\\', '/', $path);
-
-            // 取消注释并替换值，或直接替换已有值
-            $content = preg_replace(
-                '/^\s*;?\s*' . $escaped . '\s*=.*$/m',
-                $key . ' = "' . $pathValue . '"',
-                $content,
-                1,
-                $count
-            );
-            if ($count === 0) {
-                $content = preg_replace('/(\[PHP\])/', '$1' . "\n" . $key . ' = "' . $pathValue . '"' . "\n", $content, 1);
+            $content = preg_replace('/^\s*;?\s*' . $escaped . '\s*=.*$/mi', $key . ' = "' . $path . '"', $content, 1, $count) ?? $content;
+            if (($count ?? 0) === 0) {
+                $content = preg_replace('/(\[PHP\])/', '$1' . "\n" . $key . ' = "' . $path . '"' . "\n", $content, 1) ?? $content;
             }
         }
 
-        // log_errors = On
-        $content = preg_replace('/^\s*;?\s*log_errors\s*=.*$/m', 'log_errors = On', $content, 1, $count);
-        if ($count === 0) {
-            $content = preg_replace('/(\[PHP\])/', '$1' . "\nlog_errors = On\n", $content, 1);
+        $content = preg_replace('/^\s*;?\s*log_errors\s*=.*$/mi', 'log_errors = On', $content, 1, $count) ?? $content;
+        if (($count ?? 0) === 0) {
+            $content = preg_replace('/(\[PHP\])/', '$1' . "\nlog_errors = On\n", $content, 1) ?? $content;
         }
 
         return $content;
+    }
+
+    private function buildInstallerIni(array $extList, string $extDirReal, bool $isWindows): string
+    {
+        $extensionDirValue = $isWindows ? 'ext' : $extDirReal;
+        $lines = [
+            'extension_dir = "' . $extensionDirValue . '"',
+            'memory_limit = 512M',
+            'log_errors = On',
+        ];
+
+        foreach ($extList as $ext) {
+            if ($ext === '' || $ext === 'pdo') {
+                continue;
+            }
+            if ($isWindows) {
+                $dll = $extDirReal . '/php_' . $ext . '.dll';
+                if (!is_file($dll)) {
+                    continue;
+                }
+            }
+            $lines[] = 'extension=' . $ext;
+        }
+
+        if ($isWindows && is_file($extDirReal . '/php_opcache.dll')) {
+            $lines[] = 'zend_extension=opcache';
+        }
+
+        return implode("\n", $lines) . "\n";
     }
 }

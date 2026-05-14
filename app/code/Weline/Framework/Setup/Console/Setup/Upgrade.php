@@ -39,7 +39,6 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Framework\Router\Service\RouteUpdateService;
-use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Framework\Console\ParseModuleArgsTrait;
@@ -296,16 +295,30 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function findComposerCommand(): ?string
     {
+        // 0. installer/runtime override
+        $envComposerCommand = getenv('WELINE_COMPOSER_COMMAND');
+        if (is_string($envComposerCommand) && trim($envComposerCommand) !== '') {
+            exec($envComposerCommand . ' --version 2>&1', $envOutput, $envReturnCode);
+            if ($envReturnCode === 0) {
+                return $envComposerCommand;
+            }
+        }
+
         // 1. 检查项目根目录下的 composer.phar
         // 注意：在 Windows 上，is_executable() 对 .phar 文件可能返回 false
         // 所以只要文件存在，就尝试使用 PHP 执行它
         $composerPhar = BP . 'composer.phar';
         if (file_exists($composerPhar)) {
+            $installerIni = BP . 'extend' . DS . 'server' . DS . 'php' . DS . 'php.installer.ini';
+            $phpBinary = PHP_BINARY;
+            if (file_exists($installerIni)) {
+                $phpBinary .= ' -c ' . escapeshellarg($installerIni);
+            }
             // 验证文件是否真的是 composer.phar（尝试执行 --version）
-            $testCommand = PHP_BINARY . ' ' . escapeshellarg($composerPhar) . ' --version 2>&1';
+            $testCommand = $phpBinary . ' ' . escapeshellarg($composerPhar) . ' --version 2>&1';
             exec($testCommand, $testOutput, $testReturnCode);
             if ($testReturnCode === 0) {
-                return PHP_BINARY . ' ' . $composerPhar;
+                return $phpBinary . ' ' . escapeshellarg($composerPhar);
             }
         }
         
@@ -1116,8 +1129,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 仅保留已注册的模块名，避免将 stage code（如 schema_diff）等误当作模块传入注册表/标签库收集
         $validModuleNames = array_keys(Env::getInstance()->getActiveModules());
         $moduleNames = array_values(array_intersect($moduleNames, $validModuleNames));
-        RegistryProgress::enable(true);
-        RegistryProgress::section('Setup registry refresh');
 
         // 使用统一服务更新所有注册表
         try {
