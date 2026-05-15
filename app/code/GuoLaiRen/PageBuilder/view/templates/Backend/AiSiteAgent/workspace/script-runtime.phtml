@@ -604,7 +604,7 @@
         if (op === 'plan' || op === 'build') {
             modalOptions.extraMessage = (typeof messages === 'object' && messages.retryableAiFailuresPending)
                 ? String(messages.retryableAiFailuresPending || '')
-                : '失败项已加入错误列表，请在进入下一阶段前点击“重试失败项”处理完成。';
+                : '失败项已加入错误列表；系统不会自动重试，请调整底座提示词后重新生成。';
         }
         return showOperationFailureDetailModal(op, payload, modalOptions);
     }
@@ -1040,7 +1040,7 @@
         }
         var kind = String(eventKind || '').toLowerCase();
         var queueStatus = readQueueStatusFromPayload(operation, payload);
-        var queueStillWaiting = !!(payload && (payload.deferred_queue_progress || payload.queue_waiting_for_scheduler || payload.can_close_stream))
+        var queueStillWaiting = !!(payload && (payload.deferred_queue_progress || payload.queue_waiting_for_scheduler))
             || ['pending', 'queued'].indexOf(queueStatus) !== -1;
         if (queueStillWaiting) { return 10; }
         if (queueStatus === 'running' || queueStatus === 'processing') { return 35; }
@@ -3007,7 +3007,6 @@
                 && (
                     payload.deferred_queue_progress
                     || payload.queue_waiting_for_scheduler
-                    || payload.can_close_stream
                 )
             );
             if (!queueCompletedOnDone && (!payload || payload.success !== false) && deferredQueueProgress) {
@@ -3025,8 +3024,7 @@
                     message: continueMessage,
                     queue_status: queueStatusOnDone || 'queued',
                     deferred_queue_progress: true,
-                    queue_waiting_for_scheduler: true,
-                    can_close_stream: true
+                    queue_waiting_for_scheduler: true
                 }), { level: 'info' });
                 logOperationToWorkspaceTerminal('done', payload, 'info', continueMessage);
                 var continueTerminal = null;
@@ -3366,10 +3364,8 @@
             && (
                 payload.deferred_queue_progress
                 || payload.queue_waiting_for_scheduler
-                || payload.can_close_stream
                 || (payload.active_operation && typeof payload.active_operation === 'object' && (
                     payload.active_operation.queue_waiting_for_scheduler
-                    || payload.active_operation.can_close_stream
                 ))
             )
         );
@@ -3377,8 +3373,7 @@
             syncQueuedStageUi(operation, 'progress', Object.assign({}, payload || {}, {
                 message: String((payload && payload.message) || <?= \json_encode((string)__('队列任务已提交，正在等待系统调度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>),
                 deferred_queue_progress: true,
-                queue_waiting_for_scheduler: true,
-                can_close_stream: true
+                queue_waiting_for_scheduler: true
             }), { level: 'info' });
             startDeferredQueueStatePoll(operation || fallbackOperation || 'build');
             return true;
