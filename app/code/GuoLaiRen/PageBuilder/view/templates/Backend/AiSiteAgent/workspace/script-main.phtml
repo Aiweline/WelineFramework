@@ -6550,6 +6550,20 @@
             formData.append('region', blockEditorState.blockRegion || 'content');
             formData.append('index', String(blockEditorState.blockIndex || 0));
             formData.append('ai_prompt', aiPromptValue);
+            formData.append('current_config', JSON.stringify(serializeBlockEditorConfig()));
+
+            var streamAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            var streamTimeoutId = window.setTimeout(function () {
+                if (streamAbortController) {
+                    streamAbortController.abort();
+                }
+            }, 30000);
+            function clearStreamTimeout() {
+                if (streamTimeoutId) {
+                    window.clearTimeout(streamTimeoutId);
+                    streamTimeoutId = null;
+                }
+            }
 
             var response = await fetch(componentConfigStreamUrl, {
                 method: 'POST',
@@ -6558,6 +6572,7 @@
                     'Accept': 'text/event-stream'
                 },
                 credentials: 'same-origin',
+                signal: streamAbortController ? streamAbortController.signal : undefined,
                 body: formData
             });
             if (!response.ok) {
@@ -6573,6 +6588,9 @@
             var completed = false;
 
             function handleEvent(eventName, eventData) {
+                if (eventName) {
+                    clearStreamTimeout();
+                }
                 var payload = {};
                 try {
                     payload = eventData ? JSON.parse(eventData) : {};
@@ -6597,7 +6615,7 @@
                     applyBlockEditorGeneratedConfig(payload.data || payload);
                     blockEditorTerminalLog(<?= \json_encode((string)__('生成完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'done');
                     restoreAiButton();
-                } else if (eventName === 'error') {
+                } else if (eventName === 'error' || eventName === 'stream_error') {
                     completed = true;
                     restoreAiButton();
                     throw new Error(String(payload.message || <?= \json_encode((string)__('生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
@@ -6634,9 +6652,14 @@
                 }
             }
             if (!completed) {
+                clearStreamTimeout();
+                blockEditorTerminalLog(<?= \json_encode((string)__('AI stream ended before completion, please retry.'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
                 restoreAiButton();
             }
         } catch (error) {
+            if (typeof clearStreamTimeout === 'function') {
+                clearStreamTimeout();
+            }
             restoreAiButton();
             blockEditorTerminalLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
             toast('error', String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
@@ -7436,6 +7459,20 @@
                         formData.append('region', context.region);
                         formData.append('index', String(context.index));
                         formData.append('ai_prompt', aiPromptValue);
+                        formData.append('current_config', JSON.stringify(collectComponentConfigModalValues(modalElement)));
+
+                        var streamAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+                        var streamTimeoutId = window.setTimeout(function () {
+                            if (streamAbortController) {
+                                streamAbortController.abort();
+                            }
+                        }, 30000);
+                        function clearStreamTimeout() {
+                            if (streamTimeoutId) {
+                                window.clearTimeout(streamTimeoutId);
+                                streamTimeoutId = null;
+                            }
+                        }
 
                         var streamResponse = await fetch(componentConfigStreamUrl, {
                             method: 'POST',
@@ -7445,6 +7482,7 @@
                                 'Accept': 'text/event-stream'
                             },
                             credentials: 'same-origin',
+                            signal: streamAbortController ? streamAbortController.signal : undefined,
                             body: formData
                         });
 
@@ -7466,6 +7504,9 @@
                         var thinkingStreamingTextEl = null;
 
                         function finishStreamEvent() {
+                            if (currentEvent) {
+                                clearStreamTimeout();
+                            }
                             var payloadData = {};
                             try {
                                 payloadData = currentData ? JSON.parse(currentData) : {};
@@ -7547,7 +7588,7 @@
                                 restoreAiButton();
                                 applyConfigData(payloadData.data || payloadData);
                                 sseLog(<?= \json_encode((string)__('生成完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'done');
-                            } else if (currentEvent === 'error') {
+                            } else if (currentEvent === 'error' || currentEvent === 'stream_error') {
                                 completed = true;
                                 restoreAiButton();
                                 sseLog(String(payloadData.message || <?= \json_encode((string)__('生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
@@ -7589,9 +7630,14 @@
                         }
 
                         if (!completed) {
+                            clearStreamTimeout();
+                            sseLog(<?= \json_encode((string)__('AI stream ended before completion, please retry.'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
                             restoreAiButton();
                         }
                     } catch (error) {
+                        if (typeof clearStreamTimeout === 'function') {
+                            clearStreamTimeout();
+                        }
                         restoreAiButton();
                         sseLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
                         toast('error', String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
@@ -14846,11 +14892,26 @@
                 }
                 descEl.textContent = descText;
                 bodyWrap.appendChild(descEl);
-                if (item.value !== undefined && item.value !== null && item.value !== '' && typeof item.value !== 'object') {
-                    var valueEl = document.createElement('code');
-                    valueEl.className = 'small d-inline-block mt-1';
-                    valueEl.textContent = String(item.value);
-                    bodyWrap.appendChild(valueEl);
+                if (item.value !== undefined && item.value !== null && item.value !== '') {
+                    if (typeof item.value === 'object') {
+                        if (!ok) {
+                            var valuePre = document.createElement('pre');
+                            valuePre.className = 'small bg-light rounded p-2 mt-2 mb-0';
+                            valuePre.style.maxHeight = '120px';
+                            valuePre.style.overflow = 'auto';
+                            try {
+                                valuePre.textContent = JSON.stringify(item.value, null, 2);
+                            } catch (jsonErr) {
+                                valuePre.textContent = String(item.value);
+                            }
+                            bodyWrap.appendChild(valuePre);
+                        }
+                    } else {
+                        var valueEl = document.createElement('code');
+                        valueEl.className = 'small d-inline-block mt-1';
+                        valueEl.textContent = String(item.value);
+                        bodyWrap.appendChild(valueEl);
+                    }
                 }
                 li.appendChild(bodyWrap);
                 var badge = document.createElement('span');

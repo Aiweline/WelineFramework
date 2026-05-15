@@ -14,8 +14,11 @@ final class AiSiteQualityGateService
      */
     private const QUALITY_ITEM_SPECS = [
         'build_tasks_done' => ['label' => '构建任务全部完成'],
+        'task_coverage' => ['label' => '已确认方案的所有区块已拆成构建任务'],
         'required_pages_render' => ['label' => '关键页面可渲染'],
         'shared_blocks_ready' => ['label' => '共享 Header/Footer 已就绪', 'page_report_field' => 'shared_blocks'],
+        'source_truth_coverage' => ['label' => '必含事实/必需区块/禁忌规则均已覆盖'],
+        'render_data_quality' => ['label' => '渲染数据契约通过结构/文案/SEO 校验'],
         'content_quality' => ['label' => '页面无内部标识/方案说明/demo 文案', 'page_report_field' => 'bad_matches'],
         'stage1_content_visible' => ['label' => '页面包含阶段一确认内容', 'page_report_field' => 'stage1_hits'],
         'theme_visible' => ['label' => '页面包含阶段一主题色/视觉 token', 'page_report_field' => 'theme_hits'],
@@ -136,8 +139,6 @@ final class AiSiteQualityGateService
                 && \is_array($scope['virtual_pages_by_type'][$pageType] ?? null);
             $requiredPagesReady = $requiredPagesReady && $html !== '' && $renderError === '' && ($pageId > 0 || $hasRenderableVirtualDraft);
             $allContentClean = $allContentClean && (bool)($report['content_clean'] ?? false);
-            // TEMP: 暂停“页面无内部标识/方案说明/demo 文案”门禁，不阻断发布。
-            // 保留 page_reports.bad_matches 供排查，但质量项始终按通过处理。
             $allStageOneContentVisible = $allStageOneContentVisible && (bool)($report['stage1_content_visible'] ?? false);
             $allThemeVisible = $allThemeVisible && (bool)($report['theme_visible'] ?? false);
             $allVisualsSafe = $allVisualsSafe && (bool)($report['visuals_safe'] ?? false);
@@ -147,10 +148,25 @@ final class AiSiteQualityGateService
             $sharedBlocksReady = $sharedBlocksReady && (bool)($report['shared_blocks_ready'] ?? false);
         }
 
+        $taskCoverageReport = $this->buildTaskCoverageReport($scope);
+        if ($taskCoverageReport['evaluated']) {
+            $sharedScheduled = \is_array($taskCoverageReport['shared'] ?? null) ? $taskCoverageReport['shared'] : [];
+            if ($this->buildBlueprintExpectsSharedComponent($scope, 'header')) {
+                $sharedBlocksReady = $sharedBlocksReady && !empty($sharedScheduled['header']);
+            }
+            if ($this->buildBlueprintExpectsSharedComponent($scope, 'footer')) {
+                $sharedBlocksReady = $sharedBlocksReady && !empty($sharedScheduled['footer']);
+            }
+        }
+        $qaReportFindings = $this->collectQaReportFindings($scope);
+
         $items = $this->normalizeQualityItems([
             $this->buildItem('build_tasks_done', '构建任务全部完成', $allTasksDone, $this->buildTaskService->summarize($scope)),
+            $this->buildItem('task_coverage', '已确认方案的所有区块已拆成构建任务', $taskCoverageReport['ok'], $taskCoverageReport),
             $this->buildItem('required_pages_render', '关键页面可渲染', $requiredPagesReady, \array_keys($pageReports)),
             $this->buildItem('shared_blocks_ready', '共享 Header/Footer 已就绪', $sharedBlocksReady, $this->extractPageValues($pageReports, 'shared_blocks')),
+            $this->buildItem('source_truth_coverage', '必含事实/必需区块/禁忌规则均已覆盖', $qaReportFindings['source_truth_ok'], $qaReportFindings['source_truth']),
+            $this->buildItem('render_data_quality', '渲染数据契约通过结构/文案/SEO 校验', $qaReportFindings['render_data_ok'], $qaReportFindings['render_data']),
             $this->buildItem('content_quality', '页面无内部标识/方案说明/demo 文案', $allContentClean, $this->extractPageValues($pageReports, 'bad_matches')),
             $this->buildItem('stage1_content_visible', '页面包含阶段一确认内容', $allStageOneContentVisible, $this->extractPageValues($pageReports, 'stage1_hits')),
             $this->buildItem('theme_visible', '页面包含阶段一主题色/视觉 token', $allThemeVisible, $this->extractPageValues($pageReports, 'theme_hits')),
@@ -190,8 +206,11 @@ final class AiSiteQualityGateService
         $qualityGate = $this->inspectScope($scope, $renderedHtmlByPageType);
         $contentKeys = [
             'build_tasks_done' => true,
+            'task_coverage' => true,
             'required_pages_render' => true,
             'shared_blocks_ready' => true,
+            'source_truth_coverage' => true,
+            'render_data_quality' => true,
             'content_quality' => true,
             'stage1_content_visible' => true,
             'theme_visible' => true,
@@ -545,24 +564,25 @@ final class AiSiteQualityGateService
     }
 
     /**
+     * 语言一致性策略（设计决策，不是 TODO）：
+     *
+     * 目标语言在 prompt 端通过 `AiSitePageComponentGenerationService::buildVisibleCopyGovernancePromptAddon`
+     * + `buildStage3LocaleExecutionPromptAddon` 做硬性约束，覆盖：visitor 可见文案、alt/title/aria 属性、
+     * 品牌名/SEO/CTA 翻译要求、CJK 边界、内部 identifier 禁止外泄等。
+     *
+     * 此处发布期门禁不做 NLP 检测的原因：
+     *  - 品牌名、APK/Android/iOS、URL、域名、型号、专有名词在非英语站点合法；
+     *  - 基于脚本比例/连续外文词的启发式很容易误判（如中文站合法引用英文 SDK 名）；
+     *  - 真实质量回路依赖 prompt 端硬约束 + RenderDataQualityLinter 的 generic copy 检测。
+     *
+     * 因此 `matchLanguageViolations` 始终返回空：language_consistency 在门禁层一律放行，
+     * 责任全部交给 prompt 合同。如果未来需要落地脚本级检测，请同时移除此说明。
+     *
      * @return list<string>
      */
     private function matchLanguageViolations(string $html, string $expectedLocale, array $scope = []): array
     {
-        $expectedLocale = \trim($expectedLocale);
-        if ($html === '' || $expectedLocale === '') {
-            return [];
-        }
-
-        $text = $this->extractVisibleTextOnly($html);
-        if ($text === '') {
-            return [];
-        }
-
-        // Language is controlled by the generation prompt contract. This quality
-        // gate must not reject content merely because it contains Latin letters:
-        // brands, acronyms, URLs, model names, APK/SEO terms, and proper nouns are
-        // valid in Chinese and other non-English sites.
+        unset($html, $expectedLocale, $scope);
 
         return [];
     }
@@ -1448,9 +1468,525 @@ final class AiSiteQualityGateService
 
             $item['blocking'] = $blocking;
             $item['level'] = $level;
+            $detail = $this->formatQualityItemDetail($item, $scope);
+            if ($detail !== '') {
+                $item['detail'] = $detail;
+            }
         }
         unset($item);
 
         return $items;
+    }
+
+    /**
+     * 为发布预检弹窗生成简短中文说明（`detail` 字段），避免运营只看到 ok/false。
+     *
+     * @param array<string, mixed> $item
+     * @param array<string, mixed> $scope
+     */
+    private function formatQualityItemDetail(array $item, array $scope): string
+    {
+        $key = (string)($item['key'] ?? '');
+        $ok = !empty($item['ok']);
+        $value = $item['value'] ?? null;
+
+        if ($ok) {
+            return match ($key) {
+                'task_coverage' => '已确认方案中的页面区块均已拆成构建任务。',
+                'source_truth_coverage' => '必含事实、必需首页区块与禁忌规则均已覆盖。',
+                'render_data_quality' => '渲染数据契约的结构、文案与 SEO 校验已通过。',
+                'build_tasks_done' => '全部构建任务已完成。',
+                default => '',
+            };
+        }
+
+        return match ($key) {
+            'task_coverage' => $this->formatTaskCoverageFailureDetail(\is_array($value) ? $value : []),
+            'source_truth_coverage' => $this->formatQaFindingsFailureDetail(
+                \is_array($value) ? $value : [],
+                '请回到构建阶段补全缺失事实或必需区块，并重新生成相关页面块。'
+            ),
+            'render_data_quality' => $this->formatQaFindingsFailureDetail(
+                \is_array($value) ? $value : [],
+                '请修复渲染数据中的空文案、占位/demo 文案或 SEO 缺失后重新构建。'
+            ),
+            'build_tasks_done' => $this->formatBuildTasksFailureDetail(\is_array($value) ? $value : []),
+            'content_quality' => $this->formatContentQualityFailureDetail(\is_array($value) ? $value : []),
+            'shared_blocks_ready' => $this->formatSharedBlocksFailureDetail(\is_array($value) ? $value : [], $scope),
+            default => '',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $report
+     */
+    private function formatTaskCoverageFailureDetail(array $report): string
+    {
+        $parts = [];
+        foreach (\is_array($report['missing_blocks'] ?? null) ? $report['missing_blocks'] : [] as $pageType => $blocks) {
+            $blockList = \array_values(\array_filter(\array_map('strval', \is_array($blocks) ? $blocks : [])));
+            if ($blockList !== []) {
+                $parts[] = (string)$pageType . ' 缺任务：' . \implode('、', \array_slice($blockList, 0, 6));
+            }
+        }
+        foreach (\is_array($report['extra_blocks'] ?? null) ? $report['extra_blocks'] : [] as $pageType => $blocks) {
+            $blockList = \array_values(\array_filter(\array_map('strval', \is_array($blocks) ? $blocks : [])));
+            if ($blockList !== []) {
+                $parts[] = (string)$pageType . ' 多余任务：' . \implode('、', \array_slice($blockList, 0, 6));
+            }
+        }
+        $shared = \is_array($report['shared'] ?? null) ? $report['shared'] : [];
+        if (empty($shared['header'])) {
+            $parts[] = '缺少 shared:header 构建任务';
+        }
+        if (empty($shared['footer'])) {
+            $parts[] = '缺少 shared:footer 构建任务';
+        }
+        if ($parts === []) {
+            return '方案区块与构建任务不一致，请重新确认执行蓝图并同步构建任务。';
+        }
+
+        return \implode('；', \array_slice($parts, 0, 5));
+    }
+
+    /**
+     * @param array<string, mixed> $bucket
+     */
+    private function formatQaFindingsFailureDetail(array $bucket, string $fallback): string
+    {
+        $messages = [];
+        foreach (\is_array($bucket['findings'] ?? null) ? $bucket['findings'] : [] as $finding) {
+            if (!\is_array($finding) || ($finding['severity'] ?? '') !== 'error') {
+                continue;
+            }
+            $message = \trim((string)($finding['message'] ?? ''));
+            if ($message !== '') {
+                $messages[] = $message;
+            }
+        }
+        if ($messages === []) {
+            return $fallback;
+        }
+
+        return \implode('；', \array_slice(\array_values(\array_unique($messages)), 0, 4));
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     */
+    private function formatBuildTasksFailureDetail(array $summary): string
+    {
+        $pending = (int)($summary['pending'] ?? 0);
+        $running = (int)($summary['running'] ?? 0);
+        $failed = (int)($summary['failed'] ?? 0);
+        $total = (int)($summary['total'] ?? 0);
+        $done = (int)($summary['done'] ?? 0);
+        if ($failed > 0) {
+            return "构建任务 {$failed}/{$total} 项失败，请先重试失败任务。";
+        }
+        if ($pending > 0 || $running > 0) {
+            return "仍有 {$pending} 项待执行、{$running} 项执行中（已完成 {$done}/{$total}）。";
+        }
+
+        return '构建任务尚未全部完成，请等待构建结束后再发布。';
+    }
+
+    /**
+     * @param array<string, mixed> $badMatchesByPage
+     */
+    private function formatContentQualityFailureDetail(array $badMatchesByPage): string
+    {
+        $samples = [];
+        foreach ($badMatchesByPage as $pageType => $matches) {
+            if (!\is_array($matches)) {
+                continue;
+            }
+            foreach ($matches as $match) {
+                $match = \trim((string)$match);
+                if ($match !== '') {
+                    $samples[] = (string)$pageType . ': ' . \mb_substr($match, 0, 80);
+                }
+                if (\count($samples) >= 3) {
+                    break 2;
+                }
+            }
+        }
+        if ($samples === []) {
+            return '页面仍含内部标识、方案说明或 demo/占位文案，请重新生成相关区块。';
+        }
+
+        return \implode('；', $samples);
+    }
+
+    /**
+     * @param array<string, mixed> $sharedByPage
+     * @param array<string, mixed> $scope
+     */
+    private function formatSharedBlocksFailureDetail(array $sharedByPage, array $scope): string
+    {
+        $missing = [];
+        foreach ($sharedByPage as $pageType => $shared) {
+            if (!\is_array($shared)) {
+                continue;
+            }
+            if (empty($shared['header'])) {
+                $missing[] = (string)$pageType . ' 缺 Header';
+            }
+            if (empty($shared['footer'])) {
+                $missing[] = (string)$pageType . ' 缺 Footer';
+            }
+        }
+        $parts = $missing;
+        if ($this->buildBlueprintExpectsSharedComponent($scope, 'header')) {
+            $parts[] = '构建任务缺少 shared:header';
+        }
+        if ($this->buildBlueprintExpectsSharedComponent($scope, 'footer')) {
+            $parts[] = '构建任务缺少 shared:footer';
+        }
+        $parts = \array_values(\array_unique($parts));
+        if ($parts === []) {
+            return '共享 Header/Footer 未在页面布局或渲染结果中识别，请重新生成共享组件。';
+        }
+
+        return \implode('；', \array_slice($parts, 0, 5));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function buildBlueprintExpectsSharedComponent(array $scope, string $region): bool
+    {
+        $region = \strtolower(\trim($region));
+        if ($region === '') {
+            return false;
+        }
+        $taskKey = 'shared:' . $region;
+        $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        foreach (\is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [] as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            if ((string)($task['task_key'] ?? '') === $taskKey) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 计算「已确认方案的所有区块是否都已拆成构建任务」：
+     *  - expected = execution_blueprint.pages[*].blocks[*].block_key（Stage-1 确认方案的真相源）
+     *  - scheduled = build_blueprint.tasks[*]（按 page_type 聚合的 block_key/section_code）；
+     *    shared:header / shared:footer 单独检查共享块，不参与 per-page diff。
+     *
+     * 任何 expected 块在 scheduled 中找不到，或 scheduled 出现不属于 expected 的孤儿块，
+     * 均报告并阻断发布；这能在发布前抓住「方案有块但任务漏拆 / 任务多拆 / page_type 错位」。
+     *
+     * @param array<string, mixed> $scope
+     * @return array{
+     *     ok: bool,
+     *     missing_blocks: array<string, list<string>>,
+     *     extra_blocks: array<string, list<string>>,
+     *     expected_blocks: array<string, list<string>>,
+     *     scheduled_blocks: array<string, list<string>>,
+     *     shared: array{header: bool, footer: bool},
+     *     evaluated: bool
+     * }
+     */
+    private function buildTaskCoverageReport(array $scope): array
+    {
+        $expected = $this->collectExpectedBlocksFromExecutionBlueprint($scope);
+        $scheduled = $this->collectScheduledBlocksFromBuildBlueprint($scope);
+        $sharedHeader = $scheduled['__shared_header__'] ?? false;
+        $sharedFooter = $scheduled['__shared_footer__'] ?? false;
+        unset($scheduled['__shared_header__'], $scheduled['__shared_footer__']);
+
+        // 蓝图未生成（例如方案尚未确认）时不阻断发布，避免与 build_tasks_done / required_pages_render 双重报错；
+        // 此时报告 evaluated=false，由其它门禁覆盖。
+        if ($expected === [] && $scheduled === []) {
+            return [
+                'ok' => true,
+                'missing_blocks' => [],
+                'extra_blocks' => [],
+                'expected_blocks' => [],
+                'scheduled_blocks' => [],
+                'shared' => ['header' => $sharedHeader, 'footer' => $sharedFooter],
+                'evaluated' => false,
+            ];
+        }
+
+        $missing = [];
+        $extra = [];
+        $pageTypes = \array_values(\array_unique(\array_merge(\array_keys($expected), \array_keys($scheduled))));
+        foreach ($pageTypes as $pageType) {
+            $exp = \array_map('\strval', $expected[$pageType] ?? []);
+            $sch = \array_map('\strval', $scheduled[$pageType] ?? []);
+            $diffMissing = \array_values(\array_diff($exp, $sch));
+            $diffExtra = \array_values(\array_diff($sch, $exp));
+            if ($diffMissing !== []) {
+                $missing[$pageType] = $diffMissing;
+            }
+            if ($diffExtra !== []) {
+                $extra[$pageType] = $diffExtra;
+            }
+        }
+
+        return [
+            'ok' => $missing === [] && $extra === [],
+            'missing_blocks' => $missing,
+            'extra_blocks' => $extra,
+            'expected_blocks' => $expected,
+            'scheduled_blocks' => $scheduled,
+            'shared' => ['header' => $sharedHeader, 'footer' => $sharedFooter],
+            'evaluated' => true,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, list<string>>
+     */
+    private function collectExpectedBlocksFromExecutionBlueprint(array $scope): array
+    {
+        $blueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $sources = [];
+        foreach (['pages', 'page_plans'] as $key) {
+            if (\is_array($blueprint[$key] ?? null)) {
+                $sources[] = $blueprint[$key];
+            }
+        }
+        $expected = [];
+        foreach ($sources as $pages) {
+            foreach ($pages as $pageType => $page) {
+                if (!\is_array($page)) {
+                    continue;
+                }
+                $pageTypeKey = \trim((string)$pageType);
+                if ($pageTypeKey === '') {
+                    continue;
+                }
+                $blocks = [];
+                foreach (['blocks', 'display_blocks'] as $blockKey) {
+                    if (\is_array($page[$blockKey] ?? null)) {
+                        $blocks = \array_merge($blocks, $page[$blockKey]);
+                    }
+                }
+                foreach ($blocks as $block) {
+                    if (!\is_array($block)) {
+                        continue;
+                    }
+                    $blockKeyValue = $this->normalizeBlockIdentifier(
+                        (string)($block['block_key'] ?? $block['section_code'] ?? $block['key'] ?? '')
+                    );
+                    if ($blockKeyValue === '') {
+                        continue;
+                    }
+                    $expected[$pageTypeKey] ??= [];
+                    if (!\in_array($blockKeyValue, $expected[$pageTypeKey], true)) {
+                        $expected[$pageTypeKey][] = $blockKeyValue;
+                    }
+                }
+            }
+        }
+
+        return $expected;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, list<string>|bool>
+     */
+    private function collectScheduledBlocksFromBuildBlueprint(array $scope): array
+    {
+        $tasks = [];
+        $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        if (\is_array($blueprint['tasks'] ?? null)) {
+            $tasks = \array_merge($tasks, $blueprint['tasks']);
+        }
+        // 兼容老路径：build_summary.task_summary.groups[*].tasks。
+        $groups = \is_array($scope['build_summary']['task_summary']['groups'] ?? null)
+            ? $scope['build_summary']['task_summary']['groups']
+            : [];
+        foreach ($groups as $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            foreach (\is_array($group['tasks'] ?? null) ? $group['tasks'] : [] as $task) {
+                if (\is_array($task)) {
+                    $tasks[] = $task;
+                }
+            }
+        }
+
+        $scheduled = [
+            '__shared_header__' => false,
+            '__shared_footer__' => false,
+        ];
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = (string)($task['task_key'] ?? '');
+            if ($taskKey === 'shared:header') {
+                $scheduled['__shared_header__'] = true;
+                continue;
+            }
+            if ($taskKey === 'shared:footer') {
+                $scheduled['__shared_footer__'] = true;
+                continue;
+            }
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            if ($pageType === '') {
+                continue;
+            }
+            // 字段优先级：build_blueprint 真实任务带 block_key/section_key（line 620/936 in AiSiteBuildTaskService），
+            // 兼容老 build_summary/老 task fixture 时退到 task_key 末段或 section_code 末段。
+            $rawKey = (string)(
+                $task['block_key']
+                    ?? $task['section_key']
+                    ?? $task['task_key']
+                    ?? $task['section_code']
+                    ?? ''
+            );
+            $blockKeyValue = $this->normalizeBlockIdentifier($rawKey);
+            if ($blockKeyValue === '') {
+                continue;
+            }
+            $scheduled[$pageType] ??= [];
+            if (!\in_array($blockKeyValue, $scheduled[$pageType], true)) {
+                $scheduled[$pageType][] = $blockKeyValue;
+            }
+        }
+
+        return $scheduled;
+    }
+
+    private function normalizeBlockIdentifier(string $value): string
+    {
+        $value = \mb_strtolower(\trim($value));
+        if ($value === '') {
+            return '';
+        }
+        // 去掉命名空间前缀（保留终段 block_key/section_code）：
+        //  - task_key 形态：page:home_page:hero_banner → hero_banner
+        //  - section_code 路径形态：content/home-page-hero-banner → home-page-hero-banner
+        foreach ([':', '/'] as $separator) {
+            if (\str_contains($value, $separator)) {
+                $parts = \explode($separator, $value);
+                $value = (string)\end($parts);
+            }
+        }
+
+        // 末段命名风格归一：连字符 ↔ 下划线统一为下划线，便于与 execution_blueprint 的 block_key 对齐。
+        return \str_replace('-', '_', $value);
+    }
+
+    /**
+     * 从 `qa_report_contract.payload.content_quality.findings` 抽出已经存在但发布门禁未消费的
+     * 内容侧 findings，把它们按来源分桶：
+     *  - render_data：RenderDataQualityLinter（category=design/copy/seo）+ Visual/Asset 校验
+     *  - source_truth：SourceTruthCoverageLinter（must_include_facts / required_home_blocks / 禁忌规则）
+     *
+     * 只把 severity=error 视为阻断信号，避免把已知的 warning（如 fallback_used）升级成发布阻断。
+     * 如果 qa_report_contract 不存在或为空，按"未评估"处理 → ok=true，避免影响存量流程。
+     *
+     * @param array<string, mixed> $scope
+     * @return array{
+     *     source_truth: array{ok:bool, error_count:int, warning_count:int, findings:list<array<string,mixed>>, evaluated:bool},
+     *     render_data: array{ok:bool, error_count:int, warning_count:int, findings:list<array<string,mixed>>, evaluated:bool},
+     *     source_truth_ok: bool,
+     *     render_data_ok: bool
+     * }
+     */
+    private function collectQaReportFindings(array $scope): array
+    {
+        $preflightError = \trim((string)($scope['quality_gate_preflight_error'] ?? ''));
+        $qaReport = \is_array($scope['qa_report_contract'] ?? null) ? $scope['qa_report_contract'] : [];
+        $payload = \is_array($qaReport['payload'] ?? null) ? $qaReport['payload'] : [];
+        $contentQuality = \is_array($payload['content_quality'] ?? null) ? $payload['content_quality'] : [];
+        $findings = \is_array($contentQuality['findings'] ?? null) ? $contentQuality['findings'] : [];
+        if ($preflightError !== '') {
+            $findings[] = [
+                'severity' => 'error',
+                'category' => 'render_data',
+                'rule' => 'render_data.preflight_failed',
+                'message' => $preflightError,
+                'target_path' => 'quality_gate_preflight_error',
+            ];
+        }
+        $evaluated = $preflightError !== ''
+            || ($contentQuality['status'] ?? 'not_evaluated') !== 'not_evaluated'
+            || $findings !== [];
+
+        $sourceTruthBucket = [];
+        $renderDataBucket = [];
+        foreach ($findings as $finding) {
+            if (!\is_array($finding)) {
+                continue;
+            }
+            if ($this->isSourceTruthFinding($finding)) {
+                $sourceTruthBucket[] = $finding;
+                continue;
+            }
+            $renderDataBucket[] = $finding;
+        }
+
+        $sourceTruth = $this->summarizeFindingsBucket($sourceTruthBucket, $evaluated);
+        $renderData = $this->summarizeFindingsBucket($renderDataBucket, $evaluated);
+
+        return [
+            'source_truth' => $sourceTruth,
+            'render_data' => $renderData,
+            'source_truth_ok' => $sourceTruth['ok'],
+            'render_data_ok' => $renderData['ok'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $finding
+     */
+    private function isSourceTruthFinding(array $finding): bool
+    {
+        $contractType = \mb_strtolower(\trim((string)($finding['contract_type'] ?? '')));
+        if ($contractType === 'source_truth') {
+            return true;
+        }
+        $path = \mb_strtolower(\trim((string)($finding['path'] ?? $finding['target_path'] ?? '')));
+        if ($path === '') {
+            return false;
+        }
+
+        return \str_starts_with($path, 'content_quality.missing_must_include_fact')
+            || \str_starts_with($path, 'content_quality.missing_required_block')
+            || \str_starts_with($path, 'content_quality.forbidden_style_violation');
+    }
+
+    /**
+     * @param list<array<string, mixed>> $bucket
+     * @return array{ok:bool, error_count:int, warning_count:int, findings:list<array<string,mixed>>, evaluated:bool}
+     */
+    private function summarizeFindingsBucket(array $bucket, bool $evaluated): array
+    {
+        $errorCount = 0;
+        $warningCount = 0;
+        foreach ($bucket as $finding) {
+            $severity = \mb_strtolower(\trim((string)($finding['severity'] ?? '')));
+            if ($severity === 'error') {
+                ++$errorCount;
+            } elseif ($severity === 'warning') {
+                ++$warningCount;
+            }
+        }
+
+        return [
+            // 未评估时（qa_report_contract 还未生成）默认放行，由 build_tasks_done / required_pages_render 等门禁兜底；
+            // 一旦 qa 报告生成，error 级 finding 即阻断发布；warning 仅记录，不阻断。
+            'ok' => $errorCount === 0,
+            'error_count' => $errorCount,
+            'warning_count' => $warningCount,
+            'findings' => \array_values($bucket),
+            'evaluated' => $evaluated,
+        ];
     }
 }
