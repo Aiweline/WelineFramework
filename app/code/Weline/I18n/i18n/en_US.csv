@@ -1,4 +1,4 @@
-﻿"参数错误：--locale 或 -l 参数不能为空","Parameter error: --locale or -l parameter cannot be empty"
+﻿"参数错误：--locale 或 -l 参数不能为空","参数错误：--locale 或 -l 参数不能为空"
 开始导入所有模块的CSV翻译文件...,"Importing CSV translation files for all modules..."
 "目标语言: %{1}","Target language: %{1}"
 导入完成!,"Import complete!"

@@ -1658,6 +1658,12 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     }
                     \clearstatcache(true);
                     \Weline\Framework\Manager\ObjectManager::clearInstances();
+                    if (\class_exists(\Weline\Framework\Phrase\Parser::class)) {
+                        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+                    }
+                    if (\class_exists(\Weline\I18n\Parser::class)) {
+                        \Weline\I18n\Parser::clearWorkerCaches();
+                    }
                     // 清理 WLS 内置的静态文件内存缓存
                     if (\function_exists('handleStaticFile')) {
                         handleStaticFile('__CLEAR_CACHE__', '');

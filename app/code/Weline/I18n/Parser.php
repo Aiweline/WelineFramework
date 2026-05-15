@@ -40,6 +40,12 @@ class Parser
         }
     }
 
+    public static function clearWorkerCaches(): void
+    {
+        self::$translateWordsCache = [];
+        self::$fallbackWordsCache = null;
+    }
+
     private static function discoverPreloadLanguages(): array
     {
         $configured = self::normalizeLanguageList(Env::get('wls.i18n.preload_locales', ''));

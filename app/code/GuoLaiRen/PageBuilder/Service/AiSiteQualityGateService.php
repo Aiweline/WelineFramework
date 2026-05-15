@@ -521,12 +521,13 @@ final class AiSiteQualityGateService
             $scope['content_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $virtualPage['content_locale'] ?? null,
+            $scope['execution_blueprint']['content_locale'] ?? null,
+            $scope['plan_json']['content_locale'] ?? null,
+            $scope['plan_json']['i18n']['content_locale'] ?? null,
             $virtualPage['default_locale'] ?? null,
             $virtualPage['locale'] ?? null,
             $pageRecord['content_locale'] ?? null,
             $pageRecord['default_locale'] ?? null,
-            $scope['execution_blueprint']['content_locale'] ?? null,
-            $scope['plan_json']['content_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['default_language'] ?? null,
             $websiteProfile['default_locale'] ?? null,
@@ -558,39 +559,10 @@ final class AiSiteQualityGateService
             return [];
         }
 
-        if ($this->isCjkLocale($expectedLocale)) {
-            $violations = [];
-            if (\preg_match_all('/\b(?:Download(?:\s*(?:&|and)\s*Play|\s+Now)?|Get\s+Started|Featured\s+Download|Request\s+APK\s+link|Your\s+name|phone\s+number|Best\s+of|Play\s+with\s+friends|Start\s+now|Move\s+forward)\b/iu', $text, $phrases) > 0) {
-                $violations[] = 'English CTA/body phrase: ' . \implode(', ', \array_slice(\array_values(\array_unique($phrases[0] ?? [])), 0, 4));
-            }
-
-            $englishWords = [];
-            if (\preg_match_all('/\b[A-Za-z][A-Za-z\'-]{2,}\b/u', $text, $words) > 0) {
-                $allowed = \array_fill_keys([
-                    'apk', 'ios', 'android', 'whatsapp', 'ssl', 'upi', 'vip', 'app', 'faq', 'seo',
-                    'cta', 'api', 'html', 'css', 'json', 'url', 'www',
-                ], true);
-                foreach (\array_keys($this->collectAllowedLatinTermsFromScope($scope)) as $allowedTerm) {
-                    $allowed[$allowedTerm] = true;
-                }
-                foreach ($words[0] ?? [] as $word) {
-                    $normalized = \strtolower((string)$word);
-                    if (!isset($allowed[$normalized])) {
-                        $englishWords[] = (string)$word;
-                    }
-                }
-            }
-            $englishWords = \array_values(\array_unique($englishWords));
-            if (\count($englishWords) >= 6) {
-                $violations[] = 'Too much non-target English visible copy: ' . \implode(', ', \array_slice($englishWords, 0, 8));
-            }
-
-            return \array_slice(\array_values(\array_unique($violations)), 0, 8);
-        }
-
-        if (\preg_match_all('/\p{Han}/u', $text, $matches) > 0 && \count($matches[0] ?? []) >= 4) {
-            return ['CJK visible copy found for non-CJK locale ' . $expectedLocale];
-        }
+        // Language is controlled by the generation prompt contract. This quality
+        // gate must not reject content merely because it contains Latin letters:
+        // brands, acronyms, URLs, model names, APK/SEO terms, and proper nouns are
+        // valid in Chinese and other non-English sites.
 
         return [];
     }
@@ -606,72 +578,6 @@ final class AiSiteQualityGateService
         $text = \html_entity_decode($text, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
 
         return \trim(\preg_replace('/\s+/u', ' ', $text) ?? $text);
-    }
-
-    /**
-     * @return array<string,bool>
-     */
-    private function collectAllowedLatinTermsFromScope(array $scope): array
-    {
-        $sources = [];
-        $this->collectAllowedTermSources($scope, $sources);
-
-        $allowed = [];
-        foreach ($sources as $source) {
-            if (\preg_match_all('/\b(?:[A-Z][A-Za-z0-9\'-]{1,}|[A-Z0-9]{2,})\b/u', $source, $matches) < 1) {
-                continue;
-            }
-            foreach ($matches[0] ?? [] as $word) {
-                $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
-                if (\strlen($normalized) >= 2) {
-                    $allowed[$normalized] = true;
-                }
-            }
-        }
-
-        return $allowed;
-    }
-
-    /**
-     * @param list<string> $sources
-     */
-    private function collectAllowedTermSources(mixed $value, array &$sources, string $path = '', int $depth = 0): void
-    {
-        if ($depth > 5 || \count($sources) >= 80) {
-            return;
-        }
-        if (\is_array($value)) {
-            foreach ($value as $key => $child) {
-                $nextPath = $path === '' ? (string)$key : $path . '.' . (string)$key;
-                $this->collectAllowedTermSources($child, $sources, $nextPath, $depth + 1);
-            }
-            return;
-        }
-        if (!\is_scalar($value) || !$this->isAllowedLatinTermSourcePath($path)) {
-            return;
-        }
-
-        $source = \trim((string)$value);
-        if ($source !== '') {
-            $sources[] = $source;
-        }
-    }
-
-    private function isAllowedLatinTermSourcePath(string $path): bool
-    {
-        return \preg_match(
-            '/(?:^|\.)(?:site_title|site_name|brand|brand_name|business_name|product|product_name|game|game_name|service|service_name|platform|platform_name|app_name|keyword|keywords|domain|target_domain|name|title|tagline)(?:$|\.)/i',
-            $path
-        ) === 1;
-    }
-
-    private function isCjkLocale(string $locale): bool
-    {
-        $locale = \strtolower(\str_replace('-', '_', \trim($locale)));
-
-        return \str_starts_with($locale, 'zh')
-            || \str_starts_with($locale, 'ja')
-            || \str_starts_with($locale, 'ko');
     }
 
     /**
