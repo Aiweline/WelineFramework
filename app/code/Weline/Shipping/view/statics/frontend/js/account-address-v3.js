@@ -246,11 +246,27 @@
         }
     }
 
+    function ensureHiddenField(form, name) {
+        var input = form.querySelector('[name="' + name + '"]');
+        if (input) {
+            return input;
+        }
+
+        input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        form.appendChild(input);
+        return input;
+    }
+
     function openForm(panel, data) {
         var wrap = panel.querySelector('[data-address-form-wrap]');
         var form = panel.querySelector('[data-address-form]');
         data = normalize(data || {}, panel);
         form.reset();
+        ['country_code', 'province_code', 'province_region_id', 'city_code', 'city_region_id', 'district_code', 'district_region_id'].forEach(function (field) {
+            ensureHiddenField(form, field);
+        });
         form.querySelector('[name="' + panel.getAttribute('data-id-field') + '"]').value = data.id || '';
         ['name', 'contact_name', 'contact_phone', 'country_code', 'province_code', 'province_region_id', 'city_code', 'city_region_id', 'district_code', 'district_region_id', 'street', 'postal_code'].forEach(function (field) {
             var input = form.querySelector('[name="' + field + '"]');

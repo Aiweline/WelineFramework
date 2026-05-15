@@ -1,0 +1,210 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$config = (array)($this->getData('config') ?? []);
+$locales = (array)($this->getData('locales') ?? []);
+$stats = (array)($this->getData('stats') ?? []);
+$enabled = !empty($config['enabled']);
+$sourceLocale = (string)($config['source_locale'] ?? 'zh_Hans_CN');
+$batchSize = (int)($config['batch_size'] ?? 100);
+$strategy = (string)($config['strategy'] ?? 'light');
+$autoPublish = array_key_exists('auto_publish', $config) ? !empty($config['auto_publish']) : true;
+$sourceLocaleName = $sourceLocale;
+foreach ($locales as $locale) {
+    if ((string)($locale['code'] ?? '') === $sourceLocale) {
+        $sourceLocaleName = (string)($locale['name'] ?? $sourceLocale);
+        break;
+    }
+}
+?>
+<link rel="stylesheet" href="@static(Weline_I18n::css/backend-admin.css)">
+
+<div class="i18n-admin-page">
+    <div class="alert alert-info border-0 shadow-sm mb-4">
+        <strong><?= __('AI 翻译只用于补齐缺失翻译。') ?></strong>
+        <?= __('如果目标语言的模块 CSV 或全局语言包中已经存在有效译文，系统会自动跳过，不会再次调用 AI，避免浪费 token。AI 生成的译文会先写入词典并标记为 AI，可再增量导出回模块 CSV。') ?>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('词条总数') ?></div>
+                    <div class="fs-3 fw-semibold"><?= (int)($stats['total_words'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('AI 启用语言') ?></div>
+                    <div class="fs-3 fw-semibold text-success"><?= (int)($stats['enabled_locales'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('AI 已译词') ?></div>
+                    <div class="fs-3 fw-semibold text-primary"><?= (int)($stats['ai_translated'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('全局状态') ?></div>
+                    <div class="fs-3 fw-semibold <?= $enabled ? 'text-success' : 'text-secondary' ?>">
+                        <?= $enabled ? __('已开启') : __('已关闭') ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" action="@backend-url('*/backend/ai-translation/save')">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white">
+                <strong><?= __('基础配置') ?></strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="enabled" value="1" id="ai-translation-enabled" <?= $enabled ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="ai-translation-enabled"><?= __('开启 AI 翻译') ?></label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><?= __('源语言') ?></label>
+                        <input type="hidden" name="source_locale" value="<?= htmlspecialchars($sourceLocale, ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="form-control bg-light d-flex justify-content-between align-items-center gap-2">
+                            <span><?= htmlspecialchars($sourceLocaleName, ENT_QUOTES, 'UTF-8') ?></span>
+                            <code><?= htmlspecialchars($sourceLocale, ENT_QUOTES, 'UTF-8') ?></code>
+                        </div>
+                        <div class="form-text"><?= __('源语言固定为基础词库语言，不需要重复选择。') ?></div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label"><?= __('批量大小') ?></label>
+                        <input type="number" min="1" max="1000" name="batch_size" class="form-control" value="<?= $batchSize ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label"><?= __('翻译策略') ?></label>
+                        <select name="strategy" class="form-select">
+                            <option value="light" <?= $strategy === 'light' ? 'selected' : '' ?>><?= __('轻量') ?></option>
+                            <option value="high_fidelity" <?= $strategy === 'high_fidelity' ? 'selected' : '' ?>><?= __('高保真') ?></option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="auto_publish" value="1" id="ai-translation-publish" <?= $autoPublish ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="ai-translation-publish"><?= __('自动生效') ?></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div>
+                    <strong><?= __('语言配置') ?></strong>
+                    <div class="text-muted small"><?= __('待翻译 = 模块 CSV 与全局词典都没有有效目标译文的词。') ?></div>
+                </div>
+                <button type="submit" class="btn btn-primary"><?= __('保存配置并入队') ?></button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th><?= __('语言') ?></th>
+                            <th><?= __('AI 翻译') ?></th>
+                            <th><?= __('全局已译') ?></th>
+                            <th><?= __('AI 已译') ?></th>
+                            <th><?= __('待补翻译') ?></th>
+                            <th><?= __('最近队列') ?></th>
+                            <th class="text-end"><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($locales as $locale): ?>
+                            <?php $code = (string)$locale['code']; ?>
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold"><?= htmlspecialchars((string)$locale['name'], ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="text-muted small"><?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?></div>
+                                </td>
+                                <td>
+                                    <?php if (!empty($locale['is_source'])): ?>
+                                        <span class="badge bg-secondary"><?= __('源语言跳过') ?></span>
+                                    <?php else: ?>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="locales[<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>][enabled]" value="1" <?= !empty($locale['enabled']) ? 'checked' : '' ?>>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= (int)$locale['translated'] ?></td>
+                                <td><?= (int)$locale['ai_translated'] ?></td>
+                                <td><?= (int)$locale['pending'] ?></td>
+                                <td>
+                                    <?php if ((int)$locale['queue_id'] > 0): ?>
+                                        <span class="badge bg-light text-dark">#<?= (int)$locale['queue_id'] ?></span>
+                                        <span class="badge bg-info"><?= htmlspecialchars((string)$locale['queue_status'], ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php else: ?>
+                                        <span class="text-muted"><?= __('无') ?></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="submit"
+                                                class="btn btn-outline-primary"
+                                                form="enqueue-locale-<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
+                                                <?= !empty($locale['is_source']) ? 'disabled' : '' ?>>
+                                            <?= __('立即翻译') ?>
+                                        </button>
+                                        <button type="submit"
+                                                class="btn btn-outline-success"
+                                                form="export-modules-<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
+                                                <?= !empty($locale['is_source']) ? 'disabled' : '' ?>>
+                                            <?= __('导出 AI 到模块') ?>
+                                        </button>
+                                        <button type="submit"
+                                                class="btn btn-outline-secondary"
+                                                form="export-global-<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
+                                                <?= !empty($locale['is_source']) ? 'disabled' : '' ?>>
+                                            <?= __('导出全局包') ?>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($locales)): ?>
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4"><?= __('没有已安装并启用的语言。') ?></td>
+                            </tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <?php foreach ($locales as $locale): ?>
+        <?php $code = (string)$locale['code']; ?>
+        <form method="post" id="enqueue-locale-<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>" action="@backend-url('*/backend/ai-translation/enqueue')" class="d-none">
+            <input type="hidden" name="locale_code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+        </form>
+        <form method="post" id="export-modules-<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>" action="@backend-url('*/backend/ai-translation/export-modules')" class="d-none">
+            <input type="hidden" name="locale_code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+        </form>
+        <form method="post" id="export-global-<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>" action="@backend-url('*/backend/ai-translation/export-global')" class="d-none">
+            <input type="hidden" name="locale_code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+        </form>
+    <?php endforeach; ?>
+
+    <form method="post" action="@backend-url('*/backend/ai-translation/enqueue')" class="mt-3">
+        <button type="submit" class="btn btn-outline-success"><?= __('为所有启用语言立即入队') ?></button>
+    </form>
+</div>

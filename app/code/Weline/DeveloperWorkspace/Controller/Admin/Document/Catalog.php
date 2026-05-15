@@ -239,7 +239,7 @@ class Catalog extends \Weline\Framework\App\Controller\BackendController
             
                 $existingCatalog = $nameCheckCatalog->find()->fetch();
             if ($existingCatalog && $existingCatalog->getId()) {
-                $errorMsg = __('分类名称"' . $post['name'] . '"在同一父分类下已存在！');
+                $errorMsg = __('分类名称"%{name}"在同一父分类下已存在！', ['name' => $post['name']]);
                 if ($this->request->isAjax()) {
                     return $this->fetchJson(['success' => false, 'msg' => $errorMsg]);
                 }
@@ -253,7 +253,7 @@ class Catalog extends \Weline\Framework\App\Controller\BackendController
                 $catalogModel = $this->getCatalogModel()->clear();
                 $catalog = $catalogModel->load($id);
                 if (!$catalog || !$catalog->getId()) {
-                    $errorMsg = __('该记录已不存在！ID: ' . $id);
+                    $errorMsg = __('该记录已不存在！ID: %{id}', ['id' => $id]);
                     if ($this->request->isAjax()) {
                         return $this->fetchJson(['success' => false, 'msg' => $errorMsg]);
                     }

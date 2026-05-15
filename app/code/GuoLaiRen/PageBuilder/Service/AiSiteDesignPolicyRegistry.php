@@ -174,6 +174,7 @@ final class AiSiteDesignPolicyRegistry
             'image.object_fit_cover' => 'Crop imagery intentionally.',
             'image.shared_radius' => 'Use consistent image radii.',
             'image.gradient_overlay' => 'Use overlays only to improve readability.',
+            'image.text_safe_zone' => 'Place copy on a deliberate contrast-safe zone when media is busy.',
             'image.ambient_glow' => 'Use ambient image treatment subtly.',
             'image.edge_fade' => 'Blend image edges where useful.',
             'image.no_style_mismatch' => 'Avoid mismatched image styles.',
@@ -182,6 +183,7 @@ final class AiSiteDesignPolicyRegistry
             'background.subtle_grain' => 'Use texture only when it supports the design.',
             'background.masked_image' => 'Mask images when needed for layout integration.',
             'background.readability_overlay' => 'Keep copy readable over media.',
+            'background.scrim_text_panel' => 'Use a scrim plus text panel for copy over detailed photos.',
             'component.unified_radius' => 'Keep component radius consistent.',
             'component.unified_shadow' => 'Keep shadows restrained and consistent.',
             'component.unified_border' => 'Use borders consistently.',
@@ -227,13 +229,14 @@ final class AiSiteDesignPolicyRegistry
             '- Prioritize explicit user requirements and explicit user style.',
             '- When the brief is underspecified, produce a refined premium web design.',
             '- Use concrete layout, typography, color, media, motion, responsive, and accessibility rules.',
+            '- Any copy over photography or detailed texture must sit inside a visible scrim/text-panel safe zone with explicit foreground contrast; never place body copy directly on a busy image.',
             '- Do not output rationale fields into the build contract.',
         ]);
     }
 
     private function compactPolicyPrompt(): string
     {
-        return 'Use premium_web_v1 rule ids and concrete design tokens. Preserve explicit user style, avoid rationale fields, and keep build prompts scoped to the current task.';
+        return 'Use premium_web_v1 rule ids and concrete design tokens. Preserve explicit user style, avoid rationale fields, keep build prompts scoped to the current task, and require readable scrim/text-panel safe zones for text over busy media.';
     }
 
     /**

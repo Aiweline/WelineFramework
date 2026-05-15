@@ -88,7 +88,7 @@
 待发货,待发货
 部分发货,部分发货
 已送达,已送达
-支付方式不支持优惠方式：%s,支付方式不支持优惠方式：%s
+支付方式不支持优惠方式：%{1},支付方式不支持优惠方式：%{1}
 只有已支付的订单才能发货,只有已支付的订单才能发货
 订单已发货,订单已发货
 发货记录不存在,发货记录不存在
@@ -105,7 +105,7 @@
 商品名称不能为空,商品名称不能为空
 商品数量不能为空,商品数量不能为空
 商品价格不能为空,商品价格不能为空
-"订单状态不能从 %{1} 转换到 %{2}","订单状态不能从 %{1} 转换到 %{2}"
+订单状态不能从 %{1} 转换到 %{2},订单状态不能从 %{1} 转换到 %{2}
 状态转换被阻止,状态转换被阻止
 支付金额不能为空,支付金额不能为空
 支付方式不能为空,支付方式不能为空
@@ -123,7 +123,7 @@
 订单已退款,订单已退款
 订单管理模块安装完成,订单管理模块安装完成
 "已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
-"安装失败: %{1}","安装失败: %{1}"
+安装失败: %{1},安装失败: %{1}
 编辑订单,编辑订单
 新建订单,新建订单
 系统,系统
@@ -200,7 +200,7 @@ SKU,SKU
 默认语言（中文）的状态名称,默认语言（中文）的状态名称
 状态颜色,状态颜色
 状态图标,状态图标
-"Material Design Icons 类名，如：mdi-check-circle","Material Design Icons 类名，如：mdi-check-circle"
+Material Design Icons 类名，如：mdi-check-circle,Material Design Icons 类名，如：mdi-check-circle
 状态描述,状态描述
 是否启用,是否启用
 启用,启用
@@ -208,7 +208,7 @@ SKU,SKU
 排序,排序
 是否系统状态,是否系统状态
 多语言翻译,多语言翻译
-"英文 (en_US)","英文 (en_US)"
+英文 (en_US),英文 (en_US)
 英文状态名称,英文状态名称
 英文状态描述,英文状态描述
 状态名称会通过翻译系统自动翻译。如果在此处填写了翻译，将优先使用数据库中的翻译；否则使用翻译文件中的翻译。,状态名称会通过翻译系统自动翻译。如果在此处填写了翻译，将优先使用数据库中的翻译；否则使用翻译文件中的翻译。

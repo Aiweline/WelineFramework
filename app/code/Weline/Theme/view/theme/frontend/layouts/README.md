@@ -31,6 +31,9 @@
 - `account_auth`
   - `default`
 
+- `blank`
+  - `full`
+
 - `account_logout`
   - `default`
 

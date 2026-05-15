@@ -23,13 +23,12 @@ class AiSitePageComponentGenerationService
 {
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
-    public const REQUEST_KEY_ALLOW_STUB_AI_IN_TEST = 'pagebuilder.ai.allow_stub_in_test';
     public const REQUEST_KEY_FAST_BLOCK_ARTIFACT = 'pagebuilder.ai.fast_block_artifact';
-    /** AI 结构修复（requestJsonRepair）轮次；0 表示解析失败后不再自动调用 AI。 */
-    private const JSON_REPAIR_MAX_ATTEMPTS = 0;
+    /** Allow one AI-owned transport repair before surfacing invalid JSON as a retry item. */
+    private const JSON_REPAIR_MAX_ATTEMPTS = 1;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
-    /** 单组件仅允许一次完整 AI 生成；失败入账「可重试失败项」，由用户手动触发重试。 */
-    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
+    /** Keep recoverable component repairs inside the AI contract before surfacing a retry item. */
+    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
     // BuildPlan v2.2: generated visitor sections must pass quality gates; no fallback copy can ship.
     private const ENFORCE_COMPONENT_QUALITY_VALIDATION = true;
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
@@ -121,7 +120,12 @@ class AiSitePageComponentGenerationService
         }
 
         $refinementInstruction = \trim($refinementInstruction);
-        $siteDisplayName = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
+        $siteDisplayName = $this->resolveLocaleSafeSiteDisplayName(
+            $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope),
+            $websiteProfile,
+            $scope,
+            $this->resolvePrimaryLocale($websiteProfile, $scope)
+        );
         $cacheKey = \md5((string)\json_encode([
             'region' => $region,
             'site' => $siteDisplayName,
@@ -266,8 +270,15 @@ class AiSitePageComponentGenerationService
         $style = $isHero
             ? 'premium cinematic website banner, realistic/editorial photography or photoreal premium 3D, 1920x750 wide full-bleed cover background, not cartoon or SVG-like'
             : 'premium brand website media, realistic/editorial or high-end commercial art, not clip-art, not cartoon, not placeholder';
+        $finalUrl = $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        if ($finalUrl !== '') {
+            $resolvedSlotId = $this->resolveSectionAssetSlotId($scope, $finalUrl);
+            if ($resolvedSlotId !== '') {
+                $slotId = $resolvedSlotId;
+            }
+        }
 
-        return [
+        $contract = [
             'version' => 1,
             'required' => $requiresImage ? 1 : 0,
             'slot_id' => $slotId,
@@ -284,10 +295,15 @@ class AiSitePageComponentGenerationService
             'style' => $style,
             'html_contract' => $requiresImage
                 ? ($isHero
-                    ? 'Use the exact generated image URL as a full-width 1920x750-style banner background layer, with object-fit:cover/background-size:cover and data-pb-ai-image-role="generated-asset" plus data-pb-ai-asset-slot on the image/background element.'
-                    : 'Use the exact generated image URL and set data-pb-ai-image-role="generated-asset" plus data-pb-ai-asset-slot on the image/background element.')
+                    ? 'Render the concrete final_url from this contract as a real editable <img> cover layer inside html_content for the full-width 1920x750-style banner. The same <img> carries data-pb-ai-image-role and the concrete data-pb-ai-asset-slot from this contract.'
+                    : 'Render the concrete final_url from this contract as a real editable <img> media surface inside html_content. The same <img> carries data-pb-ai-image-role and the concrete data-pb-ai-asset-slot from this contract.')
                 : 'Use CSS-only motifs if no verified image exists; never use svg or placeholder image URLs.',
         ];
+        if ($finalUrl !== '') {
+            $contract['final_url'] = $finalUrl;
+        }
+
+        return $contract;
     }
 
     /**
@@ -366,11 +382,9 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 并发生成多个组件（header + footer + 多个 section 可同时进行）
+     * 骞跺彂鐢熸垚澶氫釜缁勪欢锛坔eader + footer + 澶氫釜 section 鍙悓鏃惰繘琛岋級
      *
-     * 使用 Fiber 实现并发：每个组件在独立 Fiber 中调用 generateComponent()，
-     * 复用完整的 AI 调用 → JSON 修复 → 语法校验 → 自动修复流程。
-     *
+     * 浣跨敤 Fiber 瀹炵幇骞跺彂锛氭瘡涓粍浠跺湪鐙珛 Fiber 涓皟鐢?generateComponent()锛?     * 澶嶇敤瀹屾暣鐨?AI 璋冪敤 鈫?JSON 淇 鈫?璇硶鏍￠獙 鈫?鑷姩淇娴佺▼銆?     *
      * @param array<string, array{
      *   componentCode:string,
      *   name:string,
@@ -428,9 +442,7 @@ class AiSitePageComponentGenerationService
 
             $sectionKey = \trim((string)($task['section_key'] ?? ''));
             $sectionKey = $sectionKey !== '' ? $sectionKey : ($blockKey !== '' ? $blockKey : $sectionCode);
-            // 只按归一化后的 sectionCode 去重（如 content/home_page-hero），
-            // 不按 sectionKey 去重——task plan 的 sectionKey（如 'hero'）必然与蓝图基段 key 重叠，
-            // 按 key 去重会把 task plan 规划的全部额外段都丢掉，导致生成数量远少于计划。
+            // Deduplicate by normalized section code, not by broad section key.
             if (isset($known[$sectionCode])) {
                 continue;
             }
@@ -477,15 +489,17 @@ class AiSitePageComponentGenerationService
      */
     private function buildSectionTasksFromExecutionBlueprint(string $pageType, array $scope): array
     {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $pages = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
-        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+        $page = $this->resolveExecutionBlueprintPagePlan($scope, $pageType);
+        $blocks = $this->resolveExecutionBlueprintBlocksForPage($scope, $pageType);
         if ($blocks === []) {
             return [];
         }
 
         $tasks = [];
+        $sharedPromptContext = $this->normalizeSharedPromptContextFromExecutionBlueprint($scope);
+        $themeContext = $this->resolveExecutionBlueprintThemeContext($scope);
+        $contentLocale = $this->resolveScopePrimaryLocale($scope);
+        $pageDesignPlan = \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : [];
         foreach (\array_values($blocks) as $index => $block) {
             if (!\is_array($block)) {
                 continue;
@@ -494,10 +508,20 @@ class AiSitePageComponentGenerationService
             if ($blockKey === '') {
                 $blockKey = 'block_' . ($index + 1);
             }
-            $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+            $locale = $this->resolveScopePrimaryLocale($scope);
+            $fieldPlan = $this->sanitizeExecutionBlueprintFieldPlanForGeneration(
+                \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
+                $locale
+            );
             $label = $this->pickExecutionBlueprintBlockLabel($block, $fieldPlan, $blockKey);
             $description = $this->pickExecutionBlueprintBlockDescription($block, $fieldPlan);
             $sectionCode = 'content/' . $this->slugForGeneratedSectionCode($pageType) . '-' . $this->slugForGeneratedSectionCode($blockKey);
+            $contentRows = $this->buildExecutionBlueprintContentCopyRows($label, $description, $fieldPlan);
+            $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
+            $stylePlan = \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [];
+            if ($pageDesignPlan !== []) {
+                $stylePlan['page_design_plan'] = $pageDesignPlan;
+            }
             $tasks[] = [
                 'task_key' => 'page:' . $pageType . ':' . $blockKey,
                 'task_type' => 'page_section',
@@ -510,21 +534,72 @@ class AiSitePageComponentGenerationService
                 'plan_context' => [
                     'block_goal' => (string)($block['goal'] ?? ''),
                     'field_plan' => $fieldPlan,
+                    'page_design_plan' => $pageDesignPlan,
+                    'source_page_type' => $pageType,
+                    'source_block_key' => $blockKey,
+                    'page_flow_role' => (string)($block['page_flow_role'] ?? ''),
                 ],
                 'block_task' => [
                     'task_goal' => (string)($block['goal'] ?? ''),
                     'content_plan' => [
-                        'content_copy' => $this->buildExecutionBlueprintContentCopyRows($label, $description, $fieldPlan),
+                        'title' => $label,
+                        'body_copy' => \array_values(\array_map(
+                            static fn(array $row): string => (string)($row['copy'] ?? ''),
+                            \array_filter($contentRows, static fn(array $row): bool => \trim((string)($row['copy'] ?? '')) !== '')
+                        )),
+                        'content_copy' => $contentRows,
                     ],
+                    'style_plan' => $stylePlan,
+                    'realtime_content' => $realtimeContent,
                     'meta_fields' => $fieldPlan,
                 ],
                 'task_script' => [
+                    'story_goal' => (string)($block['goal'] ?? ''),
+                    'content_fill_rule' => 'Write finished visitor-facing copy from the approved page plan fields; never render planning observations or block identifiers.',
                     'field_content_requirements' => $fieldPlan,
+                ],
+                'runtime_context' => [
+                    'theme_context_snapshot' => $themeContext,
+                    'shared_prompt_context' => $sharedPromptContext,
+                    'content_locale' => $contentLocale,
                 ],
             ];
         }
 
         return $tasks;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function resolveExecutionBlueprintPagePlan(array $scope, string $pageType): array
+    {
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : [];
+        if (\is_array($pagePlans[$pageType] ?? null)) {
+            return $pagePlans[$pageType];
+        }
+
+        $pages = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
+        return \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<array<string,mixed>>
+     */
+    private function resolveExecutionBlueprintBlocksForPage(array $scope, string $pageType): array
+    {
+        $page = $this->resolveExecutionBlueprintPagePlan($scope, $pageType);
+        foreach (['blocks', 'display_blocks'] as $field) {
+            $blocks = \is_array($page[$field] ?? null) ? $page[$field] : [];
+            if ($blocks !== []) {
+                return \array_values(\array_filter($blocks, static fn($block): bool => \is_array($block)));
+            }
+        }
+
+        return [];
     }
 
     /**
@@ -607,6 +682,52 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * Execution-blueprint blocks may still contain planning-only fields from
+     * older AI outputs. Generation prompts should receive content examples, not
+     * reasons, implementation prose, or asset filenames that can leak to pages.
+     *
+     * @param list<array<string,mixed>> $fieldPlan
+     * @return list<array<string,string>>
+     */
+    private function sanitizeExecutionBlueprintFieldPlanForGeneration(array $fieldPlan, string $locale): array
+    {
+        $clean = [];
+        foreach ($fieldPlan as $field) {
+            if (!\is_array($field)) {
+                continue;
+            }
+
+            $fieldName = \trim((string)($field['field'] ?? ''));
+            if ($fieldName === '') {
+                continue;
+            }
+
+            $sample = '';
+            foreach (['sample', 'copy', 'default', 'value'] as $sourceKey) {
+                $candidate = $this->sanitizeVisibleCopy((string)($field[$sourceKey] ?? ''));
+                if ($locale !== '') {
+                    $candidate = $this->filterVisibleCopyForLocale($candidate, $locale);
+                }
+                if ($candidate !== '') {
+                    $sample = $candidate;
+                    break;
+                }
+            }
+
+            if ($sample === '') {
+                continue;
+            }
+
+            $clean[] = [
+                'field' => $fieldName,
+                'sample' => $this->clipText($sample, 180),
+            ];
+        }
+
+        return $clean;
+    }
+
+    /**
      * @param list<array<string,string>> $rows
      * @return list<array<string,string>>
      */
@@ -649,6 +770,45 @@ class AiSitePageComponentGenerationService
         }
 
         return '';
+    }
+
+    /**
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     */
+    private function resolveSharedLogoAssetUrl(array $websiteProfile, array $scope): string
+    {
+        $manifestLogo = $this->resolveHeaderAssetUrl($scope);
+        if ($manifestLogo !== '') {
+            return $manifestLogo;
+        }
+
+        return $this->normalizePublishableLogoAssetUrl((string)($websiteProfile['logo'] ?? ''));
+    }
+
+    private function normalizePublishableLogoAssetUrl(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+        $lower = \strtolower($value);
+        if (\str_starts_with($lower, 'data:') || \str_contains($lower, '<svg')) {
+            return '';
+        }
+        if (\preg_match('/placeholder|example\.com|picsum\.photos|source\.unsplash\.com|images\.unsplash\.com/iu', $value) === 1) {
+            return '';
+        }
+        $path = \parse_url($value, \PHP_URL_PATH);
+        $path = \is_string($path) ? \trim($path) : $value;
+        if ($path === '' || \str_ends_with($path, '/')) {
+            return '';
+        }
+        if (\preg_match('/\.(?:png|jpe?g|webp|gif|avif|svg)(?:$|\?)/i', $path) !== 1) {
+            return '';
+        }
+
+        return $value;
     }
 
     /**
@@ -744,7 +904,7 @@ class AiSitePageComponentGenerationService
             return;
         }
 
-        if ($this->shouldUseStubAiGeneration() || $this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
+        if ($this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
             foreach ($components as $region => $spec) {
                 $spec = $this->prepareInlineImageAssetForComponentSpec($spec);
                 yield $region => $this->generateComponent(
@@ -816,7 +976,7 @@ class AiSitePageComponentGenerationService
             return;
         }
 
-        if ($this->shouldUseStubAiGeneration() || $this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
+        if ($this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
             foreach ($components as $componentKey => $spec) {
                 try {
                     $spec = $this->prepareInlineImageAssetForComponentSpec($spec);
@@ -848,8 +1008,8 @@ class AiSitePageComponentGenerationService
 
                 return;
             } catch (\InvalidArgumentException $wQueryUnavailable) {
-                // 单元测试 / 裁剪环境未加载 Weline_Ai 的 AiQueryProvider 时 w_query('ai') 不可用，回退到 Fiber。
-                if (!\str_contains((string)$wQueryUnavailable->getMessage(), '查询器')) {
+                // Fall back to Fiber when the ai query provider is unavailable.
+                if (!\str_contains((string)$wQueryUnavailable->getMessage(), 'query')) {
                     throw $wQueryUnavailable;
                 }
             }
@@ -1105,9 +1265,8 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * N 路流式走统一 {@see w_query()}（AiQueryProvider::generateStreamBatch），与站内其它模块 AI 接入一致；
-     * 失败或解析异常时对该 key 回退到单路 {@see generateComponent()}。
-     *
+     * N 璺祦寮忚蛋缁熶竴 {@see w_query()}锛圓iQueryProvider::generateStreamBatch锛夛紝涓庣珯鍐呭叾瀹冩ā鍧?AI 鎺ュ叆涓€鑷达紱
+     * 澶辫触鎴栬В鏋愬紓甯告椂瀵硅 key 鍥為€€鍒板崟璺?{@see generateComponent()}銆?     *
      * @param array<string, array{
      *   componentCode:string,
      *   name:string,
@@ -1233,11 +1392,9 @@ class AiSitePageComponentGenerationService
      * No application-level cap: the caller decides the task set size.
      */
     /**
-     * 限制出站 HTTP 并发，避免任务数较多时对 DeepSeek 等 API 全开连接导致排队/限速，
-     * 长时间无吞吐触发 OpenAiProvider 中 cURL LOW_SPEED 中止（「Less than 1 bytes/sec…」）。
-     *
-     * 配置：{@see Env::get()} 键 `pagebuilder.ai_site.max_http_concurrency`（默认 4，有效范围 1–32）。
-     */
+     * 闄愬埗鍑虹珯 HTTP 骞跺彂锛岄伩鍏嶄换鍔℃暟杈冨鏃跺 DeepSeek 绛?API 鍏ㄥ紑杩炴帴瀵艰嚧鎺掗槦/闄愰€燂紝
+     * 闀挎椂闂存棤鍚炲悙瑙﹀彂 OpenAiProvider 涓?cURL LOW_SPEED 涓锛堛€孡ess than 1 bytes/sec鈥︺€嶏級銆?     *
+     * 閰嶇疆锛歿@see Env::get()} 閿?`pagebuilder.ai_site.max_http_concurrency`锛堥粯璁?4锛屾湁鏁堣寖鍥?1-2锛夈€?     */
     private function resolveConcurrency(int $taskCount): int
     {
         $taskCount = \max(1, $taskCount);
@@ -1248,7 +1405,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 并发生成 header + footer 共享组件
+     * 骞跺彂鐢熸垚 header + footer 鍏变韩缁勪欢
      *
      * @return array{header:array<string,mixed>, footer:array<string,mixed>}
      */
@@ -1294,7 +1451,12 @@ class AiSitePageComponentGenerationService
     private function buildSharedComponentGenerationSpecs(array $websiteProfile, array $scope, array $regions = []): array
     {
         $regionMap = $regions === [] ? ['header' => true, 'footer' => true] : \array_fill_keys(\array_values(\array_filter(\array_map('strval', $regions))), true);
-        $siteDisplayName = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
+        $siteDisplayName = $this->resolveLocaleSafeSiteDisplayName(
+            $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope),
+            $websiteProfile,
+            $scope,
+            $this->resolvePrimaryLocale($websiteProfile, $scope)
+        );
         $headerConfig = $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
         $footerConfig = $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
         $components = [
@@ -1320,7 +1482,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 并发生成一个页面的所有 section
+     * 骞跺彂鐢熸垚涓€涓〉闈㈢殑鎵€鏈?section
      *
      * @return array{blueprint:array<string,mixed>, sections:list<array<string,mixed>>}
      */
@@ -1368,7 +1530,7 @@ class AiSitePageComponentGenerationService
             $sections[] = \array_replace($meta, $result);
         }
 
-        // 按 sort_order 排序
+        // 鎸?sort_order 鎺掑簭
         \usort($sections, static fn(array $a, array $b): int => ($a['sort_order'] ?? 0) <=> ($b['sort_order'] ?? 0));
 
         return [
@@ -1407,13 +1569,13 @@ class AiSitePageComponentGenerationService
             'description' => $safeDescription !== '' ? $safeDescription : ($name !== '' ? $name : $componentCode),
         ];
         $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
+        $aiData = $this->sanitizeGeneratedAssetAttributes($aiData);
+        $aiData = $this->ensureGeneratedAssetImageAttributes($aiData, $renderContext, $defaultConfig);
+        $this->assertGeneratedImageSourcesUseVerifiedAssets($aiData, $renderContext, $defaultConfig);
+        $aiData = $this->ensureRequiredNonHeroImageSlotElement($aiData, $region, $renderContext, $defaultConfig, $componentCode);
         $aiData = $this->enforceContractHeroImageUrlsInAiPayload($aiData, $region, $defaultConfig);
-        $aiData = $this->sanitizeGeneratedAssetAttributes($aiData);
-        $aiData = $this->enforceContractAllSectionImageUrlsInAiPayload($aiData, $region, $defaultConfig);
-        $aiData = $this->forceInjectMissingRequiredImageAssets($aiData, $renderContext, $defaultConfig);
-        $aiData = $this->sanitizeGeneratedAssetAttributes($aiData);
         $this->assertRequiredImageAssetsUsed($aiData, $renderContext, $defaultConfig);
-        // 强制契约：有 verified_assets 时 HTML 必须引用至少一个真实图片 URL
+        // 寮哄埗濂戠害锛氭湁 verified_assets 鏃?HTML 蹇呴』寮曠敤鑷冲皯涓€涓湡瀹炲浘鐗?URL
         if ($verifiedAssets !== []) {
             $htmlToCheck = (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? '');
             if ($htmlToCheck !== '' && !\str_contains($htmlToCheck, 'data-pb-ai-image-role="generated-asset"')) {
@@ -1433,7 +1595,7 @@ class AiSitePageComponentGenerationService
             }
         }
         $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets);
-        $aiData = $this->hideFrameworkHeaderWhenAiHtmlOwnsSectionTitle($aiData, $region);
+        $defaultConfig = $this->applyAiPayloadOwnershipToDefaultConfig($defaultConfig, $region, $aiData);
         $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig, $region);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
@@ -1499,6 +1661,209 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * If AI used the exact verified image URL but forgot editor metadata, repair
+     * only the structural slot binding. This does not invent copy, layout, CSS, or
+     * images; it preserves the AI-selected media placement and makes the queue
+     * data contract editable.
+     *
+     * @param array<string,mixed> $aiData
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function ensureGeneratedAssetImageAttributes(array $aiData, array $renderContext, array $defaultConfig): array
+    {
+        $assetMap = $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig);
+        if ($assetMap === []) {
+            return $aiData;
+        }
+
+        foreach (['html_content', 'html_extra'] as $key) {
+            $html = (string)($aiData[$key] ?? '');
+            if ($html === '' || \stripos($html, '<img') === false) {
+                continue;
+            }
+
+            $aiData[$key] = \preg_replace_callback(
+                '/<img\b[^>]*>/iu',
+                function (array $matches) use ($assetMap): string {
+                    $tag = (string)($matches[0] ?? '');
+                    $src = $this->extractHtmlAttribute($tag, 'src');
+                    if ($src === '') {
+                        return $tag;
+                    }
+                    foreach ($assetMap as $slotId => $url) {
+                        if ($src !== $url) {
+                            continue;
+                        }
+
+                        $tag = $this->upsertHtmlAttribute($tag, 'data-pb-ai-image-role', 'generated-asset');
+                        $tag = $this->upsertHtmlAttribute($tag, 'data-pb-ai-asset-slot', (string)$slotId);
+                        return $tag;
+                    }
+
+                    return $tag;
+                },
+                $html
+            ) ?? $html;
+        }
+
+        return $aiData;
+    }
+
+    /**
+     * Slot hydration is data-structure repair, not a visual fallback: when a
+     * non-hero block has a required generated image asset, the block must carry
+     * the editable slot element so later image replacement and publishing can
+     * address it. Hero/banner layout still remains an AI-owned cover contract.
+     *
+     * @param array<string,mixed> $aiData
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function ensureRequiredNonHeroImageSlotElement(
+        array $aiData,
+        string $region,
+        array $renderContext,
+        array $defaultConfig,
+        string $componentCode
+    ): array {
+        if ($region !== 'content' || $this->isHeroOrBannerImageContract($defaultConfig, $renderContext, (string)($aiData['html_content'] ?? ''))) {
+            return $aiData;
+        }
+
+        $assetMap = $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig);
+        if ($assetMap === []) {
+            return $aiData;
+        }
+
+        $html = (string)($aiData['html_content'] ?? '');
+        if (\trim($html) === '') {
+            return $aiData;
+        }
+
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        foreach ($assetMap as $slotId => $url) {
+            $slotId = \trim((string)$slotId);
+            $url = \trim((string)$url);
+            if ($slotId === '' || $url === '' || $this->htmlContainsGeneratedAssetImage($html, $slotId, $url)) {
+                continue;
+            }
+            $alt = $this->resolveGeneratedAssetAltText($slotId, $url, $renderContext, $defaultConfig, $componentCode);
+
+            $img = '<img class="' . $prefix . '-slot-image" src="'
+                . \htmlspecialchars($url, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+                . '" alt="' . \htmlspecialchars($alt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+                . '" data-pb-ai-image-role="generated-asset" data-pb-ai-asset-slot="'
+                . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+                . '">';
+            $html = $this->insertHtmlAfterFirstOpeningTag($html, $img);
+        }
+
+        $aiData['html_content'] = $html;
+
+        return $aiData;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     */
+    private function resolveGeneratedAssetAltText(
+        string $slotId,
+        string $url,
+        array $renderContext,
+        array $defaultConfig,
+        string $componentCode
+    ): string {
+        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
+            ? $renderContext['_visual_contract']
+            : $this->decodeRuntimeVisualContract($defaultConfig);
+        foreach ([
+            $defaultConfig['runtime.section_image_alt'] ?? null,
+            $defaultConfig['visual.image_alt'] ?? null,
+            $defaultConfig['image.alt'] ?? null,
+            $defaultConfig['media.image_alt'] ?? null,
+            $visualContract['alt'] ?? null,
+            $visualContract['subject'] ?? null,
+            $defaultConfig['content.title'] ?? null,
+            $defaultConfig['title'] ?? null,
+            $componentCode,
+        ] as $candidate) {
+            $alt = $this->sanitizeGeneratedAssetAltCandidate((string)$candidate);
+            if ($alt !== '') {
+                return $alt;
+            }
+        }
+
+        return $this->sanitizeGeneratedAssetAltCandidate($slotId) ?: $this->sanitizeGeneratedAssetAltCandidate($url);
+    }
+
+    private function sanitizeGeneratedAssetAltCandidate(string $value): string
+    {
+        $value = \trim(\strip_tags($value));
+        if ($value === '') {
+            return '';
+        }
+        $value = (string)(\preg_replace('/[_\/\\\\:-]+/u', ' ', $value) ?? $value);
+        $value = (string)(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        $value = \trim($value);
+        if ($value === '' || \preg_match('/^(?:page|content|header|footer|slot|image|asset)\b/i', $value) === 1) {
+            return '';
+        }
+
+        return $this->clipText($value, 140);
+    }
+
+    private function insertHtmlAfterFirstOpeningTag(string $html, string $insert): string
+    {
+        if (\preg_match('/^(\s*<\s*[a-z][a-z0-9:-]*\b[^>]*>)/iu', $html, $matches) !== 1) {
+            return $insert . $html;
+        }
+
+        $opening = (string)($matches[1] ?? '');
+        if ($opening === '') {
+            return $insert . $html;
+        }
+
+        return $opening . $insert . \substr($html, \strlen($opening));
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function isHeroOrBannerImageContract(array $defaultConfig, array $renderContext = [], string $html = ''): bool
+    {
+        $template = \strtolower(\trim((string)($defaultConfig['runtime.section_template'] ?? '')));
+        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
+            ? $renderContext['_visual_contract']
+            : $this->decodeRuntimeVisualContract($defaultConfig);
+        $slotType = \strtolower(\trim((string)($visualContract['slot_type'] ?? '')));
+
+        return \in_array($template, ['hero', 'banner'], true)
+            || \str_contains($slotType, 'hero')
+            || \str_contains($slotType, 'banner')
+            || ($html !== '' && \preg_match('/\b(?:hero|banner)\b/i', $html) === 1);
+    }
+
+    private function upsertHtmlAttribute(string $tag, string $name, string $value): string
+    {
+        $escapedValue = \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $attribute = $name . '="' . $escapedValue . '"';
+        $namePattern = \preg_quote($name, '/');
+        if (\preg_match('/\s+' . $namePattern . '\s*=\s*(["\']).*?\1/isu', $tag) === 1) {
+            return \preg_replace('/\s+' . $namePattern . '\s*=\s*(["\']).*?\1/isu', ' ' . $attribute, $tag, 1) ?? $tag;
+        }
+        if (\preg_match('/\s*\/>$/u', $tag) === 1) {
+            return \preg_replace('/\s*\/>$/u', ' ' . $attribute . ' />', $tag, 1) ?? $tag;
+        }
+
+        return \preg_replace('/\s*>$/u', ' ' . $attribute . '>', $tag, 1) ?? $tag;
+    }
+
+    /**
      * @param array<string,mixed> $renderContext
      * @return array{
      *   code:string,
@@ -1537,29 +1902,6 @@ class AiSitePageComponentGenerationService
                 );
             } catch (\Throwable $throwable) {
                 $lastThrowable = $throwable;
-                if ($this->shouldUseContractRescueComponent($region, $defaultConfig, $renderContext, $throwable)) {
-                    try {
-                        $reason = $this->summarizeThrowable($throwable);
-                        \w_log_warning('[AI Site Component Contract Rescue] ' . $componentCode . ' (' . $region . '): ' . $reason);
-                        return $this->buildFallbackComponent(
-                            $componentCode,
-                            $name,
-                            $region,
-                            $prompt,
-                            $defaultConfig,
-                            $renderContext
-                        );
-                    } catch (\Throwable $rescueThrowable) {
-                        throw new \RuntimeException(
-                            'AI component generation failed and contract rescue failed: '
-                            . $this->summarizeThrowable($throwable)
-                            . ' | rescue: '
-                            . $this->summarizeThrowable($rescueThrowable),
-                            0,
-                            $rescueThrowable
-                        );
-                    }
-                }
                 if (!$this->shouldRetryComponentGeneration($throwable)) {
                     break;
                 }
@@ -1574,7 +1916,8 @@ class AiSitePageComponentGenerationService
                     $prompt,
                     $reason,
                     $attempt + 1,
-                    $aiData
+                    $aiData,
+                    $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig)
                 );
                 $this->emitComponentRetryNotice($region, $componentCode, $reason, $attempt + 1);
                 \w_log_warning('[AI Site Component Retry] ' . $componentCode . ' (' . $region . ') attempt '
@@ -1584,31 +1927,6 @@ class AiSitePageComponentGenerationService
 
         $finalReason = $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown'));
         $recoverable = $this->shouldRetryComponentGeneration($lastThrowable ?? new \RuntimeException('unknown'));
-        if ($this->shouldUseContractRescueComponent($region, $defaultConfig, $renderContext, $lastThrowable ?? new \RuntimeException('unknown'))) {
-            try {
-                \w_log_warning('[AI Site Component Contract Rescue] ' . $componentCode . ' (' . $region . '): ' . $finalReason);
-                return $this->buildFallbackComponent(
-                    $componentCode,
-                    $name,
-                    $region,
-                    $prompt,
-                    $defaultConfig,
-                    $renderContext
-                );
-            } catch (\Throwable $rescueThrowable) {
-                throw new \RuntimeException(
-                    'AI component generation failed after '
-                    . self::COMPONENT_GENERATION_MAX_ATTEMPTS
-                    . ' real-AI attempts and contract rescue failed: '
-                    . $finalReason
-                    . ' | rescue: '
-                    . $this->summarizeThrowable($rescueThrowable),
-                    0,
-                    $rescueThrowable
-                );
-            }
-        }
-
         $message = $recoverable
             ? 'AI component generation failed after '
                 . self::COMPONENT_GENERATION_MAX_ATTEMPTS
@@ -1616,922 +1934,11 @@ class AiSitePageComponentGenerationService
                 . $finalReason
             : 'AI component generation failed: ' . $finalReason;
 
+        $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
         throw new \RuntimeException($message, 0, $lastThrowable);
 
     }
 
-    private function shouldUseContractRescueComponent(
-        string $region,
-        array $defaultConfig,
-        array $renderContext,
-        \Throwable $throwable
-    ): bool {
-        if (!$this->shouldRetryComponentGeneration($throwable)) {
-            return false;
-        }
-
-        $message = \strtolower($this->collectThrowableMessages($throwable));
-        foreach ([
-            'http 401',
-            'http 402',
-            'http 403',
-            'api key',
-            'invalid api key',
-            'missing api key',
-            'unauthorized',
-            'authentication',
-            'model unavailable',
-            'model selection',
-            'provider account',
-            'provider configuration',
-            'provider temporarily unavailable',
-            'insufficient balance',
-            'quota',
-        ] as $marker) {
-            if (\str_contains($message, $marker)) {
-                return false;
-            }
-        }
-
-        if (\in_array($region, ['header', 'footer'], true)) {
-            $sharedRegion = \trim((string)($defaultConfig['runtime.shared_region'] ?? ''));
-
-            return $sharedRegion === $region || (bool)($renderContext['_allow_ai_site_contract_rescue'] ?? false);
-        }
-
-        if ($region !== 'content') {
-            return false;
-        }
-
-        foreach ([
-            'runtime.section_code',
-            'runtime.section_key',
-            'runtime.section_template',
-            'runtime.section_page_type',
-            'runtime.content_copy_rows',
-        ] as $key) {
-            if (\trim((string)($defaultConfig[$key] ?? '')) !== '') {
-                return true;
-            }
-        }
-
-        return (bool)($renderContext['_allow_ai_site_contract_rescue'] ?? false);
-    }
-
-    /**
-     * @param array<string,mixed> $defaultConfig
-     * @param array<string,mixed> $renderContext
-     * @return array{code:string,name:string,region:string,phtml:string,html:string,default_config:array<string,mixed>,ai_data:array<string,mixed>}
-     */
-    private function buildFallbackComponent(
-        string $componentCode,
-        string $name,
-        string $region,
-        string $prompt,
-        array $defaultConfig,
-        array $renderContext
-    ): array {
-        $componentInfo = [
-            'name' => $name,
-            'name_en' => $name,
-            'description' => $name !== '' ? $name : $componentCode,
-        ];
-        $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
-        $defaultConfig = $this->applyFallbackSectionCopyToDefaultConfig($region, $prompt, $defaultConfig, $renderContext);
-        $aiData = $this->buildProductionFallbackAiPayload($region, $prompt, $defaultConfig, $renderContext);
-        $aiData = $this->enforceContractHeroImageUrlsInAiPayload($aiData, $region, $defaultConfig);
-        $aiData = $this->sanitizeGeneratedAssetAttributes($aiData);
-        $aiData = $this->enforceContractAllSectionImageUrlsInAiPayload($aiData, $region, $defaultConfig);
-        $aiData = $this->forceInjectMissingRequiredImageAssets($aiData, $renderContext, $defaultConfig);
-        $aiData = $this->sanitizeGeneratedAssetAttributes($aiData);
-        $this->assertRequiredImageAssetsUsed($aiData, $renderContext, $defaultConfig);
-        $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets);
-        $aiData = $this->hideFrameworkHeaderWhenAiHtmlOwnsSectionTitle($aiData, $region);
-        $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig, $region);
-        $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
-        $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
-        if (empty($syntaxCheck['valid'])) {
-            $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
-        }
-        $html = $this->renderTemplateToHtml($phtml, $persistedConfig, $renderContext);
-        $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
-
-        return [
-            'code' => $componentCode,
-            'name' => $name,
-            'region' => $region,
-            'phtml' => $phtml,
-            'html' => $html,
-            'default_config' => $persistedConfig,
-            'ai_data' => $aiData,
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $aiData
-     * @return array<string,mixed>
-     */
-    private function hideFrameworkHeaderWhenAiHtmlOwnsSectionTitle(array $aiData, string $region): array
-    {
-        if ($region !== 'content') {
-            return $aiData;
-        }
-        $html = (string)($aiData['html_content'] ?? '');
-        if ($html === '' || \preg_match('/<h[1-3]\b|class=["\'][^"\']*(?:headline|section-title|heading|title)/iu', $html) !== 1) {
-            return $aiData;
-        }
-
-        $hideRule = '#componentId > [class$="-inner"] > [class$="-title"], #componentId > [class$="-inner"] > [class$="-description"] { display:none !important; }';
-        $css = (string)($aiData['css_extra'] ?? '');
-        if (!\str_contains($css, '[class$="-inner"] > [class$="-title"]')) {
-            $aiData['css_extra'] = $hideRule . ($css !== '' ? "\n" . $css : '');
-        }
-
-        return $aiData;
-    }
-
-    /**
-     * @param array<string,mixed> $defaultConfig
-     * @param array<string,mixed> $renderContext
-     * @return array<string,mixed>
-     */
-    private function applyFallbackSectionCopyToDefaultConfig(
-        string $region,
-        string $prompt,
-        array $defaultConfig,
-        array $renderContext
-    ): array {
-        if (\in_array($region, ['header', 'footer'], true)) {
-            return $defaultConfig;
-        }
-
-        $copy = $this->resolveFallbackVisibleCopy(
-            $region,
-            $defaultConfig,
-            $renderContext,
-            (string)($renderContext['_content_locale'] ?? '')
-        );
-        $sectionPlan = $this->buildFallbackSectionPlan($defaultConfig, $renderContext, $prompt, $copy);
-        $title = $this->sanitizeVisibleCopy((string)($sectionPlan['title'] ?? ''));
-        $body = $this->sanitizeVisibleCopy((string)($sectionPlan['body'] ?? ''));
-        if ($title !== '') {
-            $defaultConfig['content.title'] = $title;
-            $defaultConfig['title'] = $title;
-            $defaultConfig['section_title'] = $title;
-            $defaultConfig['content.section_title'] = $title;
-        }
-        if ($body !== '') {
-            $defaultConfig['content.description'] = $body;
-            $defaultConfig['description'] = $body;
-            $defaultConfig['section_intro'] = $body;
-            $defaultConfig['content.section_intro'] = $body;
-        }
-
-        return $defaultConfig;
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    private function buildProductionFallbackAiPayload(
-        string $region,
-        string $prompt,
-        array $defaultConfig = [],
-        array $renderContext = []
-    ): array
-    {
-        if (\in_array($region, ['header', 'footer'], true)) {
-            return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
-        }
-
-        $copy = $this->resolveFallbackVisibleCopy(
-            $region,
-            $defaultConfig,
-            $renderContext,
-            (string)($renderContext['_content_locale'] ?? '')
-        );
-        $sectionPlan = $this->buildFallbackSectionPlan($defaultConfig, $renderContext, $prompt, $copy);
-        $surfaceStyle = $this->buildFallbackSurfaceStyle($sectionPlan, $defaultConfig);
-        // 强行契约：先尝试使用第一阶段已落地的真实图片（slot.final_url），保证生成的网站真正"带着规划好的图片"。
-        $visualPanel = $this->buildContractVisualPanel(
-            $defaultConfig,
-            (string)$sectionPlan['title'],
-            '#2563eb',
-            '#06b6d4',
-            '#f59e0b'
-        );
-
-        $artClass = 'ai-site-contract-art' . ($visualPanel['has_image'] ? ' ai-site-contract-art--image' : '');
-        $artInner = $visualPanel['html'];
-        $cardsHtml = $this->buildFallbackCardsHtml(\is_array($sectionPlan['cards'] ?? null) ? $sectionPlan['cards'] : []);
-
-        return [
-            'extra_fields' => '',
-            'php_variables' => '',
-            'css_extra' => '#componentId { --ai-site-contract-gap:22px; }'
-                . "\n" . '#componentId > [class$="-inner"] > [class$="-title"], #componentId > [class$="-inner"] > [class$="-description"] { display:none !important; }'
-                . "\n" . '#componentId .ai-site-contract-stage { position:relative; overflow:hidden; display:grid; grid-template-columns:minmax(0,1.04fr) minmax(280px,.96fr); gap:30px; align-items:center; padding:34px; border-radius:32px; border:1px solid color-mix(in srgb,var(--section-primary,#2563eb) 22%,transparent); background:' . $surfaceStyle['stage_background'] . '; box-shadow:0 28px 80px rgba(15,23,42,.14); }'
-                . "\n" . '#componentId .ai-site-contract-stage:before { content:""; position:absolute; inset:auto -12% -38% 22%; height:56%; background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--section-primary,#2563eb) 16%,transparent) 0 2px,transparent 2px 12px); opacity:.36; transform:rotate(-4deg); }'
-                . "\n" . '#componentId .ai-site-contract-copy, #componentId .ai-site-contract-art { position:relative; z-index:1; }'
-                . "\n" . '#componentId .ai-site-contract-copy > strong { display:block; max-width:12ch; font-size:clamp(28px,4.5vw,58px); line-height:1.02; letter-spacing:-.05em; color:' . $surfaceStyle['heading_color'] . '; }'
-                . "\n" . '#componentId .ai-site-contract-copy > p { margin:16px 0 0; max-width:58ch; color:var(--section-text,#334155); font-size:clamp(15px,1.3vw,18px); }'
-                . "\n" . '#componentId .ai-site-contract-kicker { display:inline-flex; margin-bottom:16px; padding:7px 12px; border-radius:999px; background:color-mix(in srgb,var(--section-primary,#2563eb) 12%,white); color:var(--section-primary,#2563eb); font-weight:700; font-size:12px; letter-spacing:.12em; text-transform:uppercase; }'
-                . "\n" . '#componentId .ai-site-contract-proof { display:flex; flex-wrap:wrap; gap:10px; margin-top:22px; } #componentId .ai-site-contract-proof span { padding:10px 12px; border-radius:14px; background:rgba(255,255,255,.74); border:1px solid rgba(255,255,255,.72); box-shadow:0 12px 30px rgba(15,23,42,.09); color:var(--section-heading,#0f172a); font-weight:700; }'
-                . "\n" . '#componentId .ai-site-contract-art { position:relative; min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(145deg,var(--section-primary,#2563eb),var(--section-secondary,#06b6d4)); } #componentId .ai-site-contract-art .ai-site-css-visual { position:absolute; inset:0; overflow:hidden; background:radial-gradient(circle at 18% 18%,rgba(255,255,255,.34),transparent 26%),radial-gradient(circle at 82% 72%,rgba(255,255,255,.22),transparent 30%),linear-gradient(145deg,var(--section-primary,#2563eb),var(--section-secondary,#06b6d4)); } #componentId .ai-site-css-visual span { position:absolute; border-radius:999px; background:rgba(255,255,255,.32); box-shadow:0 18px 46px rgba(15,23,42,.16); } #componentId .ai-site-css-visual span:nth-child(1){left:9%;top:14%;width:34%;height:20%;} #componentId .ai-site-css-visual span:nth-child(2){right:10%;top:22%;width:38%;height:9%;} #componentId .ai-site-css-visual span:nth-child(3){left:16%;bottom:16%;width:58%;height:12%;}'
-                . "\n" . '#componentId .ai-site-contract-art--image { background:color-mix(in srgb,var(--section-primary,#2563eb) 18%,#0f172a); }'
-                . "\n" . '#componentId .ai-site-contract-art--image:after { content:""; position:absolute; inset:0; background:linear-gradient(155deg,color-mix(in srgb,var(--section-primary,#2563eb) 22%,rgba(15,23,42,.72)) 0%,rgba(15,23,42,.10) 50%,color-mix(in srgb,var(--section-accent,#f59e0b) 18%,rgba(15,23,42,.74)) 100%); pointer-events:none; }'
-                . "\n" . '#componentId .ai-site-contract-art .ai-site-visual-image { width:100%; height:100%; min-height:260px; display:block; object-fit:cover; object-position:center; }'
-                . "\n" . '#componentId .ai-site-contract-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:24px; max-width:620px; }'
-                . "\n" . '#componentId .ai-site-contract-card { position:relative; overflow:hidden; padding:18px 18px 16px; border-radius:20px; background:rgba(255,255,255,.82); border:1px solid rgba(255,255,255,.86); box-shadow:0 18px 48px rgba(15,23,42,.12); backdrop-filter:blur(10px); }'
-                . "\n" . '#componentId .ai-site-contract-card:before { content:""; position:absolute; left:0; top:0; width:4px; height:100%; background:linear-gradient(180deg,var(--section-accent,#f59e0b),var(--section-primary,#2563eb)); opacity:.78; }'
-                . "\n" . '#componentId .ai-site-contract-card strong { display:block; margin:0 0 8px; font-size:17px; line-height:1.18; color:var(--section-heading,#0f172a); }'
-                . "\n" . '#componentId .ai-site-contract-card p { margin:0; color:var(--section-text,#334155); line-height:1.52; }'
-                . "\n" . '#componentId .ai-site-contract-card span { display:inline-flex; margin-top:12px; padding:5px 9px; border-radius:999px; background:color-mix(in srgb,var(--section-accent,#f59e0b) 14%,white); color:color-mix(in srgb,var(--section-accent,#f59e0b) 58%,#111827); font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }',
-            'css_responsive' => '#componentId .ai-site-contract-stage { grid-template-columns:1fr; padding:24px; } #componentId .ai-site-contract-copy > strong { max-width:12ch; } #componentId .ai-site-contract-cards { grid-template-columns:1fr; }',
-            'html_content' => '<div class="ai-site-contract-stage"><div class="ai-site-contract-copy"><span class="ai-site-contract-kicker">' . \htmlspecialchars((string)$sectionPlan['eyebrow'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><strong>' . \htmlspecialchars((string)$sectionPlan['title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars((string)$sectionPlan['body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><div class="ai-site-contract-proof">' . $this->buildFallbackProofHtml((array)$sectionPlan['proof_points']) . '</div>' . $cardsHtml . '</div><div class="' . $artClass . '">' . $artInner . '</div></div>',
-            'js_content' => '',
-        ];
-    }
-
-    /**
-     * @param list<array{title:string,body:string,meta:string}> $cards
-     */
-    private function buildFallbackCardsHtml(array $cards): string
-    {
-        if ($cards === []) {
-            return '';
-        }
-        $html = '<div class="ai-site-contract-cards">';
-        foreach (\array_slice($cards, 0, 3) as $card) {
-            $title = $this->sanitizeVisibleCopy((string)($card['title'] ?? ''));
-            $body = $this->sanitizeVisibleCopy((string)($card['body'] ?? ''));
-            $meta = $this->sanitizeVisibleCopy((string)($card['meta'] ?? ''));
-            if ($title === '' && $body === '') {
-                continue;
-            }
-            $html .= '<article class="ai-site-contract-card">';
-            if ($title !== '') {
-                $html .= '<strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong>';
-            }
-            if ($body !== '') {
-                $html .= '<p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p>';
-            }
-            if ($meta !== '') {
-                $html .= '<span>' . \htmlspecialchars($meta, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span>';
-            }
-            $html .= '</article>';
-        }
-
-        return $html . '</div>';
-    }
-
-    /**
-     * @param array<string,mixed> $defaultConfig
-     * @param array<string,mixed> $renderContext
-     * @param array{title:string,body:string,cjk:bool} $copy
-     * @return array<string,mixed>
-     */
-    private function buildFallbackSectionPlan(array $defaultConfig, array $renderContext, string $prompt, array $copy): array
-    {
-        $cjk = (bool)($copy['cjk'] ?? false);
-        $samples = $this->decodeConfigStringList($defaultConfig['contract.stage1_samples'] ?? null);
-        $variant = $this->detectFallbackSectionVariant($defaultConfig, $renderContext, $prompt);
-        $siteTitle = $this->pickFallbackConfigCopy($defaultConfig, ['site_title', 'brand.name', 'logo.text', 'content.site_title'], 48);
-        $primaryAction = $this->pickFallbackConfigCopy($defaultConfig, ['content.cta_text', 'cta_text', 'button.text', 'primary_cta', 'content.primary_cta'], 36);
-        if ($primaryAction === '') {
-            $primaryAction = $cjk ? '立即开始' : 'Get started';
-        }
-        $proofPoints = $this->buildFallbackProofPoints(
-            $samples,
-            (string)($copy['title'] ?? ''),
-            (string)($copy['body'] ?? ''),
-            $primaryAction,
-            $cjk
-        );
-
-        $plan = [
-            'variant' => $variant,
-            'eyebrow' => $this->pickFallbackConfigCopy($defaultConfig, ['content.eyebrow', 'eyebrow', 'badge', 'kicker'], 48),
-            'title' => $copy['title'],
-            'body' => $copy['body'],
-            'proof_points' => $proofPoints,
-            'callout_title' => $cjk ? '继续下一步' : 'Continue clearly',
-            'callout_body' => $cjk ? '按页面节奏查看重点、理解价值，再进入下一步操作。' : 'Scan the essentials, verify the trust cues, and continue to the download entry.',
-            'card_title_primary' => $cjk ? '体验重点' : 'Game suite',
-            'card_body_primary' => $cjk ? '把玩法、入口和安全提示拆成可扫读的信息。' : 'Card games, quick entry, and safety notes are separated into scannable moments.',
-            'card_title_secondary' => $cjk ? '下一步动作' : 'Download path',
-            'card_body_secondary' => $primaryAction,
-            'card_title_tertiary' => $cjk ? '信任说明' : 'Trust signal',
-            'card_body_tertiary' => $cjk ? '突出公平、安全和清晰入口，减少犹豫。' : 'Fair play, secure access, and a clear route reduce hesitation.',
-        ];
-
-        if ($plan['eyebrow'] === '') {
-            $plan['eyebrow'] = match ($variant) {
-                'features' => $cjk ? '核心亮点' : 'Highlights',
-                'checklist' => $cjk ? '操作步骤' : 'How it works',
-                'cta' => $cjk ? '立即行动' : 'Ready to act',
-                default => $cjk ? '精选内容' : 'Featured',
-            };
-        }
-
-        switch ($variant) {
-            case 'features':
-                $plan['title'] = $this->pickFallbackConfigCopy($defaultConfig, ['content.section_title', 'section_title', 'features.title'], 72);
-                if ($plan['title'] === '') {
-                    $plan['title'] = $cjk
-                        ? (($siteTitle !== '' ? $siteTitle : '这个页面') . '的核心亮点')
-                        : (($siteTitle !== '' ? $siteTitle : 'This page') . ' highlights');
-                }
-                $plan['body'] = $this->pickFallbackConfigCopy($defaultConfig, ['content.section_intro', 'section_intro', 'features.description'], 180);
-                if ($plan['body'] === '') {
-                    $plan['body'] = $cjk
-                        ? '用更清晰的卡片层级展示卖点、差异点和信任信息，避免所有内容挤成同一种视觉。'
-                        : 'Use clearer card hierarchy to separate benefits, differentiators, and trust details instead of stacking everything into one repeated treatment.';
-                }
-                $plan['callout_title'] = $cjk ? '继续查看亮点' : 'See the strengths';
-                $plan['callout_body'] = $cjk ? '每张卡片只承载一个重点，让访客能扫读后迅速理解价值。' : 'Each card carries one clear idea so visitors can scan and understand the value quickly.';
-                break;
-            case 'checklist':
-                $plan['title'] = $cjk ? '三步看懂并开始操作' : 'Three clear steps to begin';
-                $plan['body'] = $cjk
-                    ? '把流程、条件和风险提示拆开排版，让访客不必在一大段文案里寻找下一步。'
-                    : 'Separate the process, conditions, and reassurance so visitors can find the download path without reading one long paragraph.';
-                $plan['card_title_primary'] = $cjk ? '步骤顺序' : 'Ordered steps';
-                $plan['card_body_primary'] = $cjk ? '按先后顺序呈现关键动作。' : 'Show the key actions in a clear sequence.';
-                $plan['card_title_secondary'] = $cjk ? '阅读负担低' : 'Low reading load';
-                $plan['card_body_secondary'] = $cjk ? '每一步只保留必要信息。' : 'Keep each step focused on one necessary piece of information.';
-                $plan['card_title_tertiary'] = $cjk ? '动作明确' : 'Action stays clear';
-                $plan['card_body_tertiary'] = $primaryAction;
-                break;
-            case 'cta':
-                $plan['title'] = $primaryAction;
-                $plan['body'] = $cjk
-                    ? '把价值总结、信任提示和主按钮收口到同一块区域，形成明确的行动终点。'
-                    : 'Bring the download offer, trust proof, and primary button into one focused conversion block.';
-                $plan['proof_points'] = \array_slice($this->buildFallbackProofPoints(
-                    $proofPoints,
-                    (string)$plan['title'],
-                    (string)$plan['body'],
-                    $primaryAction,
-                    $cjk
-                ), 0, 2);
-                $plan['callout_title'] = $cjk ? '现在就继续' : 'Move forward now';
-                $plan['callout_body'] = $cjk ? '让按钮、辅助说明和背景层次共同强调这一处主动作。' : 'Use the button, supporting note, and contrast layer to keep the download entry unmistakable.';
-                break;
-            default:
-                break;
-        }
-
-        $plan = $this->normalizeFallbackSectionPlanForRole($plan, $defaultConfig, $cjk);
-        $plan['body'] = $this->removeFallbackTitleDuplication((string)$plan['body'], (string)$plan['title']);
-        $plan['card_body_primary'] = $this->removeFallbackTitleDuplication((string)$plan['card_body_primary'], (string)$plan['title']);
-        $plan['callout_body'] = $this->removeFallbackTitleDuplication((string)$plan['callout_body'], (string)$plan['title']);
-        $plan['content_rows'] = $this->decodeFallbackContentRows($defaultConfig);
-        $plan['cards'] = $this->buildSectionSpecificFallbackCards($plan, $defaultConfig, $cjk);
-        $plan['proof_points'] = $this->buildSectionSpecificProofPoints($plan, $defaultConfig, $cjk);
-
-        return $plan;
-    }
-
-    /**
-     * @param array<string,mixed> $plan
-     * @param array<string,mixed> $defaultConfig
-     * @return array<string,mixed>
-     */
-    private function normalizeFallbackSectionPlanForRole(array $plan, array $defaultConfig, bool $cjk): array
-    {
-        $sectionKey = \strtolower((string)($defaultConfig['runtime.section_key'] ?? $defaultConfig['runtime.section_code'] ?? ''));
-        if (\preg_match('/trust|security|safe|license|proof/i', $sectionKey) === 1) {
-            $plan['eyebrow'] = $cjk ? (string)$plan['eyebrow'] : 'Verified trust';
-            $plan['title'] = $cjk ? (string)$plan['title'] : 'Secure play, visible proof';
-            $plan['body'] = $cjk
-                ? (string)$plan['body']
-                : 'Show safety, player confidence, and download reassurance before visitors make the install decision.';
-            return $plan;
-        }
-        if (\preg_match('/game[_-]?showcase|features|suite/i', $sectionKey) === 1) {
-            $plan['eyebrow'] = $cjk ? (string)$plan['eyebrow'] : 'Royal game suite';
-            $plan['title'] = $cjk ? (string)$plan['title'] : 'Every table has a clear path';
-            $plan['body'] = $cjk
-                ? (string)$plan['body']
-                : 'Present Teen Patti and Rummy as premium game choices with quick entry, simple rules, and confident download cues.';
-            return $plan;
-        }
-        if (\preg_match('/categor|game[_-]?mode/i', $sectionKey) === 1) {
-            $plan['eyebrow'] = $cjk ? (string)$plan['eyebrow'] : 'Game modes';
-            $plan['title'] = $cjk ? (string)$plan['title'] : 'Choose the card room that fits you';
-            $plan['body'] = $cjk
-                ? (string)$plan['body']
-                : 'Split the games into distinct choices so players can compare the mood, pace, and next action at a glance.';
-            return $plan;
-        }
-        if (\preg_match('/cta|download|conversion|final|action/i', $sectionKey) === 1) {
-            $plan['eyebrow'] = $cjk ? (string)$plan['eyebrow'] : 'Download moment';
-            $plan['title'] = $cjk ? (string)$plan['title'] : 'Download the royal card room';
-            $plan['body'] = $cjk
-                ? (string)$plan['body']
-                : 'Close with one decisive APK entry, backed by trust marks and a high-contrast conversion surface.';
-            return $plan;
-        }
-        if (\preg_match('/story|about|mission|journey/i', $sectionKey) === 1) {
-            $plan['eyebrow'] = $cjk ? (string)$plan['eyebrow'] : 'Brand story';
-            $plan['title'] = $cjk ? (string)$plan['title'] : 'Built for serious card players';
-            $plan['body'] = $cjk
-                ? (string)$plan['body']
-                : 'Give the brand a credible editorial story instead of repeating product-card copy.';
-            return $plan;
-        }
-
-        return $plan;
-    }
-
-    /**
-     * @param array<string,mixed> $defaultConfig
-     * @return list<array{field:string,copy:string}>
-     */
-    private function decodeFallbackContentRows(array $defaultConfig): array
-    {
-        $raw = \trim((string)($defaultConfig['runtime.content_copy_rows'] ?? ''));
-        if ($raw === '') {
-            return [];
-        }
-        $decoded = \json_decode($raw, true);
-        if (!\is_array($decoded)) {
-            return [];
-        }
-        $rows = [];
-        foreach ($decoded as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $field = \trim((string)($row['field'] ?? ''));
-            $copy = $this->sanitizeVisibleCopy((string)($row['copy'] ?? ''));
-            if ($field !== '' && $copy !== '') {
-                $rows[] = ['field' => $field, 'copy' => $copy];
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
-     * @param array<string,mixed> $sectionPlan
-     * @param array<string,mixed> $defaultConfig
-     * @return list<array{title:string,body:string,meta:string}>
-     */
-    private function buildSectionSpecificFallbackCards(array $sectionPlan, array $defaultConfig, bool $cjk): array
-    {
-        $rows = \is_array($sectionPlan['content_rows'] ?? null) ? $sectionPlan['content_rows'] : [];
-        $sectionKey = \strtolower((string)($defaultConfig['runtime.section_key'] ?? $defaultConfig['runtime.section_code'] ?? ''));
-        $cards = [];
-
-        if (\str_contains($sectionKey, 'testimonial') || \str_contains($sectionKey, 'review')) {
-            $quote = $this->findFallbackRowCopy($rows, '/quote|testimonial|review|story/i');
-            $author = $this->findFallbackRowCopy($rows, '/author|name|location/i');
-            $rating = $this->findFallbackRowCopy($rows, '/rating|star/i');
-            $cards[] = [
-                'title' => $rating !== '' ? $rating : '★★★★★',
-                'body' => $quote !== '' ? $quote : ($cjk ? '玩家反馈：体验顺滑、安全且公平。' : 'Players highlight smooth rounds, fair play, and secure access.'),
-                'meta' => $author !== '' ? $author : ($cjk ? '真实玩家' : 'Verified player'),
-            ];
-            $cards[] = [
-                'title' => $cjk ? '五星反馈' : '5-star feedback',
-                'body' => $cjk ? '评价卡片突出公平、安全和顺滑体验。' : 'The review focuses on fairness, safety, and a smooth game flow.',
-                'meta' => $cjk ? '评分信号' : 'Rating signal',
-            ];
-            $cards[] = [
-                'title' => $cjk ? '本地玩家' : 'Local player',
-                'body' => $author !== '' ? $author : ($cjk ? '来自印度玩家社区的反馈。' : 'A location-backed player voice for social proof.'),
-                'meta' => $cjk ? '用户故事' : 'Player story',
-            ];
-            return $cards;
-        }
-
-        if (\str_contains($sectionKey, 'faq') || \str_contains($sectionKey, 'accordion')) {
-            foreach ($rows as $row) {
-                $field = \strtolower((string)($row['field'] ?? ''));
-                if (!\str_contains($field, 'question') && !\str_contains($field, 'answer') && !\str_contains($field, 'faq')) {
-                    continue;
-                }
-                $cards[] = [
-                    'title' => \str_contains($field, 'answer') ? ($cjk ? '回答' : 'Answer') : ($cjk ? '常见问题' : 'Question'),
-                    'body' => $this->clipText((string)$row['copy'], 150),
-                    'meta' => $cjk ? 'FAQ' : 'FAQ',
-                ];
-                if (\count($cards) >= 3) {
-                    break;
-                }
-            }
-        }
-
-        foreach ($rows as $row) {
-            if (\count($cards) >= 3) {
-                break;
-            }
-            $field = (string)($row['field'] ?? '');
-            $copy = (string)($row['copy'] ?? '');
-            if ($copy === ''
-                || \preg_match('/section_intro|section_title/i', $field) === 1
-                || $this->isInternalFallbackAssetField($field, $copy)
-            ) {
-                continue;
-            }
-            $title = $this->deriveFallbackCardTitle($field, $copy, $sectionKey, $cjk);
-            $body = $this->deriveFallbackCardBody($field, $copy, $sectionKey, $cjk);
-            $cards[] = [
-                'title' => $title,
-                'body' => $body,
-                'meta' => '',
-            ];
-        }
-
-        if ($cards === []) {
-            return $this->buildRoleSpecificFallbackCards($sectionPlan, $sectionKey, $cjk);
-        }
-
-        return \array_slice($cards, 0, 3);
-    }
-
-    /**
-     * @param array<string,mixed> $sectionPlan
-     * @return list<array{title:string,body:string,meta:string}>
-     */
-    private function buildRoleSpecificFallbackCards(array $sectionPlan, string $sectionKey, bool $cjk): array
-    {
-        $title = (string)($sectionPlan['title'] ?? '');
-        $body = (string)($sectionPlan['body'] ?? '');
-        $action = (string)($sectionPlan['card_body_secondary'] ?? '');
-        $key = \strtolower($sectionKey);
-        if (\preg_match('/trust|security|safe|license|proof/i', $key) === 1) {
-            return [
-                ['title' => $cjk ? '安全资质' : 'Security seal', 'body' => $cjk ? '把资质、隐私和下载安全前置成可信证明。' : 'Credentials, privacy, and download safety are surfaced as proof.', 'meta' => $cjk ? '信任层' : 'Trust layer'],
-                ['title' => $cjk ? '玩家保障' : 'Player assurance', 'body' => $cjk ? '用清晰说明降低安装和注册前的顾虑。' : 'Clear reassurance reduces hesitation before install or sign-up.', 'meta' => $cjk ? '保障说明' : 'Assurance'],
-                ['title' => $cjk ? '透明入口' : 'Transparent path', 'body' => $action !== '' ? $action : ($cjk ? '主行动路径保持明确。' : 'The main action path stays visible.'), 'meta' => $cjk ? '行动' : 'Action'],
-            ];
-        }
-        if (\preg_match('/faq|accordion|question|support|help/i', $key) === 1) {
-            return [
-                ['title' => $cjk ? '下载是否安全？' : 'Is the APK safe?', 'body' => $body !== '' ? $body : ($cjk ? '用短回答解释安全、隐私和安装边界。' : 'Use short answers to explain safety, privacy, and install boundaries.'), 'meta' => $cjk ? 'FAQ' : 'FAQ'],
-                ['title' => $cjk ? '如何开始？' : 'How do I start?', 'body' => $action !== '' ? $action : ($cjk ? '给出清晰的下一步入口。' : 'Give visitors a clear next step.'), 'meta' => $cjk ? '步骤' : 'Steps'],
-                ['title' => $cjk ? '需要帮助？' : 'Need help?', 'body' => $cjk ? '把支持和常见疑问放在同一处。' : 'Keep support and common questions in one readable area.', 'meta' => $cjk ? '支持' : 'Support'],
-            ];
-        }
-        if (\preg_match('/cta|download|conversion|final|action/i', $key) === 1) {
-            return [
-                ['title' => $action !== '' ? $action : ($cjk ? '立即行动' : 'Start now'), 'body' => $body !== '' ? $body : ($cjk ? '集中呈现行动理由和下载入口。' : 'Focus the action reason and download entry in one place.'), 'meta' => $cjk ? '主行动' : 'Primary action'],
-                ['title' => $cjk ? '行动前确认' : 'Before you continue', 'body' => $cjk ? '用一句话说明安全、条件或支持。' : 'Summarize safety, terms, or support before the click.', 'meta' => $cjk ? '确认' : 'Check'],
-            ];
-        }
-
-        return [
-            ['title' => $title !== '' ? $this->clipText($title, 58) : ($cjk ? '核心价值' : 'Core value'), 'body' => $body !== '' ? $this->clipText($body, 150) : ($cjk ? '用本区块独有的信息承接页面节奏。' : 'Use section-specific information to continue the page rhythm.'), 'meta' => $cjk ? '内容重点' : 'Section focus'],
-            ['title' => (string)($sectionPlan['card_title_primary'] ?? ($cjk ? '差异点' : 'Differentiator')), 'body' => (string)($sectionPlan['card_body_primary'] ?? ($cjk ? '突出与相邻区块不同的表达。' : 'Highlight a different expression from neighboring blocks.')), 'meta' => $cjk ? '设计变化' : 'Design shift'],
-        ];
-    }
-
-    private function isInternalFallbackAssetField(string $field, string $copy): bool
-    {
-        $field = \strtolower($field);
-        $copy = \trim($copy);
-        if (\preg_match('/icon|image|img|logo|avatar|asset|file|url|href|src/i', $field) === 1) {
-            return true;
-        }
-
-        return \preg_match('/\.(?:svg|png|jpe?g|webp|gif)(?:\?.*)?$/i', $copy) === 1;
-    }
-
-    private function deriveFallbackCardTitle(string $field, string $copy, string $sectionKey, bool $cjk): string
-    {
-        if (\preg_match('/trust|badge|security|license|certificate/i', $sectionKey) === 1) {
-            return $this->clipText($copy, 58);
-        }
-        if (\preg_match('/cta|button|action|link/i', $field) === 1) {
-            return $this->clipText($copy, 58);
-        }
-        if (\preg_match('/label|title|headline|name/i', $field) === 1) {
-            return $this->clipText($copy, 58);
-        }
-        if (\preg_match('/description|body|summary|intro/i', $field) === 1) {
-            if (\preg_match('/game|category|feature|showcase/i', $sectionKey . ' ' . $field) === 1) {
-                return $cjk ? '玩法亮点' : 'Game overview';
-            }
-            return $cjk ? '核心说明' : 'Key detail';
-        }
-
-        return $this->humanizeFallbackFieldLabel($field, $cjk);
-    }
-
-    private function deriveFallbackCardBody(string $field, string $copy, string $sectionKey, bool $cjk): string
-    {
-        if (\preg_match('/trust|badge|security|license|certificate/i', $sectionKey) === 1) {
-            if (\preg_match('/encrypt|ssl|secure|privacy|protect/i', $copy) === 1) {
-                return $cjk ? '安全能力直接前置，降低下载和注册前的疑虑。' : 'Security proof is visible before the download decision.';
-            }
-            if (\preg_match('/license|authority|certif/i', $copy) === 1) {
-                return $cjk ? '资质信息以独立卡片展示，避免隐藏在长段落里。' : 'Credential details are shown as a standalone trust signal.';
-            }
-
-            return $cjk ? '信任信息拆成可扫读卡片，避免重复堆叠。' : 'Trust details are split into scannable proof cards.';
-        }
-        if (\preg_match('/cta|button|action|link/i', $field) === 1) {
-            return $cjk ? '把主行动直接放在卡片中，减少犹豫。' : 'The primary CTA stays clear and easy to follow.';
-        }
-
-        return $this->clipText($copy, 150);
-    }
-
-    /**
-     * @param list<array{field:string,copy:string}> $rows
-     */
-    private function findFallbackRowCopy(array $rows, string $pattern): string
-    {
-        foreach ($rows as $row) {
-            if (\preg_match($pattern, (string)($row['field'] ?? '')) === 1) {
-                return $this->clipText((string)($row['copy'] ?? ''), 180);
-            }
-        }
-
-        return '';
-    }
-
-    private function humanizeFallbackFieldLabel(string $field, bool $cjk): string
-    {
-        $field = \trim(\preg_replace('/[_\-.]+/', ' ', $field) ?? $field);
-        $field = \preg_replace('/\b(?:content|section|field|copy)\b/i', '', $field) ?? $field;
-        $field = \trim(\preg_replace('/\s+/', ' ', $field) ?? $field);
-        if ($field === '') {
-            return $cjk ? '重点内容' : 'Key detail';
-        }
-
-        return $cjk ? $field : \ucwords(\strtolower($field));
-    }
-
-    /**
-     * @param array<string,mixed> $sectionPlan
-     * @param array<string,mixed> $defaultConfig
-     * @return list<string>
-     */
-    private function buildSectionSpecificProofPoints(array $sectionPlan, array $defaultConfig, bool $cjk): array
-    {
-        $rows = \is_array($sectionPlan['content_rows'] ?? null) ? $sectionPlan['content_rows'] : [];
-        $points = [];
-        foreach ($rows as $row) {
-            $field = \strtolower((string)($row['field'] ?? ''));
-            if (\preg_match('/section_intro|section_title|title|headline/i', $field) === 1) {
-                continue;
-            }
-            $copy = $this->clipText((string)($row['copy'] ?? ''), 56);
-            if ($this->isInternalFallbackAssetField($field, $copy)) {
-                continue;
-            }
-            if ($copy !== '' && !$this->isFallbackProofDuplicate($copy, (string)$sectionPlan['title'], (string)$sectionPlan['body'], (string)($sectionPlan['card_body_secondary'] ?? ''))) {
-                $points[] = $copy;
-            }
-            if (\count($points) >= 3) {
-                break;
-            }
-        }
-        if ($points !== []) {
-            return \array_values(\array_unique($points));
-        }
-
-        return \is_array($sectionPlan['proof_points'] ?? null) ? \array_slice($sectionPlan['proof_points'], 0, 3) : [];
-    }
-
-    private function removeFallbackTitleDuplication(string $body, string $title): string
-    {
-        $body = \trim($body);
-        $title = \trim($title);
-        if ($body === '' || $title === '') {
-            return $body;
-        }
-        $body = \trim(\str_replace([$title . ' ', ' ' . $title, $title], ' ', $body));
-        $body = \trim(\preg_replace('/\s+/u', ' ', $body) ?? $body);
-
-        return $body;
-    }
-
-    /**
-     * @param list<string> $samples
-     * @return list<string>
-     */
-    private function buildFallbackProofPoints(array $samples, string $title, string $body, string $primaryAction, bool $cjk): array
-    {
-        $fallbacks = $cjk
-            ? ['安全下载入口', '热门棋牌游戏', '公平体验说明', '快速开始路径']
-            : ['Secure download', 'Popular card games', 'Fair-play signal', 'Fast start path'];
-        $points = [];
-        foreach ($samples as $sample) {
-            $sample = $this->clipText($this->sanitizeVisibleCopy((string)$sample), 42);
-            if ($sample === '' || $this->isFallbackProofDuplicate($sample, $title, $body, $primaryAction)) {
-                continue;
-            }
-            $points[] = $sample;
-            if (\count($points) >= 3) {
-                break;
-            }
-        }
-        foreach ($fallbacks as $fallback) {
-            if (\count($points) >= 3) {
-                break;
-            }
-            if (!$this->isFallbackProofDuplicate($fallback, $title, $body, $primaryAction)) {
-                $points[] = $fallback;
-            }
-        }
-
-        return \array_values(\array_unique($points));
-    }
-
-    private function isFallbackProofDuplicate(string $value, string $title, string $body, string $primaryAction): bool
-    {
-        $normalized = \mb_strtolower(\trim($value));
-        if ($normalized === '' || \mb_strlen($normalized) > 44) {
-            return true;
-        }
-        foreach ([$title, $body, $primaryAction] as $source) {
-            $source = \mb_strtolower(\trim($source));
-            if ($source === '') {
-                continue;
-            }
-            if ($normalized === $source || \str_contains($source, $normalized) || \str_contains($normalized, $source)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array<string,mixed> $defaultConfig
-     * @param array<string,mixed> $renderContext
-     */
-    private function detectFallbackSectionVariant(array $defaultConfig, array $renderContext, string $prompt): string
-    {
-        // 强行契约：当 runtime.section_template 已由蓝图给出（hero/cta/features/checklist）时，
-        // 直接尊重该模板，避免关键字命中导致 hero 段被误判成 cta（出现 "Close the page with a compact summary..." 占位文案）。
-        $template = \strtolower(\trim((string)($defaultConfig['runtime.section_template'] ?? '')));
-        $allowedFromTemplate = match ($template) {
-            'hero', 'banner' => 'hero',
-            'cta' => 'cta',
-            'checklist' => 'checklist',
-            'features' => 'features',
-            default => '',
-        };
-        if ($allowedFromTemplate !== '') {
-            return $allowedFromTemplate;
-        }
-        $sectionIdentity = \strtolower((string)($defaultConfig['runtime.section_key'] ?? '') . ' ' . (string)($defaultConfig['runtime.section_code'] ?? ''));
-        if (\preg_match('/faq|accordion|question|answer|step|process|how-to/', $sectionIdentity) === 1) {
-            return 'checklist';
-        }
-        if (\preg_match('/testimonial|review|trust|badge|security|category|showcase|feature|game/', $sectionIdentity) === 1) {
-            return 'features';
-        }
-
-        $signals = \strtolower(\json_encode([$defaultConfig, $renderContext, $prompt], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '');
-        if (\preg_match('/download|cta|contact|checkout|install|start now|primary_cta/', $signals) === 1) {
-            return 'cta';
-        }
-        if (\preg_match('/checklist|step|process|how[-_ ]to|guide|policy|faq|terms|privacy/', $signals) === 1) {
-            return 'checklist';
-        }
-        // Do NOT match bare "card" — briefs like "card games / poker club" must not collapse the hero into a card-grid features stub.
-        if (\preg_match('/feature|highlight|benefit|advantage|proof|trust|value/', $signals) === 1) {
-            return 'features';
-        }
-
-        return 'hero';
-    }
-
-    /**
-     * @param array<string,mixed> $sectionPlan
-     * @param array<string,mixed> $defaultConfig
-     * @return array{stage_background:string,heading_color:string,callout_background:string,callout_color:string}
-     */
-    private function buildFallbackSurfaceStyle(array $sectionPlan, array $defaultConfig): array
-    {
-        $tokens = \array_values(\array_filter(
-            $this->decodeConfigStringList($defaultConfig['contract.theme_tokens'] ?? null),
-            static fn(string $token): bool => \preg_match('/^#[0-9a-f]{6}$/i', $token) === 1
-        ));
-        $primary = $tokens[0] ?? '#2563eb';
-        $secondary = $tokens[1] ?? '#06b6d4';
-        $accent = $tokens[2] ?? '#f59e0b';
-
-        return match ((string)($sectionPlan['variant'] ?? 'hero')) {
-            'features' => [
-                'stage_background' => 'linear-gradient(180deg,#ffffff 0%,color-mix(in srgb,' . $secondary . ' 8%,#ffffff) 100%)',
-                'heading_color' => '#0f172a',
-                'callout_background' => 'linear-gradient(135deg,#0f172a,color-mix(in srgb,' . $primary . ' 34%,#0f172a))',
-                'callout_color' => '#ffffff',
-            ],
-            'checklist' => [
-                'stage_background' => 'linear-gradient(180deg,color-mix(in srgb,' . $accent . ' 10%,#ffffff) 0%,#ffffff 100%)',
-                'heading_color' => '#0f172a',
-                'callout_background' => '#0f172a',
-                'callout_color' => '#ffffff',
-            ],
-            'cta' => [
-                'stage_background' => 'linear-gradient(135deg,color-mix(in srgb,' . $primary . ' 14%,#ffffff),color-mix(in srgb,' . $accent . ' 12%,#ffffff))',
-                'heading_color' => '#0f172a',
-                'callout_background' => 'linear-gradient(135deg,#0f172a,color-mix(in srgb,' . $accent . ' 28%,#0f172a))',
-                'callout_color' => '#ffffff',
-            ],
-            default => [
-                'stage_background' => 'radial-gradient(circle at 12% 8%,color-mix(in srgb,' . $accent . ' 26%,transparent),transparent 32%),linear-gradient(135deg,color-mix(in srgb,' . $primary . ' 12%,white),color-mix(in srgb,' . $secondary . ' 10%,white))',
-                'heading_color' => '#0f172a',
-                'callout_background' => '#0f172a',
-                'callout_color' => '#ffffff',
-            ],
-        };
-    }
-
-    /**
-     * @param list<string> $items
-     */
-    private function buildFallbackProofHtml(array $items): string
-    {
-        $html = '';
-        foreach ($items as $item) {
-            $item = \trim((string)$item);
-            if ($item === '') {
-                continue;
-            }
-            $html .= '<span>' . \htmlspecialchars($item, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span>';
-        }
-
-        return $html;
-    }
-
-    /**
-     * @param array<string,mixed> $defaultConfig
-     * @param array<string,mixed> $renderContext
-     * @return array{title:string,body:string,cjk:bool}
-     */
-    private function resolveFallbackVisibleCopy(
-        string $region,
-        array $defaultConfig,
-        array $renderContext,
-        string $locale = ''
-    ): array {
-        $jsonContext = (string)\json_encode([$defaultConfig, $renderContext], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR);
-        $localeLower = \strtolower($locale);
-        $cjk = \str_starts_with($localeLower, 'zh') || ($localeLower === '' && $this->hasAnyCjkContent($jsonContext));
-        $title = $this->pickFallbackConfigCopy($defaultConfig, [
-            'content.title',
-            'title',
-            'heading',
-            'headline',
-            'brand.name',
-            'logo.text',
-        ], 72);
-        $body = $this->pickFallbackConfigCopy($defaultConfig, [
-            'content.description',
-            'content.subtitle',
-            'description',
-            'body',
-            'summary',
-            'brand.description',
-            'content.text',
-        ], 180);
-
-        if ($title === '') {
-            $title = $this->fallbackTitleForRegion($region, $cjk);
-        }
-        if ($body === '') {
-            $body = $cjk
-                ? '访客可以在这里了解服务亮点、查看作品证明，并通过明确按钮提交预约咨询。'
-                : 'Core benefits, trust proof, and a clear action come together so users can understand the value quickly.';
-        }
-
-        return [
-            'title' => $title,
-            'body' => $body,
-            'cjk' => $cjk,
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $defaultConfig
-     * @param list<string> $keys
-     */
-    private function pickFallbackConfigCopy(array $defaultConfig, array $keys, int $limit): string
-    {
-        foreach ($keys as $key) {
-            if (!\is_scalar($defaultConfig[$key] ?? null)) {
-                continue;
-            }
-            $value = $this->sanitizeVisibleCopy((string)$defaultConfig[$key]);
-            if ($value === '') {
-                continue;
-            }
-
-            return $this->clipText($value, $limit);
-        }
-
-        return '';
-    }
 
     /**
      * @return list<string>
@@ -2565,16 +1972,6 @@ class AiSitePageComponentGenerationService
         return \array_values(\array_unique($normalized));
     }
 
-    private function fallbackTitleForRegion(string $region, bool $cjk): string
-    {
-        return match ($region) {
-            'hero' => $cjk ? '核心展示' : 'Featured story',
-            'cta' => $cjk ? '预约咨询' : 'Clear next step',
-            'header' => $cjk ? '站点导航' : 'Site navigation',
-            'footer' => $cjk ? '联系与信任信息' : 'Contact and trust information',
-            default => $cjk ? '精选内容' : 'Featured content',
-        };
-    }
 
     private function summarizeThrowable(\Throwable $throwable): string
     {
@@ -2605,11 +2002,9 @@ class AiSitePageComponentGenerationService
             'provider account',
             'provider configuration',
             'quota',
-            '余额',
-            '密钥',
-            '未配置',
-            '配置',
-            '账户',
+            'balance',
+            'secret',
+            'configuration',
             'account',
         ];
 
@@ -2622,94 +2017,23 @@ class AiSitePageComponentGenerationService
         return true;
     }
 
-    private function shouldFallbackComponentGeneration(\Throwable $throwable): bool
-    {
-        return false;
-
-        $message = \strtolower($this->collectThrowableMessages($throwable));
-        if (\trim($message) === '') {
-            return true;
-        }
-
-        // Hard provider/config errors must stay visible. The outer stream wrapper
-        // includes "stream failed", so these markers need precedence.
-        foreach ([
-            'http 401',
-            'http 402',
-            'http 403',
-            'invalid api key',
-            'incorrect api key',
-            'missing api key',
-            'unauthorized',
-            'authentication',
-            'model unavailable',
-            'model selection',
-            'no available',
-            'provider account',
-            'provider configuration',
-            'provider temporarily unavailable',
-            'insufficient balance',
-            'quota',
-            '密钥',
-            '未配置',
-            '配置',
-            '账户',
-            '余额',
-            '额度',
-            'account',
-        ] as $marker) {
-            if (\str_contains($message, $marker)) {
-                return false;
-            }
-        }
-
-        foreach ([
-            'valid component json',
-            'invalid component json',
-            'malformed component json',
-            'invalid json',
-            'malformed json',
-            'json payload',
-            'json repair',
-            'syntax error',
-            'html_content',
-            'no content',
-            'empty content',
-            'control character',
-            'unexpected end',
-            'unterminated',
-            'stream disconnected',
-            'stream failed',
-            '流式生成失败',
-            '未返回任何内容',
-        ] as $marker) {
-            if (\str_contains($message, $marker)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private function attemptSyntaxFix(string $phtml, string $region, array $componentInfo, array $aiData, array $initialCheck): string
     {
         $codeFixer = $this->getCodeFixer();
         $codeValidator = $this->getCodeValidator();
 
-        // 第 1 轮：CodeFixer::fix() 常规修复
+        // 绗?1 杞細CodeFixer::fix() 甯歌淇
         $fixed = $codeFixer->fix($phtml);
         $check = $codeValidator->checkSyntax($fixed);
         if (!empty($check['valid'])) {
             return $fixed;
         }
 
-        // 第 2 轮：CodeFixer::fixAndValidate() 含激进修复
         $result = $codeFixer->fixAndValidate($phtml, $codeValidator);
         if (!empty($result['validation']['valid'])) {
             return (string)$result['code'];
         }
 
-        // 第 3 轮：对 AI 数据中各字段逐一修复后重新组装
         $fixedAiData = $aiData;
         $fieldsToPatch = ['php_variables', 'css_extra', 'css_content', 'css_responsive', 'html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'];
         $patched = false;
@@ -2738,7 +2062,7 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        throw new \RuntimeException((string)__('AI 生成的组件未通过 PHP 语法校验（已尝试 %{n} 轮自动修复）：%{message}', [
+        throw new \RuntimeException((string)__('AI generated component failed PHP syntax validation after %{n} automatic repair attempts: %{message}', [
             'n' => self::SYNTAX_FIX_MAX_ATTEMPTS + 1,
             'message' => (string)($initialCheck['error'] ?? 'unknown'),
         ]));
@@ -2757,6 +2081,10 @@ class AiSitePageComponentGenerationService
         $aiData = $this->getCodeFixer()->fixAiData($aiData);
         $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region, $verifiedAssets);
         $aiData = $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
+        $this->assertNoInvalidComponentRootClassSelectors($aiData);
+        $this->assertGeneratedComponentHtmlScopeContract($aiData, $region, $componentCode);
+        $this->assertGeneratedComponentCssContract($aiData, $region, $componentCode);
+        $this->assertHeroGeneratedImageCoverCssContract($aiData, $region, $componentCode);
 
         $validation = $this->getCodeValidator()->validateAiData($aiData, $region);
         if (!empty($validation['valid'])) {
@@ -2764,7 +2092,7 @@ class AiSitePageComponentGenerationService
         }
 
         $errors = \array_values(\array_filter(\array_map('strval', $validation['errors'] ?? [])));
-        throw new \RuntimeException((string)__('AI 组件 JSON 校验失败：%{message}', [
+        throw new \RuntimeException((string)__('AI 缁勪欢 JSON 鏍￠獙澶辫触锛?{message}', [
             'message' => \implode('; ', \array_slice($errors, 0, 5)),
         ]));
     }
@@ -2781,8 +2109,6 @@ class AiSitePageComponentGenerationService
     {
         $aiData['extra_fields'] = '';
         $aiData['php_variables'] = '';
-        // 强行契约：默认清空 js_content；仅当本组件是 hero/banner 轮播这类必须有 JS 才能完成
-        // 体验的场景，并且 JS 内容是受控的（仅引用 component 局部 DOM、无 eval / 外部资源 / fetch）才放行。
         $existingJs = (string)($aiData['js_content'] ?? '');
         $aiData['js_content'] = $this->isAllowedComponentInlineJs($existingJs, $aiData) ? $existingJs : '';
 
@@ -2826,7 +2152,7 @@ class AiSitePageComponentGenerationService
         if (self::ENFORCE_COMPONENT_QUALITY_VALIDATION && $region === 'content') {
             $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason((string)($aiData['html_content'] ?? ''));
             if ($lowQualityReason !== null) {
-                throw new \RuntimeException((string)__('AI 组件内容质量不足：%{1}。请重新生成。', [$lowQualityReason]));
+                throw new \RuntimeException('AI component content quality failed: ' . $lowQualityReason);
             }
         }
 
@@ -2849,15 +2175,109 @@ class AiSitePageComponentGenerationService
             return '';
         }
 
+        $css = $this->repairCssDeclarationSyntaxForValidation($css);
+        $css = $this->repairCssParenthesesOutsideStrings($css);
         $css = $this->normalizeVirtualThemeCssComponentScope($css);
         $css = $this->clipCssAtRuleBoundary($css, $limit);
         if ($css === '') {
             return '';
         }
 
+        $css = $this->repairCssDeclarationSyntaxForValidation($css);
+        $css = $this->repairCssParenthesesOutsideStrings($css);
         $css = $this->normalizeVirtualThemeCssComponentScope($css);
 
-        return $this->balanceCssBraces(\trim($this->getCodeFixer()->fixCss($css)));
+        return $this->balanceCssBraces(\trim($this->getCodeFixer()->fixCss(
+            $this->repairCssParenthesesOutsideStrings(
+                $this->repairCssDeclarationSyntaxForValidation($css)
+            )
+        )));
+    }
+
+    private function repairCssDeclarationSyntaxForValidation(string $css): string
+    {
+        if (\trim($css) === '') {
+            return '';
+        }
+
+        $css = $this->repairCssStringsOutsideComments($css);
+        $css = $this->repairCssMergedDeclarationsForValidation($css);
+        $css = \preg_replace('/([;{]\s*)content\s*:\s*(?=[;}])/i', '$1', $css) ?? $css;
+        $css = \preg_replace('/([;{]\s*)[-_a-z][a-z0-9_-]*\s*:\s*(?=[;}])/i', '$1', $css) ?? $css;
+        $css = \preg_replace('/([;{]\s*)height\s*:\s*%\s*(?=;|})/i', '$1', $css) ?? $css;
+        $css = \preg_replace('/([;{]\s*)width\s*:\s*%\s*(?=;|})/i', '$1', $css) ?? $css;
+        $css = \preg_replace('/([;{]\s*)-index\s*:/i', '$1z-index:', $css) ?? $css;
+        $css = \preg_replace('/([;{]\s*)-(?!(?:webkit|moz|ms|o)-)[a-z][a-z0-9_-]*\s*:[^;}]*;?/i', '$1', $css) ?? $css;
+        $css = \preg_replace('/\{\s*;+/', '{', $css) ?? $css;
+        $css = \preg_replace('/;{2,}/', ';', $css) ?? $css;
+
+        return \trim($css);
+    }
+
+    private function repairCssMergedDeclarationsForValidation(string $css): string
+    {
+        $properties = '(?:position|display|width|height|z-index|background(?:-image)?|color|font(?:-size|weight|family)?|padding|margin|grid-template-columns|flex-direction)';
+        for ($i = 0; $i < 3; $i++) {
+            $next = \preg_replace('/(:\s*[^;{}]*?\s+)(' . $properties . '\s*:)/i', '$1;$2', $css) ?? $css;
+            $next = \preg_replace('/\b(relative|absolute|sticky|fixed|block|flex|grid|none|hidden|visible|cover|contain|center)(z-index|position|display|width|height|background(?:-image)?|color|padding|margin)\s*:/i', '$1;$2:', $next) ?? $next;
+            if ($next === $css) {
+                break;
+            }
+            $css = $next;
+        }
+
+        return $css;
+    }
+
+    private function repairCssStringsOutsideComments(string $css): string
+    {
+        $repaired = '';
+        $quote = '';
+        $length = \strlen($css);
+        for ($index = 0; $index < $length; $index++) {
+            $char = $css[$index];
+            if ($quote !== '') {
+                if (($char === ';' || $char === '}') && !$this->hasUnescapedQuoteAhead($css, $index, $quote)) {
+                    $repaired .= $quote;
+                    $quote = '';
+                    $repaired .= $char;
+                    continue;
+                }
+                $repaired .= $char;
+                if ($char === $quote && ($index === 0 || $css[$index - 1] !== '\\')) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                $repaired .= $char;
+                continue;
+            }
+            $repaired .= $char;
+        }
+
+        if ($quote !== '') {
+            $repaired .= $quote;
+        }
+
+        return $repaired;
+    }
+
+    private function hasUnescapedQuoteAhead(string $text, int $offset, string $quote): bool
+    {
+        $length = \strlen($text);
+        for ($index = $offset + 1; $index < $length; $index++) {
+            $char = $text[$index];
+            if (($char === ';' || $char === '}') && ($index === 0 || $text[$index - 1] !== '\\')) {
+                return false;
+            }
+            if ($char === $quote && ($index === 0 || $text[$index - 1] !== '\\')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function clipCssAtRuleBoundary(string $css, int $limit): string
@@ -2913,6 +2333,56 @@ class AiSitePageComponentGenerationService
         return \trim($balanced);
     }
 
+    private function repairCssParenthesesOutsideStrings(string $css): string
+    {
+        if (\trim($css) === '') {
+            return '';
+        }
+
+        $repaired = '';
+        $quote = '';
+        $parenDepth = 0;
+        $length = \strlen($css);
+        for ($index = 0; $index < $length; $index++) {
+            $char = $css[$index];
+            if ($quote !== '') {
+                $repaired .= $char;
+                if ($char === $quote && ($index === 0 || $css[$index - 1] !== '\\')) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                $repaired .= $char;
+                continue;
+            }
+            if ($char === '(') {
+                $parenDepth++;
+                $repaired .= $char;
+                continue;
+            }
+            if ($char === ')') {
+                if ($parenDepth > 0) {
+                    $parenDepth--;
+                    $repaired .= $char;
+                }
+                continue;
+            }
+            if (($char === ';' || $char === '{' || $char === '}') && $parenDepth > 0) {
+                $repaired .= \str_repeat(')', $parenDepth);
+                $parenDepth = 0;
+            }
+            $repaired .= $char;
+        }
+
+        if ($parenDepth > 0) {
+            $repaired .= \str_repeat(')', $parenDepth);
+        }
+
+        return \trim($repaired);
+    }
+
     private function normalizeVirtualThemeCssComponentScope(string $css): string
     {
         $css = \preg_replace('/#\s*<\?=\s*\$componentId\s*\?>/i', self::COMPONENT_CSS_SCOPE_PLACEHOLDER, $css) ?? $css;
@@ -2930,6 +2400,387 @@ class AiSitePageComponentGenerationService
         }
 
         return $this->scopeVirtualThemeCssBlock($css);
+    }
+
+    /**
+     * AI html_content is inserted inside the framework component root. Selectors
+     * shaped like `#componentId.some-class` target a class on the framework root,
+     * not the AI's inner wrapper, so they silently fail in preview. Reject them
+     * and force the model to use descendant selectors: `#componentId .some-class`.
+     *
+     * @param array<string,mixed> $aiData
+     */
+    private function assertNoInvalidComponentRootClassSelectors(array $aiData): void
+    {
+        foreach (['css_extra', 'css_responsive', 'css_content'] as $cssKey) {
+            $css = (string)($aiData[$cssKey] ?? '');
+            if ($css === '') {
+                continue;
+            }
+            if (\preg_match('/#componentId\.[a-z0-9_-]+/i', $css) === 1) {
+                throw new \RuntimeException(
+                    'AI CSS scope contract failed: use descendant selectors like #componentId .component-class; '
+                    . '#componentId.component-class does not target html_content.'
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     */
+    private function assertGeneratedComponentHtmlScopeContract(array $aiData, string $region, string $componentCode): void
+    {
+        if ($region !== 'content') {
+            return;
+        }
+
+        $html = (string)($aiData['html_content'] ?? '');
+        if (\trim($html) === '') {
+            return;
+        }
+
+        if (\preg_match('/\sid\s*=\s*(["\'])(?:#?componentId|#\s*<\?=\s*\$componentId\s*\?>)\1/iu', $html) === 1) {
+            throw new \RuntimeException(
+                'AI HTML scope contract failed: html_content must not create id="componentId"; '
+                . 'it is already rendered inside the framework component root.'
+            );
+        }
+
+        $allowedUtilityClasses = \array_fill_keys(['sr-only', 'visually-hidden'], true);
+        $matched = \preg_match_all('/\bclass\s*=\s*(["\'])(.*?)\1/isu', $html, $matches);
+        if ($matched === false || $matched === 0) {
+            return;
+        }
+
+        foreach ($matches[2] as $classValue) {
+            $tokens = \preg_split('/\s+/', \trim((string)$classValue)) ?: [];
+            foreach ($tokens as $token) {
+                $token = \trim((string)$token);
+                if ($token === '' || isset($allowedUtilityClasses[$token])) {
+                    continue;
+                }
+                $classReason = $this->detectMalformedGeneratedClassTokenReason($token, $componentCode);
+                if ($classReason === null) {
+                    continue;
+                }
+                throw new \RuntimeException(
+                    'AI HTML class scope contract failed: class "' . $token . '" is invalid: ' . $classReason
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     */
+    private function assertGeneratedComponentCssContract(array $aiData, string $region, string $componentCode): void
+    {
+        $allowedUtilityClasses = \array_fill_keys(['sr-only', 'visually-hidden'], true);
+
+        foreach (['css_extra', 'css_responsive', 'css_content'] as $cssKey) {
+            $css = (string)($aiData[$cssKey] ?? '');
+            if (\trim($css) === '') {
+                continue;
+            }
+            $cssReason = $this->detectMalformedGeneratedCssReason($css);
+            if ($cssReason !== null) {
+                throw new \RuntimeException('AI CSS structure contract failed: ' . $cssReason);
+            }
+            if ($region !== 'content') {
+                continue;
+            }
+            foreach ($this->collectGeneratedCssSelectorClasses($css) as $className) {
+                if (isset($allowedUtilityClasses[$className])) {
+                    continue;
+                }
+                $classReason = $this->detectMalformedGeneratedClassTokenReason($className, $componentCode);
+                if ($classReason === null) {
+                    continue;
+                }
+                throw new \RuntimeException(
+                    'AI CSS class scope contract failed: selector class "' . $className . '" is invalid: ' . $classReason
+                );
+            }
+        }
+    }
+
+    private function detectMalformedGeneratedClassTokenReason(string $className, string $componentCode): ?string
+    {
+        $className = \trim($className);
+        if ($className === '') {
+            return null;
+        }
+        if (\str_starts_with($className, '-')) {
+            return 'class starts with a dangling hyphen';
+        }
+        if (\preg_match('/^pb-content(?!-)/i', $className) === 1) {
+            return 'pb-content prefix is missing a hyphen separator';
+        }
+        if ($componentCode !== '' && !\str_starts_with($className, 'pb-')) {
+            return 'custom classes for generated content must use a pb-* prefix';
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectGeneratedCssSelectorClasses(string $css): array
+    {
+        $scan = $this->stripCssCommentsAndStringsForStructuralScan($css);
+        if (\preg_match_all('/(?<![a-z0-9_-])\.(-?[a-z_][a-z0-9_-]*)/i', $scan, $matches) <= 0) {
+            return [];
+        }
+
+        $classes = [];
+        foreach ($matches[1] as $className) {
+            $className = \trim((string)$className);
+            if ($className !== '') {
+                $classes[$className] = true;
+            }
+        }
+
+        return \array_keys($classes);
+    }
+
+    private function detectMalformedGeneratedCssReason(string $css): ?string
+    {
+        $structuralReason = $this->detectCssStructuralBalanceReason($css);
+        if ($structuralReason !== null) {
+            return $structuralReason;
+        }
+
+        $scan = $this->stripCssCommentsAndStringsForStructuralScan($css);
+        if (\preg_match('/(?:^|[;{])\s*[-_a-z][a-z0-9_-]*\s*:\s*(?=[;}])/i', $scan) === 1) {
+            return 'empty CSS declaration value';
+        }
+        if (\preg_match('/(?:^|[;{])\s*-(?!(?:webkit|moz|ms|o)-)[a-z][a-z0-9_-]*\s*:/i', $scan) === 1) {
+            return 'malformed CSS property name';
+        }
+        if (\preg_match('/:\s*%\s*(?:[;}])/i', $scan) === 1) {
+            return 'CSS value starts with a bare percent sign';
+        }
+        if (\preg_match('/:\s*[^;{}]*(?:\b(?:position|display|width|height|z-index|background(?:-image)?|color|font(?:-size|weight|family)?|padding|margin|grid-template-columns|flex-direction)\s*:)/i', $scan) === 1) {
+            return 'merged CSS declarations; missing semicolon between properties';
+        }
+
+        return null;
+    }
+
+    private function stripCssCommentsAndStringsForStructuralScan(string $css): string
+    {
+        $css = \preg_replace('/\/\*.*?\*\//s', '', $css) ?? $css;
+        $result = '';
+        $quote = '';
+        $length = \strlen($css);
+        for ($index = 0; $index < $length; $index++) {
+            $char = $css[$index];
+            if ($quote !== '') {
+                if ($char === $quote && ($index === 0 || $css[$index - 1] !== '\\')) {
+                    $quote = '';
+                    $result .= "''";
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                continue;
+            }
+            $result .= $char;
+        }
+
+        return $result;
+    }
+
+    private function detectCssStructuralBalanceReason(string $css): ?string
+    {
+        $quote = '';
+        $parenDepth = 0;
+        $braceDepth = 0;
+        $length = \strlen($css);
+        for ($index = 0; $index < $length; $index++) {
+            $char = $css[$index];
+            if ($quote !== '') {
+                if ($char === $quote && ($index === 0 || $css[$index - 1] !== '\\')) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                continue;
+            }
+            if ($char === '(') {
+                $parenDepth++;
+                continue;
+            }
+            if ($char === ')') {
+                $parenDepth--;
+                if ($parenDepth < 0) {
+                    return 'orphan closing parenthesis';
+                }
+                continue;
+            }
+            if ($char === '{') {
+                $braceDepth++;
+                continue;
+            }
+            if ($char === '}') {
+                $braceDepth--;
+                if ($braceDepth < 0) {
+                    return 'orphan closing brace';
+                }
+            }
+        }
+
+        if ($quote !== '') {
+            return 'unclosed CSS string';
+        }
+        if ($parenDepth !== 0) {
+            return 'unbalanced CSS parentheses';
+        }
+        if ($braceDepth !== 0) {
+            return 'unbalanced CSS braces';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     */
+    private function assertHeroGeneratedImageCoverCssContract(array $aiData, string $region, string $componentCode): void
+    {
+        if ($region !== 'content') {
+            return;
+        }
+
+        $html = (string)($aiData['html_content'] ?? '');
+        if ($html === '' || \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $componentCode . ' ' . $html) !== 1) {
+            return;
+        }
+
+        $tags = $this->collectGeneratedAssetImageTags($html);
+        if ($tags === []) {
+            return;
+        }
+
+        $css = \implode("\n", \array_map(
+            static fn(string $key): string => (string)($aiData[$key] ?? ''),
+            ['css_extra', 'css_responsive', 'css_content']
+        ));
+
+        foreach ($tags as $tag) {
+            if ($this->tagHasHeroCoverStyle($tag) || $this->cssProvidesHeroCoverForImageTag($tag, $css)) {
+                continue;
+            }
+
+            throw new \RuntimeException(
+                'AI hero image cover CSS contract failed: generated hero/banner image must be styled by a matching '
+                . 'class or data selector as an absolute cover layer with object-fit:cover and inset/100% sizing.'
+            );
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectGeneratedAssetImageTags(string $html): array
+    {
+        if (\preg_match_all('/<img\b[^>]*>/iu', $html, $matches) <= 0) {
+            return [];
+        }
+
+        $tags = [];
+        foreach ($matches[0] as $tag) {
+            $tag = (string)$tag;
+            if ($this->extractHtmlAttribute($tag, 'data-pb-ai-image-role') === 'generated-asset') {
+                $tags[] = $tag;
+            }
+        }
+
+        return $tags;
+    }
+
+    private function tagHasHeroCoverStyle(string $tag): bool
+    {
+        $style = $this->extractHtmlAttribute($tag, 'style');
+        if ($style === '') {
+            return false;
+        }
+
+        return $this->cssDeclarationBodyHasHeroCoverStyle($style);
+    }
+
+    private function cssProvidesHeroCoverForImageTag(string $tag, string $css): bool
+    {
+        if (\trim($css) === '') {
+            return false;
+        }
+
+        $classes = $this->extractHtmlClassTokensFromTag($tag);
+        $hasDataSelector = false;
+        if (\preg_match_all('/([^{}]+)\{([^{}]+)\}/s', $css, $matches, \PREG_SET_ORDER) <= 0) {
+            return false;
+        }
+
+        foreach ($matches as $match) {
+            $selector = (string)($match[1] ?? '');
+            $body = (string)($match[2] ?? '');
+            if (!$this->cssDeclarationBodyHasHeroCoverStyle($body)) {
+                continue;
+            }
+            if (\preg_match('/\[data-pb-ai-(?:image-role|asset-slot)\b/i', $selector) === 1) {
+                $hasDataSelector = true;
+            }
+            foreach ($classes as $class) {
+                if (\preg_match('/\.' . \preg_quote($class, '/') . '\b(?![a-z0-9_-])/i', $selector) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return $hasDataSelector;
+    }
+
+    private function cssDeclarationBodyHasHeroCoverStyle(string $body): bool
+    {
+        $normalized = \strtolower(\preg_replace('/\s+/u', '', $body) ?? $body);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $hasCover = \str_contains($normalized, 'object-fit:cover');
+        $hasPosition = \str_contains($normalized, 'position:absolute')
+            || \str_contains($normalized, 'position:fixed');
+        $hasFullBounds = \str_contains($normalized, 'inset:0')
+            || (\str_contains($normalized, 'width:100%') && \str_contains($normalized, 'height:100%'));
+
+        return $hasCover && $hasPosition && $hasFullBounds;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractHtmlClassTokensFromTag(string $tag): array
+    {
+        $classValue = $this->extractHtmlAttribute($tag, 'class');
+        if ($classValue === '') {
+            return [];
+        }
+
+        $tokens = \preg_split('/\s+/', \trim($classValue)) ?: [];
+        $classes = [];
+        foreach ($tokens as $token) {
+            $token = \trim((string)$token);
+            if ($token !== '') {
+                $classes[] = $token;
+            }
+        }
+
+        return \array_values(\array_unique($classes));
     }
 
     private function scopeVirtualThemeCssBlock(string $css, bool $insideKeyframes = false): string
@@ -3106,6 +2957,7 @@ class AiSitePageComponentGenerationService
             if (!\is_string($aiData[$cssKey] ?? null)) {
                 continue;
             }
+            $aiData[$cssKey] = $this->repairComponentClassPrefixTypos((string)$aiData[$cssKey]);
             foreach ($this->collectGenericCssSelectorClasses((string)$aiData[$cssKey]) as $genericClass) {
                 $renameMap[$genericClass] = $prefix . '-' . $genericClass;
             }
@@ -3115,6 +2967,7 @@ class AiSitePageComponentGenerationService
             if (!\is_string($aiData[$htmlKey] ?? null)) {
                 continue;
             }
+            $aiData[$htmlKey] = $this->repairComponentClassPrefixTypos((string)$aiData[$htmlKey]);
             foreach ($this->collectGenericHtmlClassTokens((string)$aiData[$htmlKey]) as $genericClass) {
                 $renameMap[$genericClass] = $prefix . '-' . $genericClass;
             }
@@ -3139,6 +2992,22 @@ class AiSitePageComponentGenerationService
         }
 
         return $aiData;
+    }
+
+    private function repairComponentClassPrefixTypos(string $text): string
+    {
+        if ($text === '') {
+            return '';
+        }
+
+        $text = \preg_replace('/\bpb-(content|header|footer)(?=[a-z0-9])/i', 'pb-$1-', $text) ?? $text;
+        $text = \str_replace(
+            ['.-content-', '"-content-', '\'-content-', ' -content-', '.-header-', '"-header-', '\'-header-', ' -header-', '.-footer-', '"-footer-', '\'-footer-', ' -footer-'],
+            ['.pb-content-', '"pb-content-', '\'pb-content-', ' pb-content-', '.pb-header-', '"pb-header-', '\'pb-header-', ' pb-header-', '.pb-footer-', '"pb-footer-', '\'pb-footer-', ' pb-footer-'],
+            $text
+        );
+
+        return $text;
     }
 
     private function normalizeComponentCssPrefix(string $componentCode): string
@@ -3251,6 +3120,18 @@ class AiSitePageComponentGenerationService
             . "- Never use generic custom classes such as .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active.\n"
             . "- Any custom class in CSS and the matching HTML must use this component prefix: `{$prefix}-...`.\n"
             . "- CSS selectors must be scoped with the safe placeholder `#componentId`; do not output PHP tags in JSON CSS fields.\n"
+            . "- `html_content` is inserted inside the framework root. To style your inner wrapper use `#componentId .{$prefix}-root`, not `#componentId.{$prefix}-root`.\n"
+            . "- Do not create an inner `id='componentId'` wrapper. The framework root already owns that id; use a class-only wrapper like `<section class='{$prefix}-root'>`.\n"
+            . "- Minimal valid HTML skeleton for this component: `<section class='{$prefix}-root'><div class='{$prefix}-wrap'><h2 class='{$prefix}-title'>Visitor-facing title</h2><p class='{$prefix}-copy'>Concrete visitor-facing copy.</p></div></section>`.\n"
+            . "- Minimal valid CSS skeleton for this component: `#componentId .{$prefix}-root { position:relative; overflow:hidden; background:linear-gradient(135deg,#111827,#1f2937); } #componentId .{$prefix}-wrap { position:relative; z-index:1; min-width:0; } @media (max-width:768px){ #componentId .{$prefix}-grid { grid-template-columns:1fr; } }`.\n"
+            . "- Valid JSON envelope shape: `{\"extra_fields\":\"\",\"php_variables\":\"\",\"css_extra\":\"#componentId .{$prefix}-root { position:relative; overflow:hidden; }\",\"css_responsive\":\"@media (max-width:768px){ #componentId .{$prefix}-root { padding:24px; } }\",\"html_content\":\"<section class='{$prefix}-root'><div class='{$prefix}-wrap'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-copy'>Finished copy.</p></div></section>\",\"js_content\":\"\"}`. Replace example words and CSS values with finished customer content before returning.\n"
+            . "- Prefix self-check: every custom class must literally start with `{$prefix}-`, including the leading `pb`. A class that starts with `-`, `content-`, or any value missing the leading `pb-` is invalid.\n"
+            . "- Before returning, self-check that every custom class used in CSS exists with the exact same spelling in html_content and starts with `{$prefix}-`.\n"
+            . "- HTML attribute grammar must be exact: write `<span class='{$prefix}-badge'>`; for img tags, put a real space between every quoted attribute such as src, alt, data-pb-ai-image-role, and data-pb-ai-asset-slot. Never output `<span='...'>`, `<img ...'alt='...'>`, or any attribute glued after a closing quote.\n"
+            . "- HTML closing-tag grammar must be exact: never concatenate closing tags. Write `</p></a>`, `</small></div>`, or `</div></section>` as separate tags; outputs like `</pa>`, `</smalldiv>`, `</pdiv>`, or `</divsection>` are invalid.\n"
+            . "- CSS grammar must be exact: no empty declarations like `content:;`, no malformed properties like `-index`, no values like `height:%`, no merged declarations like `position:relativez-index:1`, no unclosed quoted values, and all function parentheses must close.\n"
+            . "- CSS reliability mode: write simple complete declarations as `property: value;`, preferably one declaration per line. Avoid fragile or nested CSS functions and avoid quoted CSS values unless necessary; use plain hex/rgba colors, linear-gradient(), clamp(), and simple box-shadow only when every quote and parenthesis is closed. Do not use color-mix(), mask, clip-path, nested calc(), or filter chains in generated CSS.\n"
+            . "- Invalid output examples to avoid: `<div='...'>`, `<p='...'>`, `<span='...'>`, `<a href='#'class='...'>`, `content:;`, `height:%`, `position:relativez-index:1`, and selector fragments such as `.-content...`.\n"
             . "- Examples for this component: `#componentId .{$prefix}-card`, `#componentId .{$prefix}-icon`, `#componentId .{$prefix}-title`.\n";
     }
 
@@ -3259,26 +3140,21 @@ class AiSitePageComponentGenerationService
         $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
         $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
         $html = $this->stripPhpFragmentsFromHtml($html);
+        $html = $this->repairHtmlTagAttributeSpacing($html);
+        $html = $this->repairGeneratedImageTagAttributeGrammar($html);
         $svgPolicyReason = $this->detectInlineSvgGeneratedSectionViolation($html);
         if ($svgPolicyReason !== null) {
             throw new \RuntimeException('AI component content hard policy failed: ' . $svgPolicyReason);
         }
-        // 清理“提示词泄漏”句式，防止把计划/指令文本渲染给访客。
-        $html = \preg_replace('/<(h[1-6]|p|li|span|div)\b[^>]*>\s*(?:Use|Populate|Ensure|Must|Should|Return|Do not|Keep|Include|List|Provide|Generate)\b[^<]{0,360}<\/\1>/iu', '', $html) ?? $html;
-        $html = \preg_replace('/<(h[1-6]|p|li|span|div)\b[^>]*>\s*(?:使用|补充|确保|必须|应当|请|返回|不要|保持|包含|列出|提供|生成)\b[^<]{0,360}<\/\1>/u', '', $html) ?? $html;
         $html = \preg_replace('/@(?:component|fields)_(?:start|end)\b/i', '', $html) ?? $html;
-        $html = \preg_replace('/<div([^>]*class="[^"]*(?:eyebrow|subtitle|kicker|badge)[^"]*"[^>]*)>\s*(首页|主页|关于我们|关于|Home|About|About Us)\s*<\/div>/iu', '', $html) ?? $html;
-        // 强行契约：planning 关键字（home_page/about_page/page:.../content/...）只能从可见文本剥离，
-        // 不能动 HTML 属性（src/href/srcset/data-* 等），否则 `/pub/.../page-home_page-content-home-page-hero-...jpg`
-        // 这种合法 URL 中的 `home_page` 会被吞掉，导致 <img> 显示成 broken。
-        $html = $this->stripPlanningKeywordsFromVisibleText($html);
-        $html = \preg_replace('/(?:核心卖点|功能特性|把首页[^。！？.!?]{0,80}放出来|值得点击|页面类型|内容块)/u', '', $html) ?? $html;
-        $html = $this->repairHtmlFragmentTagBalance($html);
+        $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation($html);
+        if ($hardPolicyReason !== null) {
+            throw new \RuntimeException('AI component content hard policy failed: ' . $hardPolicyReason);
+        }
         $this->assertGeneratedHtmlFragmentWellFormed($html);
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
         $html = \trim($html);
-        // 禁止使用纯 mb/byte 裁剪：超长 HTML 在中间截断会破坏标签闭环，repair 也难救。
         $html = $this->clipHtmlFragmentPreservingIntegrity($html, 5000);
         $html = $this->repairHtmlFragmentTagBalance(\trim($html));
         $this->assertGeneratedHtmlFragmentWellFormed($html);
@@ -3286,16 +3162,110 @@ class AiSitePageComponentGenerationService
         return \trim($html);
     }
 
+    private function repairHtmlTagAttributeSpacing(string $html): string
+    {
+        if ($html === '') {
+            return '';
+        }
+
+        return \preg_replace_callback(
+            '/<\s*\/?\s*[a-z][a-z0-9:-]*\b[^<>]*(?:>|$)/iu',
+            function (array $matches): string {
+                $tag = (string)($matches[0] ?? '');
+                if ($tag === '') {
+                    return $tag;
+                }
+                $tag = $this->repairHtmlTagAttributeQuoteBeforeNextAttribute($tag);
+
+                return \preg_replace('/(["\'])(?=[a-zA-Z_:][a-zA-Z0-9_:.-]*\s*=)/u', '$1 ', $tag) ?? $tag;
+            },
+            $html
+        ) ?? $html;
+    }
+
+    private function repairHtmlTagAttributeQuoteBeforeNextAttribute(string $tag): string
+    {
+        $quote = '';
+        $repaired = '';
+        $length = \strlen($tag);
+        for ($index = 0; $index < $length; $index++) {
+            $char = $tag[$index];
+            if ($quote !== '') {
+                if (\preg_match('/\s(?:class|id|href|src|alt|title|role|loading|decoding|width|height|style|aria-[a-z0-9_-]+|data-[a-z0-9_-]+)\s*=/iu', \substr($tag, $index), $attrMatch, \PREG_OFFSET_CAPTURE) === 1
+                    && (int)$attrMatch[0][1] === 0
+                ) {
+                    $repaired .= $quote;
+                    $quote = '';
+                }
+                $repaired .= $char;
+                if ($char === $quote && ($index === 0 || $tag[$index - 1] !== '\\')) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+            }
+            $repaired .= $char;
+        }
+
+        return $repaired;
+    }
+
+    private function repairGeneratedImageTagAttributeGrammar(string $html): string
+    {
+        if ($html === '' || \stripos($html, '<img') === false) {
+            return $html;
+        }
+
+        return \preg_replace_callback(
+            '/<img\b[^<>]*(?:>|$)/iu',
+            function (array $matches): string {
+                $tag = (string)($matches[0] ?? '');
+                if ($tag === '') {
+                    return $tag;
+                }
+                $tag = \preg_replace('/(["\'])(?=[a-zA-Z_:][a-zA-Z0-9_:.-]*\s*=)/u', '$1 ', $tag) ?? $tag;
+
+                $quote = '';
+                $repaired = '';
+                $length = \strlen($tag);
+                for ($index = 0; $index < $length; $index++) {
+                    $char = $tag[$index];
+                    if ($quote !== '') {
+                        if (\preg_match('/\s(?:src|alt|title|class|loading|decoding|width|height|data-[a-z0-9_-]+|aria-[a-z0-9_-]+)\s*=/iu', \substr($tag, $index), $attrMatch, \PREG_OFFSET_CAPTURE) === 1
+                            && (int)$attrMatch[0][1] === 0
+                        ) {
+                            $repaired .= $quote;
+                            $quote = '';
+                        }
+                        if ($char === '>' && ($index === 0 || $tag[$index - 1] !== '\\')) {
+                            $repaired .= $quote;
+                            $quote = '';
+                        }
+                        $repaired .= $char;
+                        if ($char === $quote && ($index === 0 || $tag[$index - 1] !== '\\')) {
+                            $quote = '';
+                        }
+                        continue;
+                    }
+                    if ($char === '"' || $char === "'") {
+                        $quote = $char;
+                    }
+                    $repaired .= $char;
+                }
+
+                if ($quote !== '') {
+                    $repaired .= $quote;
+                }
+
+                return $repaired;
+            },
+            $html
+        ) ?? $html;
+    }
+
     /**
-     * 强行契约：组件内联 JS 白名单——只放行 hero/banner 轮播这类受控 JS。
-     *
-     * 必须满足：
-     *  - HTML 含 `class="ai-site-hero"` 这一已知轮播容器（其它结构一律不需要 JS）。
-     *  - JS 仅引用 `component.querySelector*`、`addEventListener`、`setInterval`、`classList`、
-     *    `setAttribute("aria-hidden", ...)` 等局部 DOM 操作。
-     *  - JS 不得包含 `eval(`、`Function(`、`fetch(`、`XMLHttpRequest`、`document.write`、
-     *    `import(`、`<script`、`document.body`、`window.location` 等高风险结构。
-     *
      * @param array<string,mixed> $aiData
      */
     private function isAllowedComponentInlineJs(string $js, array $aiData): bool
@@ -3304,13 +3274,6 @@ class AiSitePageComponentGenerationService
         if ($js === '' || \strlen($js) < 5) {
             return false;
         }
-        $html = (string)($aiData['html_content'] ?? '');
-        $isHeroBanner = \str_contains($html, 'class="ai-site-hero"');
-        if (!$isHeroBanner) {
-            return false;
-        }
-        // 高风险关键字一律拒绝。注意 JS 大小写敏感：`function(` 是字面量（安全），
-        // `Function(` 是构造器（危险），因此对这一类标识符使用大小写敏感匹配。
         $forbiddenCaseSensitive = [
             'Function(',
         ];
@@ -3348,8 +3311,6 @@ class AiSitePageComponentGenerationService
                 return false;
             }
         }
-        // 必须在 component 局部范围内操作 DOM；如果 JS 完全不引用 component 这个局部句柄，
-        // 风险更高（可能影响整页 DOM），统一拒绝。
         if (\strpos($js, 'component') === false) {
             return false;
         }
@@ -3358,59 +3319,16 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 提取 HTML 中"访客可见文本"——剥掉所有标签（包括属性），只保留 `>...<` 之间的内容。
-     * 用于泄漏检测，避免把 src/href/data-* 中的合法 URL / slot id 误判为 leak。
-     */
+     * 鎻愬彇 HTML 涓?璁垮鍙鏂囨湰"鈥斺€斿墺鎺夋墍鏈夋爣绛撅紙鍖呮嫭灞炴€э級锛屽彧淇濈暀 `>...<` 涔嬮棿鐨勫唴瀹广€?     * 鐢ㄤ簬娉勬紡妫€娴嬶紝閬垮厤鎶?src/href/data-* 涓殑鍚堟硶 URL / slot id 璇垽涓?leak銆?     */
     private function extractVisibleHtmlText(string $html): string
     {
         if ($html === '') {
             return '';
         }
-        // 直接 strip_tags 已能去掉所有标签（含属性），剩下的就是访客可读文本。
         $plain = \strip_tags($html);
         $plain = \preg_replace('/\s+/u', ' ', $plain) ?? $plain;
 
         return \trim($plain);
-    }
-
-    /**
-     * 强行契约：仅在 HTML 文本节点（标签之外）剥离 planning 关键字，保留属性值/标签原貌。
-     *
-     * 旧实现使用全局正则一次性剥离 home_page / about_page / content/... / page:...，
-     * 但这些 token 经常合法地出现在 <img src="/pub/.../page-home_page-content-home-page-hero-...jpg">
-     * 这类资产 URL、CSS class、data-pb-ai-asset-slot 属性中，被错误吞掉后会让图片 404、broken。
-     *
-     * 这里改成"分段处理"：标签整段保留，仅在 `>...<` 之间的文本片段上跑该剥离正则。
-     */
-    private function stripPlanningKeywordsFromVisibleText(string $html): string
-    {
-        if ($html === '') {
-            return $html;
-        }
-        $pattern = '/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu';
-
-        // 使用 preg_split 按 HTML 标签切片：奇数下标是标签，偶数下标是文本节点。
-        // PREG_SPLIT_DELIM_CAPTURE 让分隔符（标签）保留在结果中。
-        $parts = \preg_split('/(<[^>]+>)/u', $html, -1, \PREG_SPLIT_DELIM_CAPTURE);
-        if (!\is_array($parts)) {
-            return $html;
-        }
-
-        $out = '';
-        foreach ($parts as $idx => $part) {
-            if ($part === '') {
-                continue;
-            }
-            $isTag = ($idx % 2 === 1) || (\strlen($part) > 0 && $part[0] === '<');
-            if ($isTag) {
-                $out .= $part;
-                continue;
-            }
-            $clean = \preg_replace($pattern, '', $part);
-            $out .= ($clean ?? $part);
-        }
-
-        return $out;
     }
 
     private function assertGeneratedHtmlFragmentWellFormed(string $html): void
@@ -3483,6 +3401,11 @@ class AiSitePageComponentGenerationService
         if (!\str_ends_with($tagText, '>')) {
             return 'unterminated tag';
         }
+        if (\preg_match('/^<\s*[a-z][a-z0-9:-]*\s*=\s*(["\'])/iu', $tagText) === 1
+            || \preg_match('/^<\s*[a-z][a-z0-9:-]*\s*(["\'])/iu', $tagText) === 1
+        ) {
+            return 'attribute name is missing';
+        }
 
         $quote = '';
         $length = \strlen($tagText);
@@ -3491,6 +3414,10 @@ class AiSitePageComponentGenerationService
             if ($quote !== '') {
                 if ($char === $quote && ($index === 0 || $tagText[$index - 1] !== '\\')) {
                     $quote = '';
+                    $next = $tagText[$index + 1] ?? '';
+                    if ($next !== '' && !\preg_match('/[\s>\/]/', $next)) {
+                        return 'missing whitespace before next attribute';
+                    }
                 }
                 continue;
             }
@@ -3575,8 +3502,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * AI 超长 HTML 若用字节/字符硬性截断会破坏标签闭环；末尾裁到最近一次完整标签结束边界后再跑一次 repair。
-     */
+     * AI 瓒呴暱 HTML 鑻ョ敤瀛楄妭/瀛楃纭€ф埅鏂細鐮村潖鏍囩闂幆锛涙湯灏捐鍒版渶杩戜竴娆″畬鏁存爣绛剧粨鏉熻竟鐣屽悗鍐嶈窇涓€娆?repair銆?     */
     private function clipHtmlFragmentPreservingIntegrity(string $html, int $limit): string
     {
         if ($limit <= 32 || \trim($html) === '') {
@@ -3649,18 +3575,22 @@ class AiSitePageComponentGenerationService
         if (\preg_match('/\bai-site-fallback\b|<svg\s+viewBox=["\']0 0 520 360["\']/iu', $trimmed) === 1) {
             return 'plan-derived fallback visual leaked into generated content';
         }
-        // 强行契约：泄漏检测只看"可见文本"——属性中的合法 URL/slot id（如
-        //   src="/pub/.../page-home_page-content-home-page-hero-xxx.jpg"
-        //   data-pb-ai-asset-slot="page:home_page:content-home-page-hero"
-        // 不应触发"internal task identifiers leaked"，否则会让所有真实图像 build 全失败。
+
+        // Inspect only visitor-visible text so valid URL and slot attributes do not false-positive.
         $visibleText = $this->extractVisibleHtmlText($trimmed);
-        if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|Use concrete|Present key terms|provide download CTA|Provide category|filter tabs|visually distinct|Visible CTA path|Trust content|Responsive cards|proof points|visual hierarchy|launch-ready content|Immediately capture|Instantly communicate|Immediately inform|Capture immediate attention|Introduce Teenipiya|\$[a-z_][a-z0-9_]*|=>|===|优先沿用|输出必须|字段样例|提示词|直接产出可上屏|生成页面方案/iu', $visibleText) === 1) {
+        if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|\$[a-z_][a-z0-9_]*|=>|===/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
         }
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
             return 'internal task identifiers leaked';
         }
-        if (\preg_match('/\b(?:Game Card|Category|Badge)\s+\d+\b/iu', $visibleText) === 1) {
+        $visibleTextWithTagBoundaries = \html_entity_decode(
+            \strip_tags(\preg_replace('/<[^>]+>/u', ' ', $trimmed) ?? $trimmed),
+            \ENT_QUOTES | \ENT_SUBSTITUTE,
+            'UTF-8'
+        );
+        $visibleTextWithTagBoundaries = \trim((string)\preg_replace('/\s+/u', ' ', $visibleTextWithTagBoundaries));
+        if (\preg_match('/\b(?:[A-Z][A-Za-z]{2,}\s+)?(?:Card|Category|Badge|Step|Item)\s+\d+\b/iu', $visibleText . ' ' . $visibleTextWithTagBoundaries) === 1) {
             return 'internal field labels leaked';
         }
 
@@ -3690,30 +3620,16 @@ class AiSitePageComponentGenerationService
             return 'plan-derived fallback visual leaked into generated content';
         }
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
-        $visibleLower = \mb_strtolower($this->extractVisibleHtmlText($trimmed) . ' ' . $plain);
-        if (\str_contains($visibleLower, 'get started')
-            && \str_contains($visibleLower, 'game suite')
-            && \str_contains($visibleLower, 'download path')
-        ) {
-            return 'generic repeated three-card scaffold leaked into generated content';
-        }
         if ($plain === '' || \mb_strlen($plain) < 18) {
             return 'insufficient visitor-facing text';
         }
         $visibleText = $this->extractVisibleHtmlText($trimmed);
-        // 同上：仅在可见文本上做 leak 检测，避免 src/href/data-* 中的合法 URL/slot id 被误判。
-        $visibleText = $this->extractVisibleHtmlText($trimmed);
-
-        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|Use concrete|Present key terms|provide download CTA|优先沿用|输出必须|字段样例|提示词|直接产出可上屏|生成页面方案/iu', $visibleText) === 1) {
+        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
         }
 
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
             return 'internal task identifiers leaked';
-        }
-
-        if (\preg_match('/核心卖点|功能特性|把首页|值得点击|放出来|方案头部|方案背景|方案结尾|当前方案|任务方案|蓝图/iu', $plain) === 1) {
-            return 'planning copy leaked into visitor content';
         }
 
         if ($this->containsPlanningObservationCopy($plain)) {
@@ -3728,7 +3644,7 @@ class AiSitePageComponentGenerationService
         ) {
             return 'unstyled browser-default link leaked into visitor content';
         }
-        if (\preg_match('/>\s*(?:✓|✔|√)\s*</u', $trimmed) === 1) {
+        if (\preg_match('/>\s*(?:[\p{S}\p{P}\s]{3,})\s*</u', $trimmed) === 1) {
             return 'symbol-only decorative control leaked into visitor content';
         }
 
@@ -3740,22 +3656,34 @@ class AiSitePageComponentGenerationService
         if (!$hasVisual && !$hasRealCopy && !$hasVisitorLinkCluster && !$hasVisitorArticleList) {
             return 'missing real copy, visual hierarchy, or visitor content structure';
         }
+        if (\preg_match('/\b(hero|banner|opening|above[-_ ]?fold)\b/i', $trimmed) === 1
+            && \preg_match('/<img\b|background-image|data-pb-ai-image-role=["\']generated-asset["\']/iu', $trimmed) === 1
+        ) {
+            $heroReason = $this->detectHeroBannerQualityViolation($trimmed);
+            if ($heroReason !== null) {
+                return $heroReason;
+            }
+        }
 
         return null;
     }
-
     private function detectHeroBannerQualityViolation(string $html): ?string
     {
         $normalized = \preg_replace('/\s+/u', ' ', $html) ?? $html;
-        $hasFullBleedBackground = \preg_match('/(?:class=["\'][^"\']*ai-site-hero-image[^"\']*["\'][^>]*(?:width:100%|height:100%|object-fit|data-pb-ai-image-role)|background-image|object-fit\s*:\s*cover|inset\s*:\s*0)/iu', $normalized) === 1;
+        $hasFullBleedBackground = \preg_match('/(?:data-pb-ai-image-role=["\']generated-asset["\'][^>]*(?:width:100%|height:100%|object-fit)|background-image|object-fit\s*:\s*cover|inset\s*:\s*0)/iu', $normalized) === 1;
         $hasPremiumMediaHero = \preg_match('/(?:data-pb-ai-image-role=["\']generated-asset["\']|class=["\'][^"\']*(?:hero|banner)[^"\']*(?:media|visual|image)[^"\']*["\'])/iu', $normalized) === 1
             && \preg_match('/(?:border-radius|box-shadow|linear-gradient|radial-gradient|backdrop-filter|object-fit\s*:\s*cover)/iu', $normalized) === 1;
         $hasOverlayPanel = \preg_match('/backdrop-filter|rgba\([^)]*,\s*\.(?:3|4|5|6|7|8|9)|linear-gradient\([^;]*(?:rgba|transparent)/iu', $normalized) === 1;
+        $hasNamedReadabilityLayer = \preg_match('/class=["\'][^"\']*(?:overlay|scrim|veil|shade|backdrop|gradient)[^"\']*["\']/iu', $normalized) === 1;
+        $hasNamedTextSafePanel = \preg_match('/class=["\'][^"\']*(?:copy|content|text|caption|message|panel|plate|card)[^"\']*["\']/iu', $normalized) === 1;
         if (!$hasFullBleedBackground && !$hasPremiumMediaHero) {
             return 'hero/banner is not using a full-background image or a premium generated media visual';
         }
         if (!$hasOverlayPanel) {
             return 'hero/banner lacks a readable overlay layer for floating content';
+        }
+        if (!$hasNamedReadabilityLayer || !$hasNamedTextSafePanel) {
+            return 'hero/banner text over media must use named scrim/overlay and text-safe panel classes';
         }
 
         return null;
@@ -3799,7 +3727,7 @@ class AiSitePageComponentGenerationService
         }
 
         $plain = \mb_strtolower(\trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($html))));
-        return \preg_match('/<time\b|date|read|guide|review|tips|news|update|strategy|apk|teen patti|rummy|category|article/iu', $html . ' ' . $plain) === 1;
+        return \preg_match('/<time\b|date|read|guide|review|tips|news|update|strategy|category|article|editorial|post/iu', $html . ' ' . $plain) === 1;
     }
 
     /**
@@ -3846,9 +3774,9 @@ class AiSitePageComponentGenerationService
         if ($requiredAssets === [] && (int)($visualContract['required'] ?? 0) === 1) {
             $slotId = \trim((string)($visualContract['slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? ''));
             $url = $this->firstConfigString($defaultConfig, ['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url']);
-            if ($slotId !== '' && $url !== '') {
-                $requiredAssets[$slotId] = $url;
-            }
+        if ($slotId !== '' && $url !== '') {
+            $requiredAssets[$slotId] = $url;
+        }
         }
         if ($requiredAssets === []) {
             return;
@@ -3862,90 +3790,114 @@ class AiSitePageComponentGenerationService
             if ($slotId === '' || $url === '') {
                 continue;
             }
-            if (!\str_contains($payload, $url)) {
-                throw new \RuntimeException('Required image slot is not referenced by generated block: ' . $slotId);
-            }
-            if (!\str_contains($html, 'data-pb-ai-image-role="generated-asset"')
-                || !\str_contains($html, 'data-pb-ai-asset-slot="' . $slotId . '"')
-            ) {
+            if (!$this->htmlContainsGeneratedAssetImage($html, $slotId, $url)) {
+                if (!\str_contains($payload, $url)) {
+                    throw new \RuntimeException('Required image slot is not referenced by generated block: ' . $slotId);
+                }
                 throw new \RuntimeException('Required image slot is missing editor attributes: ' . $slotId);
             }
         }
     }
 
     /**
+     * Once a block has verified generated assets, the generated HTML/CSS must not
+     * keep a second local ai-generated URL for the same visual. That creates
+     * duplicate slot images and bypasses slot backfill/publish migration.
+     *
      * @param array<string,mixed> $aiData
      * @param array<string,mixed> $renderContext
      * @param array<string,mixed> $defaultConfig
-     * @return array<string,mixed>
      */
-    private function forceInjectMissingRequiredImageAssets(array $aiData, array $renderContext, array $defaultConfig): array
+    private function assertGeneratedImageSourcesUseVerifiedAssets(array $aiData, array $renderContext, array $defaultConfig): void
     {
-        $requiredAssets = \is_array($renderContext['_required_image_assets'] ?? null) ? $renderContext['_required_image_assets'] : [];
-        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
-            ? $renderContext['_visual_contract']
-            : $this->decodeRuntimeVisualContract($defaultConfig);
-        if ($requiredAssets === [] && (int)($visualContract['required'] ?? 0) === 1) {
-            $slotId = \trim((string)($visualContract['slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? ''));
-            $url = $this->firstConfigString($defaultConfig, ['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url']);
-            if ($slotId !== '' && $url !== '') {
-                $requiredAssets[$slotId] = $url;
-            }
-        }
-        if ($requiredAssets === []) {
-            return $aiData;
+        $verifiedMap = $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig);
+        $verifiedUrls = \array_values(\array_filter(\array_map('strval', \array_values($verifiedMap))));
+        if ($verifiedUrls === []) {
+            return;
         }
 
-        $htmlKey = \trim((string)($aiData['html_content'] ?? '')) !== '' ? 'html_content' : 'html_extra';
-        $html = (string)($aiData[$htmlKey] ?? '');
-        if ($html === '') {
-            return $aiData;
-        }
-
-        foreach ($requiredAssets as $slotId => $url) {
-            $slotId = \trim((string)$slotId);
-            $url = \trim((string)$url);
-            if ($slotId === '' || $url === '') {
+        $violations = [];
+        foreach (['html_content', 'html_extra'] as $key) {
+            $html = (string)($aiData[$key] ?? '');
+            if ($html === '') {
                 continue;
             }
-            $slotAttr = 'data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
-            if (\str_contains($html, $url) && \str_contains($html, $slotAttr)) {
+            if (\preg_match_all('/<img\b[^>]*>/iu', $html, $matches) > 0) {
+                foreach ($matches[0] as $tag) {
+                    $tag = (string)$tag;
+                    $src = $this->extractHtmlAttribute($tag, 'src');
+                    if ($src === '') {
+                        continue;
+                    }
+                    $role = $this->extractHtmlAttribute($tag, 'data-pb-ai-image-role');
+                    $slot = $this->extractHtmlAttribute($tag, 'data-pb-ai-asset-slot');
+                    $slotRequiresVerifiedUrl = $slot !== '' && isset($verifiedMap[$slot]);
+                    if (($role === 'generated-asset' || $slotRequiresVerifiedUrl || $this->looksLikeGeneratedAssetSource($src))
+                        && !$this->isVerifiedAssetUrl($src, $verifiedUrls)
+                    ) {
+                        $violations[] = $src;
+                    }
+                }
+            }
+        }
+
+        foreach (['css_extra', 'css_responsive'] as $key) {
+            $css = (string)($aiData[$key] ?? '');
+            if ($css === '') {
+                continue;
+            }
+            if (\preg_match_all('/url\(\s*([\'"]?)(.*?)\1\s*\)/iu', $css, $matches, \PREG_SET_ORDER) > 0) {
+                foreach ($matches as $match) {
+                    $src = \trim((string)($match[2] ?? ''));
+                    if ($src !== '' && $this->looksLikeGeneratedAssetSource($src) && !$this->isVerifiedAssetUrl($src, $verifiedUrls)) {
+                        $violations[] = $src;
+                    }
+                }
+            }
+        }
+
+        $violations = \array_values(\array_unique(\array_filter(\array_map('trim', $violations))));
+        if ($violations !== []) {
+            throw new \RuntimeException('Generated image source is outside verified asset allowlist: ' . \implode(', ', \array_slice($violations, 0, 4)));
+        }
+    }
+
+    private function looksLikeGeneratedAssetSource(string $src): bool
+    {
+        $normalized = $this->normalizeVerifiedAssetUrl($src);
+        $lower = \strtolower($normalized);
+
+        return \str_contains($lower, '/ai-generated/')
+            || \str_contains($lower, '/page-build/');
+    }
+
+    private function htmlContainsGeneratedAssetImage(string $html, string $slotId, string $url): bool
+    {
+        if (\preg_match_all('/<img\b[^>]*>/iu', $html, $matches) <= 0) {
+            return false;
+        }
+
+        foreach ($matches[0] as $tag) {
+            $tag = (string)$tag;
+            if ($this->extractHtmlAttribute($tag, 'src') !== $url) {
+                continue;
+            }
+            if ($this->extractHtmlAttribute($tag, 'data-pb-ai-asset-slot') !== $slotId) {
+                continue;
+            }
+            if ($this->extractHtmlAttribute($tag, 'data-pb-ai-image-role') !== 'generated-asset') {
                 continue;
             }
 
-            $alt = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, [
-                'runtime.section_image_alt',
-                'visual.image_alt',
-                'image.alt',
-                'content.title',
-                'runtime.section_name',
-            ]));
-            if ($alt === '') {
-                $alt = 'Section visual';
-            }
-            $img = '<figure class="pb-ai-required-visual" data-pb-ai-asset-slot="'
-                . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
-                . '"><img src="' . \htmlspecialchars($url, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '" alt="'
-                . \htmlspecialchars($alt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
-                . '" loading="lazy" decoding="async" data-pb-ai-image-role="generated-asset" data-pb-ai-asset-slot="'
-                . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
-                . '"></figure>';
-
-            $injected = \preg_replace('/(<\/(?:section|article|div)>\s*)$/iu', $img . '$1', \trim($html), 1, $count);
-            $html = \is_string($injected) && $count > 0 ? $injected : \trim($html) . $img;
+            return true;
         }
 
-        $aiData[$htmlKey] = $html;
-        $aiData['css_extra'] = (string)($aiData['css_extra'] ?? '')
-            . "\n" . '#componentId .pb-ai-required-visual{margin:clamp(24px,4vw,44px) 0 0;border-radius:28px;overflow:hidden;box-shadow:0 28px 70px rgba(15,23,42,.18);background:linear-gradient(135deg,rgba(255,255,255,.92),rgba(255,255,255,.68));}'
-            . "\n" . '#componentId .pb-ai-required-visual img{display:block;width:100%;aspect-ratio:16/9;max-height:520px;object-fit:cover;filter:saturate(1.04) contrast(1.03);}';
-
-        return $aiData;
+        return false;
     }
 
     /**
-     * Stage-3 偶有 hero 大图未接上（空 src）、或整块高饱和渐变底板压在照片边上产生“主题色 vs 画面色”撞色。
-     * 对已写入 runtime.section_image_* 的规划 URL：补齐 `.ai-site-hero--has-photo`、重写首帧背景图标签，并 prepend 色谱融合的底板/遮罩 CSS。
+     * Validate hero/banner image slot usage. The renderer must not inject the missing
+     * image, class, overlay, or CSS; invalid AI output is retried or failed.
      *
      * @param array<string, mixed> $aiData
      * @param array<string, mixed> $defaultConfig
@@ -3956,17 +3908,11 @@ class AiSitePageComponentGenerationService
         if ($region !== 'content') {
             return $aiData;
         }
-        $template = \strtolower(\trim((string)($defaultConfig['runtime.section_template'] ?? '')));
         $html = (string)($aiData['html_content'] ?? '');
         if ($html === '') {
             return $aiData;
         }
-        $visualContract = $this->decodeRuntimeVisualContract($defaultConfig);
-        $slotType = \strtolower(\trim((string)($visualContract['slot_type'] ?? '')));
-        $isHeroContract = \in_array($template, ['hero', 'banner'], true)
-            || \str_contains($slotType, 'hero')
-            || \str_contains($slotType, 'banner');
-        if (!$isHeroContract && !\preg_match('/\bai-site-hero\b/i', $html)) {
+        if (!$this->isHeroOrBannerImageContract($defaultConfig, [], $html)) {
             return $aiData;
         }
 
@@ -3981,316 +3927,20 @@ class AiSitePageComponentGenerationService
         if ($imageUrl === '') {
             return $aiData;
         }
-        if (!\preg_match('/\bai-site-hero\b/i', $html)) {
-            return $this->buildStrictHeroBannerPayload($aiData, $defaultConfig, $imageUrl);
-        }
-
-        $heroDivPatched = false;
-        $html = \preg_replace_callback(
-            '/<div\b[^>]*>/iu',
-            function (array $matches) use (&$heroDivPatched): string {
-                $tag = $matches[0];
-                if ($heroDivPatched) {
-                    return $tag;
-                }
-                if (!\preg_match('/\bai-site-hero\b/i', $tag) || \preg_match('/\bai-site-hero--has-photo\b/i', $tag)) {
-                    return $tag;
-                }
-
-                $heroDivPatched = true;
-                if (\preg_match('/\bclass=(["\'])([\s\S]*?)\1/u', $tag, $cm) !== 1) {
-                    return $tag;
-                }
-                $quote = (string)$cm[1];
-                $list = \trim((string)($cm[2] ?? ''));
-
-                return \str_replace(
-                    'class=' . $quote . $list . $quote,
-                    'class=' . $quote . \trim($list . ' ai-site-hero--has-photo') . $quote,
-                    $tag
-                );
-            },
-            $html,
-        );
-        $html = \is_string($html) ? $html : (string)($aiData['html_content'] ?? '');
-
         $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? $defaultConfig['visual.image_slot_id'] ?? ''));
-        $escapedUrl = \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-        $alt = $this->sanitizeVisibleCopy((string)(
-            $defaultConfig['runtime.section_image_alt']
-            ?? $defaultConfig['visual.image_alt']
-            ?? $defaultConfig['image.alt']
-            ?? $defaultConfig['content.title']
-            ?? ''
-        ));
-        if ($alt === '') {
-            $alt = 'Hero';
-        }
-        $escapedAlt = \htmlspecialchars($alt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-
-        $slotPieces = ['data-pb-ai-image-role="generated-asset"'];
-        if ($slotId !== '') {
-            $slotPieces[] = 'data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
-        }
-        $slotAttr = \implode(' ', $slotPieces);
-
-        $heroImgTag = '<img class="ai-site-visual-image ai-site-hero-image" loading="eager" decoding="async"'
-            . ' src="' . $escapedUrl . '" alt="' . $escapedAlt . '" ' . $slotAttr . '>';
-
-        $imgMatched = false;
-        $html = \preg_replace_callback(
-            '/<img\b[^>]*\bai-site-hero-image\b[^>]*>/iu',
-            function (array $matches) use (&$imgMatched, $heroImgTag): string {
-                if ($imgMatched) {
-                    return $matches[0];
-                }
-                $imgMatched = true;
-
-                return $heroImgTag;
-            },
-            $html,
-            -1
-        );
-
-        $htmlFinal = \is_string($html) ? $html : '';
-        if (!$imgMatched && $htmlFinal !== '') {
-            $injected = \preg_replace(
-                '/(<div\b[^>]*\bclass=["\'][^"\']*\bai-site-hero\b[^"\']*["\'][^>]*>)/iu',
-                '$1' . $heroImgTag,
-                $htmlFinal,
-                1,
-            );
-            $htmlFinal = \is_string($injected) ? $injected : $htmlFinal;
-        }
-
-        $themeTokens = $this->decodeConfigStringList($defaultConfig['contract.theme_tokens'] ?? null);
-        $primary = $themeTokens[0] ?? '#2563eb';
-        $secondary = $themeTokens[1] ?? '#06b6d4';
-        $accent = $themeTokens[2] ?? '#f59e0b';
-
-        $aiData['html_content'] = $htmlFinal;
-        $aiData['css_extra'] = $this->buildAiHeroPhotoFusionCssSnippet($primary, $secondary, $accent) . (string)($aiData['css_extra'] ?? '');
-
-        return $aiData;
-    }
-
-    /**
-     * @param array<string,mixed> $aiData
-     * @param array<string,mixed> $defaultConfig
-     * @return array<string,mixed>
-     */
-    private function buildStrictHeroBannerPayload(array $aiData, array $defaultConfig, string $imageUrl): array
-    {
-        $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? $defaultConfig['visual.image_slot_id'] ?? ''));
-        $title = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, [
-            'content.title',
-            'content.heading',
-            'content.headline',
-            'title',
-            'heading',
-        ]));
-        if ($title === '') {
-            $title = 'Premium Experience';
-        }
-        $body = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, [
-            'content.description',
-            'content.body',
-            'description',
-            'body',
-        ]));
-        if ($body === '') {
-            $body = 'Explore the offer with confidence and continue when you are ready.';
-        }
-        $cta = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, [
-            'content.cta_text',
-            'cta.text',
-            'button.text',
-        ]));
-        if ($cta === '') {
-            $cta = 'Download APK';
-        }
-        $href = $this->firstConfigString($defaultConfig, ['content.cta_url', 'cta.url', 'button.url']);
-        if ($href === '') {
-            $href = '#download';
-        }
-        $escapedUrl = \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-        $escapedSlot = $slotId !== ''
-            ? ' data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-            : '';
-
-        $aiData['html_content'] = '<section class="ai-site-hero ai-site-hero--has-photo pb-ai-strict-hero">'
-            . '<img class="ai-site-visual-image ai-site-hero-image pb-ai-strict-hero__image" loading="eager" decoding="async" src="' . $escapedUrl . '" alt="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '" data-pb-ai-image-role="generated-asset"' . $escapedSlot . '>'
-            . '<div class="pb-ai-strict-hero__shade"></div>'
-            . '<div class="pb-ai-strict-hero__content">'
-            . '<span class="pb-ai-strict-hero__eyebrow">Featured Download</span>'
-            . '<h1>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</h1>'
-            . '<p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p>'
-            . '<a class="pb-ai-strict-hero__cta" href="' . \htmlspecialchars($href, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">' . \htmlspecialchars($cta, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</a>'
-            . '</div>'
-            . '</section>';
-        $aiData['css_extra'] = '#componentId{padding:0!important;width:100vw!important;max-width:100vw!important;margin-left:calc(50% - 50vw)!important;margin-right:calc(50% - 50vw)!important;}'
-            . "\n" . '#componentId>[class$="-container"]{width:100%!important;max-width:100%!important;padding:0!important;}'
-            . "\n" . '#componentId [class$="-body"]{width:100%!important;}'
-            . "\n" . '#componentId [class$="-header"]{display:none!important;}'
-            . "\n" . '#componentId .pb-ai-strict-hero{position:relative;min-height:clamp(640px,82vh,860px);overflow:hidden;isolation:isolate;background:#0f172a;color:#fff;}'
-            . "\n" . '#componentId .pb-ai-strict-hero__image{position:absolute;inset:0;width:100%;height:100%;max-width:none;object-fit:cover;object-position:center;filter:saturate(1.05) contrast(1.04) brightness(.78);z-index:0;}'
-            . "\n" . '#componentId .pb-ai-strict-hero__shade{position:absolute;inset:0;z-index:1;background:linear-gradient(100deg,rgba(5,10,20,.86) 0%,rgba(5,10,20,.68) 38%,rgba(5,10,20,.18) 72%,rgba(5,10,20,.52) 100%),radial-gradient(circle at 18% 20%,rgba(255,209,102,.22),transparent 28%);}'
-            . "\n" . '#componentId .pb-ai-strict-hero__content{position:relative;z-index:2;width:min(1120px,calc(100% - 48px));min-height:inherit;margin:0 auto;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:clamp(72px,9vw,128px) 0;}'
-            . "\n" . '#componentId .pb-ai-strict-hero__eyebrow{display:inline-flex;margin-bottom:18px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(10px);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:12px;}'
-            . "\n" . '#componentId .pb-ai-strict-hero h1{max-width:760px;margin:0 0 22px;font-size:clamp(46px,6vw,88px);line-height:.98;letter-spacing:-.055em;color:#fff;text-shadow:0 18px 48px rgba(0,0,0,.48);}'
-            . "\n" . '#componentId .pb-ai-strict-hero p{max-width:620px;margin:0 0 34px;font-size:clamp(18px,1.45vw,23px);line-height:1.62;color:rgba(255,255,255,.92);text-shadow:0 10px 28px rgba(0,0,0,.42);}'
-            . "\n" . '#componentId .pb-ai-strict-hero__cta{display:inline-flex;align-items:center;justify-content:center;padding:16px 30px;border-radius:999px;background:linear-gradient(135deg,#f8d46b,#b7791f);color:#111827;text-decoration:none;font-weight:900;box-shadow:0 22px 56px rgba(0,0,0,.36);transition:transform .22s ease,box-shadow .22s ease;}'
-            . "\n" . '#componentId .pb-ai-strict-hero__cta:hover{transform:translateY(-2px);box-shadow:0 28px 68px rgba(0,0,0,.44);}'
-            . "\n" . (string)($aiData['css_extra'] ?? '');
-        $aiData['css_responsive'] = '#componentId .pb-ai-strict-hero__content{width:min(100% - 28px,720px);align-items:flex-start;} #componentId .pb-ai-strict-hero h1{font-size:clamp(38px,11vw,58px);}'
-            . "\n" . (string)($aiData['css_responsive'] ?? '');
-        $aiData['js_content'] = (string)($aiData['js_content'] ?? '');
-
-        return $aiData;
-    }
-
-    private function buildAiHeroPhotoFusionCssSnippet(string $primaryHex, string $secondaryHex, string $accentHex): string
-    {
-        $norm = static function (string $hex, string $fallback): string {
-            $candidate = \trim($hex);
-
-            return \preg_match('/^#[0-9a-f]{6}$/i', $candidate) === 1 ? $candidate : $fallback;
-        };
-
-        $p = $norm($primaryHex, '#2563eb');
-        $s = $norm($secondaryHex, '#06b6d4');
-        $a = $norm($accentHex, '#f59e0b');
-
-        return '#componentId{padding:0!important;width:100vw!important;max-width:100vw!important;margin-left:calc(50% - 50vw)!important;margin-right:calc(50% - 50vw)!important;}'
-            . "\n"
-            . '#componentId>[class$="-container"]{width:100%!important;max-width:100%!important;padding:0!important;}'
-            . "\n"
-            . '#componentId [class$="-body"]{width:100%!important;}'
-            . "\n"
-            . '#componentId .ai-site-hero--has-photo{background:none;background-color:color-mix(in srgb,' . $p . ' 22%,#0f172a);color:#fff;}'
-            . "\n"
-            . '#componentId .ai-site-hero--has-photo:after{background:linear-gradient(165deg,'
-            . 'color-mix(in srgb,' . $p . ' 26%,rgba(15,23,42,.74)) 0%,'
-            . 'color-mix(in srgb,' . $s . ' 14%,rgba(15,23,42,.26)) 46%,'
-            . 'color-mix(in srgb,' . $a . ' 22%,rgba(15,23,42,.82)) 100%);}'
-            . "\n";
-    }
-
-    /**
-     * 通用 section 图片强制性注入：对于所有非 hero 的 section，如果 defaultConfig 中有 section_image_url
-     * 但 AI 生成的 html_content 没有引用该 URL，则强制将占位 SVG/CSS 替换为真实图片。
-     *
-     * 核心原则：一旦生成了图片就必须使用，不能浪费。禁止占位图，必须用真实图片嵌入插槽。
-     */
-    private function enforceContractAllSectionImageUrlsInAiPayload(array $aiData, string $region, array $defaultConfig): array
-    {
-        if ($region !== 'content') {
-            return $aiData;
-        }
-        $html = (string)($aiData['html_content'] ?? '');
-        if ($html === '') {
-            return $aiData;
-        }
-
-        // 如果 AI 已经有图片标签包含了 verified_assets 的数据属性，说明已自行处理，跳过
-        $imageUrl = '';
-        $slotId = '';
-        foreach (['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url'] as $key) {
-            $candidate = \trim((string)($defaultConfig[$key] ?? ''));
-            if ($candidate !== '') {
-                $imageUrl = $candidate;
-                break;
+        if ($slotId !== '' && !$this->htmlContainsGeneratedAssetImage($html, $slotId, $imageUrl)) {
+            if (!\str_contains($html, $imageUrl)) {
+                throw new \RuntimeException('AI hero image contract failed: generated hero must use the provided image URL.');
             }
+            throw new \RuntimeException('AI hero image contract failed: generated hero image must use the provided image URL, generated-asset role, and slot binding on the same img element.');
         }
-        if ($imageUrl === '') {
-            return $aiData;
+        if ($slotId === '' && !\str_contains($html, $imageUrl)) {
+            throw new \RuntimeException('AI hero image contract failed: generated hero must use the provided image URL.');
         }
-
-        // 如果 HTML 已经引用了该图片 URL（src 或 CSS url），不重复注入
-        $escapedImageUrl = \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-        $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? $defaultConfig['visual.image_slot_id'] ?? ''));
-        $requiredSlotAttr = $slotId !== ''
-            ? 'data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-            : '';
-        if (
-            \str_contains($html, 'data-pb-ai-image-role="generated-asset"')
-            && ($requiredSlotAttr === '' || \str_contains($html, $requiredSlotAttr))
-        ) {
-            return $aiData;
-        }
-        $escapedImageUrl = \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-        if (\str_contains($html, $escapedImageUrl) && ($requiredSlotAttr === '' || \str_contains($html, $requiredSlotAttr))) {
-            return $aiData;
+        if ($slotId === '' && !\preg_match('/<img\b[^>]*\bdata-pb-ai-image-role\s*=\s*(["\'])generated-asset\1/iu', $html)) {
+            throw new \RuntimeException('AI hero image contract failed: generated hero must mark the image element as generated-asset.');
         }
 
-        $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? $defaultConfig['visual.image_slot_id'] ?? ''));
-        $alt = \htmlspecialchars(
-            $this->sanitizeVisibleCopy((string)(
-                $defaultConfig['runtime.section_image_alt']
-                ?? $defaultConfig['visual.image_alt']
-                ?? $defaultConfig['image.alt']
-                ?? $defaultConfig['content.title']
-                ?? 'Section image'
-            )),
-            \ENT_QUOTES | \ENT_SUBSTITUTE,
-            'UTF-8'
-        );
-        $slotAttr = $slotId !== ''
-            ? ' data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-            : '';
-        $imgTag = '<img src="' . $escapedImageUrl . '" alt="' . $alt . '"'
-            . ' loading="lazy" decoding="async"'
-            . ' style="width:100%;height:auto;max-width:100%;display:block;object-fit:cover;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.08);"'
-            . ' data-pb-ai-image-role="generated-asset"' . $slotAttr . '>';
-
-        // 策略 1：查找 SVG 占位容器（.ai-site-fallback-art, .ai-site-visual-panel, svg 父容器等），替换其内容
-        $placeholderPatterns = [
-            '/<div[^>]*\bai-site-fallback-art\b[^>]*>.*?<\/div>\s*<div[^>]*\bai-site-fallback-copy\b/is',
-            '/<div[^>]*\bai-site-visual-panel\b[^>]*>.*?<\/div>/is',
-            '/<div[^>]*\bai-site-fallback-art\b[^>]*>.*?<\/div>/is',
-            '/<figure[^>]*>.*?<svg\b.*?<\/svg>.*?<\/figure>/is',
-            '/<div[^>]*\bclass=["\'][^"\']*\bsvg-wrapper\b[^"\']*["\'][^>]*>.*?<\/div>/is',
-        ];
-        $replaced = false;
-        foreach ($placeholderPatterns as $pattern) {
-            $replacement = '<div class="ai-section-image-replaced" style="margin:16px 0;">' . $imgTag . '</div>';
-            $count = 0;
-            $html = \preg_replace($pattern, $replacement, $html, 1, $count);
-            if ($count > 0) {
-                $replaced = true;
-                break;
-            }
-        }
-
-        // 策略 2：如未替换任何占位，查找第一个 <svg> 元素，将其整个父容器替换为图片
-        if (!$replaced && \preg_match('/<svg\b[^>]*>.*?<\/svg>/is', $html) === 1) {
-            $html = \preg_replace(
-                '/<div[^>]*>\s*<svg\b[^>]*>.*?<\/svg>\s*<\/div>/is',
-                '<div class="ai-section-image-replaced" style="margin:16px 0;">' . $imgTag . '</div>',
-                $html,
-                1,
-                $count
-            );
-            $replaced = $count > 0;
-        }
-
-        // 策略 3：没有任何 SVG 可替换，在末尾追加
-        if (!$replaced) {
-            $finalImgTag = '<div class="ai-section-image-wrapper" style="margin-top:20px;border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.08);">'
-                . $imgTag . '</div>';
-            $injected = \preg_replace(
-                '/(<\/[a-z]+>\s*)$/iu',
-                $finalImgTag . '$1',
-                \trim($html),
-                1
-            );
-            if (\is_string($injected) && $injected !== '') {
-                $html = $injected;
-                $replaced = true;
-            }
-        }
-
-        $aiData['html_content'] = $html;
         return $aiData;
     }
 
@@ -4351,7 +4001,7 @@ class AiSitePageComponentGenerationService
         }
         $broken = \array_values(\array_unique($broken));
         if ($broken !== []) {
-            throw new \RuntimeException((string)__('AI 组件包含无效图片资源：%{1}', [\implode(', ', \array_slice($broken, 0, 5))]));
+            throw new \RuntimeException((string)__('AI 缁勪欢鍖呭惈鏃犳晥鍥剧墖璧勬簮锛?{1}', [\implode(', ', \array_slice($broken, 0, 5))]));
         }
     }
     private function extractHtmlAttribute(string $tag, string $attribute): string
@@ -4377,10 +4027,31 @@ class AiSitePageComponentGenerationService
         }
 
         $lower = \strtolower($src);
+        if (\str_starts_with($lower, '://') || \str_starts_with($lower, '//')) {
+            return true;
+        }
         if (\str_starts_with($lower, 'data:image/') || \str_starts_with($lower, 'blob:')) {
             return false;
         }
-        foreach (['example.com', 'placeholder.com', 'placehold.co', 'via.placeholder', 'dummyimage.com', 'placekitten.com', 'picsum.photos', 'loremflickr.com'] as $marker) {
+        foreach ([
+            'example.com',
+            'placeholder.com',
+            'placehold.co',
+            'via.placeholder',
+            'dummyimage.com',
+            'placekitten.com',
+            'picsum.photos',
+            'loremflickr.com',
+            'unsplash.com',
+            'images.unsplash.com',
+            'source.unsplash.com',
+            'pexels.com',
+            'images.pexels.com',
+            'pixabay.com',
+            'freepik.com',
+            'shutterstock.com',
+            'stock.adobe.com',
+        ] as $marker) {
             if (\str_contains($lower, $marker)) {
                 return true;
             }
@@ -4410,7 +4081,7 @@ class AiSitePageComponentGenerationService
 
         $result = $renderer->render($phtml);
         if (!($result['success'] ?? false)) {
-            throw new \RuntimeException((string)__('AI 组件预览渲染失败：%{message}', [
+            throw new \RuntimeException((string)__('AI 缁勪欢棰勮娓叉煋澶辫触锛?{message}', [
                 'message' => (string)($result['error'] ?? 'unknown'),
             ]));
         }
@@ -4423,10 +4094,6 @@ class AiSitePageComponentGenerationService
      */
     private function runAiGeneration(string $region, string $prompt, array $defaultConfig = [], array $renderContext = []): array
     {
-        if ($this->shouldUseStubAiGeneration()) {
-            return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
-        }
-
         $fullContent = '';
         $sse = RequestContext::get(\Weline\Framework\Runtime\RequestContext::SSE_WRITER_KEY);
         $chunkForwarder = RequestContext::get(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
@@ -4609,7 +4276,11 @@ class AiSitePageComponentGenerationService
             '- Do not output analysis, reasoning_content, markdown, code fences, comments, or explanatory prose.',
             '- Keep exact JSON field names required by this task; do not rename keys.',
             '- Ensure all JSON string values are properly escaped and syntactically valid.',
+            '- Backslashes are only legal for JSON escapes like \\", \\\\, \\/, \\n, \\r, \\t, or \\uXXXX. Do not output stray backslashes before HTML text, class names, tag names, or visitor copy.',
             '- HTML string fields must be well-formed fragments: balanced tags, closed attribute quotes, no orphan closing tags, and no framework wrapper leakage.',
+            '- Every `<` inside html_content must begin a valid HTML tag name or be escaped as visitor text; never leave dangling `<`, empty tag names, or comparison symbols in copy.',
+            '- Use single quotes for all HTML attributes inside JSON strings. When the prompt provides exact editable image templates, copy their concrete src and data-pb-ai-asset-slot values; never return symbolic URL or slot placeholders.',
+            '- Never place standalone punctuation/symbol-only decorations in visible HTML text. Build arrows, dividers, stars, suit marks, plus signs, and other ornaments with CSS borders, gradients, pseudo-elements, or background layers instead.',
         ];
         if ($retry) {
             $guard[] = 'RECOVERY MODE: previous stream ended without usable final JSON. Return the final JSON object immediately.';
@@ -4636,8 +4307,6 @@ class AiSitePageComponentGenerationService
         }
 
         foreach ([
-            '完成但未返回任何内容',
-            '未返回任何内容',
             'streaming completed without final content',
             'completed without final content',
             'returned empty content',
@@ -4724,448 +4393,6 @@ class AiSitePageComponentGenerationService
         }
     }
 
-    /**
-     * @return array<string,mixed>
-     */
-    private function buildStubAiPayload(
-        string $region,
-        string $prompt,
-        array $defaultConfig = [],
-        array $renderContext = []
-    ): array
-    {
-        $copy = $this->resolveFallbackVisibleCopy(
-            $region,
-            $defaultConfig,
-            $renderContext,
-            (string)($renderContext['_content_locale'] ?? '')
-        );
-        $sectionPlan = $this->buildFallbackSectionPlan($defaultConfig, $renderContext, $prompt, $copy);
-        $title = $copy['title'];
-        $body = $copy['body'];
-        $cjk = $copy['cjk'];
-        $secondaryTitle = $cjk ? '立即行动' : 'Fast next step';
-        $secondaryBody = $cjk
-            ? '查看重点信息后，即可继续咨询、下载或完成下一步操作。'
-            : 'Review the key details, then continue with the highlighted action when you are ready.';
-        $trustTitle = $cjk ? '安全可靠' : 'Safe and clear';
-        $trustBody = $cjk
-            ? '清晰的标题、说明和操作入口帮助你快速判断服务是否适合。'
-            : 'Clear labels, concise details, and direct actions help you decide with confidence.';
-        $callout = $cjk
-            ? '继续查看亮点、选择操作入口，并放心完成后续步骤。'
-            : 'Explore the highlights, choose the next action, and continue with confidence.';
-        $stageOneSamples = $this->decodeConfigStringList($defaultConfig['contract.stage1_samples'] ?? null);
-        $themeTokens = \array_values(\array_filter(
-            $this->decodeConfigStringList($defaultConfig['contract.theme_tokens'] ?? null),
-            static fn(string $token): bool => \preg_match('/^#[0-9a-f]{6}$/i', $token) === 1
-        ));
-        $contractPrimary = $themeTokens[0] ?? '#2563eb';
-        $contractSecondary = $themeTokens[1] ?? '#06b6d4';
-        $contractAccent = $themeTokens[2] ?? '#f59e0b';
-        $stageOneHtml = '';
-        foreach (\array_slice($stageOneSamples, 0, 3) as $sample) {
-            $stageOneHtml .= '<li>' . \htmlspecialchars($sample, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</li>';
-        }
-        $stageOnePanel = $stageOneHtml !== ''
-            ? '<div class="ai-site-highlight-proof"><strong>' . ($cjk ? '核心亮点' : 'Highlights') . '</strong><ul>' . $stageOneHtml . '</ul></div>'
-            : '';
-        // 强行契约：当第一阶段已经为该 section 生成真实图片时，stub/fallback 必须用真图，
-        // 而不是再退化成占位 SVG。`buildContractVisualPanel` 会优先用 verified_assets 的 final_url。
-        $visualPanel = $this->buildContractVisualPanel(
-            $defaultConfig,
-            $title,
-            $contractPrimary,
-            $contractSecondary,
-            $contractAccent
-        );
-
-        return match ($region) {
-            'header' => [
-                'extra_fields' => '',
-                'php_variables' => '',
-                'css_extra' => '#componentId { --header-text:#172033; --header-link:#172033; --header-link-hover:var(--section-primary,#8B4513); position:sticky; top:0; z-index:20; border-bottom:1px solid color-mix(in srgb,var(--section-primary,#2563eb) 20%,transparent); background:linear-gradient(135deg,rgba(255,255,255,.96),color-mix(in srgb,var(--section-accent,#f59e0b) 10%,white)); backdrop-filter:blur(18px); box-shadow:0 18px 44px rgba(15,23,42,.10); color:var(--header-text); }'
-                    . "\n" . '#componentId:after { content:""; position:absolute; left:8%; right:8%; bottom:-1px; height:2px; border-radius:99px; background:linear-gradient(90deg,transparent,var(--section-accent,#f59e0b),transparent); }'
-                    . "\n" . '#componentId [class$="-logo"] { color:var(--header-text); text-shadow:none; } #componentId [class$="-logo"] img { width:44px; height:44px; border-radius:12px; box-shadow:0 10px 24px rgba(15,23,42,.16); }'
-                    . "\n" . '#componentId a { color:inherit; transition:color .18s ease, transform .18s ease; } #componentId a:hover, #componentId a:focus-visible { color:var(--section-primary,#8B4513); transform:translateY(-1px); }',
-                'html_extra' => '',
-                'js_content' => '',
-            ],
-            'footer' => [
-                'extra_fields' => '',
-                'php_variables' => '',
-                'css_extra' => '#componentId { position:relative; overflow:hidden; border-top:1px solid color-mix(in srgb,var(--section-accent,#f59e0b) 28%,transparent); background:radial-gradient(circle at 86% 10%,color-mix(in srgb,var(--section-accent,#f59e0b) 20%,transparent),transparent 30%),linear-gradient(135deg,var(--section-heading,#0f172a),color-mix(in srgb,var(--section-primary,#2563eb) 42%,#0f172a)); color:var(--section-bg,#fff); box-shadow:0 -24px 70px rgba(15,23,42,.18); }'
-                    . "\n" . '#componentId:before { content:""; position:absolute; inset:0; background:repeating-linear-gradient(135deg,rgba(255,255,255,.10) 0 1px,transparent 1px 12px); opacity:.32; pointer-events:none; }'
-                    . "\n" . '#componentId a { color:inherit; text-decoration-color:rgba(255,255,255,.38); text-underline-offset:4px; } #componentId a:hover, #componentId a:focus-visible { color:var(--section-accent,#f59e0b); }',
-                'html_extra_column' => '',
-                'html_extra' => '',
-                'footer_extra_text' => $cjk ? '页面内容可持续维护' : 'Content can be maintained after publishing',
-                'js_content' => '',
-            ],
-            default => $this->buildStubAiContentPayload(
-                $sectionPlan,
-                $copy,
-                $defaultConfig,
-                $visualPanel,
-                $stageOnePanel,
-                $stageOneSamples,
-                $contractPrimary,
-                $contractSecondary,
-                $contractAccent
-            ),
-        };
-    }
-
-    /**
-     * 强行契约：根据 section variant 分发不同的 stub 渲染。
-     * - hero/banner → 大图背景 + 标题/CTA 居中覆盖 + slide 自动轮播；
-     * - 其他 → 卡片网格 + 视觉面板。
-     *
-     * @param array<string,mixed> $sectionPlan
-     * @param array{title:string,body:string,cjk:bool} $copy
-     * @param array<string,mixed> $defaultConfig
-     * @param array{html:string,has_image:bool,image_url:string} $visualPanel
-     * @param list<string> $stageOneSamples
-     * @return array<string,mixed>
-     */
-    private function buildStubAiContentPayload(
-        array $sectionPlan,
-        array $copy,
-        array $defaultConfig,
-        array $visualPanel,
-        string $stageOnePanel,
-        array $stageOneSamples,
-        string $contractPrimary,
-        string $contractSecondary,
-        string $contractAccent
-    ): array {
-        $variant = (string)($sectionPlan['variant'] ?? 'hero');
-        if ($variant === 'hero' || $variant === 'banner') {
-            return $this->buildStubHeroBannerPayload(
-                $sectionPlan,
-                $copy,
-                $defaultConfig,
-                $visualPanel,
-                $stageOneSamples,
-                $contractPrimary,
-                $contractSecondary,
-                $contractAccent
-            );
-        }
-        $cards = \is_array($sectionPlan['cards'] ?? null) ? $sectionPlan['cards'] : [];
-        $cardHtml = '';
-        foreach ($cards as $card) {
-            if (!\is_array($card)) {
-                continue;
-            }
-            $meta = \trim((string)($card['meta'] ?? ''));
-            $cardHtml .= '<article class="ai-site-card">'
-                . ($meta !== '' ? '<span class="ai-site-card-meta">' . \htmlspecialchars($meta, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span>' : '')
-                . '<strong>' . \htmlspecialchars((string)($card['title'] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong>'
-                . '<p>' . \htmlspecialchars((string)($card['body'] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p>'
-                . '</article>';
-        }
-        if ($cardHtml === '') {
-            $cardHtml = '<article class="ai-site-card"><strong>' . \htmlspecialchars((string)$sectionPlan['card_title_primary'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars((string)$sectionPlan['card_body_primary'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>';
-        }
-        $proofPoints = \is_array($sectionPlan['proof_points'] ?? null) ? $sectionPlan['proof_points'] : [];
-        $proofHtml = $proofPoints !== []
-            ? '<div class="ai-site-highlight-proof"><strong>' . \htmlspecialchars($this->resolveFallbackProofHeading((string)($sectionPlan['variant'] ?? ''), (bool)($copy['cjk'] ?? false)), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><ul>' . $this->buildFallbackProofHtml($proofPoints) . '</ul></div>'
-            : '';
-        $calloutBody = \trim((string)($sectionPlan['callout_body'] ?? ''));
-        $calloutHtml = $calloutBody !== ''
-            ? '<div class="ai-site-callout"><p>' . \htmlspecialchars($calloutBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>'
-            : '';
-
-        return [
-            'extra_fields' => '',
-            'php_variables' => '',
-            'css_extra' => '#componentId { --ai-site-contract-primary:' . $contractPrimary . '; --ai-site-contract-secondary:' . $contractSecondary . '; --ai-site-contract-accent:' . $contractAccent . '; }'
-                . "\n" . '#componentId .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:clamp(16px,2.4vw,24px); margin-top:clamp(26px,4vw,42px); }'
-                . "\n" . '#componentId .ai-site-card { min-height:150px; padding:24px; border-radius:24px; border:1px solid var(--section-border); background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.76)); text-align:left; box-shadow:0 16px 42px rgba(15,23,42,.10); transition:transform .22s ease, box-shadow .22s ease; }'
-                . "\n" . '#componentId .ai-site-card:hover { transform:translateY(-4px); box-shadow:0 22px 54px rgba(15,23,42,.16); }'
-                . "\n" . '#componentId .ai-site-card-meta { display:inline-flex; margin-bottom:12px; color:var(--ai-site-contract-primary); font-weight:800; letter-spacing:.04em; }'
-                . "\n" . '#componentId .ai-site-card strong { display:block; margin-bottom:10px; font-size:clamp(17px,1.4vw,22px); color:var(--section-heading,#0f172a); } #componentId .ai-site-card p { margin:0; line-height:1.65; }'
-                . "\n" . '#componentId .ai-site-visual-panel { position:relative; width:min(620px,100%); aspect-ratio:16/10; min-height:0; margin:clamp(30px,5vw,56px) auto 0; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(135deg,var(--ai-site-contract-primary),var(--ai-site-contract-secondary),var(--ai-site-contract-accent)); }'
-                . "\n" . '#componentId .ai-site-visual-panel--image { background:color-mix(in srgb,var(--ai-site-contract-primary) 18%,#0f172a); }'
-                . "\n" . '#componentId .ai-site-visual-panel--image:after { content:""; position:absolute; inset:0; background:linear-gradient(155deg,color-mix(in srgb,var(--ai-site-contract-primary) 22%,rgba(15,23,42,.70)) 0%,rgba(15,23,42,.10) 50%,color-mix(in srgb,var(--ai-site-contract-accent) 18%,rgba(15,23,42,.76)) 100%); pointer-events:none; }'
-                . "\n" . '#componentId .ai-site-css-visual { position:absolute; inset:0; overflow:hidden; background:radial-gradient(circle at 16% 18%,rgba(255,255,255,.30),transparent 24%),radial-gradient(circle at 84% 72%,rgba(255,255,255,.20),transparent 30%),linear-gradient(145deg,var(--ai-site-contract-primary),var(--ai-site-contract-secondary)); } #componentId .ai-site-css-visual span { position:absolute; border-radius:999px; background:rgba(255,255,255,.28); box-shadow:0 18px 46px rgba(15,23,42,.16); } #componentId .ai-site-css-visual span:nth-child(1){left:9%;top:14%;width:34%;height:20%;} #componentId .ai-site-css-visual span:nth-child(2){right:10%;top:22%;width:38%;height:9%;} #componentId .ai-site-css-visual span:nth-child(3){left:16%;bottom:16%;width:58%;height:12%;}'
-                . "\n" . '#componentId .ai-site-visual-image { position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:cover; object-position:center; }'
-                . "\n" . '#componentId .ai-site-highlight-proof { padding:22px 24px; border-radius:24px; background:rgba(255,255,255,.82); border:1px solid var(--section-border); text-align:left; box-shadow:0 14px 36px rgba(15,23,42,.09); }'
-                . "\n" . '#componentId .ai-site-highlight-proof ul { margin:12px 0 0; padding-left:20px; display:grid; gap:10px; }'
-                . "\n" . '#componentId .ai-site-callout { margin-top:16px; padding:18px 20px; border-radius:18px; background:color-mix(in srgb,var(--section-primary) 10%,white); color:var(--section-heading); text-align:left; }',
-            'css_responsive' => '#componentId .ai-site-card-grid { grid-template-columns:1fr; }',
-            'html_content' => '<div class="ai-site-card-grid">' . $cardHtml . '</div>'
-                . '<div class="ai-site-visual-panel' . ($visualPanel['has_image'] ? ' ai-site-visual-panel--image' : '') . '">' . $visualPanel['html'] . '</div>',
-            'js_content' => '',
-        ];
-    }
-
-    private function resolveFallbackProofHeading(string $variant, bool $cjk): string
-    {
-        return match ($variant) {
-            'checklist' => $cjk ? '关键问题' : 'Key details',
-            'cta' => $cjk ? '行动理由' : 'Why act now',
-            default => $cjk ? '本块重点' : 'Block highlights',
-        };
-    }
-
-    /**
-     * 强行契约：hero/banner stub 必须是真正的"banner"——大图全宽背景、覆盖式标题/CTA、
-     * 多 slide 自动轮播；不再退化为通用卡片网格。
-     *
-     * 即使 stage1 只生成单张主图，这里也通过 `proof_points` 派生多 slide 内容（每个 slide
-     * 复用同一张 hero 图但展示不同标题/亮点），形成视觉上的轮播节奏。
-     *
-     * @param array<string,mixed> $sectionPlan
-     * @param array{title:string,body:string,cjk:bool} $copy
-     * @param array<string,mixed> $defaultConfig
-     * @param array{html:string,has_image:bool,image_url:string} $visualPanel
-     * @param list<string> $stageOneSamples
-     * @return array<string,mixed>
-     */
-    private function buildStubHeroBannerPayload(
-        array $sectionPlan,
-        array $copy,
-        array $defaultConfig,
-        array $visualPanel,
-        array $stageOneSamples,
-        string $contractPrimary,
-        string $contractSecondary,
-        string $contractAccent
-    ): array {
-        $cjk = (bool)($copy['cjk'] ?? false);
-        $title = (string)$sectionPlan['title'];
-        $body = (string)$sectionPlan['body'];
-        $eyebrow = (string)$sectionPlan['eyebrow'];
-        $primaryAction = (string)$sectionPlan['card_body_secondary'];
-        if ($primaryAction === '') {
-            $primaryAction = $cjk ? '立即开始' : 'Get started';
-        }
-        $primaryActionHref = $this->pickFallbackConfigCopy($defaultConfig, [
-            'cta.url',
-            'content.cta_url',
-            'button.url',
-        ], 200);
-        if ($primaryActionHref === '' || \str_starts_with($primaryActionHref, '#') === false) {
-            $primaryActionHref = '#';
-        }
-
-        // 派生 slide：第一张用 sectionPlan 主标题/正文；后续 slide 用 proof_points / stage1 samples 形成轮播节奏。
-        $slides = [];
-        $slides[] = [
-            'eyebrow' => $eyebrow,
-            'title' => $title,
-            'body' => $body,
-        ];
-        $proofPoints = \is_array($sectionPlan['proof_points'] ?? null) ? $sectionPlan['proof_points'] : [];
-        foreach ($proofPoints as $idx => $point) {
-            $point = \trim((string)$point);
-            if ($point === '' || $idx > 2) {
-                continue;
-            }
-            $slides[] = [
-                'eyebrow' => $cjk ? '亮点 ' . ($idx + 1) : 'Highlight ' . ($idx + 1),
-                'title' => $point,
-                'body' => $stageOneSamples[$idx + 1] ?? $body,
-            ];
-        }
-        if (\count($slides) < 2) {
-            // 无足够轮播素材时使用 sectionPlan 衍生第二张，避免 carousel 只剩一张滑块。
-            $slides[] = [
-                'eyebrow' => (string)$sectionPlan['card_title_primary'],
-                'title' => (string)$sectionPlan['card_title_secondary'],
-                'body' => (string)$sectionPlan['card_body_secondary'],
-            ];
-        }
-
-        $slidesHtml = '';
-        $slideCount = \count($slides);
-        foreach ($slides as $i => $slide) {
-            $slidesHtml .= '<article class="ai-site-hero-slide" data-slide-index="' . $i . '" aria-hidden="' . ($i === 0 ? 'false' : 'true') . '">'
-                . ($slide['eyebrow'] !== '' ? '<span class="ai-site-hero-eyebrow">' . \htmlspecialchars((string)$slide['eyebrow'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span>' : '')
-                . '<h2 class="ai-site-hero-title">' . \htmlspecialchars((string)$slide['title'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</h2>'
-                . '<p class="ai-site-hero-body">' . \htmlspecialchars((string)$slide['body'], \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p>'
-                . '<a class="ai-site-hero-cta" href="' . \htmlspecialchars($primaryActionHref, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">' . \htmlspecialchars($primaryAction, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</a>'
-                . '</article>';
-        }
-
-        $dotsHtml = '';
-        for ($i = 0; $i < $slideCount; $i++) {
-            $dotsHtml .= '<button type="button" class="ai-site-hero-dot' . ($i === 0 ? ' is-active' : '') . '" data-slide-target="' . $i . '" aria-label="' . ($cjk ? '第 ' . ($i + 1) . ' 帧' : 'Slide ' . ($i + 1)) . '"></button>';
-        }
-
-        // 优先使用第一阶段已落地的 verified_asset 真实图片；没有真图则用渐变色。
-        $hasImage = (bool)$visualPanel['has_image'];
-        $imageUrl = (string)$visualPanel['image_url'];
-        // slot id 是属性值（不是访客可见文本），不能用 sanitizeVisibleCopy 处理，
-        // 否则 `page:home_page:content-...` 这类合法 slot id 会被规划关键字正则吞掉。
-        $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? ''));
-        $imageAlt = $this->sanitizeVisibleCopy((string)(
-            $defaultConfig['runtime.section_image_alt']
-            ?? $defaultConfig['visual.image_alt']
-            ?? $defaultConfig['image.alt']
-            ?? $title
-        ));
-        if ($imageAlt === '') {
-            $imageAlt = $title;
-        }
-        $bgLayer = '';
-        $heroFusionClass = '';
-        if ($hasImage && $slotId !== '') {
-            $bgLayer .= '<img class="ai-site-visual-image ai-site-hero-image" loading="eager" decoding="async"'
-                . ' src="' . \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-                . ' alt="' . \htmlspecialchars($imageAlt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-                . ' data-pb-ai-image-role="generated-asset"'
-                . ' data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">';
-            $heroFusionClass = ' ai-site-hero--has-photo';
-        } elseif ($hasImage) {
-            $bgLayer .= '<img class="ai-site-visual-image ai-site-hero-image" loading="eager" decoding="async"'
-                . ' src="' . \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-                . ' alt="' . \htmlspecialchars($imageAlt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-                . ' data-pb-ai-image-role="generated-asset">';
-            $heroFusionClass = ' ai-site-hero--has-photo';
-        }
-
-        $cssExtra = '#componentId { --ai-site-hero-primary:' . $contractPrimary . '; --ai-site-hero-secondary:' . $contractSecondary . '; --ai-site-hero-accent:' . $contractAccent . '; padding:0 !important; width:100vw !important; max-width:100vw !important; margin-left:calc(50% - 50vw) !important; margin-right:calc(50% - 50vw) !important; }'
-            . "\n" . '#componentId [class$="-header"] { display:none !important; }'
-            . "\n" . '#componentId .ai-site-hero { position:relative; overflow:hidden; min-height:clamp(620px,39.0625vw,760px); border-radius:0; isolation:isolate; color:#fff; background:radial-gradient(circle at 78% 16%,color-mix(in srgb,var(--ai-site-hero-accent) 30%,transparent),transparent 30%),linear-gradient(135deg,var(--ai-site-hero-primary),color-mix(in srgb,var(--ai-site-hero-secondary) 78%,#111827)); }'
-            . "\n" . '#componentId .ai-site-hero:not(.ai-site-hero--has-photo) { background:linear-gradient(135deg,var(--ai-site-hero-primary),var(--ai-site-hero-secondary) 60%,var(--ai-site-hero-accent)); }'
-            . "\n" . '#componentId .ai-site-hero--has-photo { background:none; background-color:color-mix(in srgb,var(--ai-site-hero-primary) 22%,#0f172a); }'
-            . "\n" . '#componentId .ai-site-hero-image { position:absolute; inset:0; width:100%; height:100%; max-width:none; object-fit:cover; object-position:center; z-index:0; border-radius:0; box-shadow:none; filter:saturate(1.08) contrast(1.05) brightness(.84); }'
-            . "\n" . '#componentId .ai-site-hero:not(.ai-site-hero--has-photo):after { content:""; position:absolute; inset:0; background:linear-gradient(135deg,rgba(15,23,42,.35) 0%,rgba(15,23,42,.14) 50%,rgba(15,23,42,.48) 100%); z-index:0; pointer-events:none; }'
-            . "\n" . '#componentId .ai-site-hero--has-photo:after { content:""; position:absolute; inset:0; background:linear-gradient(92deg,rgba(6,10,20,.88) 0%,rgba(6,10,20,.66) 42%,rgba(6,10,20,.22) 72%,rgba(6,10,20,.58) 100%),radial-gradient(circle at 20% 28%,rgba(255,255,255,.13),transparent 28%); z-index:1; pointer-events:none; }'
-            . "\n" . '#componentId .ai-site-hero-track { position:relative; z-index:2; display:grid; grid-template-areas:"slide"; min-height:inherit; width:min(1200px,calc(100% - 48px)); margin:0 auto; padding:clamp(64px,9vw,116px) 0; }'
-            . "\n" . '#componentId .ai-site-hero-slide { grid-area:slide; max-width:min(720px,58vw); align-self:center; opacity:0; transform:translateX(24px); transition:opacity .9s ease, transform .9s ease; pointer-events:none; }'
-            . "\n" . '#componentId .ai-site-hero-slide[aria-hidden="false"] { opacity:1; transform:translateX(0); pointer-events:auto; padding:clamp(28px,4vw,48px); border-radius:34px; background:linear-gradient(135deg,rgba(7,13,25,.74),rgba(7,13,25,.36)); border:1px solid rgba(255,255,255,.16); box-shadow:0 32px 110px rgba(0,0,0,.36); backdrop-filter:blur(14px); }'
-            . "\n" . '#componentId .ai-site-hero-eyebrow { display:inline-block; padding:6px 14px; margin-bottom:18px; border-radius:999px; background:rgba(255,255,255,.18); backdrop-filter:blur(8px); font-size:13px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }'
-            . "\n" . '#componentId .ai-site-hero-title { margin:0 0 18px; font-size:clamp(40px,5.6vw,76px); line-height:1.02; letter-spacing:-.045em; font-weight:900; color:#fff; text-shadow:0 3px 0 rgba(0,0,0,.16),0 18px 42px rgba(0,0,0,.58); }'
-            . "\n" . '#componentId .ai-site-hero-body { margin:0 0 28px; max-width:58ch; font-size:clamp(17px,1.45vw,21px); line-height:1.62; color:rgba(255,255,255,.98); text-shadow:0 8px 24px rgba(0,0,0,.42); }'
-            . "\n" . '#componentId .ai-site-hero-cta { display:inline-flex; align-items:center; gap:8px; padding:14px 28px; border-radius:999px; background:var(--ai-site-hero-accent,#f59e0b); color:#0f172a; font-weight:800; text-decoration:none; box-shadow:0 18px 44px rgba(15,23,42,.32); transition:transform .22s ease, box-shadow .22s ease; }'
-            . "\n" . '#componentId .ai-site-hero-cta:hover { transform:translateY(-2px); box-shadow:0 22px 54px rgba(15,23,42,.40); }'
-            . "\n" . '#componentId .ai-site-hero-dots { position:absolute; left:0; right:0; bottom:24px; z-index:3; display:flex; justify-content:center; gap:10px; }'
-            . "\n" . '#componentId .ai-site-hero-dot { width:32px; height:4px; padding:0; border:none; border-radius:999px; background:rgba(255,255,255,.36); cursor:pointer; transition:background .22s ease, transform .22s ease; }'
-            . "\n" . '#componentId .ai-site-hero-dot:hover { background:rgba(255,255,255,.7); }'
-            . "\n" . '#componentId .ai-site-hero-dot.is-active { background:#fff; transform:scaleX(1.4); }';
-
-        $jsContent = 'const slides=Array.from(component.querySelectorAll(".ai-site-hero-slide"));'
-            . 'const dots=Array.from(component.querySelectorAll(".ai-site-hero-dot"));'
-            . 'if(slides.length>1){'
-            . 'let idx=0;let timer=null;'
-            . 'const show=function(next){'
-            . 'idx=(next+slides.length)%slides.length;'
-            . 'slides.forEach(function(s,i){s.setAttribute("aria-hidden",i===idx?"false":"true");});'
-            . 'dots.forEach(function(d,i){d.classList.toggle("is-active",i===idx);});'
-            . '};'
-            . 'const start=function(){timer=setInterval(function(){show(idx+1);},5200);};'
-            . 'const stop=function(){if(timer){clearInterval(timer);timer=null;}};'
-            . 'dots.forEach(function(d,i){d.addEventListener("click",function(){show(i);stop();start();});});'
-            . 'component.addEventListener("mouseenter",stop);component.addEventListener("mouseleave",start);'
-            . 'start();'
-            . '}';
-
-        return [
-            'extra_fields' => '',
-            'php_variables' => '',
-            'css_extra' => $cssExtra,
-            'css_responsive' => '#componentId { width:100vw !important; max-width:100vw !important; margin-left:calc(50% - 50vw) !important; margin-right:calc(50% - 50vw) !important; } #componentId .ai-site-hero { min-height:clamp(560px,62vh,720px); } #componentId .ai-site-hero-track { width:min(100% - 32px,720px); padding:64px 0; } #componentId .ai-site-hero-slide { max-width:100%; } #componentId .ai-site-hero-slide[aria-hidden="false"] { padding:26px; }',
-            'html_content' => '<div class="ai-site-hero' . $heroFusionClass . '">'
-                . $bgLayer
-                . '<div class="ai-site-hero-track">' . $slidesHtml . '</div>'
-                . ($slideCount > 1 ? '<div class="ai-site-hero-dots" role="tablist">' . $dotsHtml . '</div>' : '')
-                . '</div>',
-            'js_content' => $jsContent,
-        ];
-    }
-
-    /**
-     * 强行契约视觉面板：优先使用第一阶段已落地的 verified_asset 真实图片；
-     * 没有真图时只退回 CSS 视觉层，不能再生成内联 SVG 占位。
-     *
-     * @param array<string,mixed> $defaultConfig
-     * @return array{html:string,has_image:bool,image_url:string}
-     */
-    private function buildContractVisualPanel(
-        array $defaultConfig,
-        string $titleForAlt,
-        string $contractPrimary,
-        string $contractSecondary,
-        string $contractAccent
-    ): array {
-        $imageUrl = '';
-        foreach (['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url'] as $candidateKey) {
-            $value = \trim((string)($defaultConfig[$candidateKey] ?? ''));
-            if ($value !== '') {
-                $imageUrl = $value;
-                break;
-            }
-        }
-
-        if ($imageUrl !== '') {
-            $alt = $this->sanitizeVisibleCopy((string)(
-                $defaultConfig['runtime.section_image_alt']
-                ?? $defaultConfig['visual.image_alt']
-                ?? $defaultConfig['image.alt']
-                ?? $titleForAlt
-                ?? ''
-            ));
-            if ($alt === '') {
-                $alt = $titleForAlt !== '' ? $titleForAlt : 'Section visual';
-            }
-            $slotId = \trim((string)(
-                $defaultConfig['runtime.section_image_slot_id']
-                ?? $defaultConfig['visual.image_slot_id']
-                ?? ''
-            ));
-            $slotAttr = $slotId !== ''
-                ? ' data-pb-ai-asset-slot="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-                : '';
-
-            $html = '<img class="ai-site-visual-image" loading="lazy" decoding="async"'
-                . ' src="' . \htmlspecialchars($imageUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-                . ' alt="' . \htmlspecialchars($alt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
-                . ' data-pb-ai-image-role="generated-asset"' . $slotAttr . '>';
-
-            return [
-                'html' => $html,
-                'has_image' => true,
-                'image_url' => $imageUrl,
-            ];
-        }
-
-        $visual = '<div class="ai-site-css-visual" role="img" aria-label="'
-            . \htmlspecialchars($titleForAlt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . ' visual system">'
-            . '<span></span><span></span><span></span></div>';
-
-        return [
-            'html' => $visual,
-            'has_image' => false,
-            'image_url' => '',
-        ];
-    }
-
-    private function extractStubTitleFromPrompt(string $summary, string $region): string
-    {
-        foreach ([
-            '/title["\']?\s*[:=]\s*["\']([^"\']{4,80})["\']/iu',
-            '/headline["\']?\s*[:=]\s*["\']([^"\']{4,80})["\']/iu',
-            '/站点[:：]\s*([^,，。]{4,60})/u',
-            '/Site[:：]\s*([^,，。]{4,60})/iu',
-        ] as $pattern) {
-            if (\preg_match($pattern, $summary, $matches) === 1) {
-                $title = \trim((string)($matches[1] ?? ''));
-                if ($title !== '') {
-                    return $title;
-                }
-            }
-        }
-
-        return match ($region) {
-            'hero' => 'Featured story',
-            'cta' => 'Clear next step',
-            default => 'Featured content',
-        };
-    }
 
     /**
      * @param array<string,mixed> $data
@@ -5214,12 +4441,6 @@ class AiSitePageComponentGenerationService
                 $normalized['html_content'] = $html;
             }
         }
-        if ($region === 'content' && (!isset($normalized['html_content']) || \trim((string)$normalized['html_content']) === '')) {
-            $html = $this->buildHtmlContentFromStructuredAiData($data);
-            if ($html !== null) {
-                $normalized['html_content'] = $html;
-            }
-        }
         if (!isset($normalized['css_extra'])) {
             $css = $this->findFirstStringByKeys($data, ['css_extra', 'cssExtra', 'css_content', 'cssContent', 'css', 'style', 'styles']);
             if ($css !== null) {
@@ -5234,77 +4455,6 @@ class AiSitePageComponentGenerationService
         }
 
         return $normalized !== [] ? \array_replace($data, $normalized) : $data;
-    }
-
-    /**
-     * @param array<string,mixed> $data
-     */
-    private function buildHtmlContentFromStructuredAiData(array $data): ?string
-    {
-        $texts = [];
-        $this->collectStructuredAiVisibleTexts($data, $texts);
-        $texts = \array_values(\array_unique(\array_filter($texts, static fn(string $text): bool => \trim($text) !== '')));
-        if (\count($texts) < 2) {
-            return null;
-        }
-
-        $title = \array_shift($texts);
-        $lead = \array_shift($texts);
-        if ($title === null || $lead === null) {
-            return null;
-        }
-
-        $html = '<section class="pb-ai-structured-section">'
-            . '<div class="pb-ai-structured-copy"><h2>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</h2>'
-            . '<p>' . \htmlspecialchars($lead, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>';
-        if ($texts !== []) {
-            $html .= '<div class="pb-ai-structured-grid">';
-            foreach (\array_slice($texts, 0, 6) as $text) {
-                $html .= '<article class="pb-ai-structured-card"><p>' . \htmlspecialchars($text, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>';
-            }
-            $html .= '</div>';
-        }
-        $html .= '</section>';
-
-        return $html;
-    }
-
-    /**
-     * @param list<string> $texts
-     */
-    private function collectStructuredAiVisibleTexts(mixed $value, array &$texts, string $path = '', int $depth = 0): void
-    {
-        if (\count($texts) >= 10 || $depth > 5) {
-            return;
-        }
-        if (\is_array($value)) {
-            foreach ($value as $key => $child) {
-                $key = \strtolower(\trim((string)$key));
-                $childPath = $path === '' ? $key : $path . '.' . $key;
-                if ($this->isNonVisibleStructuredAiKey($key) || $this->isNonVisibleStructuredAiKey($childPath)) {
-                    continue;
-                }
-                $this->collectStructuredAiVisibleTexts($child, $texts, $childPath, $depth + 1);
-            }
-            return;
-        }
-        if (!\is_scalar($value)) {
-            return;
-        }
-
-        $text = $this->sanitizeVisibleCopy(\trim((string)$value));
-        if ($text === '' || \strlen($text) < 6 || \str_contains($text, '<') || \str_contains($text, '{')) {
-            return;
-        }
-        if (\preg_match('/^(?:true|false|null|content|header|footer|section|block)$/i', $text) === 1) {
-            return;
-        }
-        $texts[] = $this->clipText($text, 180);
-    }
-
-    private function isNonVisibleStructuredAiKey(string $key): bool
-    {
-        return \preg_match('/(?:css|style|script|js|php|html|markup|template|prompt|instruction|contract|schema|task|section_code|block_key|page_type|component|locale|language|id|key|url|href|src|image|asset|icon|color|token|meta)/i', $key) === 1;
     }
 
     /**
@@ -5343,15 +4493,31 @@ class AiSitePageComponentGenerationService
 
         $this->emitJsonRepairChunk(
             $region,
-            (string)__('正在对组件 JSON 进行本地解析与修复（提取 JSON、控制字符、尾逗号、截断补全等）…')
+            'Parsing component JSON locally.'
         );
         $decoded = $parser->extractAndDecode($content);
         if (\is_array($decoded)) {
             $this->emitJsonRepairChunk(
                 $region,
-                (string)__('本地解析与修复成功，已得到有效组件 JSON。')
+                'Component JSON parsed successfully.'
             );
             return $decoded;
+        }
+
+        $locallyRepairedContent = $this->repairInvalidJsonBackslashEscapes($content);
+        if ($locallyRepairedContent !== $content) {
+            $this->emitJsonRepairChunk(
+                $region,
+                'Component JSON contained invalid backslash escapes; repaired JSON transport escapes locally.'
+            );
+            $decoded = $parser->extractAndDecode($locallyRepairedContent);
+            if (\is_array($decoded)) {
+                $this->emitJsonRepairChunk(
+                    $region,
+                    'Component JSON parsed successfully after local escape repair.'
+                );
+                return $decoded;
+            }
         }
 
         if (self::JSON_REPAIR_MAX_ATTEMPTS <= 0) {
@@ -5361,7 +4527,7 @@ class AiSitePageComponentGenerationService
         $this->emitJsonRepairChunk(
             $region,
             (string)__(
-                '本地解析与修复仍未得到有效 JSON，将按轮次调用 AI 进行结构修复（共 %{1} 轮）',
+                '鏈湴瑙ｆ瀽涓庝慨澶嶄粛鏈緱鍒版湁鏁?JSON锛屽皢鎸夎疆娆¤皟鐢?AI 杩涜缁撴瀯淇锛堝叡 %{1} 杞級',
                 [self::JSON_REPAIR_MAX_ATTEMPTS]
             )
         );
@@ -5371,20 +4537,20 @@ class AiSitePageComponentGenerationService
             $this->emitJsonRepairChunk(
                 $region,
                 (string)__(
-                    '第 %{1}/%{2} 轮：正在请求 AI 修复 JSON 结构…',
+                    'JSON repair attempt %{1}/%{2}.',
                     [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
                 )
             );
             $retryContent = $this->requestJsonRepair(
                 $region,
-                (string)__('AI 未返回有效的组件 JSON 结果'),
+                'AI did not return valid component JSON.',
                 $currentContent
             );
             if ($retryContent === null || \trim($retryContent) === '') {
                 $this->emitJsonRepairChunk(
                     $region,
                     (string)__(
-                        '第 %{1}/%{2} 轮：AI 未返回可用内容，将尝试下一轮（若仍有）。',
+                        'JSON repair attempt %{1}/%{2} returned empty content.',
                         [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
                     )
                 );
@@ -5395,7 +4561,7 @@ class AiSitePageComponentGenerationService
             $this->emitJsonRepairChunk(
                 $region,
                 (string)__(
-                    '第 %{1}/%{2} 轮：AI 已返回，正在解析校验…',
+                    'JSON repair attempt %{1}/%{2} returned content; validating.',
                     [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
                 )
             );
@@ -5404,7 +4570,7 @@ class AiSitePageComponentGenerationService
                 $this->emitJsonRepairChunk(
                     $region,
                     (string)__(
-                        '第 %{1}/%{2} 轮：AI 修复后解析成功。',
+                        'JSON repair attempt %{1}/%{2} parsed successfully.',
                         [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
                     )
                 );
@@ -5413,13 +4579,22 @@ class AiSitePageComponentGenerationService
             $this->emitJsonRepairChunk(
                 $region,
                 (string)__(
-                    '第 %{1}/%{2} 轮：解析仍失败，将继续下一轮（若仍有）。',
+                    'JSON repair attempt %{1}/%{2} still failed validation.',
                     [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
                 )
             );
         }
 
         return null;
+    }
+
+    private function repairInvalidJsonBackslashEscapes(string $content): string
+    {
+        return \preg_replace_callback(
+            '/\\\\(?!["\\\\\/bfnrtu])/u',
+            static fn(): string => '\\\\',
+            $content
+        ) ?? $content;
     }
 
     private function emitJsonRepairChunk(string $region, string $message): void
@@ -5493,9 +4668,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * DeepSeek/GLM 等 thinking 协议模型在 JSON 合约任务上可能只返回 reasoning_content。
-     * 对组件生成统一禁用 thinking，避免流式/非流式行为分叉。
-     *
+     * DeepSeek/GLM 绛?thinking 鍗忚妯″瀷鍦?JSON 鍚堢害浠诲姟涓婂彲鑳藉彧杩斿洖 reasoning_content銆?     * 瀵圭粍浠剁敓鎴愮粺涓€绂佺敤 thinking锛岄伩鍏嶆祦寮?闈炴祦寮忚涓哄垎鍙夈€?     *
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
@@ -5527,7 +4700,7 @@ class AiSitePageComponentGenerationService
             'component_config' => $defaultConfig,
             'is_preview' => true,
             '_content_locale' => $this->resolvePrimaryLocale($websiteProfile, $scope),
-            '_content_locale_explicit' => \trim((string)($scope['content_locale'] ?? $websiteProfile['content_locale'] ?? '')) !== '',
+            '_content_locale_explicit' => $this->hasResolvedContentLocale($websiteProfile, $scope),
             '_visual_contract' => $this->decodeRuntimeVisualContract($defaultConfig),
             'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => $this->extractVerifiedAssetsForRenderContext($scope, $pageType, $defaultConfig),
@@ -5783,43 +4956,46 @@ class AiSitePageComponentGenerationService
         foreach ($this->extractManifestSlots($scope) as $slot) {
             $slotType = \trim((string)($slot['slot_type'] ?? ''));
             $field = \strtolower(\trim((string)($slot['field'] ?? '')));
-            if ($slotType !== 'logo_icon' || !\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)) {
+            $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+            $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
+            $sectionCode = \strtolower(\trim((string)($slot['section_code'] ?? '')));
+            $pageType = \strtolower(\trim((string)($slot['page_type'] ?? '')));
+            if (
+                $slotType !== 'logo_icon'
+                || !\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)
+                || !\in_array($kind, ['website_logo', 'logo', 'brand_logo'], true)
+                || !\str_starts_with($slotId, 'identity:')
+                || !\in_array($sectionCode, ['', 'identity', 'global'], true)
+                || !\in_array($pageType, ['', 'global'], true)
+            ) {
                 continue;
             }
             $finalUrl = \trim((string)($slot['final_url'] ?? ''));
-            if ($finalUrl !== '') {
+            if ($finalUrl !== '' && !$this->looksLikeSectionGeneratedAssetUrl($finalUrl)) {
                 return $finalUrl;
             }
         }
-        foreach ($this->extractManifestSlots($scope) as $slot) {
-            $slotType = \trim((string)($slot['slot_type'] ?? ''));
-            if (!\in_array($slotType, ['logo_icon', 'trust_brand_image'], true)) {
-                continue;
-            }
-            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
-            if ($finalUrl !== '') {
-                return $finalUrl;
-            }
-        }
-
         return '';
     }
 
+    private function looksLikeSectionGeneratedAssetUrl(string $value): bool
+    {
+        $path = (string)(\parse_url($value, \PHP_URL_PATH) ?: $value);
+        $basename = \strtolower((string)\basename($path));
+        if ($basename === '') {
+            return false;
+        }
+
+        return \preg_match('/(?:^|[-_])(?:page|content|section|hero|banner|trust|badge|badges|category|categories|showcase|feature|features|testimonial|story|faq|download|cta)(?:[-_.]|$)/i', $basename) === 1;
+    }
+
     /**
-     * 强行契约：解析 section 应当继承的图片 URL。
-     *
-     * 设计原则（用户要求"不能让 build 用占位图当 stage1 已经有真实图"）：
-     *   1. 真实图片永远优先于占位图。
-     *   2. 在"都是真实"或"都是占位"内部，再按 page_type 精确度排序：
-     *      a. slot_id 与 section 之 page+code 精确匹配（如 `page:home_page:content-home-page-hero`）。
-     *      b. 同 page_type 下、slot_type 命中且 slot_id/block_key/task_key 含 section 关键字。
-     *      c. 同 page_type 下、slot_type 命中的首个 slot。
-     *      d. legacy（page_type==''）+ 关键字命中（haystack 含 brief/label，因 stage1 散标 slot 信息常在 brief）。
-     *      e. legacy + slot_type 命中的首个 slot。
-     *
-     * 这样既避免被关键字匹配错的 legacy slot 抢占（如 slot_id=5、brief 含 "hero"），
-     * 也不会让仅有占位图的 page-scoped slot 排挤掉 stage1 已落地的真实 legacy 资产。
-     *
+     * 寮鸿濂戠害锛氳В鏋?section 搴斿綋缁ф壙鐨勫浘鐗?URL銆?     *
+     * 璁捐鍘熷垯锛堢敤鎴疯姹?涓嶈兘璁?build 鐢ㄥ崰浣嶅浘褰?stage1 宸茬粡鏈夌湡瀹炲浘"锛夛細
+     *   1. 鐪熷疄鍥剧墖姘歌繙浼樺厛浜庡崰浣嶅浘銆?     *   2. 鍦?閮芥槸鐪熷疄"鎴?閮芥槸鍗犱綅"鍐呴儴锛屽啀鎸?page_type 绮剧‘搴︽帓搴忥細
+     *      a. slot_id 涓?section 涔?page+code 绮剧‘鍖归厤锛堝 `page:home_page:content-home-page-hero`锛夈€?     *      b. 鍚?page_type 涓嬨€乻lot_type 鍛戒腑涓?slot_id/block_key/task_key 鍚?section 鍏抽敭瀛椼€?     *      c. 鍚?page_type 涓嬨€乻lot_type 鍛戒腑鐨勯涓?slot銆?     *      d. legacy锛坧age_type==''锛? 鍏抽敭瀛楀懡涓紙haystack 鍚?brief/label锛屽洜 stage1 鏁ｆ爣 slot 淇℃伅甯稿湪 brief锛夈€?     *      e. legacy + slot_type 鍛戒腑鐨勯涓?slot銆?     *
+     * 杩欐牱鏃㈤伩鍏嶈鍏抽敭瀛楀尮閰嶉敊鐨?legacy slot 鎶㈠崰锛堝 slot_id=5銆乥rief 鍚?"hero"锛夛紝
+     * 涔熶笉浼氳浠呮湁鍗犱綅鍥剧殑 page-scoped slot 鎺掓尋鎺?stage1 宸茶惤鍦扮殑鐪熷疄 legacy 璧勪骇銆?     *
      * @param array<string,mixed> $section
      * @param array<string,mixed> $scope
      */
@@ -5846,9 +5022,6 @@ class AiSitePageComponentGenerationService
 
         $slots = $this->extractManifestSlots($scope);
 
-        // 按 specificity 排序的 expectedSlotIds：code 比 key 更具体（如 content/about-page-story
-        // 对应 page:about_page:content-about-page-story 优先于 page:about_page:highlights，
-        // 因为 blueprint 有时会给 section.key 复用 highlights/details 这类共用 token）。
         $sectionCode = \strtolower(\trim((string)($section['code'] ?? '')));
         $sectionKey = \strtolower(\trim((string)($section['key'] ?? '')));
         $expectedSlotIdsOrdered = [];
@@ -5881,16 +5054,12 @@ class AiSitePageComponentGenerationService
             $slotsByExactId[$slotId] = $slot;
         }
 
-        // 按 verifiedOnly 切两个外层 pass：先尝试只挑非占位图，全部 miss 后再放宽到占位图。
-        // 关键字匹配（无论 scoped 还是 legacy）必须排在"任意 slot_type 命中"之前，
-        // 否则 page-scoped 但语义不相关的 slot（如 page:home_page:cta）会抢占
-        // 与 section 真正同名的 legacy slot（如 details）。
-        // Full refactor rule: programmatic/local fallback images are not
+        // 鎸?verifiedOnly 鍒囦袱涓灞?pass锛氬厛灏濊瘯鍙寫闈炲崰浣嶅浘锛屽叏閮?miss 鍚庡啀鏀惧鍒板崰浣嶅浘銆?        // 鍏抽敭瀛楀尮閰嶏紙鏃犺 scoped 杩樻槸 legacy锛夊繀椤绘帓鍦?浠绘剰 slot_type 鍛戒腑"涔嬪墠锛?        // 鍚﹀垯 page-scoped 浣嗚涔変笉鐩稿叧鐨?slot锛堝 page:home_page:cta锛変細鎶㈠崰
+        // 涓?section 鐪熸鍚屽悕鐨?legacy slot锛堝 details锛夈€?        // Full refactor rule: programmatic/local fallback images are not
         // compatible production assets. If no verified asset exists, leave the
         // section without an inherited URL so the block-level inline generator
         // must call the real text-to-image model for its required slot.
         foreach ([true] as $verifiedOnly) {
-            // (a) slot_id 精确匹配 page-scoped 标识，按 specificity 顺序匹配（code 优先于 key）。
             foreach ($expectedSlotIdsOrdered as $expectedId) {
                 $slot = $slotsByExactId[$expectedId] ?? null;
                 if (!\is_array($slot)) {
@@ -5906,33 +5075,26 @@ class AiSitePageComponentGenerationService
                 return $finalUrl;
             }
 
-            // (b) 同 page_type 下 + 关键字命中。
             $matched = $this->findSlotByKeywordsScoped($slots, $candidates, $preferredTypes, $pageType, true, $verifiedOnly);
             if ($matched !== '') {
                 return $matched;
             }
 
-            // (c) legacy（page_type==''）+ 关键字命中（haystack 加入 brief/label，因 stage1 散标 slot 信息常在 brief）。
             $matched = $this->findSlotByKeywordsScoped($slots, $candidates, $preferredTypes, $pageType, false, $verifiedOnly, true);
             if ($matched !== '') {
                 return $matched;
             }
 
-            // (d) 跨 page_type 的关键字匹配（兜底）：stage1 有时会把 legacy slot 错标到另一个 page_type
-            // （例如 slot_id=details 被标为 about_page），但其语义 (slot_id/block_key/brief 含 "details")
-            // 仍是 home_page details 的最佳替代。在已穷尽同 page_type 的 keyword 匹配后启用。
             $matched = $this->findSlotByKeywordsAcrossPageTypes($slots, $candidates, $preferredTypes, $verifiedOnly);
             if ($matched !== '') {
                 return $matched;
             }
 
-            // (e) 同 page_type 下任意 slot_type 命中（兜底；只在所有 keyword 匹配全 miss 后才会到这）。
             $matched = $this->findFirstScopedSlot($slots, $preferredTypes, $pageType, true, $verifiedOnly);
             if ($matched !== '') {
                 return $matched;
             }
 
-            // (f) legacy 范围内首个 slot_type 命中。
             $matched = $this->findFirstScopedSlot($slots, $preferredTypes, $pageType, false, $verifiedOnly);
             if ($matched !== '') {
                 return $matched;
@@ -5943,9 +5105,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 跨 page_type 的关键字匹配：仅在 page-scoped 与 legacy keyword 匹配全 miss 后启用。
-     * 用于救活那些被 stage1 错误地打到了非当前 page_type 的 legacy slot（如 details→about_page）。
-     *
+     * 璺?page_type 鐨勫叧閿瓧鍖归厤锛氫粎鍦?page-scoped 涓?legacy keyword 鍖归厤鍏?miss 鍚庡惎鐢ㄣ€?     * 鐢ㄤ簬鏁戞椿閭ｄ簺琚?stage1 閿欒鍦版墦鍒颁簡闈炲綋鍓?page_type 鐨?legacy slot锛堝 details鈫抋bout_page锛夈€?     *
      * @param list<array<string,mixed>> $slots
      * @param array<string,bool>        $candidates
      * @param list<string>              $preferredTypes
@@ -5988,8 +5148,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 在指定 page_type 范围内，按候选关键字命中 slot。
-     *
+     * 鍦ㄦ寚瀹?page_type 鑼冨洿鍐咃紝鎸夊€欓€夊叧閿瓧鍛戒腑 slot銆?     *
      * @param list<array<string,mixed>> $slots
      * @param array<string,bool>        $candidates
      * @param list<string>              $preferredTypes
@@ -6048,8 +5207,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 在指定 page_type 范围内，返回首个 slot_type 命中的 slot final_url（不依赖关键字匹配）。
-     *
+     * 鍦ㄦ寚瀹?page_type 鑼冨洿鍐咃紝杩斿洖棣栦釜 slot_type 鍛戒腑鐨?slot final_url锛堜笉渚濊禆鍏抽敭瀛楀尮閰嶏級銆?     *
      * @param list<array<string,mixed>> $slots
      * @param list<string>              $preferredTypes
      */
@@ -6088,8 +5246,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 判断 manifest slot 是否仅有占位变体（fake_mode/手动 placeholder fallback 写盘的 SVG）。
-     *
+     * 鍒ゆ柇 manifest slot 鏄惁浠呮湁鍗犱綅鍙樹綋锛坒ake_mode/鎵嬪姩 placeholder fallback 鍐欑洏鐨?SVG锛夈€?     *
      * @param array<string,mixed> $slot
      */
     private function isManifestSlotPlaceholder(array $slot): bool
@@ -6134,15 +5291,17 @@ class AiSitePageComponentGenerationService
      */
     private function buildPreviewPageStub(string $pageType, array $websiteProfile, array $scope, array $blogContext): PreviewPageStub
     {
-        $navigationPages = $this->buildNavigationPages($scope);
-        $headerNavigationPages = $this->buildHeaderNavigationPages($scope);
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        $navigationPages = $this->buildNavigationPages($scope, $locale);
+        $headerNavigationPages = $this->buildHeaderNavigationPages($scope, $locale);
         $siteTitle = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
+        $siteTitle = $this->resolveLocaleSafeSiteDisplayName($siteTitle, $websiteProfile, $scope, $locale);
 
         return new PreviewPageStub([
             'website_id' => (int)($scope['draft_website_id'] ?? $scope['website_id'] ?? 0),
             'type' => $pageType,
-            'title' => (string)($websiteProfile['site_title'] ?? $siteTitle),
-            'meta_title' => (string)($websiteProfile['site_title'] ?? $siteTitle),
+            'title' => $siteTitle,
+            'meta_title' => $siteTitle,
             'logo' => (string)($websiteProfile['logo'] ?? ''),
             'icon' => (string)($websiteProfile['icon'] ?? $websiteProfile['favicon'] ?? ''),
             'header_navigation_pages' => $headerNavigationPages,
@@ -6163,10 +5322,10 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $scope
      * @return list<array<string,mixed>>
      */
-    private function buildNavigationPages(array $scope): array
+    private function buildNavigationPages(array $scope, string $locale = ''): array
     {
         $pageTypes = $this->resolveScopedPageTypes($scope);
-        $locale = $this->resolveScopePrimaryLocale($scope);
+        $locale = $locale !== '' ? $locale : $this->resolveScopePrimaryLocale($scope);
         $labels = Page::getPageTypes();
         $items = [];
 
@@ -6199,10 +5358,10 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $scope
      * @return list<array<string,mixed>>
      */
-    private function buildHeaderNavigationPages(array $scope): array
+    private function buildHeaderNavigationPages(array $scope, string $locale = ''): array
     {
-        $locale = $this->resolveScopePrimaryLocale($scope);
-        $navigationPages = $this->buildNavigationPages($scope);
+        $locale = $locale !== '' ? $locale : $this->resolveScopePrimaryLocale($scope);
+        $navigationPages = $this->buildNavigationPages($scope, $locale);
         $sharedPromptContext = $this->resolveSharedPromptContext($scope);
         $sharedHeaderItems = $this->localizePromptLinkItemsForLocale(
             $this->normalizePromptLinkItems($sharedPromptContext['header_items'] ?? []),
@@ -6322,22 +5481,26 @@ class AiSitePageComponentGenerationService
             } elseif ($href !== '' && isset($fallbackByHref[$href])) {
                 $fallback = $fallbackByHref[$href];
             }
+            $fallbackType = \is_array($fallback) ? \trim((string)($fallback['type'] ?? '')) : '';
+            $effectiveType = $type !== '' ? $type : $fallbackType;
 
-            $label = $this->filterVisibleCopyForLocale(
+            $label = $this->filterNavigationLabelForLocale(
                 \trim((string)($item['label'] ?? $item['title'] ?? $item['text'] ?? '')),
-                $locale
+                $locale,
+                $effectiveType
             );
             if ($label !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($label)) {
                 $label = '';
             }
             if ($label === '' && \is_array($fallback)) {
-                $label = $this->filterVisibleCopyForLocale(
+                $label = $this->filterNavigationLabelForLocale(
                     \trim((string)($fallback['label'] ?? $fallback['title'] ?? $fallback['text'] ?? '')),
-                    $locale
+                    $locale,
+                    $effectiveType
                 );
             }
-            if ($label === '' && $type !== '') {
-                $label = $this->localizePageTypeTitle($type, $locale);
+            if ($label === '' && $effectiveType !== '') {
+                $label = $this->localizePageTypeTitle($effectiveType, $locale);
             }
             if ($label === '') {
                 continue;
@@ -6353,8 +5516,8 @@ class AiSitePageComponentGenerationService
             ];
             if ($type !== '') {
                 $normalized['type'] = $type;
-            } elseif (\is_array($fallback) && \trim((string)($fallback['type'] ?? '')) !== '') {
-                $normalized['type'] = \trim((string)$fallback['type']);
+            } elseif ($fallbackType !== '') {
+                $normalized['type'] = $fallbackType;
             }
             $localized[] = $normalized;
         }
@@ -6512,7 +5675,7 @@ class AiSitePageComponentGenerationService
             . "4. Navigation must be compatible with real page links and the provided navigation data.\n"
             . "5. Keep the structure practical: logo area, navigation, optional CTA, mobile-friendly behavior.\n"
             . "6. Style should be inspired by the reference theme, but do not mention the theme name in visible copy.\n"
-            . "7. CSS EFFECTS REQUIRED: the header must have visible depth — subtle shadow on the nav bar, hover underline animation on nav links, transition on CTA with shadow lift. Every interactive element (nav-link, CTA, logo, toggle) must have a non-zero hover/focus style.\n"
+            . "7. CSS EFFECTS REQUIRED: the header must have visible depth -subtle shadow on the nav bar, hover underline animation on nav links, transition on CTA with shadow lift. Every interactive element (nav-link, CTA, logo, toggle) must have a non-zero hover/focus style.\n"
             . "8. The framework already provides fields/config/nav/CTA. Set extra_fields, php_variables, html_extra, and js_content to empty strings unless explicitly required.\n"
             . "9. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.\n"
@@ -6568,7 +5731,7 @@ class AiSitePageComponentGenerationService
             . "5. Footer links should be compatible with real page nav logic and the provided link groups.\n"
             . "6. Footer completeness contract (hard requirement): render at least 3 visible link labels in html_extra_column/html_extra, include at least one support/contact entry, and include at least one legal/compliance entry. Do not return empty link groups.\n"
             . "7. Footer visibility contract (hard requirement): never hide or collapse the footer by default (no display:none, visibility:hidden, opacity:0, height:0, off-canvas positioning, or clipped-to-zero wrappers).\n"
-            . "8. CSS EFFECTS REQUIRED: the footer must have visible depth — a top border/shadow separator from the page body, hover lift on social icons with shadow, hover underline animation on link items, and transition effects on any interactive element. Grouped link columns should have heading separation.\n"
+            . "8. CSS EFFECTS REQUIRED: the footer must have visible depth -a top border/shadow separator from the page body, hover lift on social icons with shadow, hover underline animation on link items, and transition effects on any interactive element. Grouped link columns should have heading separation.\n"
             . "9. Style should follow the reference theme direction without naming the theme in visible text.\n"
             . "9. The framework already provides brand/link/social/copyright fields. Set extra_fields, php_variables, and js_content to empty strings unless explicitly required.\n"
             . "10. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars and footer_extra_text as one short visitor-facing sentence.\n"
@@ -6642,10 +5805,10 @@ class AiSitePageComponentGenerationService
             . "Page type: " . $pageLabel . " ({$pageType})\n"
             . "Section name: {$sectionName}\n"
             . "Section role: {$sectionKey}\n"
-            . ($sectionTemplate === 'hero' ? "BANNER MODULE DEFAULT RULE: this is a hero/banner section. Unless the user's latest block-adjustment instruction or approved design plan explicitly asks for a different hero composition, use a FULL-WIDTH 1920x750-style banner (container_width=full) with a background IMAGE covering the entire section. Set bg_type to 'image' and use the planned hero_image URL when available. Add a dark gradient overlay over the background image so text remains readable. Content overlay is placed inside a centered max-width content container above the image. If the user explicitly requests a different hero layout, follow that layout but keep a premium generated image, strong hierarchy, and readable overlay.\n" : '')
+            . ($sectionTemplate === 'hero' ? "BANNER MODULE DEFAULT RULE: this is a hero/banner section. Unless the user's latest block-adjustment instruction or approved design plan explicitly asks for a different hero composition, use a FULL-WIDTH 1920x750-style banner (container_width=full) with a background IMAGE covering the entire section. Set bg_type to 'image' and use the planned hero_image URL when available. Add a dark gradient overlay over the entire image AND put heading/body/CTA copy inside a visible text-safe panel/scrim zone with its own readable foreground color. Content overlay is placed inside a centered max-width content container above the image. Body copy must never be dark text directly on a busy photo. If the user explicitly requests a different hero layout, follow that layout but keep a premium generated image, strong hierarchy, and readable overlay.\n" : '')
             . "Suggested structure: {$sectionTemplate}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
-            . ($brief !== '' ? "Customer brief (HARD CONTRACT — all content must fit this business): {$brief}\n" : '')
+            . ($brief !== '' ? "Customer brief (HARD CONTRACT -all content must fit this business): {$brief}\n" : '')
             . "Page guidance: {$pageInstruction}\n"
             . "Suggested section config: {$sectionConfig}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
@@ -6662,19 +5825,33 @@ class AiSitePageComponentGenerationService
             . "Rules:\n"
             . "1. Output only one content component, never a full page document.\n"
             . "2. Write finished visitor-facing copy. Do not expose internal prompts, briefs, requirement wording, or phrases such as 'page focus' and 'site summary'.\n"
+            . "2a. Do not output blueprint meta-copy or instruction-shaped headings such as page-level highlight labels, design-task sentences, or layout instructions about card hierarchy, trust proof, or primary actions. Rewrite them into concrete business copy for this customer and locale.\n"
+            . "2b. Card/list titles must be concrete visitor labels with descriptions. CTA labels belong on actual buttons/links, not as repeated ordinary card headings. Do not repeat the same title/description pair inside one component.\n"
+            . "2c. Before returning, compare every heading, card title, badge, CTA label, alt/title/aria text, and paragraph against task labels, component labels, section labels, slot labels, and build-plan labels. Exact copies, title-cased copies, or lightly reworded instruction sentences starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are invalid visible copy; rewrite them into final customer-facing website copy.\n"
             . "3. The section must be meaningfully different for its page type and role; home, about, contact, policy, and blog sections should not read the same.\n"
             . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
-            . "5. CSS EFFECTS REQUIRED ON ALL BLOCKS (DO NOT SKIP): every block — title, subtitle, description, card, image, CTA, list, divider, icon — MUST have at least two visible CSS effects from: gradient text on headings, card hover lift with shadow, pill/badge style subtitles, decorative underlines on titles with gradient, border or background transitions, backdrop-filter glass effect, CSS-only decorations/pseudo-elements, or fade-in animation. Flat unstyled blocks are invalid unless the user EXPLICITLY indicated 'no effects', 'minimal', or 'clean' in the refine instruction.\n"
+            . "5. CSS EFFECTS REQUIRED ON ALL BLOCKS (DO NOT SKIP): every block -title, subtitle, description, card, image, CTA, list, divider, icon -MUST have at least two visible CSS effects from: gradient text on headings, card hover lift with shadow, pill/badge style subtitles, decorative underlines on titles with gradient, border or background transitions, backdrop-filter glass effect, CSS-only decorations/pseudo-elements, or fade-in animation. Flat unstyled blocks are invalid unless the user EXPLICITLY indicated 'no effects', 'minimal', or 'clean' in the refine instruction.\n"
             . "6. NO SOLID/FLAT BACKGROUNDS: every section must have a subtle gradient, radial light bloom, noise texture, or patterned overlay on its background. A plain hex color (#fff, #f8f9fa, etc.) as the sole background is forbidden. Use at minimum a two-stop gradient or a radial glow behind the content area.\n"
-            . "7. CONTRAST GATE (HARD REQUIREMENT): never pair a light background with light text or a dark background with dark text. Every text/button/link must have WCAG AA minimum contrast against its immediate background. Use color-mix() to derive readable foregrounds automatically where possible.\n"
+            . "7. CONTRAST GATE (HARD REQUIREMENT): never pair a light background with light text or a dark background with dark text. Every text/button/link must have WCAG AA minimum contrast against its immediate background. Text over photos/detailed textures requires a real local contrast layer: a scrim, gradient veil, glass panel, or solid translucent text plate behind the text itself. A section-wide overlay alone is not enough when the image is visually busy.\n"
             . "8. TYPOGRAPHY STANDARDS: set letter-spacing on uppercase text (0.06-0.12em), use clamp() for heading sizes, set generous line-height (1.6-1.85 for body, 1.1-1.3 for headings), and use a max-width on paragraph text (55-70ch) to prevent overly long lines.\n"
             . "9. NO INFINITE IMAGE SCALING: do not add transform:scale() to any image or media element on hover or in animation. Use box-shadow, translateY, brightness filter, or border transitions for hover effects instead. Scale transforms on images cause cropping/overflow issues.\n"
             . "10. RESPONSIVE IMAGES REQUIRED: every img tag MUST have max-width:100% and height:auto via inline style or CSS class. Images inside flex/grid containers must not overflow on small screens. Use object-fit:cover + object-position:center for decorative/bg images. Add mobile-specific media query adjustments for image border-radius and shadow at 768px breakpoint.\n"
+            . "10b. REQUIRED IMAGE SLOT BINDING: if a required generated image slot/final_url is supplied, copy the concrete editable image template from Block visual contract or verified_assets into html_content. The same <img> must contain the supplied final_url, data-pb-ai-image-role='generated-asset', and the supplied data-pb-ai-asset-slot. Use CSS to make it cover a banner/media panel; do not satisfy a required slot with CSS background-image only. Symbolic URL or slot placeholders are invalid output.\n"
+            . "10c. HERO/BANNER COVER-LAYER CONTRACT: for hero/banner generated images, the <img> class and CSS selector must match exactly, and that selector must set position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; with overlay/content above it. Include both a named overlay/scrim/veil layer and a named text/content panel class; the panel CSS must set readable foreground color, background/scrim, padding, border-radius, and max-width. If the image is inside html_content, style it with `#componentId .your-image-class`, never `#componentId.your-image-class`.\n"
+            . "10a. MOBILE READABILITY REQUIRED: at 390px width, grids/flex rows must stack to one column, children need min-width:0, long headings must not be constrained to tiny ch-width columns, and image/media panels must not overlap or cover text/CTA content.\n"
             . "11. Do not repeat the framework title/description in the body as empty h1/h2/p tags. The body must add useful content such as cards, trust points, game tiles, proof points, or CTA support.\n"
             . "12. Preserve page-level color layering: this block must have its own surface/contrast role and must not make the whole page feel like one solid theme color.\n"
             . "13. Implement like a UI/interaction designer handoff: section-specific visual hierarchy, spatial rhythm, motion restraint, hover/focus states, and mobile stacking must be visible in html_content/css_extra.\n"
             . "14. Accessibility contrast gate: before returning, inspect every visible text/link/button/chip against its immediate background; rewrite CSS if any foreground/background pair is low-contrast.\n"
             . "15. HTML closure gate: html_content must be a balanced fragment with all non-void tags closed; invalid nesting or stray closing tags are build-breaking failures.\n"
+            . "15a. JSON/HTML quote gate: use single quotes for HTML attributes in html_content to avoid unescaped JSON quotes. Required generated-image slots must copy the supplied exact editable image template with concrete src and slot values, never a symbolic example.\n"
+            . "15b. No symbol-only visitor elements: never output standalone arrows, stars, card-suit marks, plus signs, separators, or icon-only text nodes as visible content. Decorative symbols must be CSS-only pseudo-elements/backgrounds and must not appear as visitor copy.\n"
+            . "15c. HTML fragment self-check: every `<` in html_content must begin a real HTML tag with an element name or be escaped as visitor text; every opened quote and non-void tag must close before JSON is returned.\n"
+            . "15d. HTML/CSS contract self-check: do not emit `id='componentId'` or `id=\"componentId\"` inside html_content; use one component-prefixed class wrapper. No `<tag='...'>`, no concatenated closing tags such as `</pa>`/`</pdiv>`/`</divsection>`, no attribute glued after a quote, no class token outside this component prefix, no empty CSS declarations, no malformed CSS property names, no single-hyphen CSS properties such as `-index`, no merged declarations caused by missing semicolons, and no unbalanced CSS parentheses.\n"
+            . "15e. JSON transport self-check: return a single complete JSON object. If the response is near the token budget, shorten nonessential CSS/HTML detail before output instead of truncating or appending raw CSS after the closing brace.\n"
+            . "15f. Stable FAQ/accordion markup: avoid fragile `<details>`/`<summary>` disclosure tags unless the user explicitly requires native disclosure behavior. Use div/h3/p/a/img groups with scoped CSS for FAQ, testimonial, trust, and support sections; never nest span/strong tags inside headings unless they close before the heading closes.\n"
+            . "15g. Link styling gate: do not output browser-default links. If an <a> is necessary, it must have a component-prefixed class and css_extra/css_responsive must style its normal, hover, and focus states. If a block can work without a link, omit the <a> entirely.\n"
+            . "15h. CSS selector integrity gate: every class used in html_content that needs styling must be matched exactly by css_extra/css_responsive selectors, and every CTA/link selector must match the HTML class byte-for-byte. Before returning, self-check for misspelled CSS properties such as text-decorationone, missing punctuation in rgba(), and mismatched class names; invalid CSS or selector drift is forbidden.\n"
             . "16. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
             . "17. Return valid JSON only. No markdown. No explanation. Keep html_content under 2400 chars and css_extra under 2600 chars.\n"
             . "18. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
@@ -6683,25 +5860,71 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 英文硬约束：降低合并进 .phtml 后的 PHP 语法错误（如 unexpected "=>"）
-     */
+     * 鑻辨枃纭害鏉燂細闄嶄綆鍚堝苟杩?.phtml 鍚庣殑 PHP 璇硶閿欒锛堝 unexpected "=>"锛?     */
     private function buildComponentJsonPhpSafetyRulesEn(): string
     {
-        return "PHP / HTML / CSS / JSON safety (critical — invalid output breaks the site build):\n"
-            . "- Output one JSON object only. Every value must be a valid JSON string: escape double quotes as \\\", represent newlines inside strings as \\n. Do not truncate strings mid-escape.\n"
+        return "PHP / HTML / CSS / JSON safety (critical -invalid output breaks the site build):\n"
+            . "- Output exactly one JSON object only, with exactly these string keys: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. The first non-whitespace character must be { and the last non-whitespace character must be }. Do not append a second object, raw CSS, `php_variables:` labels, markdown, or explanation after the closing brace. Every value must be a valid JSON string: escape double quotes as \\\", represent newlines inside strings as \\n. Do not truncate strings mid-escape.\n"
+            . "- JSON escape discipline: never place a backslash before normal HTML text, class names, tag names, or visitor copy. Legal backslash escapes are only \\\", \\\\, \\/, \\n, \\r, \\t, and \\uXXXX; invalid sequences like \\d, \\R, or \\< break the build.\n"
             . "- Field php_variables: MUST be an empty string for this virtual-theme build. The framework already provides variables and config.\n"
             . "- In php_variables, every array literal must be complete: e.g. \$x = ['k' => 'v']; with all [, ], (, ), quotes, and semicolons balanced. Never paste JavaScript object literals or JSON blobs here. The PHP token => must appear only inside valid PHP array syntax, never loose in HTML/CSS.\n"
             . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
             . "- extra_fields and js_content: MUST be empty strings unless the task explicitly requires them.\n"
             . "- html_extra, html_extra_column, html_content: static HTML fragments only. No PHP tags, no <style>, no <script>, no @component_start/@fields_start metadata.\n"
             . "- HTML fragments must be balanced and embeddable: close every non-void tag, do not output full <html>/<head>/<body> documents, and do not leave stray closing tags.\n"
-            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. Use scoped CSS when needed for visual polish: layered backgrounds, textures, shape motifs, hover/focus states, responsive rhythm, and type scale. Every rule and @media block must have balanced { } braces and be short enough to fit completely.\n"
+            . "- Closing-tag grammar: never merge adjacent closing tags into one token. `</p></a>`, `</small></div>`, and `</div></section>` are valid; `</pa>`, `</smalldiv>`, `</pdiv>`, and `</divsection>` are invalid build-breaking HTML.\n"
+            . "- Heading grammar: heading elements must close with the same exact element name, and inline tags inside headings must close first. Valid: `<h3><span>Safe APK</span></h3>`. Invalid: `</h>`, `</spanh2>`, `</h3div>`, or closing a parent while span/strong remains open.\n"
+            . "- Disclosure markup discipline: do not use `<details>` or `<summary>` for generated FAQ/accordion sections unless explicitly requested. These tags often produce malformed attributes in model output; use static div/h3/p groups styled by scoped CSS instead.\n"
+            . "- HTML quote discipline: use single quotes for attributes inside html_content/css strings, including required generated image <img> attributes. Do not put raw double-quoted HTML attributes inside JSON string values.\n"
+            . "- HTML fragment discipline: every `<` in html_content must begin a valid tag name or be escaped as text, all attribute quotes must close, and all non-void tags must be balanced before returning JSON.\n"
+            . "- HTML scope discipline: html_content is already nested inside the framework root. Never output `id='componentId'`, `id=\"componentId\"`, or any inner wrapper id that pretends to be the framework root. Use class-only wrappers with the component prefix.\n"
+            . "- HTML attribute discipline: never output malformed attributes such as `<span='...'>`, `<div='...'>`, `<a ... class='x'href='...'>`, or `<span='class-name'>`. Every attribute needs a name, equals sign, quoted value, and whitespace before the next attribute.\n"
+            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. These fields own the component's visual quality and responsive behavior; the renderer will not inject compatibility CSS/JS or beautify weak output after generation.\n"
+            . "- Responsive CSS is mandatory for every non-trivial component: include scoped @media rules for 768px and/or 420px, stack grids/flex rows, set min-width:0 on children, keep media max-width:100%, and prevent overlap between images, copy, and CTAs.\n"
+            . "- Use scoped CSS for visual polish: layered backgrounds, textures, shape motifs, hover/focus states, responsive rhythm, and type scale. Every rule and @media block must have balanced { } braces and be short enough to fit completely.\n"
+            . "- CSS grammar discipline: no empty declarations (`content:;`), no malformed properties (`-index`), no bare percent values (`height:%`), no merged declarations (`position:relativez-index:1`), and no unbalanced function parentheses in gradients, color-mix(), rgba(), url(), or clamp().\n"
+            . "- CSS reliability mode: output simple complete CSS. Every declaration must be `property: value;`; put a semicolon before the next property. Avoid color-mix(), mask, clip-path, nested calc(), filter chains, and ornate function stacks. If a visual effect risks invalid CSS, choose simpler gradients, borders, shadows, spacing, and pseudo-elements.\n"
             . "- Color contrast: never pair dark foreground text with dark backgrounds or light foreground text with light backgrounds; define readable text/link/button/focus states in CSS before returning.\n"
+            . "- Links: never leave a bare `<a>` without class. Every link must use a component-prefixed class and have explicit normal/hover/focus CSS. For FAQ/support copy, prefer plain text unless a real CTA is required.\n"
             . "- Page hierarchy: do not make the section one flat theme-color slab. Use palette roles, surface elevation, dividers, texture, cards, or spacing to distinguish this block from adjacent blocks.\n"
-            . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use component-specific classes shaped like pb-{component-code}-{element}, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync.\n"
-            . "- Images: never output broken image placeholders. If no verified asset URL is provided, create visual rhythm with CSS-only shapes/pseudo-elements inside html_content; do not use <svg>, data:image/svg+xml, empty src, example.com, placeholder services, or unverified .jpg/.png/.webp URLs.\n"
-            . "- AI image editability: when using a verified text-to-image asset URL in <img src> or CSS url(), put data-pb-ai-asset-slot=\"<slot_id>\" and data-pb-ai-image-role=\"generated-asset\" on the exact image/background element so the visual editor can regenerate only that image.\n"
+            . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use component-specific classes shaped like pb-{component-code}-{element}, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync. The html_content fragment is nested inside #componentId, so CSS must use descendant selectors such as `#componentId .pb-...`; do not write `#componentId.pb-...` unless the framework root itself has that class, which it will not.\n"
+            . "- Images: never output broken image placeholders. If no verified asset URL is provided, create visual rhythm with CSS-only shapes/pseudo-elements inside html_content; do not use <svg>, data:image/svg+xml, empty src, example.com, placeholder services, stock-photo services, external CDN/stock URLs, or unverified .jpg/.png/.webp URLs.\n"
+            . "- Decorations: never put standalone symbols such as arrows, suit marks, stars, bullets, plus signs, or divider glyphs in visitor-visible HTML. Render decoration with CSS borders, gradients, pseudo-elements, background layers, or box-shadow instead.\n"
+            . "- External image ban: never use Unsplash, Pexels, Pixabay, Freepik, Shutterstock, Adobe Stock, source.unsplash.com, images.unsplash.com, picsum.photos, loremflickr.com, scheme-less URLs like ://... or //..., or any image URL that is not supplied as a verified final_url in this prompt.\n"
+            . "- IMAGE_SRC_SELF_CHECK before returning: scan every <img src> and every CSS url(...). Each image URL must exactly equal one value from verified_asset_src_allowlist. If a URL is not on the allowlist, remove it or replace it with the matching final_url before returning JSON.\n"
+            . "- AI image editability: required generated image slots must be real <img> elements in html_content, not CSS-only background-image references. Copy the prompt's concrete editable image template so the same <img> carries the supplied final_url, data-pb-ai-asset-slot, and data-pb-ai-image-role='generated-asset'. Replace alt='...' with a short visitor-facing image description in the target locale; never copy task labels, slot labels, prompt briefs, or instruction sentences into alt/title/aria text. Symbolic URL or slot placeholder strings are invalid. Use CSS object-fit/absolute positioning when the image needs to look like a banner background. For hero/banner images, the same class on the <img> must be styled by matching CSS as an absolute cover layer; a class spelling mismatch is invalid.\n"
+            . "- No post-render visitor-copy cleanup exists. If labels, copy, layout, or image-slot binding are wrong, fix this JSON output instead of assuming PHP will repair it later.\n"
             . "- js_content: MUST be an empty string for this virtual-theme build.\n";
+    }
+
+    /**
+     * @param array<string,string> $verifiedAssets
+     */
+    private function buildVerifiedAssetPromptContract(array $verifiedAssets): string
+    {
+        $allowlist = [];
+        $templates = [];
+        foreach ($verifiedAssets as $slotId => $finalUrl) {
+            $slotId = \str_replace(["\r", "\n"], '', \trim((string)$slotId));
+            $finalUrl = \str_replace(["\r", "\n"], '', \trim((string)$finalUrl));
+            if ($slotId === '' || $finalUrl === '') {
+                continue;
+            }
+            $allowlist[] = "  * {$finalUrl}";
+            $templates[] = "  * <img src='" . $finalUrl . "' alt='...' data-pb-ai-image-role='generated-asset' data-pb-ai-asset-slot='" . $slotId . "'>";
+        }
+        if ($allowlist === []) {
+            return '';
+        }
+
+        return "- verified_asset_src_allowlist (CLOSED SET - the only legal image src/url values for this component):\n" . \implode("\n", \array_values(\array_unique($allowlist))) . "\n"
+            . "- copyable_verified_asset_img_template (copy/adapt one concrete template per required slot):\n" . \implode("\n", \array_values(\array_unique($templates))) . "\n"
+            . "- REQUIRED EXACT IMAGE TAG: copy one concrete template above for each required slot and keep src, data-pb-ai-image-role, and data-pb-ai-asset-slot on the same <img>. Do not output data-pb-ai-asset-slot on an <img> whose src is missing or different from the matching final_url. Do not return symbolic placeholder strings for URL or slot values.\n"
+            . "- Slot placement: the copied/adapted <img> must be inside html_content for this component, not only in CSS, config, comments, or alt text. Put the copied <img> as a direct child of this component's root wrapper or inside the first real media wrapper under that root, before decorative-only layers. This rule applies even for testimonial, FAQ, trust, or category sections.\n"
+            . "- Image URL exclusivity: the src for each editable image slot must be copied exactly from the matching final_url above. Do not add, shorten, translate, encode, prefix, trim query strings from, or replace that URL.\n"
+            . "- Image alt text: replace the template alt='...' with concise visitor-facing image alt text in the website content locale. Never copy slot labels, task labels, component labels, prompt briefs, or action/instruction sentences into alt/title/aria attributes. Invalid examples: 'Introduce brand story and mission', 'Showcase testimonials', 'Answer common questions', 'licenses, security certifications'. Valid examples are concrete visual descriptions such as 'Players at a premium Teen Patti table' or 'Secure APK download badge cluster'.\n"
+            . "- IMAGE_SRC_SELF_CHECK: before returning JSON, inspect every <img src> and every CSS url(...). If any image URL is not exactly one value in verified_asset_src_allowlist, the output is invalid; replace it with the correct final_url or remove the image reference. Do not leave stock-photo URLs in failed-payload repairs.\n"
+            . "- External image ban: never use Unsplash, Pexels, Pixabay, Freepik, Shutterstock, Adobe Stock, source.unsplash.com, images.unsplash.com, picsum.photos, loremflickr.com, scheme-less URLs like ://... or //..., or any image URL not listed in verified_asset_src_allowlist.\n";
     }
 
     private function resolvePromptStyleCode(array $scope, string $pageType): string
@@ -6731,8 +5954,12 @@ class AiSitePageComponentGenerationService
             . "- pagebuilder-style-templates: output must map to PageBuilder component fields/config, keep @fields/default_config alignment, scope all CSS under the component root id, and use data-glr-ref/GlrDownloadRegistry-compatible download or CTA links when applicable.\n"
             . "- theme-development: use confirmed theme palette tokens and CSS variables/inline scoped styles; no CDN, no global selectors, no unrelated hardcoded brand colors, no duplicate pixel/tracking snippets.\n"
             . "- frontend-components: generate one reusable component/block with editable fields and visitor-facing copy; do not emit full-page HTML, static placeholder sections, internal prompt text, generic substitute content, or page-type labels as visible eyebrow text.\n"
+            . "- frontend ownership: all aesthetics, layout rhythm, responsive rules, and any tiny allowed interaction belong in the AI JSON fields. Do not rely on PageRenderService or a global compatibility stylesheet to make the result attractive or mobile-safe.\n"
             . "- page-design-plan: for page-owned blocks, page_design_plan is the design brief. Preserve its color_layering, section_flow, interaction_notes, and anti_monotony_rule in the final visual hierarchy.\n"
             . "- asset-rule: when a visual/image is needed but no verified uploaded asset URL exists, create a theme-colored CSS-only visual directly. Never render <svg> or a broken <img>.\n"
+            . "- shared-logo-rule: header and footer are shared brand surfaces. If logo.image/logo.url/brand.logo provides a verified logo asset, use the same logo asset in both header and footer by default; do not replace it with section photos, trust badges, category imagery, or generated decorative art.\n"
+            . "- shared-logo-variant-rule: only use a separate light/dark/monochrome logo treatment when the approved design plan or latest user instruction requires it for contrast against different header/footer backgrounds. Preserve the same brand shape/name, change only the visual treatment needed for legibility, and keep the alt/aria label as the localized brand name.\n"
+            . "- logo-fallback-rule: when no verified logo asset exists, create one consistent typographic/CSS brand mark and reuse that identity in both header and footer. Do not invent unrelated logo concepts per block.\n"
             . "- ai-module-development: this is an audited AI scenario result; include only content that follows the provided stage-1 theme context and current build-plan task contract.\n"
             . "- queue-usage/sse-streaming: long generation is already queued; return the final component JSON only, not progress narration or markdown.\n";
     }
@@ -6756,9 +5983,17 @@ class AiSitePageComponentGenerationService
             . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
             . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is only an internal planning language hint, never a visitor-facing language source.\n"
             . "- Visitor-visible copy must use content_locale/default_locale. Do not use plan_locale unless it is the same locale.\n"
+            . "- Visitor-facing attributes are copy too: alt, title, aria-label, placeholder, value, button labels, nav labels, footer labels, and form labels must be rewritten into content_locale/default_locale before output.\n"
             . "- Planned content is not exempt: if task_script, block_task.content_plan, field samples, nav labels, CTA labels, SEO snippets, or stage-1 plan text use another language, translate/rewrite them into content_locale/default_locale before rendering html_content/footer/header text.\n"
-            . "- Rewrite planning/observation sentences into direct marketing copy before rendering. Do not visibly output phrases like \"Visitors see...\", \"Visitors can review...\", \"访客看到...\", \"用户看到...\", \"信任感增强\", or \"从而产生...\".\n"
+            . "- Brand/profile normalization: never output schema/object names such as websiteProfile, Website Profile, site profile, profile, or raw target_domain as a brand/site title. If the stored site_title/SEO/logo text is in another language than content_locale/default_locale, rewrite it into a concise visitor-facing brand label in the target locale using the business category and market from the brief.\n"
+            . "- For non-CJK content locales, Chinese/Japanese/Korean brand names, meta snippets, logo text, badges, and alt text are internal source material only unless the user explicitly requested that script as visible copy. Rewrite them into the target locale before output.\n"
+            . "- Task labels, component labels, section labels, image-slot labels, queue/build-plan labels, and data-contract role labels are internal metadata. Never render them verbatim as headings, card titles, badges, CTA text, alt/title/aria text, or body copy; rewrite them into final customer-facing copy.\n"
+            . "- Instruction-shaped English copy is forbidden as visible copy. Sentences or alt text starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are task instructions; rewrite them into concrete customer-facing copy before output.\n"
+            . "- Rewrite planning/observation sentences into direct marketing copy before rendering. Do not visibly output phrases like \"Visitors see...\", \"Visitors can review...\", \"访客看到...\", or \"访客可以...\".\n"
+            . "- Never output blueprint meta-copy: page/current-section highlight headings, planning observations, design instructions, task scripts, or sentences that tell the AI to display hierarchy, trust proof, primary actions, flow, risks, or content grouping. Those are instructions, not website copy.\n"
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
+            . "- Renderer will not repair visitor copy after generation; the JSON you return must already contain final customer-specific visible copy.\n"
+            . "- Never output internal list labels shaped like schema role + number, for example card/category/badge/step placeholders. Each card/list item needs a customer-specific title and description from the brief, build plan, or verified content data.\n"
             . "- Never render broken image placeholders. If a verified uploaded asset URL is absent, create the visual with CSS-only shapes/pseudo-elements; never use <svg>.\n";
     }
 
@@ -6775,7 +6010,7 @@ class AiSitePageComponentGenerationService
 
         $localeHint = $this->describeLocaleForAiPrompt($contentLocale);
         $scriptGuard = $this->isNonCjkLocale($contentLocale)
-            ? "- Script guard for final visible copy: do not output Chinese/Japanese/Korean sentences in headings, body, nav labels, buttons, footer text, alt text, badges, or trust points. If any planned sample contains CJK text, rewrite it into {$contentLocale} before rendering.\n"
+            ? "- Script guard for final visible copy: do not output Chinese/Japanese/Korean sentences in headings, body, nav labels, buttons, footer text, alt/title/aria-label/placeholder/value attributes, badges, or trust points. If any planned sample contains CJK text, rewrite it into {$contentLocale} before rendering.\n"
             : "- Script guard for final visible copy: keep all visitor-visible text in {$contentLocale}; if planned samples use another language, rewrite them to match the content locale before rendering.\n";
 
         return "Stage-3 language execution contract (hard requirement):\n"
@@ -6792,6 +6027,7 @@ class AiSitePageComponentGenerationService
     private function buildThemeContractPromptAddon(array $scope): string
     {
         $contract = $this->resolveThemeContract($scope);
+        $locale = $this->resolveScopePrimaryLocale($scope);
         $palette = \is_array($contract['palette'] ?? null) ? $contract['palette'] : [];
         if ($palette === []) {
             // Minimum viable visual contract fallback: never let the AI generate without any
@@ -6799,7 +6035,7 @@ class AiSitePageComponentGenerationService
             // but as a safety net this injects the style reference as an explicit contract.
             $styleCode = $this->resolvePromptStyleCode($scope, 'home');
             $styleDirection = $this->describeStyleDirection($styleCode);
-            return "Visual contract (style reference — full palette not available, use this as design mandate):\n"
+            return "Visual contract (style reference -full palette not available, use this as design mandate):\n"
                 . "- style_reference: {$styleCode}\n"
                 . "- style_direction: {$styleDirection}\n"
                 . "- IMPORTANT: Build a coherent CSS palette from this style direction. Do not invent unrelated colors.\n"
@@ -6807,13 +6043,22 @@ class AiSitePageComponentGenerationService
                 . "- Do not make every block the same full-bleed primary/accent color. Vary surfaces, cards, and spacing.\n";
         }
         $themeContext = \is_array($contract['raw_context'] ?? null) ? $contract['raw_context'] : [];
+        $artDirection = \is_array($contract['art_direction'] ?? null) ? $contract['art_direction'] : [];
+        if ($locale !== '') {
+            $filteredPalette = $this->filterPromptArrayForLocale($palette, $locale);
+            $filteredThemeContext = $this->filterPromptArrayForLocale($themeContext, $locale);
+            $filteredArtDirection = $this->filterPromptArrayForLocale($artDirection, $locale);
+            $palette = \is_array($filteredPalette) ? $filteredPalette : $palette;
+            $themeContext = \is_array($filteredThemeContext) ? $filteredThemeContext : $themeContext;
+            $artDirection = \is_array($filteredArtDirection) ? $filteredArtDirection : $artDirection;
+        }
 
         return "Confirmed visual contract from the approved stage-1 theme and build plan:\n"
             . "- theme_name: " . (string)($contract['name'] ?? '') . "\n"
             . "- visual_tone: " . (string)($contract['visual_tone'] ?? '') . "\n"
             . "- font_family: " . (string)($contract['font_family'] ?? '') . "\n"
             . "- style_signature: " . (string)($contract['style_signature'] ?? '') . "\n"
-            . "- art_direction: " . $this->jsonEncodeForPrompt(\is_array($contract['art_direction'] ?? null) ? $contract['art_direction'] : [], 2000) . "\n"
+            . "- art_direction: " . $this->jsonEncodeForPrompt($artDirection, 2000) . "\n"
             . "- palette: " . \json_encode($palette, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- full_theme_context: " . $this->jsonEncodeForPrompt($themeContext, 9000) . "\n"
             . "- Use these exact palette tokens for generated CSS and extra fields. Do not invent unrelated accent colors.\n"
@@ -6835,11 +6080,20 @@ class AiSitePageComponentGenerationService
             . "- The generated component must look polished enough for a paying customer preview, not like a default template or placeholder block.\n"
             . "- Design from the customer brief plus theme style_signature/art_direction when present; the style reference is scaffolding, not permission to reuse a fixed look.\n"
             . "- Avoid one-size-fits-all layouts: no plain centered hero plus three generic cards, no flat one-color strip, no default Inter/Roboto/Arial/system-font look, no purple-on-white AI template unless explicitly requested.\n"
+            . "- Presentation ownership rule: the renderer will output the component as returned. It will not add universal mobile CSS, layout correction CSS, hover polish, or aesthetic JS. Therefore css_extra/css_responsive must fully carry the visual design and mobile behavior.\n"
             . "- Spend CSS budget on visible quality: scoped CSS variables, clamp typography, layered gradients, texture/noise via CSS, asymmetric composition, decorative borders, CSS-only motifs/pseudo-elements, tactile CTA hover/focus states, and mobile-specific rhythm.\n"
+            . "- Mobile compatibility is part of quality, not a post-render repair: include @media rules that stack grids/flex rows, set min-width:0 on columns/cards, keep headings readable at 390px, and prevent image panels from overlapping body copy or CTAs.\n"
+            . "- Over-image readability contract: any text placed over a photo, video, detailed gradient, or busy texture must sit on a real local contrast layer such as a scrim, gradient overlay, glass panel, or dark/light text plate. Use explicit overlay/scrim/veil and text-panel/content-panel classes so the contract is visible in HTML/CSS. Body copy must never be placed directly on a busy image, and CTA/buttons must remain visually separated from paragraphs.\n"
+            . "- Hero/banner mobile contract: immersive image-backed hero/banner layouts must use clamp() typography, max-width text columns, safe line-height, and breakpoint-specific overlay strength. At phone width, headings must not exceed the viewport, paragraphs must remain readable, and media/text/CTA layers must not overlap.\n"
+            . "- Responsive audit contract: validate the component mentally at 1440px, 1024px, 768px, and 390px before returning. If any breakpoint would produce horizontal overflow, cropped text, unreadable text-on-image contrast, or absolute-position overlap, rewrite css_extra/css_responsive in the AI output.\n"
+            . "- Card readability contract: card icons, bullets, badges, titles, body copy, and CTAs must have explicit spacing and cannot collide or visually sit on top of each other. Do not shrink cards into tiny unreadable strips; keep body text at a readable size and use normal wrapping/line-height.\n"
+            . "- Typography restraint contract: decorative letter-spacing is allowed only for short eyebrow labels, not full headings or CTA headlines. Main headings must read naturally on desktop and mobile without huge word gaps, clipped letters, or awkward forced line breaks.\n"
             . "- Block-specific baseline: use the role-specific base pattern unless explicitly overridden: hero/banner defaults to an immersive image-backed banner; trust defaults to badge/proof/credential rhythm; game/product defaults to media-led showcase or feature tiles; FAQ defaults to accordion/help rhythm; story defaults to timeline/editorial narrative; CTA defaults to a cinematic conversion band. Do not render every block as the same centered title + three small cards + image.\n"
             . "- Shadow/depth effects required: use box-shadow, drop-shadow, or CSS filters to create visual depth on cards, images, and interactive elements. At minimum, implement a subtle card shadow with a hover lift (transition: box-shadow 0.3s ease, transform 0.3s ease). Do not leave interactive surfaces flat.\n"
             . "- Richer text colors: do not rely on just one heading color and one body color. Use accent-colored spans, gradient text (via background-clip), highlighted/inline marks, and color-mix() to create typographic hierarchy and visual rhythm in headings and key phrases.\n"
             . "- Customer-intent lock: the final HTML/CSS must visibly match the user's actual business/game/service scenario through motifs, labels, CTA affordances, proof details, and interaction behavior; do not generate a category-neutral section.\n"
+            . "- Editable-field completeness: if default_config contains content.title/content.subtitle/content.description or alias fields such as title, heading, headline, description, body, section_title, or eyebrow, keep them populated with coherent visitor copy. Do not overwrite framework-provided copy fields with empty strings; empty editable fields make the preview fall back to generic labels and are invalid.\n"
+            . "- No post-render cleanup dependency: invalid copy or layout fails validation and triggers AI retry. Do not rely on the renderer to rename labels, rewrite copy, or restyle a weak composition after JSON return.\n"
             . "- Interaction/effects requirement: implement at least one friendly visible hover/focus/reveal/ambient effect with CSS transition/transform/animation plus a reduced-motion-safe fallback when motion is used; do not describe effects without CSS.\n"
             . "- Color quality requirement: define explicit readable background/text/CTA/focus pairings; dark surfaces require light foregrounds, and neighboring blocks must differ by surface depth, divider, texture, or layout rhythm.\n"
             . "- HTML structure contract: every HTML field must be a valid fragment with a component-owned root wrapper, closed attribute quotes, and balanced tags. Never emit framework wrappers like `.pb-ai-html-block`, never close a `div/section/article` that was not opened inside the same field, and never concatenate neighboring blocks into one field.\n"
@@ -6870,7 +6124,7 @@ class AiSitePageComponentGenerationService
         }
 
         $heroRule = $isHero
-            ? "- HERO/BANNER DEFAULT BASELINE: unless the user's latest block-adjustment instruction or approved design plan explicitly conflicts, render a real premium 1920x750-style banner. The image or visual layer covers the section background edge-to-edge with object-fit:cover or background-image; content sits as a floating overlay inside a centered max-width container. Do NOT create a small side image, isolated centered card, narrow media frame, or huge empty side gutters as the default. If the user explicitly asks for another hero composition, follow it while preserving premium generated imagery, strong hierarchy, and readable overlay treatment.\n"
+            ? "- HERO/BANNER DEFAULT BASELINE: unless the user's latest block-adjustment instruction or approved design plan explicitly conflicts, render a real premium 1920x750-style banner. When a verified generated image exists, it must be a real editable <img> cover layer with object-fit:cover and the required slot attributes; content sits inside a floating text-safe panel on top of an image-wide scrim/gradient veil. The text panel must have its own readable background/scrim, padding, max-width, and foreground colors so paragraphs remain readable on busy photos. Do NOT create a small side image, isolated centered card, narrow media frame, CSS background-image-only hero, huge empty side gutters, or dark body text directly over a detailed photo as the default. If the user explicitly asks for another hero composition, follow it while preserving premium generated imagery, strong hierarchy, and readable overlay treatment.\n"
             : "- NON-HERO HARD RULE: this block needs its own layout purpose and visual rhythm. Do not copy the hero structure or the previous block's card/media arrangement.\n";
 
         return "Premium site design contract for this section:\n"
@@ -6878,8 +6132,8 @@ class AiSitePageComponentGenerationService
             . $heroRule
             . "- Section recipe: {$recipe}\n"
             . "- Anti-monotony rule: adjacent blocks must not share the same three-card row, same image position, same copy labels, or same pale background/card treatment. Change composition, scale, motif, and spacing per section role.\n"
-            . "- Rejected output examples: centered title plus three small cards plus the same image; tiny cartoon/SVG-looking media used as a substitute for a real generated image; generic labels like \"Get started\", \"Game suite\", \"Download path\" repeated across blocks; hero built as a boxed card next to a small image.\n"
-            . "- If a verified generated image exists, use it prominently and naturally. For hero it is the background layer; for non-hero it must be a purposeful media surface, not a thumbnail afterthought.\n";
+            . "- Rejected output patterns: centered title plus three small cards plus the same image; tiny cartoon/SVG-looking media used as a substitute for a real generated image; repeated generic CTA/category labels across blocks; hero built as a boxed card next to a small image.\n"
+            . "- If a verified generated image exists, use it prominently and naturally as a real editable <img>. For hero, the <img> is a cover layer behind the overlay copy; for non-hero it is a purposeful media surface, not a thumbnail afterthought.\n";
     }
 
     /**
@@ -6892,17 +6146,32 @@ class AiSitePageComponentGenerationService
         }
         $required = (int)($visualContract['required'] ?? 0) === 1;
         $slotId = (string)($visualContract['slot_id'] ?? '');
+        $finalUrl = \trim((string)($visualContract['final_url'] ?? $visualContract['url'] ?? ''));
         $usage = (string)($visualContract['usage'] ?? '');
         $placement = (string)($visualContract['placement'] ?? '');
         $subject = (string)($visualContract['subject'] ?? '');
         $style = (string)($visualContract['style'] ?? '');
+        $requiredAssetContract = ($required && $slotId !== '' && $finalUrl !== '')
+            ? $this->buildVerifiedAssetPromptContract([$slotId => $finalUrl])
+            : '';
+        $requiredImgTemplate = '';
+        if ($required && $slotId !== '' && $finalUrl !== '') {
+            $requiredImgTemplate = "<img src='"
+                . \htmlspecialchars($finalUrl, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+                . "' alt='...' data-pb-ai-image-role='generated-asset' data-pb-ai-asset-slot='"
+                . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+                . "'>";
+        }
 
         return "Block visual contract:\n"
             . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
             . "- image_required: " . ($required ? 'yes' : 'no') . "\n"
             . ($required
                 ? "- Required image slot {$slotId}: use the exact generated asset for this block. Usage={$usage}; placement={$placement}; subject={$subject}; style={$style}.\n"
-                    . "- Required slot HTML rule: the image URL must appear in html_content as <img src> or inline/background style on a real element, and that same element must include data-pb-ai-image-role=\"generated-asset\" and data-pb-ai-asset-slot=\"{$slotId}\".\n"
+                    . ($finalUrl !== '' ? "- Required final_url for this slot: {$finalUrl}\n" : '')
+                    . ($requiredImgTemplate !== '' ? "- Copyable required img template: {$requiredImgTemplate}\n" : '')
+                    . $requiredAssetContract
+                    . "- Required slot HTML rule: copy the concrete img template above into html_content as a direct child of the component root or inside the first media wrapper, and keep its src, data-pb-ai-image-role, and data-pb-ai-asset-slot values on the same <img>. Any other src for this slot is invalid, including external stock URLs, placeholder URLs, malformed scheme-less URLs, or URLs that differ by one character. Do not use CSS background-image alone for required slots; editor slot binding is HTML-attribute based.\n"
                     . "- If the slot is hero/background_cover and the user's latest block-adjustment instruction does not explicitly request another composition, build the block as a real 1920x750-style banner: full-cover image layer, gradient overlay, floating content container. A side thumbnail or cartoon-like illustration panel is invalid as the default baseline.\n"
                 : "- Optional image slot: do not invent image URLs. If no verified generated image is supplied, design with CSS-only motif/pseudo-elements; no <svg> and no placeholder service.\n");
     }
@@ -7210,97 +6479,6 @@ class AiSitePageComponentGenerationService
         return (0.2126 * $channels[0]) + (0.7152 * $channels[1]) + (0.0722 * $channels[2]);
     }
 
-    private function buildHeaderPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $headerConfig): string
-    {
-        $brief = $this->pickString($websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, $scope['user_description'] ?? null);
-        $pageTypes = $this->resolveScopedPageTypes($scope);
-        $pageTypeLabels = Page::getPageTypes();
-        $pageList = [];
-        foreach ($pageTypes as $pageType) {
-            $pageList[] = (string)($pageTypeLabels[$pageType] ?? $pageType);
-        }
-        $langRule = $this->buildPrimaryLanguageRuleZh($websiteProfile, $scope);
-
-        return $langRule
-            . "你正在为 PageBuilder AI 建站工作台生成一个网站页头 header 组件。\n"
-            . "站点名称：{$siteDisplayName}\n"
-            . "客户一句话需求：{$brief}\n"
-            . "站点需要承载的页面：" . \implode('、', $pageList) . "\n"
-            . "要求：\n"
-            . "1. 这是常规网站页头，不要输出整页，只生成 header 组件增强部分。\n"
-            . "2. 导航必须服务于真实页面导航，不能写死伪造菜单；当前组件会优先读取真实页面导航，没有时回退到配置中的导航项。\n"
-            . "3. 允许输出 css_extra / html_extra / js_content，重点体现品牌气质、吸顶、滚动、移动端菜单等体验。\n"
-            . "4. 文案必须贴合客户一句话需求，避免空泛模板句。\n"
-            . "5. 返回纯 JSON 对象，不要 markdown，不要解释。\n"
-            . "JSON 字段：extra_fields, php_variables, css_extra, html_extra, js_content。\n"
-            . "当前导航回退项：" . \json_encode($headerConfig['nav_items'] ?? [], \JSON_UNESCAPED_UNICODE);
-    }
-
-    /**
-     * @param array<string,mixed> $websiteProfile
-     * @param array<string,mixed> $scope
-     * @param array<string,mixed> $footerConfig
-     */
-    private function buildFooterPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $footerConfig): string
-    {
-        $brief = $this->pickString($websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, $scope['user_description'] ?? null);
-        $langRule = $this->buildPrimaryLanguageRuleZh($websiteProfile, $scope);
-
-        return $langRule
-            . "你正在为 PageBuilder AI 建站工作台生成一个网站页脚 footer 组件。\n"
-            . "站点名称：{$siteDisplayName}\n"
-            . "客户一句话需求：{$brief}\n"
-            . "要求：\n"
-            . "1. 这是常规网站页脚，不要输出整页，只生成 footer 组件增强部分。\n"
-            . "2. 页脚链接需要兼容真实页面 link/nav 逻辑，没有真实页面时回退到配置中的链接列。\n"
-            . "3. 可以生成品牌区、资源链接、补充列、订阅区、声明文案，但必须保持常规网站 footer 结构。\n"
-            . "4. 文案与气质必须贴合客户一句话需求。\n"
-            . "5. 返回纯 JSON 对象，不要 markdown，不要解释。\n"
-            . "JSON 字段：extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content。\n"
-            . "当前页脚回退配置：" . \json_encode([
-                'column1' => $footerConfig['links.column1_items'] ?? '',
-                'column2' => $footerConfig['links.column2_items'] ?? '',
-            ], \JSON_UNESCAPED_UNICODE);
-    }
-
-    /**
-     * @param array<string,mixed> $section
-     * @param array<string,mixed> $blueprint
-     * @param array<string,mixed> $websiteProfile
-     * @param array<string,mixed> $scope
-     */
-    private function buildSectionPrompt(string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): string
-    {
-        $brief = $this->pickString($websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, $scope['user_description'] ?? null);
-        $pageInstructionMap = Page::getPageTypePromptInstructionsMap();
-        $pageInstruction = (string)($pageInstructionMap[$pageType] ?? '');
-        $sectionName = (string)($section['name'] ?? $section['code'] ?? '');
-        $sectionKey = (string)($section['key'] ?? '');
-        $sectionTemplate = (string)($section['template'] ?? 'hero');
-        $sectionConfig = \json_encode($section['config'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT);
-        $refinement = $this->resolveSectionRefinement($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
-        $blogPrompt = $this->buildBlogPromptAddon($pageType, $sectionKey, $scope);
-        $langRule = $this->buildPrimaryLanguageRuleZh($websiteProfile, $scope);
-
-        return $langRule
-            . "你正在为 PageBuilder AI 建站工作台生成一个内容区块 content 组件。\n"
-            . "页面类型：" . (string)($blueprint['page_label'] ?? $pageType) . " ({$pageType})\n"
-            . "区块名称：{$sectionName}\n"
-            . "区块角色：{$sectionKey}\n"
-            . "建议结构类型：{$sectionTemplate}\n"
-            . "客户一句话需求：{$brief}\n"
-            . "页面生成说明：{$pageInstruction}\n"
-            . "当前区块建议配置：{$sectionConfig}\n"
-            . ($refinement !== '' ? "用户对当前区块的额外微调要求：{$refinement}\n" : '')
-            . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
-            . "要求：\n"
-            . "1. 只生成一个 content 组件，不要输出整页 document。\n"
-            . "2. 组件必须围绕这个区块角色来写，文案要严格贴合客户一句话需求，而不是通用模板句。\n"
-            . "3. 返回纯 JSON 对象，不要 markdown，不要解释。\n"
-            . "4. JSON 字段：extra_fields, php_variables, css_extra, css_responsive, html_content, js_content。\n"
-            . "5. 如果是博客页面并且提示里给出了真实数据变量，必须优先使用真实数据变量，不要伪造文章或分类。";
-    }
-
     /**
      * @param array<string,mixed> $scope
      */
@@ -7326,18 +6504,18 @@ class AiSitePageComponentGenerationService
         }, \array_slice((array)($blogContext['blog_categories'] ?? []), 0, 5));
 
         $roleHint = match ($sectionKey) {
-            'hero' => '这一屏更适合做博客页说明、栏目定位和阅读引导。',
-            'highlights' => '这一屏更适合直接渲染真实文章列表或分类卡片。',
-            'details' => '这一屏更适合做分类导航、阅读路径、近期文章或当前文章补充信息。',
-            default => '这一屏请结合博客真实数据来组织内容。',
+            'hero' => 'Use this section for blog positioning and reading guidance.',
+            'highlights' => 'Use this section to render real post lists or category cards.',
+            'details' => 'Use this section for category navigation, reading paths, recent posts, or current post context.',
+            default => 'Organize this section around real blog data.',
         };
 
-        return "博客页面真实数据要求：\n"
-            . "- 可用变量：\$blog_posts, \$blog_categories, \$recent_posts, \$related_posts, \$current_post, \$current_category, \$category_posts。\n"
+        return "Blog real-data requirements:\n"
+            . "- Available variables: \$blog_posts, \$blog_categories, \$recent_posts, \$related_posts, \$current_post, \$current_category, \$category_posts.\n"
             . "- {$roleHint}\n"
-            . "- 示例文章数据：" . \json_encode($postPreview, \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- 示例分类数据：" . \json_encode($categoryPreview, \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- 请使用 foreach ((\$blog_posts ?? []) as \$post) 或同类真实数据循环，不要手写假文章。";
+            . "- Example post data: " . \json_encode($postPreview, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- Example category data: " . \json_encode($categoryPreview, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- Use loops over real variables such as foreach ((\$blog_posts ?? []) as \$post); do not hardcode fake posts.\n";
     }
 
     /**
@@ -7348,7 +6526,8 @@ class AiSitePageComponentGenerationService
     private function buildHeaderDefaultConfig(array $websiteProfile, array $scope, string $siteDisplayName): array
     {
         $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
-        $navItems = $this->buildHeaderNavigationPages($scope);
+        $siteDisplayName = $this->resolveLocaleSafeSiteDisplayName($siteDisplayName, $websiteProfile, $scope, $locale);
+        $navItems = $this->buildHeaderNavigationPages($scope, $locale);
         $navTextLines = [];
         foreach ($navItems as $item) {
             if (!\is_array($item)) {
@@ -7357,16 +6536,15 @@ class AiSitePageComponentGenerationService
             $navTextLines[] = \trim((string)($item['title'] ?? '')) . '=>' . \trim((string)($item['url'] ?? '#'));
         }
 
-        $profileLogo = \trim((string)($websiteProfile['logo'] ?? ''));
-        $logoAssetUrl = $this->resolveHeaderAssetUrl($scope);
-        // Manifest / queued logo assets must beat stale profile.logo placeholders — otherwise AI-generated marks never surface on preview even after asset stages finish.
-        $effectiveLogo = $logoAssetUrl !== '' ? $logoAssetUrl : $profileLogo;
+        $effectiveLogo = $this->resolveSharedLogoAssetUrl($websiteProfile, $scope);
 
         $defaultConfig = [
             'logo.display' => 'yes',
             'logo.text' => $siteDisplayName,
             'logo.image' => $effectiveLogo,
             'logo.url' => $effectiveLogo,
+            'identity.shared_logo_asset' => $effectiveLogo,
+            'identity.logo_reuse_policy' => 'reuse the same verified logo asset in header and footer by default; only use a contrast-safe variant when the design plan explicitly needs it',
             'navigation.display' => 'yes',
             'navigation.items' => \implode("\n", $navTextLines),
             'nav_items' => \array_map(static fn(array $item): array => [
@@ -7374,13 +6552,14 @@ class AiSitePageComponentGenerationService
                 'href' => (string)($item['url'] ?? '#'),
             ], $navItems),
             'cta.show' => 'yes',
-            'cta.text' => $this->resolvePrimaryCtaText($scope),
-            'cta.url' => '#contact',
+            'cta.text' => $this->resolvePrimaryCtaText($scope, $locale),
+            'cta.url' => $this->resolvePrimaryCtaUrl($scope),
         ];
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'header'));
 
         $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $this->resolveSharedBuildPlanTask($scope, 'header'), $locale);
         $defaultConfig['runtime.shared_region'] = 'header';
+        $defaultConfig['runtime.content_locale'] = $locale;
 
         return $defaultConfig;
     }
@@ -7393,8 +6572,9 @@ class AiSitePageComponentGenerationService
     private function buildFooterDefaultConfig(array $websiteProfile, array $scope, string $siteDisplayName): array
     {
         $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        $siteDisplayName = $this->resolveLocaleSafeSiteDisplayName($siteDisplayName, $websiteProfile, $scope, $locale);
         $sharedPromptContext = $this->resolveSharedPromptContext($scope);
-        $navigationPages = $this->buildNavigationPages($scope);
+        $navigationPages = $this->buildNavigationPages($scope, $locale);
         $brandSummary = $this->filterVisibleCopyForLocale(
             $this->pickString(
                 $sharedPromptContext['site_positioning'] ?? null,
@@ -7433,7 +6613,14 @@ class AiSitePageComponentGenerationService
                 continue;
             }
             $type = (string)($item['type'] ?? '');
-            $line = \trim((string)($item['title'] ?? '')) . '=>' . \trim((string)($item['url'] ?? '#'));
+            $title = $this->filterVisibleCopyForLocale(\trim((string)($item['title'] ?? '')), $locale);
+            if ($title === '' && $type !== '') {
+                $title = $this->localizePageTypeTitle($type, $locale);
+            }
+            if ($title === '') {
+                continue;
+            }
+            $line = $title . '=>' . \trim((string)($item['url'] ?? '#'));
             $allLines[] = $line;
             if (\in_array($type, [Page::TYPE_TERMS_OF_SERVICE, Page::TYPE_PRIVACY_POLICY, Page::TYPE_COOKIE_POLICY, Page::TYPE_REFUND_POLICY, Page::TYPE_SHIPPING_POLICY], true)) {
                 $legalLines[] = $line;
@@ -7450,9 +6637,12 @@ class AiSitePageComponentGenerationService
             $legalLines = \array_slice($allLines, 1, 3);
         }
 
+        $effectiveLogo = $this->resolveSharedLogoAssetUrl($websiteProfile, $scope);
         $defaultConfig = [
             'brand.name' => $siteDisplayName,
-            'brand.logo' => (string)($websiteProfile['logo'] ?? ''),
+            'brand.logo' => $effectiveLogo,
+            'identity.shared_logo_asset' => $effectiveLogo,
+            'identity.logo_reuse_policy' => 'reuse the same verified logo asset in header and footer by default; only use a contrast-safe variant when the design plan explicitly needs it',
             'brand.description' => $brandSummary,
             'links.column1_title' => $this->localizeBuildText('featured_pages', $locale),
             'links.column1_items' => \implode("\n", $featuredLines),
@@ -7467,6 +6657,7 @@ class AiSitePageComponentGenerationService
 
         $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $this->resolveSharedBuildPlanTask($scope, 'footer'), $locale);
         $defaultConfig['runtime.shared_region'] = 'footer';
+        $defaultConfig['runtime.content_locale'] = $locale;
 
         return $defaultConfig;
     }
@@ -7515,6 +6706,19 @@ class AiSitePageComponentGenerationService
             'content.title' => $title,
             'content.subtitle' => $subtitle,
             'content.description' => $description,
+            'title' => $title,
+            'heading' => $title,
+            'headline' => $title,
+            'section_title' => $title,
+            'subtitle' => $subtitle,
+            'eyebrow' => $subtitle,
+            'description' => $description,
+            'body' => $description,
+            'section_intro' => $description,
+            'content.heading' => $title,
+            'content.headline' => $title,
+            'content.section_title' => $title,
+            'content.body' => $description,
             'layout.container_width' => '1200',
             'layout.padding_top' => (string)($isHeroSectionTpl ? 96 : 72),
             'layout.padding_bottom' => (string)($sectionTpl === 'cta' ? 96 : 72),
@@ -7533,6 +6737,24 @@ class AiSitePageComponentGenerationService
             );
         }
         $defaultConfig = $this->repairDefaultVisibleCopyFromStageOneSamples($defaultConfig, $stageOneSamples);
+        $resolvedTitle = \trim((string)($defaultConfig['content.title'] ?? $defaultConfig['title'] ?? ''));
+        $resolvedSubtitle = \trim((string)($defaultConfig['content.subtitle'] ?? $defaultConfig['subtitle'] ?? ''));
+        $resolvedDescription = \trim((string)($defaultConfig['content.description'] ?? $defaultConfig['description'] ?? ''));
+        foreach (['title', 'heading', 'headline', 'section_title', 'content.heading', 'content.headline', 'content.section_title'] as $field) {
+            if ($resolvedTitle !== '') {
+                $defaultConfig[$field] = $resolvedTitle;
+            }
+        }
+        foreach (['subtitle', 'eyebrow'] as $field) {
+            if ($resolvedSubtitle !== '') {
+                $defaultConfig[$field] = $resolvedSubtitle;
+            }
+        }
+        foreach (['description', 'body', 'section_intro', 'content.body'] as $field) {
+            if ($resolvedDescription !== '') {
+                $defaultConfig[$field] = $resolvedDescription;
+            }
+        }
         $themeTokens = $this->collectContractThemeTokens($scope);
         if ($themeTokens !== []) {
             $defaultConfig['contract.theme_tokens'] = \implode(' ', \array_slice($themeTokens, 0, 8));
@@ -7548,7 +6770,6 @@ class AiSitePageComponentGenerationService
             $resolvedImageSlotId = $this->resolveSectionAssetSlotId($scope, $sectionImageUrl);
             $sectionImageSlotId = $resolvedImageSlotId !== '' ? $resolvedImageSlotId : $sectionImageSlotId;
             if ($sectionImageSlotId === '') {
-                // 默认按 page:{page_type}:{code}（slash → dash）派生 slot_id，便于前端可视化编辑追踪。
                 $sectionImageSlotId = 'page:' . $pageType . ':' . \str_replace('/', '-', (string)($section['code'] ?? ''));
             }
         }
@@ -7563,15 +6784,32 @@ class AiSitePageComponentGenerationService
 
         $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $buildPlanTask, $locale);
         $defaultConfig = $this->repairDefaultVisibleCopyFromStageOneSamples($defaultConfig, $stageOneSamples);
+        $resolvedTitle = \trim((string)($defaultConfig['content.title'] ?? $defaultConfig['title'] ?? ''));
+        $resolvedSubtitle = \trim((string)($defaultConfig['content.subtitle'] ?? $defaultConfig['subtitle'] ?? ''));
+        $resolvedDescription = \trim((string)($defaultConfig['content.description'] ?? $defaultConfig['description'] ?? ''));
+        foreach (['title', 'heading', 'headline', 'section_title', 'content.heading', 'content.headline', 'content.section_title'] as $field) {
+            if ($resolvedTitle !== '') {
+                $defaultConfig[$field] = $resolvedTitle;
+            }
+        }
+        foreach (['subtitle', 'eyebrow'] as $field) {
+            if ($resolvedSubtitle !== '') {
+                $defaultConfig[$field] = $resolvedSubtitle;
+            }
+        }
+        foreach (['description', 'body', 'section_intro', 'content.body'] as $field) {
+            if ($resolvedDescription !== '') {
+                $defaultConfig[$field] = $resolvedDescription;
+            }
+        }
 
-        // 强行契约：把当前 section 的模板/页面/资产等元信息写入 runtime.* 内部键，
-        // stub/fallback 用它直接命中正确变体并真正使用 verified_assets，而不是退化为占位 SVG。
-        // runtime.* 前缀会在 stripInternalComponentConfig 中被剔除，不会污染最终保存的组件配置。
-        $defaultConfig['runtime.section_template'] = (string)($section['template'] ?? '');
+        // 寮鸿濂戠害锛氭妸褰撳墠 section 鐨勬ā鏉?椤甸潰/璧勪骇绛夊厓淇℃伅鍐欏叆 runtime.* 鍐呴儴閿紝
+        // stub/fallback 鐢ㄥ畠鐩存帴鍛戒腑姝ｇ‘鍙樹綋骞剁湡姝ｄ娇鐢?verified_assets锛岃€屼笉鏄€€鍖栦负鍗犱綅 SVG銆?        // runtime.* 鍓嶇紑浼氬湪 stripInternalComponentConfig 涓鍓旈櫎锛屼笉浼氭薄鏌撴渶缁堜繚瀛樼殑缁勪欢閰嶇疆銆?        $defaultConfig['runtime.section_template'] = (string)($section['template'] ?? '');
         $defaultConfig['runtime.section_page_type'] = $pageType;
         $defaultConfig['runtime.section_code'] = (string)($section['code'] ?? '');
         $defaultConfig['runtime.section_key'] = (string)($section['key'] ?? '');
         $defaultConfig['runtime.task_key'] = (string)($buildPlanTask['task_key'] ?? '');
+        $defaultConfig['runtime.content_locale'] = $locale;
         if (\trim((string)($defaultConfig['runtime.content_copy_rows'] ?? '')) === '') {
             $sectionRows = $this->resolveExecutionBlueprintSectionRows($scope, $pageType, $section);
             if ($sectionRows !== []) {
@@ -7601,9 +6839,7 @@ class AiSitePageComponentGenerationService
     {
         $code = \strtolower(\str_replace(['/', '_'], '-', \trim((string)($section['code'] ?? ''))));
         $key = \strtolower(\str_replace('_', '-', \trim((string)($section['key'] ?? ''))));
-        $blocks = \is_array($scope['execution_blueprint']['pages'][$pageType]['blocks'] ?? null)
-            ? $scope['execution_blueprint']['pages'][$pageType]['blocks']
-            : [];
+        $blocks = $this->resolveExecutionBlueprintBlocksForPage($scope, $pageType);
         foreach ($blocks as $block) {
             if (!\is_array($block)) {
                 continue;
@@ -7684,8 +6920,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 反向查找：用 final_url 找回 manifest 中的 slot_id。
-     * @param array<string,mixed> $scope
+     * 鍙嶅悜鏌ユ壘锛氱敤 final_url 鎵惧洖 manifest 涓殑 slot_id銆?     * @param array<string,mixed> $scope
      */
     private function resolveSectionAssetSlotId(array $scope, string $finalUrl): string
     {
@@ -7807,7 +7042,7 @@ class AiSitePageComponentGenerationService
     {
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         if ((string)($buildBlueprint['source'] ?? '') !== 'build_plan_v2') {
-            return [];
+            return $this->buildPlanTaskRootFromExecutionBlueprint($scope);
         }
 
         $sharedTasks = [];
@@ -7831,6 +7066,89 @@ class AiSitePageComponentGenerationService
 
         return [
             'signature' => (string)($buildBlueprint['build_plan_signature'] ?? $buildBlueprint['signature'] ?? ''),
+            'shared_tasks' => $sharedTasks,
+            'page_tasks' => $pageTasks,
+        ];
+    }
+
+    /**
+     * The refactored stage-1 blueprint is the source of truth for generation.
+     * Convert its page_plans/shared chrome shape into the task root consumed by
+     * section prompts and default-config derivation.
+     *
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function buildPlanTaskRootFromExecutionBlueprint(array $scope): array
+    {
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        if ($executionBlueprint === []) {
+            return [];
+        }
+
+        $sharedPromptContext = $this->normalizeSharedPromptContextFromExecutionBlueprint($scope);
+        $themeContext = $this->resolveExecutionBlueprintThemeContext($scope);
+        $contentLocale = $this->resolveScopePrimaryLocale($scope);
+        $sharedTasks = [];
+        foreach (['header', 'footer'] as $region) {
+            $plan = $this->resolveExecutionBlueprintSharedPlan($scope, $region);
+            if ($plan === []) {
+                continue;
+            }
+            $sharedTasks[] = [
+                'task_key' => 'shared:' . $region,
+                'task_type' => 'shared_component',
+                'region' => $region,
+                'label' => $this->pickString($plan['title'] ?? null, $region),
+                'sort_order' => $region === 'header' ? 10 : 20,
+                'plan_context' => [
+                    'block_goal' => (string)($plan['goal'] ?? ''),
+                    'field_plan' => $this->sanitizeExecutionBlueprintFieldPlanForGeneration(
+                        \is_array($plan['field_plan'] ?? null) ? $plan['field_plan'] : [],
+                        $contentLocale
+                    ),
+                ],
+                'task_script' => [
+                    'story_goal' => (string)($plan['goal'] ?? ''),
+                    'field_content_requirements' => $this->buildSharedPlanFieldRequirements($plan, $region),
+                ],
+                'block_task' => [
+                    'task_goal' => (string)($plan['goal'] ?? ''),
+                    'content_plan' => [
+                        'content_copy' => $this->buildSharedPlanContentCopyRows($plan, $region),
+                    ],
+                    'style_plan' => \is_array($plan['style_brief'] ?? null) ? $plan['style_brief'] : [],
+                    'realtime_content' => \is_array($plan['realtime_content'] ?? null) ? $plan['realtime_content'] : [],
+                ],
+                'runtime_context' => [
+                    'theme_context_snapshot' => $themeContext,
+                    'shared_prompt_context' => $sharedPromptContext,
+                    'content_locale' => $contentLocale,
+                ],
+            ];
+        }
+
+        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : [];
+        if ($pagePlans === [] && \is_array($executionBlueprint['pages'] ?? null)) {
+            $pagePlans = $executionBlueprint['pages'];
+        }
+
+        $pageTasks = [];
+        foreach (\array_keys($pagePlans) as $pageType) {
+            if (!\is_string($pageType) || \trim($pageType) === '') {
+                continue;
+            }
+            foreach ($this->buildSectionTasksFromExecutionBlueprint($pageType, $scope) as $task) {
+                $pageTasks[$pageType][] = $task;
+            }
+        }
+
+        if ($sharedTasks === [] && $pageTasks === []) {
+            return [];
+        }
+
+        return [
+            'signature' => (string)($executionBlueprint['signature'] ?? ''),
             'shared_tasks' => $sharedTasks,
             'page_tasks' => $pageTasks,
         ];
@@ -7919,11 +7237,28 @@ class AiSitePageComponentGenerationService
                 : (\is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null)
                     ? $scope['plan_workbench']['confirmed']['shared_prompt_context']
                     : []);
+            if ($sharedPromptContext === []) {
+                $sharedPromptContext = $this->resolveSharedPromptContext($scope);
+            }
+            $contentLocale = \trim((string)(
+                $themeContext['content_locale']
+                ?? $sharedPromptContext['content_locale']
+                ?? $this->resolveScopePrimaryLocale($scope)
+            ));
+            if ($contentLocale !== '') {
+                $filteredThemeContext = $this->filterPromptArrayForLocale($themeContext, $contentLocale);
+                $filteredSharedPromptContext = $this->filterPromptArrayForLocale($sharedPromptContext, $contentLocale);
+                $themeContext = \is_array($filteredThemeContext) ? $filteredThemeContext : $themeContext;
+                $sharedPromptContext = \is_array($filteredSharedPromptContext) ? $filteredSharedPromptContext : $sharedPromptContext;
+            }
             $verifiedAssets = $this->extractVerifiedAssetsForBuildPlanTask($scope, $buildPlanTask);
             $verifiedAssetRule = $verifiedAssets !== []
                 ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 3000) . "\n"
-                    . "- HARD CONTRACT: every verified_asset URL MUST be used as <img src> or CSS url() in this section's output. Do not skip any. If a slot_id matches this section, the corresponding image must appear in html_content. This is NOT optional — unused generated images waste API tokens.\n"
-                    . "- Inject attribute data-pb-ai-asset-slot=\"<slot_id>\" on every element using a verified asset URL.\n"
+                    . "- HARD CONTRACT: every verified_asset final_url for this section MUST be used as a real editable <img> in html_content by copying the concrete template below. Do not skip any. If a slot_id matches this section, the corresponding image must appear as an editable image. This is NOT optional; unused generated images waste API tokens.\n"
+                    . "- Slot placement contract: place the editable <img> for the matching slot inside this component's root wrapper before decorative-only layers. For non-hero sections, use it as a media card, portrait/avatar rail, proof image, or editorial visual; never omit it because the section is text-heavy.\n"
+                    . "- The same <img> must keep the concrete src, data-pb-ai-asset-slot, and data-pb-ai-image-role='generated-asset' values from the copied template.\n"
+                    . "- Use CSS to make required images cover banners/media panels; do not replace the editable <img> with CSS background-image only.\n"
+                    . $this->buildVerifiedAssetPromptContract($verifiedAssets)
                 : "- verified_assets: []\n";
             return "Build-plan task context for this {$contextLabel} (fallback from scope - follow the customer brief strictly):\n"
                 . "- customer_brief: {$brief}\n"
@@ -7931,7 +7266,7 @@ class AiSitePageComponentGenerationService
                 . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
                 . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 5000) . "\n"
                 . $verifiedAssetRule
-                . "- anti-copy rule: never paste stage-1 observation/planning sentences directly into html_content. Rewrite phrases like \"Visitors see...\", \"访客看到...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n";
+            . "- anti-copy rule: never paste stage-1 observation/planning sentences directly into html_content. Rewrite observation-shaped phrases in any planning language into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n";
         }
 
         $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
@@ -7965,7 +7300,24 @@ class AiSitePageComponentGenerationService
         $pageDesignPlan = \is_array($planContext['page_design_plan'] ?? null)
             ? $planContext['page_design_plan']
             : (\is_array($stylePlan['page_design_plan'] ?? null) ? $stylePlan['page_design_plan'] : []);
-        $contentLocale = \trim((string)($runtimeContext['content_locale'] ?? $scope['default_locale'] ?? ''));
+        $contentLocale = \trim((string)($runtimeContext['content_locale'] ?? $this->resolveScopePrimaryLocale($scope)));
+        if ($contentLocale !== '') {
+            foreach ([
+                'themeContext' => $themeContext,
+                'sharedPromptContext' => $sharedPromptContext,
+                'taskScript' => $taskScript,
+                'blockTask' => $blockTask,
+                'fieldRequirements' => $fieldRequirements,
+                'contentPlan' => $contentPlan,
+                'stylePlan' => $stylePlan,
+                'pageDesignPlan' => $pageDesignPlan,
+            ] as $name => $payload) {
+                $filtered = $this->filterPromptArrayForLocale($payload, $contentLocale);
+                if (\is_array($filtered)) {
+                    ${$name} = $filtered;
+                }
+            }
+        }
         $localeHint = $contentLocale !== '' ? $this->describeLocaleForAiPrompt($contentLocale) : '';
         $stage3LocaleRule = $contentLocale !== ''
             ? "- stage3 locale gate: source_of_truth_locale={$contentLocale} ({$localeHint}). build-plan text is intent only; rewrite any non-{$contentLocale} planned sentence before it becomes visible copy.\n"
@@ -7979,10 +7331,12 @@ class AiSitePageComponentGenerationService
         }
         $verifiedAssetRule = $verifiedAssets !== []
             ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 3000) . "\n"
-                . "- HARD CONTRACT — every verified_asset URL MUST appear as <img src> or CSS background-image in html_content. Do not skip any. Unused generated images waste API tokens.\n"
-                . "- Rules: use the exact final_url value; match the asset by slot_id context. If no asset matches this section, render CSS-only decorative structure; never use <svg>.\n"
-                . "- Inject attribute data-pb-ai-asset-slot=\"<slot_id>\" on every element using a verified asset URL.\n"
-                . "- Inject attribute data-pb-ai-image-role=\"generated-asset\" on every element using a verified asset URL.\n"
+                . "- HARD CONTRACT: every verified_asset final_url for this section MUST appear as a real editable <img> in html_content by copying the concrete template below. Do not skip any. Unused generated images waste API tokens.\n"
+                . "- Rules: use the supplied final_url value without changing it; match the asset by slot_id context. If no asset matches this section, render CSS-only decorative structure; never use <svg>.\n"
+                . "- Slot placement contract: place the editable <img> for the matching slot inside this component's root wrapper before decorative-only layers. For non-hero sections, use it as a media card, portrait/avatar rail, proof image, or editorial visual; never omit it because the section is text-heavy.\n"
+                . "- The same <img> must keep the concrete src, data-pb-ai-asset-slot, and data-pb-ai-image-role='generated-asset' values from the copied template.\n"
+                . "- Required slot shape: for hero/background designs, make that <img> a cover layer with CSS object-fit/absolute/inset/width/height, then place overlay text above it; do not replace the editable <img> with CSS background-image only.\n"
+                . $this->buildVerifiedAssetPromptContract($verifiedAssets)
             : "- verified_assets: []\n- verified asset rule: no verified real image URL is available, so render visual media as CSS-only shapes/pseudo-elements and do not invent image URLs or use <svg>.\n";
 
         return "Build-plan task context for this {$contextLabel}:\n"
@@ -8013,8 +7367,9 @@ class AiSitePageComponentGenerationService
             . "- hierarchy execution rule: do not reuse the same full-bleed primary/accent background for every block; vary surface elevation, background texture, dividers, spacing rhythm, or visual motif per block.\n"
             . "- html fragment rule: output only this block's inner visitor content in html_content/html_extra. Use one component-owned root wrapper, close every quote/tag, and do not include `pb-ai-html-block`, neighboring `<section>` wrappers, or orphan closing tags from previous/next blocks.\n"
             . "- no-overlap structure rule: do not rely on negative margins, fixed container heights, or absolute-positioned content for the main flow. Cards, proof strips, grids, and CTA rows must consume normal layout space with padding/gap/margin inside the block.\n"
+            . "- mobile execution rule: write css_responsive or scoped @media rules for 390px previews. Stack multi-column layouts, reset narrow title max-widths to 100%, keep media below/behind text only when it cannot cover copy, and set min-width:0 on all grid/flex children.\n"
             . "- build-plan language rule: treat build-plan text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
-            . "- anti-copy rule: never paste build-plan observation/planning sentences directly into html_content. Rewrite phrases like \"访客看到...\", \"用户看到...\", \"从而产生...\", \"信任感增强\", \"知道如何...\", \"Visitors see...\", or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
+            . "- anti-copy rule: never paste build-plan observation/planning sentences directly into html_content. Rewrite phrases like \"Visitors see...\" or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
             . $stage3LocaleRule
             . $verifiedAssetRule
             . "- theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
@@ -8047,6 +7402,12 @@ class AiSitePageComponentGenerationService
             if ($field === '' || $sample === '') {
                 continue;
             }
+            if (!$isLinkField && $locale !== '') {
+                $sample = $this->filterVisibleCopyForLocale($sample, $locale);
+                if ($sample === '') {
+                    continue;
+                }
+            }
             if (\in_array(\strtolower($sample), ['header', 'footer'], true)) {
                 continue;
             }
@@ -8057,11 +7418,11 @@ class AiSitePageComponentGenerationService
 
             $candidateKeys = match (true) {
                 \str_contains($field, 'brand'), \str_contains($field, 'platform'), \str_contains($field, 'site_title'), \str_contains($field, 'logo_text') => ['logo.text', 'brand.name'],
-                \str_contains($field, 'title'), \str_contains($field, 'headline'), \str_contains($field, '标题'), \str_contains($field, '標題') => ['content.title'],
-                \str_contains($field, 'subtitle'), \str_contains($field, 'eyebrow'), \str_contains($field, 'tagline'), \str_contains($field, 'slogan'), \str_contains($field, '副标题'), \str_contains($field, '副標題'), \str_contains($field, '标语'), \str_contains($field, '標語') => ['content.subtitle'],
-                \str_contains($field, 'description'), \str_contains($field, 'body'), \str_contains($field, 'text'), \str_contains($field, '简介'), \str_contains($field, '說明'), \str_contains($field, '说明'), \str_contains($field, '正文'), \str_contains($field, '内容'), \str_contains($field, '內容'), \str_contains($field, '文案') => ['content.description', 'brand.description'],
-                \str_contains($field, 'button_text'), \str_contains($field, 'cta'), \str_contains($field, '按钮'), \str_contains($field, '按鈕') => ['cta.text'],
-                \str_contains($field, 'button_url'), \str_contains($field, 'url'), \str_contains($field, 'href'), \str_contains($field, '链接'), \str_contains($field, '連結') => ['cta.url'],
+                \str_contains($field, 'title'), \str_contains($field, 'headline') => ['content.title'],
+                \str_contains($field, 'subtitle'), \str_contains($field, 'eyebrow'), \str_contains($field, 'tagline'), \str_contains($field, 'slogan') => ['content.subtitle'],
+                \str_contains($field, 'description'), \str_contains($field, 'body'), \str_contains($field, 'text'), \str_contains($field, 'copy') => ['content.description', 'brand.description'],
+                \str_contains($field, 'button_url'), \str_contains($field, 'url'), \str_contains($field, 'href') => ['cta.url'],
+                \str_contains($field, 'button_text'), \str_contains($field, 'cta') => ['cta.text'],
                 default => [],
             };
             foreach ($candidateKeys as $candidateKey) {
@@ -8080,22 +7441,26 @@ class AiSitePageComponentGenerationService
         }
 
         $storyGoal = $this->sanitizeVisibleCopy((string)($taskScript['story_goal'] ?? ''));
+        if ($locale !== '') {
+            $storyGoal = $this->filterVisibleCopyForLocale($storyGoal, $locale);
+        }
         if ($storyGoal !== '' && \trim((string)($defaultConfig['content.title'] ?? '')) === '') {
             $defaultConfig['content.title'] = $this->clipText($storyGoal, 72);
         }
 
-        // 强行契约：将 stage-2 block_task.content_plan.content_copy / cta_plan 优先回填进 defaultConfig，
-        // 避免 stub/fallback 因仅依赖 field_content_requirements.sample 而把 task 真正规划好的视觉文案当成"未指定"漏掉。
-        // 必须在 visibleSummary 兜底前完成，否则 description 会被 content_copy 拼接出的概要覆盖单一 description 字段。
-        $defaultConfig = $this->applyBuildPlanContentPlanDefaults($defaultConfig, $blockTask);
+        $defaultConfig = $this->applyBuildPlanContentPlanDefaults($defaultConfig, $blockTask, $locale);
 
         $visibleSummary = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext);
+        if ($locale !== '') {
+            $visibleSummary = $this->filterVisibleCopyForLocale($visibleSummary, $locale);
+        }
         if ($visibleSummary !== '' && \trim((string)($defaultConfig['content.description'] ?? '')) === '') {
             $defaultConfig['content.description'] = $this->clipText($visibleSummary, 180);
         }
 
         return $this->sanitizeDefaultConfigVisibleCopy(
-            $this->applyBuildPlanDataContractDefaults($defaultConfig, $buildPlanTask)
+            $this->applyBuildPlanDataContractDefaults($defaultConfig, $buildPlanTask, $locale),
+            $locale
         );
     }
 
@@ -8104,7 +7469,7 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $blockTask
      * @return array<string,mixed>
      */
-    private function applyBuildPlanContentPlanDefaults(array $defaultConfig, array $blockTask): array
+    private function applyBuildPlanContentPlanDefaults(array $defaultConfig, array $blockTask, string $locale = ''): array
     {
         $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
         if ($contentPlan === []) {
@@ -8119,6 +7484,9 @@ class AiSitePageComponentGenerationService
             }
             $field = $this->normalizeBuildPlanRequirementField($row['field'] ?? '');
             $copy = $this->sanitizeVisibleCopy((string)($row['copy'] ?? $row['sample'] ?? $row['default'] ?? ''));
+            if ($locale !== '') {
+                $copy = $this->filterVisibleCopyForLocale($copy, $locale);
+            }
             if ($field === '' || $copy === '') {
                 continue;
             }
@@ -8130,9 +7498,7 @@ class AiSitePageComponentGenerationService
                 \str_contains($field, 'site_title'),
                 \str_contains($field, 'logo_text') => ['logo.text', 'brand.name'],
                 \str_contains($field, 'title'),
-                \str_contains($field, 'headline'),
-                \str_contains($field, '标题'),
-                \str_contains($field, '標題') => ['content.title'],
+                \str_contains($field, 'headline') => ['content.title'],
                 \str_contains($field, 'subtitle'),
                 \str_contains($field, 'eyebrow'),
                 \str_contains($field, 'tagline'),
@@ -8140,16 +7506,15 @@ class AiSitePageComponentGenerationService
                 \str_contains($field, 'description'),
                 \str_contains($field, 'body'),
                 \str_contains($field, 'text'),
-                \str_contains($field, '简介'),
-                \str_contains($field, '说明'),
-                \str_contains($field, '内容'),
-                \str_contains($field, '文案') => ['content.description', 'brand.description'],
+                \str_contains($field, 'copy') => ['content.description', 'brand.description'],
+                \str_contains($field, 'button_url'),
+                \str_contains($field, 'url'),
+                \str_contains($field, 'href') => ['cta.url', 'content.cta_url'],
                 \str_contains($field, 'button_text'),
                 \str_contains($field, 'cta_label'),
                 \str_contains($field, 'cta_text'),
                 \str_contains($field, 'cta'),
-                \str_contains($field, 'primary_cta'),
-                \str_contains($field, '按钮') => ['cta.text', 'content.cta_text'],
+                \str_contains($field, 'primary_cta') => ['cta.text', 'content.cta_text'],
                 default => [],
             };
             foreach ($candidateKeys as $candidateKey) {
@@ -8176,6 +7541,9 @@ class AiSitePageComponentGenerationService
                 continue;
             }
             $label = $this->sanitizeVisibleCopy((string)($row['label'] ?? $row['text'] ?? ''));
+            if ($locale !== '') {
+                $label = $this->filterVisibleCopyForLocale($label, $locale);
+            }
             $href = \trim((string)($row['target'] ?? $row['href'] ?? $row['url'] ?? ''));
             if ($label !== '') {
                 foreach (['cta.text', 'content.cta_text'] as $candidateKey) {
@@ -8191,7 +7559,6 @@ class AiSitePageComponentGenerationService
                     }
                 }
             }
-            // 仅取首个有效 cta（否则会被多个 cta 覆盖）。
             if ($label !== '' || $href !== '') {
                 break;
             }
@@ -8243,11 +7610,14 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $defaultConfig
      * @return array<string,mixed>
      */
-    private function fillDefaultConfigVisibleCopyFromContractSamples(array $defaultConfig): array
+    private function fillDefaultConfigVisibleCopyFromContractSamples(array $defaultConfig, string $locale = ''): array
     {
         $samples = [];
         foreach ($this->decodeConfigStringList($defaultConfig['contract.stage1_samples'] ?? null) as $sample) {
             $sample = $this->sanitizeVisibleCopy($sample);
+            if ($locale !== '') {
+                $sample = $this->filterVisibleCopyForLocale($sample, $locale);
+            }
             if ($sample === '' || \in_array($sample, $samples, true)) {
                 continue;
             }
@@ -8282,7 +7652,7 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $buildPlanTask
      * @return array<string,mixed>
      */
-    private function applyBuildPlanDataContractDefaults(array $defaultConfig, array $buildPlanTask): array
+    private function applyBuildPlanDataContractDefaults(array $defaultConfig, array $buildPlanTask, string $locale = ''): array
     {
         foreach ($this->extractBuildPlanDataContractLines($buildPlanTask) as $line) {
             if (!\str_contains($line, ':')) {
@@ -8291,6 +7661,9 @@ class AiSitePageComponentGenerationService
             [$rawKey, $rawValue] = \explode(':', $line, 2);
             $key = \strtolower(\trim($rawKey));
             $value = $this->sanitizeVisibleCopy(\trim(\trim($rawValue), " \t\n\r\0\x0B'\""));
+            if ($locale !== '') {
+                $value = $this->filterVisibleCopyForLocale($value, $locale);
+            }
             if ($key === '' || $value === '') {
                 continue;
             }
@@ -8310,7 +7683,7 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        return $this->fillDefaultConfigVisibleCopyFromContractSamples($defaultConfig);
+        return $this->fillDefaultConfigVisibleCopyFromContractSamples($defaultConfig, $locale);
     }
 
     private function normalizeBuildPlanRequirementField(mixed $fieldRaw): string
@@ -8357,6 +7730,9 @@ class AiSitePageComponentGenerationService
         if (!\is_scalar($sampleRaw)) {
             return '';
         }
+        if ($isLinkField) {
+            return \trim((string)$sampleRaw);
+        }
 
         return $this->sanitizeVisibleCopy((string)$sampleRaw);
     }
@@ -8365,16 +7741,19 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $defaultConfig
      * @return array<string,mixed>
      */
-    private function sanitizeDefaultConfigVisibleCopy(array $defaultConfig): array
+    private function sanitizeDefaultConfigVisibleCopy(array $defaultConfig, string $locale = ''): array
     {
         foreach ($defaultConfig as $key => $value) {
             if (\is_string($value)) {
                 if ($key === 'navigation.items') {
-                    $defaultConfig[$key] = $this->sanitizeNavigationItemsText($value);
+                    $defaultConfig[$key] = $this->sanitizeNavigationItemsText($value, $locale);
                     continue;
                 }
                 if ($this->isVisualTextConfigKey($key)) {
                     $defaultConfig[$key] = $this->sanitizeVisibleCopy($value);
+                    if ($locale !== '') {
+                        $defaultConfig[$key] = $this->filterVisibleCopyForLocale($defaultConfig[$key], $locale);
+                    }
                 }
                 continue;
             }
@@ -8384,7 +7763,11 @@ class AiSitePageComponentGenerationService
                     if (!\is_array($item)) {
                         continue;
                     }
-                    $item['text'] = $this->sanitizeVisibleCopy((string)($item['text'] ?? $item['label'] ?? ''));
+                    $item['text'] = $this->filterNavigationLabelForLocale(
+                        (string)($item['text'] ?? $item['label'] ?? ''),
+                        $locale,
+                        (string)($item['type'] ?? '')
+                    );
                     if ($item['text'] === '') {
                         unset($value[$idx]);
                         continue;
@@ -8395,7 +7778,7 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        return $this->fillDefaultConfigVisibleCopyFromContractSamples($defaultConfig);
+        return $this->fillDefaultConfigVisibleCopyFromContractSamples($defaultConfig, $locale);
     }
 
     /**
@@ -8404,11 +7787,42 @@ class AiSitePageComponentGenerationService
      */
     private function sanitizeGeneratedComponentDefaultConfig(array $defaultConfig, string $region = ''): array
     {
+        $locale = \trim((string)($defaultConfig['runtime.content_locale'] ?? ''));
         $defaultConfig = $this->applyGeneratedComponentLayoutDefaults($defaultConfig, $region);
 
         return $this->sanitizeDefaultConfigVisibleCopy(
-            $this->stripInternalComponentConfig($defaultConfig)
+            $this->stripInternalComponentConfig($defaultConfig),
+            $locale
         );
+    }
+
+    /**
+     * In virtual-theme generation the AI fragment owns the section hierarchy.
+     * When the returned HTML already contains a heading, keeping the framework
+     * shell title produces duplicated headings or leaks section identifiers.
+     *
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $aiData
+     * @return array<string,mixed>
+     */
+    private function applyAiPayloadOwnershipToDefaultConfig(array $defaultConfig, string $region, array $aiData): array
+    {
+        if ($region !== 'content') {
+            return $defaultConfig;
+        }
+
+        $html = (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? '');
+        if ($html === '' || \preg_match('/<h[1-3]\b/i', $html) !== 1) {
+            return $defaultConfig;
+        }
+
+        foreach (['content.title', 'content.subtitle', 'content.description'] as $key) {
+            if (\array_key_exists($key, $defaultConfig)) {
+                $defaultConfig[$key] = '';
+            }
+        }
+
+        return $defaultConfig;
     }
 
     /**
@@ -8496,7 +7910,7 @@ class AiSitePageComponentGenerationService
             || \str_contains($normalized, 'stage3_');
     }
 
-    private function sanitizeNavigationItemsText(string $lines): string
+    private function sanitizeNavigationItemsText(string $lines, string $locale = ''): string
     {
         $rows = \preg_split('/\r?\n/', $lines) ?: [];
         $cleanRows = [];
@@ -8506,7 +7920,7 @@ class AiSitePageComponentGenerationService
                 continue;
             }
             $parts = \explode('=>', $row, 2);
-            $label = $this->sanitizeVisibleCopy((string)($parts[0] ?? ''));
+            $label = $this->filterNavigationLabelForLocale((string)($parts[0] ?? ''), $locale);
             $href = \trim((string)($parts[1] ?? '#'));
             if ($label === '') {
                 continue;
@@ -8515,6 +7929,28 @@ class AiSitePageComponentGenerationService
         }
 
         return \implode("\n", $cleanRows);
+    }
+
+    private function filterNavigationLabelForLocale(string $value, string $locale = '', string $pageType = ''): string
+    {
+        $label = \trim(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        if ($label === '') {
+            return '';
+        }
+        if ($this->isSymbolOnlyVisibleCopy($label) || $this->containsPlanningObservationCopy($label)) {
+            return '';
+        }
+        if ($locale !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($label)) {
+            $label = '';
+        }
+        if ($label === '' && $pageType !== '') {
+            $label = $this->localizePageTypeTitle($pageType, $locale);
+        }
+        if ($label === '') {
+            return '';
+        }
+
+        return $this->clipText($label, 72);
     }
 
     private function isVisualTextConfigKey(string $key): bool
@@ -8538,41 +7974,36 @@ class AiSitePageComponentGenerationService
         if ($value === '') {
             return '';
         }
+        if ($this->isSymbolOnlyVisibleCopy($value)) {
+            return '';
+        }
         $value = $this->stripPlanningKeywordPrefix($value);
         if ($value === '') {
             return '';
         }
 
         $normalized = \mb_strtolower($value);
-        if (\in_array($normalized, ['首页', '主页', '关于我们', '关于', 'home', 'home page', 'about', 'about page', 'about us'], true)) {
+        if (\in_array($normalized, ['棣栭〉', '涓婚〉', '鍏充簬鎴戜滑', '鍏充簬', 'home', 'home page', 'about', 'about page', 'about us'], true)) {
             return '';
         }
-        foreach (['核心卖点', '功能特性', '把首页', '值得点击', '放出来', '页面类型', '内容块', '需要作为一次独立', '共享任务只生成一次'] as $marker) {
+        foreach (['core selling points', 'feature characteristics', 'page type', 'content block', 'planning', 'blueprint'] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
                 return '';
             }
         }
-        foreach (['访客看到', '用户看到', '让访客看到', '从而产生', '产生下载兴趣', '信任感增强', '知道如何'] as $marker) {
+        foreach (['visitors see', 'users see', 'visitors can review', 'planning observation'] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
                 return '';
             }
         }
         foreach ([
-            '优先沿用第一阶段',
-            '输出必须是访客可见内容',
-            '不能写方向型提示语',
-            '不能写“围绕',
-            '不能写"围绕',
-            '直接产出可上屏',
-            '直接给出',
-            '缺少真实事实',
-            '字段样例',
-            '内容规则',
-            '内容填充规则',
+            'priority from stage one',
+            'directional prompt',
+            'field example',
+            'content rule',
+            'content fill rule',
             'Generated website section',
             'Website content language',
-            'visitor-visible copy',
-            'Do not use the',
             'Return ONLY',
             'prompt text',
             'customer brief',
@@ -8580,53 +8011,25 @@ class AiSitePageComponentGenerationService
             'planning/plan language',
             'stage-2 planned text',
             'source intent',
-            'Visitors see',
-            'Visitor sees',
-            'Visitors can review',
-            'Visitors can verify',
-            'before publishing',
-            'reviewable page content',
             'confirmed stage-one content',
             'confirmed stage-1 plan',
-            'confirmed stage-1 theme',
-            'confirmed stage-1 theme context',
             'stage-2 task detail',
             'frontend component skill',
-            'Generate the frontend block',
-            'Fill the block fields',
             'block_task.content_plan',
             'block_task.style_plan',
             'Required by block task schema',
             'planning_reason',
             'Built from plan',
             'generated from plan',
-            'Use concrete',
-            'Present key terms',
-            'provide download CTA',
-            'Provide category',
-            'filter tabs',
-            'visually distinct',
-            'Visible CTA path',
-            'Trust content',
-            'Responsive cards',
-            'proof points',
-            'visual hierarchy',
-            'launch-ready content',
-            'Immediately capture',
-            'Instantly communicate',
-            'Immediately inform',
-            'Capture immediate attention',
-            'Introduce Teenipiya',
             'content_fill_rule',
             'field_content_requirements',
             'task_script',
             'stage3_directive',
-            '优先沿用',
+            'generated page plan',
+            '优先沿用第一阶段',
+            '第一阶段确认',
             '输出必须',
-            '字段样例',
-            '提示词',
-            '直接产出可上屏',
-            '生成页面方案',
+            '访客可见内容',
         ] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
                 return '';
@@ -8643,6 +8046,9 @@ class AiSitePageComponentGenerationService
         if (\preg_match('/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/', $normalized) === 1) {
             return '';
         }
+        if ($this->looksLikeGeneratedIdentifierLabel($value)) {
+            return '';
+        }
 
         if ($this->containsPlanningObservationCopy($value)) {
             return '';
@@ -8657,6 +8063,66 @@ class AiSitePageComponentGenerationService
         return $this->clipText($value, 220);
     }
 
+    private function looksLikeGeneratedIdentifierLabel(string $value): bool
+    {
+        $trimmed = \trim($value);
+        if ($trimmed === '' || $trimmed !== \mb_strtolower($trimmed)) {
+            return false;
+        }
+        if (\preg_match('/^[a-z0-9]+(?:[ _-]+[a-z0-9]+){1,6}$/', $trimmed) !== 1) {
+            return false;
+        }
+
+        $tokens = \preg_split('/[ _-]+/', $trimmed) ?: [];
+        $generic = \array_fill_keys([
+            'about',
+            'accordion',
+            'badge',
+            'badges',
+            'block',
+            'categories',
+            'category',
+            'content',
+            'cta',
+            'download',
+            'faq',
+            'features',
+            'final',
+            'footer',
+            'game',
+            'games',
+            'header',
+            'hero',
+            'home',
+            'or',
+            'page',
+            'section',
+            'security',
+            'showcase',
+            'story',
+            'testimonials',
+            'trust',
+        ], true);
+        $matched = 0;
+        foreach ($tokens as $token) {
+            if (isset($generic[$token])) {
+                $matched++;
+            }
+        }
+
+        return $matched >= \max(2, \count($tokens) - 1);
+    }
+
+    private function isSymbolOnlyVisibleCopy(string $value): bool
+    {
+        $value = \trim(\preg_replace('/\s+/u', '', $value) ?? $value);
+        if ($value === '') {
+            return false;
+        }
+
+        return \preg_match('/^[\p{S}\p{P}]+$/u', $value) === 1;
+    }
+
     private function stripPlanningKeywordPrefix(string $value): string
     {
         $value = \trim($value);
@@ -8664,7 +8130,7 @@ class AiSitePageComponentGenerationService
             return '';
         }
 
-        if (\substr_count($value, '/') + \substr_count($value, '／') < 2) {
+        if (\substr_count($value, '/') + \substr_count($value, ':') < 2) {
             return $value;
         }
         if (\preg_match('/\s[-–—]\s*(?<copy>.+)$/u', $value, $matches) !== 1) {
@@ -8682,15 +8148,12 @@ class AiSitePageComponentGenerationService
             return false;
         }
 
+        if ($this->containsPromptPlanningLeakText($value)) {
+            return true;
+        }
+
         $normalized = \mb_strtolower($value);
         foreach ([
-            '访客看到',
-            '用户看到',
-            '让访客看到',
-            '从而产生',
-            '产生下载兴趣',
-            '信任感增强',
-            '知道如何',
             'Visitors see',
             'Visitor sees',
             'Visitors can review',
@@ -8699,37 +8162,19 @@ class AiSitePageComponentGenerationService
             'Visitors are guided',
             'before publishing',
             'reviewable page content',
+            'priority from stage one',
+            'field sample',
+            'card hierarchy',
+            'planning observation',
+            'page rhythm',
+            'design variation',
+            '访客看到',
+            '访客可以',
+            '信任感增强',
             '优先沿用第一阶段',
-            '输出必须是访客可见内容',
-            '直接产出可上屏',
-            '字段样例',
-        ] as $marker) {
-            $marker = \mb_strtolower($marker);
-            if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
-                return true;
-            }
-        }
-
-        foreach ([
-            'Introduce brand story',
-            'build initial trust',
-            'Showcase available games',
-            'encourage exploration',
-            'Build user confidence',
-            'popular game categories',
-            'educate users',
-            'increase time on page',
-            'licenses, security certifications',
-            'secure download badges',
-            'reassure users',
-            'customer testimonials',
-            'build social proof',
-            'Answer common questions',
-            'remove barriers',
-            'Close the page with a compact summary',
-            'visitor has a clear endpoint',
-            'Key message',
-            'Next action',
+            '第一阶段确认',
+            '输出必须',
+            '访客可见内容',
         ] as $marker) {
             $marker = \mb_strtolower($marker);
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
@@ -8740,10 +8185,43 @@ class AiSitePageComponentGenerationService
         return false;
     }
 
+    private function containsPromptPlanningLeakText(string $value): bool
+    {
+        return $this->matchPromptPlanningLeakText($value) !== [];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function matchPromptPlanningLeakText(string $value): array
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return [];
+        }
+
+        $matches = [];
+        $patterns = [
+            '/(?:这个|本|当前)?(?:页面|区块|模块|page|section|block).{0,24}(?:核心|关键|主要|key|core).{0,16}(?:亮点|卖点|重点|highlights?|selling\s+points?)/iu',
+            '/(?:用|使用|通过|以|use|using|display|show|present).{0,28}(?:卡片层级|视觉层级|内容层级|card\s+hierarchy|visual\s+hierarchy).{0,90}(?:展示|呈现|强调|卖点|差异|信任|selling\s+points?|differences?|trust)/iu',
+            '/(?:把|将|让|put|place|make).{0,22}(?:主行动|主要行动|主按钮|primary\s+action|main\s+action|cta).{0,60}(?:卡片|按钮|button|card).{0,60}(?:减少|降低|避免|reduce|avoid|hesitation|犹豫)/iu',
+            '/(?:避免|不要|防止|avoid|do\s+not|don\'t).{0,36}(?:内容|视觉|区块|模块|blocks?|sections?|content).{0,48}(?:挤成|同一种视觉|相同视觉|same\s+visual|same\s+layout|feel\s+like\s+one)/iu',
+            '/(?:访客|用户|visitors?|users?).{0,28}(?:看到|可以看到|see|can\s+review|can\s+verify|understand|ready\s+to).{0,100}(?:信任|下载|发布|证明|reviewable|before\s+publishing|proof|cta|action)/iu',
+            '/(?:rewrite|render|use|provide|present|include|output)\s+(?:concrete|visitor-facing|download|category|trust|proof|cta|feature).{0,90}(?:copy|language|labels?|path|cards?)/iu',
+        ];
+        foreach ($patterns as $pattern) {
+            if (\preg_match($pattern, $value, $found) === 1) {
+                $matches[] = (string)($found[0] ?? $pattern);
+            }
+        }
+
+        return \array_slice(\array_values(\array_unique($matches)), 0, 10);
+    }
+
     /**
      * Walk a section config array and strip planning/observation language from all
      * leaf string values. This prevents stage-1 blueprint planning text from leaking
-     * into the prompt as "Suggested section config" — where the AI would then treat
+     * into the prompt as "Suggested section config" -where the AI would then treat
      * it as finished copy.
      *
      * @param array<string,mixed> $config
@@ -8824,8 +8302,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * HTML 轨共享页头/页脚微调：可能写在 shared_component_refinements 或各页 section_refinements（如 *-site-header）。
-     *
+     * HTML 杞ㄥ叡浜〉澶?椤佃剼寰皟锛氬彲鑳藉啓鍦?shared_component_refinements 鎴栧悇椤?section_refinements锛堝 *-site-header锛夈€?     *
      * @param array<string,mixed> $scope
      */
     private function resolveSharedComponentRefinement(array $scope, string $region): string
@@ -8880,9 +8357,9 @@ class AiSitePageComponentGenerationService
     /**
      * @param array<string,mixed> $scope
      */
-    private function resolvePrimaryCtaText(array $scope): string
+    private function resolvePrimaryCtaText(array $scope, string $locale = ''): string
     {
-        $locale = $this->resolveScopePrimaryLocale($scope);
+        $locale = $locale !== '' ? $locale : $this->resolveScopePrimaryLocale($scope);
         $sharedPromptContext = $this->resolveSharedPromptContext($scope);
         $sharedAction = $this->filterVisibleCopyForLocale(
             \trim((string)($sharedPromptContext['shared_cta_strategy']['primary_action'] ?? '')),
@@ -8901,6 +8378,76 @@ class AiSitePageComponentGenerationService
         }
 
         return $this->localizeBuildText('get_started', $locale);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolvePrimaryCtaUrl(array $scope): string
+    {
+        $sharedPromptContext = $this->resolveSharedPromptContext($scope);
+        $target = \trim((string)($sharedPromptContext['shared_cta_strategy']['primary_target'] ?? ''));
+        if ($target !== '') {
+            return $target;
+        }
+
+        foreach ($this->normalizePromptLinkItems($sharedPromptContext['header_items'] ?? []) as $item) {
+            $label = \mb_strtolower((string)($item['label'] ?? ''));
+            $href = \trim((string)($item['href'] ?? ''));
+            if ($href === '') {
+                continue;
+            }
+            if (\str_contains($label, 'download') || \str_contains($href, 'download')) {
+                return $href;
+            }
+        }
+
+        return '#contact';
+    }
+
+    /**
+     * Stage-1 may carry a planning-language site title while stage-3 renders a
+     * different visitor locale. Prefer explicit plan/profile display names that
+     * already match the target locale instead of leaking the planning brief.
+     *
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     */
+    private function resolveLocaleSafeSiteDisplayName(
+        string $siteDisplayName,
+        array $websiteProfile,
+        array $scope,
+        string $locale
+    ): string {
+        $sharedPromptContext = $this->resolveSharedPromptContext($scope);
+        foreach ([
+            $siteDisplayName,
+            $sharedPromptContext['site_display_name'] ?? null,
+            $sharedPromptContext['header_plan']['site_display_name'] ?? null,
+            $sharedPromptContext['header_plan']['title'] ?? null,
+            $sharedPromptContext['footer_plan']['site_display_name'] ?? null,
+            $sharedPromptContext['footer_plan']['title'] ?? null,
+            $scope['execution_blueprint']['shared_prompt_context']['site_display_name'] ?? null,
+            $scope['execution_blueprint']['theme_context_snapshot']['site_display_name'] ?? null,
+            $scope['plan_workbench']['confirmed']['shared_prompt_context']['site_display_name'] ?? null,
+            $scope['plan_workbench']['confirmed']['theme_context_snapshot']['site_display_name'] ?? null,
+            $websiteProfile['brand_name'] ?? null,
+            $websiteProfile['site_name'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $label = $this->filterVisibleCopyForLocale((string)$candidate, $locale);
+            if ($label !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($label)) {
+                $label = '';
+            }
+            if ($label !== '') {
+                return $label;
+            }
+        }
+
+        return $this->localizeBuildText('site_name_fallback', $locale);
     }
 
     private function pickString(mixed ...$values): string
@@ -8947,11 +8494,6 @@ class AiSitePageComponentGenerationService
             || \defined('__PHPUNIT_PHAR__');
     }
 
-    private function shouldUseStubAiGeneration(): bool
-    {
-        return !(bool)RequestContext::get(self::REQUEST_KEY_FORCE_REAL_AI_IN_TEST, false)
-            && (bool)RequestContext::get(self::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, false);
-    }
 
     private function getFrameworkBuilder(): FrameworkBuilder
     {
@@ -8979,21 +8521,15 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * @deprecated 仅用于既有依赖检查；新代码必须走 {@see self::callAiOperation()}，
-     *             以遵守 unified-query-provider 规范（模块间通过 w_query('ai', ...) 触达 AI）。
-     */
+     * @deprecated 浠呯敤浜庢棦鏈変緷璧栨鏌ワ紱鏂颁唬鐮佸繀椤昏蛋 {@see self::callAiOperation()}锛?     *             浠ラ伒瀹?unified-query-provider 瑙勮寖锛堟ā鍧楅棿閫氳繃 w_query('ai', ...) 瑙﹁揪 AI锛夈€?     */
     private function getAiService(): AiService
     {
         return $this->aiService ?? ObjectManager::getInstance(AiService::class);
     }
 
     /**
-     * 统一的跨模块 AI 调用入口：
-     *  - 构造注入了 {@see AiService} 时直接复用，兼容既有 mock 测试；
-     *  - 否则走 `w_query('ai', $operation, $params)`，由 {@see \Weline\Ai\Extends\Module\Weline_Framework\Query\AiQueryProvider} 接管。
-     *
-     * 支持的 operation：
-     *  - generate(prompt, model_code?, scenario_code?, locale?, params?, user_id?, is_backend?) -> string
+     * 缁熶竴鐨勮法妯″潡 AI 璋冪敤鍏ュ彛锛?     *  - 鏋勯€犳敞鍏ヤ簡 {@see AiService} 鏃剁洿鎺ュ鐢紝鍏煎鏃㈡湁 mock 娴嬭瘯锛?     *  - 鍚﹀垯璧?`w_query('ai', $operation, $params)`锛岀敱 {@see \Weline\Ai\Extends\Module\Weline_Framework\Query\AiQueryProvider} 鎺ョ銆?     *
+     * 鏀寔鐨?operation锛?     *  - generate(prompt, model_code?, scenario_code?, locale?, params?, user_id?, is_backend?) -> string
      *  - generateStream(prompt, on_chunk, model_code?, scenario_code?, locale?, params?) -> ['status'=>'fulfilled']
      *
      * @param array<string, mixed> $params
@@ -9069,19 +8605,47 @@ class AiSitePageComponentGenerationService
      */
     private function resolvePrimaryLocale(array $websiteProfile, array $scope): string
     {
-        return \trim((string)(
-            $scope['content_locale']
-                ?? $websiteProfile['content_locale']
-                ?? $scope['default_locale']
-                ?? $scope['default_language']
-                ?? $websiteProfile['default_locale']
-                ?? ''
-        ));
+        foreach ([
+            $scope['content_locale'] ?? null,
+            $websiteProfile['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $websiteProfile['default_language'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['website_profile']['default_language'] ?? null,
+            $websiteProfile['locales'][0] ?? null,
+            $scope['website_profile']['locales'][0] ?? null,
+            $scope['plan_generated_locale'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_generated_locale'] ?? null,
+            $scope['plan_structured']['plan_generated_locale'] ?? null,
+            $scope['plan_json']['content_locale'] ?? null,
+            $scope['plan_json']['i18n']['content_locale'] ?? null,
+        ] as $candidate) {
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     */
+    private function hasResolvedContentLocale(array $websiteProfile, array $scope): bool
+    {
+        return $this->resolvePrimaryLocale($websiteProfile, $scope) !== '';
     }
 
     private function resolveScopePrimaryLocale(array $scope): string
     {
-        return $this->resolvePrimaryLocale([], $scope);
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+
+        return $this->resolvePrimaryLocale($websiteProfile, $scope);
     }
 
     /**
@@ -9091,6 +8655,7 @@ class AiSitePageComponentGenerationService
     private function resolveSharedPromptContext(array $scope): array
     {
         foreach ([
+            $this->normalizeSharedPromptContextFromExecutionBlueprint($scope),
             $this->extractSharedPromptContextFromTask($this->resolveSharedBuildPlanTask($scope, 'header')),
             $this->extractSharedPromptContextFromTask($this->resolveSharedBuildPlanTask($scope, 'footer')),
             \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null) ? $scope['execution_blueprint']['shared_prompt_context'] : [],
@@ -9099,13 +8664,320 @@ class AiSitePageComponentGenerationService
             if (!\is_array($candidate) || $candidate === []) {
                 continue;
             }
+            $candidate = $this->normalizeSharedPromptContextCandidate($candidate);
             if (
                 \is_array($candidate['header_items'] ?? null)
                 || \is_array($candidate['footer_featured'] ?? null)
                 || \is_array($candidate['footer_policies'] ?? null)
                 || \is_array($candidate['shared_cta_strategy'] ?? null)
+                || \is_scalar($candidate['site_display_name'] ?? null)
             ) {
                 return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function normalizeSharedPromptContextFromExecutionBlueprint(array $scope): array
+    {
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        if ($executionBlueprint === []) {
+            return [];
+        }
+
+        $headerPlan = $this->resolveExecutionBlueprintSharedPlan($scope, 'header');
+        $footerPlan = $this->resolveExecutionBlueprintSharedPlan($scope, 'footer');
+        $candidate = [];
+        if ($headerPlan !== []) {
+            $candidate['header_plan'] = $headerPlan;
+        }
+        if ($footerPlan !== []) {
+            $candidate['footer_plan'] = $footerPlan;
+        }
+        foreach ([
+            $headerPlan['content_locale'] ?? null,
+            $footerPlan['content_locale'] ?? null,
+            $executionBlueprint['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+        ] as $localeCandidate) {
+            if (\is_scalar($localeCandidate) && \trim((string)$localeCandidate) !== '') {
+                $candidate['content_locale'] = \trim((string)$localeCandidate);
+                break;
+            }
+        }
+
+        return $candidate !== [] ? $this->normalizeSharedPromptContextCandidate($candidate) : [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function resolveExecutionBlueprintSharedPlan(array $scope, string $region): array
+    {
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
+        $candidates = $region === 'header'
+            ? [
+                $sharedComponents['header'] ?? null,
+                $executionBlueprint['navigation_plan'] ?? null,
+                $executionBlueprint['header_plan'] ?? null,
+            ]
+            : [
+                $sharedComponents['footer'] ?? null,
+                $executionBlueprint['footer_plan'] ?? null,
+            ];
+
+        foreach ($candidates as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function resolveExecutionBlueprintThemeContext(array $scope): array
+    {
+        foreach ([
+            $scope['execution_blueprint']['theme_context_snapshot'] ?? null,
+            $scope['plan_workbench']['confirmed']['theme_context_snapshot'] ?? null,
+            $scope['content_manifest']['theme_context_snapshot'] ?? null,
+            $scope['plan_projection']['theme_context_snapshot'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $plan
+     * @return list<array{field:string,sample:string}>
+     */
+    private function buildSharedPlanFieldRequirements(array $plan, string $region): array
+    {
+        $rows = [];
+        $payload = \is_array($plan['payload'] ?? null) ? $plan['payload'] : [];
+        if ($region === 'header') {
+            $items = \is_array($payload['header_items'] ?? null) ? $payload['header_items'] : [];
+            if ($items !== []) {
+                $rows[] = [
+                    'field' => 'navigation.items',
+                    'sample' => $this->buildLinkLines($this->normalizePromptLinkItems($items)),
+                ];
+            }
+        } else {
+            foreach ([
+                'featured_links' => $payload['featured'] ?? $payload['featured_links'] ?? null,
+                'policy_links' => $payload['policies'] ?? $payload['policy_links'] ?? null,
+            ] as $field => $items) {
+                if (!\is_array($items) || $items === []) {
+                    continue;
+                }
+                $rows[] = [
+                    'field' => $field,
+                    'sample' => $this->buildLinkLines($this->normalizePromptLinkItems($items)),
+                ];
+            }
+        }
+
+        $realtime = \is_array($plan['realtime_content'] ?? null) ? $plan['realtime_content'] : [];
+        foreach (\is_array($realtime['cta'] ?? null) ? $realtime['cta'] : [] as $cta) {
+            if (!\is_array($cta)) {
+                continue;
+            }
+            $label = $this->sanitizeVisibleCopy((string)($cta['label'] ?? $cta['text'] ?? ''));
+            $target = \trim((string)($cta['target'] ?? $cta['href'] ?? $cta['url'] ?? ''));
+            if ($label !== '') {
+                $rows[] = ['field' => 'cta_text', 'sample' => $label];
+            }
+            if ($target !== '') {
+                $rows[] = ['field' => 'cta_url', 'sample' => $target];
+            }
+            break;
+        }
+        foreach (['site_display_name', 'title'] as $field) {
+            $sample = $this->sanitizeVisibleCopy((string)($plan[$field] ?? ''));
+            if ($sample !== '') {
+                $rows[] = ['field' => $field === 'title' ? 'brand_name' : $field, 'sample' => $sample];
+                break;
+            }
+        }
+
+        return \array_values(\array_filter($rows, static fn(array $row): bool => \trim((string)$row['sample']) !== ''));
+    }
+
+    /**
+     * @param array<string,mixed> $plan
+     * @return list<array{field:string,copy:string}>
+     */
+    private function buildSharedPlanContentCopyRows(array $plan, string $region): array
+    {
+        $rows = [];
+        foreach ($this->buildSharedPlanFieldRequirements($plan, $region) as $row) {
+            $field = \trim((string)($row['field'] ?? ''));
+            $sample = $this->sanitizeVisibleCopy((string)($row['sample'] ?? ''));
+            if ($field !== '' && $sample !== '') {
+                $rows[] = ['field' => $field, 'copy' => $sample];
+            }
+        }
+        $realtime = \is_array($plan['realtime_content'] ?? null) ? $plan['realtime_content'] : [];
+        foreach ([$realtime['headline'] ?? null, $plan['goal'] ?? null] as $copy) {
+            if (!\is_scalar($copy)) {
+                continue;
+            }
+            $sample = $this->sanitizeVisibleCopy((string)$copy);
+            if ($sample !== '') {
+                $rows[] = ['field' => 'headline', 'copy' => $sample];
+                break;
+            }
+        }
+        foreach (\is_array($realtime['supporting_copy'] ?? null) ? $realtime['supporting_copy'] : [] as $copy) {
+            if (!\is_scalar($copy)) {
+                continue;
+            }
+            $sample = $this->sanitizeVisibleCopy((string)$copy);
+            if ($sample !== '') {
+                $rows[] = ['field' => 'supporting_copy', 'copy' => $sample];
+            }
+            if (\count($rows) >= 8) {
+                break;
+            }
+        }
+
+        return $this->dedupeContentCopyRows($rows);
+    }
+
+    /**
+     * Stage-1 shared plans may store the customer-facing chrome contract under
+     * nested header_plan/footer_plan payloads. Normalize that shape once so
+     * generation prompts, default config, and link fallback logic consume the
+     * same contract instead of leaking planning-language profile defaults.
+     *
+     * @param array<string,mixed> $candidate
+     * @return array<string,mixed>
+     */
+    private function normalizeSharedPromptContextCandidate(array $candidate): array
+    {
+        $headerPlan = \is_array($candidate['header_plan'] ?? null) ? $candidate['header_plan'] : [];
+        $footerPlan = \is_array($candidate['footer_plan'] ?? null) ? $candidate['footer_plan'] : [];
+        $headerPayload = \is_array($headerPlan['payload'] ?? null) ? $headerPlan['payload'] : [];
+        $footerPayload = \is_array($footerPlan['payload'] ?? null) ? $footerPlan['payload'] : [];
+
+        if (!\is_scalar($candidate['site_display_name'] ?? null)) {
+            foreach ([
+                $headerPlan['site_display_name'] ?? null,
+                $headerPlan['title'] ?? null,
+                $footerPlan['site_display_name'] ?? null,
+                $footerPlan['title'] ?? null,
+            ] as $siteCandidate) {
+                if (!\is_scalar($siteCandidate) || \trim((string)$siteCandidate) === '') {
+                    continue;
+                }
+                $candidate['site_display_name'] = \trim((string)$siteCandidate);
+                break;
+            }
+        }
+
+        if (!\is_array($candidate['header_items'] ?? null)) {
+            foreach ([
+                $headerPayload['header_items'] ?? null,
+                $headerPayload['items'] ?? null,
+                $headerPlan['header_items'] ?? null,
+            ] as $items) {
+                if (!\is_array($items) || $items === []) {
+                    continue;
+                }
+                $candidate['header_items'] = $items;
+                break;
+            }
+        }
+
+        if (!\is_array($candidate['footer_featured'] ?? null)) {
+            foreach ([
+                $footerPayload['featured'] ?? null,
+                $footerPayload['featured_links'] ?? null,
+                $footerPayload['links'] ?? null,
+                $footerPlan['featured'] ?? null,
+            ] as $items) {
+                if (!\is_array($items) || $items === []) {
+                    continue;
+                }
+                $candidate['footer_featured'] = $items;
+                break;
+            }
+        }
+
+        if (!\is_array($candidate['footer_policies'] ?? null)) {
+            foreach ([
+                $footerPayload['policies'] ?? null,
+                $footerPayload['policy_links'] ?? null,
+                $footerPlan['policies'] ?? null,
+            ] as $items) {
+                if (!\is_array($items) || $items === []) {
+                    continue;
+                }
+                $candidate['footer_policies'] = $items;
+                break;
+            }
+        }
+
+        if (!\is_array($candidate['shared_cta_strategy'] ?? null)) {
+            $cta = $this->resolveSharedPromptContextCtaStrategy($headerPlan, $footerPlan);
+            if ($cta !== []) {
+                $candidate['shared_cta_strategy'] = $cta;
+            }
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * @param array<string,mixed> ...$plans
+     * @return array<string,string>
+     */
+    private function resolveSharedPromptContextCtaStrategy(array ...$plans): array
+    {
+        foreach ($plans as $plan) {
+            $realtime = \is_array($plan['realtime_content'] ?? null) ? $plan['realtime_content'] : [];
+            $payload = \is_array($plan['payload'] ?? null) ? $plan['payload'] : [];
+            foreach ([
+                $realtime['cta'] ?? null,
+                $payload['cta'] ?? null,
+                $payload['ctas'] ?? null,
+            ] as $items) {
+                if (!\is_array($items)) {
+                    continue;
+                }
+                foreach ($items as $item) {
+                    if (!\is_array($item)) {
+                        continue;
+                    }
+                    $label = \trim((string)($item['label'] ?? $item['text'] ?? ''));
+                    if ($label === '') {
+                        continue;
+                    }
+                    $strategy = ['primary_action' => $label];
+                    $target = \trim((string)($item['target'] ?? $item['href'] ?? $item['url'] ?? ''));
+                    if ($target !== '') {
+                        $strategy['primary_target'] = $target;
+                    }
+                    return $strategy;
+                }
             }
         }
 
@@ -9145,6 +9017,9 @@ class AiSitePageComponentGenerationService
         if ($locale !== '' && $this->isNonCjkLocale($locale) && $this->hasMeaningfulCjkContent($value)) {
             return '';
         }
+        if ($locale !== '' && $this->isCjkLocale($locale) && $this->hasDominantLatinProseForCjkLocale($value)) {
+            return '';
+        }
         if ($this->containsPlanningObservationCopy($value)) {
             return '';
         }
@@ -9177,38 +9052,62 @@ class AiSitePageComponentGenerationService
 
     private function localizePageTypeTitle(string $pageType, string $locale): string
     {
-        $isZh = $this->isChineseLocale($locale);
-        $isJa = $this->isJapaneseLocale($locale);
-        $isKo = $this->isKoreanLocale($locale);
+        if ($this->isChineseLocale($locale)) {
+            return match ($pageType) {
+                Page::TYPE_HOME => '首页',
+                Page::TYPE_ABOUT => '关于我们',
+                Page::TYPE_CONTACT => '联系我们',
+                Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => '博客',
+                Page::TYPE_PRIVACY_POLICY => '隐私政策',
+                Page::TYPE_TERMS_OF_SERVICE => '服务条款',
+                Page::TYPE_REFUND_POLICY => '退款政策',
+                Page::TYPE_SHIPPING_POLICY => '配送政策',
+                Page::TYPE_COOKIE_POLICY => 'Cookie 政策',
+                default => '',
+            };
+        }
 
         return match ($pageType) {
-            Page::TYPE_HOME => $isZh ? '首页' : ($isJa ? 'ホーム' : ($isKo ? '홈' : 'Home')),
-            Page::TYPE_ABOUT => $isZh ? '关于我们' : ($isJa ? '私たちについて' : ($isKo ? '회사 소개' : 'About')),
-            Page::TYPE_CONTACT => $isZh ? '联系我们' : ($isJa ? 'お問い合わせ' : ($isKo ? '문의하기' : 'Contact')),
-            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $isZh ? '博客' : ($isJa ? 'ブログ' : ($isKo ? '블로그' : 'Blog')),
-            Page::TYPE_PRIVACY_POLICY => $isZh ? '隐私政策' : ($isJa ? 'プライバシーポリシー' : ($isKo ? '개인정보처리방침' : 'Privacy Policy')),
-            Page::TYPE_TERMS_OF_SERVICE => $isZh ? '服务条款' : ($isJa ? '利用規約' : ($isKo ? '이용약관' : 'Terms of Service')),
-            Page::TYPE_REFUND_POLICY => $isZh ? '退款政策' : ($isJa ? '返金ポリシー' : ($isKo ? '환불 정책' : 'Refund Policy')),
-            Page::TYPE_SHIPPING_POLICY => $isZh ? '配送政策' : ($isJa ? '配送ポリシー' : ($isKo ? '배송 정책' : 'Shipping Policy')),
-            Page::TYPE_COOKIE_POLICY => $isZh ? 'Cookie 政策' : ($isJa ? 'Cookie ポリシー' : ($isKo ? '쿠키 정책' : 'Cookie Policy')),
+            Page::TYPE_HOME => 'Home',
+            Page::TYPE_ABOUT => 'About',
+            Page::TYPE_CONTACT => 'Contact',
+            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => 'Blog',
+            Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+            Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+            Page::TYPE_REFUND_POLICY => 'Refund Policy',
+            Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+            Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             default => '',
         };
     }
 
     private function localizeBuildText(string $key, string $locale): string
     {
-        $isZh = $this->isChineseLocale($locale);
-        $isJa = $this->isJapaneseLocale($locale);
-        $isKo = $this->isKoreanLocale($locale);
+        if ($key === 'site_name_fallback') {
+            return $this->isChineseLocale($locale) ? "\u{7AD9}\u{70B9}" : 'Website';
+        }
+
+        if ($this->isChineseLocale($locale)) {
+            return match ($key) {
+                'policy_info' => '政策信息',
+                'featured_pages' => '重点页面',
+                'all_pages' => '全部页面',
+                'all_rights_reserved' => '保留所有权利。',
+                'contact_us' => '联系我们',
+                'explore_more' => '查看更多',
+                'get_started' => '立即开始',
+                default => $key,
+            };
+        }
 
         return match ($key) {
-            'policy_info' => $isZh ? '政策信息' : ($isJa ? 'ポリシー' : ($isKo ? '정책 정보' : 'Policy Info')),
-            'featured_pages' => $isZh ? '重点页面' : ($isJa ? '注目ページ' : ($isKo ? '주요 페이지' : 'Featured Pages')),
-            'all_pages' => $isZh ? '全部页面' : ($isJa ? 'すべてのページ' : ($isKo ? '모든 페이지' : 'All Pages')),
-            'all_rights_reserved' => $isZh ? '保留所有权利。' : ($isJa ? 'All rights reserved.' : ($isKo ? 'All rights reserved.' : 'All rights reserved.')),
-            'contact_us' => $isZh ? '联系我们' : ($isJa ? 'お問い合わせ' : ($isKo ? '문의하기' : 'Contact Us')),
-            'explore_more' => $isZh ? '了解更多' : ($isJa ? '詳しく見る' : ($isKo ? '더 알아보기' : 'Explore More')),
-            'get_started' => $isZh ? '立即开始' : ($isJa ? '始める' : ($isKo ? '시작하기' : 'Get Started')),
+            'policy_info' => 'Policy Info',
+            'featured_pages' => 'Featured Pages',
+            'all_pages' => 'All Pages',
+            'all_rights_reserved' => 'All rights reserved.',
+            'contact_us' => 'Contact Us',
+            'explore_more' => 'Explore More',
+            'get_started' => 'Get Started',
             default => $key,
         };
     }
@@ -9350,6 +9249,13 @@ class AiSitePageComponentGenerationService
         return $locale === 'ko' || \str_starts_with($locale, 'ko_') || \str_starts_with($locale, 'ko-');
     }
 
+    private function isCjkLocale(string $locale): bool
+    {
+        return $this->isChineseLocale($locale)
+            || $this->isJapaneseLocale($locale)
+            || $this->isKoreanLocale($locale);
+    }
+
     private function isNonCjkLocale(string $locale): bool
     {
         return $locale !== ''
@@ -9382,6 +9288,51 @@ class AiSitePageComponentGenerationService
         return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $text) === 1;
     }
 
+    private function hasDominantLatinProseForCjkLocale(string $text): bool
+    {
+        $text = \html_entity_decode($text, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $text = (string)\preg_replace('/https?:\/\/\S+|\/pub\/media\/\S+/iu', ' ', $text);
+        $segments = \preg_split('/[\r\n。！？!?；;|]+/u', $text) ?: [$text];
+
+        foreach ($segments as $segment) {
+            $segment = \trim((string)\preg_replace('/\s+/u', ' ', (string)$segment));
+            if ($segment === '') {
+                continue;
+            }
+
+            $matches = [];
+            \preg_match_all('/[A-Za-z][A-Za-z0-9\'-]*/u', $segment, $matches);
+            $words = $matches[0] ?? [];
+            if ($words === []) {
+                continue;
+            }
+
+            $letterCount = 0;
+            foreach ($words as $word) {
+                $letterCount += \strlen((string)$word);
+            }
+
+            $hasCjk = $this->hasMeaningfulCjkContent($segment);
+            if ($hasCjk && \count($words) >= 5 && $letterCount >= 30) {
+                return true;
+            }
+            if ($hasCjk) {
+                continue;
+            }
+            if (\count($words) >= 3 && $letterCount >= 16) {
+                return true;
+            }
+            if (
+                \count($words) >= 2
+                && \preg_match('/\b(?:download|play|learn|more|get|started|start|contact|about|subscribe|signup|sign|shop|explore|read|view)\b/iu', $segment) === 1
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @param array<string,mixed> $renderContext
      */
@@ -9393,13 +9344,19 @@ class AiSitePageComponentGenerationService
         if (!$contentLocaleExplicit) {
             return;
         }
-        if ($locale === '' || !$this->isNonCjkLocale($locale)) {
+        if ($locale === '') {
             return;
         }
 
         $visibleHtml = (string)\preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', ' ', $html);
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($visibleHtml)));
-        if ($plain !== '' && $this->hasMeaningfulCjkContent($plain)) {
+        if ($plain === '') {
+            return;
+        }
+        if ($this->isNonCjkLocale($locale) && $this->hasMeaningfulCjkContent($plain)) {
+            throw new \RuntimeException('Rendered component visible copy does not match website content locale.');
+        }
+        if ($this->isCjkLocale($locale) && $this->hasDominantLatinProseForCjkLocale($plain)) {
             throw new \RuntimeException('Rendered component visible copy does not match website content locale.');
         }
     }
@@ -9409,7 +9366,7 @@ class AiSitePageComponentGenerationService
         if (\trim($html) === '') {
             return;
         }
-        // 标签闭合校验：检测非自闭合标签是否缺少闭标签
+        // 鏍囩闂悎鏍￠獙锛氭娴嬮潪鑷棴鍚堟爣绛炬槸鍚︾己灏戦棴鏍囩
         $unclosedTags = $this->detectUnclosedHtmlTags($html);
         if ($unclosedTags !== []) {
             throw new \RuntimeException(
@@ -9457,8 +9414,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 检测 HTML 片段中未闭合的标签（忽略 void 元素和自闭合标签）。
-     *
+     * 妫€娴?HTML 鐗囨涓湭闂悎鐨勬爣绛撅紙蹇界暐 void 鍏冪礌鍜岃嚜闂悎鏍囩锛夈€?     *
      * @return array<string,int> tagName => openCount
      */
     private function detectUnclosedHtmlTags(string $html): array
@@ -9479,7 +9435,6 @@ class AiSitePageComponentGenerationService
             if ($tagName === '') {
                 continue;
             }
-            // 闭标签
             if (\preg_match('/^<\s*\/\s*/', $tagText) === 1) {
                 for ($stackIndex = \count($stack) - 1; $stackIndex >= 0; $stackIndex--) {
                     if ($stack[$stackIndex] === $tagName) {
@@ -9489,7 +9444,7 @@ class AiSitePageComponentGenerationService
                 }
                 continue;
             }
-            // void 元素或自闭合标签
+            // void 鍏冪礌鎴栬嚜闂悎鏍囩
             if (isset($voidTags[$tagName]) || \preg_match('/\/\s*>$/', $tagText) === 1) {
                 continue;
             }
@@ -9521,22 +9476,7 @@ class AiSitePageComponentGenerationService
         }
         $hint = $this->describeLocaleForAiPrompt($locale);
 
-        return "Website content language (locale {$locale} — {$hint}): all visitor-visible copy (headings, buttons, nav labels, body text, footer, alt text) must be written in this language from the website requirement. Do not use the planning/plan language as visitor copy unless it matches this locale.\n";
-    }
-
-    /**
-     * @param array<string,mixed> $websiteProfile
-     * @param array<string,mixed> $scope
-     */
-    private function buildPrimaryLanguageRuleZh(array $websiteProfile, array $scope): string
-    {
-        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
-        if ($locale === '') {
-            return '';
-        }
-        $hint = $this->describeLocaleForAiPrompt($locale);
-
-        return "网站内容主语言（locale {$locale}，{$hint}）：所有面向访客可见的文案（标题、按钮、导航、段落、页脚、alt 文案等）均须使用用户需求选择的网站主语言撰写。禁止把方案/计划语言当成网站可见文案语言，除非它与该 locale 一致。\n";
+        return "Website content language (locale {$locale} - {$hint}): all visitor-visible copy (headings, buttons, nav labels, body text, footer, alt text) must be written in this language from the website requirement. Do not use the planning/plan language as visitor copy unless it matches this locale.\n";
     }
 
     private function emitComponentRetryNotice(string $region, string $componentCode, string $reason, int $attempt): void
@@ -9550,7 +9490,7 @@ class AiSitePageComponentGenerationService
             $sse->sendEvent('warning', [
                 'region' => $region,
                 'component_code' => $componentCode,
-                'message' => (string)__('AI 组件生成未通过校验，正在使用 AI 增强修复方案重写（第 %{1} 轮）：%{2}', [
+                'message' => (string)__('AI component generation failed validation; retrying with AI repair attempt %{1}. Reason: %{2}', [
                     $attempt,
                     $reason,
                 ]),
@@ -9584,16 +9524,25 @@ class AiSitePageComponentGenerationService
         string $basePrompt,
         string $reason,
         int $attempt,
-        array $failedAiData = []
+        array $failedAiData = [],
+        array $verifiedAssets = []
     ): string {
         $cssPrefix = $this->normalizeComponentCssPrefix($componentCode);
+        $structuralFailure = $this->isStructuralComponentGenerationFailureReason($reason);
         $failedPayload = '';
-        if ($failedAiData !== []) {
+        if ($failedAiData !== [] && !$structuralFailure) {
+            $failedAiData = $this->redactUnverifiedImageReferencesForRetryPrompt(
+                $this->normalizeComponentPayload($failedAiData),
+                $verifiedAssets
+            );
             $failedPayload = $this->clipText(
-                (string)\json_encode($this->normalizeComponentPayload($failedAiData), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR),
+                (string)\json_encode($failedAiData, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR),
                 5000
             );
         }
+        $retryVerifiedAssetContract = $verifiedAssets !== []
+            ? "\n" . $this->buildVerifiedAssetPromptContract($verifiedAssets)
+            : '';
 
         return $basePrompt
             . "\n\nAI enhanced repair/rewrite mode (attempt {$attempt}/" . self::COMPONENT_GENERATION_MAX_ATTEMPTS . "):"
@@ -9601,13 +9550,42 @@ class AiSitePageComponentGenerationService
             . "\n- Regenerate the SAME component as a full-quality AI design repair, not a stub; keep the complete planned component scope."
             . "\n- Preserve the original page/task intent and customer brief; strengthen visitor-facing copy, hierarchy, surface depth, CTA states, and theme-specific visual devices."
             . "\n- If the previous output used the wrong language, rewrite every visitor-visible heading, body paragraph, CTA label, nav label, badge, form label, legal/support sentence, and alt text into the website content locale before returning JSON."
+            . "\n- Treat task labels, component labels, section labels, image-slot labels, queue/build-plan labels, and schema role labels as internal metadata only. If they read like instructions such as Introduce..., Showcase..., Answer..., Reassure..., or Remove..., rewrite them into final customer-facing copy before returning JSON."
+            . "\n- The renderer does not perform post-render content replacements or mobile/aesthetic CSS injection. Fix the JSON itself; do not assume PHP will rename labels, split card copy, add responsive CSS, or restyle a weak layout after generation."
+            . "\n- Before reading or reusing failed payload media, obey the closed verified_asset_src_allowlist from the base prompt. Failed payload image URLs are untrusted unless they exactly match a supplied final_url."
+            . $retryVerifiedAssetContract
+            . ($structuralFailure ? "\n- STRUCTURAL REWRITE MODE: the previous payload failed JSON/HTML/CSS grammar. Do not reuse or patch the failed payload markup/CSS. Rebuild a clean component from the base prompt, visual contract, verified asset template, and component prefix." : '')
+            . ($structuralFailure ? "\n- STRUCTURAL SAFE HTML SUBSET: use only section, div, h2, h3, p, a, img, ul, li, small, strong, and span. Do not use details, summary, button, form, input, custom elements, nested inline tags inside headings, empty wrappers, or any tag not in this list. Keep html_content under 1400 characters." : '')
+            . ($structuralFailure ? "\n- STRUCTURAL SAFE CSS SUBSET: use only stable properties: position, inset, z-index, display, grid-template-columns, gap, align-items, justify-content, width, max-width, min-width, height, min-height, padding, margin, border, border-radius, background, color, font-size, font-weight, line-height, letter-spacing, text-transform, box-shadow, overflow, object-fit, object-position, opacity, transform, transition. Keep css_extra under 1600 characters and css_responsive under 800 characters." : '')
+            . ($structuralFailure ? "\n- STRUCTURAL CSS FORMAT: one selector block at a time, one `property: value;` declaration per line. Avoid quoted CSS values; if a string value is unavoidable, close the quote before the semicolon. Do not output CSS variables, vendor-prefixed properties, pseudo-elements, `content:`, `filter`, `backdrop-filter`, `color-mix()`, `calc()`, `mask`, `clip-path`, or more than one CSS function in a single value." : '')
             . ($failedPayload !== '' ? "\n- Start from this failed component JSON and repair it in place instead of inventing a fresh unrelated block:\n" . $failedPayload : '')
-            . "\n- Do not paste planning/observation copy into visible text. Rewrite \"访客看到\", \"用户看到\", \"从而产生\", \"信任感增强\", \"知道如何\", \"Visitors see\", and \"Visitors can review\" sentences into direct marketing, legal, support, or editorial copy."
+            . "\n- Return exactly one JSON object with exactly these six string keys: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. Do not append a second JSON object, raw CSS, `php_variables:` labels, markdown fences, or explanation after the closing brace."
+            . "\n- JSON transport repair: the corrected output must be one parseable JSON object on its own. If content is too long, shorten nonessential detail while preserving the block intent; never truncate mid-string, mid-tag, or mid-CSS-rule."
+            . "\n- Escape JSON strings correctly: use backslashes only for valid JSON escapes (\\\", \\\\, \\/, \\n, \\r, \\t, \\uXXXX). Never output stray sequences like \\d, \\R, \\<, or class-name\\Text inside html_content/css_extra."
+            . "\n- Repair quote balance before returning: use single quotes for HTML attributes, including required generated-image <img> attributes. When a verified asset exists, copy the concrete editable image template so src, data-pb-ai-image-role='generated-asset', and data-pb-ai-asset-slot stay on the same <img>."
+            . "\n- If the failure mentions invalid JSON, valid component JSON payload, opening tag, unclosed quote, or missing element name, rebuild the HTML fragment with one root wrapper plus balanced child elements, then rebuild styling in css_extra/css_responsive. Do not put raw `<` or `>` in visitor text, and do not paste raw double-quoted HTML attributes inside JSON strings."
+            . "\n- If the failure mentions a Required image slot, locate the matching slot_id and final_url from Block visual contract, verified_asset_src_allowlist, verified_assets, or copyable_verified_asset_img_template, then copy the concrete editable image template into html_content as a direct child of the root wrapper or inside the first media wrapper. Use CSS for cover/overlay behavior, but do not use CSS background-image only for a required slot."
+            . "\n- If the failure mentions skipped real images, verified assets exist, or none referenced in html_content, copy one concrete editable image template into html_content for this section. Put it in a real media wrapper immediately under the component root, then design the surrounding testimonial/trust/category/FAQ/story content around that media."
+            . "\n- If the failed payload contains any img src that is not the supplied final_url for its slot, replace that src with the matching supplied final_url. Never preserve invented image URLs, stock URLs, placeholders, or malformed scheme-less URLs like ://images.example/..."
+            . "\n- Image source allowlist is closed: do not use Unsplash, Pexels, Pixabay, Freepik, Shutterstock, Adobe Stock, source.unsplash.com, images.unsplash.com, picsum.photos, loremflickr.com, external stock/CDN URLs, or any image URL not supplied as a verified final_url."
+            . "\n- IMAGE_SRC_SELF_CHECK before returning: every <img src> and every CSS url(...) must be either an exact verified final_url from the prompt or not present. Required slots must have one same <img> containing exact src, data-pb-ai-image-role='generated-asset', and data-pb-ai-asset-slot."
+            . "\n- Do not paste planning/observation copy into visible text. Rewrite \"Visitors see\" and \"Visitors can review\" sentences into direct marketing, legal, support, or editorial copy."
+            . "\n- If the failed output used internal schema labels shaped like role + number, replace them with customer-specific visible titles and descriptions from the brief/build plan."
             . "\n- Do not downgrade to a generic grid: preserve a distinctive composition, theme-matched surface treatment, and at least two visible design devices."
             . "\n- If the failed output looked like plain cards or a flat strip, rewrite the composition with richer layout, stronger art direction, and complete scoped CSS instead of reducing detail."
             . "\n- If this is a hero/banner component and no explicit user adjustment asks for another layout, rebuild it as a true premium 1920x750-style banner: full-background generated image or cover visual layer, dark gradient overlay, and floating content inside a centered max-width container. A small side image plus boxed text is invalid as the default repair target. If explicit user adjustment conflicts, follow the user composition but keep premium generated imagery, readable overlay, and strong hierarchy."
+            . "\n- If the failure mentions CSS scope or #componentId.component-class, rewrite root/wrapper selectors as descendant selectors, e.g. `#componentId .pb-component-root`. The html_content fragment is nested inside the framework root."
+            . "\n- If the failure mentions hero image cover CSS, keep the editable <img> but fix its class/CSS selector spelling exactly and style that selector with position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; then layer overlay and content above it."
+            . "\n- If the failure mentions HTML/CSS scope, attribute, class, or structure contract, rebuild the fragment with one class-only wrapper using `{$cssPrefix}-root`; every custom class must start with the exact prefix `{$cssPrefix}-`, including the leading `pb`. Never output `id='componentId'`, `<tag='...'>`, attributes glued after a closing quote, or class names outside that prefix."
+            . "\n- If the failure mentions CSS structure, rewrite css_extra/css_responsive from scratch with simple complete declarations: each declaration must be `property: value;`, with a semicolon before the next property. Use `z-index`, never `-index`; no property name may start with a single hyphen. Remove empty declarations, bare percent values like `height:%`, merged declarations caused by missing semicolons, unclosed strings, orphan parentheses, color-mix(), mask, clip-path, nested calc(), and filter chains."
+            . "\n- Mobile repair is mandatory: at 390px width, reset narrow heading max-widths, stack grids/flex rows, set min-width:0 on columns/cards, and ensure images or absolute media layers never cover body copy, CTA, or card text."
             . "\n- If this is not hero/banner, choose a section-specific recipe for the role: trust badge wall, game showcase, FAQ accordion, story timeline, testimonial quote rail, or cinematic CTA band. Do not reuse the same three-card row plus image from adjacent blocks."
-            . "\n- Never reuse generic labels such as \"Get started\", \"Game suite\", and \"Download path\" as a repeated card trio."
+            . "\n- Never reuse generic CTA/category/navigation labels as a repeated card trio; labels must come from the customer brief, verified data, or approved build plan."
+            . "\n- If validation failed for crossed closing tags, rebuild html_content with separate adjacent closing tags. Never merge `</p></a>` into `</pa>`, `</small></div>` into `</smalldiv>`, or `</div></section>` into `</divsection>`."
+            . "\n- If validation failed for malformed tags, do not abbreviate heading tags or infer closing tags. Every heading must close with the exact same element name, for example `<h2>...</h2>` or `<h3>...</h3>`; outputs like `</h>`, `</h2div>`, or closing a parent while a span/strong is still open are invalid."
+            . "\n- If validation failed near `<details>` or `<summary>`, rebuild the component without those tags. Use static FAQ cards with div/h3/p/a/img and scoped CSS; do not attempt to repair malformed disclosure markup."
+            . "\n- If validation failed for an unstyled browser-default link, remove nonessential links or rebuild every `<a>` with a `{$cssPrefix}-...` class and explicit normal, hover, and focus CSS. Do not rely on global link styling."
+            . "\n- If validation failed for symbol-only decorative control, remove standalone glyph text such as arrows, stars, card suits, plus signs, bullets, or separators from html_content and rebuild those ornaments in css_extra/css_responsive with pseudo-elements, gradients, borders, or shadows."
             . "\n- For link/contact/social blocks, include real visitor-facing labels, short supporting copy where useful, clear interaction states, and visible grouping or motif treatment."
             . "\n- For blog/article/category blocks, render editorial-quality visitor content: category headline, article teasers, meta chips, related links, reading CTA, and theme-specific layout treatment; use internal anchors or provided URLs, never example.com."
             . "\n- Keep `extra_fields`, `php_variables`, and `js_content` empty unless absolutely necessary."
@@ -9621,14 +9599,126 @@ class AiSitePageComponentGenerationService
             . "\n- Return pure JSON only for component `{$componentCode}`.";
     }
 
+    private function isStructuralComponentGenerationFailureReason(string $reason): bool
+    {
+        $reason = \strtolower($reason);
+        if ($reason === '') {
+            return false;
+        }
+
+        return \preg_match(
+            '/(?:valid component json payload|invalid json|json payload|html structure invalid|css structure contract|opening tag|closing tag|crossed closing|orphan closing|unclosed tag|unclosed quote|missing whitespace|attribute name is missing|attribute glued|malformed css|merged css|missing semicolon|unbalanced css|parentheses|declaration|unterminated tag)/i',
+            $reason
+        ) === 1;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,string>
+     */
+    private function extractVerifiedAssetMapFromRenderContext(array $renderContext, array $defaultConfig): array
+    {
+        $assets = [];
+        foreach (['_required_image_assets', 'verified_assets'] as $contextKey) {
+            $contextAssets = \is_array($renderContext[$contextKey] ?? null) ? $renderContext[$contextKey] : [];
+            foreach ($contextAssets as $slotId => $value) {
+                if (\is_array($value)) {
+                    $slotId = \trim((string)($value['slot_id'] ?? $slotId));
+                    $url = $this->firstConfigString($value, ['final_url', 'url', 'src']);
+                } else {
+                    $slotId = \trim((string)$slotId);
+                    $url = \trim((string)$value);
+                }
+                if ($slotId !== '' && !\is_numeric($slotId) && $url !== '') {
+                    $assets[$slotId] = $url;
+                }
+            }
+        }
+
+        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
+            ? $renderContext['_visual_contract']
+            : $this->decodeRuntimeVisualContract($defaultConfig);
+        $slotId = \trim((string)($visualContract['slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? $defaultConfig['visual.image_slot_id'] ?? ''));
+        $url = $this->firstConfigString($visualContract, ['final_url', 'url', 'src'])
+            ?: $this->firstConfigString($defaultConfig, ['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url']);
+        if ($slotId !== '' && $url !== '') {
+            $assets[$slotId] = $url;
+        }
+
+        return $assets;
+    }
+
+    /**
+     * Keep retry prompts useful without letting a rejected image URL become an
+     * anchor the model copies again. This changes only prompt context, not the
+     * generated block output.
+     *
+     * @param array<string,mixed> $payload
+     * @param array<string,string> $verifiedAssets
+     * @return array<string,mixed>
+     */
+    private function redactUnverifiedImageReferencesForRetryPrompt(array $payload, array $verifiedAssets): array
+    {
+        $allowedUrls = \array_values(\array_filter(\array_map('trim', \array_values($verifiedAssets)), static fn(string $url): bool => $url !== ''));
+        foreach ($payload as $key => $value) {
+            if (\is_array($value)) {
+                $payload[$key] = $this->redactUnverifiedImageReferencesForRetryPrompt($value, $verifiedAssets);
+                continue;
+            }
+            if (!\is_string($value) || $value === '') {
+                continue;
+            }
+            $payload[$key] = $this->redactUnverifiedImageReferencesInString($value, $allowedUrls);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param list<string> $allowedUrls
+     */
+    private function redactUnverifiedImageReferencesInString(string $value, array $allowedUrls): string
+    {
+        $replaceUrl = function (string $url) use ($allowedUrls): string {
+            $url = \html_entity_decode(\trim($url), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+            if ($url === '') {
+                return '';
+            }
+            foreach ($allowedUrls as $allowedUrl) {
+                if ($url === $allowedUrl || $this->normalizeVerifiedAssetUrl($url) === $this->normalizeVerifiedAssetUrl($allowedUrl)) {
+                    return $url;
+                }
+            }
+
+            return '[UNVERIFIED_IMAGE_URL_REMOVED_USE_VERIFIED_FINAL_URL]';
+        };
+
+        $value = \preg_replace_callback(
+            '/(<img\b[^>]*\bsrc\s*=\s*)(["\'])(.*?)\2/isu',
+            static function (array $matches) use ($replaceUrl): string {
+                return (string)$matches[1] . (string)$matches[2] . $replaceUrl((string)$matches[3]) . (string)$matches[2];
+            },
+            $value
+        ) ?? $value;
+
+        return \preg_replace_callback(
+            '/url\(\s*([\'"]?)(.*?)\1\s*\)/isu',
+            static function (array $matches) use ($replaceUrl): string {
+                return 'url(' . (string)$matches[1] . $replaceUrl((string)$matches[2]) . (string)$matches[1] . ')';
+            },
+            $value
+        ) ?? $value;
+    }
+
     private function describeLocaleForAiPrompt(string $locale): string
     {
         return match ($locale) {
-            'zh_Hans_CN' => '简体中文',
-            'zh_Hant_TW' => '繁體中文',
+            'zh_Hans_CN' => 'Simplified Chinese',
+            'zh_Hant_TW' => 'Traditional Chinese',
             'en_US' => 'English',
-            'ja_JP' => '日本語',
-            'ko_KR' => '한국어',
+            'ja_JP' => 'Japanese',
+            'ko_KR' => 'Korean',
             default => $locale,
         };
     }

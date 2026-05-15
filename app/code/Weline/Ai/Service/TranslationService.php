@@ -238,25 +238,13 @@ class TranslationService
         string $sourceLanguage,
         string $strategy
     ): string {
-        $textList = '';
-        foreach ($texts as $index => $text) {
-            $num = $index + 1;
-            $textList .= "{$num}. {$text}\n";
-        }
-        
-        if ($sourceLanguage === '自动检测') {
-            $prompt = "请将以下文本列表翻译成{$targetLanguage}，要求：\n";
-        } else {
-            $prompt = "请将以下{$sourceLanguage}文本列表翻译成{$targetLanguage}，要求：\n";
-        }
-        
-        $prompt .= "1. 保持原文的顺序和编号\n";
-        $prompt .= "2. 每行翻译结果格式为：编号. 翻译内容\n";
-        $prompt .= "3. 只返回翻译结果，不要包含其他说明\n";
-        $prompt .= "4. 如果某条文本无法翻译，保持原文不变\n\n";
-        $prompt .= "原文列表：\n{$textList}\n翻译结果：\n";
-        
-        return $prompt;
+        $payload = json_encode(array_values($texts), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return "Translate this JSON array from {$sourceLanguage} to {$targetLanguage}.\n"
+            . "Return only a valid JSON array of translated strings in the same order and with the same item count.\n"
+            . "Preserve placeholders such as %{1}, %{name}, HTML tags, and template tokens exactly.\n"
+            . "Strategy: {$strategy}.\n"
+            . "Input JSON:\n{$payload}";
     }
     
     /**
@@ -268,6 +256,18 @@ class TranslationService
      */
     private function parseBatchTranslationResponse(string $response, int $expectedCount): array
     {
+        $json = trim($response);
+        if (str_starts_with($json, '```')) {
+            $json = preg_replace('/^```(?:json)?\s*/i', '', $json) ?? $json;
+            $json = preg_replace('/\s*```$/', '', $json) ?? $json;
+            $json = trim($json);
+        }
+
+        $decoded = json_decode($json, true);
+        if (is_array($decoded) && array_is_list($decoded) && count($decoded) === $expectedCount) {
+            return array_map(static fn($item): string => trim((string)$item), $decoded);
+        }
+
         $translations = [];
         $lines = explode("\n", trim($response));
         
@@ -297,12 +297,11 @@ class TranslationService
             $translations = array_values($translations);
         }
         
-        // 确保返回的数量正确
-        while (count($translations) < $expectedCount) {
-            $translations[] = '';
+        if (count($translations) !== $expectedCount) {
+            return [];
         }
-        
-        return array_slice($translations, 0, $expectedCount);
+
+        return array_map(static fn($item): string => trim((string)$item), $translations);
     }
 
     /**

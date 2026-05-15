@@ -33,9 +33,10 @@
     </if>
     
     <div class="backend-layout-1440 <?= htmlspecialchars($meta['class'] ?? '') ?>">
-        <main class="backend-main-content" id="main-content">
-            <?php echo $this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml'); ?>
-        </main>
+        <?php
+        $layoutMainClass = 'backend-main-content';
+        echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
+        ?>
     </div>
     
     <if condition="meta.showFooter">

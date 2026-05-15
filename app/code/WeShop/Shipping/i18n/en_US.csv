@@ -15,13 +15,13 @@
 "Inject extra shipping UI blocks into checkout shipping section without overriding theme pages.","Inject extra shipping UI blocks into checkout shipping section without overriding theme pages."
 DHL,DHL
 "No DHL shipping rate is currently available.","No DHL shipping rate is currently available."
-DHL标准配送,DHL标准配送
-DHL运单创建失败,DHL运单创建失败
+DHL标准配送,"DHL standard delivery"
+DHL运单创建失败,"DHL waybill creation failed"
 "DHL shipment creation failed.","DHL shipment creation failed."
 FedEx,FedEx
 "No FedEx shipping rate is currently available.","No FedEx shipping rate is currently available."
-获取FedEx访问令牌失败,获取FedEx访问令牌失败
-FedEx标准配送,FedEx标准配送
+获取FedEx访问令牌失败,"Failed to get FedEx access token"
+FedEx标准配送,"FedEx Standard Shipping"
 "Failed to obtain FedEx access token.","Failed to obtain FedEx access token."
 "FedEx shipment creation failed: unexpected API response.","FedEx shipment creation failed: unexpected API response."
 "FedEx shipment creation failed.","FedEx shipment creation failed."
