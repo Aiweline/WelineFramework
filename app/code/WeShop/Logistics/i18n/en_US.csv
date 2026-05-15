@@ -6,7 +6,7 @@
 "Tracking Management","Tracking Management"
 "Tracking saved.","Tracking saved."
 "Tracking save failed.","Tracking save failed."
-订单ID不能为空,订单ID不能为空
+订单ID不能为空,"Order ID cannot be empty"
 Pending,Pending
 "Picked Up","Picked Up"
 "In Transit","In Transit"

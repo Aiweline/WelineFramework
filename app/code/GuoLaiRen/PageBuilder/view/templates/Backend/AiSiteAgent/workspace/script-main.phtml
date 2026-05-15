@@ -42,6 +42,7 @@
     var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRefineComponentUrl = <?= \json_encode($startRefineComponentUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startPatchBlockUrl = <?= \json_encode($startPatchBlockUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var retryAiOperationUrl = <?= \json_encode($retryAiOperationUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var updateBlockConfigUrl = <?= \json_encode($updateBlockConfigUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var componentConfigStreamUrl = <?= \json_encode((string)$this->getBackendUrlPath('pagebuilder/backend/ai-generate/component-config-stream'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var switchPreviewPageUrl = <?= \json_encode($switchPreviewPageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -73,6 +74,7 @@
     startRegeneratePageUrl = normalizeLocalPreviewUrlForCurrentHost(startRegeneratePageUrl);
     startRefineComponentUrl = normalizeLocalPreviewUrlForCurrentHost(startRefineComponentUrl);
     startPatchBlockUrl = normalizeLocalPreviewUrlForCurrentHost(startPatchBlockUrl);
+    retryAiOperationUrl = normalizeLocalPreviewUrlForCurrentHost(retryAiOperationUrl);
     updateBlockConfigUrl = normalizeLocalPreviewUrlForCurrentHost(updateBlockConfigUrl);
     componentConfigStreamUrl = normalizeLocalPreviewUrlForCurrentHost(componentConfigStreamUrl);
     switchPreviewPageUrl = normalizeLocalPreviewUrlForCurrentHost(switchPreviewPageUrl);
@@ -308,8 +310,43 @@
             : ((buildSummary.task_summary && typeof buildSummary.task_summary === 'object') ? buildSummary.task_summary : {});
         var hasBuildTaskEvidence = Number(taskSummary.total || taskSummary.pending || taskSummary.done || 0) > 0;
         var meta = buildPlan.contract_meta && typeof buildPlan.contract_meta === 'object' ? buildPlan.contract_meta : {};
+        var executionBlueprint = pickFirstNonEmptyPlanObject(
+            state.execution_blueprint,
+            state.execution_blueprint_draft,
+            scope.execution_blueprint,
+            scope.execution_blueprint_draft,
+            planBlock.execution_blueprint
+        );
+        var planJson = pickFirstNonEmptyPlanObject(
+            state.plan_json,
+            state.plan_structured,
+            scope.plan_json,
+            scope.plan_structured,
+            planBlock.json,
+            planBlock.structured
+        );
+        var displayPlan = {};
+        var displayKind = '';
+        if (hasNonEmptyPlanArtifact(projection)) {
+            displayPlan = projection;
+            displayKind = 'projection';
+        } else if (hasNonEmptyPlanArtifact(buildPlan)) {
+            displayPlan = buildPlan;
+            displayKind = 'build_plan';
+        } else if (hasNonEmptyPlanArtifact(executionBlueprint)) {
+            displayPlan = executionBlueprint;
+            displayKind = 'execution_blueprint';
+        } else if (hasNonEmptyPlanArtifact(planJson)) {
+            displayPlan = planJson;
+            displayKind = 'plan_json';
+        } else if (hasNonEmptyPlanArtifact(taskSummary)) {
+            displayPlan = taskSummary;
+            displayKind = 'task_summary';
+        }
         var hasEvidence = hasNonEmptyPlanArtifact(buildPlan)
             || hasNonEmptyPlanArtifact(projection)
+            || hasNonEmptyPlanArtifact(executionBlueprint)
+            || hasNonEmptyPlanArtifact(planJson)
             || !!state.has_build_plan_v2
             || !!scope.has_build_plan_v2
             || ((!!state.build_plan_confirmed || !!scope.build_plan_confirmed || !!buildPlanConfirmedState) && hasBuildTaskEvidence);
@@ -321,6 +358,10 @@
         return {
             buildPlan: buildPlan,
             projection: projection,
+            executionBlueprint: executionBlueprint,
+            planJson: planJson,
+            displayPlan: displayPlan,
+            displayKind: displayKind,
             hasEvidence: hasEvidence,
             confirmed: confirmed
         };
@@ -566,11 +607,13 @@
         syncConfirmPlanButtonEnabled();
         syncPlanRebuildButtonVisibility();
         syncBuildPlanStartButtonState();
+        syncRebuildBuildStageButtonState(workspaceState);
         syncPublishStartButtonFromWorkspaceState(workspaceState);
         syncPublishStageEntryFromWorkspaceState(workspaceState);
         syncPublishedSiteAccess(workspaceState);
         syncRetryableAiFailureActionGuards(workspaceState);
         syncBuildPlanStartButtonState(workspaceState);
+        syncRebuildBuildStageButtonState(workspaceState);
         scheduleRetryableAiFailureResumePrompt(workspaceState);
         syncAssetPanelFromWorkspaceState(workspaceState);
         syncReferenceImagePanelFromWorkspaceState(workspaceState);
@@ -661,6 +704,12 @@
         return redirectUrl || window.location.href;
     }
 
+    function shouldRedirectToWorkspaceBuildStage() {
+        var renderedStage = String(currentStageCode || '').trim().toLowerCase();
+        var workspaceStage = String(currentWorkspaceStage || '').trim().toLowerCase();
+        return renderedStage === 'plan' || workspaceStage === 'plan';
+    }
+
     function continueToBuildAfterPlanConfirm(workspaceState) {
         planConfirmedState = true;
         lastPhaseOnePlanPresent = true;
@@ -670,18 +719,10 @@
         if (state && typeof state === 'object') {
             renderBuildPlanProjectionSummary(state);
         }
-        if (shouldUseBuildPlanV2Flow(state)) {
-            buildPlanConfirmedState = true;
-            syncBuildPlanStartButtonState();
-            var selectedTypes = Array.isArray(currentPlanSelection) && currentPlanSelection.length > 0
-                ? currentPlanSelection.slice()
-                : selectedPageTypes();
-            startConfirmedBuild(currentPlanTriggerButton, selectedTypes, {});
-            return;
-        }
-        toast('warning', messages.buildPlanV2ConfirmRequired);
+        buildPlanConfirmedState = !!(state && shouldUseBuildPlanV2Flow(state));
+        syncBuildPlanStartButtonState();
         window.setTimeout(function () {
-            window.location.href = resolveWorkspaceRedirectUrl(workspaceState);
+            window.location.href = resolveWorkspaceRedirectUrl(state);
         }, 120);
     }
 
@@ -1054,18 +1095,25 @@
         );
     }
 
-    function hasAnyRunningQueueForUi(workspaceState) {
+    function hasRunningQueueForUi(workspaceState, operationFilter) {
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
+        var normalizedFilter = String(operationFilter || '').trim().toLowerCase();
+        var operations = normalizedFilter === 'plan' || normalizedFilter === 'build'
+            ? [normalizedFilter]
+            : ['plan', 'build'];
         var candidates = [];
         if (state.active_operation && typeof state.active_operation === 'object') {
-            candidates.push(state.active_operation);
+            var activeOperationName = String(state.active_operation.operation || '').trim().toLowerCase();
+            if (!normalizedFilter || activeOperationName === normalizedFilter) {
+                candidates.push(state.active_operation);
+            }
         }
         var activeOperations = state.active_operations && typeof state.active_operations === 'object'
             ? state.active_operations
             : {};
-        ['plan', 'build'].forEach(function (operation) {
+        operations.forEach(function (operation) {
             if (activeOperations[operation] && typeof activeOperations[operation] === 'object') {
                 candidates.push(activeOperations[operation]);
             }
@@ -1075,8 +1123,12 @@
             }
         });
         return candidates.some(function (item) {
-            return isQueueUiBusyStatus(item.status || item.queue_status || item.state);
+            return isQueueStatusRunningForUi(readQueueStatusForPrompt(item));
         });
+    }
+
+    function hasAnyRunningQueueForUi(workspaceState) {
+        return hasRunningQueueForUi(workspaceState, '');
     }
 
     function hasBuildOperationRunningForUi(workspaceState) {
@@ -1095,7 +1147,7 @@
         }
         return candidates.some(function (item) {
             var operation = String(item.operation || 'build').trim().toLowerCase();
-            var status = item.status || item.queue_status || item.state;
+            var status = readQueueStatusForPrompt(item);
             return (operation === 'build' || operation === 'visual_edit') && isQueueStatusRunningForUi(status);
         });
     }
@@ -1199,7 +1251,7 @@
     }
 
     function getRetryableAiFailureMessage(workspaceState, operation) {
-        if (hasAnyRunningQueueForUi(workspaceState)) {
+        if (hasRunningQueueForUi(workspaceState, operation)) {
             return String(messages.retryableAiQueueRunning || 'Current queue is still running.');
         }
         var count = getRetryableAiFailureCount(workspaceState, operation);
@@ -1249,11 +1301,19 @@
         var count = getRetryableAiFailureCount(state, operation);
         var visible = count > 0;
         button.classList.toggle('d-none', !visible);
+        if (operation === 'build' && visible) {
+            var retryPayload = resolveRetryableAiOperationResumePayload(operation);
+            button.dataset.pbRetryableAiResolvedOperation = retryPayload && retryPayload.operation ? String(retryPayload.operation) : '';
+            button.dataset.pbRetryableAiResolvedQueueId = retryPayload && retryPayload.queue_id ? String(retryPayload.queue_id) : '';
+        } else {
+            delete button.dataset.pbRetryableAiResolvedOperation;
+            delete button.dataset.pbRetryableAiResolvedQueueId;
+        }
         var countEl = button.querySelector('[data-retryable-ai-count]');
         if (countEl) {
             countEl.textContent = String(count);
         }
-        var busy = visible && (hasAnyRunningQueueForUi(state) || (operation === 'build' && isBuildActionLocked(state)));
+        var busy = visible && (hasRunningQueueForUi(state, operation) || (operation === 'build' && isBuildActionLocked(state)));
         button.disabled = busy;
         button.setAttribute('aria-disabled', busy ? 'true' : 'false');
         if (visible) {
@@ -1294,12 +1354,142 @@
         return false;
     }
 
+    function isRetryableVisualAiOperation(operation) {
+        return ['block_regenerate', 'block_partial_patch', 'regenerate_page'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
+    }
+
+    function normalizeRetryableAiOperationCandidate(candidate, requestedOperation) {
+        if (!candidate || typeof candidate !== 'object') {
+            return null;
+        }
+        var details = candidate.details && typeof candidate.details === 'object' ? candidate.details : {};
+        var actualOperation = String(candidate.operation || details.operation || '').trim().toLowerCase();
+        var requested = String(requestedOperation || '').trim().toLowerCase();
+        if (!actualOperation) {
+            return null;
+        }
+        if (requested && requested !== actualOperation && !(requested === 'build' && (actualOperation === 'build' || isRetryableVisualAiOperation(actualOperation)))) {
+            return null;
+        }
+        var status = String(candidate.status || details.status || '').trim().toLowerCase();
+        if (status && ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(status) === -1) {
+            return null;
+        }
+        var queueId = parseInt(String(candidate.queue_id || details.queue_id || 0), 10) || 0;
+        var pageType = String(candidate.page_type || details.page_type || '').trim();
+        var payload = {
+            public_id: publicId,
+            operation: actualOperation
+        };
+        if (queueId > 0) {
+            payload.queue_id = String(queueId);
+        }
+        if (pageType) {
+            payload.page_type = pageType;
+        }
+        return payload;
+    }
+
+    function resolveRetryableAiOperationResumePayload(operation) {
+        var state = normalizeWorkspaceStateShape(getLatestWorkspaceStateForQueuePrompt());
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var candidates = [];
+        var append = function (candidate) {
+            if (candidate && typeof candidate === 'object') {
+                candidates.push(candidate);
+            }
+        };
+        append(state.active_operation);
+        append(scope.active_operation);
+        var activeOperations = state.active_operations && typeof state.active_operations === 'object'
+            ? state.active_operations
+            : (scope.active_operations && typeof scope.active_operations === 'object' ? scope.active_operations : {});
+        Object.keys(activeOperations || {}).forEach(function (key) {
+            var candidate = activeOperations[key];
+            if (candidate && typeof candidate === 'object') {
+                if (!candidate.operation) {
+                    candidate = Object.assign({ operation: key }, candidate);
+                }
+                append(candidate);
+            }
+        });
+        append(state.latest_build_failure);
+        append(scope.latest_build_failure);
+
+        for (var i = 0; i < candidates.length; i += 1) {
+            var payload = normalizeRetryableAiOperationCandidate(candidates[i], operation);
+            if (payload && payload.operation) {
+                return payload;
+            }
+        }
+        if (String(operation || '').trim().toLowerCase() === 'build' && hasRetryableAiFailures(state, 'build')) {
+            var fallbackQueueId = 0;
+            var buildState = activeOperations && activeOperations.build && typeof activeOperations.build === 'object'
+                ? activeOperations.build
+                : null;
+            [state.active_operation, scope.active_operation, buildState].some(function (candidate) {
+                if (!candidate || typeof candidate !== 'object') {
+                    return false;
+                }
+                fallbackQueueId = parseInt(String(candidate.queue_id || (candidate.details && candidate.details.queue_id) || 0), 10) || 0;
+                return fallbackQueueId > 0;
+            });
+            if (fallbackQueueId <= 0) {
+                var button = document.querySelector('[data-retryable-ai-operation="build"][data-pb-retryable-ai-resolved-queue-id]');
+                fallbackQueueId = button ? (parseInt(String(button.dataset.pbRetryableAiResolvedQueueId || '0'), 10) || 0) : 0;
+            }
+            var fallbackPayload = {
+                public_id: publicId,
+                operation: 'build'
+            };
+            if (fallbackQueueId > 0) {
+                fallbackPayload.queue_id = String(fallbackQueueId);
+            }
+            return fallbackPayload;
+        }
+        return null;
+    }
+
     function triggerRetryableAiFailureResumeOperation(operation) {
         var normalized = String(operation || '').trim();
+        document.documentElement.dataset.pbRetryableAiTriggerOperation = normalized;
         if (normalized === 'plan') {
             return !!workspaceApi.retryPhaseOnePlanGeneration({ forceRebuild: false });
         }
         if (normalized === 'build') {
+            var retryPayload = resolveRetryableAiOperationResumePayload(normalized);
+            document.documentElement.dataset.pbRetryableAiTriggerPayloadOperation = retryPayload && retryPayload.operation ? String(retryPayload.operation) : '';
+            document.documentElement.dataset.pbRetryableAiTriggerHasUrl = retryAiOperationUrl ? '1' : '0';
+            if (retryPayload && !retryAiOperationUrl) {
+                toast('error', messages.refineUnavailable);
+                return false;
+            }
+            if (retryPayload && retryAiOperationUrl) {
+                document.documentElement.dataset.pbRetryableAiTriggerPosted = '1';
+                postForm(retryAiOperationUrl, retryPayload).then(function (data) {
+                    if (data && data.data && typeof data.data === 'object') {
+                        hydrateWorkspaceFromState(data.data);
+                    }
+                    if (
+                        data
+                        && data.success
+                        && window.PbAiOperationRunner
+                        && typeof window.PbAiOperationRunner.startFromResponse === 'function'
+                        && window.PbAiOperationRunner.startFromResponse(data, retryPayload.operation)
+                    ) {
+                        toast('success', data.message ? String(data.message) : String(messages.retryableAiResumePromptStarted || '').replace('%{operation}', retryPayload.operation));
+                        return;
+                    }
+                    if (data && data.success) {
+                        toast('success', data.message ? String(data.message) : String(messages.retryableAiResumePromptStarted || '').replace('%{operation}', retryPayload.operation));
+                        return;
+                    }
+                    toast('error', data && data.message ? String(data.message) : messages.refineUnavailable);
+                }).catch(function (error) {
+                    toast('error', error && error.message ? error.message : messages.refineUnavailable);
+                });
+                return true;
+            }
             startOrObserveBuildFromVisualEditEntry();
             return true;
         }
@@ -1404,26 +1594,63 @@
         }, 400);
     }
 
+    function handleRetryableAiFailureButtonClick(button, operation) {
+        if (!button || button.disabled || String(button.getAttribute('aria-disabled') || '').trim() === 'true') {
+            return;
+        }
+        button.dataset.pbRetryableAiLastClickAt = String(Date.now());
+        triggerRetryableAiFailureResumeOperation(operation);
+    }
+
+    var retryableAiFailurePointerGuardAt = 0;
+
+    function handleRetryableAiFailureDelegatedEvent(event) {
+        var clickTarget = event ? event.target : null;
+        if (clickTarget && clickTarget.nodeType !== 1 && clickTarget.parentElement) {
+            clickTarget = clickTarget.parentElement;
+        }
+        var target = clickTarget && typeof clickTarget.closest === 'function'
+            ? clickTarget.closest('[data-retryable-ai-operation]')
+            : null;
+        if (!target) {
+            return;
+        }
+        var operation = String(target.getAttribute('data-retryable-ai-operation') || '').trim();
+        if (operation !== 'plan' && operation !== 'build') {
+            return;
+        }
+        var now = Date.now();
+        if ((now - retryableAiFailurePointerGuardAt) < 600) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            return;
+        }
+        retryableAiFailurePointerGuardAt = now;
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+        handleRetryableAiFailureButtonClick(target, operation);
+    }
+
     function bindRetryableAiFailureButtons() {
+        if (document.documentElement.dataset.pbRetryableAiDelegatedBound !== '1') {
+            document.documentElement.dataset.pbRetryableAiDelegatedBound = '1';
+            ['pointerdown', 'mousedown', 'click'].forEach(function (eventName) {
+                document.addEventListener(eventName, handleRetryableAiFailureDelegatedEvent, true);
+            });
+        }
         document.querySelectorAll('[data-retryable-ai-operation]').forEach(function (button) {
             var operation = String(button.getAttribute('data-retryable-ai-operation') || '').trim();
-            if (operation !== 'plan' && operation !== 'build') {
-                return;
+            if (operation === 'plan' || operation === 'build') {
+                button.dataset.pbRetryableAiBound = '1';
+                button.onclick = function (event) {
+                    if (event && typeof event.preventDefault === 'function') {
+                        event.preventDefault();
+                    }
+                    handleRetryableAiFailureButtonClick(button, operation);
+                };
             }
-            if (button.dataset.pbRetryableAiBound === '1') {
-                return;
-            }
-            button.dataset.pbRetryableAiBound = '1';
-            button.addEventListener('click', function () {
-                if (button.disabled) {
-                    return;
-                }
-                if (hasAnyRunningQueueForUi()) {
-                    toast('warning', getRetryableAiFailureMessage(null, operation));
-                    return;
-                }
-                triggerRetryableAiFailureResumeOperation(operation);
-            });
         });
         syncRetryableAiFailureActionGuards(getLatestWorkspaceStateForQueuePrompt());
     }
@@ -1452,8 +1679,8 @@
         visualPreviewEmpty: <?= \json_encode((string)__('暂无可预览页面，请先完成页面生成或选择预览页。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         field: <?= \json_encode((string)__('字段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         sample: <?= \json_encode((string)__('示例'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        reason: <?= \json_encode((string)__('设计细节'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        implementationNote: <?= \json_encode((string)__('实现说明'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        details: <?= \json_encode((string)__('设计细节'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        implementationNote: <?= \json_encode((string)__('任务拆解'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         contentStructure: <?= \json_encode((string)__('内容结构'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         designDetails: <?= \json_encode((string)__('设计细节'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         links: <?= \json_encode((string)__('链接'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1482,14 +1709,14 @@
         ctaTone: <?= \json_encode((string)__('CTA 语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeDirectEditTitle: <?= \json_encode((string)__('主题微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeDirectEditHint: <?= \json_encode((string)__('支持直接编辑主题宗旨、视觉关键词与内容语气。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        stageToolbarHint: <?= \json_encode((string)__('悬停后可直接微调、重建、删除或新增块；拖动排序后会自动保存；也可以对整个阶段重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageToolbarHint: <?= \json_encode((string)__('悬停后可直接微调、重建、删除或新增块；拖动排序后会自动保存；也可以对整个方案重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineAction: <?= \json_encode((string)__('微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         rebuildAction: <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         deleteAction: <?= \json_encode((string)__('删除'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         addBlockAction: <?= \json_encode((string)__('新增块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         moveAction: <?= \json_encode((string)__('跳位'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         reorderModalRange: <?= \json_encode((string)__('（当前第 %{current} 位 / 共 %{total} 项）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        reorderContextMetaPlan: <?= \json_encode((string)__('阶段：方案块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderContextMetaPlan: <?= \json_encode((string)__('方案块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         reorderInvalidTarget: <?= \json_encode((string)__('请输入有效的位置（正整数）。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         reorderSameTarget: <?= \json_encode((string)__('当前已在该位置，无需移动。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         reorderClampedTarget: <?= \json_encode((string)__('目标位置已自动限制为 %{target}。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1668,6 +1895,82 @@
         return '';
     }
 
+    function looksLikeAssetInternalPromptText(value) {
+        var text = String(value || '').trim().toLowerCase();
+        if (!text) {
+            return false;
+        }
+        if (/\.(png|jpe?g|webp|gif|svg)(\b|$)/i.test(text)) {
+            return true;
+        }
+        return [
+            'primary subject',
+            'only describe',
+            'no text bars',
+            'no placeholder',
+            'prompt',
+            'blueprint',
+            'mockup',
+            'faceless',
+            'block image generation',
+            'subject-matter image',
+            'neighboring block',
+            'single section only'
+        ].some(function (marker) {
+            return marker && text.indexOf(marker) !== -1;
+        });
+    }
+
+    function normalizeAssetPanelSafeText(value, maxLength) {
+        var limit = maxLength || 96;
+        var text = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!text || looksLikeAssetInternalPromptText(text) || text.length > limit) {
+            return '';
+        }
+        return text;
+    }
+
+    function humanizeAssetPanelKey(value) {
+        var text = String(value || '').trim();
+        if (!text) {
+            return '';
+        }
+        text = text.split(':').pop().split('/').pop();
+        text = text.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+        return text;
+    }
+
+    function buildAssetSlotDisplayLabel(slot, slotId) {
+        var explicit = normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['label', 'title', 'name']), 80);
+        if (explicit) {
+            return explicit;
+        }
+        var semantic = normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['field', 'target_field', 'slot_type', 'kind', 'role']), 80);
+        if (semantic) {
+            return humanizeAssetPanelKey(semantic) || semantic;
+        }
+        return humanizeAssetPanelKey(slotId) || 'Image slot';
+    }
+
+    function buildAssetSlotBindingText(slot, slotId) {
+        var parts = [
+            normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['page_type', 'page_key', 'page']), 64),
+            normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['block_key', 'section_code', 'section_key']), 96),
+            normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['field', 'target_field', 'image_field']), 64)
+        ].filter(Boolean).map(function (part) {
+            return humanizeAssetPanelKey(part) || part;
+        });
+        if (parts.length > 0) {
+            return parts.join(' / ');
+        }
+        return normalizeAssetPanelSafeText(slotId, 96);
+    }
+
+    function buildAssetSlotPurposeText(slot) {
+        var purpose = normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['slot_type', 'kind', 'role']), 64);
+        return purpose ? (humanizeAssetPanelKey(purpose) || purpose) : '';
+    }
+
     function normalizeAssetStatus(status) {
         return String(status || '').trim().toLowerCase();
     }
@@ -1811,12 +2114,13 @@
         list.innerHTML = slots.map(function (slot) {
             var slotId = readAssetSlotValue(slot, ['slot_id', 'id', 'key']);
             var status = readAssetSlotValue(slot, ['status', 'queue_status']) || 'pending';
-            var brief = readAssetSlotValue(slot, ['prompt_brief', 'brief', 'description', 'prompt']);
             var preview = readAssetSlotValue(slot, ['preview', 'preview_url', 'url', 'final_url']);
             var finalUrl = readAssetSlotValue(slot, ['final_url', 'url']);
-            var source = readAssetSlotValue(slot, ['source', 'provider', 'mode']);
             var lockedBy = readAssetSlotValue(slot, ['locked_by_user', 'locked_by']);
-            var error = readAssetSlotValue(slot, ['error', 'error_message']);
+            var error = normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['error', 'error_message']), 220);
+            var displayLabel = buildAssetSlotDisplayLabel(slot, slotId);
+            var binding = buildAssetSlotBindingText(slot, slotId);
+            var purpose = buildAssetSlotPurposeText(slot);
             var locked = lockedBy !== '' && lockedBy !== '0' && lockedBy.toLowerCase() !== 'false';
             var previewHtml = preview
                 ? '<div class="pb-ai-asset-preview mb-2"><img alt="" src="' + escapeHtml(preview) + '"></div>'
@@ -1824,14 +2128,14 @@
             return ''
                 + '<div class="pb-ai-asset-slot-card p-2 small" data-asset-slot-id="' + escapeHtml(slotId) + '">'
                 + '<div class="d-flex align-items-start justify-content-between gap-2 mb-1">'
-                + '<strong class="text-break">' + escapeHtml(slotId || '-') + '</strong>'
+                + '<strong class="text-break">' + escapeHtml(displayLabel || slotId || '-') + '</strong>'
                 + '<span class="badge text-bg-secondary" data-asset-slot-status>' + escapeHtml(status) + '</span>'
                 + '</div>'
+                + (binding ? '<div class="text-muted mb-1 pb-ai-asset-binding">' + escapeHtml(binding) + '</div>' : '')
                 + previewHtml
-                + (brief ? '<div class="text-muted mb-1 pb-ai-asset-brief">' + escapeHtml(brief) + '</div>' : '')
                 + '<div class="d-flex flex-wrap gap-1 mb-2">'
                 + (finalUrl ? '<a class="badge text-bg-light border text-decoration-none" target="_blank" rel="noopener" href="' + escapeHtml(finalUrl) + '">final_url</a>' : '')
-                + (source ? '<span class="badge text-bg-light border">source: ' + escapeHtml(source) + '</span>' : '')
+                + (purpose ? '<span class="badge text-bg-light border">' + escapeHtml(purpose) + '</span>' : '')
                 + (locked ? '<span class="badge text-bg-warning">locked</span>' : '')
                 + (error ? '<span class="badge text-bg-danger">error</span>' : '')
                 + '</div>'
@@ -2396,6 +2700,8 @@
             stage: targetStage
         }).then(function (data) {
             if (data && data.success && data.data && typeof data.data === 'object') {
+                markPlanBlockMutationStatus('success', data.message ? String(data.message) : '');
+                closeBlockOperationModal();
                 hydrateWorkspaceFromState(data.data);
             }
             return data;
@@ -2597,17 +2903,61 @@
             frame.style.maxWidth = '100%';
             frame.style.minHeight = getPreviewDeviceMinHeight() + 'px';
         } else if (currentPreviewDevice === 'tablet') {
-            frame.style.width = '834px';
-            frame.style.maxWidth = '834px';
+            frame.style.width = 'min(834px, 100%)';
+            frame.style.maxWidth = '100%';
             frame.style.minHeight = getPreviewDeviceMinHeight() + 'px';
         } else {
-            frame.style.width = '390px';
-            frame.style.maxWidth = '390px';
+            frame.style.width = 'min(390px, 100%)';
+            frame.style.maxWidth = '100%';
             frame.style.minHeight = getPreviewDeviceMinHeight() + 'px';
         }
         frame.style.display = 'block';
         frame.style.margin = '0 auto';
         bindVisualPreviewFrameHeightSync(frame);
+        syncEmbeddedPreviewFrameActionChrome(getPreviewFrameDocument(frame));
+    }
+
+    function syncEmbeddedPreviewFrameActionChrome(doc) {
+        if (!doc || !doc.documentElement) {
+            return;
+        }
+        doc.documentElement.setAttribute('data-pb-workspace-preview-device', currentPreviewDevice);
+        doc.documentElement.setAttribute('data-pb-workspace-mobile-action-dock', currentPreviewDevice === 'mobile' ? '1' : '0');
+        if (doc.getElementById('pb-workspace-mobile-action-dock-style')) {
+            return;
+        }
+        var style = doc.createElement('style');
+        style.id = 'pb-workspace-mobile-action-dock-style';
+        style.textContent = [
+            'html[data-pb-workspace-mobile-action-dock="1"] .component-actions { display:none !important; visibility:hidden !important; pointer-events:none !important; }',
+            'html[data-pb-workspace-mobile-action-dock="1"] .tpmst-component-wrapper.selected > .component-actions, html[data-pb-workspace-mobile-action-dock="1"] .pb-component-wrapper.selected > .component-actions, html[data-pb-workspace-mobile-action-dock="1"] .pb-ai-block-wrapper.selected > .component-actions { display:none !important; }'
+        ].join('\n');
+        (doc.head || doc.documentElement).appendChild(style);
+    }
+
+    function syncEmbeddedPreviewActionDockPlacement() {
+        var dock = document.getElementById('pb-ai-embedded-action-dock');
+        if (!dock) {
+            return;
+        }
+        dock.style.maxWidth = 'calc(100vw - 24px)';
+        dock.style.flexWrap = 'wrap';
+        dock.style.justifyContent = 'center';
+        if (currentPreviewDevice === 'mobile') {
+            dock.style.top = 'auto';
+            dock.style.right = 'auto';
+            dock.style.bottom = '22px';
+            dock.style.left = '50%';
+            dock.style.transform = 'translateX(-50%)';
+            dock.style.borderRadius = '20px';
+            return;
+        }
+        dock.style.top = '84px';
+        dock.style.right = '32px';
+        dock.style.bottom = 'auto';
+        dock.style.left = 'auto';
+        dock.style.transform = 'none';
+        dock.style.borderRadius = '999px';
     }
 
     function applyPreviewDeviceMode(device) {
@@ -2635,6 +2985,7 @@
             window.localStorage.setItem('pb-ai-preview-device', currentPreviewDevice);
         } catch (error) {}
         syncVisualPreviewFullscreenFrameSizing();
+        syncEmbeddedPreviewActionDockPlacement();
     }
 
     function bindPreviewDeviceButtons() {
@@ -3051,7 +3402,7 @@
             || !!planGenerationActionLockActive
             || !!planStartRequestPending
             || !!planSseRunning
-            || hasAnyRunningQueueForUi()
+            || hasRunningQueueForUi(null, 'plan')
             || !String(startPlanUrl || '').trim()
             || !isTargetDomainRequiredForPlanActionSatisfied();
         getRunVirtualThemeButtons().forEach(function (btn) {
@@ -3611,7 +3962,7 @@
         });
     }
 
-    // T36：打开已确认方案（阶段一/二）只读预览弹层。
+    // T36：打开已确认方案/执行蓝图只读预览弹层。
     function showConfirmedPlanModal(planType) {
         var modalEl = document.getElementById('pb-ai-confirmed-plan-view-modal');
         if (!modalEl) {
@@ -3642,12 +3993,14 @@
             var buildPlanArtifacts = resolveBuildPlanV2ArtifactsFromWorkspaceState(stateForBuildPlan);
             if (buildPlanArtifacts.hasEvidence) {
                 typeLabel = <?= \json_encode((string)__('执行蓝图'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-                planData = hasNonEmptyPlanArtifact(buildPlanArtifacts.projection) ? buildPlanArtifacts.projection : buildPlanArtifacts.buildPlan;
+                planData = hasNonEmptyPlanArtifact(buildPlanArtifacts.displayPlan) ? buildPlanArtifacts.displayPlan : {};
                 markdown = '';
                 confirmedAt = String(stateForBuildPlan.build_plan_confirmed_at || '');
                 signature = String(
                     (planData && planData.source_contract_id)
                     || (buildPlanArtifacts.buildPlan && buildPlanArtifacts.buildPlan.contract_meta && buildPlanArtifacts.buildPlan.contract_meta.id)
+                    || (buildPlanArtifacts.executionBlueprint && buildPlanArtifacts.executionBlueprint.signature)
+                    || (stateForBuildPlan.execution_blueprint_confirmed_signature)
                     || ''
                 );
                 locale = String((stateForBuildPlan.scope && stateForBuildPlan.scope.plan_locale) || '');
@@ -3664,14 +4017,33 @@
                     markdown: markdown
                 };
             } else if (planType === 'build_plan') {
-                planRenderedContent.innerHTML = '<pre class="small bg-light border rounded p-3 mb-0 text-break" style="white-space:pre-wrap;">'
-                    + escapeHtml(JSON.stringify(planData || {}, null, 2))
-                    + '</pre>';
+                if (buildPlanArtifacts.displayKind === 'execution_blueprint') {
+                    planRenderedContent.innerHTML = buildPlanPreviewHtml('', { execution_blueprint: planData });
+                } else if (buildPlanArtifacts.displayKind === 'plan_json') {
+                    planRenderedContent.innerHTML = buildPlanPreviewHtml('', { structured: planData, json: planData });
+                } else if (
+                    buildPlanArtifacts.displayKind === 'projection'
+                    && planData
+                    && typeof planData === 'object'
+                    && (hasNonEmptyPlanArtifact(planData.pages) || hasNonEmptyPlanArtifact(planData.page_plans))
+                ) {
+                    planRenderedContent.innerHTML = buildPlanPreviewHtml('', { structured: planData, json: planData });
+                } else if (hasNonEmptyPlanArtifact(planData)) {
+                    planRenderedContent.innerHTML = '<pre class="small bg-light border rounded p-3 mb-0 text-break" style="white-space:pre-wrap;">'
+                        + escapeHtml(JSON.stringify(planData, null, 2))
+                        + '</pre>';
+                } else {
+                    planRenderedContent.innerHTML = renderPlanPreviewEmptyStateHtml();
+                }
                 previewPayload = null;
             }
             if (previewPayload !== null) {
                 planRenderedContent.innerHTML = buildPlanPreviewHtml(markdown, previewPayload);
             }
+            bindPreviewActionButtons(planRenderedContent);
+            bindPreviewTabButtons(planRenderedContent);
+            bindPreviewSortables(planRenderedContent);
+            bindStageOnePlanFieldEditors(planRenderedContent);
         }
         if (planConfirmedAt) planConfirmedAt.textContent = confirmedAt || '-';
         if (planSignature) planSignature.textContent = signature || '-';
@@ -3984,7 +4356,7 @@
     };
     workspaceApi.retryPhaseOnePlanGeneration = function (options) {
         var opts = options && typeof options === 'object' ? options : {};
-        if (planStartRequestPending || planSseRunning || hasAnyRunningQueueForUi()) {
+        if (planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan')) {
             toast('warning', getRetryableAiFailureMessage(null, 'plan'));
             return false;
         }
@@ -4881,6 +5253,7 @@
         }
         currentActiveOperationState = active;
         isOperationRunning = false;
+        buildStartupPending = false;
         if (!latestWorkspaceState || typeof latestWorkspaceState !== 'object') {
             latestWorkspaceState = {};
         }
@@ -4906,6 +5279,11 @@
             statePatch.can_publish = false;
             statePatch.workspace_status = 'failed';
         }
+        renderQueueUiState('build', {
+            state: normalizedStatus,
+            message: String(message || active.message || ''),
+            percent: (normalizedStatus === 'done' || normalizedStatus === 'complete' || normalizedStatus === 'completed') ? 100 : 0
+        }, { updateStatus: false });
         try {
             window.__pbWorkspaceState = window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
                 ? Object.assign({}, window.__pbWorkspaceState, statePatch)
@@ -4917,12 +5295,18 @@
             // UI state is already updated locally; cross-script mirrors are best-effort.
         }
         syncPublishRepairButtonDisabledState();
+        syncBuildPlanStartButtonState(latestWorkspaceState);
+        syncRebuildBuildStageButtonState(latestWorkspaceState);
         syncPublishStageEntryFromWorkspaceState(latestWorkspaceState);
     }
 
     function resetBuildStartUi() {
+        buildStartupPending = false;
+        hideBuildGuard();
+        setBuildNavigationGuard(false);
         setRunVirtualThemeButtonsDisabled(false);
         syncBuildPlanStartButtonState();
+        syncRebuildBuildStageButtonState();
         syncPublishRepairButtonDisabledState();
     }
 
@@ -6417,19 +6801,30 @@
     }
 
     function openRefineComponentModal(payload) {
+        function markRefineOpenStatus(status, message) {
+            if (document.body && document.body.dataset) {
+                document.body.dataset.pbRefineComponentOpenStatus = String(status || '');
+                document.body.dataset.pbRefineComponentOpenMessage = String(message || '');
+            }
+        }
         var modalEl = document.getElementById('pb-ai-refine-component-modal');
         var contextEl = document.getElementById('pb-ai-refine-component-context');
         var instructionEl = document.getElementById('pb-ai-refine-component-instruction');
         if (!modalEl || !contextEl || !instructionEl) {
+            markRefineOpenStatus('failed', 'missing_modal_dom');
             toast('error', messages.refineUnavailable);
-            return;
+            return false;
+        }
+        if (modalEl.parentNode !== document.body || modalEl !== document.body.lastElementChild) {
+            document.body.appendChild(modalEl);
         }
         var pageType = String((payload && payload.page_type) || getActivePreviewPageType() || '');
         var componentCode = String((payload && (payload.component_code || payload.component)) || '');
         var blockId = String((payload && (payload.block_id || payload.component_code || payload.component)) || '');
         if (!pageType || !componentCode || !blockId) {
+            markRefineOpenStatus('failed', 'invalid_payload');
             toast('error', messages.refineUnavailable);
-            return;
+            return false;
         }
         refineComponentState.pageType = pageType;
         refineComponentState.blockId = blockId;
@@ -6441,15 +6836,12 @@
             componentCode
         );
         instructionEl.value = '';
-        var modalInstance = resolveBootstrapModalInstance(modalEl);
-        if (!modalInstance || typeof modalInstance.show !== 'function') {
-            toast('error', messages.refineUnavailable);
-            return;
-        }
-        modalInstance.show();
+        showBootstrapModal(modalEl);
+        markRefineOpenStatus('success', componentCode);
         window.setTimeout(function () {
             instructionEl.focus();
         }, 120);
+        return true;
     }
 
     function resolveWorkspaceVisualComponentContext(payload) {
@@ -7262,10 +7654,7 @@
             submitBtn.disabled = true;
         }
         if (modalEl) {
-            var modalInstance = resolveBootstrapModalInstance(modalEl);
-            if (modalInstance && typeof modalInstance.hide === 'function') {
-                modalInstance.hide();
-            }
+            hideBootstrapModal(modalEl);
         }
         blockRefreshState.active = true;
         blockRefreshState.pageType = refineComponentState.pageType;
@@ -7461,6 +7850,136 @@
                 || ''
             )
         };
+    }
+
+    var embeddedPreviewActionGuard = {
+        key: '',
+        timestamp: 0
+    };
+
+    function markEmbeddedPreviewActionDebug(status, payload, detail) {
+        if (!document.body || !document.body.dataset) {
+            return;
+        }
+        var normalized = payload && typeof payload === 'object' ? payload : {};
+        document.body.dataset.pbEmbeddedPreviewActionStatus = String(status || '');
+        document.body.dataset.pbEmbeddedPreviewAction = String(normalized.action || '');
+        document.body.dataset.pbEmbeddedPreviewActionComponent = String(normalized.component_code || normalized.component || normalized.block_id || '');
+        document.body.dataset.pbEmbeddedPreviewActionDetail = String(detail || '');
+    }
+
+    function shouldSuppressEmbeddedPreviewAction(action, payload) {
+        var normalized = payload && typeof payload === 'object' ? payload : {};
+        var key = [
+            String(action || normalized.action || ''),
+            String(normalized.page_type || getActivePreviewPageType() || ''),
+            String(normalized.component_code || normalized.component || normalized.block_id || '')
+        ].join('|');
+        var now = Date.now ? Date.now() : new Date().getTime();
+        if (embeddedPreviewActionGuard.key === key && now - embeddedPreviewActionGuard.timestamp < 700) {
+            markEmbeddedPreviewActionDebug('suppressed_duplicate', Object.assign({}, normalized, { action: action }), key);
+            return true;
+        }
+        embeddedPreviewActionGuard.key = key;
+        embeddedPreviewActionGuard.timestamp = now;
+        return false;
+    }
+
+    function dispatchEmbeddedPreviewActionPayload(action, payload) {
+        var normalizedAction = String(action || (payload && payload.action) || '');
+        var normalizedPayload = Object.assign({}, payload || {}, { action: normalizedAction });
+        if (['refine', 'regenerate-block', 'edit-block', 'open-editor'].indexOf(normalizedAction) === -1) {
+            markEmbeddedPreviewActionDebug('ignored', normalizedPayload, 'unknown_action');
+            return false;
+        }
+        if (!normalizedPayload.component && !normalizedPayload.component_code && !normalizedPayload.block_id) {
+            markEmbeddedPreviewActionDebug('failed', normalizedPayload, 'missing_component');
+            toast('error', messages.refineUnavailable);
+            return true;
+        }
+        if (shouldSuppressEmbeddedPreviewAction(normalizedAction, normalizedPayload)) {
+            return true;
+        }
+        markEmbeddedPreviewActionDebug('dispatch', normalizedPayload, '');
+        if (normalizedAction === 'refine') {
+            openRefineComponentModal(normalizedPayload);
+            return true;
+        }
+        if (normalizedAction === 'regenerate-block') {
+            startBlockRegenerate(normalizedPayload);
+            return true;
+        }
+        if (normalizedAction === 'edit-block' || normalizedAction === 'open-editor') {
+            openBlockEditorModal(normalizedPayload);
+            return true;
+        }
+        return false;
+    }
+
+    function getEmbeddedActionButtonInlineDispatch() {
+        return "return (window.__pbDispatchComponentActionFromButton ? window.__pbDispatchComponentActionFromButton(this, event) : (function(target, e) { if (!target) { return true; } if (e && typeof e.preventDefault === 'function') { e.preventDefault(); } var wrapper = target.closest ? target.closest('.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper') : null; if (!wrapper || !window.parent || window.parent === window) { return true; } var currentPageType = ''; try { currentPageType = new URLSearchParams(window.location.search).get('page_type') || ''; } catch (err) { currentPageType = ''; } var payload = { type: 'pb-component-action', action: target.getAttribute('data-pb-action') || '', component: wrapper.getAttribute('data-component') || wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-block-id') || '', component_code: wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-component') || wrapper.getAttribute('data-block-id') || '', block_id: wrapper.getAttribute('data-block-id') || wrapper.getAttribute('data-ai-block-id') || wrapper.getAttribute('data-component') || '', page_type: wrapper.getAttribute('data-page-type') || currentPageType, region: wrapper.getAttribute('data-region') || '', index: wrapper.getAttribute('data-index') || '' }; try { if (window.parent.PbAiWorkspacePreview && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === 'function' && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } } catch (err) {} window.parent.postMessage(payload, '*'); return false; })(this, event));";
+    }
+
+    function ensureEmbeddedActionButtonInlineDispatch(button) {
+        if (!button || !button.setAttribute) {
+            return;
+        }
+        button.setAttribute('onclick', getEmbeddedActionButtonInlineDispatch());
+        button.setAttribute('onpointerdown', getEmbeddedActionButtonInlineDispatch());
+        button.setAttribute('ontouchstart', getEmbeddedActionButtonInlineDispatch());
+    }
+
+    var embeddedPreviewActionDockPayload = null;
+
+    function ensureEmbeddedPreviewActionDock() {
+        var dock = document.getElementById('pb-ai-embedded-action-dock');
+        if (dock) {
+            return dock;
+        }
+        dock = document.createElement('div');
+        dock.id = 'pb-ai-embedded-action-dock';
+        dock.className = 'pb-ai-embedded-action-dock';
+        dock.style.cssText = 'position:fixed;top:84px;right:32px;z-index:100700;display:none;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;background:rgba(15,23,42,.92);box-shadow:0 14px 36px rgba(15,23,42,.26);backdrop-filter:blur(12px);';
+        [
+            ['refine', previewLabels.aiRefineAction || 'Refine'],
+            ['regenerate-block', previewLabels.aiRebuildAction || 'Rebuild'],
+            ['edit-block', previewLabels.editAction || 'Edit']
+        ].forEach(function (item) {
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm';
+            button.style.cssText = 'border:0;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:#fff;background:' + (item[0] === 'refine' ? '#2563eb' : (item[0] === 'regenerate-block' ? '#ea580c' : 'rgba(148,163,184,.28)')) + ';';
+            button.setAttribute('data-pb-action', item[0]);
+            button.textContent = item[1];
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                runEmbeddedPreviewDockAction(String(button.getAttribute('data-pb-action') || ''));
+            });
+            dock.appendChild(button);
+        });
+        document.body.appendChild(dock);
+        return dock;
+    }
+
+    function showEmbeddedPreviewActionDock(payload) {
+        var normalized = payload && typeof payload === 'object' ? payload : {};
+        if (!normalized.component && !normalized.component_code && !normalized.block_id) {
+            return;
+        }
+        embeddedPreviewActionDockPayload = normalized;
+        var dock = ensureEmbeddedPreviewActionDock();
+        syncEmbeddedPreviewActionDockPlacement();
+        dock.style.display = 'flex';
+    }
+
+    function runEmbeddedPreviewDockAction(action) {
+        var payload = Object.assign({}, embeddedPreviewActionDockPayload || {}, { action: action });
+        if (!payload.component && !payload.component_code && !payload.block_id) {
+            toast('error', messages.refineUnavailable);
+            return;
+        }
+        dispatchEmbeddedPreviewActionPayload(action, payload);
     }
 
     var imageRegenerateState = null;
@@ -7918,6 +8437,7 @@
         }
         refineBtn.textContent = previewLabels.aiRefineAction;
         refineBtn.setAttribute('title', previewLabels.aiRefineAction);
+        ensureEmbeddedActionButtonInlineDispatch(refineBtn);
 
         var editBtn = actions.querySelector('[data-pb-action="edit-block"], [data-pb-action="open-editor"]');
         if (!editBtn) {
@@ -7928,6 +8448,7 @@
         }
         editBtn.textContent = previewLabels.editAction;
         editBtn.setAttribute('title', previewLabels.editBlockAction);
+        ensureEmbeddedActionButtonInlineDispatch(editBtn);
 
         var moveUpBtn = actions.querySelector('[data-pb-action="move-up"]');
         if (!moveUpBtn) {
@@ -7937,6 +8458,7 @@
             moveUpBtn.textContent = 'Move up';
             actions.appendChild(moveUpBtn);
         }
+        ensureEmbeddedActionButtonInlineDispatch(moveUpBtn);
 
         var moveDownBtn = actions.querySelector('[data-pb-action="move-down"]');
         if (!moveDownBtn) {
@@ -7946,6 +8468,7 @@
             moveDownBtn.textContent = 'Move down';
             actions.appendChild(moveDownBtn);
         }
+        ensureEmbeddedActionButtonInlineDispatch(moveDownBtn);
 
         actions.querySelectorAll('[data-pb-action="move-up"], [data-pb-action="move-down"]').forEach(function (button) {
             if (isContentRegion) {
@@ -7969,6 +8492,7 @@
         }
         rebuildBtn.setAttribute('title', previewLabels.aiRebuildAction);
         rebuildBtn.textContent = previewLabels.aiRebuildAction;
+        ensureEmbeddedActionButtonInlineDispatch(rebuildBtn);
     }
 
     function bindEmbeddedPreviewFrameBridge() {
@@ -7987,6 +8511,7 @@
             if (!doc || !doc.documentElement) {
                 return;
             }
+            syncEmbeddedPreviewFrameActionChrome(doc);
 
             var wrapperSelector = '.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper';
             var selectedWrapperSelector = '.pb-ai-block-wrapper.selected, .tpmst-component-wrapper.selected, .pb-component-wrapper.selected';
@@ -8010,6 +8535,32 @@
                     }
                 });
                 ensureWrapperActionButtons(wrapper);
+                var actionHost = wrapper.querySelector('.component-actions');
+                if (actionHost && actionHost.dataset.pbWorkspaceActionDelegateBound !== '1') {
+                    actionHost.dataset.pbWorkspaceActionDelegateBound = '1';
+                    actionHost.addEventListener('click', function (event) {
+                        var source = event && event.target && event.target.nodeType === 3 ? event.target.parentElement : (event ? event.target : null);
+                        var actionButton = source && source.closest ? source.closest('[data-pb-action]') : null;
+                        if (!actionButton || !actionHost.contains(actionButton)) {
+                            return;
+                        }
+                        var actionWrapper = actionButton.closest(wrapperSelector);
+                        var actionPayload = buildEmbeddedPreviewPayload(actionWrapper, actionButton);
+                        if (!actionPayload || !actionPayload.component) {
+                            toast('error', messages.refineUnavailable);
+                            return;
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (typeof event.stopImmediatePropagation === 'function') {
+                            event.stopImmediatePropagation();
+                        }
+                        var action = String(actionButton.getAttribute('data-pb-action') || '');
+                        if (dispatchEmbeddedPreviewActionPayload(action, actionPayload)) {
+                            return;
+                        }
+                    }, true);
+                }
 
                 wrapper.addEventListener('click', function (event) {
                     if (event.target && event.target.closest && event.target.closest('.component-actions')) {
@@ -8019,42 +8570,80 @@
                         selected.classList.remove('selected');
                     });
                     wrapper.classList.add('selected');
+                    showEmbeddedPreviewActionDock(buildEmbeddedPreviewPayload(wrapper, wrapper));
                 });
             });
 
-            doc.querySelectorAll('.component-actions [data-pb-action]').forEach(function (button) {
-                if (button.dataset.pbWorkspaceActionBound === '1') {
+            function handleEmbeddedPreviewActionClick(event) {
+                var button = (event && event.currentTarget) ? event.currentTarget : this;
+                var source = event && event.target && event.target.nodeType === 3 ? event.target.parentElement : (event ? event.target : null);
+                var actionButton = source && source.closest ? source.closest('.component-actions [data-pb-action]') : null;
+                if (actionButton) {
+                    button = actionButton;
+                }
+                if (!button) {
                     return;
                 }
-                button.dataset.pbWorkspaceActionBound = '1';
-
-                button.addEventListener('click', function (event) {
+                if (event) {
                     event.preventDefault();
                     event.stopPropagation();
-                    event.stopImmediatePropagation();
-
-                    var wrapper = button.closest(wrapperSelector);
-                    var payload = buildEmbeddedPreviewPayload(wrapper, button);
-                    if (!payload || !payload.component) {
-                        toast('error', messages.refineUnavailable);
-                        return;
+                    if (typeof event.stopImmediatePropagation === 'function') {
+                        event.stopImmediatePropagation();
                     }
+                }
 
-                    if (String(button.getAttribute('data-pb-action') || '') === 'refine') {
-                        openRefineComponentModal(payload);
-                        return;
-                    }
+                var wrapper = button.closest(wrapperSelector);
+                var payload = buildEmbeddedPreviewPayload(wrapper, button);
+                if (!payload || !payload.component) {
+                    toast('error', messages.refineUnavailable);
+                    return;
+                }
 
-                    if (String(button.getAttribute('data-pb-action') || '') === 'regenerate-block') {
-                        startBlockRegenerate(payload);
-                        return;
-                    }
+                var action = String(button.getAttribute('data-pb-action') || '');
+                dispatchEmbeddedPreviewActionPayload(action, payload);
+            }
 
-                    var action = String(button.getAttribute('data-pb-action') || '');
-                    if (action === 'edit-block' || action === 'open-editor') {
-                        openBlockEditorModal(payload);
-                    }
-                }, true);
+            function handleEmbeddedPreviewActionPointerDown(event) {
+                var button = (event && event.currentTarget) ? event.currentTarget : this;
+                var action = String(button && button.getAttribute ? button.getAttribute('data-pb-action') || '' : '');
+                if (['refine', 'regenerate-block', 'edit-block', 'open-editor'].indexOf(action) === -1) {
+                    return;
+                }
+                handleEmbeddedPreviewActionClick(event);
+            }
+
+            function handleEmbeddedPreviewActionCapture(event) {
+                var source = event && event.target && event.target.nodeType === 3 ? event.target.parentElement : (event ? event.target : null);
+                var actionButton = source && source.closest ? source.closest('.component-actions [data-pb-action]') : null;
+                if (!actionButton) {
+                    return;
+                }
+                handleEmbeddedPreviewActionClick.call(actionButton, event);
+            }
+
+            if (doc.documentElement && doc.documentElement.dataset.pbWorkspaceActionCaptureBound !== '1') {
+                doc.documentElement.dataset.pbWorkspaceActionCaptureBound = '1';
+                doc.addEventListener('pointerdown', handleEmbeddedPreviewActionCapture, true);
+                doc.addEventListener('pointerup', handleEmbeddedPreviewActionCapture, true);
+                doc.addEventListener('touchstart', handleEmbeddedPreviewActionCapture, true);
+                doc.addEventListener('mousedown', handleEmbeddedPreviewActionCapture, true);
+                doc.addEventListener('click', handleEmbeddedPreviewActionCapture, true);
+            }
+
+            doc.querySelectorAll('.component-actions [data-pb-action]').forEach(function (button) {
+                if (button.dataset.pbWorkspaceActionBound !== '1') {
+                    button.addEventListener('pointerdown', handleEmbeddedPreviewActionPointerDown, true);
+                    button.addEventListener('pointerup', handleEmbeddedPreviewActionPointerDown, true);
+                    button.addEventListener('touchstart', handleEmbeddedPreviewActionPointerDown, true);
+                    button.addEventListener('mousedown', handleEmbeddedPreviewActionPointerDown, true);
+                    button.addEventListener('click', handleEmbeddedPreviewActionClick, true);
+                    button.dataset.pbWorkspaceActionBound = '1';
+                }
+                button.onpointerdown = handleEmbeddedPreviewActionPointerDown;
+                button.onpointerup = handleEmbeddedPreviewActionPointerDown;
+                button.ontouchstart = handleEmbeddedPreviewActionPointerDown;
+                button.onmousedown = handleEmbeddedPreviewActionPointerDown;
+                button.onclick = handleEmbeddedPreviewActionClick;
             });
 
             bindEmbeddedPreviewImageRegeneration(doc, wrapperSelector);
@@ -8094,18 +8683,16 @@
             if (!payload) {
                 return;
             }
+            if (payload.type === 'pb-component-select') {
+                showEmbeddedPreviewActionDock(Object.assign({}, payload, {
+                    component_code: payload.component_code || payload.component || '',
+                    block_id: payload.block_id || payload.component || '',
+                    page_type: payload.page_type || getActivePreviewPageType() || ''
+                }));
+                return;
+            }
             if (payload.type === 'pb-component-action') {
-                if (String(payload.action || '') === 'refine') {
-                    openRefineComponentModal(payload);
-                    return;
-                }
-                if (String(payload.action || '') === 'regenerate-block') {
-                    startBlockRegenerate(payload);
-                    return;
-                }
-                if (String(payload.action || '') === 'edit-block' || String(payload.action || '') === 'open-editor') {
-                    openBlockEditorModal(payload);
-                }
+                dispatchEmbeddedPreviewActionPayload(String(payload.action || ''), payload);
                 return;
             }
             if (payload.type === 'PageBuilderVisualEditor' && String(payload.action || '') === 'navigate') {
@@ -8680,9 +9267,7 @@
             'accent'               => (string)__('强调色'),
             'surface'              => (string)__('表面色'),
             'text'                 => (string)__('文本色'),
-            'implementation_note'  => (string)__('实现说明'),
-            'reason'               => (string)__('设计细节'),
-            'planning_reason'      => (string)__('构建说明'),
+            'implementation_note'  => (string)__('任务拆解'),
             'page_goal'            => (string)__('页面目标'),
             'block_goal'           => (string)__('区块目标'),
             'content_fill_rule'    => (string)__('内容填充规则'),
@@ -8733,6 +9318,20 @@
         });
     }
 
+    function isPlanPreviewMetaKey(key) {
+        var normalized = String(key || '').trim().toLowerCase();
+        return [
+            'reason',
+            'why',
+            'decision_reason',
+            'planning_reason',
+            'selection_reason',
+            'stale_reason',
+            'generation_fallback_reason',
+            'fallback_reason'
+        ].indexOf(normalized) !== -1;
+    }
+
     function fallbackPageLabel(pageType, rawLabel) {
         var label = sanitizePreviewText(rawLabel, '');
         if (label) {
@@ -8778,9 +9377,9 @@
         return (<?= \json_encode((string)__('为“%{page}”页面的“%{block}”区块生成可直接展示的文案与结构。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageName).replace('%{block}', blockName);
     }
 
-    function fallbackFieldReason(field) {
+    function fallbackFieldTaskBreakdown(field) {
         var label = humanizePreviewKey(field) || <?= \json_encode((string)__('字段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
-        return '“' + label + '”用于说明该项在当前区块中的必要性与业务意图。';
+        return '“' + label + '”需要拆成可编辑内容、样式约束和构建任务。';
     }
 
     function resolveFieldPlanImplementationNote(row) {
@@ -8847,7 +9446,7 @@
             if (looksLikePreviewMetaInstruction(noteText)) {
                 noteText = '';
             }
-            var implementationNote = escapeHtml(noteText || fallbackFieldReason(fieldRaw)).replace(/\n/g, '<br>');
+            var implementationNote = escapeHtml(noteText || fallbackFieldTaskBreakdown(fieldRaw)).replace(/\n/g, '<br>');
             if (!field && !sample && !implementationNote) {
                 return '';
             }
@@ -8974,7 +9573,9 @@
             parts.push('<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(humanizePreviewKey(k) || k) + '</div><div class="small text-muted">' + escapeHtml(v).replace(/\n/g, '<br>') + '</div></div>');
         });
         if (Array.isArray(script.media_assets) && script.media_assets.length > 0) {
-            parts.push('<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.mediaAssets) + '</div><div class="small text-muted">' + escapeHtml(script.media_assets.join(', ')) + '</div></div>');
+            var mediaCount = script.media_assets.length;
+            var mediaSummary = mediaCount + ' image slot' + (mediaCount > 1 ? 's' : '') + ' planned; generation is bound by slot and backfilled after completion.';
+            parts.push('<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.mediaAssets) + '</div><div class="small text-muted">' + escapeHtml(mediaSummary) + '</div></div>');
         }
         if (parts.length === 0) {
             return '';
@@ -8999,6 +9600,9 @@
         }
         if (value && typeof value === 'object') {
             return Object.keys(value).map(function (key) {
+                if (isPlanPreviewMetaKey(key)) {
+                    return '';
+                }
                 var raw = value[key];
                 var text = '';
                 if (raw && typeof raw === 'object') {
@@ -9047,7 +9651,7 @@
         }
         var filtered = {};
         Object.keys(value).forEach(function (key) {
-            if (key === 'reason' || key === 'why' || key === 'decision_reason') {
+            if (isPlanPreviewMetaKey(key)) {
                 return;
             }
             filtered[key] = value[key];
@@ -9110,7 +9714,7 @@
         if (rows.length === 0) {
             return '';
         }
-        var title = sanitizePreviewText(label, previewLabels.reason || 'Details');
+        var title = sanitizePreviewText(label, previewLabels.details || 'Details');
         var body = rows.map(function (section) {
             var heading = sanitizePreviewText(section.title || '', '');
             var content = String(section.html || '').trim();
@@ -9308,17 +9912,29 @@
             themeDesign && themeDesign.theme_purpose,
             themeDesign && themeDesign.site_positioning,
             planRoot.theme_purpose,
-            planRoot.site_positioning
+            planRoot.site_positioning,
+            planRoot.brief_description,
+            planRoot.website_brief,
+            planRoot.request_summary && planRoot.request_summary.summary,
+            planRoot.requirement_expansion && planRoot.requirement_expansion.summary,
+            planRoot.requirement_expansion && planRoot.requirement_expansion.expanded_brief
         );
         var visualKeywords = pickPreviewValue(
             themeDesign && themeDesign.visual_keywords,
+            planRoot.visual_keywords,
+            planRoot.theme_keywords,
+            planRoot.primary_keywords,
             planRoot.style_tone,
-            planRoot.visual_style
+            planRoot.visual_style,
+            planRoot.site_strategy && planRoot.site_strategy.visual_keywords
         );
         var toneOfVoice = pickPreviewValue(
             themeDesign && themeDesign.tone_of_voice,
             themeDesign && themeDesign.content_tone,
-            planRoot.tone_of_voice
+            planRoot.tone_of_voice,
+            planRoot.content_tone,
+            planRoot.brand_voice,
+            planRoot.requirement_expansion && planRoot.requirement_expansion.content_tone
         );
         return ''
             + '<div class="border rounded p-3 mt-3 bg-light-subtle">'
@@ -9353,9 +9969,13 @@
         );
         var styleTone = omitPreviewMetaKeys(pickPreviewValue(
             themeDesign && themeDesign.visual_keywords,
+            planRoot.visual_keywords,
+            planRoot.theme_keywords,
+            planRoot.primary_keywords,
             planRoot.style_tone,
             planRoot.visual_style,
             planRoot.theme_style,
+            planRoot.site_strategy && planRoot.site_strategy.visual_keywords,
             snapshot && snapshot.visual_direction
         ));
         var typography = omitPreviewMetaKeys(pickPreviewValue(
@@ -9369,7 +9989,12 @@
             planRoot.theme_purpose,
             planRoot.site_positioning,
             snapshot && snapshot.theme_purpose,
-            snapshot && snapshot.site_positioning
+            snapshot && snapshot.site_positioning,
+            planRoot.brief_description,
+            planRoot.website_brief,
+            planRoot.request_summary && planRoot.request_summary.summary,
+            planRoot.requirement_expansion && planRoot.requirement_expansion.summary,
+            planRoot.requirement_expansion && planRoot.requirement_expansion.expanded_brief
         );
         var forbiddenStyles = pickPreviewValue(
             themeDesign && themeDesign.forbidden_styles,
@@ -9380,7 +10005,10 @@
             themeDesign && themeDesign.tone_of_voice,
             themeDesign && themeDesign.content_tone,
             planRoot.tone_of_voice,
-            snapshot && snapshot.content_tone
+            snapshot && snapshot.content_tone,
+            planRoot.content_tone,
+            planRoot.brand_voice,
+            planRoot.requirement_expansion && planRoot.requirement_expansion.content_tone
         );
         var ctaTone = pickPreviewValue(themeDesign && themeDesign.cta_tone, planRoot.cta_tone);
         var parts = [];
@@ -9446,7 +10074,6 @@
         });
         return ''
             + '<button type="button" class="btn btn-sm ' + escapeHtml(String(tone || 'btn-outline-primary')) + ' pb-ai-preview-action-btn"'
-            + ' onclick="if (window.event) { window.event.preventDefault(); if (window.event.stopPropagation) { window.event.stopPropagation(); } } if (window.PbAiWorkspacePreviewAction) { window.PbAiWorkspacePreviewAction(this); } return false;"'
             + ' data-pb-preview-action="' + escapeHtml(String(action || '')) + '"' + attrs + '>'
             + escapeHtml(String(label || ''))
             + '</button>';
@@ -9796,7 +10423,7 @@
             + ' data-pb-sort-item="1"'
             + ' data-pb-sort-key="' + escapeHtml(rawBlockKey) + '"'
             + ' data-pb-preview-block-key="' + escapeHtml(rawBlockKey) + '">'
-            + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pb-ai-plan-preview-block-head">'
+            + '<div class="d-flex flex-column align-items-start gap-2 pb-ai-plan-preview-block-head">'
             + '<div class="d-flex align-items-center gap-2 min-w-0">'
             + renderPreviewSortHandle()
             + '<div class="fw-semibold">' + escapeHtml(label) + '</div>'
@@ -9890,7 +10517,7 @@
                 + ' data-pb-sort-item="1"'
                 + ' data-pb-sort-key="' + blockKey + '"'
                 + ' data-pb-preview-block-key="' + blockKey + '">'
-                + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pb-ai-plan-preview-block-head">'
+                + '<div class="d-flex flex-column align-items-start gap-2 pb-ai-plan-preview-block-head">'
                 + '<div class="d-flex align-items-center gap-2 min-w-0">'
                 + renderPreviewSortHandle()
                 + '<div class="fw-semibold">' + blockTitle + '</div>'
@@ -10645,10 +11272,10 @@
     function getPreviewActionLabel(action) {
         var normalized = String(action || '').trim();
         if (normalized === 'rebuild-stage') {
-            return String(previewLabels.rebuildStage || previewLabels.rebuildAction || <?= \json_encode((string)__('重建阶段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+            return String(previewLabels.rebuildStage || previewLabels.rebuildAction || <?= \json_encode((string)__('重建方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (normalized === 'refine-stage') {
-            return String(previewLabels.refineStage || previewLabels.refineAction || <?= \json_encode((string)__('微调阶段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+            return String(previewLabels.refineStage || previewLabels.refineAction || <?= \json_encode((string)__('微调方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (normalized === 'rebuild') {
             return String(previewLabels.rebuildAction || <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
@@ -10895,7 +11522,7 @@
             };
             if (scopeKind === 'stage' && false) {
                 window.__pbPreviewActionDebug.mode = 'stage-panel-removed';
-                toast('info', <?= \json_encode((string)__('阶段级微调/重建面板已移除，请在具体页面区块中执行新增、微调或删除。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+                toast('info', <?= \json_encode((string)__('方案级微调/重建面板已移除，请在具体页面区块中执行新增、微调或删除。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
                 return true;
             }
             // 老板 2026-04-23 口径：块级跳到某位置走独立的轻量弹窗，复用 persist*Sort。
@@ -10946,6 +11573,13 @@
     }
     window.PbAiWorkspacePreviewAction = handlePreviewActionClick;
 
+    function markPlanBlockMutationStatus(status, message) {
+        if (document.body && document.body.dataset) {
+            document.body.dataset.pbPlanBlockMutationStatus = String(status || '');
+            document.body.dataset.pbPlanBlockMutationMessage = String(message || '');
+        }
+    }
+
     function handlePlanBlockMutationAction(action, scopeKind, pageType, blockKey, blockLabel, actionContext) {
         // 老板 2026-04-23 口径：块级 refine/rebuild/create/delete 全部通过统一弹窗
         // `pb-ai-block-op-modal` 捕获用户意图文本，这里只做「路由到弹窗」或
@@ -10972,12 +11606,13 @@
         if (inlineInstruction === '' && ctx.skipModal !== true) {
             if (typeof window.__pbOpenBlockOperationModal === 'function') {
                 window.__pbOpenBlockOperationModal({
-                    stage: 'stage1',
+                    stage: 'plan',
                     action: normalizedAction === 'add-block' ? 'create' : normalizedAction,
                     pageKey: pageType,
                     blockKey: blockKey,
                     blockTitle: blockLabel || blockKey,
-                    contextLabel: (ctx.summary || '')
+                    contextLabel: (ctx.summary || ''),
+                    targetScope: (ctx && typeof ctx.targetScope === 'string') ? ctx.targetScope : ''
                 });
                 return true;
             }
@@ -11008,6 +11643,7 @@
             blockConfig = { delete_note: inlineInstruction };
         }
 
+        markPlanBlockMutationStatus('pending', '');
         postForm(mutatePlanBlockUrl, {
             public_id: publicId,
             page_type: pageType,
@@ -11023,15 +11659,21 @@
                 hydrateWorkspaceFromState(data.data);
             }
             if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'plan')) {
+                markPlanBlockMutationStatus('success', data.message ? String(data.message) : '');
+                closeBlockOperationModal();
                 toast('success', data.message ? String(data.message) : (messages.blockOpSuccess || <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>));
                 return;
             }
             if (data && data.success && data.data && typeof data.data === 'object') {
+                markPlanBlockMutationStatus('success', data.message ? String(data.message) : '');
+                closeBlockOperationModal();
                 toast('success', data.message ? String(data.message) : (messages.blockOpSuccess || <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>));
                 return;
             }
+            markPlanBlockMutationStatus('failed', data && data.message ? String(data.message) : messages.networkError);
             toast('warning', data && data.message ? String(data.message) : messages.networkError);
         }).catch(function (error) {
+            markPlanBlockMutationStatus('error', (error && error.message) ? String(error.message) : messages.networkError);
             toast('error', (error && error.message) ? String(error.message) : messages.networkError);
         });
 
@@ -11097,9 +11739,34 @@
             { instruction: String(opts.instruction || ''), skipModal: true, summary: String(opts.contextLabel || '') }
         );
     };
+    function bindPreviewActionButtonDirectHandlers(root) {
+        if (!root || !root.querySelectorAll) {
+            return;
+        }
+        Array.prototype.forEach.call(root.querySelectorAll('.pb-ai-preview-action-btn'), function (button) {
+            if (!button || button.dataset.pbPreviewActionButtonBound === '1') {
+                return;
+            }
+            button.dataset.pbPreviewActionButtonBound = '1';
+            button.addEventListener('click', function (event) {
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault();
+                }
+                if (event && typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
+                handlePreviewActionClick(button);
+            });
+        });
+    }
+
     function bindPreviewActionButtons(container) {
         var root = typeof container === 'string' ? document.getElementById(container) : container;
-        if (!root || root.dataset.pbPreviewActionBound === '1') {
+        if (!root) {
+            return;
+        }
+        bindPreviewActionButtonDirectHandlers(root);
+        if (root.dataset.pbPreviewActionBound === '1') {
             return;
         }
         root.dataset.pbPreviewActionBound = '1';
@@ -11261,23 +11928,28 @@
         if (!modalEl) {
             return null;
         }
+        if (modalEl.parentNode !== document.body || modalEl !== document.body.lastElementChild) {
+            document.body.appendChild(modalEl);
+        }
         var config = Object.assign({
-            stage: 'stage1',
+            stage: 'plan',
             action: 'create',
             pageKey: '',
             blockKey: '',
             blockTitle: '',
+            targetScope: '',
             promptPlaceholder: '',
             destructiveText: '',
             contextLabel: ''
         }, options || {});
-        config.stage = 'stage1';
+        config.stage = 'plan';
 
-        modalEl.dataset.stage = 'stage1';
+        modalEl.dataset.stage = 'plan';
         modalEl.dataset.action = config.action;
         modalEl.dataset.pageKey = config.pageKey || '';
         modalEl.dataset.blockKey = config.blockKey || '';
         modalEl.dataset.blockTitle = config.blockTitle || '';
+        modalEl.dataset.targetScope = config.targetScope || '';
         modalEl.dataset.contextLabel = config.contextLabel || '';
 
         var modalTitleEl = document.getElementById('pb-ai-block-op-modal-title');
@@ -11376,10 +12048,12 @@
                 return;
             }
             var detail = {
-                stage: modalEl.dataset.stage || 'stage1',
+                stage: modalEl.dataset.stage || 'plan',
                 action: modalEl.dataset.action || 'create',
                 pageKey: modalEl.dataset.pageKey || '',
                 blockKey: modalEl.dataset.blockKey || '',
+                blockTitle: modalEl.dataset.blockTitle || '',
+                targetScope: modalEl.dataset.targetScope || '',
                 promptText: promptEl ? String(promptEl.value || '').trim() : ''
             };
             // 为业务层提供一个可取消的事件钩子。
@@ -11392,12 +12066,53 @@
                 // 业务层希望保持弹窗以便用户修正输入。
                 return;
             }
-            closeBlockOperationModal();
+            if (detail.__pbBlockOpHandled !== true) {
+                if (!dispatchBlockOperationModalDetail(detail, modalEl)) {
+                    return;
+                }
+            }
+            if (detail.__pbBlockOpKeepOpen !== true) {
+                closeBlockOperationModal();
+            }
         });
     }
 
     window.__pbOpenBlockOperationModal = openBlockOperationModal;
     window.__pbCloseBlockOperationModal = closeBlockOperationModal;
+
+    function dispatchBlockOperationModalDetail(detail, modalEl) {
+        var payload = detail && typeof detail === 'object' ? detail : {};
+        var action = String(payload.action || '').trim();
+        var pageKey = String(payload.pageKey || '').trim();
+        var blockKey = String(payload.blockKey || '').trim();
+        var promptText = String(payload.promptText || '').trim();
+        if (action !== 'delete' && promptText === '') {
+            var promptEl = document.getElementById('pb-ai-block-op-prompt');
+            if (promptEl) {
+                setPromptInputInvalidState(promptEl, true);
+                if (typeof promptEl.focus === 'function') { promptEl.focus(); }
+            }
+            toast('warning', messages.planActionPromptRequired || messages.networkError);
+            return false;
+        }
+        var blockTitle = String(payload.blockTitle || '');
+        if (blockTitle === '' && modalEl && modalEl.dataset && modalEl.dataset.blockTitle) {
+            blockTitle = String(modalEl.dataset.blockTitle);
+        }
+        var targetScope = String(payload.targetScope || '');
+        if (targetScope === '' && modalEl && modalEl.dataset && modalEl.dataset.targetScope) {
+            targetScope = String(modalEl.dataset.targetScope);
+        }
+        payload.__pbBlockOpKeepOpen = true;
+        return handlePlanBlockMutationAction(
+            action === 'create' ? 'add-block' : action,
+            'block',
+            pageKey,
+            blockKey,
+            blockTitle,
+            { instruction: promptText, skipModal: true, targetScope: targetScope }
+        );
+    }
 
     // 统一块级弹窗提交分发器：默认监听 `pb:ai:block-op:submit`，
     // 把用户意图转发到对应块级 API 调用，保证弹窗骨架与业务逻辑解耦。
@@ -11409,35 +12124,10 @@
         modalEl.dataset.pbRouterBound = '1';
         modalEl.addEventListener('pb:ai:block-op:submit', function (event) {
             var detail = (event && event.detail) || {};
-            var action = String(detail.action || '').trim();
-            var pageKey = String(detail.pageKey || '').trim();
-            var blockKey = String(detail.blockKey || '').trim();
-            var promptText = String(detail.promptText || '').trim();
-            if (action !== 'delete' && promptText === '') {
-                var promptEl = document.getElementById('pb-ai-block-op-prompt');
-                if (promptEl) {
-                    setPromptInputInvalidState(promptEl, true);
-                    if (typeof promptEl.focus === 'function') { promptEl.focus(); }
-                }
-                toast('warning', messages.planActionPromptRequired || messages.networkError);
+            detail.__pbBlockOpHandled = true;
+            if (!dispatchBlockOperationModalDetail(detail, modalEl)) {
                 if (typeof event.preventDefault === 'function') { event.preventDefault(); }
-                return;
-            }
-            var blockTitle = '';
-            if (modalEl && modalEl.dataset && modalEl.dataset.blockTitle) {
-                blockTitle = String(modalEl.dataset.blockTitle);
-            }
-            var ok = handlePlanBlockMutationAction(
-                action === 'create' ? 'add-block' : action,
-                'block',
-                pageKey,
-                blockKey,
-                blockTitle,
-                { instruction: promptText, skipModal: true }
-            );
-            if (!ok) {
                 toast('warning', messages.blockOpFailed || messages.networkError);
-                if (typeof event.preventDefault === 'function') { event.preventDefault(); }
             }
         });
     }
@@ -11890,7 +12580,7 @@
         }
         var shouldShow = !!visible;
         retryBtn.classList.toggle('d-none', !shouldShow);
-        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning || hasAnyRunningQueueForUi();
+        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan');
     }
 
     function shouldShowPlanRetryButtonFromWorkspaceState(workspaceState) {
@@ -12997,6 +13687,26 @@
 
     /**
      * 判断是否已具备进入构建准备链路的前置条件（建站方案/蓝图/工作区状态）。     */
+    function syncRebuildBuildStageButtonState(workspaceState) {
+        var rebuildBtn = document.getElementById('pb-ai-rebuild-build-stage');
+        if (!rebuildBtn) {
+            return;
+        }
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var disabled = isBuildActionLocked(state);
+        rebuildBtn.disabled = disabled;
+        rebuildBtn.classList.toggle('disabled', disabled);
+        if (disabled) {
+            rebuildBtn.setAttribute('aria-disabled', 'true');
+        } else {
+            rebuildBtn.removeAttribute('disabled');
+            rebuildBtn.removeAttribute('aria-disabled');
+            rebuildBtn.removeAttribute('title');
+        }
+    }
+
     function extractResponseCode(data) {
         if (!data || typeof data !== 'object') {
             return '';
@@ -13296,7 +14006,7 @@
     function markBuildStageGenerationStarting(options) {
         var opts = options && typeof options === 'object' ? options : {};
         var message = opts.forceBuildRebuild === true
-            ? <?= \json_encode((string)__('正在重新生成虚拟主题，已清空当前构建阶段旧结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+            ? <?= \json_encode((string)__('正在重新生成虚拟主题，已清空当前构建旧结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
             : <?= \json_encode((string)__('构建任务已提交，等待后台队列开始执行。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         var active = {
             operation: 'build',
@@ -13501,7 +14211,7 @@
         if (retryPlanBtn && retryPlanBtn.dataset.pbBound !== '1') {
             retryPlanBtn.dataset.pbBound = '1';
             retryPlanBtn.addEventListener('click', function () {
-                if (planStartRequestPending || planSseRunning || hasAnyRunningQueueForUi()) {
+                if (planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan')) {
                     toast('warning', getRetryableAiFailureMessage(null, 'plan'));
                     return;
                 }
@@ -13563,6 +14273,7 @@
         }
         bindRetryableAiFailureButtons();
         syncBuildPlanStartButtonState();
+        syncRebuildBuildStageButtonState();
     }
 
     function bindVisualEditStageLogic() {
@@ -13927,6 +14638,13 @@
                     return;
                 }
                 toast('success', messages.orchestrated);
+                if (shouldRedirectToWorkspaceBuildStage()) {
+                    var redirectState = (data && data.data && typeof data.data === 'object')
+                        ? data.data
+                        : (latestWorkspaceState && typeof latestWorkspaceState === 'object' ? latestWorkspaceState : null);
+                    window.location.href = resolveWorkspaceRedirectUrl(redirectState);
+                    return;
+                }
 
                 // 尝试从响应启动操作流（SSE）；失败则提示缺少可观察的进度流。
                 if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
@@ -14030,7 +14748,12 @@
                 mergeVirtualPagesByTypeState(pages);
             }
         },
-        handleEmbeddedPreviewGenerateRequest: handleEmbeddedPreviewGenerateRequest
+        handleEmbeddedPreviewGenerateRequest: handleEmbeddedPreviewGenerateRequest,
+        handleEmbeddedPreviewAction: function (payload) {
+            payload = payload && typeof payload === 'object' ? payload : {};
+            var action = String(payload.action || '');
+            return dispatchEmbeddedPreviewActionPayload(action, payload);
+        }
     };
     previewBridge = resolvePreviewBridge();
 

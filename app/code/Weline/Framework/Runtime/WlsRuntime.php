@@ -19,10 +19,12 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser as PhraseParser;
 use Weline\Framework\Router\Core as Router;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Env\WelineEnv;
+use Weline\I18n\Parser as I18nParser;
 use Weline\Server\Log\LogConfig;
 /**
  * WLS 运行时
@@ -137,6 +139,9 @@ class WlsRuntime implements RuntimeInterface
         // 预加载常用对象（进程级缓存）
         $this->eventManager = ObjectManager::getInstance(EventsManager::class);
         $this->router = ObjectManager::getInstance(Router::class);
+        Router::preloadGeneratedRouterFiles();
+        PhraseParser::preloadWorkerDictionaries();
+        I18nParser::preloadWorkerDictionaries();
         
         // Router 在 WLS 模式下是进程级单例。
         // 请求级状态由 Router::__init() 在每个请求开始时重置，

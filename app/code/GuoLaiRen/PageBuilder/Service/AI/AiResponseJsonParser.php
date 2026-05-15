@@ -76,8 +76,20 @@ class AiResponseJsonParser
             }
         }
 
-        if (str_starts_with($response, '{') && str_ends_with($response, '}')) {
-            return $response;
+        if (str_starts_with($response, '{')) {
+            if (str_ends_with($response, '}')) {
+                $decoded = $this->decodeWithRepair($response);
+                if ($decoded !== null && is_array($decoded)) {
+                    return $response;
+                }
+            }
+            $extracted = $this->extractBalancedBraces($response, 0);
+            if ($extracted !== null) {
+                return $extracted;
+            }
+            if (str_ends_with($response, '}')) {
+                return $response;
+            }
         }
 
         if ($firstBrace !== false) {
@@ -121,6 +133,7 @@ class AiResponseJsonParser
     {
         // 第一次尝试：先修控制字符 + 尾逗号，再解析（不对原始 $json 直接 json_decode）
         $normalized = $this->fixControlCharsInJsonStrings($json);
+        $normalized = $this->repairMissingColonAfterKnownKeys($normalized);
         $normalized = preg_replace('/,\s*}/', '}', $normalized);
         $normalized = preg_replace('/,\s*]/', ']', $normalized);
         $data = json_decode($normalized, true);
@@ -130,6 +143,7 @@ class AiResponseJsonParser
 
         // 第二次：对原始 $json 再做一次相同修复后解析（兜底）
         $fixed = $this->fixControlCharsInJsonStrings($json);
+        $fixed = $this->repairMissingColonAfterKnownKeys($fixed);
         $fixed = preg_replace('/,\s*}/', '}', $fixed);
         $fixed = preg_replace('/,\s*]/', ']', $fixed);
         $data = json_decode($fixed, true);
@@ -138,6 +152,7 @@ class AiResponseJsonParser
         }
 
         $fixed = preg_replace('/[\x00-\x1F\x7F]/u', '', $json);
+        $fixed = $this->repairMissingColonAfterKnownKeys((string)$fixed);
         $fixed = preg_replace('/,\s*}/', '}', $fixed);
         $fixed = preg_replace('/,\s*]/', ']', $fixed);
         $data = json_decode($fixed, true);
@@ -146,6 +161,7 @@ class AiResponseJsonParser
         }
 
         $normalizedForRepair = $this->fixControlCharsInJsonStrings($json);
+        $normalizedForRepair = $this->repairMissingColonAfterKnownKeys($normalizedForRepair);
         $repaired = $this->repairTruncatedJson($normalizedForRepair);
         if ($repaired !== null) {
             $data = json_decode($repaired, true);
@@ -163,6 +179,37 @@ class AiResponseJsonParser
         }
 
         return null;
+    }
+
+    private function repairMissingColonAfterKnownKeys(string $json): string
+    {
+        $knownKeys = [
+            'extra_fields',
+            'php_variables',
+            'css_extra',
+            'css_responsive',
+            'html_content',
+            'html_extra',
+            'html_extra_column',
+            'js_content',
+            'markdown',
+            'plan_json',
+            'style_plan',
+            'task_plan',
+        ];
+        $keyPattern = implode('|', array_map(static fn(string $key): string => preg_quote($key, '/'), $knownKeys));
+
+        $json = preg_replace(
+            '/(^|[{\[,]\s*)"(' . $keyPattern . ')\s*"\s*"(?=\s*[,}])/u',
+            '$1"$2": ""',
+            $json
+        ) ?? $json;
+
+        return preg_replace(
+            '/(^|[{\[,]\s*)"(' . $keyPattern . ')"\s+(?=(?:"|\{|\[|-?\d|true\b|false\b|null\b))/u',
+            '$1"$2": ',
+            $json
+        ) ?? $json;
     }
 
     /**

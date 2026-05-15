@@ -1,142 +1,142 @@
-﻿"参数 identity 不能为空","参数 identity 不能为空"
-操作成功！,操作成功！
-请至少选择一个缓存项,请至少选择一个缓存项
-批量缓存状态已更新,批量缓存状态已更新
-"缓存池 %{1} 已清理","缓存池 %{1} 已清理"
-"WLS 共享命名空间已同步清理","WLS 共享命名空间已同步清理"
-已强制清理所有缓存池（包括持久缓存）,已强制清理所有缓存池（包括持久缓存）
-已清理所有非持久缓存池,已清理所有非持久缓存池
-"并额外清理 %{1} 个 WLS 共享缓存命名空间","并额外清理 %{1} 个 WLS 共享缓存命名空间"
-定时任务执行完成！已清理过期缓存文件。,定时任务执行完成！已清理过期缓存文件。
-"定时任务执行失败: %{1}。请检查 Cron 配置和日志。","定时任务执行失败: %{1}。请检查 Cron 配置和日志。"
-缓存清理任务,缓存清理任务
-自动清理过期的缓存文件，防止缓存目录过大,自动清理过期的缓存文件，防止缓存目录过大
-缓存清理完成,缓存清理完成
-"缓存清理任务执行失败: %{1}","缓存清理任务执行失败: %{1}"
-"缓存清理失败: %{1}","缓存清理失败: %{1}"
-"缓存池 %{1} 不存在","缓存池 %{1} 不存在"
-"env 配置写入失败，请检查 app/etc/env.php 权限","env 配置写入失败，请检查 app/etc/env.php 权限"
-"缓存池 %{1} 为持久缓存，需要强制清理（force=1）","缓存池 %{1} 为持久缓存，需要强制清理（force=1）"
-应用,应用
-系统,系统
-"WLS 常驻内存","WLS 常驻内存"
-"FPM 请求隔离","FPM 请求隔离"
+﻿"参数 identity 不能为空","Parameter identity cannot be empty"
+操作成功！,"Operation successful!"
+请至少选择一个缓存项,"Please select at least one cache item"
+批量缓存状态已更新,"Batch cache status updated"
+"缓存池 %{1} 已清理","Cache pool %{1} has been cleaned"
+"WLS 共享命名空间已同步清理","WLS shared namespace has been cleaned up synchronously"
+已强制清理所有缓存池（包括持久缓存）,"Forcibly cleared all cache pools (including persistent cache)"
+已清理所有非持久缓存池,"Cleaned all non-persistent cache pools"
+"并额外清理 %{1} 个 WLS 共享缓存命名空间","And additionally clean up %{1} WLS shared cache namespaces"
+定时任务执行完成！已清理过期缓存文件。,"Scheduled Task Execution Completed! Expired Cache Files Have Been Cleaned Up."
+"定时任务执行失败: %{1}。请检查 Cron 配置和日志。","Scheduled Task Execution Failed: %{1}. Please Check the Cron Configuration and Logs."
+缓存清理任务,"Cache Cleanup Task"
+自动清理过期的缓存文件，防止缓存目录过大,"Automatically clean up expired cache files to prevent the cache directory from becoming too large"
+缓存清理完成,"Cache Cleanup Complete"
+"缓存清理任务执行失败: %{1}","Cache Cleanup Task Execution Failed: %{1}"
+"缓存清理失败: %{1}","Cache Cleanup Failed: %{1}"
+"缓存池 %{1} 不存在","Cache pool %{1} does not exist"
+"env 配置写入失败，请检查 app/etc/env.php 权限","Failed to write env configuration, please check app/etc/env.php permissions"
+"缓存池 %{1} 为持久缓存，需要强制清理（force=1）","Cache pool %{1} is a persistent cache and requires forced cleanup (force=1)"
+应用,Apply
+系统,System
+"WLS 常驻内存","WLS resident memory"
+"FPM 请求隔离","FPM request quarantine"
 CLI,CLI
-"缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。","缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。"
-缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。,缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。
-未知适配器,未知适配器
-"WLS 共享内存","WLS 共享内存"
-文件缓存,文件缓存
+"缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。","Cache cleanup will process the cache pool, WLS shared memory namespace, and Worker runtime synchronization simultaneously."
+缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。,"Cache cleanup will directly affect the current cache backend; the next request will reload the cache content."
+未知适配器,"Unknown adapter"
+"WLS 共享内存","WLS Shared Memory"
+文件缓存,"File cache"
 Redis,Redis
 Memcached,Memcached
 APCu,APCu
-运行时统一缓存视图,运行时统一缓存视图
-当前模式,当前模式
-共享内存,共享内存
-共享命名空间,共享命名空间
-共享键总量,共享键总量
-底层兼容状态,底层兼容状态
-"后台清理入口会尽量统一 WLS、共享内存和 FPM 下的表现。","后台清理入口会尽量统一 WLS、共享内存和 FPM 下的表现。"
-持久化运行时,持久化运行时
-"File 驱动接管","File 驱动接管"
-共享服务客户端数,共享服务客户端数
-共享服务内存,共享服务内存
-缓存池总数,缓存池总数
-已启用,已启用
-已禁用,已禁用
-持久缓存,持久缓存
-"WLS 托管池","WLS 托管池"
-筛选与视图,筛选与视图
-按身份、说明、模块或状态定位缓存池，当前视图只展示匹配结果。,按身份、说明、模块或状态定位缓存池，当前视图只展示匹配结果。
-当前显示,当前显示
-搜索,搜索
+运行时统一缓存视图,"Runtime unified cache view"
+当前模式,"Current mode"
+共享内存,"Shared Memory"
+共享命名空间,"Shared Namespace"
+共享键总量,"Total Shared Keys"
+底层兼容状态,"Low-level Compatibility Status"
+"后台清理入口会尽量统一 WLS、共享内存和 FPM 下的表现。","Backend Cleanup Entry will unify the behavior across WLS, shared memory, and FPM as much as possible."
+持久化运行时,"Persist runtime"
+"File 驱动接管","File driver takes over"
+共享服务客户端数,"Shared Service Client Count"
+共享服务内存,"Shared Service Memory"
+缓存池总数,"Total Cache Pools"
+已启用,Enabled
+已禁用,Disabled
+持久缓存,"Persistent cache"
+"WLS 托管池","WLS hosting pool"
+筛选与视图,"Filter & View"
+按身份、说明、模块或状态定位缓存池，当前视图只展示匹配结果。,"Locate cache pool by identity, description, module, or status; the current view only shows matching results."
+当前显示,"Currently displayed."
+搜索,Search
 类型,Type
-状态,状态
-持久化,持久化
-应用筛选,应用筛选
-重置,重置
-批量操作,批量操作
-"启用、禁用和清理都通过统一接口完成，WLS 模式下会继续联动运行时缓存刷新。","启用、禁用和清理都通过统一接口完成，WLS 模式下会继续联动运行时缓存刷新。"
-选择当前结果,选择当前结果
-个已选,个已选
-启用所选,启用所选
-禁用所选,禁用所选
-清理所选,清理所选
-清理全部非持久缓存,清理全部非持久缓存
-强制清理全部,强制清理全部
-执行清理定时任务,执行清理定时任务
-刷新页面,刷新页面
-缓存池清单,缓存池清单
-每个卡片同时展示缓存池配置、命中情况、底层适配器与共享命名空间信息。,每个卡片同时展示缓存池配置、命中情况、底层适配器与共享命名空间信息。
-"WLS 共享存储","WLS 共享存储"
-支持标签失效,支持标签失效
-命中率,命中率
-"命中 / 未命中","命中 / 未命中"
-运行态提示,运行态提示
+状态,Status
+持久化,Persist
+应用筛选,"Apply Filter"
+重置,Reset
+批量操作,"Batch operation"
+"启用、禁用和清理都通过统一接口完成，WLS 模式下会继续联动运行时缓存刷新。","Enabling, disabling, and clearing are all done through a unified interface. In WLS mode, runtime cache refresh will continue to be coordinated."
+选择当前结果,"Select Current Result"
+个已选,selected
+启用所选,"Enable selected"
+禁用所选,"Disable Selected"
+清理所选,"Clear Selected"
+清理全部非持久缓存,"Clear All Non-Persistent Cache"
+强制清理全部,"Force Clean All"
+执行清理定时任务,"Execute cleanup scheduled task"
+刷新页面,"Refresh Page"
+缓存池清单,"Cache Pool List"
+每个卡片同时展示缓存池配置、命中情况、底层适配器与共享命名空间信息。,"Each card displays cache pool configuration, hit rate, underlying adapter, and shared namespace information."
+"WLS 共享存储","WLS shared storage"
+支持标签失效,"Supports tag invalidation"
+命中率,"Hit rate"
+"命中 / 未命中","Hit / Miss"
+运行态提示,"Runtime prompt"
 共享键示例,"Sample Shared Keys"
-刷新统计,刷新统计
-当前没有匹配的缓存池,当前没有匹配的缓存池
-缓存相关定时任务,缓存相关定时任务
-便于确认自动清理策略是否存在，以及需要时手动触发一次。,便于确认自动清理策略是否存在，以及需要时手动触发一次。
-任务代码,任务代码
-任务名称,任务名称
-执行频率,执行频率
-说明,说明
-暂无缓存定时任务,暂无缓存定时任务
-"如果你希望后台自动清理过期缓存，可以在 Cron 模块里补充计划任务，或者继续使用上面的手动清理入口。","如果你希望后台自动清理过期缓存，可以在 Cron 模块里补充计划任务，或者继续使用上面的手动清理入口。"
-永久,永久
-"约 %{1} 秒","约 %{1} 秒"
-"约 %{1} 分钟","约 %{1} 分钟"
-"约 %{1} 小时","约 %{1} 小时"
-"约 %{1} 天","约 %{1} 天"
-清理,清理
-强制清理,强制清理
-未知,未知
-无,无
+刷新统计,"Refresh Statistics"
+当前没有匹配的缓存池,"No matching cache pool currently exists."
+缓存相关定时任务,"Cache-Related Scheduled Tasks"
+便于确认自动清理策略是否存在，以及需要时手动触发一次。,"To easily confirm whether an auto-cleanup policy exists, and manually trigger it if needed."
+任务代码,"Task code"
+任务名称,"Task name"
+执行频率,"Execution frequency"
+说明,Description
+暂无缓存定时任务,"No cache scheduled tasks"
+"如果你希望后台自动清理过期缓存，可以在 Cron 模块里补充计划任务，或者继续使用上面的手动清理入口。","If you want the system to automatically clean expired caches in the background, you can add a scheduled task in the Cron module, or continue using the manual cleanup entry above."
+永久,Permanent
+"约 %{1} 秒","About %{1} seconds"
+"约 %{1} 分钟","About %{1} minutes"
+"约 %{1} 小时","About %{1} hours"
+"约 %{1} 天","About %{1} days"
+清理,"Clean Up"
+强制清理,"Force Clean"
+未知,Unknown
+无,None
 是,Yes
 否,No
 已连接,Connected
 未连接,Disconnected
-无共享键,无共享键
-共享键,共享键
-缓存状态已更新,缓存状态已更新
+无共享键,"No Share Key"
+共享键,"Shared Key"
+缓存状态已更新,"Cache Status Updated"
 缓存统计已刷新,"Cache statistics refreshed"
-请求失败,请求失败
-操作失败,操作失败
-清理失败,清理失败
-缓存已清理,缓存已清理
-定时任务执行完成,定时任务执行完成
-执行失败,执行失败
-当前选择里没有可切换状态的缓存池,当前选择里没有可切换状态的缓存池
-所选缓存已清理完成,所选缓存已清理完成
-部分缓存清理失败，请查看提示后重试,部分缓存清理失败，请查看提示后重试
-确定要禁用所选缓存池吗？禁用后将直接绕过缓存读写。,确定要禁用所选缓存池吗？禁用后将直接绕过缓存读写。
-确定要清理所选缓存池吗？,确定要清理所选缓存池吗？
-所选缓存里包含持久缓存，将以强制模式清理。是否继续？,所选缓存里包含持久缓存，将以强制模式清理。是否继续？
-确定要清理这个缓存池吗？,确定要清理这个缓存池吗？
-该缓存池为持久缓存，后台将以强制模式清理。是否继续？,该缓存池为持久缓存，后台将以强制模式清理。是否继续？
-确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。,确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。
-确定要强制清理全部缓存吗？这会连持久缓存与额外共享命名空间一起处理。,确定要强制清理全部缓存吗？这会连持久缓存与额外共享命名空间一起处理。
-继续,继续
-取消,取消
-禁用所选缓存,禁用所选缓存
-清理所选缓存,清理所选缓存
-强制清理所选缓存,强制清理所选缓存
-清理缓存池,清理缓存池
-强制清理持久缓存,强制清理持久缓存
-强制清理全部缓存,强制清理全部缓存
-缓存管理,缓存管理
-未知运行态,未知运行态
-未启用,未启用
-"后台执行清理时会同时触达缓存池、WLS Worker 缓存刷新事件以及共享内存命名空间。","后台执行清理时会同时触达缓存池、WLS Worker 缓存刷新事件以及共享内存命名空间。"
-"当前未检测到共享内存服务连接。缓存池本身仍可清理，但 WLS 共享内存同步能力可能不可用。","当前未检测到共享内存服务连接。缓存池本身仍可清理，但 WLS 共享内存同步能力可能不可用。"
-"例如 identity、适配器、模块、说明","例如 identity、适配器、模块、说明"
-全部,全部
-启用,启用
-禁用,禁用
-选择该缓存池,选择该缓存池
-未知存储,未知存储
-"共享键 %{1}","共享键 %{1}"
+请求失败,"Request failed"
+操作失败,"Operation failed"
+清理失败,"Cleanup Failed"
+缓存已清理,"Cache cleaned"
+定时任务执行完成,"Scheduled Task Execution Completed"
+执行失败,"Execution failed"
+当前选择里没有可切换状态的缓存池,"No cache pool with a switchable status is available in the current selection."
+所选缓存已清理完成,"The selected cache has been cleared"
+部分缓存清理失败，请查看提示后重试,"Some cache clearing failed, please check the prompts and try again"
+确定要禁用所选缓存池吗？禁用后将直接绕过缓存读写。,"Are you sure you want to disable the selected cache pool? Once disabled, cache reads and writes will be bypassed directly."
+确定要清理所选缓存池吗？,"Are you sure you want to clear the selected cache pool?"
+所选缓存里包含持久缓存，将以强制模式清理。是否继续？,"The selected cache contains persistent cache, which will be cleared in force mode. Continue?"
+确定要清理这个缓存池吗？,"Are you sure you want to clear this cache pool?"
+该缓存池为持久缓存，后台将以强制模式清理。是否继续？,"This cache pool is a persistent cache and will be cleared in forced mode in the background. Continue?"
+确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。,"Are you sure you want to clear all non-persistent caches? This will keep system-critical persistent caches."
+确定要强制清理全部缓存吗？这会连持久缓存与额外共享命名空间一起处理。,"Are you sure you want to force clear all caches? This will also process persistent caches and additional shared namespaces."
+继续,Continue
+取消,Cancel
+禁用所选缓存,"Disable Selected Cache"
+清理所选缓存,"Clear Selected Cache"
+强制清理所选缓存,"Force Clean Selected Cache"
+清理缓存池,"Clean cache pool"
+强制清理持久缓存,"Force Clean Persistent Cache"
+强制清理全部缓存,"Force Clean All Cache"
+缓存管理,"Cache Management"
+未知运行态,"Unknown runtime state"
+未启用,"Not enabled"
+"后台执行清理时会同时触达缓存池、WLS Worker 缓存刷新事件以及共享内存命名空间。","Backend execution of cleanup will simultaneously trigger cache pool, WLS Worker cache refresh events, and shared memory namespace."
+"当前未检测到共享内存服务连接。缓存池本身仍可清理，但 WLS 共享内存同步能力可能不可用。","No shared memory service connection detected. The cache pool itself can still be cleared, but WLS shared memory sync capability may be unavailable."
+"例如 identity、适配器、模块、说明","For example: identity, adapter, module, description"
+全部,All
+启用,Enable
+禁用,Disable
+选择该缓存池,"Select This Cache Pool"
+未知存储,"Unknown storage"
+"共享键 %{1}","Shared Key %{1}"
 "%{1} / %{2}","%{1} / %{2}"
-持久缓存默认保持启用，仅支持强制清理,持久缓存默认保持启用，仅支持强制清理
-切换缓存启用状态,切换缓存启用状态
+持久缓存默认保持启用，仅支持强制清理,"Persistent cache is enabled by default; only forced clearing is supported"
+切换缓存启用状态,"Toggle Cache Enabled Status"

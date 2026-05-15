@@ -1,4 +1,4 @@
-﻿无效的请求方法,无效的请求方法
+﻿无效的请求方法,"Invalid request method"
 执行失败：%{error},"Execution failed: %{error}"
 DNS记录类型不合法,"Invalid DNS record type"
 DNS记录类型不能为空,"DNS record type is required"

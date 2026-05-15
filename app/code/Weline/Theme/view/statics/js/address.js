@@ -14,7 +14,7 @@
     var autoCode = 0;
     var groups = {};
     var regionSources = {};
-    var defaultSourceUrl = '/shipping/frontend/region/list';
+    var defaultSourceUrl = frontendRoute('/shipping/frontend/region/list');
     var defaultLabels = {
         country: '\u56fd\u5bb6/\u5730\u533a',
         province: '\u7701\u4efd',
@@ -29,6 +29,21 @@
         selectCountryFirst: '\u8bf7\u5148\u9009\u62e9\u56fd\u5bb6/\u5730\u533a',
         selectProvinceFirst: '\u8bf7\u5148\u9009\u62e9\u7701\u4efd',
         selectCityFirst: '\u8bf7\u5148\u9009\u62e9\u57ce\u5e02'
+    };
+    var englishLabels = {
+        country: 'Country/Region',
+        province: 'Province',
+        city: 'City',
+        district: 'District',
+        empty: 'No regions available',
+        manual: 'You can enter this region directly',
+        selectCountry: 'Please select country/region',
+        selectProvince: 'Please select province',
+        selectCity: 'Please select city',
+        selectDistrict: 'Please select district',
+        selectCountryFirst: 'Please select country/region first',
+        selectProvinceFirst: 'Please select province first',
+        selectCityFirst: 'Please select city first'
     };
     var chinaFallback = [
         {region_id: 100001, parent_region_id: 0, country_code: 'CN', region_code: 'BJ', region_name: '\u5317\u4eac\u5e02', region_type: 'province'},
@@ -66,6 +81,23 @@
         return value == null ? '' : String(value);
     }
 
+    function frontendRoute(path) {
+        path = text(path);
+        if (!path) {
+            return '';
+        }
+        if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(path)) {
+            return path;
+        }
+        if (typeof window.frontend_url === 'function') {
+            return window.frontend_url(path);
+        }
+        if (typeof window.url === 'function') {
+            return window.url(path);
+        }
+        return path;
+    }
+
     function escapeHtml(value) {
         return text(value).replace(/[&<>"']/g, function (ch) {
             return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[ch];
@@ -94,14 +126,35 @@
 
     function readConfig(root) {
         try {
-            return JSON.parse(root.getAttribute('data-address-config') || '{}') || {};
+            var config = JSON.parse(root.getAttribute('data-address-config') || '{}') || {};
+            config.sourceUrl = frontendRoute(config.sourceUrl || defaultSourceUrl);
+            return config;
         } catch (error) {
-            return {};
+            return {sourceUrl: defaultSourceUrl};
         }
     }
 
+    function currentLocale() {
+        if (window.site && window.site.lang) {
+            return text(window.site.lang);
+        }
+        if (window.Weline && window.Weline.config) {
+            return text(window.Weline.config.currentLang || (window.Weline.config.i18n && window.Weline.config.i18n.currentLang));
+        }
+        var match = text(window.location.pathname).match(/\/([a-z]{2}(?:_[A-Za-z0-9]+)+)(?:\/|$)/i);
+        return match ? text(match[1]) : '';
+    }
+
     function labelsFor(config) {
-        return Object.assign({}, defaultLabels, config.labels || {});
+        var labels = Object.assign({}, defaultLabels, config.labels || {});
+        if (!/^zh/i.test(currentLocale())) {
+            Object.keys(englishLabels).forEach(function (key) {
+                if (!labels[key] || labels[key] === defaultLabels[key]) {
+                    labels[key] = englishLabels[key];
+                }
+            });
+        }
+        return labels;
     }
 
     function normalizeRegions(regionList) {
@@ -178,7 +231,7 @@
 
     function groupFor(code, sourceUrl) {
         if (!groups[code]) {
-            groups[code] = {code: code, controls: {}, state: {}, regions: fallbackRegions(), fixed: {}, cascade: true, sourceUrl: sourceUrl || defaultSourceUrl};
+            groups[code] = {code: code, controls: {}, state: {}, regions: fallbackRegions(), fixed: {}, cascade: true, sourceUrl: frontendRoute(sourceUrl || defaultSourceUrl)};
         }
         return groups[code];
     }
@@ -328,6 +381,58 @@
         return opts.length ? opts[0] : null;
     }
 
+    function metadataValue(group, name) {
+        var root = null;
+        Object.keys(group.controls).some(function (level) {
+            root = group.controls[level].root;
+            return !!root;
+        });
+        if (!root) {
+            return '';
+        }
+        var form = root.closest('form');
+        if (!form) {
+            return '';
+        }
+        var field = form.querySelector('[name="' + name + '"]');
+        return field ? text(field.value) : '';
+    }
+
+    function findRegionByMetadata(group, level) {
+        var regionId = '';
+        var regionCode = '';
+        var countryCode = metadataValue(group, 'country_code');
+
+        if (level === 'country') {
+            if (!countryCode) {
+                return null;
+            }
+            return optionsFor(group, level).find(function (region) {
+                return countryCode === text(region.country_code) || countryCode === text(region.region_code);
+            }) || null;
+        }
+
+        if (level === 'province') {
+            regionId = metadataValue(group, 'province_region_id');
+            regionCode = metadataValue(group, 'province_code');
+        } else if (level === 'city') {
+            regionId = metadataValue(group, 'city_region_id');
+            regionCode = metadataValue(group, 'city_code');
+        } else if (level === 'district') {
+            regionId = metadataValue(group, 'district_region_id');
+            regionCode = metadataValue(group, 'district_code');
+        }
+
+        if (!regionId && !regionCode) {
+            return null;
+        }
+
+        return optionsFor(group, level).find(function (region) {
+            return (regionId && regionId === text(region.region_id)) ||
+                (regionCode && regionCode === text(region.region_code));
+        }) || null;
+    }
+
     function refreshState(group) {
         order.forEach(function (level) {
             group.state[level] = null;
@@ -335,29 +440,50 @@
         if (group.controls.country && group.controls.country.field.value) {
             group.state.country = findRegion(group, 'country', group.controls.country.field.value);
         }
+        if (!group.state.country) {
+            group.state.country = findRegionByMetadata(group, 'country');
+        }
         if (!group.state.country && group.fixed.country) {
             group.state.country = findRegion(group, 'country', splitFilter(group.fixed.country)[0]);
         }
         if (!group.state.country && group.controls.country && !group.controls.country.field.value) {
             group.state.country = findRegion(group, 'country', 'CN') || firstAllowed(group, 'country');
         }
-        if (group.state.country && group.controls.country && !group.controls.country.field.value) {
+        if (group.state.country && group.controls.country) {
             group.controls.country.field.value = labelOf(group.state.country);
         }
         if (group.controls.province && group.controls.province.field.value) {
             group.state.province = findRegion(group, 'province', group.controls.province.field.value);
         }
+        if (!group.state.province) {
+            group.state.province = findRegionByMetadata(group, 'province');
+        }
         if (!group.state.province && group.fixed.province) {
             group.state.province = findRegion(group, 'province', splitFilter(group.fixed.province)[0]);
+        }
+        if (group.state.province && group.controls.province) {
+            group.controls.province.field.value = labelOf(group.state.province);
         }
         if (group.controls.city && group.controls.city.field.value) {
             group.state.city = findRegion(group, 'city', group.controls.city.field.value);
         }
+        if (!group.state.city) {
+            group.state.city = findRegionByMetadata(group, 'city');
+        }
         if (!group.state.city && group.fixed.city) {
             group.state.city = findRegion(group, 'city', splitFilter(group.fixed.city)[0]);
         }
+        if (group.state.city && group.controls.city) {
+            group.controls.city.field.value = labelOf(group.state.city);
+        }
         if (group.controls.district && group.controls.district.field.value) {
             group.state.district = findRegion(group, 'district', group.controls.district.field.value);
+        }
+        if (!group.state.district) {
+            group.state.district = findRegionByMetadata(group, 'district');
+        }
+        if (group.state.district && group.controls.district) {
+            group.controls.district.field.value = labelOf(group.state.district);
         }
     }
 
@@ -483,6 +609,9 @@
     function updateControl(group, control) {
         refreshState(group);
         var current = group.state[control.level];
+        if (current) {
+            control.field.value = labelOf(current);
+        }
         control.input.value = current ? labelOf(current) : control.field.value;
         control.input.placeholder = placeholderFor(group, control.level);
         var disabled = isDisabled(group, control.level);
@@ -552,7 +681,7 @@
         var group = groupFor(code, config.sourceUrl || defaultSourceUrl);
         group.cascade = config.cascade !== false;
         group.labels = labelsFor(config);
-        group.sourceUrl = config.sourceUrl || group.sourceUrl || defaultSourceUrl;
+        group.sourceUrl = frontendRoute(config.sourceUrl || group.sourceUrl || defaultSourceUrl);
         ['country', 'province', 'city'].forEach(function (level) {
             if (config.filters && config.filters[level]) {
                 group.fixed[level] = config.filters[level];

@@ -1,49 +1,49 @@
-﻿首页,首页
-欢迎访问,欢迎访问
-"这是 WelineFramework 的默认首页","这是 WelineFramework 的默认首页"
-前端账户登录后,前端账户登录后
-前端用户登录成功后触发，允许其他模块监听登录事件并执行相应操作。,前端用户登录成功后触发，允许其他模块监听登录事件并执行相应操作。
-前端账户注册后,前端账户注册后
-前端用户注册成功后触发，允许其他模块监听注册事件并执行相应操作。,前端用户注册成功后触发，允许其他模块监听注册事件并执行相应操作。
+﻿首页,Homepage
+欢迎访问,Welcome
+"这是 WelineFramework 的默认首页","This is the default homepage of WelineFramework"
+前端账户登录后,"After Frontend Account Login"
+前端用户登录成功后触发，允许其他模块监听登录事件并执行相应操作。,"Triggered after a frontend user logs in successfully, allowing other modules to listen for the login event and perform corresponding actions."
+前端账户注册后,"After Frontend Account Registration"
+前端用户注册成功后触发，允许其他模块监听注册事件并执行相应操作。,"Triggered after a frontend user registers successfully, allowing other modules to listen for the registration event and perform corresponding actions."
 用户头像,"User Avatar"
-前端头部,前端头部
-"在前端页面的 <head> 标签内注入内容，允许其他模块在前端页面头部注入额外的 CSS、JavaScript 或其他资源。","在前端页面的 <head> 标签内注入内容，允许其他模块在前端页面头部注入额外的 CSS、JavaScript 或其他资源。"
-模块不存在，请检查模块名称!,模块不存在，请检查模块名称!
-"JS: inject_path函数path路径不允许为空！","JS: inject_path函数path路径不允许为空！"
-通知,通知
-查看全部,查看全部
-查看更多,查看更多
-"模块 %{1} 加载失败：未找到 %{2}","模块 %{1} 加载失败：未找到 %{2}"
-"模块 %{1} 加载失败：无法加载 %{2}","模块 %{1} 加载失败：无法加载 %{2}"
-"预加载模块 %{1} 失败","预加载模块 %{1} 失败"
-"Weline.Account.%{1} 已弃用，请使用 %{2}","Weline.Account.%{1} 已弃用，请使用 %{2}"
-登录/注册页面,登录/注册页面
-用户中心/账户相关页面,用户中心/账户相关页面
-API相关页面,API相关页面
-购物车相关页面,购物车相关页面
-自动预加载模块,自动预加载模块
-页面,页面
-原因,原因
-模块,模块
-时间,时间
-模块预加载完成,模块预加载完成
-模块预加载失败,模块预加载失败
-错误,错误
-当前页面无需预加载模块,当前页面无需预加载模块
-切换,切换
-网站维护,网站维护
-请稍等片刻...,请稍等片刻...
-返回首页重试,返回首页重试
+前端头部,"Frontend Header"
+"在前端页面的 <head> 标签内注入内容，允许其他模块在前端页面头部注入额外的 CSS、JavaScript 或其他资源。","Injects content into the <head> tag of frontend pages, allowing other modules to inject additional CSS, JavaScript, or other resources into the frontend page head."
+模块不存在，请检查模块名称!,"Module does not exist, please check the module name!"
+"JS: inject_path函数path路径不允许为空！","JS: The inject_path function path is not allowed to be empty!"
+通知,Notification
+查看全部,"View all"
+查看更多,"View More"
+"模块 %{1} 加载失败：未找到 %{2}","Module %{1} failed to load: %{2} not found."
+"模块 %{1} 加载失败：无法加载 %{2}","Module %{1} failed to load: unable to load %{2}"
+"预加载模块 %{1} 失败","Preloading module %{1} failed"
+"Weline.Account.%{1} 已弃用，请使用 %{2}","Weline.Account.%{1} is deprecated, please use %{2}"
+登录/注册页面,"Login/Register page"
+用户中心/账户相关页面,"User center/account-related pages"
+API相关页面,"API related pages"
+购物车相关页面,"Cart-related pages"
+自动预加载模块,"Auto-preload modules"
+页面,Page
+原因,Reason
+模块,Module.
+时间,Time
+模块预加载完成,"Module preload complete"
+模块预加载失败,"Module preload failed"
+错误,Error
+当前页面无需预加载模块,"No preload module is needed for the current page"
+切换,Toggle
+网站维护,"Website maintenance"
+请稍等片刻...,"Please wait a moment..."
+返回首页重试,"Return to Homepage and Retry"
 刷新,Refresh
-为什么网站会处于维护模式？,为什么网站会处于维护模式？
-网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。
-多久能够恢复？,多久能够恢复？
-大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,大部分的网站升级活动都只有几分钟甚至几秒钟的时间。
-需要帮助吗？,需要帮助吗？
-如果你长期看到这个页面，对网站存在疑惑，请联系：,如果你长期看到这个页面，对网站存在疑惑，请联系：
-网站Logo,网站Logo
+为什么网站会处于维护模式？,"Why is the website in maintenance mode?"
+网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The site may be undergoing a system upgrade, or most of the content has changed. Developers are maintaining or upgrading data to provide better service."
+多久能够恢复？,"How long until recovery?"
+大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most website upgrade activities only last a few minutes or even seconds."
+需要帮助吗？,"Need help?"
+如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have doubts about the website, please contact:"
+网站Logo,"Site Logo"
 Weline,Weline
-搜索商品...,搜索商品...
-搜索,搜索
-我的账户,我的账户
-账户,账户
+搜索商品...,"Search products..."
+搜索,Search
+我的账户,"My Account"
+账户,Account

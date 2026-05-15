@@ -1,521 +1,821 @@
 <?php
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\I18n\Service;
 
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 
-/**
- * AI翻译服务
- * 
- * 功能：
- * - 批量翻译词典（每次1000个词）
- * - 增量翻译（跳过已存在的翻译）
- * - CSV词典导入
- * - 异常处理和系统消息通知
- */
 class AiTranslationService
 {
-    /**
-     * 每批翻译的词数量
-     */
-    private const BATCH_SIZE = 1000;
+    private const DEFAULT_SCAN_PAGE_SIZE = 500;
 
     /**
-     * @var EventsManager
+     * @var array<string, array<string, string>>
      */
-    private EventsManager $eventsManager;
+    private array $csvWordCache = [];
 
     /**
-     * @var Dictionary
+     * @var array<string, string>|null
      */
-    private Dictionary $dictionary;
+    private ?array $activeModuleBasePaths = null;
 
     /**
-     * @var LocaleDictionary
+     * @var array<string, array<string, true>>
      */
-    private LocaleDictionary $localeDictionary;
+    private array $csvTranslatedWordIndex = [];
 
     /**
-     * 构造函数
+     * @var array<string, array<string, true>>
      */
+    private array $localeTranslatedWordIndex = [];
+
+    /**
+     * @var array<string, array<string, true>>
+     */
+    private array $generatedTranslatedWordIndex = [];
+
+    /**
+     * @var array<string, string>
+     */
+    private array $candidateSourceModules = [];
+
     public function __construct(
-        EventsManager $eventsManager,
-        Dictionary $dictionary,
-        LocaleDictionary $localeDictionary
+        private readonly Dictionary $dictionary,
+        private readonly LocaleDictionary $localeDictionary,
+        private readonly I18nAiTranslationAdapter $translationAdapter,
+        private readonly AiTranslationPublisher $publisher
     ) {
-        $this->eventsManager = $eventsManager;
-        $this->dictionary = $dictionary;
-        $this->localeDictionary = $localeDictionary;
     }
 
     /**
-     * 批量翻译词典（增量翻译）
-     * 
-     * @param string $targetLocale 目标语言代码，如 'en_US'
-     * @param string $sourceLocale 源语言代码，如 'zh_Hans_CN'，默认 'auto'
-     * @param int $batchSize 每批翻译数量，默认1000
-     * @return array 翻译结果统计
+     * @return array<string, mixed>
      */
     public function batchTranslateDictionary(
         string $targetLocale,
-        string $sourceLocale = 'auto',
-        int $batchSize = self::BATCH_SIZE
+        string $sourceLocale = AiTranslationConfig::DEFAULT_SOURCE_LOCALE,
+        int $batchSize = AiTranslationConfig::DEFAULT_BATCH_SIZE,
+        string $strategy = AiTranslationConfig::DEFAULT_STRATEGY,
+        bool $publish = true
     ): array {
         $startTime = microtime(true);
-        $totalTranslated = 0;
-        $totalSkipped = 0;
-        $totalFailed = 0;
+        $targetLocale = $this->normalizeLocaleCode($targetLocale);
+        $sourceLocale = $this->normalizeLocaleCode($sourceLocale);
+        $batchSize = max(1, min(AiTranslationConfig::MAX_BATCH_SIZE, $batchSize));
+
+        if ($targetLocale === '' || $targetLocale === $sourceLocale) {
+            return [
+                'success' => true,
+                'translated' => 0,
+                'skipped' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'remaining' => 0,
+                'duration' => 0,
+                'errors' => [],
+                'message' => (string)__('目标语言为空或等于源语言，已跳过。'),
+            ];
+        }
+
+        $words = $this->getUntranslatedWords($targetLocale, $batchSize, $sourceLocale);
+        if ($words === []) {
+            return [
+                'success' => true,
+                'translated' => 0,
+                'skipped' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'remaining' => 0,
+                'duration' => 0,
+                'errors' => [],
+                'message' => (string)__('没有待翻译词。'),
+            ];
+        }
+
+        $translated = 0;
+        $failed = 0;
+        $skipped = 0;
         $errors = [];
 
         try {
-            // 获取待翻译的词（未翻译的词）
-            $untranslatedWords = $this->getUntranslatedWords($targetLocale, $batchSize);
-
-            if (empty($untranslatedWords)) {
-                // 没有待翻译的词时静默返回，不再发送系统消息
-                return [
-                    'success' => true,
-                    'translated' => 0,
-                    'skipped' => 0,
-                    'failed' => 0,
-                    'total' => 0,
-                    'duration' => 0,
-                    'message' => __('没有待翻译的词')
-                ];
-            }
-
-            // 触发AI翻译事件
-            $eventData = [
-                'words' => $untranslatedWords,
-                'target_locale' => $targetLocale,
-                'source_locale' => $sourceLocale,
-                'strategy' => 'light', // 批量翻译使用轻量策略
-                'translations' => [],
-                'errors' => [],
-                'success' => false
-            ];
-
-            $this->eventsManager->dispatch('Weline_Ai::translate', $eventData);
-
-            // 处理翻译结果
-            if ($eventData['success']) {
-                $translations = $eventData['translations'];
-                
-                // 保存翻译结果到词典
-                foreach ($translations as $word => $translation) {
-                    try {
-                        $this->saveTranslation($word, $translation, $targetLocale);
-                        $totalTranslated++;
-                    } catch (\Exception $e) {
-                        $totalFailed++;
-                        $errors[] = __('保存翻译失败 [%{1}]: %{2}', [$word, $e->getMessage()]);
-                    }
-                }
-
-                // 计算耗时
-                $duration = round(microtime(true) - $startTime, 2);
-
-                // 发送成功通知
-                $this->sendSystemMessage(
-                    __('AI批量翻译完成'),
-                    __(
-                        "目标语言：%{locale}\n翻译数量：%{translated}\n失败数量：%{failed}\n总词数：%{total}\n耗时：%{duration}秒",
-                        [
-                            'locale' => $targetLocale,
-                            'translated' => $totalTranslated,
-                            'failed' => $totalFailed,
-                            'total' => count($untranslatedWords),
-                            'duration' => $duration
-                        ]
-                    ),
-                    'ri-translate'
-                );
-
-                return [
-                    'success' => true,
-                    'translated' => $totalTranslated,
-                    'skipped' => $totalSkipped,
-                    'failed' => $totalFailed,
-                    'total' => count($untranslatedWords),
-                    'duration' => $duration,
-                    'errors' => $errors,
-                    'message' => __('成功翻译 %{1} 个词', [$totalTranslated])
-                ];
-            } else {
-                // AI翻译失败
-                $errorMessage = implode("\n", $eventData['errors']);
-                $errors = $eventData['errors'];
-
-                $this->sendSystemMessage(
-                    __('AI翻译失败'),
-                    __(
-                        "目标语言：%{locale}\n待翻译词数：%{total}\n错误信息：\n%{errors}",
-                        [
-                            'locale' => $targetLocale,
-                            'total' => count($untranslatedWords),
-                            'errors' => $errorMessage
-                        ]
-                    ),
-                    'ri-error-warning-line'
-                );
+            $response = $this->translationAdapter->translateBatch($words, $sourceLocale, $targetLocale, $strategy);
+            if (empty($response['success'])) {
+                $errors = array_values(array_map('strval', (array)($response['errors'] ?? [])));
+                $message = $errors ? implode('; ', $errors) : (string)__('AI 翻译服务返回失败。');
 
                 return [
                     'success' => false,
                     'translated' => 0,
                     'skipped' => 0,
-                    'failed' => count($untranslatedWords),
-                    'total' => count($untranslatedWords),
+                    'failed' => count($words),
+                    'total' => count($words),
+                    'remaining' => $this->countUntranslatedWords($targetLocale, $sourceLocale),
                     'duration' => round(microtime(true) - $startTime, 2),
                     'errors' => $errors,
-                    'message' => __('AI翻译失败: %{1}', [$errorMessage])
+                    'message' => $message,
                 ];
             }
-        } catch (\Exception $e) {
-            // 捕获所有异常
-            $errorMessage = $e->getMessage();
-            
+
+            $translations = $this->normalizeTranslations((array)$response['translations'], $words);
+            foreach ($words as $word) {
+                $translation = trim((string)($translations[$word] ?? ''));
+                $validationError = $this->validateTranslation($word, $translation);
+                if ($validationError !== null) {
+                    $failed++;
+                    $errors[] = $validationError;
+                    continue;
+                }
+
+                try {
+                    $this->saveTranslation($word, $translation, $targetLocale, true, $this->getCandidateSourceModule($word));
+                    $translated++;
+                } catch (\Throwable $throwable) {
+                    $failed++;
+                    $errors[] = (string)__('保存翻译失败 [%{1}]: %{2}', [$word, $throwable->getMessage()]);
+                }
+            }
+
+            $published = false;
+            if ($publish && $translated > 0) {
+                $published = $this->publisher->publishLocale($targetLocale);
+                if (!$published) {
+                    $errors[] = (string)__('翻译已写入词典库，但发布语言文件失败：%{1}', [$targetLocale]);
+                }
+            }
+
+            $remaining = $this->countUntranslatedWords($targetLocale, $sourceLocale);
+            $duration = round(microtime(true) - $startTime, 2);
+            $success = $translated > 0 || $failed === 0;
+
             $this->sendSystemMessage(
-                __('AI翻译异常'),
-                __(
-                    "翻译过程发生异常\n目标语言：%{locale}\n异常信息：%{error}\n异常位置：%{file}:%{line}",
+                $success ? (string)__('I18n AI翻译完成') : (string)__('I18n AI翻译失败'),
+                (string)__(
+                    "目标语言：%{locale}\n本批词数：%{total}\n成功：%{translated}\n失败：%{failed}\n剩余：%{remaining}\n自动发布：%{published}\n耗时：%{duration}s",
                     [
                         'locale' => $targetLocale,
-                        'error' => $errorMessage,
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine()
+                        'total' => (string)count($words),
+                        'translated' => (string)$translated,
+                        'failed' => (string)$failed,
+                        'remaining' => (string)$remaining,
+                        'published' => $published ? 'yes' : 'no',
+                        'duration' => (string)$duration,
                     ]
                 ),
+                $success ? 'ri-translate' : 'ri-error-warning-line'
+            );
+
+            return [
+                'success' => $success,
+                'translated' => $translated,
+                'skipped' => $skipped,
+                'failed' => $failed,
+                'total' => count($words),
+                'remaining' => $remaining,
+                'duration' => $duration,
+                'errors' => $errors,
+                'message' => (string)__('成功翻译 %{1} 个词，失败 %{2} 个词。', [$translated, $failed]),
+            ];
+        } catch (\Throwable $throwable) {
+            $message = $throwable->getMessage();
+            $this->sendSystemMessage(
+                (string)__('I18n AI翻译异常'),
+                (string)__('目标语言：%{1}；错误：%{2}', [$targetLocale, $message]),
                 'ri-alarm-warning-line'
             );
 
             return [
                 'success' => false,
-                'translated' => $totalTranslated,
-                'skipped' => $totalSkipped,
-                'failed' => $totalFailed,
-                'total' => 0,
+                'translated' => $translated,
+                'skipped' => $skipped,
+                'failed' => count($words),
+                'total' => count($words),
+                'remaining' => $this->countUntranslatedWords($targetLocale, $sourceLocale),
                 'duration' => round(microtime(true) - $startTime, 2),
-                'errors' => [$errorMessage],
-                'message' => __('翻译异常: %{1}', [$errorMessage])
+                'errors' => [$message],
+                'message' => $message,
             ];
         }
     }
 
     /**
-     * 获取未翻译的词
-     * 
-     * @param string $targetLocale 目标语言代码
-     * @param int $limit 限制数量
-     * @return array 待翻译词列表
+     * @return list<string>
      */
-    private function getUntranslatedWords(string $targetLocale, int $limit): array
+    public function getUntranslatedWords(
+        string $targetLocale,
+        int $limit,
+        string $sourceLocale = AiTranslationConfig::DEFAULT_SOURCE_LOCALE
+    ): array
     {
-        // 获取所有词典中的词
-        $allWords = $this->dictionary->clear()
-            ->pagination(1, $limit)
-            ->select()
-            ->fetch()
-            ->getItems();
+        $targetLocale = $this->normalizeLocaleCode($targetLocale);
+        $sourceLocale = $this->normalizeLocaleCode($sourceLocale);
+        $limit = max(1, min(AiTranslationConfig::MAX_BATCH_SIZE, $limit));
+        $words = [];
 
-        $untranslatedWords = [];
+        foreach ($this->collectCandidateWords($targetLocale, $sourceLocale) as $word) {
+            $word = (string)$word;
+            if (!$this->shouldTranslateWord($word, $targetLocale)) {
+                continue;
+            }
+            $words[] = $word;
+            if (count($words) >= $limit) {
+                break;
+            }
+        }
 
-        foreach ($allWords as $wordData) {
-            $word = $wordData[Dictionary::schema_fields_WORD] ?? '';
-            if (empty($word)) {
+        return $words;
+    }
+
+    public function countUntranslatedWords(
+        string $targetLocale,
+        string $sourceLocale = AiTranslationConfig::DEFAULT_SOURCE_LOCALE
+    ): int
+    {
+        $targetLocale = $this->normalizeLocaleCode($targetLocale);
+        $sourceLocale = $this->normalizeLocaleCode($sourceLocale);
+        $missing = 0;
+
+        foreach ($this->collectCandidateWords($targetLocale, $sourceLocale) as $word) {
+            $word = (string)$word;
+            if ($this->shouldTranslateWord($word, $targetLocale)) {
+                $missing++;
+            }
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectCandidateWords(string $targetLocale, string $sourceLocale): array
+    {
+        $candidates = [];
+        $this->appendBackendMenuWords($candidates, $targetLocale);
+        $this->appendModuleCsvWords($candidates, $targetLocale, $sourceLocale);
+        $this->appendDictionaryWords($candidates);
+
+        return array_values(array_map('strval', array_keys($candidates)));
+    }
+
+    /**
+     * @param array<string, string> $candidates
+     */
+    private function appendDictionaryWords(array &$candidates): void
+    {
+        $page = 1;
+        while (true) {
+            $rows = $this->dictionary->clear()->reset()
+                ->pagination($page, self::DEFAULT_SCAN_PAGE_SIZE)
+                ->select()
+                ->fetchArray();
+
+            if (empty($rows)) {
+                break;
+            }
+
+            foreach ($rows as $row) {
+                $word = trim((string)($row[Dictionary::schema_fields_WORD] ?? ''));
+                if ($word !== '') {
+                    $module = trim((string)($row[Dictionary::schema_fields_MODULE] ?? ''));
+                    $this->addCandidate($candidates, $word, $module);
+                }
+            }
+
+            if (count($rows) < self::DEFAULT_SCAN_PAGE_SIZE) {
+                break;
+            }
+            $page++;
+        }
+    }
+
+    /**
+     * @param array<string, string> $candidates
+     */
+    private function appendModuleCsvWords(array &$candidates, string $targetLocale, string $sourceLocale): void
+    {
+        foreach ($this->getActiveModuleBasePaths() as $basePath => $moduleName) {
+            $sourceWords = $this->readCsvWords($basePath . DS . 'i18n' . DS . $sourceLocale . '.csv');
+            $targetWords = $this->readCsvWords($basePath . DS . 'i18n' . DS . $targetLocale . '.csv');
+
+            foreach (array_keys($sourceWords + $targetWords) as $word) {
+                $target = trim((string)($targetWords[$word] ?? ''));
+                if ($target === '' || $target === $word) {
+                    $this->addCandidate($candidates, (string)$word, $moduleName);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, string> $candidates
+     */
+    private function appendBackendMenuWords(array &$candidates, string $targetLocale): void
+    {
+        foreach ($this->getActiveModuleBasePaths() as $basePath => $moduleName) {
+            $menuFile = $basePath . DS . 'etc' . DS . 'backend' . DS . 'menu.xml';
+            if (!is_file($menuFile)) {
                 continue;
             }
 
-            // 检查是否已存在翻译
-            $md5 = LocaleDictionary::generateMd5($word, $targetLocale);
-            $existingTranslation = $this->localeDictionary->clear()
-                ->where(LocaleDictionary::schema_fields_MD5, $md5)
-                ->find()
-                ->fetch();
+            $targetWords = $this->readCsvWords($basePath . DS . 'i18n' . DS . $targetLocale . '.csv');
+            try {
+                $xml = simplexml_load_file($menuFile);
+            } catch (\Throwable) {
+                $xml = false;
+            }
+            if (!$xml) {
+                continue;
+            }
 
-            // 如果不存在翻译，添加到待翻译列表
-            if (!$existingTranslation->getId()) {
-                $untranslatedWords[] = $word;
+            foreach ((array)$xml->xpath('//menu[@title]') as $menuNode) {
+                $attributes = $menuNode->attributes();
+                $word = trim((string)($attributes['title'] ?? ''));
+                $target = trim((string)($targetWords[$word] ?? ''));
+                if ($word !== '' && ($target === '' || $target === $word)) {
+                    $this->addCandidate($candidates, $word, $moduleName);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, string> $candidates
+     */
+    private function addCandidate(array &$candidates, string $word, string $moduleName = ''): void
+    {
+        $word = trim($word);
+        if ($word === '') {
+            return;
+        }
+
+        if (!isset($candidates[$word])) {
+            $candidates[$word] = $moduleName;
+        } elseif ($candidates[$word] === '' && $moduleName !== '') {
+            $candidates[$word] = $moduleName;
+        }
+
+        if (!isset($this->candidateSourceModules[$word]) || $this->candidateSourceModules[$word] === '') {
+            $this->candidateSourceModules[$word] = $moduleName;
+        }
+    }
+
+    private function getCandidateSourceModule(string $word): string
+    {
+        return (string)($this->candidateSourceModules[$word] ?? '');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getActiveModuleBasePaths(): array
+    {
+        if ($this->activeModuleBasePaths !== null) {
+            return $this->activeModuleBasePaths;
+        }
+
+        $paths = [];
+        foreach (Env::getInstance()->getActiveModules() as $moduleKey => $module) {
+            $basePath = is_array($module) ? (string)($module['base_path'] ?? '') : '';
+            if ($basePath !== '' && is_dir($basePath)) {
+                $moduleName = is_array($module) ? (string)($module['name'] ?? $moduleKey) : (string)$moduleKey;
+                $paths[rtrim($basePath, "\\/")] = $moduleName;
+            }
+        }
+        $this->activeModuleBasePaths = $paths;
+
+        return $paths;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function readCsvWords(string $csvFile): array
+    {
+        $cacheKey = str_replace('\\', '/', $csvFile);
+        if (isset($this->csvWordCache[$cacheKey])) {
+            return $this->csvWordCache[$cacheKey];
+        }
+
+        $this->csvWordCache[$cacheKey] = [];
+        if (!is_file($csvFile)) {
+            return [];
+        }
+
+        $handle = @fopen($csvFile, 'r');
+        if ($handle === false) {
+            return [];
+        }
+
+        while (($row = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
+            $word = trim((string)($row[0] ?? ''));
+            $translate = trim((string)($row[1] ?? ''));
+            if ($word !== '') {
+                $this->csvWordCache[$cacheKey][$word] = $translate;
+            }
+        }
+        fclose($handle);
+
+        return $this->csvWordCache[$cacheKey];
+    }
+
+    private function hasCsvTranslation(string $word, string $localeCode): bool
+    {
+        $index = $this->getCsvTranslatedWordIndex($localeCode);
+
+        return isset($index[$word]);
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function getCsvTranslatedWordIndex(string $localeCode): array
+    {
+        if (isset($this->csvTranslatedWordIndex[$localeCode])) {
+            return $this->csvTranslatedWordIndex[$localeCode];
+        }
+
+        $this->csvTranslatedWordIndex[$localeCode] = [];
+        foreach ($this->getActiveModuleBasePaths() as $basePath => $moduleName) {
+            $words = $this->readCsvWords($basePath . DS . 'i18n' . DS . $localeCode . '.csv');
+            foreach ($words as $word => $translate) {
+                if ($translate !== '' && $translate !== $word) {
+                    $this->csvTranslatedWordIndex[$localeCode][$word] = true;
+                }
             }
         }
 
-        return $untranslatedWords;
+        return $this->csvTranslatedWordIndex[$localeCode];
     }
 
     /**
-     * 保存翻译到词典
-     * 
-     * @param string $word 原词
-     * @param string $translation 翻译
-     * @param string $localeCode 语言代码
-     * @throws \Exception
-     */
-    private function saveTranslation(string $word, string $translation, string $localeCode): void
-    {
-        $md5 = LocaleDictionary::generateMd5($word, $localeCode);
-
-        // 检查是否已存在
-        $existingTranslation = $this->localeDictionary->clear()
-            ->where(LocaleDictionary::schema_fields_MD5, $md5)
-            ->find()
-            ->fetch();
-
-        if ($existingTranslation->getId()) {
-            // 更新现有翻译
-            $this->localeDictionary->clear()
-                ->where(LocaleDictionary::schema_fields_MD5, $md5)
-                ->update([
-                    LocaleDictionary::schema_fields_TRANSLATE => $translation
-                ])
-                ->fetch();
-        } else {
-            // 创建新翻译
-            $this->localeDictionary->clear()
-                ->insert([
-                    LocaleDictionary::schema_fields_MD5 => $md5,
-                    LocaleDictionary::schema_fields_WORD => $word,
-                    LocaleDictionary::schema_fields_LOCALE_CODE => $localeCode,
-                    LocaleDictionary::schema_fields_TRANSLATE => $translation
-                ], LocaleDictionary::schema_fields_MD5)
-                ->fetch();
-        }
-    }
-
-    /**
-     * 从CSV文件导入翻译
-     * 
-     * @param string $csvFilePath CSV文件路径
-     * @param string $localeCode 语言代码
-     * @return array 导入结果统计
+     * @return array<string, mixed>
      */
     public function importFromCsv(string $csvFilePath, string $localeCode): array
     {
         $startTime = microtime(true);
-        $totalImported = 0;
-        $totalSkipped = 0;
-        $totalFailed = 0;
+        $localeCode = $this->normalizeLocaleCode($localeCode);
+        $imported = 0;
+        $skipped = 0;
+        $failed = 0;
         $errors = [];
 
         try {
-            if (!file_exists($csvFilePath)) {
-                throw new \Exception(__('CSV文件不存在: %{1}', [$csvFilePath]));
+            if (!is_file($csvFilePath)) {
+                throw new \RuntimeException((string)__('CSV文件不存在：%{1}', [$csvFilePath]));
             }
 
             $handle = fopen($csvFilePath, 'r');
             if ($handle === false) {
-                throw new \Exception(__('无法打开CSV文件: %{1}', [$csvFilePath]));
+                throw new \RuntimeException((string)__('无法打开CSV文件：%{1}', [$csvFilePath]));
             }
 
-            $lineNumber = 0;
-            while (($data = fgetcsv($handle)) !== false) {
-                $lineNumber++;
-
-                // 跳过空行
-                if (empty($data) || count($data) < 2) {
+            $line = 0;
+            while (($row = fgetcsv($handle)) !== false) {
+                $line++;
+                if (count($row) < 2) {
+                    $skipped++;
                     continue;
                 }
 
-                $word = trim($data[0] ?? '');
-                $translation = trim($data[1] ?? '');
-
-                // 跳过空词或空翻译
-                if (empty($word) || empty($translation)) {
-                    $totalSkipped++;
+                $word = trim((string)($row[0] ?? ''));
+                $translation = trim((string)($row[1] ?? ''));
+                if ($word === '' || $translation === '') {
+                    $skipped++;
                     continue;
                 }
 
                 try {
-                    // 保存翻译（如果已存在则跳过）
-                    $md5 = LocaleDictionary::generateMd5($word, $localeCode);
-                    $existing = $this->localeDictionary->clear()
-                        ->where(LocaleDictionary::schema_fields_MD5, $md5)
-                        ->find()
-                        ->fetch();
-
-                    if ($existing->getId()) {
-                        // 已存在，跳过
-                        $totalSkipped++;
-                    } else {
-                        // 不存在，导入
-                        $this->saveTranslation($word, $translation, $localeCode);
-                        $totalImported++;
+                    if ($this->translationExists($word, $localeCode)) {
+                        $skipped++;
+                        continue;
                     }
-                } catch (\Exception $e) {
-                    $totalFailed++;
-                    $errors[] = __('第%{1}行导入失败 [%{2}]: %{3}', [$lineNumber, $word, $e->getMessage()]);
+                    $this->saveTranslation($word, $translation, $localeCode, false, '');
+                    $imported++;
+                } catch (\Throwable $throwable) {
+                    $failed++;
+                    $errors[] = (string)__('第 %{1} 行导入失败：%{2}', [$line, $throwable->getMessage()]);
                 }
             }
-
             fclose($handle);
-
-            $duration = round(microtime(true) - $startTime, 2);
-
-            // 发送成功通知
-            $this->sendSystemMessage(
-                __('CSV词典导入完成'),
-                __(
-                    "文件：%{file}\n语言：%{locale}\n导入数量：%{imported}\n跳过数量：%{skipped}\n失败数量：%{failed}\n耗时：%{duration}秒",
-                    [
-                        'file' => basename($csvFilePath),
-                        'locale' => $localeCode,
-                        'imported' => $totalImported,
-                        'skipped' => $totalSkipped,
-                        'failed' => $totalFailed,
-                        'duration' => $duration
-                    ]
-                ),
-                'ri-file-upload-line'
-            );
 
             return [
                 'success' => true,
-                'imported' => $totalImported,
-                'skipped' => $totalSkipped,
-                'failed' => $totalFailed,
-                'total' => $totalImported + $totalSkipped + $totalFailed,
-                'duration' => $duration,
+                'imported' => $imported,
+                'skipped' => $skipped,
+                'failed' => $failed,
+                'total' => $imported + $skipped + $failed,
+                'duration' => round(microtime(true) - $startTime, 2),
                 'errors' => $errors,
-                'message' => __('成功导入 %{1} 条翻译', [$totalImported])
+                'message' => (string)__('成功导入 %{1} 条翻译。', [$imported]),
             ];
-        } catch (\Exception $e) {
-            $errorMessage = $e->getMessage();
-
-            $this->sendSystemMessage(
-                __('CSV词典导入失败'),
-                __(
-                    "文件：%{file}\n语言：%{locale}\n错误：%{error}",
-                    [
-                        'file' => basename($csvFilePath),
-                        'locale' => $localeCode,
-                        'error' => $errorMessage
-                    ]
-                ),
-                'ri-error-warning-line'
-            );
-
+        } catch (\Throwable $throwable) {
             return [
                 'success' => false,
-                'imported' => $totalImported,
-                'skipped' => $totalSkipped,
-                'failed' => $totalFailed,
-                'total' => $totalImported + $totalSkipped + $totalFailed,
+                'imported' => $imported,
+                'skipped' => $skipped,
+                'failed' => $failed,
+                'total' => $imported + $skipped + $failed,
                 'duration' => round(microtime(true) - $startTime, 2),
-                'errors' => [$errorMessage],
-                'message' => __('导入失败: %{1}', [$errorMessage])
+                'errors' => [$throwable->getMessage()],
+                'message' => $throwable->getMessage(),
             ];
         }
     }
 
     /**
-     * 导入模块中的CSV翻译文件
-     * 
-     * @param string $localeCode 语言代码
-     * @return array 导入结果统计
+     * @return array<string, mixed>
      */
     public function importModuleCsvFiles(string $localeCode): array
     {
-        $totalImported = 0;
-        $totalSkipped = 0;
-        $totalFailed = 0;
+        $localeCode = $this->normalizeLocaleCode($localeCode);
+        $files = $this->findCsvFiles(BP . '/app/code', $localeCode);
+        $imported = 0;
+        $skipped = 0;
+        $failed = 0;
         $errors = [];
-        $processedFiles = 0;
 
-        try {
-            // 扫描所有模块的i18n目录
-            $modulesPath = BP . '/app/code';
-            $csvFiles = $this->findCsvFiles($modulesPath, $localeCode);
-
-            foreach ($csvFiles as $csvFile) {
-                $result = $this->importFromCsv($csvFile, $localeCode);
-                
-                $totalImported += $result['imported'];
-                $totalSkipped += $result['skipped'];
-                $totalFailed += $result['failed'];
-                $errors = array_merge($errors, $result['errors']);
-                $processedFiles++;
-            }
-
-            return [
-                'success' => true,
-                'imported' => $totalImported,
-                'skipped' => $totalSkipped,
-                'failed' => $totalFailed,
-                'files' => $processedFiles,
-                'errors' => $errors,
-                'message' => __('处理了 %{1} 个CSV文件，导入 %{2} 条翻译', [$processedFiles, $totalImported])
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'imported' => $totalImported,
-                'skipped' => $totalSkipped,
-                'failed' => $totalFailed,
-                'files' => $processedFiles,
-                'errors' => array_merge($errors, [$e->getMessage()]),
-                'message' => __('导入异常: %{1}', [$e->getMessage()])
-            ];
+        foreach ($files as $file) {
+            $result = $this->importFromCsv($file, $localeCode);
+            $imported += (int)($result['imported'] ?? 0);
+            $skipped += (int)($result['skipped'] ?? 0);
+            $failed += (int)($result['failed'] ?? 0);
+            $errors = array_merge($errors, (array)($result['errors'] ?? []));
         }
+
+        return [
+            'success' => true,
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'failed' => $failed,
+            'files' => count($files),
+            'errors' => $errors,
+            'message' => (string)__('处理 %{1} 个CSV文件，导入 %{2} 条翻译。', [count($files), $imported]),
+        ];
+    }
+
+    private function translationExists(string $word, string $localeCode): bool
+    {
+        $index = $this->getLocaleTranslatedWordIndex($localeCode);
+
+        return isset($index[$word]);
+    }
+
+    private function shouldTranslateWord(string $word, string $targetLocale): bool
+    {
+        return $this->hasTranslatableText($word)
+            && !$this->translationExists($word, $targetLocale)
+            && !$this->hasGeneratedTranslation($word, $targetLocale)
+            && !$this->hasCsvTranslation($word, $targetLocale);
+    }
+
+    private function hasTranslatableText(string $word): bool
+    {
+        return (bool)preg_match('/\p{Han}/u', $word);
     }
 
     /**
-     * 查找CSV文件
-     * 
-     * @param string $basePath 基础路径
-     * @param string $localeCode 语言代码
-     * @return array CSV文件列表
+     * @return array<string, true>
+     */
+    private function getLocaleTranslatedWordIndex(string $localeCode): array
+    {
+        if (isset($this->localeTranslatedWordIndex[$localeCode])) {
+            return $this->localeTranslatedWordIndex[$localeCode];
+        }
+
+        $this->localeTranslatedWordIndex[$localeCode] = [];
+        $rows = $this->localeDictionary->clear()->reset()
+            ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
+            ->select()
+            ->fetchArray();
+
+        foreach ((array)$rows as $row) {
+            $word = trim((string)($row[LocaleDictionary::schema_fields_WORD] ?? ''));
+            $translate = trim((string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? ''));
+            if ($word !== '' && $translate !== '' && $translate !== $word) {
+                $this->localeTranslatedWordIndex[$localeCode][$word] = true;
+            }
+        }
+
+        return $this->localeTranslatedWordIndex[$localeCode];
+    }
+
+    private function hasGeneratedTranslation(string $word, string $localeCode): bool
+    {
+        $index = $this->getGeneratedTranslatedWordIndex($localeCode);
+
+        return isset($index[$word]);
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function getGeneratedTranslatedWordIndex(string $localeCode): array
+    {
+        if (isset($this->generatedTranslatedWordIndex[$localeCode])) {
+            return $this->generatedTranslatedWordIndex[$localeCode];
+        }
+
+        $this->generatedTranslatedWordIndex[$localeCode] = [];
+        $localeFile = BP . DS . 'generated' . DS . 'language' . DS . $localeCode . '.php';
+        if (!is_file($localeFile)) {
+            return [];
+        }
+
+        $words = include $localeFile;
+        if (!is_array($words)) {
+            return [];
+        }
+
+        $this->flattenGeneratedTranslations($words, $this->generatedTranslatedWordIndex[$localeCode]);
+
+        return $this->generatedTranslatedWordIndex[$localeCode];
+    }
+
+    /**
+     * @param array<mixed> $words
+     * @param array<string, true> $index
+     */
+    private function flattenGeneratedTranslations(array $words, array &$index): void
+    {
+        foreach ($words as $word => $translation) {
+            if (is_array($translation)) {
+                $this->flattenGeneratedTranslations($translation, $index);
+                continue;
+            }
+            if (
+                is_string($word)
+                && is_string($translation)
+                && $word !== ''
+                && $translation !== ''
+                && $translation !== $word
+            ) {
+                $index[$word] = true;
+            }
+        }
+    }
+
+    private function saveTranslation(
+        string $word,
+        string $translation,
+        string $localeCode,
+        bool $isAi = false,
+        string $sourceModule = ''
+    ): void
+    {
+        $md5 = LocaleDictionary::generateMd5($word, $localeCode);
+        $existing = $this->localeDictionary->clear()->reset()
+            ->where(LocaleDictionary::schema_fields_MD5, $md5)
+            ->find()
+            ->fetch();
+
+        if ((int)$existing->getId() > 0) {
+            $patch = [LocaleDictionary::schema_fields_TRANSLATE => $translation];
+            if ($isAi) {
+                $patch[LocaleDictionary::schema_fields_IS_AI] = 1;
+                if ($sourceModule !== '') {
+                    $patch[LocaleDictionary::schema_fields_SOURCE_MODULE] = $sourceModule;
+                }
+            }
+            $this->localeDictionary->clear()->reset()
+                ->where(LocaleDictionary::schema_fields_MD5, $md5)
+                ->update($patch)
+                ->fetch();
+            $this->localeTranslatedWordIndex[$localeCode][$word] = true;
+            return;
+        }
+
+        $this->localeDictionary->clear()->reset()
+            ->insert([
+                LocaleDictionary::schema_fields_MD5 => $md5,
+                LocaleDictionary::schema_fields_WORD => $word,
+                LocaleDictionary::schema_fields_LOCALE_CODE => $localeCode,
+                LocaleDictionary::schema_fields_TRANSLATE => $translation,
+                LocaleDictionary::schema_fields_IS_AI => $isAi ? 1 : 0,
+                LocaleDictionary::schema_fields_SOURCE_MODULE => $sourceModule,
+            ], LocaleDictionary::schema_fields_MD5)
+            ->fetch();
+        $this->localeTranslatedWordIndex[$localeCode][$word] = true;
+    }
+
+    /**
+     * @param array<mixed> $translations
+     * @param list<string> $words
+     * @return array<string, string>
+     */
+    private function normalizeTranslations(array $translations, array $words): array
+    {
+        $normalized = [];
+        foreach ($translations as $key => $translation) {
+            if (is_string($key) && in_array($key, $words, true)) {
+                $normalized[$key] = (string)$translation;
+            }
+        }
+
+        if (count($normalized) === count($words)) {
+            return $normalized;
+        }
+
+        $values = array_values($translations);
+        foreach ($words as $index => $word) {
+            if (!isset($normalized[$word]) && array_key_exists($index, $values)) {
+                $normalized[$word] = (string)$values[$index];
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function validateTranslation(string $word, string $translation): ?string
+    {
+        if ($translation === '') {
+            return (string)__('翻译为空，已跳过：%{1}', [$word]);
+        }
+        if ($translation === $word) {
+            return (string)__('翻译结果与原文相同，已跳过：%{1}', [$word]);
+        }
+
+        foreach ($this->tokenPatterns() as $pattern) {
+            $sourceTokens = $this->extractTokens($pattern, $word);
+            if ($sourceTokens === []) {
+                continue;
+            }
+            $targetTokens = $this->extractTokens($pattern, $translation);
+            if ($sourceTokens !== $targetTokens) {
+                return (string)__('翻译丢失结构化占位符，已跳过：%{1}', [$word]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tokenPatterns(): array
+    {
+        return [
+            '/%\{[A-Za-z0-9_]+\}/u',
+            '/\{\{[^}]+\}\}/u',
+            '/\{%[^%]+%\}/u',
+            '/<\/?[A-Za-z][^>]*>/u',
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function extractTokens(string $pattern, string $text): array
+    {
+        preg_match_all($pattern, $text, $matches);
+        $tokens = array_count_values($matches[0] ?? []);
+        ksort($tokens);
+
+        return $tokens;
+    }
+
+    /**
+     * @return list<string>
      */
     private function findCsvFiles(string $basePath, string $localeCode): array
     {
-        $csvFiles = [];
-        $csvFileName = $localeCode . '.csv';
+        if (!is_dir($basePath)) {
+            return [];
+        }
 
-        // 递归查找所有i18n目录中的CSV文件
+        $files = [];
+        $filename = $localeCode . '.csv';
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($basePath, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
+            new \RecursiveDirectoryIterator($basePath, \RecursiveDirectoryIterator::SKIP_DOTS)
         );
 
         foreach ($iterator as $file) {
-            if ($file->isFile() && 
-                $file->getFilename() === $csvFileName && 
-                strpos($file->getPath(), '/i18n') !== false) {
-                $csvFiles[] = $file->getPathname();
+            if (!$file->isFile() || $file->getFilename() !== $filename) {
+                continue;
+            }
+            $path = str_replace('\\', '/', $file->getPathname());
+            if (str_contains($path, '/i18n/')) {
+                $files[] = $file->getPathname();
             }
         }
 
-        return $csvFiles;
+        return $files;
     }
 
-    /**
-     * 发送系统消息通知
-     * 
-     * @param string $title 标题
-     * @param string $content 内容
-     * @param string $icon 图标
-     */
+    private function normalizeLocaleCode(string $localeCode): string
+    {
+        return trim(str_replace('-', '_', $localeCode));
+    }
+
     private function sendSystemMessage(string $title, string $content, string $icon = 'ri-translate'): void
     {
         try {
-            w_msg(
-                'ai_translation',
-                'info',
-                $title,
-                $content,
-                ['icon' => $icon, 'source_module' => 'Weline_I18n']
-            );
-        } catch (\Exception $e) {
-            w_log_error("发送AI翻译系统消息失败: " . $e->getMessage(), [], 'i18n');
+            w_msg('ai_translation', 'info', $title, $content, [
+                'icon' => $icon,
+                'source_module' => 'Weline_I18n',
+            ]);
+        } catch (\Throwable $throwable) {
+            w_log_error('I18n AI translation message failed: ' . $throwable->getMessage(), [], 'i18n');
         }
     }
 }
-

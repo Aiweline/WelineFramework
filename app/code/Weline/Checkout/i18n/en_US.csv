@@ -1,4 +1,4 @@
-﻿订单管理,订单管理
+﻿订单管理,"Order Management"
 订单不存在,"Order does not exist"
 订单详情,"Order Details"
 无效的请求方法,"Invalid request method"
@@ -24,10 +24,10 @@
 在计算订单总额之前触发，允许其他模块修改计算参数（运费、税费、折扣等）。,"Triggered before calculating order totals, allowing other modules to modify calculation parameters (shipping, tax, discount, etc.)."
 计算订单总额后,"After Calculate Totals"
 在计算订单总额之后触发，允许其他模块修改计算结果或执行后续操作。,"Triggered after calculating order totals, allowing other modules to modify calculation results or perform follow-up operations."
-创建订单前,创建订单前
-在创建订单之前触发，允许其他模块修改订单数据、验证库存、应用优惠券等。,在创建订单之前触发，允许其他模块修改订单数据、验证库存、应用优惠券等。
-创建订单后,创建订单后
-在创建订单之后触发，允许其他模块执行后续操作，如扣减库存、发送通知、发起支付等。,在创建订单之后触发，允许其他模块执行后续操作，如扣减库存、发送通知、发起支付等。
+创建订单前,"Before creating order"
+在创建订单之前触发，允许其他模块修改订单数据、验证库存、应用优惠券等。,"Triggered before creating an order, allowing other modules to modify order data, verify inventory, apply coupons, etc."
+创建订单后,"After creating order"
+在创建订单之后触发，允许其他模块执行后续操作，如扣减库存、发送通知、发起支付等。,"Triggered after creating an order, allowing other modules to perform subsequent operations such as reducing inventory, sending notifications, initiating payments, etc."
 订单加载前,"Before Order Load"
 在加载订单数据之前触发，允许其他模块执行预处理操作。,"Triggered before loading order data, allowing other modules to perform preprocessing operations."
 订单加载后,"After Order Load"
@@ -40,12 +40,12 @@
 在取消订单之前触发，允许其他模块验证是否可以取消或执行预处理操作。,"Triggered before canceling order, allowing other modules to verify if cancellation is allowed or perform preprocessing operations."
 订单取消后,"After Order Cancel"
 在取消订单之后触发，允许其他模块执行后续操作，如恢复库存、处理退款、发送通知等。,"Triggered after canceling order, allowing other modules to perform follow-up operations, such as restoring inventory, processing refunds, sending notifications, etc."
-订单完成,订单完成
-当订单状态变更为已完成时触发，允许其他模块执行完成后的操作，如增加积分、发送通知等。,当订单状态变更为已完成时触发，允许其他模块执行完成后的操作，如增加积分、发送通知等。
-订单取消,订单取消
-当订单被取消时触发，允许其他模块执行取消后的操作，如恢复库存、处理退款等。,当订单被取消时触发，允许其他模块执行取消后的操作，如恢复库存、处理退款等。
-订单退款,订单退款
-当订单被退款时触发，允许其他模块执行退款后的操作，如更新账户余额、发送通知等。,当订单被退款时触发，允许其他模块执行退款后的操作，如更新账户余额、发送通知等。
+订单完成,"Order completed"
+当订单状态变更为已完成时触发，允许其他模块执行完成后的操作，如增加积分、发送通知等。,"Triggered when the order status changes to completed, allowing other modules to perform post-completion actions such as adding points or sending notifications."
+订单取消,"Cancel order"
+当订单被取消时触发，允许其他模块执行取消后的操作，如恢复库存、处理退款等。,"Triggered when the order is canceled, allowing other modules to perform post-cancellation actions such as restoring inventory or processing refunds."
+订单退款,"Order Refund"
+当订单被退款时触发，允许其他模块执行退款后的操作，如更新账户余额、发送通知等。,"Triggered when the order is refunded, allowing other modules to perform post-refund actions such as updating account balances or sending notifications."
 支付验证前,"Before Payment Validation"
 在验证支付数据之前触发，允许其他模块修改验证数据或执行预处理操作。,"Triggered before validating payment data, allowing other modules to modify validation data or perform preprocessing operations."
 支付验证后,"After Payment Validation"
@@ -111,7 +111,7 @@
 "订单项 %{1} 的价格无效","Price of order item %{1} is invalid"
 收货地址不能为空,"Shipping address cannot be empty"
 订单无法取消,"Order cannot be cancelled"
-订单ID不能为空,订单ID不能为空
+订单ID不能为空,"Order ID cannot be empty"
 支付方式不能为空,"Payment method cannot be empty"
 支付金额无效,"Payment amount is invalid"
 订单已支付,"Order has been paid"

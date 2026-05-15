@@ -38,7 +38,7 @@
 "Google auth is not configured.","Google auth is not configured."
 "Unsupported Google auth mode: %{1}","Unsupported Google auth mode: %{1}"
 "Sign in with Google","Sign in with Google"
-或,或
+或,or
 "Google Sign-In","Google Sign-In"
 "Connected Account","Connected Account"
 "Google auth is not configured yet.","Google auth is not configured yet."
@@ -72,4 +72,4 @@ Policy,Policy
 "Verify and Sign In","Verify and Sign In"
 "Challenge expires at: %{1}","Challenge expires at: %{1}"
 Unknown,Unknown
-"使用 Google 账户继续","使用 Google 账户继续"
+"使用 Google 账户继续","Continue with Google account"

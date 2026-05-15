@@ -10,9 +10,9 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 final class AiSiteAgentWorkspaceDebugDefaults
 {
-    public const SITE_TITLE = 'Teenipiya websiteProfile';
+    public const SITE_TITLE = 'Demo Site';
 
-    public const BRIEF_DESCRIPTION = '我想做一个印度市场的棋牌网站，推广棋牌apk下载的seo网站';
+    public const BRIEF_DESCRIPTION = 'Build a business website with service content, trust signals, and a clear conversion path.';
 
     /** 会话未带主语言时，与后台「AI 建站工作台 · 调试预填」中的默认主语言一致，内置为简体中文 */
     public const DEFAULT_LOCALE = 'zh_Hans_CN';

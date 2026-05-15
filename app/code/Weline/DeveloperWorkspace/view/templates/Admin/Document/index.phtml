@@ -591,6 +591,12 @@
 
     var catalogTree = null;
     var currentCategoryId = <?=json_encode($this->getData('selectedCategoryId') ?? '')?>;
+    var documentAdminUrls = {
+        list: '<?= $this->getBackendUrl('dev/tool/admin/document/list') ?>',
+        view: '<?= $this->getBackendUrl('dev/tool/admin/document/view') ?>',
+        edit: '<?= $this->getBackendUrl('dev/tool/admin/document/edit') ?>',
+        delete: '<?= $this->getBackendUrl('dev/tool/admin/document/delete') ?>'
+    };
     
     function initCatalogTree() {
         try {
@@ -692,7 +698,7 @@
         $('#document-list-container').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">' + i18n.loading + '</span></div><p class="mt-2 text-muted">' + i18n.loadingDocument + '</p></div>');
         
         $.ajax({
-            url: '@admin-url("dev/tool/admin/document/list")',
+            url: documentAdminUrls.list,
             method: 'GET',
             data: { category_id: categoryId },
             dataType: 'json',
@@ -717,7 +723,7 @@
         
         var html = '<div class="row">';
         items.forEach(function(doc) {
-            html += '<div class="col-md-4 col-lg-3 mb-3"><div class="document-card h-100"><div class="document-header"><div class="d-flex justify-content-between align-items-start"><div class="flex-grow-1"><h5 class="mb-1" style="font-size: 0.95rem; font-weight: 500; line-height: 1.4;">' + (doc.title || '') + '</h5><div class="d-flex align-items-center gap-1 mt-1 flex-wrap"><span class="badge bg-light text-dark" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-folder-outline me-1" style="font-size: 0.7rem;"></i>' + (doc.c_name || '') + '</span>' + (doc.module_name ? '<span class="badge-module" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-package-variant me-1" style="font-size: 0.7rem;"></i>' + doc.module_name + '</span>' : '') + (doc.is_auto_imported ? '<span class="badge-auto" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-auto-fix me-1" style="font-size: 0.7rem;"></i>' + i18n.autoImported + '</span>' : '') + '</div></div></div></div><div class="document-body"><p class="summary-text mb-2" style="font-size: 0.8rem; line-height: 1.5;">' + (doc.summary || '') + '</p><div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.75rem;"><span><i class="mdi mdi-account-outline me-1"></i>' + i18n.author + ' ' + (doc.author || doc.author_id || i18n.unknown) + '</span><span><i class="mdi mdi-clock-outline me-1"></i>' + (doc.update_time || '') + '</span></div></div><div class="document-footer"><div class="action-buttons d-flex justify-content-end"><button type="button" class="btn btn-sm btn-primary view-document-btn" data-id="' + doc.doc_id + '"><i class="mdi mdi-eye me-1"></i><?=__('查看')?></button><a href="@admin-url(\'dev/tool/admin/document/edit\')?id=' + doc.doc_id + '"><button type="button" class="btn btn-sm btn-info"><i class="mdi mdi-pencil me-1"></i><?=__('编辑')?></button></a>' + (!doc.is_auto_imported ? '<button type="button" class="btn btn-sm btn-danger document-delete-btn" data-url="@admin-url(\'dev/tool/admin/document/delete\')?id=' + doc.doc_id + '"><i class="mdi mdi-delete me-1"></i><?=__('删除')?></button>' : '') + '</div></div></div></div>';
+            html += '<div class="col-md-4 col-lg-3 mb-3"><div class="document-card h-100"><div class="document-header"><div class="d-flex justify-content-between align-items-start"><div class="flex-grow-1"><h5 class="mb-1" style="font-size: 0.95rem; font-weight: 500; line-height: 1.4;">' + (doc.title || '') + '</h5><div class="d-flex align-items-center gap-1 mt-1 flex-wrap"><span class="badge bg-light text-dark" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-folder-outline me-1" style="font-size: 0.7rem;"></i>' + (doc.c_name || '') + '</span>' + (doc.module_name ? '<span class="badge-module" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-package-variant me-1" style="font-size: 0.7rem;"></i>' + doc.module_name + '</span>' : '') + (doc.is_auto_imported ? '<span class="badge-auto" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-auto-fix me-1" style="font-size: 0.7rem;"></i>' + i18n.autoImported + '</span>' : '') + '</div></div></div></div><div class="document-body"><p class="summary-text mb-2" style="font-size: 0.8rem; line-height: 1.5;">' + (doc.summary || '') + '</p><div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.75rem;"><span><i class="mdi mdi-account-outline me-1"></i>' + i18n.author + ' ' + (doc.author || doc.author_id || i18n.unknown) + '</span><span><i class="mdi mdi-clock-outline me-1"></i>' + (doc.update_time || '') + '</span></div></div><div class="document-footer"><div class="action-buttons d-flex justify-content-end"><button type="button" class="btn btn-sm btn-primary view-document-btn" data-id="' + doc.doc_id + '"><i class="mdi mdi-eye me-1"></i><?=__('查看')?></button><a href="' + documentAdminUrls.edit + '?id=' + doc.doc_id + '"><button type="button" class="btn btn-sm btn-info"><i class="mdi mdi-pencil me-1"></i><?=__('编辑')?></button></a>' + (!doc.is_auto_imported ? '<button type="button" class="btn btn-sm btn-danger document-delete-btn" data-url="' + documentAdminUrls.delete + '?id=' + doc.doc_id + '"><i class="mdi mdi-delete me-1"></i><?=__('删除')?></button>' : '') + '</div></div></div></div>';
         });
         html += '</div>';
         
@@ -814,7 +820,7 @@
         offcanvas.show();
         
         $.ajax({
-            url: '@admin-url("dev/tool/admin/document/view")',
+            url: documentAdminUrls.view,
             method: 'GET',
             data: { id: docId },
             dataType: 'json',
@@ -916,5 +922,73 @@
     } else {
         setTimeout(initDragScroll, 500);
     }
+})();
+</script>
+<script>
+(function () {
+    if (!/\/en_US(?:\/|$)/.test(window.location.pathname)) {
+        return;
+    }
+    const dict = {
+        '开发文档': 'Developer Docs',
+        '编写和管理开发文档': 'Write and manage developer documents',
+        '视图切换': 'View Switcher',
+        '卡片视图': 'Card View',
+        '卡片': 'Cards',
+        '列表视图': 'List View',
+        '列表': 'List',
+        '翻译配置': 'Translation Config',
+        'API文档': 'API Docs',
+        '目录管理': 'Catalog Management',
+        '新增文章': 'New Article',
+        '文档分类': 'Document Categories',
+        '加载中...': 'Loading...',
+        '暂无文章': 'No articles',
+        '点击"新增文章"按钮开始创建您的第一篇文档': 'Click "New Article" to create your first document',
+        '自动导入': 'Auto Imported',
+        '作者:': 'Author:',
+        '查看': 'View',
+        '编辑': 'Edit',
+        '删除': 'Delete',
+        '文档详情': 'Document Details',
+        '全部文档': 'All Documents',
+        '该分类下暂无文档': 'No documents in this category'
+    };
+    function replaceNodeText(node) {
+        const text = node.nodeValue;
+        const trimmed = text.trim();
+        if (!trimmed || !dict[trimmed]) {
+            return;
+        }
+        node.nodeValue = text.replace(trimmed, dict[trimmed]);
+    }
+    function translate(root) {
+        const walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        while (walker.nextNode()) {
+            nodes.push(walker.currentNode);
+        }
+        nodes.forEach(replaceNodeText);
+        document.querySelectorAll('[title],[aria-label],[placeholder]').forEach(function (el) {
+            ['title', 'aria-label', 'placeholder'].forEach(function (attr) {
+                const value = el.getAttribute(attr);
+                if (value && dict[value.trim()]) {
+                    el.setAttribute(attr, dict[value.trim()]);
+                }
+            });
+        });
+    }
+    translate(document.body);
+    new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+            mutation.addedNodes.forEach(function (node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    replaceNodeText(node);
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    translate(node);
+                }
+            });
+        });
+    }).observe(document.body, {childList: true, subtree: true});
 })();
 </script>

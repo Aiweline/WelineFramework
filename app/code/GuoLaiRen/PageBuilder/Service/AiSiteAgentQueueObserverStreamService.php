@@ -174,8 +174,8 @@ class AiSiteAgentQueueObserverStreamService
                         ? (string)__('生成主题队列已取消。')
                         : (string)__('生成主题队列已完成。'),
                     default => $activeOperation['status'] === 'cancelled'
-                        ? (string)__('阶段一方案队列已取消。')
-                        : (string)__('阶段一方案队列已完成。'),
+                        ? (string)__('建站方案队列已取消。')
+                        : (string)__('建站方案队列已完成。'),
                 };
             }
             $activeOperation['updated_at'] = \date('Y-m-d H:i:s');

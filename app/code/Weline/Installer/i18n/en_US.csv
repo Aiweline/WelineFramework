@@ -1,4 +1,4 @@
-﻿系统已安装,系统已安装
+﻿系统已安装,"System installed"
 系统已经安装完成，安装器已禁用。,"The system has been installed. The installer is disabled."
 系统安装,"System Installation"
 环境检测,"Environment Check"
@@ -21,7 +21,7 @@
 "从 disable_functions 中移除: %{funcs}","Remove from disable_functions: %{funcs}"
 "重启 PHP 后刷新页面","Restart PHP and refresh the page"
 "扩展 %{ext} 需要手动安装","Extension %{ext} needs manual installation"
-未命名,未命名
+未命名,Unnamed
 "跳过 %{name}（无模块路径）","Skipping %{name} (no module path)"
 "正在安装: %{name}","Installing: %{name}"
 "%{name} 安装成功","%{name} installed successfully"
@@ -87,5 +87,5 @@
 后台入口密钥,"Admin URL Key"
 "API 后台密钥","API Admin Key"
 后台地址,"Admin URL"
-安装失败,安装失败
+安装失败,"Installation failed"
 返回首页,"Back to Home"

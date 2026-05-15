@@ -989,11 +989,12 @@ class PageRenderService
                 } else {
                     // 在可视化编辑器模式下，添加组件包装器
                     if ($isVisualEditor) {
-                        $escapedCode = htmlspecialchars($code);
-                        $escapedRegion = htmlspecialchars($region);
+                        $escapedCode = htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+                        $escapedRegion = htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+                        $escapedPageType = htmlspecialchars((string)$page->getData(Page::schema_fields_TYPE), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                         // 存储组件实际所属的模板代码（用于跨模板组件编辑）
-                        $escapedStyleCode = htmlspecialchars($useTemplateCode);
-                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\">{$componentHtml}</div>";
+                        $escapedStyleCode = htmlspecialchars($useTemplateCode, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-page-type=\"{$escapedPageType}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" tabindex=\"0\">{$componentHtml}</div>";
                     }
                     $html .= $componentHtml;
                     $html .= "<!-- Component {$code} rendered successfully -->\n";
@@ -1068,174 +1069,15 @@ class PageRenderService
             return '<!-- Error rendering virtual theme component ' . \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
                 . ': ' . \htmlspecialchars($throwable->getMessage(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . " -->\n";
         }
-        $componentHtml = $this->sanitizeVirtualThemeComponentHtml($componentHtml);
-
         $marker = "<!-- Component {$code} resolved via Weline_Theme virtual theme -->\n";
         if ($isVisualEditor) {
             $escapedCode = \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
             $escapedRegion = \htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-            $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"virtual-theme\">{$componentHtml}</div>";
+            $escapedPageType = \htmlspecialchars((string)$page->getData(Page::schema_fields_TYPE), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+            $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-page-type=\"{$escapedPageType}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"virtual-theme\" tabindex=\"0\">{$componentHtml}</div>";
         }
 
         return $marker . $componentHtml . "\n<!-- Component {$code} rendered successfully -->\n";
-    }
-
-    private function sanitizeVirtualThemeComponentHtml(string $html): string
-    {
-        if ($html === '') {
-            return $html;
-        }
-
-        $html = \preg_replace_callback(
-            '/<strong>\s*(?:Game Card|Category|Badge)\s+\d+\s*<\/strong>\s*<p>(.*?)<\/p>/isu',
-            static function (array $matches): string {
-                $body = \trim((string)\strip_tags((string)($matches[1] ?? '')));
-                if ($body === '') {
-                    return '';
-                }
-                $title = $body;
-                $description = 'A focused highlight from this section.';
-                if (\str_contains($body, '–')) {
-                    [$title, $description] = \array_map('trim', \explode('–', $body, 2));
-                } elseif (\str_contains($body, '-')) {
-                    [$title, $description] = \array_map('trim', \explode('-', $body, 2));
-                }
-
-                return '<strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong>'
-                    . '<p>' . \htmlspecialchars($description !== '' ? $description : $body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p>';
-            },
-            $html
-        ) ?? $html;
-
-        $html = $this->sanitizeGeneratedBrandCopy($html);
-        $html = $this->sanitizeGeneratedLogoImages($html);
-        $html = $this->sanitizePersistedHeroImageLayout($html);
-
-        return $html;
-    }
-
-    private function sanitizeGeneratedBrandCopy(string $html): string
-    {
-        if ($html === '') {
-            return $html;
-        }
-
-        return \preg_replace('/\b([A-Z][A-Za-z0-9-]{2,40})\s+(?:websiteProfile|WebsiteProfile|Website Profile)\b/u', '$1', $html) ?? $html;
-    }
-
-    private function sanitizeGeneratedLogoImages(string $html): string
-    {
-        if ($html === '') {
-            return $html;
-        }
-
-        $html = \preg_replace('/<img\b[^>]*\bsrc=(["\'])[^"\']*\/ai-generated\/\1[^>]*>\s*/iu', '', $html) ?? $html;
-
-        return \preg_replace_callback(
-            '/<a\b([^>]*\bclass=(["\'])(?=[^"\']*\blogo\b)[^"\']*\2[^>]*)>(.*?)<\/a>/isu',
-            static function (array $matches): string {
-                $attrs = (string)($matches[1] ?? '');
-                $inner = (string)($matches[3] ?? '');
-                $inner = \preg_replace_callback(
-                    '/<img\b[^>]*\bsrc=(["\'])([^"\']+)\1[^>]*>\s*/iu',
-                    static function (array $imgMatches): string {
-                        $src = \strtolower((string)($imgMatches[2] ?? ''));
-                        if (\str_contains($src, '/ai-generated/') && !\str_contains($src, 'logo') && !\str_contains($src, 'identity')) {
-                            return '';
-                        }
-
-                        return (string)($imgMatches[0] ?? '');
-                    },
-                    $inner
-                ) ?? $inner;
-
-                return '<a ' . $attrs . '>' . $inner . '</a>';
-            },
-            $html
-        ) ?? $html;
-    }
-
-    private function sanitizePersistedHeroImageLayout(string $html): string
-    {
-        if ($html === '') {
-            return $html;
-        }
-
-        $html = \str_replace('class="ai-site-hero-image ai-site-visual-image"', 'class="ai-site-visual-image ai-site-hero-image"', $html);
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-image)\s*\{[^}]*\}/iu',
-            static fn(array $matches): string => (string)$matches[1] . ' { position:absolute !important; inset:0 !important; top:0 !important; right:0 !important; bottom:0 !important; left:0 !important; width:100% !important; height:100% !important; max-width:none !important; aspect-ratio:auto !important; transform:none !important; object-fit:cover !important; object-position:center !important; z-index:0 !important; border-radius:0 !important; border:0 !important; box-shadow:none !important; filter:saturate(1.08) contrast(1.05) brightness(.84) !important; }',
-            $html
-        ) ?? $html;
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero)\s*\{[^}]*\}/iu',
-            static function (array $matches): string {
-                $selector = (string)($matches[1] ?? '.ai-site-hero');
-                $rule = (string)($matches[0] ?? '');
-                $rule = \preg_replace('/min-height\s*:\s*[^;]+;?/iu', '', $rule) ?? $rule;
-                $body = \trim((string)\preg_replace('/^[^{]+\{/u', '', \substr($rule, 0, -1)));
-                return $selector . ' { ' . $body . ' width:100vw !important; margin-left:calc(50% - 50vw) !important; margin-right:calc(50% - 50vw) !important; min-height:clamp(620px,78vh,820px) !important; }';
-            },
-            $html
-        ) ?? $html;
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-track)\s*\{[^}]*\}/iu',
-            static fn(array $matches): string => (string)$matches[1] . ' { position:relative !important; z-index:2 !important; display:grid !important; grid-template-areas:"slide" !important; min-height:inherit !important; width:min(1200px,calc(100% - 48px)) !important; max-width:none !important; margin:0 auto !important; padding:clamp(72px,9vw,128px) 0 !important; }',
-            $html
-        ) ?? $html;
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-slide)\s*\{[^}]*\}/iu',
-            static function (array $matches): string {
-                $selector = (string)($matches[1] ?? '.ai-site-hero-slide');
-                $rule = (string)($matches[0] ?? '');
-                $rule = \preg_replace('/max-width\s*:\s*[^;]+;?/iu', '', $rule) ?? $rule;
-                $body = \trim((string)\preg_replace('/^[^{]+\{/u', '', \substr($rule, 0, -1)));
-                return $selector . ' { ' . $body . ' max-width:min(720px,58vw) !important; }';
-            },
-            $html
-        ) ?? $html;
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero--has-photo:after)\s*\{[^}]*\}/iu',
-            static fn(array $matches): string => (string)$matches[1] . ' { content:"" !important; position:absolute !important; inset:0 !important; background:linear-gradient(100deg,rgba(5,10,20,.88) 0%,rgba(5,10,20,.66) 42%,rgba(5,10,20,.20) 72%,rgba(5,10,20,.42) 100%) !important; z-index:1 !important; pointer-events:none !important; }',
-            $html
-        ) ?? $html;
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-slide\[aria-hidden="false"\])\s*\{[^}]*\}/iu',
-            static fn(array $matches): string => (string)$matches[1] . ' { opacity:1 !important; transform:translateX(0) !important; pointer-events:auto !important; padding:clamp(30px,4vw,52px) !important; border-radius:34px !important; background:linear-gradient(135deg,rgba(4,10,22,.78),rgba(4,10,22,.44)) !important; border:1px solid rgba(255,255,255,.22) !important; box-shadow:0 34px 110px rgba(0,0,0,.36) !important; backdrop-filter:blur(14px) !important; color:#fff !important; text-align:left !important; }',
-            $html
-        ) ?? $html;
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-title)\s*\{[^}]*\}/iu',
-            static fn(array $matches): string => (string)$matches[1] . ' { margin:0 0 18px !important; font-size:clamp(48px,6.2vw,88px) !important; line-height:.98 !important; letter-spacing:-.055em !important; font-weight:900 !important; color:#fff !important; text-shadow:0 4px 0 rgba(0,0,0,.18),0 20px 54px rgba(0,0,0,.70) !important; }',
-            $html
-        ) ?? $html;
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-body)\s*\{[^}]*\}/iu',
-            static fn(array $matches): string => (string)$matches[1] . ' { margin:0 0 30px !important; max-width:58ch !important; font-size:clamp(18px,1.45vw,22px) !important; line-height:1.62 !important; color:rgba(255,255,255,.94) !important; text-shadow:0 8px 26px rgba(0,0,0,.56) !important; }',
-            $html
-        ) ?? $html;
-        $html = \preg_replace_callback(
-            '/((?:#[A-Za-z0-9_-]+\s+)?\.ai-site-hero-eyebrow)\s*\{[^}]*\}/iu',
-            static fn(array $matches): string => (string)$matches[1] . ' { display:inline-flex !important; padding:7px 15px !important; margin-bottom:20px !important; border-radius:999px !important; background:rgba(255,255,255,.18) !important; color:#fff !important; font-size:12px !important; font-weight:800 !important; letter-spacing:.16em !important; text-transform:uppercase !important; }',
-            $html
-        ) ?? $html;
-        $html = \str_replace(
-            '.ai-site-hero-slide[aria-hidden="false"] { opacity:1; transform:translateX(0); pointer-events:auto; }',
-            '.ai-site-hero-slide[aria-hidden="false"] { opacity:1; transform:translateX(0); pointer-events:auto; padding:34px 36px; border-radius:32px; background:linear-gradient(135deg,rgba(7,13,25,.68),rgba(7,13,25,.30)); border:1px solid rgba(255,255,255,.14); box-shadow:0 30px 90px rgba(0,0,0,.28); backdrop-filter:blur(12px); }',
-            $html
-        );
-        $html = \str_replace(
-            'font-size:clamp(36px,5vw,64px); line-height:1.05; letter-spacing:-.02em; font-weight:800; color:#fff; text-shadow:0 12px 34px rgba(0,0,0,.42);',
-            'font-size:clamp(40px,5.6vw,76px); line-height:1.02; letter-spacing:-.045em; font-weight:900; color:#fff; text-shadow:0 3px 0 rgba(0,0,0,.16),0 18px 42px rgba(0,0,0,.58);',
-            $html
-        );
-        $html = \str_replace(
-            'max-width:62ch; font-size:clamp(16px,1.4vw,20px); line-height:1.6; color:rgba(255,255,255,.96); text-shadow:0 8px 24px rgba(0,0,0,.36);',
-            'max-width:58ch; font-size:clamp(17px,1.45vw,21px); line-height:1.62; color:rgba(255,255,255,.98); text-shadow:0 8px 24px rgba(0,0,0,.42);',
-            $html
-        );
-
-        return $html;
     }
 
     /**
@@ -1750,6 +1592,7 @@ class PageRenderService
         }
 
         $html = '';
+        $pageType = \trim((string)$page->getData(Page::schema_fields_TYPE));
         foreach ($blocks as $block) {
             if (!\is_array($block)) {
                 continue;
@@ -1758,10 +1601,6 @@ class PageRenderService
                 continue;
             }
             $blockHtml = \trim((string)($block['html'] ?? $block['config']['html_content'] ?? ''));
-            if ($blockHtml === '') {
-                continue;
-            }
-            $blockHtml = $this->sanitizeAiHtmlBlockFragment($blockHtml);
             if ($blockHtml === '') {
                 continue;
             }
@@ -1783,17 +1622,20 @@ class PageRenderService
                 $region = \trim((string)($block['_pb_server_region'] ?? $block['region'] ?? 'content'));
                 $region = $region !== '' ? $region : 'content';
                 $componentKey = $componentCode !== '' ? $componentCode : ($blockId !== '' ? $blockId : $blockType);
+                $actionDispatch = \htmlspecialchars($this->getComponentActionInlineDispatchJs(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                 $html .= '<div class="pb-component-wrapper tpmst-component-wrapper"'
                     . ' data-component="' . \htmlspecialchars($componentKey, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                    . ' data-page-type="' . \htmlspecialchars($pageType, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
                     . ' data-component-code="' . \htmlspecialchars($componentCode !== '' ? $componentCode : $componentKey, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
                     . ' data-block-id="' . \htmlspecialchars($blockId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
                     . ' data-region="' . \htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
                     . ' data-index="0"'
-                    . ' data-ai-block-id="' . \htmlspecialchars($blockId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">'
+                    . ' data-ai-block-id="' . \htmlspecialchars($blockId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+                    . ' tabindex="0">'
                     . '<div class="component-actions" aria-label="Component actions">'
-                    . '<button type="button" data-pb-action="refine">Refine</button>'
-                    . '<button type="button" data-pb-action="move-up">Move up</button>'
-                    . '<button type="button" data-pb-action="move-down">Move down</button>'
+                    . '<button type="button" data-pb-action="refine" onclick="' . $actionDispatch . '">Refine</button>'
+                    . '<button type="button" data-pb-action="move-up" onclick="' . $actionDispatch . '">Move up</button>'
+                    . '<button type="button" data-pb-action="move-down" onclick="' . $actionDispatch . '">Move down</button>'
                     . '</div>'
                     . $blockHtml
                     . '</div>';
@@ -1812,6 +1654,13 @@ class PageRenderService
      * 统一使用组件化模式：始终构建完整 HTML 结构
      * header/content/footer 组件只是 HTML 片段，不包含完整的 HTML 文档结构
      */
+    private function getComponentActionInlineDispatchJs(): string
+    {
+        return <<<'JS'
+return (window.__pbDispatchComponentActionFromButton ? window.__pbDispatchComponentActionFromButton(this, event) : (function(target, e) { if (!target) { return true; } if (e && typeof e.preventDefault === 'function') { e.preventDefault(); } var wrapper = target.closest ? target.closest('.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper') : null; if (!wrapper || !window.parent || window.parent === window) { return true; } var currentPageType = ''; try { currentPageType = new URLSearchParams(window.location.search).get('page_type') || ''; } catch (err) { currentPageType = ''; } var payload = { type: 'pb-component-action', action: target.getAttribute('data-pb-action') || '', component: wrapper.getAttribute('data-component') || wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-block-id') || '', component_code: wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-component') || wrapper.getAttribute('data-block-id') || '', block_id: wrapper.getAttribute('data-block-id') || wrapper.getAttribute('data-ai-block-id') || wrapper.getAttribute('data-component') || '', page_type: wrapper.getAttribute('data-page-type') || currentPageType, region: wrapper.getAttribute('data-region') || '', index: wrapper.getAttribute('data-index') || '' }; try { if (window.parent.PbAiWorkspacePreview && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === 'function' && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } } catch (err) {} window.parent.postMessage(payload, '*'); return false; })(this, event));
+JS;
+    }
+
     /**
      * @param array<string, mixed> $block
      */
@@ -1835,78 +1684,6 @@ class PageRenderService
         }
 
         return '';
-    }
-
-    private function sanitizeAiHtmlBlockFragment(string $html): string
-    {
-        if (!$this->containsAiInstructionLeak($html)) {
-            return $html;
-        }
-
-        $html = \preg_replace_callback(
-            '/<div\b[^>]*class=(["\'])(?=[^"\']*header)[^"\']*\1[^>]*>.*?<\/div>\s*/is',
-            function (array $matches): string {
-                return $this->containsAiInstructionLeak((string)($matches[0] ?? '')) ? '' : (string)($matches[0] ?? '');
-            },
-            $html
-        ) ?? $html;
-
-        $html = \preg_replace_callback(
-            '/<span\b[^>]*class=(["\'])(?=[^"\']*ai-site-fallback-kicker)[^"\']*\1[^>]*>.*?<\/span>\s*/is',
-            function (array $matches): string {
-                return $this->containsAiInstructionLeak((string)($matches[0] ?? '')) ? '' : (string)($matches[0] ?? '');
-            },
-            $html
-        ) ?? $html;
-
-        $html = \preg_replace_callback(
-            '/<(h[1-6]|p)\b[^>]*>.*?<\/\1>/is',
-            function (array $matches): string {
-                return $this->containsAiInstructionLeak((string)($matches[0] ?? '')) ? '' : (string)($matches[0] ?? '');
-            },
-            $html
-        ) ?? $html;
-
-        return \trim($html);
-    }
-
-    private function containsAiInstructionLeak(string $html): bool
-    {
-        $html = \preg_replace('/<(style|script)\b[^>]*>.*?<\/\1>/is', '', $html) ?? $html;
-        $text = \html_entity_decode(\strip_tags($html), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-        $text = \trim(\preg_replace('/\s+/u', ' ', $text) ?? $text);
-        if ($text === '') {
-            return false;
-        }
-        $normalized = \mb_strtolower($text);
-
-        foreach ([
-            '优先沿用第一阶段',
-            '输出必须是访客可见内容',
-            '不能写方向型提示语',
-            '直接产出可上屏',
-            '字段样例',
-            'content_fill_rule',
-            'field_content_requirements',
-            'Generated website section',
-            'visitor-visible copy',
-            'prompt text',
-            'stage-2 planned text',
-            'Visitors see',
-            'Visitors can review',
-            'Built from plan',
-            'generated from plan',
-            'content_fill_rule',
-            'field_content_requirements',
-            'task_script',
-            'stage3_directive',
-        ] as $marker) {
-            if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
-                return true;
-            }
-        }
-
-        return \preg_match('/^(?:present|provide|showcase|explain|build|create|highlight|include|display|structure|design|render|add)\b.{0,180}\b(?:cta|card|cards|accordion|accordions|section|block|layout|grid|module|page|signals?|content|policy|terms?|download)\b/iu', $text) === 1;
     }
 
     private function renderVisualMode(
@@ -2104,11 +1881,23 @@ class PageRenderService
             }
             .tpmst-component-wrapper:hover .component-actions,
             .pb-component-wrapper:hover .component-actions,
+            .tpmst-component-wrapper:focus-within .component-actions,
+            .pb-component-wrapper:focus-within .component-actions,
+            .tpmst-component-wrapper.selected .component-actions,
+            .pb-component-wrapper.selected .component-actions,
             .tpmst-component-wrapper .component-actions.pb-actions-visible,
             .pb-component-wrapper .component-actions.pb-actions-visible,
             .tpmst-component-wrapper .component-actions:hover,
             .pb-component-wrapper .component-actions:hover {
                 display: flex !important;
+            }
+            .tpmst-component-wrapper.selected > .component-actions,
+            .pb-component-wrapper.selected > .component-actions {
+                position: sticky !important;
+                top: 8px !important;
+                margin: 8px 8px 0 auto !important;
+                justify-content: flex-end !important;
+                width: max-content !important;
             }
             .tpmst-component-wrapper[data-region="header"] .component-actions,
             .tpmst-component-wrapper[data-region="footer"] .component-actions,
@@ -2181,6 +1970,35 @@ class PageRenderService
                 transform: none;
                 box-shadow: none;
             }
+            @media (max-width: 480px) {
+                .tpmst-component-wrapper .component-actions,
+                .pb-component-wrapper .component-actions {
+                    position: sticky !important;
+                    display: flex !important;
+                    top: 6px !important;
+                    right: 6px !important;
+                    left: 6px !important;
+                    max-width: calc(100% - 12px) !important;
+                    width: auto !important;
+                    justify-content: flex-start !important;
+                    flex-wrap: wrap !important;
+                    border-radius: 18px !important;
+                    gap: 5px !important;
+                    padding: 5px !important;
+                }
+                .tpmst-component-wrapper.selected > .component-actions,
+                .pb-component-wrapper.selected > .component-actions {
+                    margin: 6px !important;
+                    width: auto !important;
+                    max-width: calc(100% - 12px) !important;
+                }
+                .tpmst-component-wrapper .component-actions button,
+                .pb-component-wrapper .component-actions button {
+                    height: 28px !important;
+                    padding: 0 9px !important;
+                    font-size: 11px !important;
+                }
+            }
         </style>';
     }
     
@@ -2241,6 +2059,66 @@ class PageRenderService
                         }
                     });
                 });
+
+                function dispatchComponentAction(target, e) {
+                    if (!target) {
+                        return true;
+                    }
+                    if (e && typeof e.preventDefault === "function") {
+                        e.preventDefault();
+                    }
+                    var wrapper = target.closest(".pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper");
+                    if (!wrapper || !window.parent || window.parent === window) {
+                        return true;
+                    }
+                    var currentPageType = "";
+                    try {
+                        currentPageType = new URLSearchParams(window.location.search).get("page_type") || "";
+                    } catch (err) {
+                        currentPageType = "";
+                    }
+                    var payload = {
+                        type: "pb-component-action",
+                        action: target.getAttribute("data-pb-action") || "",
+                        component: wrapper.getAttribute("data-component") || wrapper.getAttribute("data-component-code") || wrapper.getAttribute("data-block-id") || "",
+                        component_code: wrapper.getAttribute("data-component-code") || wrapper.getAttribute("data-component") || wrapper.getAttribute("data-block-id") || "",
+                        block_id: wrapper.getAttribute("data-block-id") || wrapper.getAttribute("data-ai-block-id") || wrapper.getAttribute("data-component") || "",
+                        page_type: wrapper.getAttribute("data-page-type") || currentPageType,
+                        region: wrapper.getAttribute("data-region") || "",
+                        index: wrapper.getAttribute("data-index") || ""
+                    };
+                    try {
+                        if (
+                            window.parent.PbAiWorkspacePreview
+                            && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === "function"
+                            && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)
+                        ) {
+                            if (e && typeof e.stopPropagation === "function") {
+                                e.stopPropagation();
+                            }
+                            if (e && typeof e.stopImmediatePropagation === "function") {
+                                e.stopImmediatePropagation();
+                            }
+                            return false;
+                        }
+                    } catch (err) {
+                    }
+                    window.parent.postMessage(payload, "*");
+                    return false;
+                }
+
+                window.__pbDispatchComponentActionFromButton = function(target, e) {
+                    return dispatchComponentAction(target, e);
+                };
+
+                function handleComponentActionEvent(e) {
+                    var source = e.target && e.target.nodeType === 3 ? e.target.parentElement : e.target;
+                    var target = source && source.closest ? source.closest(".component-actions [data-pb-action]") : null;
+                    dispatchComponentAction(target, e);
+                }
+
+                document.addEventListener("mousedown", handleComponentActionEvent, true);
+                document.addEventListener("click", handleComponentActionEvent, true);
             })();
         </script>';
     }

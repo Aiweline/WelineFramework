@@ -321,8 +321,11 @@ class ApiDocImporter
             $catalog->setName('API文档')
                 ->setDescription('自动导入的API接口文档')
                 ->setIsSystem(true)
+                ->setPid(0)
                 ->setSortOrder(0)
                 ->save();
+        } elseif ($catalog->getPid() === null || $catalog->getPid() === '') {
+            $catalog->setPid(0)->save();
         }
         
         return $catalog;
@@ -372,7 +375,7 @@ class ApiDocImporter
         if (!$catalog->getId()) {
             $catalog->setName($displayName)
                 ->setDescription("模块 {$displayName} 的API文档")
-                ->setParentId((string)$parentCatalog->getId())
+                ->setPid((int)$parentCatalog->getId())
                 ->setIsSystem(true)
                 ->setSortOrder($sortOrder)
                 ->save();
@@ -397,7 +400,7 @@ class ApiDocImporter
         if (!$catalog->getId()) {
             $catalog->setName($version)
                 ->setDescription("API版本 {$version}")
-                ->setParentId((string)$parentCatalog->getId())
+                ->setPid((int)$parentCatalog->getId())
                 ->setIsSystem(true)
                 ->setSortOrder(0)
                 ->save();
@@ -424,7 +427,7 @@ class ApiDocImporter
         if (!$catalog->getId()) {
             $catalog->setName($category)
                 ->setDescription("API类 {$shortClassName}")
-                ->setParentId((string)$parentCatalog->getId())
+                ->setPid((int)$parentCatalog->getId())
                 ->setIsSystem(true)
                 ->setSortOrder(0)
                 ->save();

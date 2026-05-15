@@ -424,6 +424,29 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         }
     }
 
+    public function testForcedBuildQueuesIgnoreExistingArtifactsBeforePickingPendingTasks(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+
+        foreach (['runHtmlBlocksBuildOperationV3', 'runVirtualThemeBuildOperationV3'] as $methodName) {
+            $methodSource = $this->extractControllerMethodSource($source, $methodName);
+            $forceOffset = \strpos($methodSource, '$queueForcedAiRebuild = (int)($scope[\'_queue_force_build\'][\'active\'] ?? 0) === 1;');
+            $clearOffset = \strpos($methodSource, 'clearBuildArtifactsForRegeneration($scope)', $forceOffset === false ? 0 : $forceOffset);
+            $resetOffset = \strpos($methodSource, 'resetBuildTasksToPendingForRebuild($scope, false)', $forceOffset === false ? 0 : $forceOffset);
+            $reconcileOffset = \strpos($methodSource, 'reconcileGeneratedArtifactsWithTaskState($scope)', $forceOffset === false ? 0 : $forceOffset);
+            $pendingOffset = \strpos($methodSource, 'listPendingTasks($scope)');
+
+            self::assertNotFalse($forceOffset, $methodName . ' missing force rebuild marker check');
+            self::assertNotFalse($clearOffset, $methodName . ' must clear stale generated artifacts on force rebuild');
+            self::assertNotFalse($resetOffset, $methodName . ' must reset all tasks without artifact reuse on force rebuild');
+            self::assertNotFalse($reconcileOffset, $methodName . ' must keep normal artifact reconcile for resume');
+            self::assertNotFalse($pendingOffset, $methodName . ' does not list pending tasks');
+            self::assertLessThan($pendingOffset, $clearOffset);
+            self::assertLessThan($pendingOffset, $resetOffset);
+            self::assertLessThan($pendingOffset, $reconcileOffset);
+        }
+    }
+
     public function testBuildResumeRetriesOnlyFailedOrInterruptedCheckpointTasks(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
@@ -441,6 +464,17 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString('resetFailedTasksForFreshRepair(', $startOperation);
         self::assertStringContainsString('resetRunningTasksForInterruptedBuild(', $startOperation);
         self::assertStringContainsString('Resume build after previous task failure', $startOperation);
+    }
+
+    public function testRetryAiOperationResumesBuildWithoutCloningFailedQueueScopePatch(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $handleRetry = $this->extractControllerMethodSource($source, 'handleRetryAiOperation');
+
+        self::assertStringContainsString("!\\in_array(\$operation, ['plan', 'build'], true) && \$pageType === ''", $handleRetry);
+        self::assertStringContainsString("unset(\$details['fresh_repair_failed_tasks']);", $handleRetry);
+        self::assertStringContainsString("\$details['resume_failed_tasks'] = 1;", $handleRetry);
+        self::assertStringContainsString('$scopePatch = [];', $handleRetry);
     }
 
     public function testVirtualThemeBuildInvalidatesQualityFailedPagesBeforePendingSelection(): void
@@ -570,6 +604,28 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'latest_build_failed'] = 1", $methodSource);
         self::assertStringContainsString("'publish_blocked_by_latest_ai_failure'] = 1", $methodSource);
         self::assertStringContainsString('resetRunningTasksForInterruptedBuild', $methodSource);
+    }
+
+    public function testBuildQueueDoesNotTreatTaskKeysAsExtraComponentCodesWhenComponentsAreExplicit(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSiteBuildQueue.php');
+        $methodSource = $this->extractControllerMethodSource($source, 'resolveQueuedOperationContexts');
+
+        $componentListOffset = \strpos($methodSource, '$componentCodes = $this->mergeStringLists([');
+        $taskFallbackOffset = \strpos($methodSource, 'if ($componentCodes === [])');
+        self::assertIsInt($componentListOffset);
+        self::assertIsInt($taskFallbackOffset);
+        self::assertGreaterThan($componentListOffset, $taskFallbackOffset);
+
+        $explicitComponentListSource = \substr($methodSource, $componentListOffset, $taskFallbackOffset - $componentListOffset);
+        self::assertStringContainsString("\$content['component_codes'] ?? null", $explicitComponentListSource);
+        self::assertStringContainsString("\$details['component_codes'] ?? null", $explicitComponentListSource);
+        self::assertStringNotContainsString('task_keys', $explicitComponentListSource);
+        self::assertStringNotContainsString('task_key', $explicitComponentListSource);
+
+        $fallbackSource = \substr($methodSource, $taskFallbackOffset);
+        self::assertStringContainsString("\$content['task_keys'] ?? null", $fallbackSource);
+        self::assertStringContainsString("\$activeDetails['task_keys'] ?? null", $fallbackSource);
     }
 
     public function testPlanQueueTerminalErrorCreatesRetryablePlanFailure(): void

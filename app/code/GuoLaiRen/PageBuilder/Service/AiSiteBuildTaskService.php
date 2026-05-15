@@ -63,7 +63,6 @@ class AiSiteBuildTaskService
         'Instantly communicate',
         'Immediately inform',
         'Capture immediate attention',
-        'Introduce Teenipiya',
         '$category',
         'slug ===',
         '提示词',
@@ -204,7 +203,7 @@ class AiSiteBuildTaskService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    public function resetBuildTasksToPendingForRebuild(array $scope): array
+    public function resetBuildTasksToPendingForRebuild(array $scope, bool $reuseAvailableArtifacts = true): array
     {
         $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
@@ -235,7 +234,7 @@ class AiSiteBuildTaskService
             }
 
             $definition = \is_array($definitionsByTaskKey[$taskKey] ?? null) ? $definitionsByTaskKey[$taskKey] : [];
-            if ($definition !== [] && $this->isGeneratedArtifactAvailableForTask($scope, $definition)) {
+            if ($reuseAvailableArtifacts && $definition !== [] && $this->isGeneratedArtifactAvailableForTask($scope, $definition)) {
                 $resultRef = \is_array($existing['result_ref'] ?? null) && $existing['result_ref'] !== []
                     ? $existing['result_ref']
                     : $this->buildTaskResultRefFromDefinition($definition);

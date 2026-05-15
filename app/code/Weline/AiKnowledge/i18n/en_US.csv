@@ -1,9 +1,9 @@
-﻿"AiKnowledge 查询器不支持的操作：%{1}","AiKnowledge 查询器不支持的操作：%{1}"
+﻿"AiKnowledge 查询器不支持的操作：%{1}","Operation not supported by AiKnowledge Queryer: %{1}"
 "query is required","query is required"
-"AI 知识库","AI 知识库"
-提供混合向量检索（语义+关键词）搜索文档、API、代码,提供混合向量检索（语义+关键词）搜索文档、API、代码
-语义/关键词混合搜索,语义/关键词混合搜索
-搜索词或自然语言,搜索词或自然语言
+"AI 知识库","AI knowledge base"
+提供混合向量检索（语义+关键词）搜索文档、API、代码,"Provides hybrid vector search (semantic + keyword) for documents, APIs, and code"
+语义/关键词混合搜索,"Semantic/keyword hybrid search"
+搜索词或自然语言,"Search term or natural language"
 all|docs|api|code|config,all|docs|api|code|config
-模块过滤,模块过滤
-结果数量,结果数量
+模块过滤,"Module filter"
+结果数量,"Number of results"

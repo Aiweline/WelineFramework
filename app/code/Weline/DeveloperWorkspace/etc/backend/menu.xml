@@ -17,8 +17,10 @@
              icon="mdi mdi-sitemap-outline" order="10"/>
         <menu source="Weline_DeveloperWorkspace::dev-document-list" name="dev-document-list" title="文档管理" action="dev/tool/admin/document"
              icon="mdi mdi-file-document-outline" order="20"/>
+        <menu source="Weline_DeveloperWorkspace::document_config" name="document_config" title="文档管理配置" action="dev/tool/admin/document/config"
+             icon="mdi mdi-translate" order="30"/>
         <menu source="Weline_DeveloperWorkspace::dev-document-frontend" name="dev-document-frontend" title="前端预览" action="dev/tool/docs" is_backend="0"
-             icon="mdi mdi-open-in-new" order="30"/>
+             icon="mdi mdi-open-in-new" order="40"/>
     </menu>
     
     <!-- 调试工具 - 归入开发者 > 调试工具 -->

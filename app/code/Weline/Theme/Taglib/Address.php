@@ -68,10 +68,25 @@ class Address implements TaglibInterface
             $name = trim((string)($attributes['name'] ?? ''));
             $class = trim((string)($attributes['class'] ?? ''));
             $style = trim((string)($attributes['style'] ?? ''));
-            $sourceUrl = trim((string)($attributes['url'] ?? '/shipping/frontend/region/list'));
+            $sourceUrl = trim((string)($attributes['url'] ?? ''));
+            if ($sourceUrl === '') {
+                $sourceUrl = w_url('/shipping/frontend/region/list');
+            } elseif (!preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $sourceUrl)) {
+                $sourceUrl = w_url($sourceUrl);
+            }
             $searchable = $bool($attributes, 'searchable', true);
             $cascade = $bool($attributes, 'cascade', true);
             $includeDistrict = $bool($attributes, 'district', true);
+            $locale = (string)(w_env('user.lang') ?: \Weline\Framework\Http\Cookie::getLangLocal() ?: 'zh_Hans_CN');
+            $useEnglishFallback = !str_starts_with($locale, 'zh');
+            $translate = static function (string $source, string $fallback) use ($useEnglishFallback): string {
+                $translated = (string)__($source);
+                if ($useEnglishFallback && ($translated === '' || $translated === $source)) {
+                    return $fallback;
+                }
+
+                return $translated ?: $source;
+            };
 
             $names = [
                 'country' => (string)($attributes['country-name'] ?? 'country'),
@@ -102,12 +117,28 @@ class Address implements TaglibInterface
                 'province' => (string)($attributes['province'] ?? ''),
                 'city' => (string)($attributes['city'] ?? ''),
             ];
+            $labels = [
+                'country' => $translate('国家/地区', 'Country/Region'),
+                'province' => $translate('省份', 'Province'),
+                'city' => $translate('城市', 'City'),
+                'district' => $translate('区县', 'District'),
+                'empty' => $translate('暂无可选地区', 'No regions available'),
+                'manual' => $translate('可直接输入该地区', 'You can enter this region directly'),
+                'selectCountry' => $translate('请选择国家/地区', 'Please select country/region'),
+                'selectProvince' => $translate('请选择省份', 'Please select province'),
+                'selectCity' => $translate('请选择城市', 'Please select city'),
+                'selectDistrict' => $translate('请选择区县', 'Please select district'),
+                'selectCountryFirst' => $translate('请先选择国家/地区', 'Please select country/region first'),
+                'selectProvinceFirst' => $translate('请先选择省份', 'Please select province first'),
+                'selectCityFirst' => $translate('请先选择城市', 'Please select city first'),
+            ];
 
             $tagAttributes = \Weline\Taglib\Taglib::attributes($attributes);
             $data = [
                 'for' => implode('|', $levels),
                 'code' => $code,
                 'names' => $names,
+                'labels' => $labels,
                 'filters' => $filters,
                 'sourceUrl' => $sourceUrl,
                 'searchable' => $searchable,
@@ -118,7 +149,7 @@ class Address implements TaglibInterface
             $html = [];
             $html[] = '<?php ' . $tagAttributes . ' ?>';
             $html[] = '<div' . $idAttr . ' class="w-address ' . $escape($class) . '" style="' . $escape($style) . '" data-w-address data-address-config="' . $escape(json_encode($data, JSON_UNESCAPED_UNICODE)) . '"></div>';
-            $html[] = '<script src="/Weline/Theme/view/statics/js/address-loader.js?v=20260513-address-loader-7" data-w-address-loader data-no-extract="true" defer></script>';
+            $html[] = '<script src="/Weline/Theme/view/statics/js/address-loader.js?v=20260514-address-loader-8" data-w-address-loader data-no-extract="true" defer></script>';
 
             return implode("\n", $html);
         };

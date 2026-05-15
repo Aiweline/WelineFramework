@@ -14,6 +14,8 @@ namespace Weline\Admin\Service;
 use Weline\Acl\Model\Role;
 use Weline\Admin\Model\MenuAccessLog;
 use Weline\Backend\Model\BackendUser;
+use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
@@ -40,6 +42,11 @@ class MenuRenderService
      * @var AuthenticatedSessionInterface
      */
     private AuthenticatedSessionInterface $session;
+
+    /**
+     * @var array<string, array<string, string>>
+     */
+    private array $moduleLocaleWords = [];
 
     /**
      * 构造函数
@@ -419,7 +426,7 @@ class MenuRenderService
             $hasNodes = isset($menu['nodes']) && !empty($menu['nodes']);
             $sourceId = htmlspecialchars($menu['source_id'] ?? '');
             $icon = htmlspecialchars($menu['icon'] ?? 'mdi mdi-circle');
-            $title = __($menu['source_name'] ?? '');
+            $title = $this->translateMenuTitle((string)($menu['source_name'] ?? ''), (string)($menu['source_id'] ?? ''));
             
             // 使用 formatMenuUrl 和 isMenuActive 来判断菜单是否有 URL 和是否激活
             $menuUrl = $this->formatMenuUrlCached($menu);
@@ -507,7 +514,7 @@ class MenuRenderService
 
             $sourceId = htmlspecialchars($submenu['source_id'] ?? '');
             $icon = htmlspecialchars($submenu['icon'] ?? 'mdi mdi-circle');
-            $title = __($submenu['source_name'] ?? '');
+            $title = $this->translateMenuTitle((string)($submenu['source_name'] ?? ''), (string)($submenu['source_id'] ?? ''));
 
             // 如果没有子菜单，渲染为普通菜单项
             if ($childCount == 0) {
@@ -559,6 +566,120 @@ class MenuRenderService
         }
         
         return $html;
+    }
+
+    public function translateMenuTitle(string $title, string $sourceId = ''): string
+    {
+        if ($title === '') {
+            return '';
+        }
+
+        $moduleName = $this->extractModuleNameFromSource($sourceId);
+        if ($moduleName !== '') {
+            $moduleWords = $this->getModuleLocaleWords($moduleName, State::getLangLocal());
+            $moduleTranslate = trim((string)($moduleWords[$title] ?? ''));
+            if ($moduleTranslate !== '' && $moduleTranslate !== $title) {
+                return htmlspecialchars($moduleTranslate);
+            }
+        }
+
+        $generatedWords = $this->getGeneratedLocaleWords(State::getLangLocal());
+        $generatedTranslate = trim((string)($generatedWords[$title] ?? ''));
+        if ($generatedTranslate !== '' && $generatedTranslate !== $title) {
+            return htmlspecialchars($generatedTranslate);
+        }
+
+        return htmlspecialchars((string)__($title));
+    }
+
+    private function extractModuleNameFromSource(string $sourceId): string
+    {
+        $sourceId = trim($sourceId);
+        if ($sourceId === '' || !str_contains($sourceId, '::')) {
+            return '';
+        }
+
+        return trim(strstr($sourceId, '::', true) ?: '');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getModuleLocaleWords(string $moduleName, string $localeCode): array
+    {
+        $cacheKey = $moduleName . '|' . $localeCode;
+        if (isset($this->moduleLocaleWords[$cacheKey])) {
+            return $this->moduleLocaleWords[$cacheKey];
+        }
+
+        $this->moduleLocaleWords[$cacheKey] = [];
+        $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+        $basePath = is_array($moduleInfo) ? (string)($moduleInfo['base_path'] ?? '') : '';
+        if ($basePath === '') {
+            return [];
+        }
+
+        $csvFile = rtrim($basePath, "\\/") . DS . 'i18n' . DS . $localeCode . '.csv';
+        if (!is_file($csvFile)) {
+            return [];
+        }
+
+        $handle = @fopen($csvFile, 'r');
+        if ($handle === false) {
+            return [];
+        }
+
+        while (($row = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
+            $word = trim((string)($row[0] ?? ''));
+            $translate = trim((string)($row[1] ?? ''));
+            if ($word !== '' && $translate !== '') {
+                $this->moduleLocaleWords[$cacheKey][$word] = $translate;
+            }
+        }
+        fclose($handle);
+
+        return $this->moduleLocaleWords[$cacheKey];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getGeneratedLocaleWords(string $localeCode): array
+    {
+        $cacheKey = 'generated|' . $localeCode;
+        if (isset($this->moduleLocaleWords[$cacheKey])) {
+            return $this->moduleLocaleWords[$cacheKey];
+        }
+
+        $this->moduleLocaleWords[$cacheKey] = [];
+        $localeFile = BP . DS . 'generated' . DS . 'language' . DS . $localeCode . '.php';
+        if (!is_file($localeFile)) {
+            return [];
+        }
+
+        $words = include $localeFile;
+        if (is_array($words)) {
+            $this->flattenLocaleWords($words, $this->moduleLocaleWords[$cacheKey]);
+        }
+
+        return $this->moduleLocaleWords[$cacheKey];
+    }
+
+    /**
+     * @param array<mixed> $words
+     * @param array<string, string> $result
+     */
+    private function flattenLocaleWords(array $words, array &$result): void
+    {
+        foreach ($words as $word => $translate) {
+            if (is_array($translate)) {
+                $this->flattenLocaleWords($translate, $result);
+                continue;
+            }
+            if (is_string($word) && is_string($translate) && $word !== '' && $translate !== '') {
+                $result[$word] = $translate;
+            }
+        }
     }
 
     /**

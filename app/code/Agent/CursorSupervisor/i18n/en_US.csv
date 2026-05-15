@@ -1,18 +1,18 @@
-﻿管理代码备份（查看、恢复、清理）,管理代码备份（查看、恢复、清理）
-"检查代码是否符合 .cursor 规则","检查代码是否符合 .cursor 规则"
-"智能分析并提交 Git 更改","智能分析并提交 Git 更改"
-"启动 PHP Agent Orchestrator（分布式任务总线）","启动 PHP Agent Orchestrator（分布式任务总线）"
-"查看 PHP Agent Orchestrator 状态","查看 PHP Agent Orchestrator 状态"
-"管理 Orchestrator 任务（添加/处理/派发/清空）","管理 Orchestrator 任务（添加/处理/派发/清空）"
-执行指定的开发计划（自监督，带测试）,执行指定的开发计划（自监督，带测试）
-列出所有开发计划,列出所有开发计划
-"启动计划（将状态改为 running）","启动计划（将状态改为 running）"
-查看计划或当前执行状态,查看计划或当前执行状态
-"启动 Cursor 智能监督助手（Headless Agent Control），监控 PHP 文件变化并自动触发 Cursor 执行","启动 Cursor 智能监督助手（Headless Agent Control），监控 PHP 文件变化并自动触发 Cursor 执行"
-"查看 Cursor 智能监督助手状态","查看 Cursor 智能监督助手状态"
-"停止 Cursor 智能监督助手","停止 Cursor 智能监督助手"
-"Watchdog 子进程（由交互模式自动启动）","Watchdog 子进程（由交互模式自动启动）"
-文案,文案
-"Cursor 监控面板","Cursor 监控面板"
-"该页面用于确认 CursorSupervisor 后台入口可用。","该页面用于确认 CursorSupervisor 后台入口可用。"
+﻿管理代码备份（查看、恢复、清理）,"Manage Code Backups (View, Restore, Clean Up)"
+"检查代码是否符合 .cursor 规则","Checking code compliance with .cursor rules"
+"智能分析并提交 Git 更改","Smart analysis and submit Git changes"
+"启动 PHP Agent Orchestrator（分布式任务总线）","Start PHP Agent Orchestrator (Distributed Task Bus)"
+"查看 PHP Agent Orchestrator 状态","View PHP Agent Orchestrator status"
+"管理 Orchestrator 任务（添加/处理/派发/清空）","Manage Orchestrator Tasks (Add/Process/Dispatch/Clear)"
+执行指定的开发计划（自监督，带测试）,"Execute the specified development plan (self-supervised, with tests)"
+列出所有开发计划,"List All Development Plans"
+"启动计划（将状态改为 running）","Start plan (change status to running)"
+查看计划或当前执行状态,"View Planned or Current Execution Status"
+"启动 Cursor 智能监督助手（Headless Agent Control），监控 PHP 文件变化并自动触发 Cursor 执行","Start Cursor Intelligent Supervision Assistant (Headless Agent Control), monitor PHP file changes and automatically trigger Cursor execution"
+"查看 Cursor 智能监督助手状态","View Cursor Smart Supervision Assistant status"
+"停止 Cursor 智能监督助手","Stop Cursor Smart Supervision Assistant"
+"Watchdog 子进程（由交互模式自动启动）","Watchdog child process (automatically started by interactive mode)"
+文案,Copy
+"Cursor 监控面板","Cursor monitoring panel"
+"该页面用于确认 CursorSupervisor 后台入口可用。","This page is used to confirm the CursorSupervisor backend entry is available."
 常用监控命令,"Common monitoring commands"

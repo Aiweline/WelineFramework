@@ -1,320 +1,320 @@
-﻿"实体不存在: %s","实体不存在: %s"
-"缺少必要参数：attribute_id 或 (entity_code + attribute_code)","缺少必要参数：attribute_id 或 (entity_code + attribute_code)"
-属性不存在,属性不存在
-缺少必要参数：entity_code,缺少必要参数：entity_code
-"缺少必需参数: %1","缺少必需参数: %1"
-缺少属性ID,缺少属性ID
-"属性不存在: %1","属性不存在: %1"
-请选择所属实体,请选择所属实体
-请选择所属属性集,请选择所属属性集
-请选择所属属性组,请选择所属属性组
-请选择属性类型,请选择属性类型
-属性代码不能为空,属性代码不能为空
-属性名称不能为空,属性名称不能为空
-系统属性的代码不能修改,系统属性的代码不能修改
-"该实体下属性代码已存在: %1","该实体下属性代码已存在: %1"
-属性更新成功,属性更新成功
-属性创建成功,属性创建成功
-系统属性不能删除,系统属性不能删除
-属性删除成功,属性删除成功
-缺少实体ID,缺少实体ID
-"实体不存在: %1","实体不存在: %1"
-实体代码不能为空,实体代码不能为空
-实体名称不能为空,实体名称不能为空
-实体类不能为空,实体类不能为空
-"实体类不存在: %1","实体类不存在: %1"
-系统实体的代码不能修改,系统实体的代码不能修改
-系统实体的实体类不能修改,系统实体的实体类不能修改
-"实体代码已存在: %1","实体代码已存在: %1"
-实体更新成功,实体更新成功
-实体创建成功,实体创建成功
-系统实体不能删除,系统实体不能删除
-实体删除成功,实体删除成功
-缺少属性组ID,缺少属性组ID
-"属性组不存在: %1","属性组不存在: %1"
-属性组代码不能为空,属性组代码不能为空
-属性组名称不能为空,属性组名称不能为空
-"该属性集下属性组代码已存在: %1","该属性集下属性组代码已存在: %1"
-属性组更新成功,属性组更新成功
-属性组创建成功,属性组创建成功
-属性组删除成功,属性组删除成功
-请先选择实体,请先选择实体
-请先选择属性集,请先选择属性集
-缺少属性集ID,缺少属性集ID
-"属性集不存在: %1","属性集不存在: %1"
-属性集代码不能为空,属性集代码不能为空
-属性集名称不能为空,属性集名称不能为空
-"该实体下属性集代码已存在: %1","该实体下属性集代码已存在: %1"
-属性集更新成功,属性集更新成功
-属性集创建成功,属性集创建成功
-属性集删除成功,属性集删除成功
-"未知节点类型: %1","未知节点类型: %1"
-需要选择依赖属性,需要选择依赖属性
-需要选择依赖值,需要选择依赖值
-需要选择当前属性,需要选择当前属性
-当前属性不存在,当前属性不存在
-当前属性类型不存在,当前属性类型不存在
-当前属性类型模型不存在,当前属性类型模型不存在
-请先选择实体后操作！,请先选择实体后操作！
-请先选择属性后操作！,请先选择属性后操作！
-添加成功！,添加成功！
-添加异常！信息可能已经存在！,添加异常！信息可能已经存在！
-修改成功！,修改成功！
-修改异常！,修改异常！
-属性组已不存在！,属性组已不存在！
-该属性组中有属性，不可删除！,该属性组中有属性，不可删除！
-删除成功！,删除成功！
-删除失败！,删除失败！
-参数异常！,参数异常！
-属性已不存在！,属性已不存在！
-添加配置项成功！,添加配置项成功！
-添加配置项失败！,添加配置项失败！
-请选择要操作的配置项！,请选择要操作的配置项！
-配置项不存在！,配置项不存在！
-操作成功：,操作成功：
-配置项删除失败，请联系管理员,配置项删除失败，请联系管理员
-操作成功！,操作成功！
-操作失败，请检查编码或配置！,操作失败，请检查编码或配置！
-添加异常！可能已存在该属性集！,添加异常！可能已存在该属性集！
-编辑异常！,编辑异常！
-属性集不存在！,属性集不存在！
-属性集内还有属性！不能删除！,属性集内还有属性！不能删除！
-属性集内还有属性组！不能删除！,属性集内还有属性组！不能删除！
-找不到要操作的代码！,找不到要操作的代码！
-实体不存在,实体不存在
-请先选择属性集后操作！,请先选择属性集后操作！
-请先选择属性组后操作！,请先选择属性组后操作！
-非法请求!,非法请求!
-保存成功,"Save successful"
-属性不存在！,属性不存在！
-删除失败，请联系管理员,删除失败，请联系管理员
-删除成功,"Delete successful"
-非法请求,非法请求
-属性集不存在,属性集不存在
-属性组不存在,属性组不存在
-缺少必填字段,缺少必填字段
-未知类型,未知类型
-记录不存在,记录不存在
-系统记录不能删除,系统记录不能删除
-Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%{1},Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%{1}
-Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%{1},Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%{1}
-Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%{1},Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%{1}
-Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%{1},Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%{1}
-实体（%{1}）已经存在属性（%{2}）,实体（%{1}）已经存在属性（%{2}）
-警告：属性不属于当前Eav实体！当前实体：%{1}，当前属性：%{2}，当前属性所属实体：%{3},警告：属性不属于当前Eav实体！当前实体：%{1}，当前属性：%{2}，当前属性所属实体：%{3}
-请传入类型编码！,请传入类型编码！
-属性类型不存在！类型：%{1},属性类型不存在！类型：%{1}
-属性所属实体不存在！实体：%{1},属性所属实体不存在！实体：%{1}
-"当前实体不存在 %{1}","当前实体不存在 %{1}"
-类型不存在:%{1},类型不存在:%{1}
-"属性类型添加失败 %{1}","属性类型添加失败 %{1}"
-属性不存在！无法获取属性类型字段。,属性不存在！无法获取属性类型字段。
-属性类型不存在！无法获取属性类型字段。,属性类型不存在！无法获取属性类型字段。
-此属性没有样本，无法为属性值设置样本！,此属性没有样本，无法为属性值设置样本！
-"模型类: %{1} 必须是 EavModelInterface 接口类的实例","模型类: %{1} 必须是 EavModelInterface 接口类的实例"
-请输入,请输入
-Eav属性输入：缺少select选项,Eav属性输入：缺少select选项
-依赖：,依赖：
-属性没有实体！,属性没有实体！
-该属性没有entity实体！,该属性没有entity实体！
-该属性没有code代码！,该属性没有code代码！
-属性值保存失败！信息：%{1},属性值保存失败！信息：%{1}
-单值属性只能接收一个值！当前值：%{1},单值属性只能接收一个值！当前值：%{1}
-单值属性不支持数组或者对象类型值：%{1},单值属性不支持数组或者对象类型值：%{1}
-不接受除string和int以外的值！,不接受除string和int以外的值！
-"属性类型不存在！属性：%{name}, 属性代码：%{code} 属性实体：%{entity} 属性实体代码：%{entity_code}","属性类型不存在！属性：%{name}, 属性代码：%{code} 属性实体：%{entity} 属性实体代码：%{entity_code}"
-鍏朵粬,鍏朵粬
--请选择-%{1}-依赖项-,-请选择-%{1}-依赖项-
-默认选项1,默认选项1
-默认选项2,默认选项2
+﻿实体不存在: %{1},实体不存在: %{1}
+缺少必要参数：attribute_id 或 (entity_code + attribute_code),Missing required parameter: attribute_id or (entity_code + attribute_code)
+属性不存在,Attribute does not exist
+缺少必要参数：entity_code,Missing required parameter: entity_code
+缺少必需参数: %{1},缺少必需参数: %{1}
+缺少属性ID,Missing attribute ID
+属性不存在: %{1},属性不存在: %{1}
+请选择所属实体,Select the owning entity
+请选择所属属性集,Select the owning attribute set
+请选择所属属性组,Select the owning attribute group
+请选择属性类型,Select attribute type
+属性代码不能为空,Attribute code cannot be empty
+属性名称不能为空,Attribute name cannot be empty
+系统属性的代码不能修改,The code of the system attribute cannot be modified
+该实体下属性代码已存在: %{1},该实体下属性代码已存在: %{1}
+属性更新成功,Attribute updated successfully
+属性创建成功,Attribute created successfully
+系统属性不能删除,System attribute cannot be deleted
+属性删除成功,Attribute deleted successfully
+缺少实体ID,Missing entity ID
+实体不存在: %{1},实体不存在: %{1}
+实体代码不能为空,Entity code cannot be empty
+实体名称不能为空,Entity name cannot be empty
+实体类不能为空,Entity class cannot be empty
+实体类不存在: %{1},实体类不存在: %{1}
+系统实体的代码不能修改,The code of the system entity cannot be modified
+系统实体的实体类不能修改,The entity class of the system entity cannot be modified
+实体代码已存在: %{1},实体代码已存在: %{1}
+实体更新成功,Entity updated successfully
+实体创建成功,Entity created successfully
+系统实体不能删除,System entity cannot be deleted
+实体删除成功,Entity deleted successfully
+缺少属性组ID,Missing attribute group ID
+属性组不存在: %{1},属性组不存在: %{1}
+属性组代码不能为空,Attribute group code cannot be empty
+属性组名称不能为空,Attribute group name cannot be empty
+该属性集下属性组代码已存在: %{1},该属性集下属性组代码已存在: %{1}
+属性组更新成功,Attribute group updated successfully
+属性组创建成功,Attribute group created successfully
+属性组删除成功,Attribute group deleted successfully
+请先选择实体,Please select an entity first
+请先选择属性集,Please select an attribute set first
+缺少属性集ID,Missing attribute set ID
+属性集不存在: %{1},属性集不存在: %{1}
+属性集代码不能为空,Attribute set code cannot be empty
+属性集名称不能为空,Attribute set name cannot be empty
+该实体下属性集代码已存在: %{1},该实体下属性集代码已存在: %{1}
+属性集更新成功,Attribute set updated successfully
+属性集创建成功,Attribute set created successfully
+属性集删除成功,Attribute set deleted successfully
+未知节点类型: %{1},未知节点类型: %{1}
+需要选择依赖属性,Need to select a dependency attribute
+需要选择依赖值,Need to select a dependency value
+需要选择当前属性,Need to select the current attribute
+当前属性不存在,Current attribute does not exist
+当前属性类型不存在,Current attribute type does not exist
+当前属性类型模型不存在,The current attribute type model does not exist.
+请先选择实体后操作！,Please select an entity before proceeding!
+请先选择属性后操作！,Please select an attribute before proceeding!
+添加成功！,Add Success!
+添加异常！信息可能已经存在！,Add Error! Information may already exist!
+修改成功！,Modification successful!
+修改异常！,Modification Exception!
+属性组已不存在！,Attribute group no longer exists!
+该属性组中有属性，不可删除！,There are properties in this property group and it cannot be deleted!
+删除成功！,Deletion successful!
+删除失败！,Deletion failed!
+参数异常！,Parameter exception!
+属性已不存在！,Attribute no longer exists!
+添加配置项成功！,Successfully Added Configuration Item!
+添加配置项失败！,Failed to Add Configuration Item!
+请选择要操作的配置项！,Please select the configuration item to operate on!
+配置项不存在！,Configuration item does not exist!
+操作成功：,Operation successful:
+配置项删除失败，请联系管理员,"Failed to delete configuration item, please contact the administrator"
+操作成功！,Operation successful!
+操作失败，请检查编码或配置！,"Operation failed, please check the encoding or configuration!"
+添加异常！可能已存在该属性集！,Add Error! This attribute set may already exist!
+编辑异常！,Edit exception!
+属性集不存在！,Attribute set does not exist!
+属性集内还有属性！不能删除！,There are still attributes in the attribute set! Cannot delete!
+属性集内还有属性组！不能删除！,There are still attribute groups in the attribute set! Cannot delete!
+找不到要操作的代码！,Cannot find the code to operate!
+实体不存在,Entity Does Not Exist
+请先选择属性集后操作！,Please select an attribute set before proceeding!
+请先选择属性组后操作！,Please select an attribute group first!
+非法请求!,Invalid Request!
+保存成功,Save successful
+属性不存在！,Attribute does not exist!
+删除失败，请联系管理员,"Deletion failed, please contact the administrator"
+删除成功,Delete successful
+非法请求,Invalid Request
+属性集不存在,Attribute set does not exist
+属性组不存在,Attribute group does not exist
+缺少必填字段,Missing required field
+未知类型,Unknown type
+记录不存在,Record Not Found
+系统记录不能删除,System record cannot be deleted
+Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%{1},The Eav model does not set the entity code entity_code constant or the entity_code attribute is not set. Eav class: %{1}
+Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%{1},The Eav model does not set the entity name entity_name constant or the entity_name attribute is not set. Eav class: %{1}
+Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%{1},The Eav model does not set the entity code eav_entity_id_field_type constant or the eav_entity_id_field_type attribute is not set. Eav class: %{1}
+Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%{1},The Eav model does not set the entity name eav_entity_id_field_length constant or the eav_entity_id_field_length attribute is not set. Eav class: %{1}
+实体（%{1}）已经存在属性（%{2}）,Entity (%{1}) already has attribute (%{2})
+警告：属性不属于当前Eav实体！当前实体：%{1}，当前属性：%{2}，当前属性所属实体：%{3},"Warning: Attribute does not belong to the current Eav entity! Current entity: %{1}, current attribute: %{2}, entity to which the current attribute belongs: %{3}"
+请传入类型编码！,Please provide the type code!
+属性类型不存在！类型：%{1},Attribute type does not exist! Type: %{1}
+属性所属实体不存在！实体：%{1},The entity to which the attribute belongs does not exist! Entity: %{1}
+当前实体不存在 %{1},Current entity does not exist %{1}
+类型不存在:%{1},Type does not exist: %{1}
+属性类型添加失败 %{1},Failed to add attribute type %{1}
+属性不存在！无法获取属性类型字段。,Attribute does not exist! Unable to get attribute type field.
+属性类型不存在！无法获取属性类型字段。,Attribute type does not exist! Unable to retrieve attribute type fields.
+此属性没有样本，无法为属性值设置样本！,"This property has no samples, so sample values cannot be set for it!"
+模型类: %{1} 必须是 EavModelInterface 接口类的实例,Model class: %{1} must be an instance of the EavModelInterface interface
+请输入,Please enter
+Eav属性输入：缺少select选项,Eav attribute input: select option missing
+依赖：,Dependencies:
+属性没有实体！,Attribute has no entity!
+该属性没有entity实体！,This attribute has no entity!
+该属性没有code代码！,This attribute has no code!
+属性值保存失败！信息：%{1},Failed to save attribute value! Info: %{1}
+单值属性只能接收一个值！当前值：%{1},Single-value attribute can only accept one value! Current value: %{1}
+单值属性不支持数组或者对象类型值：%{1},Single-value attribute does not support array or object type values: %{1}
+不接受除string和int以外的值！,Values ​​other than string and int are not accepted!
+"属性类型不存在！属性：%{name}, 属性代码：%{code} 属性实体：%{entity} 属性实体代码：%{entity_code}","Attribute type does not exist! Attribute: %{name}, Attribute Code: %{code}, Attribute Entity: %{entity}, Attribute Entity Code: %{entity_code}"
+鍏朵粬,Other
+-请选择-%{1}-依赖项-,- Please select -%{1}-dependencies-
+默认选项1,Default Option 1
+默认选项2,Default Option 2
 是,Yes
 否,No
-实体,实体
-属性集,属性集
-属性组,属性组
-属性,属性
-加载失败,加载失败
-网络错误,网络错误
-加载中...,加载中...
-暂无数据,暂无数据
+实体,Entity
+属性集,Attribute Set
+属性组,Attribute Group
+属性,Attribute
+加载失败,Failed to load
+网络错误,Network error
+加载中...,Loading...
+暂无数据,No data
 提交,Submit
-下一步,下一步
-温馨提示！,"Friendly Reminder!"
-好的,好的
-错误！,错误！
-未知错误,未知错误
-未知错误！,未知错误！
-请求失败,请求失败
-属性代码,属性代码
+下一步,Next step
+温馨提示！,Friendly Reminder!
+好的,OK
+错误！,Error!
+未知错误,Unknown error
+未知错误！,Unknown error!
+请求失败,Request failed
+属性代码,Attribute Code
 名称,Name
 状态,Status
-属性配置项,属性配置项
-更新时间,"Update time"
-创建时间,"Create time"
+属性配置项,Attribute configuration item
+更新时间,Update time
+创建时间,Create time
 操作,Operation
-暂无配置项。,暂无配置项。
+暂无配置项。,No configuration items.
 保存,Save
 取消,Cancel
-添加配置项,添加配置项
-配置项,配置项
+添加配置项,Add Configuration Item
+配置项,Configuration item
 代码,Code
 添加,Add
 编辑,Edit
 删除,Delete
 关闭,Close
-每个配置项名称,每个配置项名称
-请输入配置项名称,请输入配置项名称
-每个配置项应该有自己的代码，请填写对应实体和属性时的唯一编码。,每个配置项应该有自己的代码，请填写对应实体和属性时的唯一编码。
-请输入代码,请输入代码
-修改提示,修改提示
-编辑提示,编辑提示
-重试,重试
-通知,通知
-你确定要删除这个配置项么?,你确定要删除这个配置项么?
-数据校验,数据校验
-填写的配置项已经存在，需要替换么！,填写的配置项已经存在，需要替换么！
-替换,替换
-再次编辑,再次编辑
-操作失败,"Operation failed"
-重新编辑,重新编辑
-选择实体,选择实体
-你选择了,你选择了
-选择属性集,选择属性集
-选择属性组,选择属性组
-你创建了,你创建了
-配置项：,配置项：
-个,个
-搜索实体,搜索实体
-搜索【实体-属性集-属性组】,搜索【实体-属性集-属性组】
-填写正确！,填写正确！
-请正确填写正确属性代码，最小长度3个字符，最大长度60个字符,请正确填写正确属性代码，最小长度3个字符，最大长度60个字符
-属性名,属性名
-请正确填写正确属性名，最小长度3个字符，最大长度128个字符,请正确填写正确属性名，最小长度3个字符，最大长度128个字符
-属性类型,属性类型
-必须选择一个类型,必须选择一个类型
-是否启用,是否启用
+每个配置项名称,Each configuration item name
+请输入配置项名称,Please enter the configuration item name
+每个配置项应该有自己的代码，请填写对应实体和属性时的唯一编码。,Each configuration item should have its own code; please enter the unique code when filling in the corresponding entity and attribute.
+请输入代码,Enter code
+修改提示,Modification prompt
+编辑提示,Edit prompt
+重试,Retry
+通知,Notification
+你确定要删除这个配置项么?,Are you sure you want to delete this configuration item?
+数据校验,Data validation
+填写的配置项已经存在，需要替换么！,"The entered configuration item already exists, do you want to replace it?"
+替换,Replace
+再次编辑,Edit again
+操作失败,Operation failed
+重新编辑,Re-edit
+选择实体,Select Entity
+你选择了,You selected
+选择属性集,Select Attribute Set
+选择属性组,Select Attribute Group
+你创建了,You created
+配置项：,Configuration item:
+个,indivual
+搜索实体,Search Entity
+搜索【实体-属性集-属性组】,Search [Entity - Property Set - Property Group]
+填写正确！,Correct entry!
+请正确填写正确属性代码，最小长度3个字符，最大长度60个字符,"Please fill in the correct attribute code, minimum length 3 characters, maximum length 60 characters"
+属性名,Attribute Name
+请正确填写正确属性名，最小长度3个字符，最大长度128个字符,"Please fill in the correct attribute name, minimum length 3 characters, maximum length 128 characters"
+属性类型,Attribute Type
+必须选择一个类型,Must select a type
+是否启用,Enable
 禁用,Disable
 启用,Enable
-鍓嶇鍙,鍓嶇鍙
-鍚?,鍚?
-鏄?,鏄?
-鍙瓫閫?,鍙瓫閫?
-鍙悳绱?,鍙悳绱?
-高级设置,高级设置
-是否多值,是否多值
-必须选择一个多值类型,必须选择一个多值类型
-是否有配置项,是否有配置项
-没有特定配置项,没有特定配置项
-有特定配置项,有特定配置项
-有配置项则只能选择配置项内设置的值，没有配置项可以输入任意值。,有配置项则只能选择配置项内设置的值，没有配置项可以输入任意值。
-是否是系统生成,是否是系统生成
-非系统属性,非系统属性
-系统属性,系统属性
-仅做标记是否由系统生成，或者非系统生成（用户自定义）。,仅做标记是否由系统生成，或者非系统生成（用户自定义）。
+鍓嶇鍙,Frontend Visible
+鍚?,And
+鏄?,Yes
+鍙瓫閫?,Filterable?
+鍙悳绱?,Searchable?
+高级设置,Advanced settings
+是否多值,Multi-value
+必须选择一个多值类型,Must select a multi-value type
+是否有配置项,Has configuration item
+没有特定配置项,No specific configuration items
+有特定配置项,Has specific configuration items
+有配置项则只能选择配置项内设置的值，没有配置项可以输入任意值。,"If there are configuration items, only values set within the configuration items can be selected; if there are no configuration items, any value can be entered."
+是否是系统生成,Is system-generated
+非系统属性,Non-system Attribute
+系统属性,System Attribute
+仅做标记是否由系统生成，或者非系统生成（用户自定义）。,Only marks whether it is system-generated or non-system-generated (user-defined).
 ID,ID
-配置值,配置值
-颜色,颜色
-图片,图片
-文本,文本
-图片选择器,图片选择器
-（双击选中图片）最大支持100kb,（双击选中图片）最大支持100kb
+配置值,Configuration Value
+颜色,Color
+图片,Image
+文本,Text
+图片选择器,Image picker
+（双击选中图片）最大支持100kb,(Double-click to select image) Max 100KB supported
 确定,OK
-请输入要查找的实体名或者实体代码,请输入要查找的实体名或者实体代码
-搜索实体结果,搜索实体结果
-"请输入要查找的 属性集名 或者 属性集代码","请输入要查找的 属性集名 或者 属性集代码"
-"请输入要查找的 属性集名或者 属性集代码","请输入要查找的 属性集名或者 属性集代码"
-"搜索 属性集 结果","搜索 属性集 结果"
-请输入要查找的【实体-属性集-属性组】名或者【实体-属性集-属性组】代码,请输入要查找的【实体-属性集-属性组】名或者【实体-属性集-属性组】代码
-搜索【实体-属性集-属性组】结果,搜索【实体-属性集-属性组】结果
-编辑配置项,编辑配置项
-每个配置颜色，请填写,每个配置颜色，请填写
-请选择,请选择
-每个配置的图片，请选择,每个配置的图片，请选择
-请选中图片,请选中图片
-每个配置的文本，请填写,每个配置的文本，请填写
-请输入文本,请输入文本
-请先创建属性名再操作！,请先创建属性名再操作！
-当前属性名为空！无法创建属性配置项！,当前属性名为空！无法创建属性配置项！
-请先创建属性再操作！,请先创建属性再操作！
-当前属性代码为空！无法创建属性配置项！,当前属性代码为空！无法创建属性配置项！
-请先选择属性类型再操作！,请先选择属性类型再操作！
-当前属性类型为空！无法创建属性配置项！,当前属性类型为空！无法创建属性配置项！
-请先选择实体再操作！,请先选择实体再操作！
-当前实体为空！无法创建属性配置项！,当前实体为空！无法创建属性配置项！
-请先创建属性集再操作！,请先创建属性集再操作！
-当前属性集代码为空！无法创建属性配置项！,当前属性集代码为空！无法创建属性配置项！
-请先创建属性组再操作！,请先创建属性组再操作！
-当前属性组代码为空！无法创建属性配置项！,当前属性组代码为空！无法创建属性配置项！
-获取已填写数据,获取已填写数据
-第5部分的数据,第5部分的数据
-当前实体为空！无法创建属性！,当前实体为空！无法创建属性！
-当前属性集代码为空！无法创建属性！,当前属性集代码为空！无法创建属性！
-请先选择属性组再操作！,请先选择属性组再操作！
-当前属性组代码为空！无法创建属性！,当前属性组代码为空！无法创建属性！
-属性已存在！,属性已存在！
-该属性已存在！,该属性已存在！
+请输入要查找的实体名或者实体代码,Please enter the entity name or entity code to search
+搜索实体结果,Search Entity Results
+请输入要查找的 属性集名 或者 属性集代码,Please enter the attribute set name or attribute set code to search for
+请输入要查找的 属性集名或者 属性集代码,Please enter the attribute set name or attribute set code to search
+搜索 属性集 结果,Search property set results
+请输入要查找的【实体-属性集-属性组】名或者【实体-属性集-属性组】代码,Please enter the [Entity-Attribute Set-Attribute Group] name or [Entity-Attribute Set-Attribute Group] code to search
+搜索【实体-属性集-属性组】结果,Search [Entity - Property Set - Property Group] results
+编辑配置项,Edit Configuration Item
+每个配置颜色，请填写,"For each configured color, please fill in"
+请选择,Please select
+每个配置的图片，请选择,"For each configured image, please select"
+请选中图片,Please select an image
+每个配置的文本，请填写,"For each configured text, please fill in"
+请输入文本,Please enter text
+请先创建属性名再操作！,Please create the attribute name first before operating!
+当前属性名为空！无法创建属性配置项！,Current attribute name is empty! Cannot create attribute configuration item!
+请先创建属性再操作！,Please create the attribute first before operating!
+当前属性代码为空！无法创建属性配置项！,Current attribute code is empty! Cannot create attribute configuration item!
+请先选择属性类型再操作！,Please select an attribute type before proceeding!
+当前属性类型为空！无法创建属性配置项！,The current attribute type is empty! Unable to create attribute configuration item.
+请先选择实体再操作！,Please select an entity first!
+当前实体为空！无法创建属性配置项！,Current entity is empty! Cannot create attribute configuration item!
+请先创建属性集再操作！,Please create the attribute set first before operating!
+当前属性集代码为空！无法创建属性配置项！,The current attribute set code is empty! Unable to create attribute configuration item.
+请先创建属性组再操作！,Please create the attribute group first before operating!
+当前属性组代码为空！无法创建属性配置项！,The current attribute group code is empty! Unable to create attribute configuration item.
+获取已填写数据,Get filled data
+第5部分的数据,Data for part 5
+当前实体为空！无法创建属性！,Current entity is empty! Cannot create attribute!
+当前属性集代码为空！无法创建属性！,The current attribute set code is empty! Unable to create attribute.
+请先选择属性组再操作！,Please select an attribute group before proceeding!
+当前属性组代码为空！无法创建属性！,The current attribute group code is empty! Unable to create attribute.
+属性已存在！,Attribute already exists!
+该属性已存在！,The attribute already exists!
 提示,Tip
-确认删除当前列吗？,确认删除当前列吗？
-请先填写配置项和代码再操作！,请先填写配置项和代码再操作！
-当前属性配置项或代码为空！,当前属性配置项或代码为空！
-请先选择颜色再操作！,请先选择颜色再操作！
-当前属性颜色为空！,当前属性颜色为空！
-请先选择图片再操作！,请先选择图片再操作！
-当前属性图片为空！,当前属性图片为空！
-请先填写文本再操作！,请先填写文本再操作！
-当前属性文本为空！,当前属性文本为空！
-属性组表单,属性组表单
-属性组信息编辑。,属性组信息编辑。
-组名,组名
-组代码,组代码
-继续新增,继续新增
-"Eav > 属性组","Eav > 属性组"
-系统配置,系统配置
+确认删除当前列吗？,Are you sure you want to delete the current column?
+请先填写配置项和代码再操作！,Please fill in the configuration item and code first before operating!
+当前属性配置项或代码为空！,The current attribute configuration item or code is empty!
+请先选择颜色再操作！,Please select a color before proceeding!
+当前属性颜色为空！,The current attribute color is empty!
+请先选择图片再操作！,Please select an image first!
+当前属性图片为空！,Current attribute image is empty!
+请先填写文本再操作！,Please fill in the text first before operating!
+当前属性文本为空！,Current attribute text is empty!
+属性组表单,Attribute group form
+属性组信息编辑。,Editing attribute group information.
+组名,Group Name
+组代码,Group Code
+继续新增,Continue Adding New
+Eav > 属性组,Eav > attribute group
+系统配置,System Configuration
 Eav,Eav
-Eav属性组,Eav属性组
-Eav属性归组,Eav属性归组
-将属性归组方便管理,将属性归组方便管理
-所属实体,所属实体
-所属属性集,所属属性集
-Eav>属性管理,Eav>属性管理
-Eav实体-属性管理,Eav实体-属性管理
-管理实体的属性,管理实体的属性
-您当前管理的属性实体是：,您当前管理的属性实体是：
-实体ID,实体ID
-系统实体,系统实体
-属性配置项弹窗,属性配置项弹窗
-保存更改,保存更改
-确认删除,确认删除
+Eav属性组,Eav attribute group
+Eav属性归组,Eav attribute grouping
+将属性归组方便管理,Group attributes for easier management
+所属实体,Parent Entity
+所属属性集,Parent Attribute Set
+Eav>属性管理,Eav>Attribute Management
+Eav实体-属性管理,Eav entity-attribute management
+管理实体的属性,Manage Entity Attributes
+您当前管理的属性实体是：,The property entity you are currently managing is:
+实体ID,Entity ID
+系统实体,System Entity
+属性配置项弹窗,Attribute configuration item popup
+保存更改,Save changes
+确认删除,Confirm deletion
 确认,Confirm
-属性集名,属性集名
-属性集代码,属性集代码
-修改通知,修改通知
-"Eav > 属性集","Eav > 属性集"
-Eav属性集,Eav属性集
-将属性归档为集-方便管理,将属性归档为集-方便管理
-编码,编码
-"Eav > 实体","Eav > 实体"
-Eav实体,Eav实体
+属性集名,Attribute set name
+属性集代码,Attribute set code
+修改通知,Modification notification
+Eav > 属性集,Eav > attribute set
+Eav属性集,Eav attribute set
+将属性归档为集-方便管理,Archive attributes into sets for easier management
+编码,Encoding
+Eav > 实体,Eav > Entity
+Eav实体,Eav entity
 修改,Modify
-类,类
-实体主键字段类型,实体主键字段类型
-实体主键字段长度,实体主键字段长度
-是否系统生成,是否系统生成
-EAV管理,EAV管理
-新建,新建
-新建实体,新建实体
-新建属性集,新建属性集
-新建属性组,新建属性组
-新建属性,新建属性
-选择左侧节点查看详情,选择左侧节点查看详情
-点击左侧树形导航中的节点，在此处查看和编辑详情,点击左侧树形导航中的节点，在此处查看和编辑详情
-搜索实体、属性集、属性...,搜索实体、属性集、属性...
-请选择属性集,请选择属性集
-暂无属性集,暂无属性集
-属性集详情,属性集详情
-属性集名称,属性集名称
-请输入属性集名称,请输入属性集名称
-保存失败,保存失败
-删除失败,删除失败
-确定要删除此属性集吗？,确定要删除此属性集吗？
-暂无属性数据,暂无属性数据
+类,Class
+实体主键字段类型,Entity primary key field type
+实体主键字段长度,Entity primary key field length
+是否系统生成,Is system-generated
+EAV管理,EAV management
+新建,Create
+新建实体,New Entity
+新建属性集,New Attribute Set
+新建属性组,New Attribute Group
+新建属性,New Attribute
+选择左侧节点查看详情,Select a left node to view details
+点击左侧树形导航中的节点，在此处查看和编辑详情,Click a node in the tree navigation on the left to view and edit details here.
+搜索实体、属性集、属性...,"Search Entity, Attribute Set, Attribute..."
+请选择属性集,Select attribute set
+暂无属性集,No attribute sets
+属性集详情,Attribute set details
+属性集名称,Attribute set name
+请输入属性集名称,Enter attribute set name
+保存失败,Save Failed
+删除失败,Deletion failed
+确定要删除此属性集吗？,Are you sure you want to delete this attribute set?
+暂无属性数据,No attribute data

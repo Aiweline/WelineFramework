@@ -1,80 +1,80 @@
-﻿账户绑定,账户绑定
-无效的请求方法,无效的请求方法
-请输入邮箱和密码,请输入邮箱和密码
-绑定失败：,绑定失败：
-解绑失败：,解绑失败：
-下载历史,下载历史
-缺少记录ID,缺少记录ID
-记录不存在,记录不存在
-记录已删除,记录已删除
-删除失败：,删除失败：
-历史记录已清空,历史记录已清空
-清空失败：,清空失败：
-应用商城,应用商城
-请先绑定官网账户,请先绑定官网账户
-获取授权令牌失败,获取授权令牌失败
-获取模块列表失败：,获取模块列表失败：
-缺少许可证密钥,缺少许可证密钥
-缺少模块ID,缺少模块ID
-模块安装成功,模块安装成功
-模块安装失败：,模块安装失败：
-安装失败：,安装失败：
-我的模块,我的模块
-模块不存在,模块不存在
-缺少模块标识,缺少模块标识
-卸载失败：,卸载失败：
-模块已卸载,模块已卸载
-检查更新失败：,检查更新失败：
-许可证管理,许可证管理
-获取授权令牌失败，请重新绑定账户,获取授权令牌失败，请重新绑定账户
-许可证激活成功,许可证激活成功
-激活失败,激活失败
-激活失败：,激活失败：
-验证失败：,验证失败：
-续订失败：,续订失败：
-应用下载完成,应用下载完成
-当应用市场模块下载完成后触发，用于安装前检查和下载日志处理。,当应用市场模块下载完成后触发，用于安装前检查和下载日志处理。
-子站应用商城，支持绑定官网账户、浏览下载模块、自动安装已购模块,子站应用商城，支持绑定官网账户、浏览下载模块、自动安装已购模块
-账户验证失败,账户验证失败
-账户绑定已更新,账户绑定已更新
-账户绑定成功,账户绑定成功
-账户绑定失败：,账户绑定失败：
-"OAuth 授权失败","OAuth 授权失败"
-获取用户信息失败,获取用户信息失败
-"OAuth 绑定失败：","OAuth 绑定失败："
-未找到已绑定的账户,未找到已绑定的账户
-账户已解绑,账户已解绑
-令牌无效，请重新绑定账户,令牌无效，请重新绑定账户
-令牌刷新失败,令牌刷新失败
-令牌已刷新,令牌已刷新
-令牌刷新失败：,令牌刷新失败：
-未绑定账户,未绑定账户
-账户令牌无效，请重新绑定,账户令牌无效，请重新绑定
-获取许可证列表失败：,获取许可证列表失败：
-令牌为空,令牌为空
-令牌格式无效,令牌格式无效
-令牌数据损坏,令牌数据损坏
-令牌解密失败,令牌解密失败
-下载失败,下载失败
-下载响应数据不完整,下载响应数据不完整
-文件校验失败,文件校验失败
-模块下载失败：,模块下载失败：
-模块文件不存在,模块文件不存在
-模块依赖不满足：,模块依赖不满足：
-"模块结构无效：找不到 register.php","模块结构无效：找不到 register.php"
-"模块结构无效：无法解析 register.php","模块结构无效：无法解析 register.php"
-模块结构无效：缺少模块名,模块结构无效：缺少模块名
-"模块名格式无效，必须是 Vendor_Module 格式","模块名格式无效，必须是 Vendor_Module 格式"
-"下载文件失败，HTTP 状态码：","下载文件失败，HTTP 状态码："
-可安装模块,可安装模块
-否,否
-是,是
-当前已绑定官网账户：,当前已绑定官网账户：
-未知邮箱,未知邮箱
-当前未绑定官网账户，请先完成绑定。,当前未绑定官网账户，请先完成绑定。
-下载历史数据已加载，可继续扩展为列表展示。,下载历史数据已加载，可继续扩展为列表展示。
-官网账户已绑定，可开始浏览并安装模块。,官网账户已绑定，可开始浏览并安装模块。
-尚未绑定官网账户，请先前往“账户绑定”完成绑定。,尚未绑定官网账户，请先前往“账户绑定”完成绑定。
-已安装模块数据已就绪，可继续扩展为表格展示。,已安装模块数据已就绪，可继续扩展为表格展示。
-请先绑定官网账户后再管理许可证。,请先绑定官网账户后再管理许可证。
-已加载许可证列表，可通过接口执行激活、校验和续订。,已加载许可证列表，可通过接口执行激活、校验和续订。
+﻿账户绑定,"Account Binding"
+无效的请求方法,"Invalid request method"
+请输入邮箱和密码,"Please enter email and password"
+绑定失败：,"Binding failed:"
+解绑失败：,"Unbinding failed:"
+下载历史,"Download History"
+缺少记录ID,"Missing record ID"
+记录不存在,"Record does not exist"
+记录已删除,"Record deleted"
+删除失败：,"Delete failed:"
+历史记录已清空,"History has been cleared"
+清空失败：,"Clear failed:"
+应用商城,"App Store"
+请先绑定官网账户,"Please bind the official site account first"
+获取授权令牌失败,"Failed to get authorization token"
+获取模块列表失败：,"Failed to fetch module list:"
+缺少许可证密钥,"Missing license key"
+缺少模块ID,"Missing module ID"
+模块安装成功,"Module installed successfully"
+模块安装失败：,"Module installation failed:"
+安装失败：,"Installation failed:"
+我的模块,"My Modules"
+模块不存在,"Module does not exist"
+缺少模块标识,"Missing module identifier"
+卸载失败：,"Uninstall failed:"
+模块已卸载,"Module uninstalled"
+检查更新失败：,"Failed to check for updates:"
+许可证管理,"License Management"
+获取授权令牌失败，请重新绑定账户,"Failed to get authorization token. Please rebind the account."
+许可证激活成功,"License activated successfully"
+激活失败,"Activation failed"
+激活失败：,"Activation failed:"
+验证失败：,"Validation failed:"
+续订失败：,"Renewal failed:"
+应用下载完成,"Application download completed"
+当应用市场模块下载完成后触发，用于安装前检查和下载日志处理。,"Triggered after App Store module downloads complete, for pre-install checks and download log handling."
+子站应用商城，支持绑定官网账户、浏览下载模块、自动安装已购模块,"Subsite App Store supports binding the official site account, browsing downloadable modules, and automatically installing purchased modules."
+账户验证失败,"Account verification failed"
+账户绑定已更新,"Account binding updated"
+账户绑定成功,"Account binding succeeded"
+账户绑定失败：,"Account binding failed:"
+"OAuth 授权失败","OAuth authorization failed"
+获取用户信息失败,"Failed to get user information"
+"OAuth 绑定失败：","OAuth binding failed:"
+未找到已绑定的账户,"No bound account found"
+账户已解绑,"Account unbound"
+令牌无效，请重新绑定账户,"Token is invalid. Please rebind the account."
+令牌刷新失败,"Token refresh failed"
+令牌已刷新,"Token refreshed"
+令牌刷新失败：,"Token refresh failed:"
+未绑定账户,"No account bound"
+账户令牌无效，请重新绑定,"Account token is invalid. Please rebind."
+获取许可证列表失败：,"Failed to fetch license list:"
+令牌为空,"Token is empty"
+令牌格式无效,"Token format is invalid"
+令牌数据损坏,"Token data is corrupted"
+令牌解密失败,"Token decryption failed"
+下载失败,"Download failed"
+下载响应数据不完整,"Download response data is incomplete"
+文件校验失败,"File verification failed"
+模块下载失败：,"Module download failed:"
+模块文件不存在,"Module file does not exist"
+模块依赖不满足：,"Module dependencies are not satisfied:"
+"模块结构无效：找不到 register.php","Invalid module structure: register.php not found"
+"模块结构无效：无法解析 register.php","Invalid module structure: failed to parse register.php"
+模块结构无效：缺少模块名,"Invalid module structure: missing module name"
+"模块名格式无效，必须是 Vendor_Module 格式","Invalid module name format. Expected Vendor_Module."
+"下载文件失败，HTTP 状态码：","Failed to download file. HTTP status code:"
+可安装模块,"Installable Modules"
+否,No
+是,Yes
+当前已绑定官网账户：,"Currently bound official site account:"
+未知邮箱,"Unknown email"
+当前未绑定官网账户，请先完成绑定。,"No official site account is currently bound. Complete the binding first."
+下载历史数据已加载，可继续扩展为列表展示。,"Download history has loaded and is ready for list rendering."
+官网账户已绑定，可开始浏览并安装模块。,"The official site account is bound. You can now browse and install modules."
+尚未绑定官网账户，请先前往“账户绑定”完成绑定。,"No official site account is bound yet. Complete Account Binding first."
+已安装模块数据已就绪，可继续扩展为表格展示。,"Installed module data is ready for table rendering."
+请先绑定官网账户后再管理许可证。,"Bind the official site account before managing licenses."
+已加载许可证列表，可通过接口执行激活、校验和续订。,"The license list has loaded. Activation, validation, and renewal are available via API."

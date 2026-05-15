@@ -18,7 +18,7 @@ class PageSeoContextResolver
      */
     public function resolve($template, array $options = []): array
     {
-        $meta = $this->toArray($this->readTemplate($template, 'meta'));
+        $meta = $this->pageMeta($template);
         $seo = $this->toArray($this->readTemplate($template, 'seo'));
         $product = $this->readTemplate($template, 'product');
         $category = $this->readTemplate($template, 'category');
@@ -35,7 +35,7 @@ class PageSeoContextResolver
             'Weline Framework',
         ]);
 
-        $layoutName = $this->layoutName($meta);
+        $layoutName = $this->layoutName($template, $meta);
         $controllerTitle = $this->firstNonEmpty([
             $this->read($meta, ['controller_title']),
             $this->meaningfulTemplateTitle($template),
@@ -57,7 +57,7 @@ class PageSeoContextResolver
         $description = $this->normalizeDescription($this->firstNonEmpty([
             $this->read($seo, ['description', 'meta_description']),
             $this->readTemplate($template, 'meta_description'),
-            $this->read($meta, ['meta_description', 'description']),
+            $this->metaDescription($meta),
             $this->read($product, ['meta_description', 'short_description', 'description']),
             $this->read($category, ['meta_description', 'description']),
             $this->read($page, ['meta_description', 'ai_description', 'description', 'excerpt']),
@@ -133,6 +133,27 @@ class PageSeoContextResolver
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function pageMeta($template): array
+    {
+        $meta = $this->toArray($this->readTemplate($template, 'meta'));
+        $layoutMeta = $this->toArray($this->readTemplate($template, 'layout'));
+        if ($layoutMeta === []) {
+            return $meta;
+        }
+
+        $pageMeta = array_replace($meta, $layoutMeta);
+        foreach (['layout_name', 'name', 'layout_description', 'description', 'title', 'meta_title', 'meta_description'] as $key) {
+            if (!array_key_exists($key, $layoutMeta)) {
+                unset($pageMeta[$key]);
+            }
+        }
+
+        return $pageMeta;
+    }
+
+    /**
      * @param mixed $source
      * @param string[] $keys
      */
@@ -184,6 +205,25 @@ class PageSeoContextResolver
         return mb_substr($text, 0, 300);
     }
 
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function metaDescription(array $meta): string
+    {
+        $metaDescription = $this->normalizeMetaText($meta['meta_description'] ?? null);
+        if ($metaDescription !== '') {
+            return $metaDescription;
+        }
+
+        $description = $this->normalizeMetaText($meta['description'] ?? null);
+        $layoutDescription = $this->normalizeMetaText($meta['layout_description'] ?? null);
+        if ($description !== '' && $description !== $layoutDescription) {
+            return $description;
+        }
+
+        return '';
+    }
+
     private function defaultDescription(string $title, string $siteName): string
     {
         $title = trim($title);
@@ -217,8 +257,76 @@ class PageSeoContextResolver
     /**
      * @param array<string, mixed> $meta
      */
-    private function layoutName(array $meta): string
+    private function layoutName($template, array $meta): string
     {
+        return (string) $this->firstNonEmpty([
+            $this->normalizeMetaText($meta['layout_name'] ?? null),
+            $this->normalizeMetaText($meta['name'] ?? null),
+            $this->layoutNameFromThemeContext($template),
+        ]);
+    }
+
+    private function layoutNameFromThemeContext($template): string
+    {
+        $themeData = $this->readTemplate($template, 'theme');
+        if (!is_array($themeData)) {
+            return '';
+        }
+
+        $layoutType = trim((string) ($themeData['layoutType'] ?? ''));
+        $layoutOption = trim((string) ($themeData['layoutOption'] ?? ''));
+        $area = trim((string) ($themeData['area'] ?? 'frontend')) ?: 'frontend';
+        $theme = $themeData['theme'] ?? null;
+        if ($layoutType === '' || $layoutOption === '' || !is_object($theme)) {
+            return '';
+        }
+
+        if (!class_exists(\Weline\Theme\Helper\LayoutPathResolver::class)
+            || !class_exists(\Weline\Theme\Helper\ComponentMetaParser::class)) {
+            return '';
+        }
+
+        try {
+            $layoutPath = \Weline\Theme\Helper\LayoutPathResolver::buildLayoutPath('', $area, $layoutType, $layoutOption);
+            $resolvedLayoutPath = \Weline\Theme\Helper\LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
+            if (!$resolvedLayoutPath) {
+                return '';
+            }
+
+            $layoutFilePath = \Weline\Theme\Helper\LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
+            $layoutName = $this->layoutNameFromFile($layoutFilePath);
+            if ($layoutName !== '') {
+                return $layoutName;
+            }
+
+            if (strpos($resolvedLayoutPath, '::') !== false) {
+                [, $relativePath] = explode('::', $resolvedLayoutPath, 2);
+                $defaultPath = \Weline\Theme\Helper\LayoutPathResolver::getDefaultLayoutPath($relativePath, $area);
+                return $this->layoutNameFromFile($defaultPath);
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    private function layoutNameFromFile(?string $layoutFilePath): string
+    {
+        if (!$layoutFilePath || !is_file($layoutFilePath)) {
+            return '';
+        }
+
+        try {
+            $parsed = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath);
+        } catch (\Throwable) {
+            return '';
+        }
+
+        $meta = $parsed['meta'] ?? [];
+        if (!is_array($meta)) {
+            return '';
+        }
+
         return (string) $this->firstNonEmpty([
             $this->normalizeMetaText($meta['layout_name'] ?? null),
             $this->normalizeMetaText($meta['name'] ?? null),

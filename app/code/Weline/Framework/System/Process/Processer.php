@@ -606,7 +606,11 @@ class Processer
         if (self::shouldTryManagedProcessReuse((bool) $block, $foreground)) {
             $existingPid = (int) self::getData($pname, 'pid');
             if ($existingPid > 0) {
-                return $existingPid;
+                $expectedProcessName = (string) ($processInfo['name'] ?? '');
+                if (self::isManagedProcessRunning($existingPid, $expectedProcessName !== '' ? $expectedProcessName : null, '', $pname)) {
+                    return $existingPid;
+                }
+                self::removePidFile($pname);
             }
         }
         

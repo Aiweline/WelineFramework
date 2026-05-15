@@ -41,10 +41,17 @@ $addressData = static function ($address, string $idField, string $type) use ($a
         'name' => (string)$address->getData('name'),
         'contact_name' => (string)$address->getData('contact_name'),
         'contact_phone' => (string)$address->getData('contact_phone'),
+        'country_code' => (string)$address->getData('country_code'),
         'country' => (string)($address->getData('country') ?: __('中国')),
         'province' => (string)$address->getData('province'),
+        'province_code' => (string)$address->getData('province_code'),
+        'province_region_id' => $address->getData('province_region_id'),
         'city' => (string)$address->getData('city'),
+        'city_code' => (string)$address->getData('city_code'),
+        'city_region_id' => $address->getData('city_region_id'),
         'district' => (string)$address->getData('district'),
+        'district_code' => (string)$address->getData('district_code'),
+        'district_region_id' => $address->getData('district_region_id'),
         'street' => (string)$address->getData('street'),
         'postal_code' => (string)$address->getData('postal_code'),
         'is_default' => $address->isDefault() ? 1 : 0,
@@ -552,4 +559,4 @@ $renderAddressForm = static function (string $idField, string $typeLabel, string
     }
 }
 </style>
-<script src="@static(Weline_Shipping::frontend/js/account-address-v3.js)?v=20260513-address-tag-4"></script>
+<script src="@static(Weline_Shipping::frontend/js/account-address-v3.js)?v=20260514-address-tag-5"></script>

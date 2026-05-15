@@ -238,7 +238,7 @@ class AiSitePlanQueue implements QueueInterface
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
             '_plan_sse_request' => [
                 'prompt_mode' => 'rebuild',
-                'instruction' => '[FORCE] queue:run -f 强制重建阶段一方案',
+                'instruction' => '[FORCE] queue:run -f 强制重建建站方案',
                 'target_scope' => 'full_plan',
                 'round' => $nextRound,
                 'plan_locale' => \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? '')),

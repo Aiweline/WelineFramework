@@ -1,40 +1,40 @@
-﻿重写失败！,重写失败！
-重写成功！,重写成功！
-删除成功！,删除成功！
-删除失败！,删除失败！
-路由表,路由表
-静态路由管理：可定制属于自己的静态url来提升seo。,静态路由管理：可定制属于自己的静态url来提升seo。
-网站ID,网站ID
-网站ID正确,网站ID正确
-请输入网站ID,请输入网站ID
-同一网站ID下重写路径必须唯一,同一网站ID下重写路径必须唯一
-路径,路径
-输入路径正确,输入路径正确
-请输入路径,请输入路径
-重写路径,重写路径
-请输入重写路径,请输入重写路径
-重写路由,重写路由
-输入网站ID，0表示默认,输入网站ID，0表示默认
-输入路径,输入路径
+﻿重写失败！,"Rewrite failed!"
+重写成功！,"Rewrite succeeded!"
+删除成功！,"Deletion successful!"
+删除失败！,"Deletion failed!"
+路由表,"Route table"
+静态路由管理：可定制属于自己的静态url来提升seo。,"Static Route Management: Customize your own static URLs to improve SEO."
+网站ID,"Site ID"
+网站ID正确,"Site ID is correct"
+请输入网站ID,"Please enter the website ID"
+同一网站ID下重写路径必须唯一,"Rewrite paths must be unique under the same site ID"
+路径,Path
+输入路径正确,"The entered path is correct"
+请输入路径,"Please enter the path"
+重写路径,"Rewrite path"
+请输入重写路径,"Please enter the rewrite path"
+重写路由,"Rewrite route"
+输入网站ID，0表示默认,"Enter the website ID, 0 means default"
+输入路径,"Enter the path"
 添加,Add
 "URL ID","URL ID"
-指纹,指纹
+指纹,Fingerprint
 类型,Type
 创建时间,"Create time"
 更新时间,"Update time"
-是否已删除,是否已删除
+是否已删除,Deleted
 操作,Operation
-自定义,自定义
-前台,前台
+自定义,Custom
+前台,Frontend
 是,Yes
 否,No
 编辑,Edit
 删除,Delete
-URL管理,URL管理
-系统配置,系统配置
-URL管理器,URL管理器
-"URL 管理","URL 管理"
-"URL 管理器","URL 管理器"
+URL管理,"URL management"
+系统配置,"System Configuration"
+URL管理器,"URL manager"
+"URL 管理","URL management"
+"URL 管理器","URL manager"
 路由列表,"Route List"
 "管理系统中可访问的 URL，可为关键页面设置更友好的自定义地址，提升 SEO 和可读性。","Manage accessible URLs and set friendly custom addresses for key pages to improve SEO and readability."
 按路径搜索…,"Search by path…"
@@ -42,6 +42,6 @@ URL管理器,URL管理器
 访问路径,"Access Path"
 路由标识,"Route ID"
 所属模块,Module
-重写,重写
+重写,Rewrite
 暂无路由数据,"No route data"
 请检查相关模块是否正确注册,"Please check if related modules are registered correctly"
