@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Observer;
 
+use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -26,17 +27,20 @@ use Weline\Framework\View\Template;
  */
 class DevToolPanelObserver implements ObserverInterface
 {
-    private const PERSISTENT_MAX_RESPONSE_BYTES = 262144;
+    private const DEFAULT_MAX_RESPONSE_BYTES = 1048576;
     private const MAX_TRACE_SPANS = 300;
     private const MAX_TRACE_META_FIELD_BYTES = 2048;
     /** 内联注入页面的 trace JSON 默认上限（字节），防止超大 JSON 撑爆 Worker 内存 */
     private const DEFAULT_MAX_TRACE_JSON_BYTES = 524288;
+    private const TRACE_TTL_SECONDS = 60;
 
     private Request $request;
+    private DevToolPayloadStore $payloadStore;
 
-    public function __construct(Request $request)
+    public function __construct(Request $request, ?DevToolPayloadStore $payloadStore = null)
     {
         $this->request = $request;
+        $this->payloadStore = $payloadStore ?? new DevToolPayloadStore();
     }
 
     public function execute(Event &$event): void
@@ -96,6 +100,9 @@ class DevToolPanelObserver implements ObserverInterface
                 return;
             }
 
+            $requestId = RequestLifecycleTrace::ensureRequestId();
+            $this->setRequestIdHeader($requestId);
+
             if (!$this->isHtmlResponse($result)) {
                 return;
             }
@@ -135,11 +142,8 @@ class DevToolPanelObserver implements ObserverInterface
                 }
             }
 
-            $traceSpans = $this->resolveCurrentTraceSpans($payload);
-            if (!empty($traceSpans)) {
-                $payload['trace']['spans'] = $traceSpans;
-                $result = $this->injectTraceScript($result, $traceSpans);
-            }
+            $this->storeTracePayload($requestId);
+            $result = $this->injectRequestMetaScript($result, $requestId);
 
             $payload['result'] = $result;
             $this->writeBackPayload($event, $payload);
@@ -187,6 +191,81 @@ class DevToolPanelObserver implements ObserverInterface
         }
 
         $event->setData('result', (string)($payload['result'] ?? ''));
+    }
+
+    private function setRequestIdHeader(string $requestId): void
+    {
+        try {
+            $this->request->getResponse()->setHeader('X-Weline-Request-Id', $requestId);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function storeTracePayload(string $requestId): void
+    {
+        if (!RequestLifecycleTrace::isEnabled()) {
+            return;
+        }
+
+        try {
+            $payload = RequestLifecycleTrace::exportCompactPayload();
+            if ((int)($payload['summary']['span_count'] ?? 0) <= 0) {
+                return;
+            }
+            $this->payloadStore->set('trace', 'trace:' . $requestId, $payload, self::TRACE_TTL_SECONDS);
+        } catch (\Throwable $e) {
+            $this->logToConsole('debug', 'DevToolPanel trace store skipped: ' . $e->getMessage());
+        }
+    }
+
+    private function injectRequestMetaScript(string $result, string $requestId): string
+    {
+        $restBackendPrefix = (string)($_SERVER['WELINE_REST_BACKEND_PREFIX'] ?? '');
+        if ($restBackendPrefix === '') {
+            $restBackendPrefix = (string)(Env::getAreaRoutePrefix('rest_backend') ?? '');
+        }
+        if ($restBackendPrefix === '') {
+            $envConfig = \is_file(BP . 'app' . DS . 'etc' . DS . 'env.php')
+                ? (include BP . 'app' . DS . 'etc' . DS . 'env.php')
+                : [];
+            if (\is_array($envConfig)) {
+                $restBackendPrefix = (string)($envConfig['router']['area_routes']['rest_backend']['prefix'] ?? '');
+            }
+        }
+        $apiBase = ($restBackendPrefix !== '' ? trim($restBackendPrefix, '/') . '/' : '') . 'dev/tool/rest/v1';
+        $config = [
+            'requestId' => $requestId,
+            'traceTtl' => self::TRACE_TTL_SECONDS,
+            'apiBase' => $apiBase,
+        ];
+        $json = \json_encode($config, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (!\is_string($json)) {
+            $json = '{}';
+        }
+        $script = '<script>window.__WELINE_REQUEST_ID__='
+            . \json_encode($requestId, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)
+            . ';window.__WELINE_DEV_TOOL__=' . $json . ';</script>';
+
+        if (stripos($result, 'window.__WELINE_REQUEST_ID__=') !== false) {
+            $count = 0;
+            $updated = preg_replace(
+                '/<script>\s*window\.__WELINE_REQUEST_ID__=.*?<\/script>/is',
+                $script,
+                $result,
+                1,
+                $count
+            );
+            if ($count > 0 && is_string($updated)) {
+                return $updated;
+            }
+        }
+
+        $bodyClosePos = strripos($result, '</body>');
+        if ($bodyClosePos !== false) {
+            return substr($result, 0, $bodyClosePos) . $script . substr($result, $bodyClosePos);
+        }
+
+        return $result . $script;
     }
 
     private function injectTraceScript(string $result, array $traceSpans): string
@@ -403,7 +482,7 @@ class DevToolPanelObserver implements ObserverInterface
 
     private function shouldSkipForResponseSize(string $result): bool
     {
-        $limit = (int)Env::get('dev_tool.max_response_bytes', self::PERSISTENT_MAX_RESPONSE_BYTES);
+        $limit = (int)Env::get('dev_tool.max_response_bytes', self::DEFAULT_MAX_RESPONSE_BYTES);
         if ($limit <= 0) {
             return false;
         }

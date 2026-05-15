@@ -1446,6 +1446,7 @@ const DevToolPanel = (function() {
         currentRouteType: '<?php echo $panelType; ?>',
         routeSearchKeyword: '',
         allRouteModules: [],
+        loadedRouteTypes: {},
         
         // 文档相关
         docSearchMode: 'all', // 'all' or 'module'
@@ -1455,6 +1456,9 @@ const DevToolPanel = (function() {
         docList: [],
         currentDocId: null,
         currentDocScrollPos: 0,
+        modulesLoaded: false,
+        docsInitialized: false,
+        docSearchTimer: null,
         
         // 拖拽相关
         panelX: 0,
@@ -1473,6 +1477,8 @@ const DevToolPanel = (function() {
         traceCodeLayout: 'tree',
         // 请求链路「DB」视图：normal=常规顺序，duration=按耗时倒序
         traceDbLayout: 'normal',
+        traceLoaded: false,
+        traceSpans: null,
     };
 
     // ========== LocalStorage 管理 ==========
@@ -1525,32 +1531,32 @@ const DevToolPanel = (function() {
         );
         
         // 加载模块列表
-        const modulePromise = loadModules() || Promise.resolve();
+        const modulePromise = state.collapsed ? Promise.resolve() : (loadModules() || Promise.resolve());
         modulePromise.then(() => {
             // 恢复文档搜索状态
-            if (state.activeMainTab === 'docs') {
+            if (!state.collapsed && state.activeMainTab === 'docs') {
                 restoreDocSearchState();
             }
         }).catch(error => {
             console.warn('[DevToolPanel] Module loading error:', error);
             // 即使加载失败也要恢复搜索状态
-            if (state.activeMainTab === 'docs') {
+            if (!state.collapsed && state.activeMainTab === 'docs') {
                 restoreDocSearchState();
             }
         });
         
         // 如果是路由标签，加载路由
-        if (state.activeMainTab === 'routes') {
+        if (!state.collapsed && state.activeMainTab === 'routes') {
             loadRoutes(state.currentRouteType);
         }
         
         // 如果是性能标签，渲染性能统计
-        if (state.activeMainTab === 'performance') {
+        if (!state.collapsed && state.activeMainTab === 'performance') {
             renderPerformanceStats();
         }
         
         // 如果是请求链路标签，渲染请求链路
-        if (state.activeMainTab === 'trace') {
+        if (!state.collapsed && state.activeMainTab === 'trace') {
             renderRequestTrace();
         }
         
@@ -2168,6 +2174,11 @@ const DevToolPanel = (function() {
         // 展开时更新展开方向
         if (!state.collapsed) {
             updateExpandDirection();
+            switchMainTab(
+                document.querySelector('.dev-tool-tab[data-tab="' + state.activeMainTab + '"]'),
+                state.activeMainTab,
+                false
+            );
         }
         
         // 保存状态（触发器位置保持不变）
@@ -2224,6 +2235,9 @@ const DevToolPanel = (function() {
         if (traceSearchArea) traceSearchArea.style.display = 'none';
         // 隐藏所有扩展搜索区（约定 id 为 dev-tool-search-area-{tabId}）
         document.querySelectorAll('[id^="dev-tool-search-area-"]').forEach(el => { el.style.display = 'none'; });
+        if (state.collapsed) {
+            return;
+        }
         
         // 扩展标签：若加载器尚未注册则短时重试，最多重试几次；重试前检查用户是否已切换标签，避免覆盖
         const isExtensionTab = tab !== 'routes' && tab !== 'docs' && tab !== 'performance' && tab !== 'trace';
@@ -2268,11 +2282,7 @@ const DevToolPanel = (function() {
         } else {
             window._devToolExtensionRetryCount = {};
             docSearchArea.style.display = 'block';
-            if (state.currentDocId) {
-                loadDocDetail(state.currentDocId);
-            } else {
-                searchDocsAPI();
-            }
+            ensureDocsLoaded();
         }
     }
     
@@ -2414,7 +2424,19 @@ const DevToolPanel = (function() {
      * 优先 window.api，其次 window.site.api_host；无可用 base 时返回空字符串。
      */
     function getDevToolApiUrl(path, params) {
-        const basePath = 'dev/tool/rest/v1/' + (path || '').replace(/^\//, '');
+        const cleanPath = (path || '').replace(/^\//, '');
+        const configApiBase = (window.__WELINE_DEV_TOOL__ && window.__WELINE_DEV_TOOL__.apiBase)
+            ? String(window.__WELINE_DEV_TOOL__.apiBase).replace(/^\/+|\/+$/g, '')
+            : '';
+        if (configApiBase) {
+            const url = window.location.origin.replace(/\/$/, '') + '/' + configApiBase + '/' + cleanPath;
+            if (params && typeof params === 'object' && Object.keys(params).length > 0) {
+                const q = new URLSearchParams(params).toString();
+                return q ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + q) : url;
+            }
+            return url;
+        }
+        const basePath = 'dev/tool/rest/v1/' + cleanPath;
         if (typeof window.api === 'function') {
             return window.api(basePath, params || {});
         }
@@ -2432,6 +2454,9 @@ const DevToolPanel = (function() {
     }
 
     function loadModules() {
+        if (state.modulesLoaded) {
+            return Promise.resolve();
+        }
         const url = getDevToolApiUrl('document/modules');
         if (!url) {
             console.warn('[DevToolPanel] Cannot build document API URL (missing window.api / window.site.api_host)');
@@ -2447,6 +2472,7 @@ const DevToolPanel = (function() {
             .then(data => {
                 if (data && Number(data.code) === 200) {
                     state.allModules = data.data || [];
+                    state.modulesLoaded = true;
                     updateModuleSelect();
                 } else {
                     console.warn('[DevToolPanel] Failed to load modules:', data?.msg || 'Unknown error');
@@ -2461,6 +2487,28 @@ const DevToolPanel = (function() {
                 // 不要阻塞初始化
                 return Promise.resolve();
             });
+    }
+
+    function ensureDocsLoaded() {
+        const content = document.getElementById('dev-tool-content');
+        if (!content) return Promise.resolve();
+        if (state.docsInitialized) {
+            if (state.currentDocId) {
+                loadDocDetail(state.currentDocId);
+            } else {
+                searchDocsAPI();
+            }
+            return Promise.resolve();
+        }
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载文档...</div></div>';
+        return (loadModules() || Promise.resolve()).then(function() {
+            state.docsInitialized = true;
+            restoreDocSearchState();
+        }).catch(function(error) {
+            console.warn('[DevToolPanel] Module loading error:', error);
+            state.docsInitialized = true;
+            restoreDocSearchState();
+        });
     }
 
     function updateModuleSelect() {
@@ -2509,7 +2557,13 @@ const DevToolPanel = (function() {
         const keyword = event.target.value.trim();
         state.docSearchKeyword = keyword;
         saveState();
-        searchDocsAPI();
+        if (state.docSearchTimer) {
+            clearTimeout(state.docSearchTimer);
+        }
+        state.docSearchTimer = setTimeout(function() {
+            state.currentDocId = null;
+            searchDocsAPI();
+        }, 250);
     }
 
     function searchDocsAPI() {
@@ -2948,9 +3002,98 @@ const DevToolPanel = (function() {
     function renderRequestTrace() {
         const content = document.getElementById('dev-tool-content');
         if (!content) return;
-        const spans = (typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined' && Array.isArray(window.__WELINE_REQUEST_TRACE__))
-            ? window.__WELINE_REQUEST_TRACE__
-            : [];
+
+        if (Array.isArray(state.traceSpans)) {
+            renderRequestTraceFromSpans(state.traceSpans);
+            return;
+        }
+
+        if (typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined' && Array.isArray(window.__WELINE_REQUEST_TRACE__)) {
+            state.traceSpans = window.__WELINE_REQUEST_TRACE__;
+            renderRequestTraceFromSpans(state.traceSpans);
+            return;
+        }
+
+        const config = window.__WELINE_DEV_TOOL__ || {};
+        const requestId = config.requestId || window.__WELINE_REQUEST_ID__ || '';
+        if (!requestId) {
+            content.innerHTML = '<div class="dev-tool-empty">当前页面没有 request_id，请刷新页面。</div>';
+            return;
+        }
+
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载请求链路...</div></div>';
+        const url = getDevToolApiUrl('trace', { id: requestId });
+        if (!url) {
+            content.innerHTML = '<div class="dev-tool-empty">无法构建 trace API 地址。</div>';
+            return;
+        }
+
+        fetch(url)
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error(response.status === 404 ? '链路已过期，请刷新页面' : ('HTTP ' + response.status));
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (!data || Number(data.code) !== 200) {
+                    throw new Error((data && (data.msg || data.message)) || 'trace load failed');
+                }
+                state.traceSpans = decodeCompactTracePayload(data.data || {});
+                renderRequestTraceFromSpans(state.traceSpans);
+            })
+            .catch(function(error) {
+                content.innerHTML = '<div class="dev-tool-empty">' + escapeHtml(error.message || '链路已过期，请刷新页面') + '</div>';
+            });
+    }
+
+    function decodeCompactTracePayload(payload) {
+        if (!payload || payload.format !== 'compact-v1') {
+            return [];
+        }
+        const dict = payload.dict || {};
+        const names = dict.names || {};
+        const categories = dict.categories || {};
+        const metas = dict.metas || {};
+        const rows = String(payload.trace || '').split('\n').filter(Boolean);
+        const spans = rows.map(function(row) {
+            const parts = row.split('|');
+            const parentId = Number(parts[1] || 0);
+            const categoryId = Number(parts[2] || 0);
+            const nameId = Number(parts[3] || 0);
+            const durationUs = Number(parts[4] || 0);
+            const metaId = Number(parts[5] || 0);
+            const span = {
+                seq: Number(parts[0] || 0),
+                name: names[nameId] || '',
+                duration_ms: Math.round((durationUs / 1000) * 100) / 100,
+                category: categories[categoryId] || 'framework'
+            };
+            if (parentId > 0 && names[parentId]) span.parent = names[parentId];
+            if (metaId > 0 && metas[metaId]) span.meta = metas[metaId];
+            return span;
+        }).filter(function(span) {
+            return span.name;
+        });
+
+        const dbByParent = {};
+        spans.forEach(function(span) {
+            if ((span.category || '') === 'db' && span.parent) {
+                dbByParent[span.parent] = (dbByParent[span.parent] || 0) + (Number(span.duration_ms) || 0);
+            }
+        });
+        spans.forEach(function(span) {
+            if ((span.category || '') !== 'db' && dbByParent[span.name]) {
+                span.db_duration_ms = Math.round(dbByParent[span.name] * 100) / 100;
+            }
+        });
+
+        return spans;
+    }
+
+    function renderRequestTraceFromSpans(spans) {
+        const content = document.getElementById('dev-tool-content');
+        if (!content) return;
         const codeSpans = spans.filter(function(s) { return (s.category || '') !== 'db'; });
         const dbSpans = spans.filter(function(s) { return (s.category || '') === 'db'; });
 
