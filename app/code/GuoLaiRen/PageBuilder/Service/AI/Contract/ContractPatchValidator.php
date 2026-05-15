@@ -38,9 +38,44 @@ final class ContractPatchValidator
             }
         }
 
+        $changedPaths = $this->collectChangedPaths($previous, $next);
+        $forbidden = $this->patternList($permissionMatrix['forbidden'] ?? []);
+        foreach ($changedPaths as $path) {
+            foreach ($forbidden as $pattern) {
+                if ($this->pathMatchesPattern($path, $pattern)) {
+                    $errors[] = 'Forbidden field changed: ' . $path;
+                    break;
+                }
+            }
+        }
+
+        $allowedPatterns = \array_values(\array_unique(\array_merge(
+            $this->patternList($permissionMatrix['patch'] ?? []),
+            $this->patternList($permissionMatrix['can_patch'] ?? []),
+            $this->patternList($permissionMatrix['create'] ?? []),
+            $this->patternList($permissionMatrix['can_create'] ?? [])
+        )));
+        if ($this->shouldEnforceAllowedPatterns($allowedPatterns, $previous, $next)) {
+            foreach ($changedPaths as $path) {
+                if ($this->isAdministrativePath($path)) {
+                    continue;
+                }
+                $allowed = false;
+                foreach ($allowedPatterns as $pattern) {
+                    if ($this->pathMatchesPattern($path, $pattern)) {
+                        $allowed = true;
+                        break;
+                    }
+                }
+                if (!$allowed) {
+                    $errors[] = 'Path is not patchable by permission_matrix: ' . $path;
+                }
+            }
+        }
+
         return [
             'valid' => $errors === [],
-            'errors' => $errors,
+            'errors' => \array_values(\array_unique($errors)),
         ];
     }
 
@@ -91,5 +126,118 @@ final class ContractPatchValidator
         }
 
         return $this->walkPath($next, $segments);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function patternList(mixed $values): array
+    {
+        if (!\is_array($values)) {
+            return [];
+        }
+
+        return \array_values(\array_filter(\array_map(
+            static fn(mixed $value): string => \trim((string)$value),
+            $values
+        ), static fn(string $value): bool => $value !== ''));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectChangedPaths(mixed $previous, mixed $next, string $prefix = ''): array
+    {
+        if (\is_array($previous) && \is_array($next)) {
+            $paths = [];
+            $keys = \array_values(\array_unique(\array_merge(\array_keys($previous), \array_keys($next))));
+            foreach ($keys as $key) {
+                $segment = (string)$key;
+                $path = $prefix !== '' ? ($prefix . '.' . $segment) : $segment;
+                $paths = \array_merge(
+                    $paths,
+                    $this->collectChangedPaths($previous[$key] ?? null, $next[$key] ?? null, $path)
+                );
+            }
+
+            return \array_values(\array_unique($paths));
+        }
+
+        if ($previous !== $next) {
+            return $prefix !== '' ? [$prefix] : ['__root__'];
+        }
+
+        return [];
+    }
+
+    private function pathMatchesPattern(string $path, string $pattern): bool
+    {
+        $path = \trim($path);
+        $pattern = \trim($pattern);
+        if ($path === '' || $pattern === '') {
+            return false;
+        }
+        if ($path === $pattern) {
+            return true;
+        }
+        if (\str_starts_with($path, $pattern . '.')) {
+            return true;
+        }
+        if (\str_ends_with($pattern, '.*')) {
+            $prefix = \substr($pattern, 0, -2);
+            return $path === $prefix || \str_starts_with($path, $prefix . '.');
+        }
+
+        $pathSegments = \explode('.', $path);
+        $patternSegments = \explode('.', $pattern);
+        if (\count($pathSegments) !== \count($patternSegments)) {
+            return false;
+        }
+        foreach ($patternSegments as $index => $segment) {
+            if ($segment === '*') {
+                continue;
+            }
+            if ($segment !== $pathSegments[$index]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function shouldEnforceAllowedPatterns(array $patterns, array $previous, array $next): bool
+    {
+        if ($patterns === []) {
+            return false;
+        }
+
+        foreach ($patterns as $pattern) {
+            $root = \trim((string)\strtok($pattern, '.'));
+            if ($root === '' || $root === '*') {
+                return true;
+            }
+            if (\array_key_exists($root, $previous) || \array_key_exists($root, $next)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isAdministrativePath(string $path): bool
+    {
+        foreach ([
+            'contract_meta.status',
+            'contract_meta.confirmed_at',
+            'contract_meta.signature',
+            'contract_meta.created_at',
+            'contract_meta.source_signature',
+        ] as $prefix) {
+            if ($path === $prefix || \str_starts_with($path, $prefix . '.')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

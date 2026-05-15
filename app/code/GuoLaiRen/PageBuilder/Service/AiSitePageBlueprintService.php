@@ -61,7 +61,7 @@ final class AiSitePageBlueprintService
         $ctaRefinement = $this->resolveRefinement($sectionRefinements, $baseCode . '-cta', 'cta');
 
         $sections = match ($pageType) {
-            Page::TYPE_HOME => $this->buildHomeSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement),
+            Page::TYPE_HOME => $this->buildHomeSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement, $brief),
             Page::TYPE_ABOUT => $this->buildAboutSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement),
             Page::TYPE_CONTACT => $this->buildContactSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement),
             Page::TYPE_PRIVACY_POLICY,
@@ -102,7 +102,7 @@ final class AiSitePageBlueprintService
     public function resolveSiteDisplayName(array $websiteProfile, array $scope = []): string
     {
         $siteTitle = $this->pickString($websiteProfile['site_title'] ?? null, $scope['site_title'] ?? null);
-        if ($siteTitle !== '' && \strtolower($siteTitle) !== 'ai site') {
+        if ($siteTitle !== '' && \strtolower($siteTitle) !== 'ai site' && \stripos($siteTitle, 'websiteprofile') === false) {
             return $siteTitle;
         }
 
@@ -182,14 +182,71 @@ final class AiSitePageBlueprintService
         string $heroRefinement,
         string $middleRefinement,
         string $detailRefinement,
-        string $ctaRefinement
+        string $ctaRefinement,
+        string $brief = ''
     ): array {
-        return [
-            $this->buildHeroSection($baseCode . '-hero', $pageLabel, $pageTitle, $siteDisplayName, $this->applyRefinement($aiDescription, $heroRefinement), $promptPoints, 10),
-            $this->buildCardsSection($baseCode . '-highlights', '核心卖点', '把首页第一屏以下最值得点击的理由放出来。', ['核心卖点', '投放场景', '下载转化'], $promptPoints, $middleRefinement, 20),
-            $this->buildChecklistSection($baseCode . '-details', '转化路径', '让用户知道进入站点后应该先看什么、再做什么。', $promptPoints, $detailRefinement, 30),
-            $this->buildCtaSection($baseCode . '-cta', '开始承接流量', '把 APK 推广、站内信任感和转化动作串成一条明确路径。', $this->resolveCtaLabel(Page::TYPE_HOME), $ctaRefinement, 40),
+        $combined = $brief . "\n" . $aiDescription;
+        $isDownload = \preg_match('/(?:APK|download|app|安装|下载|推广)/iu', $combined) === 1;
+        $isGame = \preg_match('/(?:游戏|game|棋牌|card|Teen\\s*Patti|rummy)/iu', $combined) === 1;
+        $isSeo = \preg_match('/(?:SEO|seo|关键词|keyword)/iu', $combined) === 1;
+        $isTrust = \preg_match('/(?:信任|trust|安全|secure|放心)/iu', $combined) === 1;
+
+        $sections = [
+            $this->buildHeroSection(
+                $baseCode . '-hero',
+                $pageLabel,
+                $pageTitle,
+                $siteDisplayName,
+                $this->applyRefinement($aiDescription, $heroRefinement),
+                $promptPoints,
+                10,
+                $isDownload ? 'hero_download' : 'hero'
+            ),
+            $this->buildCardsSection(
+                $baseCode . '-highlights',
+                $isGame || $isDownload ? '热门内容与下载亮点' : '核心卖点',
+                $isGame || $isDownload ? '把最值得点击的内容、下载收益和上手路径直接放到首页。' : '把首页第一屏以下最值得点击的理由放出来。',
+                $isGame || $isDownload ? ['热门游戏', '下载亮点', '上手路径'] : ['核心卖点', '投放场景', '下载转化'],
+                $promptPoints,
+                $middleRefinement,
+                20,
+                $isGame || $isDownload ? 'game_showcase_or_features' : 'highlights'
+            ),
         ];
+
+        if ($isTrust) {
+            $sections[] = $this->buildChecklistSection(
+                $baseCode . '-trust-security',
+                '安全与信任保障',
+                '把下载安全、规则透明和服务支持讲清楚，先建立信任再承接动作。',
+                $promptPoints,
+                $detailRefinement,
+                30,
+                'trust_security'
+            );
+        }
+
+        $sections[] = $this->buildChecklistSection(
+            $baseCode . ($isSeo ? '-seo-faq' : '-details'),
+            $isSeo ? '下载前常见问题' : '转化路径',
+            $isSeo ? '围绕搜索意图和下载疑问，给用户一个能直接读懂的常见问题说明。' : '让用户知道进入站点后应该先看什么、再做什么。',
+            $promptPoints,
+            $detailRefinement,
+            $isTrust ? 40 : 30,
+            $isSeo ? 'seo_faq' : 'details'
+        );
+
+        $sections[] = $this->buildCtaSection(
+            $baseCode . '-cta',
+            $isDownload ? '立即开始下载' : '开始承接流量',
+            $isDownload ? '把 APK 下载、站内信任感和转化动作串成一条明确路径。' : '把首页的核心价值和下一步动作收束成一个清晰入口。',
+            $this->resolveCtaLabel(Page::TYPE_HOME),
+            $ctaRefinement,
+            $isTrust ? 50 : 40,
+            $isDownload ? 'final_download_cta' : 'final_cta'
+        );
+
+        return $sections;
     }
 
     /**
@@ -398,10 +455,11 @@ final class AiSitePageBlueprintService
         string $siteDisplayName,
         string $description,
         array $promptPoints,
-        int $sortOrder
+        int $sortOrder,
+        string $sectionKey = 'hero'
     ): array {
         return [
-            'key' => 'hero',
+            'key' => $sectionKey,
             'code' => $code,
             'name' => $pageLabel . ' Hero',
             'template' => 'hero',
@@ -436,7 +494,8 @@ final class AiSitePageBlueprintService
         array $titles,
         array $promptPoints,
         string $refinement,
-        int $sortOrder
+        int $sortOrder,
+        string $sectionKey = 'highlights'
     ): array {
         $items = [];
         foreach ($titles as $index => $title) {
@@ -448,7 +507,7 @@ final class AiSitePageBlueprintService
         }
 
         return [
-            'key' => 'highlights',
+            'key' => $sectionKey,
             'code' => $code,
             'name' => $sectionTitle,
             'template' => 'cards',
@@ -478,10 +537,12 @@ final class AiSitePageBlueprintService
         string $sectionIntro,
         array $promptPoints,
         string $refinement,
-        int $sortOrder
+        int $sortOrder,
+        string $sectionKeyOverride = ''
     ): array {
+        $sectionKey = $sectionKeyOverride !== '' ? $sectionKeyOverride : $this->deriveSectionKeyFromCode($code, 'details');
         return [
-            'key' => 'details',
+            'key' => $sectionKey,
             'code' => $code,
             'name' => $sectionTitle,
             'template' => 'checklist',
@@ -492,6 +553,20 @@ final class AiSitePageBlueprintService
                 'points' => \array_slice($this->rotatePoints($promptPoints, 1), 0, 4),
             ],
         ];
+    }
+
+    private function deriveSectionKeyFromCode(string $code, string $fallback): string
+    {
+        $normalized = \trim(\str_replace('\\', '/', $code));
+        if ($normalized === '') {
+            return $fallback;
+        }
+
+        $segment = (string)\preg_replace('/^.*\//', '', $normalized);
+        $parts = \preg_split('/[-_]+/', $segment) ?: [];
+        $candidate = \trim((string)\end($parts));
+
+        return $candidate !== '' ? $candidate : $fallback;
     }
 
     /**
@@ -510,10 +585,11 @@ final class AiSitePageBlueprintService
         string $sectionText,
         string $buttonLabel,
         string $refinement,
-        int $sortOrder
+        int $sortOrder,
+        string $sectionKey = 'cta'
     ): array {
         return [
-            'key' => 'cta',
+            'key' => $sectionKey,
             'code' => $code,
             'name' => $sectionTitle,
             'template' => 'cta',

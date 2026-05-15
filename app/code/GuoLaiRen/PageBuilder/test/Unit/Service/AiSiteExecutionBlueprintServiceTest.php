@@ -283,6 +283,47 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('generic Inter/Roboto/system-font hierarchy', $prompt);
     }
 
+    public function testAssertAiStageOnePlanJsonRejectsDuplicateBlockKeysOnSamePage(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Explain refund rules clearly for visitors before they download the app.',
+            'page_types' => [Page::TYPE_REFUND_POLICY],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Explain refund rules clearly for visitors before they download the app.',
+        ]);
+
+        $planJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
+        $refundBlocks = \is_array($planJson['pages'][Page::TYPE_REFUND_POLICY]['blocks'] ?? null)
+            ? $planJson['pages'][Page::TYPE_REFUND_POLICY]['blocks']
+            : [];
+        self::assertSame(
+            ['hero', 'coverage', 'rights', 'cta'],
+            \array_values(\array_map(
+                static fn(array $block): string => (string)($block['block_key'] ?? ''),
+                $refundBlocks
+            ))
+        );
+
+        $planJson['theme_design']['selection_reason'] = 'This theme fits the refund rules brief because it keeps policy content readable while preserving a clear download CTA.';
+        $planJson['pages'][Page::TYPE_REFUND_POLICY]['blocks'][2]['block_key'] = 'coverage';
+
+        $method = new \ReflectionMethod($service, 'assertAiStageOnePlanJsonIsStrict');
+        $method->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('duplicate block_key "coverage"');
+        $method->invokeArgs($service, [
+            $planJson,
+            [Page::TYPE_REFUND_POLICY],
+            'Explain refund rules clearly for visitors before they download the app.',
+            'en_US',
+        ]);
+    }
+
     public function testStageOneAiPlanPromptIncludesSelectedCustomSkillBody(): void
     {
         $customProvider = new CustomSkillProvider(null, [
@@ -722,6 +763,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [],
             'Generated plan artifacts must not overwrite the user-selected page type scope.'
         );
+        self::assertIsArray($artifacts['derived_scope_patch']['source_truth_contract'] ?? null);
+        self::assertNotSame('', (string)($artifacts['derived_scope_patch']['source_truth_contract_hash'] ?? ''));
     }
 
     public function testRefineAddsPartnerBlockWhenInstructionRequestsPartners(): void
@@ -2295,6 +2338,31 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('visible heading', (string)($fieldPlan[0]['implementation_note'] ?? ''));
     }
 
+    public function testBuildPlanArtifactsByAiStreamMarksPageRetryableWhenFanoutReturnsNoBlocks(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithEmptyHomeBlocks())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $retryableFailures = $artifacts['retryable_ai_failures'] ?? [];
+
+        self::assertSame(1, (int)($artifacts['partial_retry_required'] ?? 0));
+        self::assertIsArray($retryableFailures);
+        self::assertSame('home_page', (string)($retryableFailures[0]['page_type'] ?? ''));
+        self::assertStringContainsString('without usable blocks', (string)($retryableFailures[0]['message'] ?? ''));
+    }
+
     public function testBuildPlanArtifactsByAiStreamRepairsPromptLikeFeaturePoints(): void
     {
         $service = new AiSiteExecutionBlueprintService(
@@ -3124,6 +3192,20 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['implementation_note'],
             $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['reason']
         );
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithEmptyHomeBlocks(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['pages']['home_page']['page_goal'] = 'Drive visitors to understand the offer and take the primary CTA.';
+        $decoded['plan_json']['pages']['home_page']['theme_alignment_summary'] = 'Home page uses the selected trust-first theme with direct conversion rhythm.';
+        $decoded['plan_json']['pages']['home_page']['blocks'] = [];
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }

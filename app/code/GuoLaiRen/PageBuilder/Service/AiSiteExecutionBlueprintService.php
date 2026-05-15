@@ -12,6 +12,7 @@ use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceTruthContractBuilder;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceTruthContractValidator;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -25,6 +26,7 @@ final class AiSiteExecutionBlueprintService
     /** @var array<string, array<string, mixed>|null> */
     private array $appendInstructionDecisionCache = [];
     private ?SourceTruthContractBuilder $sourceTruthContractBuilder = null;
+    private ?SourceTruthContractValidator $sourceTruthContractValidator = null;
 
     public function __construct(
         private readonly AiSitePageBlueprintService $pageBlueprintService,
@@ -52,6 +54,15 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $this->sourceTruthContractBuilder;
+    }
+
+    private function getSourceTruthContractValidator(): SourceTruthContractValidator
+    {
+        if ($this->sourceTruthContractValidator === null) {
+            $this->sourceTruthContractValidator = ObjectManager::getInstance(SourceTruthContractValidator::class);
+        }
+
+        return $this->sourceTruthContractValidator;
     }
 
     /**
@@ -131,6 +142,24 @@ final class AiSiteExecutionBlueprintService
             'plan_locale' => $planLocale,
             'content_locale' => $contentLocale,
         ]);
+        $sourceTruthContract = $this->getSourceTruthContractBuilder()->build(
+            $planningScope,
+            $websiteProfile,
+            \is_array($planningScope['reference_image_insights'] ?? null) ? $planningScope['reference_image_insights'] : [],
+            $instruction,
+            $pageTypes,
+            $contentLocale
+        );
+        $sourceTruthValidation = $this->getSourceTruthContractValidator()->validate($sourceTruthContract);
+        if (!($sourceTruthValidation['valid'] ?? false)) {
+            throw new \RuntimeException('Source truth contract invalid: ' . \implode('; ', \array_map('strval', \is_array($sourceTruthValidation['errors'] ?? null) ? $sourceTruthValidation['errors'] : [])));
+        }
+        $planningScope['source_truth_contract'] = $sourceTruthContract;
+        $planningScope['source_truth_contract_hash'] = \sha1((string)\json_encode($sourceTruthContract, \JSON_UNESCAPED_UNICODE));
+        $planningScope['asset_manifest_hash'] = \sha1((string)\json_encode(
+            \is_array($planningScope['asset_manifest'] ?? null) ? $planningScope['asset_manifest'] : [],
+            \JSON_UNESCAPED_UNICODE
+        ));
 
         $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $planningScope);
         $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $planningScope);
@@ -398,6 +427,10 @@ final class AiSiteExecutionBlueprintService
             $pageTypes,
             $contentLocale
         );
+        $sourceTruthValidation = $this->getSourceTruthContractValidator()->validate($sourceTruthContract);
+        if (!($sourceTruthValidation['valid'] ?? false)) {
+            throw new \RuntimeException('Source truth contract invalid: ' . \implode('; ', \array_map('strval', \is_array($sourceTruthValidation['errors'] ?? null) ? $sourceTruthValidation['errors'] : [])));
+        }
         $scope['source_truth_contract'] = $sourceTruthContract;
         $scope['source_truth_contract_hash'] = \sha1((string)\json_encode($sourceTruthContract, \JSON_UNESCAPED_UNICODE));
         $scope['asset_manifest_hash'] = \sha1((string)\json_encode(
@@ -653,19 +686,18 @@ final class AiSiteExecutionBlueprintService
     {
         $required = [];
         if ($pageType === 'home_page') {
-            $required = [
-                'hero_download',
-                'game_showcase_or_features',
-                'trust_security',
-                'final_download_cta',
-            ];
+            $required = \is_array($scope['source_truth_contract']['required_home_blocks'] ?? null)
+                ? \array_values(\array_map('strval', $scope['source_truth_contract']['required_home_blocks']))
+                : ['hero', 'final_cta'];
         } elseif (\in_array($pageType, ['about_page', 'contact_page'], true)) {
             $required = [];
         }
+        $homeMin = $pageType === 'home_page' ? \max(4, \count($required)) : 3;
+        $homeMax = $pageType === 'home_page' ? \max($homeMin, \count($required) + 2) : 5;
 
         return [
-            'min' => $pageType === 'home_page' ? 5 : 3,
-            'max' => $pageType === 'home_page' ? 7 : 5,
+            'min' => $homeMin,
+            'max' => $homeMax,
             'required' => $required,
         ];
     }
@@ -1652,7 +1684,22 @@ final class AiSiteExecutionBlueprintService
             $pageKey = (string)$pageType;
             $entry = \is_array($settled[$pageKey] ?? null) ? $settled[$pageKey] : [];
             if (($entry['status'] ?? '') === 'fulfilled' && \is_array($entry['result'] ?? null) && $entry['result'] !== []) {
-                $results[$pageKey] = $entry['result'];
+                $result = $entry['result'];
+                if ($this->hasStageOnePagePlanCheckpoint([$pageKey => $result], $pageKey)) {
+                    $results[$pageKey] = $result;
+                    continue;
+                }
+
+                $message = 'Stage-one page fanout returned a page plan without usable blocks.';
+                $retryableFailures[$pageKey] = $this->buildStageOneRetryablePageFailure($pageKey, $message);
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    'Page plan generation returned no usable blocks and is waiting for retry: ' . $pageKey,
+                    82,
+                    'page_plan',
+                    'failed',
+                    ['page_type' => $pageKey, 'error_message' => $retryableFailures[$pageKey]['message']]
+                );
                 continue;
             }
 
@@ -1820,8 +1867,24 @@ final class AiSiteExecutionBlueprintService
                 \is_array($pages[$pageKey] ?? null) ? $pages[$pageKey] : [],
                 $pageKey
             );
-            if ($pagePlan !== []) {
+            if ($this->hasStageOnePagePlanCheckpoint([$pageKey => $pagePlan], $pageKey)) {
                 $results[$pageKey] = $pagePlan;
+            } else {
+                $fallbackPlanJson = null;
+                $fallbackPagePlan = $this->buildStageOneFallbackPagePlanForAiFailure(
+                    $scope,
+                    $websiteProfile,
+                    $planJson,
+                    $pageTypes,
+                    $pageKey,
+                    $instruction,
+                    $targetScope,
+                    'Stage-one page fanout returned a page plan without usable blocks.',
+                    $fallbackPlanJson
+                );
+                if ($fallbackPagePlan !== []) {
+                    $results[$pageKey] = $fallbackPagePlan;
+                }
             }
             $completedPages++;
             $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
@@ -1878,7 +1941,8 @@ final class AiSiteExecutionBlueprintService
         $normalized = \array_replace($baselinePage, $pagePlan);
         foreach (['page_goal', 'page_label', 'page_title', 'nav_label', 'meta_title', 'meta_description'] as $key) {
             $candidate = \trim((string)($normalized[$key] ?? ''));
-            if ($candidate === '' || $this->isPromptLikeStageOneText($candidate, $key, '', '', $pageType)) {
+            $isWeakPageGoal = $key === 'page_goal' && $this->isWeakStageOnePageGoal($candidate, $pageType);
+            if ($candidate === '' || $isWeakPageGoal || $this->isPromptLikeStageOneText($candidate, $key, '', '', $pageType)) {
                 $fallback = \trim((string)($baselinePage[$key] ?? ''));
                 if ($fallback !== '') {
                     $normalized[$key] = $fallback;
@@ -2069,6 +2133,8 @@ final class AiSiteExecutionBlueprintService
             '- about_page usually needs story/mission/team/values/trust narrative blocks, not another homepage conversion sequence.',
             '- contact_page usually needs contact_methods, form_guidance, map/service_area, support_faq.',
             '- policy/legal pages usually need summary, key_rules, refund_or_support_steps, help_cta; keep rules concise and avoid full legal prose in Stage-1.',
+            '- Within one page, every block_key must be unique. Never output two blocks both named "details"; use purpose-specific keys such as coverage, rights, faq, process, trust, steps, timeline, or proof.',
+            '- If a policy/support page needs multiple information sections, each section must use a different block_key that matches its job.',
             '- Every block MUST include design_tags with visual, motion, interaction, texture, responsive arrays and an implementation_note.',
             '- Every field_plan row MUST include field, sample, and a concrete implementation_note explaining where/how that exact sample is rendered on the page.',
             '- design_tags examples: visual=["premium","card shadow","rounded image","large banner"], motion=["5s fade in/out","subtle parallax","hover lift"], interaction=["primary CTA hover","tabs","accordion"], texture=["soft gradient","glass surface","Indian pattern accent"], responsive=["mobile stacked cards","desktop two-column"].',
@@ -3700,7 +3766,7 @@ final class AiSiteExecutionBlueprintService
             }
 
             $pageGoal = \trim((string)($page['page_goal'] ?? ''));
-            if ($pageGoal === '' || $this->isPromptLikeStageOneText($pageGoal, 'page_goal', '', '', $pageType)) {
+            if ($this->isWeakStageOnePageGoal($pageGoal, $pageType)) {
                 throw new \RuntimeException('AI stage-1 plan invalid: page_goal for "' . $pageType . '" is empty or still instruction-like.');
             }
 
@@ -3714,6 +3780,7 @@ final class AiSiteExecutionBlueprintService
                 throw new \RuntimeException('AI stage-1 plan invalid: page "' . $pageType . '" has no blocks.');
             }
 
+            $seenBlockKeys = [];
             foreach ($blocks as $index => $block) {
                 if (!\is_array($block)) {
                     throw new \RuntimeException('AI stage-1 plan invalid: block #' . $index . ' on "' . $pageType . '" is malformed.');
@@ -3722,6 +3789,11 @@ final class AiSiteExecutionBlueprintService
                 if ($blockKey === '') {
                     throw new \RuntimeException('AI stage-1 plan invalid: block #' . $index . ' on "' . $pageType . '" is missing block_key.');
                 }
+                $normalizedBlockKey = \mb_strtolower($blockKey);
+                if (isset($seenBlockKeys[$normalizedBlockKey])) {
+                    throw new \RuntimeException('AI stage-1 plan invalid: page "' . $pageType . '" contains duplicate block_key "' . $blockKey . '".');
+                }
+                $seenBlockKeys[$normalizedBlockKey] = true;
 
                 $content = \trim((string)($block['content'] ?? ''));
                 if ($content === '' || $this->isPromptLikeStageOneText($content, 'content', (string)($block['component_kind'] ?? $block['template'] ?? ''), (string)($block['section_code'] ?? $blockKey), $pageType)) {
@@ -4140,6 +4212,37 @@ final class AiSiteExecutionBlueprintService
         return $this->looksLikeBlueprintInstruction($text, $field, $template, $sectionName, $pageLabel);
     }
 
+    private function isWeakStageOnePageGoal(string $text, string $pageType = ''): bool
+    {
+        $normalized = \mb_strtolower(\trim($text));
+        if ($normalized === '') {
+            return true;
+        }
+
+        if ($this->isPromptLikeStageOneText($text, 'page_goal', '', '', $pageType)) {
+            return true;
+        }
+
+        foreach ([
+            'deliver clear and actionable page content for visitors',
+            'present the refund_policy content clearly',
+            'present the privacy_policy content clearly',
+            'present the terms_of_service content clearly',
+            'present the shipping_policy content clearly',
+            'present the cookie_policy content clearly',
+            'should clearly serve page intent and lead users to next actions',
+            '为访客提供清晰且可执行的页面内容',
+            '页面需要围绕页面意图输出清晰信息并承接下一步动作',
+            '页面围绕页面意图输出清晰信息并承接下一步动作',
+        ] as $marker) {
+            if (\mb_stripos($normalized, $marker) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @param array<string, mixed> $planJson
      * @param list<string> $pageTypes
@@ -4172,6 +4275,20 @@ final class AiSiteExecutionBlueprintService
             }
 
             $page = $normalized['pages'][$pageType];
+            $pageGoal = \trim((string)($page['page_goal'] ?? ''));
+            $originalPageGoal = \trim((string)($originalPage['page_goal'] ?? ''));
+            if (
+                $pageGoal === ''
+                || $originalPageGoal === ''
+                || $this->isWeakStageOnePageGoal($pageGoal, (string)$pageType)
+                || $this->isWeakStageOnePageGoal($originalPageGoal, (string)$pageType)
+            ) {
+                $page['page_goal'] = $this->buildStageOneConcretePageGoal(
+                    (string)$pageType,
+                    (string)($page['page_label'] ?? $page['page_title'] ?? ''),
+                    $planLocale
+                );
+            }
             $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
             $originalThemeAlignmentSummary = \trim((string)($originalPage['theme_alignment_summary'] ?? ''));
             if (
@@ -4697,15 +4814,28 @@ final class AiSiteExecutionBlueprintService
 
             if ($blockKey === '__page__') {
                 if ($fieldPath === 'page_goal' && \trim((string)($planJson['pages'][$pageType]['page_goal'] ?? '')) === '') {
-                    $planJson['pages'][$pageType]['page_goal'] = $this->isEnglishLocale($planLocale)
-                        ? 'Deliver clear and actionable page content for visitors.'
-                        : '为访客提供清晰且可执行的页面内容。';
+                    $planJson['pages'][$pageType]['page_goal'] = $this->buildStageOneConcretePageGoal(
+                        $pageType,
+                        (string)($planJson['pages'][$pageType]['page_label'] ?? $planJson['pages'][$pageType]['page_title'] ?? ''),
+                        $planLocale
+                    );
                 }
                 if ($fieldPath === 'theme_alignment_summary' && \trim((string)($planJson['pages'][$pageType]['theme_alignment_summary'] ?? '')) === '') {
                     $planJson['pages'][$pageType]['theme_alignment_summary'] = $this->buildStageOneThemeAlignmentSummaryFromPlanJson(
                         $pageType,
                         \is_array($planJson['pages'][$pageType] ?? null) ? $planJson['pages'][$pageType] : [],
                         $planJson,
+                        $planLocale
+                    );
+                }
+                $currentPageGoal = \trim((string)($planJson['pages'][$pageType]['page_goal'] ?? ''));
+                if (
+                    $fieldPath === 'page_goal'
+                    && $this->isWeakStageOnePageGoal($currentPageGoal, $pageType)
+                ) {
+                    $planJson['pages'][$pageType]['page_goal'] = $this->buildStageOneConcretePageGoal(
+                        $pageType,
+                        (string)($planJson['pages'][$pageType]['page_label'] ?? $planJson['pages'][$pageType]['page_title'] ?? ''),
                         $planLocale
                     );
                 }
@@ -4749,6 +4879,24 @@ final class AiSiteExecutionBlueprintService
                         $blocks[$index]['field_plan'] = $fieldPlan;
                     }
                 }
+                $content = \trim((string)($blocks[$index]['content'] ?? ''));
+                if ($this->isWeakStageOneBlockContent($content, $blockKey, $pageType)) {
+                    $blocks[$index]['content'] = $this->buildStageOneConcreteBlockContent($blockKey, $pageType, $planLocale);
+                }
+                $coreCopy = \trim((string)($blocks[$index]['execution_script']['core_copy'] ?? ''));
+                if ($this->isWeakStageOneCoreCopy($coreCopy, $blockKey, $pageType)) {
+                    $blocks[$index]['execution_script']['core_copy'] = $this->buildStageOneConcreteCoreCopy($blockKey, $pageType, $planLocale);
+                }
+                foreach (\is_array($blocks[$index]['field_plan'] ?? null) ? $blocks[$index]['field_plan'] : [] as $fpIndex => $fieldRow) {
+                    if (!\is_array($fieldRow)) {
+                        continue;
+                    }
+                    $field = \trim((string)($fieldRow['field'] ?? ''));
+                    $sample = \trim((string)($fieldRow['sample'] ?? ''));
+                    if ($this->isWeakStageOneFieldSample($sample, $field, $blockKey, $pageType)) {
+                        $blocks[$index]['field_plan'][$fpIndex]['sample'] = $this->buildStageOneConcreteFieldSample($field, $blockKey, $pageType, $planLocale);
+                    }
+                }
                 break;
             }
             $planJson['pages'][$pageType]['blocks'] = $blocks;
@@ -4780,7 +4928,7 @@ final class AiSiteExecutionBlueprintService
                 continue;
             }
             $pageGoal = \trim((string)($page['page_goal'] ?? ''));
-            if ($pageGoal === '' || $this->isPromptLikeStageOneText($pageGoal, 'page_goal', '', '', (string)$pageType)) {
+            if ($this->isWeakStageOnePageGoal($pageGoal, (string)$pageType)) {
                 $issues[] = [
                     'stage' => 'stage1',
                     'page_type' => (string)$pageType,
@@ -4806,6 +4954,7 @@ final class AiSiteExecutionBlueprintService
                 ];
             }
             $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            $seenBlockKeys = [];
             foreach ($blocks as $block) {
                 if (!\is_array($block)) {
                     continue;
@@ -4814,6 +4963,21 @@ final class AiSiteExecutionBlueprintService
                 if ($blockKey === '') {
                     continue;
                 }
+                $normalizedBlockKey = \mb_strtolower($blockKey);
+                if (isset($seenBlockKeys[$normalizedBlockKey])) {
+                    $issues[] = [
+                        'stage' => 'stage1',
+                        'page_type' => (string)$pageType,
+                        'block_key' => $blockKey,
+                        'field_path' => 'blocks.block_key',
+                        'reason_code' => 'duplicate_block_key',
+                        'matched_marker' => '',
+                        'snippet' => $blockKey,
+                        'severity' => 'high',
+                    ];
+                    continue;
+                }
+                $seenBlockKeys[$normalizedBlockKey] = true;
                 $template = (string)($block['component_kind'] ?? $block['template'] ?? '');
                 $sectionName = (string)($block['section_code'] ?? $blockKey);
                 $content = \trim((string)($block['content'] ?? ''));
@@ -5285,8 +5449,15 @@ final class AiSiteExecutionBlueprintService
             }
             $fallbackPage = \is_array($fallbackPages[$pageType] ?? null) ? $fallbackPages[$pageType] : [];
             $pageGoal = \trim((string)($page['page_goal'] ?? ''));
-            if ($pageGoal !== '' && $this->isPromptLikeStageOneText($pageGoal)) {
-                $page['page_goal'] = (string)($fallbackPage['page_goal'] ?? $pageGoal);
+            if ($this->isWeakStageOnePageGoal($pageGoal, (string)$pageType)) {
+                $fallbackGoal = \trim((string)($fallbackPage['page_goal'] ?? ''));
+                $page['page_goal'] = !$this->isWeakStageOnePageGoal($fallbackGoal, (string)$pageType)
+                    ? $fallbackGoal
+                    : $this->buildStageOneConcretePageGoal(
+                        (string)$pageType,
+                        (string)($page['page_label'] ?? $fallbackPage['page_label'] ?? $page['page_title'] ?? $fallbackPage['page_title'] ?? ''),
+                        ''
+                    );
             }
             $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
             if ($themeAlignmentSummary !== '' && $this->isPromptLikeStageOneText($themeAlignmentSummary, 'theme_alignment_summary', '', '', (string)$pageType)) {
@@ -5301,6 +5472,120 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $pages;
+    }
+
+    private function buildStageOneConcretePageGoal(string $pageType, string $pageLabel = '', string $locale = ''): string
+    {
+        $policyGoal = $this->resolveStageOnePolicyPageGoal($pageType, $locale);
+        if ($policyGoal !== '') {
+            return $policyGoal;
+        }
+
+        $resolvedLabel = \trim($pageLabel);
+        if ($resolvedLabel === '') {
+            $resolvedLabel = $this->resolveStageOnePageTypeLabel($pageType, $locale);
+        }
+
+        return $this->resolvePageGoal($pageType, $resolvedLabel, $locale);
+    }
+
+    private function resolveStageOnePolicyPageGoal(string $pageType, string $locale): string
+    {
+        if ($this->isEnglishLocale($locale)) {
+            return match ($pageType) {
+                Page::TYPE_REFUND_POLICY => 'Explain refund eligibility, timing, and request steps so customers can act with confidence.',
+                Page::TYPE_PRIVACY_POLICY => 'Explain what data is collected, how it is used, and what control visitors keep.',
+                Page::TYPE_TERMS_OF_SERVICE => 'Clarify usage rules, responsibilities, and account expectations before purchase or signup.',
+                Page::TYPE_SHIPPING_POLICY => 'Set delivery timing, shipping regions, and exception handling expectations clearly.',
+                Page::TYPE_COOKIE_POLICY => 'Explain what cookies are used, why they exist, and how visitors can manage consent.',
+                default => '',
+            };
+        }
+
+        return match ($pageType) {
+            Page::TYPE_REFUND_POLICY => '退款政策清楚呈现适用条件、处理时效和申请路径，帮助客户判断并提交请求。',
+            Page::TYPE_PRIVACY_POLICY => '隐私政策清楚呈现数据收集范围、使用方式和访客可保留的控制权。',
+            Page::TYPE_TERMS_OF_SERVICE => '服务条款清楚呈现使用规则、责任边界和购买或注册前需要确认的事项。',
+            Page::TYPE_SHIPPING_POLICY => '配送政策清楚呈现送达时效、覆盖区域和异常处理方式。',
+            Page::TYPE_COOKIE_POLICY => 'Cookie 政策清楚呈现使用类型、用途和访客管理同意的方式。',
+            default => '',
+        };
+    }
+
+    private function isWeakStageOneBlockContent(string $text, string $blockKey = '', string $pageType = ''): bool
+    {
+        $normalized = \mb_strtolower(\trim($text));
+        if ($normalized === '') {
+            return true;
+        }
+
+        return \mb_stripos($normalized, 'content rendered for users') !== false;
+    }
+
+    private function isWeakStageOneCoreCopy(string $text, string $blockKey = '', string $pageType = ''): bool
+    {
+        $normalized = \mb_strtolower(\trim($text));
+        if ($normalized === '') {
+            return true;
+        }
+
+        return \mb_stripos($normalized, 'stays visible and actionable') !== false;
+    }
+
+    private function isWeakStageOneFieldSample(string $text, string $field = '', string $blockKey = '', string $pageType = ''): bool
+    {
+        $normalized = \mb_strtolower(\trim($text));
+        if ($normalized === '') {
+            return true;
+        }
+
+        return \mb_stripos($normalized, 'visible ') !== false && \mb_stripos($normalized, ' content for ') !== false;
+    }
+
+    private function buildStageOneConcreteBlockContent(string $blockKey, string $pageType, string $locale): string
+    {
+        if (!$this->isEnglishLocale($locale)) {
+            return $blockKey !== ''
+                ? ($blockKey . ' 区块直接展示客户可读内容、关键信息和下一步动作。')
+                : '该区块直接展示客户可读内容、关键信息和下一步动作。';
+        }
+
+        return $blockKey !== ''
+            ? ('The ' . $blockKey . ' block shows concrete customer-facing details, trust signals, and the next action on the page.')
+            : 'This block shows concrete customer-facing details, trust signals, and the next action on the page.';
+    }
+
+    private function buildStageOneConcreteCoreCopy(string $blockKey, string $pageType, string $locale): string
+    {
+        if (!$this->isEnglishLocale($locale)) {
+            return $blockKey !== ''
+                ? ($blockKey . ' 区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。')
+                : '该区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。';
+        }
+
+        return $blockKey !== ''
+            ? ('The ' . $blockKey . ' block explains what customers get, why they can trust it, and which next step they can take now.')
+            : 'This block explains what customers get, why they can trust it, and which next step they can take now.';
+    }
+
+    private function buildStageOneConcreteFieldSample(string $field, string $blockKey, string $pageType, string $locale): string
+    {
+        $field = \trim($field);
+        if (!$this->isEnglishLocale($locale)) {
+            return match (\mb_strtolower($field)) {
+                'title', 'headline' => '清晰说明本区块的核心信息',
+                'subtitle', 'summary', 'description' => '补充客户需要理解的条件、步骤或结果',
+                'button_text', 'cta', 'cta_text' => '立即查看详情',
+                default => $blockKey !== '' ? ($blockKey . ' 的可编辑客户文案') : '可编辑客户文案',
+            };
+        }
+
+        return match (\mb_strtolower($field)) {
+            'title', 'headline' => 'Clear headline for this customer-facing section',
+            'subtitle', 'summary', 'description' => 'Supporting copy that explains the condition, step, or outcome customers need to understand',
+            'button_text', 'cta', 'cta_text' => 'Review the next step',
+            default => $blockKey !== '' ? ('Editable customer-facing copy for the ' . $blockKey . ' block') : 'Editable customer-facing copy',
+        };
     }
 
     /**
@@ -7182,6 +7467,9 @@ final class AiSiteExecutionBlueprintService
             'site_tagline' => (string)($scope['site_tagline'] ?? $websiteProfile['site_tagline'] ?? ''),
             'theme_style' => $structured['theme_style'] ?? [],
             'palette' => $structured['palette'] ?? [],
+            'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
+            'source_truth_contract_hash' => (string)($scope['source_truth_contract_hash'] ?? ''),
+            'asset_manifest_hash' => (string)($scope['asset_manifest_hash'] ?? ''),
             'reference_image_insights' => \is_array($scope['reference_image_insights'] ?? null) ? $scope['reference_image_insights'] : [],
             'reference_image_insights_signature' => (string)($scope['reference_image_insights_signature'] ?? ''),
             'theme_design' => $this->extractStageOneThemeDesign(
@@ -10324,7 +10612,7 @@ final class AiSiteExecutionBlueprintService
                 Page::TYPE_HOME => '承接主关键词、说明核心价值，并把用户带到下一步动作。',
                 Page::TYPE_ABOUT => '解释品牌背景、能力边界和可信依据，提升继续了解意愿。',
                 Page::TYPE_CONTACT => '降低咨询门槛，快速收集有效线索。',
-                default => $pageLabel . ' 页面需要围绕页面意图输出清晰信息并承接下一步动作。',
+                default => $pageLabel . ' 清楚呈现访客最关心的信息、可信依据和继续操作路径。',
             };
         }
 
@@ -10333,14 +10621,19 @@ final class AiSiteExecutionBlueprintService
                 Page::TYPE_HOME => 'Capture core intent, explain value, and surface primary conversion actions.',
                 Page::TYPE_ABOUT => 'Build trust by explaining brand background and delivery capability.',
                 Page::TYPE_CONTACT => 'Reduce friction and collect qualified leads quickly.',
-                default => $pageLabel . ' should clearly serve page intent and lead users to next actions.',
+                Page::TYPE_REFUND_POLICY => 'Explain refund eligibility, timing, and request steps so customers can act with confidence.',
+                Page::TYPE_PRIVACY_POLICY => 'Explain what data is collected, how it is used, and what control visitors keep.',
+                Page::TYPE_TERMS_OF_SERVICE => 'Clarify usage rules, responsibilities, and account expectations before purchase or signup.',
+                Page::TYPE_SHIPPING_POLICY => 'Set delivery timing, shipping regions, and exception handling expectations clearly.',
+                Page::TYPE_COOKIE_POLICY => 'Explain what cookies are used, why they exist, and how visitors can manage consent.',
+                default => $pageLabel . ' gives visitors specific context, useful proof, and a clear route to continue.',
             };
         }
         return match ($pageType) {
             Page::TYPE_HOME => '承接主关键词、首屏价值和关键转化入口。',
             Page::TYPE_ABOUT => '解释品牌背景与能力边界，建立信任。',
             Page::TYPE_CONTACT => '降低咨询门槛，收集有效线索。',
-            default => $pageLabel . ' 页面围绕页面意图输出清晰信息并承接下一步动作。',
+            default => $pageLabel . ' 清楚呈现访客最关心的信息、可信依据和继续操作路径。',
         };
     }
 

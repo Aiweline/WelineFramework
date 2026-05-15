@@ -18,6 +18,7 @@ final class BuildPlanContractSchemaTest extends TestCase
         self::assertContains('policy_projection', $schema->requiredTopLevelFields());
         self::assertContains('content_manifest', $schema->requiredTopLevelFields());
         self::assertContains('tasks', $schema->requiredTopLevelFields());
+        self::assertContains('source_contracts', $schema->requiredTopLevelFields());
         self::assertContains('block_build', $schema->allowedTaskKinds());
         self::assertContains('AiSiteBuildQueue', $schema->allowedExecutors());
         self::assertContains('reason', $schema->forbiddenFieldNames());
