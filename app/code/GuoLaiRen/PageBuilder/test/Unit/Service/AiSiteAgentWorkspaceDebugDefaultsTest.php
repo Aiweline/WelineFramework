@@ -17,6 +17,10 @@ final class AiSiteAgentWorkspaceDebugDefaultsTest extends TestCase
     {
         self::assertNotSame('', \trim(AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE));
         self::assertNotSame('', \trim(AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION));
+        self::assertStringNotContainsString('websiteProfile', AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE);
+        self::assertStringNotContainsString('Teenipiya', AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE);
+        self::assertStringNotContainsString('APK', AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION);
+        self::assertStringNotContainsString('Teenipiya', AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION);
         self::assertSame('zh_Hans_CN', AiSiteAgentWorkspaceDebugDefaults::DEFAULT_LOCALE);
     }
 

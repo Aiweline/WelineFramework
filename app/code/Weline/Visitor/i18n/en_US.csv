@@ -1,122 +1,122 @@
-﻿时间维度参数错误，支持：%{1},时间维度参数错误，支持：%{1}
-获取商业价值分析成功,获取商业价值分析成功
-获取商业价值分析失败：%{1},获取商业价值分析失败：%{1}
-获取大屏数据成功,获取大屏数据成功
-获取大屏数据失败：%{1},获取大屏数据失败：%{1}
-获取变化百分比成功,获取变化百分比成功
-获取变化百分比失败：%{1},获取变化百分比失败：%{1}
-获取每日对比分析成功,获取每日对比分析成功
-获取每日对比分析失败：%{1},获取每日对比分析失败：%{1}
-测试ID不能为空,测试ID不能为空
-获取A/B测试数据成功,获取A/B测试数据成功
-获取A/B测试数据失败：%{1},获取A/B测试数据失败：%{1}
-测试名称不能为空,测试名称不能为空
-测试ID已存在,测试ID已存在
-创建A/B测试失败,创建A/B测试失败
-创建A/B测试成功,创建A/B测试成功
-创建A/B测试失败：%{1},创建A/B测试失败：%{1}
-获取A/B测试列表成功,获取A/B测试列表成功
-获取A/B测试列表失败：%{1},获取A/B测试列表失败：%{1}
-没有可导出的数据,没有可导出的数据
-数据量过大，已限制导出前%{1}条记录。请缩小时间范围或使用分页导出,数据量过大，已限制导出前%{1}条记录。请缩小时间范围或使用分页导出
-导出数据成功,导出数据成功
-导出数据失败：%{1},导出数据失败：%{1}
-获取报告成功,获取报告成功
-获取报告失败：%{1},获取报告失败：%{1}
-获取统计信息成功,获取统计信息成功
-获取统计信息失败：%{1},获取统计信息失败：%{1}
-事件名称不能为空,事件名称不能为空
-获取事件统计成功,获取事件统计成功
-获取事件统计失败：%{1},获取事件统计失败：%{1}
-获取站点列表成功,获取站点列表成功
-获取站点列表失败：%{1},获取站点列表失败：%{1}
-获取每日对比数据成功,获取每日对比数据成功
-获取每日对比数据失败：%{1},获取每日对比数据失败：%{1}
-获取热门事件成功,获取热门事件成功
-获取热门事件失败：%{1},获取热门事件失败：%{1}
-获取事件分布成功,获取事件分布成功
-获取事件分布失败：%{1},获取事件分布失败：%{1}
-开始日期和结束日期不能为空,开始日期和结束日期不能为空
-获取时间范围统计成功,获取时间范围统计成功
-获取时间范围统计失败：%{1},获取时间范围统计失败：%{1}
-获取实时统计成功,获取实时统计成功
-获取实时统计失败：%{1},获取实时统计失败：%{1}
-获取版本号成功,获取版本号成功
-获取版本号失败：%{1},获取版本号失败：%{1}
-缺少数据参数,缺少数据参数
-加密成功,加密成功
-加密失败：%{1},加密失败：%{1}
-加载像素统计失败：%{1},加载像素统计失败：%{1}
-站点ID无效,站点ID无效
-加载站点详情失败：%{1},加载站点详情失败：%{1}
-获取实时数据成功,获取实时数据成功
-获取实时数据失败：%{1},获取实时数据失败：%{1}
-访客像素标签,访客像素标签
-"在渲染访客像素标签时触发，允许其他模块自定义像素代码。可以通过修改 pixel_code 字段来设置像素代码。","在渲染访客像素标签时触发，允许其他模块自定义像素代码。可以通过修改 pixel_code 字段来设置像素代码。"
-获取商业价值数据失败：%{1},获取商业价值数据失败：%{1}
-获取变化百分比数据失败：%{1},获取变化百分比数据失败：%{1}
-"未找到版本号 %{1} 对应的加密token","未找到版本号 %{1} 对应的加密token"
-无效的加密数据格式,无效的加密数据格式
-解密失败：%{1},解密失败：%{1}
-获取站点统计摘要失败：%{1},获取站点统计摘要失败：%{1}
-获取趋势数据失败：%{1},获取趋势数据失败：%{1}
-数量,数量
-"最近 7 天像素趋势","最近 7 天像素趋势"
-像素统计,像素统计
-日期,日期
-事件数,事件数
-价值,价值
-暂无像素趋势数据。,暂无像素趋势数据。
-"热门事件 Top 5","热门事件 Top 5"
-暂无事件统计数据。,暂无事件统计数据。
-像素,像素
-像素总记录数,像素总记录数
-包含所有站点的有效像素事件,包含所有站点的有效像素事件
-已处理像素,已处理像素
-处理占比,处理占比
-待处理像素,待处理像素
-建议尽快排查并处理异常事件,建议尽快排查并处理异常事件
-"接入站点 / 累计价值","接入站点 / 累计价值"
-"站点数量 / 像素累计价值","站点数量 / 像素累计价值"
-Pixel沙箱环境,Pixel沙箱环境
-系统级别事件,系统级别事件
-自定义事件,自定义事件
+﻿时间维度参数错误，支持：%{1},"Invalid time dimension parameter; supported: %{1}"
+获取商业价值分析成功,"Business value analysis retrieved successfully"
+获取商业价值分析失败：%{1},"Failed to retrieve business value analysis: %{1}"
+获取大屏数据成功,"Successfully got dashboard data"
+获取大屏数据失败：%{1},"Failed to get dashboard data: %{1}"
+获取变化百分比成功,"Percentage change retrieved successfully"
+获取变化百分比失败：%{1},"Failed to retrieve percentage change: %{1}"
+获取每日对比分析成功,"Successfully got daily comparison analysis"
+获取每日对比分析失败：%{1},"Failed to get daily comparison analysis: %{1}"
+测试ID不能为空,"Test ID cannot be empty"
+获取A/B测试数据成功,"Successfully got A/B test data"
+获取A/B测试数据失败：%{1},"Failed to get A/B test data: %{1}"
+测试名称不能为空,"Test Name cannot be empty"
+测试ID已存在,"Test ID already exists"
+创建A/B测试失败,"Create A/B Test Failed"
+创建A/B测试成功,"A/B test created successfully"
+创建A/B测试失败：%{1},"Failed to create A/B test: %{1}"
+获取A/B测试列表成功,"Successfully got A/B test list"
+获取A/B测试列表失败：%{1},"Failed to get A/B test list: %{1}"
+没有可导出的数据,"No data to export"
+数据量过大，已限制导出前%{1}条记录。请缩小时间范围或使用分页导出,"Data volume is too large, export limited to the first %{1} records. Please narrow the time range or use paginated export"
+导出数据成功,"Export data succeeded"
+导出数据失败：%{1},"Export data failed: %{1}"
+获取报告成功,"Successfully got report"
+获取报告失败：%{1},"Failed to get report: %{1}"
+获取统计信息成功,"Successfully fetched statistics"
+获取统计信息失败：%{1},"Failed to fetch statistics: %{1}"
+事件名称不能为空,"Event name cannot be empty"
+获取事件统计成功,"Event statistics retrieved successfully"
+获取事件统计失败：%{1},"Failed to get event statistics: %{1}"
+获取站点列表成功,"Successfully fetched site list"
+获取站点列表失败：%{1},"Failed to fetch site list: %{1}"
+获取每日对比数据成功,"Successfully got daily comparison data"
+获取每日对比数据失败：%{1},"Failed to get daily comparison data: %{1}"
+获取热门事件成功,"Successfully got trending events"
+获取热门事件失败：%{1},"Failed to get trending events: %{1}"
+获取事件分布成功,"Successfully got event distribution"
+获取事件分布失败：%{1},"Failed to get event distribution: %{1}"
+开始日期和结束日期不能为空,"Start date and end date cannot be empty"
+获取时间范围统计成功,"Successfully got time range statistics"
+获取时间范围统计失败：%{1},"Failed to get time range statistics: %{1}"
+获取实时统计成功,"Successfully got real-time statistics"
+获取实时统计失败：%{1},"Failed to get real-time statistics: %{1}"
+获取版本号成功,"Successfully got version number"
+获取版本号失败：%{1},"Failed to get version number: %{1}"
+缺少数据参数,"Missing data parameter"
+加密成功,"Encryption succeeded"
+加密失败：%{1},"Encryption failed: %{1}"
+加载像素统计失败：%{1},"Failed to load pixel statistics: %{1}"
+站点ID无效,"Invalid Site ID"
+加载站点详情失败：%{1},"Failed to load site details: %{1}"
+获取实时数据成功,"Successfully got real-time data"
+获取实时数据失败：%{1},"Failed to get real-time data: %{1}"
+访客像素标签,"Visitor pixel tag"
+"在渲染访客像素标签时触发，允许其他模块自定义像素代码。可以通过修改 pixel_code 字段来设置像素代码。","Triggered when rendering the visitor pixel tag, allowing other modules to customize the pixel code. The pixel code can be set by modifying the pixel_code field."
+获取商业价值数据失败：%{1},"Failed to retrieve business value data: %{1}"
+获取变化百分比数据失败：%{1},"Failed to retrieve percentage change data: %{1}"
+"未找到版本号 %{1} 对应的加密token","Encryption token for version number %{1} not found"
+无效的加密数据格式,"Invalid Encrypted Data Format"
+解密失败：%{1},"Decryption failed: %{1}"
+获取站点统计摘要失败：%{1},"Failed to fetch site statistics summary: %{1}"
+获取趋势数据失败：%{1},"Failed to fetch trend data: %{1}"
+数量,Quantity
+"最近 7 天像素趋势","Pixel Trend for the Last 7 Days"
+像素统计,"Pixel Statistics"
+日期,Date
+事件数,"Number of Events"
+价值,Value
+暂无像素趋势数据。,"No Pixel Trend Data."
+"热门事件 Top 5","Top 5 Trending Events"
+暂无事件统计数据。,"No Event Statistics Data."
+像素,Pixel
+像素总记录数,"Total Pixel Records"
+包含所有站点的有效像素事件,"Include valid pixel events for all sites"
+已处理像素,"Processed pixels"
+处理占比,"Processing share"
+待处理像素,"Pending pixels"
+建议尽快排查并处理异常事件,"Suggestion: Investigate and handle abnormal events as soon as possible"
+"接入站点 / 累计价值","Connected sites / Cumulative value"
+"站点数量 / 像素累计价值","Number of Sites / Cumulative Pixel Value"
+Pixel沙箱环境,"Pixel sandbox environment"
+系统级别事件,"System-Level Events"
+自定义事件,"Custom event"
 事件{eventName}需要指定value值所在位置，请用weline-pixel::{eventName}:value类名指定值所在的元素,"Event {eventName} requires specifying the value location, please use weline-pixel::{eventName}:value class name to specify the element containing the value"
-加载失败,加载失败
-确定,确定
-提示,提示
-请先选择测试,请先选择测试
-请填写测试ID和测试名称,请填写测试ID和测试名称
-格式错误,格式错误
-变体配置JSON格式错误,变体配置JSON格式错误
-成功,成功
-创建成功,创建成功
-创建失败,创建失败
-请输入测试ID,请输入测试ID
-站点详情,站点详情
-站点ID：,站点ID：
-返回列表,返回列表
-总记录数,总记录数
-已处理,已处理
-未处理,未处理
-事件类型数,事件类型数
-商业价值趋势,商业价值趋势
-每日对比分析,每日对比分析
-事件统计,事件统计
-事件名称,事件名称
-占比,占比
-今天,今天
-昨天,昨天
-像素统计面板,像素统计面板
-刷新,刷新
-导出,导出
-自动刷新,自动刷新
-站点数量,站点数量
-最近7天趋势,最近7天趋势
-总价值：,总价值：
-事件分布,事件分布
-站点统计,站点统计
-站点ID,站点ID
-操作,操作
-查看详情,查看详情
-记录数,记录数
+加载失败,"Failed to load"
+确定,Confirm
+提示,Prompt
+请先选择测试,"Please select a test first"
+请填写测试ID和测试名称,"Fill in the test ID and test name."
+格式错误,"Format error"
+变体配置JSON格式错误,"Variant Configuration JSON Format Error"
+成功,Success
+创建成功,"Created successfully"
+创建失败,"Creation failed"
+请输入测试ID,"Please enter the test ID"
+站点详情,"Site Details"
+站点ID：,"Site ID:"
+返回列表,"Return to List"
+总记录数,"Total Records"
+已处理,Processed
+未处理,"Not processed"
+事件类型数,"Number of event types"
+商业价值趋势,"Business Value Trend"
+每日对比分析,"Daily comparative analysis"
+事件统计,"Event statistics"
+事件名称,"Event Name"
+占比,Percentage
+今天,Today
+昨天,Yesterday
+像素统计面板,"Pixel Statistics Panel"
+刷新,Refresh
+导出,Export
+自动刷新,"Auto Refresh"
+站点数量,"Number of Sites"
+最近7天趋势,"Last 7 days trend"
+总价值：,"Total Value:"
+事件分布,"Event Distribution"
+站点统计,"Site Statistics"
+站点ID,"Site ID"
+操作,Operation
+查看详情,"View Details"
+记录数,"Record Count"

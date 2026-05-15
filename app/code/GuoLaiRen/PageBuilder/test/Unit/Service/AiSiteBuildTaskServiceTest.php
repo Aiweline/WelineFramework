@@ -728,6 +728,37 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertNotContains($pageTaskKey, $pendingKeys);
     }
 
+    public function testForceRebuildResetCanIgnorePersistedArtifactsForFullRegeneration(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $pageTaskKey = 'page:home_page:content/home-page-hero';
+        $scope['build_tasks']['shared:header']['status'] = AiSiteBuildTaskService::TASK_STATUS_DONE;
+        $scope['build_tasks'][$pageTaskKey]['status'] = AiSiteBuildTaskService::TASK_STATUS_DONE;
+        $scope['shared_components']['header'] = ['region' => 'header', 'html' => '<header>Ready</header>'];
+        $scope['page_type_layouts']['home_page']['content'][] = [
+            'code' => 'content/home-page-hero',
+            'component' => 'content/home-page-hero',
+        ];
+
+        $scope = $service->resetBuildTasksToPendingForRebuild($scope, false);
+        $pendingKeys = \array_column($service->listPendingTasks($scope), 'task_key');
+
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['shared:header']['status'] ?? null);
+        $this->assertSame([], $scope['build_tasks']['shared:header']['result_ref'] ?? null);
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks'][$pageTaskKey]['status'] ?? null);
+        $this->assertSame([], $scope['build_tasks'][$pageTaskKey]['result_ref'] ?? null);
+        $this->assertContains('shared:header', $pendingKeys);
+        $this->assertContains($pageTaskKey, $pendingKeys);
+    }
+
     public function testForceRebuildResetRetriesDoneTaskWhenGeneratedArtifactIsMissing(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());

@@ -502,38 +502,77 @@
         return primaryMessage || resultTail || queueProcess || '';
     }
 
-    function collectQueueFailureDetailLines(payload, operation) {
+    function compactQueueFailureText(value, limit) {
+        var text = String(value || '').replace(/\s+/g, ' ').trim();
+        var max = parseInt(String(limit || 220), 10) || 220;
+        if (!text || text.length <= max) {
+            return text;
+        }
+        return text.slice(0, max - 1).replace(/\s+\S*$/, '') + '…';
+    }
+
+    function extractQueueFailureSummary(value) {
+        var text = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!text) {
+            return '';
+        }
+        var patterns = [
+            /AI component HTML structure invalid:[^.。]*(?:[.。]|$)/i,
+            /AI hero image contract failed:[^.。]*(?:[.。]|$)/i,
+            /Required image slot is not referenced by generated block:[^.。]*(?:[.。]|$)/i,
+            /replacement\.field_schema must be an object/i,
+            /AI patch response is not valid JSON/i,
+            /Build task failed:[^.。]*(?:[.。]|$)/i
+        ];
+        for (var i = 0; i < patterns.length; i++) {
+            var matched = text.match(patterns[i]);
+            if (matched && matched[0]) {
+                return compactQueueFailureText(matched[0], 220);
+            }
+        }
+        return compactQueueFailureText(text, 220);
+    }
+
+    function collectQueueFailureSummaryLines(payload, operation) {
         var lines = [];
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
         var queueInfo = resolveQueueInfoForOperation(payload, operation);
         var activeOperation = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
         var queueSnapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
+        var operationName = String(operation || (payload && payload.operation) || activeOperation.operation || '').trim();
+        if (operationName) {
+            lines.push('操作：' + operationName);
+        }
         var queueId = parseInt(String((queueInfo && queueInfo.queue_id) || queueSnapshot.queue_id || activeOperation.queue_id || 0), 10) || 0;
         if (queueId > 0) {
             lines.push('队列ID：' + queueId);
+        }
+        var pageType = String(activeOperation.page_type || activeOperation.page || (queueInfo && queueInfo.page_type) || '').trim();
+        var blockId = String(activeOperation.block_id || activeOperation.block || (queueInfo && queueInfo.block_id) || '').trim();
+        if (pageType || blockId) {
+            lines.push('对象：' + [pageType, blockId].filter(function (item) { return item !== ''; }).join(' / '));
         }
         var queueStatus = String(queueSnapshot.job_status || queueSnapshot.status || '').trim();
         if (queueStatus) {
             lines.push('队列状态：' + queueStatus);
         }
         var opMessage = resolveQueueFailureMessage(payload, operation) || String(activeOperation.message || payload.message || '').trim();
-        if (opMessage) {
-            lines.push('错误信息：' + opMessage);
+        var resultLog = String((queueInfo && queueInfo.result_log) || '').trim();
+        var summary = extractQueueFailureSummary(opMessage) || extractQueueFailureSummary(resultLog);
+        if (summary) {
+            lines.push('失败原因：' + summary);
         }
         var queueProcess = String((queueInfo && queueInfo.process) || '').trim();
-        if (queueProcess && queueProcess !== opMessage) {
-            lines.push('队列进程：' + queueProcess);
+        if (queueProcess && queueProcess !== opMessage && queueProcess !== summary) {
+            lines.push('当前进度：' + compactQueueFailureText(queueProcess, 120));
         }
-        var resultLog = String((queueInfo && queueInfo.result_log) || '').trim();
-        if (resultLog) {
-            lines.push('队列日志：\n' + resultLog);
-        }
+        lines.push('详细日志已保留在队列日志区域，确认弹窗只展示可决策摘要。');
         return lines;
     }
 
     function showOperationFailureDetailModal(operation, payload, options) {
         var opts = options && typeof options === 'object' ? options : {};
-        var lines = collectQueueFailureDetailLines(payload, operation);
+        var lines = collectQueueFailureSummaryLines(payload, operation);
         if (!lines.length) {
             return Promise.resolve(false);
         }
@@ -857,9 +896,6 @@
                 panel.open = true;
             }
         });
-        if (panels[0] && typeof panels[0].scrollIntoView === 'function') {
-            panels[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
         if (workspaceTerminal && operation) {
             workspaceTerminal.log(<?= \json_encode((string)__('开始执行工作区操作：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + String(operation), 'start');
         }
@@ -2698,10 +2734,6 @@
                     buildStartupPending = false;
                     previewBridge.hideBuildGuard();
                     previewBridge.setBuildNavigationGuard(false);
-                    var panels = Array.from(document.querySelectorAll('.pb-ai-workspace-log-panel'));
-                    if (panels.length > 0 && typeof panels[0].scrollIntoView === 'function') {
-                        panels[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
                 }
 
                 if (window.PbAiWorkspacePreview && payload.page_type) {

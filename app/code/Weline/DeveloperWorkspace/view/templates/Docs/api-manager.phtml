@@ -4603,6 +4603,130 @@ $apiId = $this->request->getParam('api_id');
             initSidebarResize(); // 初始化侧边栏拖拽调整宽度功能
         });
     </script>
+    <script>
+    (function () {
+        if (!/\/en_US(?:\/|$)/.test(window.location.pathname)) {
+            return;
+        }
+        const dict = {
+            'CNY - 人民币': 'CNY - Chinese Yuan',
+            'USD - 美刀': 'USD - US Dollar',
+            '当前货币': 'Current Currency',
+            '当前语言': 'Current Language',
+            '默认货币': 'Default Currency',
+            '默认语言': 'Default Language',
+            '语言': 'Language',
+            '货币': 'Currency',
+            'API接口': 'API Endpoints',
+            '选择接口查看详情': 'Select an endpoint to view details',
+            '收起/展开': 'Collapse / Expand',
+            '前端API': 'Frontend API',
+            '后端API': 'Backend API',
+            '搜索接口名称、路径、方法、描述...': 'Search endpoint name, path, method, or description...',
+            '清除搜索': 'Clear Search',
+            'API文档管理': 'API Documentation',
+            'Weline Framework API接口文档和测试工具': 'Weline Framework API Documentation and Testing Tool',
+            '正式环境调试': 'Production Debugging',
+            '登录': 'Login',
+            '切换主题': 'Switch Theme',
+            '开发文档': 'Developer Docs',
+            '暂无API文档': 'No API documents',
+            '请选择API接口': 'Select an API endpoint',
+            '从左侧列表中选择一个API接口查看详细信息': 'Select an API endpoint from the left list to view details',
+            '等待选择API': 'Waiting for API Selection',
+            '请从左侧选择一个API接口开始测试': 'Select an API endpoint on the left to start testing',
+            'API用户登录': 'API User Login',
+            '用户名': 'Username',
+            '密码': 'Password',
+            '正式环境调试模式已开启': 'Production debugging mode is enabled',
+            '目前接口直达正式环境，请谨慎操作！所有请求将直接修改正式环境数据，可能造成不可逆的损失。': 'Requests are currently sent directly to production. Proceed carefully! All requests modify production data directly and may cause irreversible loss.',
+            '接口描述': 'API Description',
+            '请求参数': 'Request Parameters',
+            '参数名': 'Parameter',
+            '类型': 'Type',
+            '必填': 'Required',
+            '获取方式': 'Source',
+            '说明': 'Description',
+            '是': 'Yes',
+            '否': 'No',
+            '方法签名参数': 'Method Signature',
+            'POST参数': 'POST Parameter',
+            'GET参数': 'GET Parameter',
+            'URL参数': 'URL Parameter',
+            'Body参数': 'Body Parameter',
+            'Authorization头': 'Authorization Header',
+            'X-API-Token头': 'X-API-Token Header',
+            '请求示例': 'Request Example',
+            '复制路径': 'Copy Path',
+            '复制请求体': 'Copy Request Body',
+            '复制响应体': 'Copy Response Body',
+            '路径': 'Path',
+            '登录成功': 'Login successful',
+            '语言和货币': 'Language and Currency',
+            '路径切换': 'Path Switching',
+            '参数切换': 'Parameter Switching',
+            '请求配置': 'Request Config',
+            '方法': 'Method',
+            '请求URL': 'Request URL',
+            '请求参数': 'Request Parameters',
+            '请求头': 'Request Headers',
+            '请求体': 'Request Body',
+            '响应信息': 'Response Info',
+            '响应头': 'Response Headers',
+            '响应体': 'Response Body',
+            '发送请求': 'Send Request',
+            '导入示例': 'Import Example',
+            '添加参数': 'Add Parameter',
+            '添加请求头': 'Add Request Header',
+            '在线测试': 'Online Test'
+        };
+        function replaceTextNode(node) {
+            const text = node.nodeValue;
+            const trimmed = text.trim();
+            if (trimmed && dict[trimmed]) {
+                node.nodeValue = text.replace(trimmed, dict[trimmed]);
+                return;
+            }
+            let translated = text;
+            Object.keys(dict).forEach(function (source) {
+                if (translated.indexOf(source) !== -1) {
+                    translated = translated.split(source).join(dict[source]);
+                }
+            });
+            if (translated !== text) {
+                node.nodeValue = translated;
+            }
+        }
+        function translate(root) {
+            const walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+            while (walker.nextNode()) {
+                nodes.push(walker.currentNode);
+            }
+            nodes.forEach(replaceTextNode);
+            document.querySelectorAll('[title],[aria-label],[placeholder]').forEach(function (el) {
+                ['title', 'aria-label', 'placeholder'].forEach(function (attr) {
+                    const value = el.getAttribute(attr);
+                    if (value && dict[value.trim()]) {
+                        el.setAttribute(attr, dict[value.trim()]);
+                    }
+                });
+            });
+        }
+        translate(document.body);
+        new MutationObserver(function (mutations) {
+            mutations.forEach(function (mutation) {
+                mutation.addedNodes.forEach(function (node) {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        replaceTextNode(node);
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        translate(node);
+                    }
+                });
+            });
+        }).observe(document.body, {childList: true, subtree: true});
+    })();
+    </script>
 </body>
 </html>
 

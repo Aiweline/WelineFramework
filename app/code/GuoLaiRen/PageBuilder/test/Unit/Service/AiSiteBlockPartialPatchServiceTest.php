@@ -306,8 +306,114 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertTrue($captured['params']['partial_patch_mode'] ?? false);
         self::assertTrue($captured['params']['disable_conversation_history'] ?? false);
         self::assertTrue($captured['params']['disable_conversation_persist'] ?? false);
-        self::assertStringContainsString('Return JSON only', $captured['prompt']);
+        self::assertStringContainsString('Required top-level keys: block, change_summary, changed_fields.', $captured['prompt']);
+        self::assertStringContainsString('The first non-whitespace character must be {', $captured['prompt']);
+        self::assertStringContainsString('JSON transport self-check', $captured['prompt']);
+        self::assertStringContainsString('Template safety', $captured['prompt']);
+        self::assertStringContainsString('Never copy, rewrite, invent, or emit PHP/PHTML code', $captured['prompt']);
+        self::assertStringContainsString('Do not return _pb_server_template_phtml unless', $captured['prompt']);
+        self::assertStringContainsString('Do not output raw HTML, CSS, PHTML, Markdown fences, comments, or prose outside JSON.', $captured['prompt']);
+        self::assertStringContainsString('Do not include reason, why, or decision_reason fields', $captured['prompt']);
+        self::assertStringNotContainsString('keys: block, change_summary, changed_fields, reason', $captured['prompt']);
         self::assertSame('Conversion headline', $result['block']['config']['headline'] ?? null);
+    }
+
+    public function testPatchPromptOmitsServerTemplateBodySoAiDoesNotRewritePhtml(): void
+    {
+        $scope = $this->scope();
+        $read = (new AiSiteBlockPartialPatchService())->readCurrentBlockFromScope($scope, 'home', 'hero');
+        $read['block']['_pb_server_template_phtml'] = '<?php foreach ($items as $item): ?><section><?= $item ?></section><?php endforeach; ?>';
+
+        $service = new AiSiteBlockPartialPatchService();
+        $prompt = (function (array $read, array $scope, string $instruction): string {
+            return $this->buildPatchPrompt($read, $scope, $instruction);
+        })->call($service, $read, $scope, 'Tighten the heading spacing.');
+
+        self::assertStringNotContainsString('<?php foreach', $prompt);
+        self::assertStringNotContainsString('<?= $item ?>', $prompt);
+        self::assertStringContainsString('_pb_server_template_phtml_preserved_by_backend', $prompt);
+    }
+
+    public function testGenerateReplacementRepairsMalformedJsonPatchResponse(): void
+    {
+        $scope = $this->scope();
+        $read = (new AiSiteBlockPartialPatchService())->readCurrentBlockFromScope($scope, 'home', 'hero');
+        $replacement = $this->block('hero', 'Repaired headline', '<section>Repaired headline</section>', 'content/hero');
+        $blockJson = \json_encode($replacement, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        $repairedResponse = '{"block":' . $blockJson
+            . ',"change_summary":"Repaired invalid JSON transport."'
+            . ',"changed_fields":[config.content.section_intro]}';
+
+        $calls = 0;
+        $prompts = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(2))
+            ->method('generateStream')
+            ->willReturnCallback(static function (
+                string $prompt,
+                callable $callback,
+                ?string $modelCode = null,
+                ?string $scenarioCode = null,
+                ?string $locale = null,
+                array $params = []
+            ) use (&$calls, &$prompts, $repairedResponse): void {
+                $calls++;
+                $prompts[] = $prompt;
+                if ($calls === 1) {
+                    $callback('{"block":{"block_id":"hero","html":"<section class="broken">Broken</section>"}}');
+                    return;
+                }
+                $callback((string)$repairedResponse);
+            });
+
+        $events = [];
+        $service = new AiSiteBlockPartialPatchService(aiService: $aiService);
+        $result = $service->generateReplacementBlock(
+            $read,
+            $scope,
+            'Make the headline stronger.',
+            static function (string $event, array $payload) use (&$events): void {
+                $events[] = $event;
+            }
+        );
+
+        self::assertSame('Repaired headline', $result['block']['config']['headline'] ?? null);
+        self::assertSame(['config.content.section_intro'], $result['changed_fields']);
+        self::assertContains('json_repair', $events);
+        self::assertStringContainsString('malformed PageBuilder block_partial_patch JSON', $prompts[1] ?? '');
+        self::assertStringContainsString('static balanced HTML fragments', $prompts[1] ?? '');
+    }
+
+    public function testGenerateReplacementNormalizesRawTemplatePatchResponse(): void
+    {
+        $scope = $this->scope();
+        $read = (new AiSiteBlockPartialPatchService())->readCurrentBlockFromScope($scope, 'home', 'hero');
+        $rawTemplate = '<section class="hero-patched">Raw template patch</section>';
+
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(static function (
+                string $prompt,
+                callable $callback,
+                ?string $modelCode = null,
+                ?string $scenarioCode = null,
+                ?string $locale = null,
+                array $params = []
+            ) use ($rawTemplate): void {
+                $callback($rawTemplate);
+            });
+
+        $service = new AiSiteBlockPartialPatchService(aiService: $aiService);
+        $result = $service->generateReplacementBlock($read, $scope, 'Make the hero stronger.');
+
+        self::assertSame($rawTemplate, $result['block']['html'] ?? null);
+        self::assertSame(['html'], $result['changed_fields']);
+        self::assertSame(
+            $this->block('hero', 'Headline', '<section>Headline</section>', 'content/hero')['field_schema'],
+            $result['block']['field_schema'] ?? null
+        );
+        self::assertSame('', $result['reason']);
     }
 
     public function testRejectsReplacementWithoutHtml(): void
@@ -321,6 +427,22 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertFalse($result['success']);
         self::assertSame('BLOCK_VALIDATION_FAILED', $result['code']);
         self::assertContains('replacement.html must be a non-empty string', $result['details']['errors']);
+    }
+
+    public function testRejectsReplacementWithBrowserDefaultLink(): void
+    {
+        $service = new AiSiteBlockPartialPatchService();
+        $replacement = $this->block(
+            'hero',
+            'New Headline',
+            '<section><h2>New Headline</h2><a href="/download">Download APK</a></section>'
+        );
+
+        $result = $service->applyReplacementBlockToScope($this->scope(), 'home', 'hero', $replacement);
+
+        self::assertFalse($result['success']);
+        self::assertSame('BLOCK_VALIDATION_FAILED', $result['code']);
+        self::assertContains('replacement.html contains an unstyled browser-default link', $result['details']['errors']);
     }
 
     public function testRejectsChangedBlockId(): void
@@ -346,6 +468,21 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertFalse($result['success']);
         self::assertSame('BLOCK_VALIDATION_FAILED', $result['code']);
         self::assertContains('replacement.field_schema has an invalid shape', $result['details']['errors']);
+    }
+
+    public function testReplacementMissingFieldSchemaInheritsCurrentSchema(): void
+    {
+        $service = new AiSiteBlockPartialPatchService();
+        $replacement = $this->block('hero', 'New Headline', '<section>New Headline</section>');
+        unset($replacement['field_schema']);
+
+        $result = $service->applyReplacementBlockToScope($this->scope(), 'home', 'hero', $replacement);
+
+        self::assertTrue($result['success']);
+        self::assertSame(
+            $this->block('hero', 'Headline', '<section>Headline</section>', 'content/hero')['field_schema'],
+            $result['after_block']['field_schema']
+        );
     }
 
     public function testAcceptsListStyleFieldSchema(): void

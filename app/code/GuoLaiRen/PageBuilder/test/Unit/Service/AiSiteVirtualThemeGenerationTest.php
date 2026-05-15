@@ -9,12 +9,8 @@ use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
-use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
-use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
-use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestContext;
 
 /**
  * PHPUnit 下 AiSitePageComponentGenerationService 走桩数据（不调用真实 AI），
@@ -49,6 +45,27 @@ final class AiSiteVirtualThemeGenerationTest extends TestCase
         self::assertSame(true, $layout['content'][0]['config']['show_pagination'] ?? null);
     }
 
+    public function testVirtualThemeConfigAssetUrlsRejectBrokenLogoValues(): void
+    {
+        $service = new AiSiteVirtualThemeService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'sanitizeConfigAssetUrls');
+        $method->setAccessible(true);
+
+        $config = $method->invokeArgs($service, [[
+            'brand.logo' => '/pub/media/page-build/site/ai-generated/',
+            'logo.image' => 'data:image/svg+xml;base64,PHN2Zw==',
+            'logo.url' => 'https://images.unsplash.com/photo-1.jpg',
+            'brand.name' => 'Royal Games',
+            'logo' => '/pub/media/page-build/site/ai-generated/logo.webp',
+        ]]);
+
+        self::assertSame('', $config['brand.logo'] ?? null);
+        self::assertSame('', $config['logo.image'] ?? null);
+        self::assertSame('', $config['logo.url'] ?? null);
+        self::assertSame('Royal Games', $config['brand.name'] ?? null);
+        self::assertSame('/pub/media/page-build/site/ai-generated/logo.webp', $config['logo'] ?? null);
+    }
+
     public function testEnsureAiGeneratedVirtualThemeCreatesThemeAndLayoutsUnderPhpUnit(): void
     {
         $suffix = \bin2hex(\random_bytes(4));
@@ -67,19 +84,47 @@ final class AiSiteVirtualThemeGenerationTest extends TestCase
         ];
         $pageTypes = [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_BLOG_LIST];
 
-        $generation = new AiSitePageComponentGenerationService(
-            frameworkBuilder: new FrameworkBuilder(),
-            codeFixer: new CodeFixer(),
-            codeValidator: new CodeValidator(),
-        );
+        $generation = new class extends AiSitePageComponentGenerationService {
+            public function generateSharedComponents(array $websiteProfile, array $scope): array
+            {
+                return [
+                    'header' => [
+                        'code' => 'header/ai-site-header',
+                        'name' => 'AI Site Header',
+                        'phtml' => '<header><nav>Home</nav></header>',
+                        'default_config' => ['site_title' => (string)($websiteProfile['site_title'] ?? 'Site')],
+                    ],
+                    'footer' => [
+                        'code' => 'footer/ai-site-footer',
+                        'name' => 'AI Site Footer',
+                        'phtml' => '<footer><p>Footer</p></footer>',
+                        'default_config' => ['site_title' => (string)($websiteProfile['site_title'] ?? 'Site')],
+                    ],
+                ];
+            }
+
+            public function generatePageSections(string $pageType, array $websiteProfile, array $scope): array
+            {
+                return [
+                    'blueprint' => [
+                        'page_label' => $pageType,
+                    ],
+                    'sections' => [
+                        [
+                            'code' => 'content/' . $pageType . '-unit-section',
+                            'name' => $pageType . ' Unit Section',
+                            'phtml' => '<section><h2>' . \htmlspecialchars($pageType, \ENT_QUOTES, 'UTF-8') . '</h2></section>',
+                            'default_config' => ['headline' => $pageType . ' headline'],
+                            'sort_order' => 100,
+                            'key' => $pageType . '_unit_section',
+                        ],
+                    ],
+                ];
+            }
+        };
         $service = new AiSiteVirtualThemeService(new AiSitePageBlueprintService(), $generation);
 
-        RequestContext::set(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, true);
-        try {
-            $result = $service->ensureAiGeneratedVirtualTheme($scope, $websiteProfile, $pageTypes, [], 0);
-        } finally {
-            RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
-        }
+        $result = $service->ensureAiGeneratedVirtualTheme($scope, $websiteProfile, $pageTypes, [], 0);
 
         $virtualThemeId = (int)($result['virtual_theme_id'] ?? 0);
         self::assertGreaterThan(0, $virtualThemeId);

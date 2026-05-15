@@ -29,6 +29,12 @@ class Dictionary extends Model
     public const schema_fields_LOCALE_CODE = 'locale_code';
     #[Col('text', nullable: false, comment: '翻译')]
     public const schema_fields_TRANSLATE = 'translate';
+    #[Col('int', 1, nullable: false, default: 0, comment: '是否AI翻译')]
+    public const schema_fields_IS_AI = 'is_ai';
+    #[Col('varchar', 128, nullable: true, comment: '来源模块')]
+    public const schema_fields_SOURCE_MODULE = 'source_module';
+    #[Col('varchar', 32, nullable: true, comment: '导出时间')]
+    public const schema_fields_EXPORTED_AT = 'exported_at';
 /**
      * 生成统一的MD5指纹
      * 确保所有地方使用相同的算法生成MD5

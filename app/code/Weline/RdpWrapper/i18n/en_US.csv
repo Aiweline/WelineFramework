@@ -1,4 +1,4 @@
-﻿RDP远程桌面管理,RDP远程桌面管理
+﻿RDP远程桌面管理,"RDP remote desktop management"
 "RDP Wrapper 仅支持 Windows 系统","RDP Wrapper only supports Windows systems"
 "RDP Wrapper 已安装","RDP Wrapper is already installed"
 安装脚本不存在：%{path},"Install script not found: %{path}"
@@ -38,8 +38,8 @@
 端口,Port
 IP地址,"IP Address"
 远程桌面未启用,"Remote Desktop Not Enabled"
-"请在 Windows 设置中启用""允许远程连接""，或点击上方的""启用""按钮自动开启。","请在 Windows 设置中启用""允许远程连接""，或点击上方的""启用""按钮自动开启。"
-"手动设置路径：设置 → 系统 → 远程桌面 → 开启""启用远程桌面""开关","手动设置路径：设置 → 系统 → 远程桌面 → 开启""启用远程桌面""开关"
+"请在 Windows 设置中启用""允许远程连接""，或点击上方的""启用""按钮自动开启。","Please enable ""Allow remote connections"" in Windows Settings, or click the ""Enable"" button above to turn it on automatically."
+"手动设置路径：设置 → 系统 → 远程桌面 → 开启""启用远程桌面""开关","Manual setup path: Settings → System → Remote Desktop → Enable the ""Enable Remote Desktop"" toggle"
 远程用户管理,"Remote User Management"
 添加用户,"Add User"
 用户名,Username
@@ -50,36 +50,36 @@ IP地址,"IP Address"
 备注,Remark
 创建时间,"Created At"
 操作,Actions
-"暂无远程用户，请点击""添加用户""创建新账户","暂无远程用户，请点击""添加用户""创建新账户"
+"暂无远程用户，请点击""添加用户""创建新账户","No remote users. Please click ""Add User"" to create a new account."
 普通用户,"Standard User"
 远程桌面使用指南,"Remote Desktop User Guide"
 启用远程桌面（被控端）,"Enable Remote Desktop (Host)"
 "在当前 Windows 电脑上，确保远程桌面已启用。有两种方式：","On this Windows PC, make sure Remote Desktop is enabled. Two ways:"
-"方式一：点击上方状态面板中的""启用""按钮（推荐）","方式一：点击上方状态面板中的""启用""按钮（推荐）"
+"方式一：点击上方状态面板中的""启用""按钮（推荐）","Method 1: Click the ""Enable"" button in the status panel above (recommended)"
 方式二：手动设置,"Method 2: Manual setup"
-"设置 → 系统 → 远程桌面 → 开启""启用远程桌面""","设置 → 系统 → 远程桌面 → 开启""启用远程桌面"""
+"设置 → 系统 → 远程桌面 → 开启""启用远程桌面""","Settings → System → Remote Desktop → Enable ""Enable Remote Desktop"""
 "安装 RDP Wrapper（多用户支持）","Install RDP Wrapper (Multi-user Support)"
 "安装 RDP Wrapper 后，多个用户可同时通过远程桌面连接到本机，互不干扰。","After installing RDP Wrapper, multiple users can connect via RDP simultaneously without interference."
-"如果上方状态显示""未安装""，点击""安装""按钮自动安装","如果上方状态显示""未安装""，点击""安装""按钮自动安装"
+"如果上方状态显示""未安装""，点击""安装""按钮自动安装","If the status above shows ""Not Installed"", click the ""Install"" button to install automatically."
 "安装需要管理员权限，请确保以管理员身份运行 Weline Server","Installation requires admin privileges. Please run Weline Server as administrator."
 "安装后可运行 RDPConf.exe 检查状态","After installation, run RDPConf.exe to check status"
 创建远程用户账户,"Create Remote User Accounts"
 "为每个需要远程连接的人创建独立的 Windows 用户账户：","Create a separate Windows user account for each person who needs remote access:"
-"点击上方""添加用户""按钮创建新用户","点击上方""添加用户""按钮创建新用户"
+"点击上方""添加用户""按钮创建新用户","Click the ""Add User"" button above to create a new user."
 每个用户有独立的桌面环境，互不影响,"Each user has an independent desktop environment"
-"建议为不需要安装软件的用户选择""普通用户""权限","建议为不需要安装软件的用户选择""普通用户""权限"
+"建议为不需要安装软件的用户选择""普通用户""权限","Suggestion: Select ""Standard User"" permissions for users who do not need to install software"
 密码要求：至少8位，包含大小写字母和数字,"Password requirements: At least 8 characters, including uppercase, lowercase and numbers"
 连接远程桌面（控制端）,"Connect via Remote Desktop (Client)"
 其他人如何连接到本机：,"How others can connect to this PC:"
 连接地址,"Connection Address"
 用户,Users
-"按 Win+R，输入 mstsc 回车打开""远程桌面连接""","按 Win+R，输入 mstsc 回车打开""远程桌面连接"""
-"输入上方连接地址，点击""连接""","输入上方连接地址，点击""连接"""
+"按 Win+R，输入 mstsc 回车打开""远程桌面连接""","Press Win+R, type mstsc, and press Enter to open ""Remote Desktop Connection"""
+"输入上方连接地址，点击""连接""","Enter the connection address above, click ""Connect"""
 输入分配的用户名和密码登录,"Enter the assigned username and password to log in"
-"从 App Store 下载安装 ""Microsoft Remote Desktop""","从 App Store 下载安装 ""Microsoft Remote Desktop"""
-"点击 ""Add PC""，输入上方连接地址","点击 ""Add PC""，输入上方连接地址"
+"从 App Store 下载安装 ""Microsoft Remote Desktop""","Download and install ""Microsoft Remote Desktop"" from the App Store"
+"点击 ""Add PC""，输入上方连接地址","Click ""Add PC"" and enter the connection address above"
 手机/平板用户,"Mobile/Tablet Users"
-"安装 ""Microsoft Remote Desktop""（iOS/Android）","安装 ""Microsoft Remote Desktop""（iOS/Android）"
+"安装 ""Microsoft Remote Desktop""（iOS/Android）","Install ""Microsoft Remote Desktop"" (iOS/Android)"
 添加电脑，输入上方连接地址,"Add PC and enter the connection address above"
 注意事项,Notes
 "Windows 更新可能导致 RDP Wrapper 失效，需要重新安装或更新配置文件","Windows updates may cause RDP Wrapper to stop working. Reinstall or update config files."
@@ -98,7 +98,7 @@ Windows,Windows
 运行中,Running
 未运行,"Not Running"
 异常,Abnormal
-已启用,已启用
+已启用,Enabled
 未启用,"Not Enabled"
 重置密码,"Reset Password"
-删除,删除
+删除,Delete

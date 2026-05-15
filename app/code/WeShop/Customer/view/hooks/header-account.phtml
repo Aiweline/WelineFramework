@@ -96,6 +96,33 @@ if ($isLoggedIn) {
             const amountLabel = <?= json_encode($amountLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
             const continuePaymentLabel = <?= json_encode($continuePaymentLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
 
+            function moveLogoutToDropdownEnd() {
+                const dropdownLinks = document.querySelector('.dropdown-account-links');
+                if (!dropdownLinks) {
+                    return;
+                }
+
+                const logoutLink = dropdownLinks.querySelector('a[href*="customer/account/logout"]');
+                if (!logoutLink) {
+                    return;
+                }
+
+                const logoutItem = logoutLink.closest('li');
+                if (!logoutItem) {
+                    return;
+                }
+
+                let divider = dropdownLinks.querySelector('li.dropdown-logout-divider');
+                if (!divider) {
+                    divider = document.createElement('li');
+                    divider.setAttribute('role', 'none');
+                    divider.className = 'divider dropdown-logout-divider';
+                }
+
+                dropdownLinks.appendChild(divider);
+                dropdownLinks.appendChild(logoutItem);
+            }
+
             // 异步加载未支付订单数量
             function loadUnpaidOrdersCount() {
                 fetch('<?= $unpaidOrdersCountApiUrl ?>')
@@ -193,8 +220,12 @@ if ($isLoggedIn) {
             
             // 页面加载完成后执行
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', loadUnpaidOrdersCount);
+                document.addEventListener('DOMContentLoaded', function () {
+                    moveLogoutToDropdownEnd();
+                    loadUnpaidOrdersCount();
+                });
             } else {
+                moveLogoutToDropdownEnd();
                 loadUnpaidOrdersCount();
             }
             

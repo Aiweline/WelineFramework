@@ -1,608 +1,608 @@
-﻿"检测到模块 %{1} 的配置文件，进入二次操作模式","检测到模块 %{1} 的配置文件，进入二次操作模式"
-"=== 模块创建向导 ===","=== 模块创建向导 ==="
-请输入模块名称（格式：Vendor_ModuleName，例如：Weline_Demo）,请输入模块名称（格式：Vendor_ModuleName，例如：Weline_Demo）
-模块名称不能为空,模块名称不能为空
-"模块名称格式不正确，应为 Vendor_ModuleName 格式","模块名称格式不正确，应为 Vendor_ModuleName 格式"
-"=== 检测到模块 %{1} 之前的操作记录 ===","=== 检测到模块 %{1} 之前的操作记录 ==="
-模块已生成,模块已生成
-模块尚未生成,模块尚未生成
-请选择操作：,请选择操作：
-"1. 继续创建流程（从上次中断的地方继续）","1. 继续创建流程（从上次中断的地方继续）"
-"2. 进入二次操作模式（添加控制器、继承模块等）","2. 进入二次操作模式（添加控制器、继承模块等）"
-"3. 直接生成模块（使用当前配置）","3. 直接生成模块（使用当前配置）"
-"4. 重新开始（将覆盖之前的配置）","4. 重新开始（将覆盖之前的配置）"
-"0. 退出","0. 退出"
-确认要重新开始吗？这将覆盖所有之前的配置！(y/n，默认：n),确认要重新开始吗？这将覆盖所有之前的配置！(y/n，默认：n)
-已重置配置，开始新的创建流程,已重置配置，开始新的创建流程
-已取消操作,已取消操作
-已退出,已退出
-无效选项，默认继续创建流程,无效选项，默认继续创建流程
-"模块 %{1} 已存在，直接进入二次操作模式","模块 %{1} 已存在，直接进入二次操作模式"
-"=== 继续模块创建流程 ===","=== 继续模块创建流程 ==="
-"步骤 1/6：请输入版本号（默认：1.0.0）","步骤 1/6：请输入版本号（默认：1.0.0）"
-版本号已设置：%{1},版本号已设置：%{1}
-"步骤 1/6：版本号（已设置：%{1}，跳过）","步骤 1/6：版本号（已设置：%{1}，跳过）"
-"步骤 2/6：请输入模块描述（可选，直接回车跳过）","步骤 2/6：请输入模块描述（可选，直接回车跳过）"
-描述已设置：%{1},描述已设置：%{1}
-"步骤 2/6：模块描述（已设置：%{1}，跳过）","步骤 2/6：模块描述（已设置：%{1}，跳过）"
-"步骤 3/6：请输入路由前缀（默认：模块名转小写，留空则不创建env.php）","步骤 3/6：请输入路由前缀（默认：模块名转小写，留空则不创建env.php）"
-路由前缀已设置：%{1},路由前缀已设置：%{1}
-"步骤 3/6：路由前缀（已设置：%{1}，跳过）","步骤 3/6：路由前缀（已设置：%{1}，跳过）"
-"步骤 4/6：是否要创建控制器？(y/n，默认：y，直接回车将创建默认 helloword 控制器)","步骤 4/6：是否要创建控制器？(y/n，默认：y，直接回车将创建默认 helloword 控制器)"
-已跳过控制器创建,已跳过控制器创建
-"已添加 %{1} 个控制器","已添加 %{1} 个控制器"
-"已添加默认 helloword 控制器","已添加默认 helloword 控制器"
-"步骤 4/6：控制器（已配置 %{1} 个，跳过）","步骤 4/6：控制器（已配置 %{1} 个，跳过）"
-"步骤 5/6：是否进行高级定制？(y/n，默认：n)","步骤 5/6：是否进行高级定制？(y/n，默认：n)"
-已跳过高级定制,已跳过高级定制
-"步骤 5/6：高级定制（已配置，跳过）","步骤 5/6：高级定制（已配置，跳过）"
-"步骤 6/6：是否现在生成模块？(y/n，默认：y)","步骤 6/6：是否现在生成模块？(y/n，默认：y)"
-模块生成完成！,模块生成完成！
-已跳过模块生成，配置已保存，您可以稍后通过二次操作模式生成模块,已跳过模块生成，配置已保存，您可以稍后通过二次操作模式生成模块
-"步骤 6/6：模块已生成，跳过","步骤 6/6：模块已生成，跳过"
-创建流程完成！,创建流程完成！
-"=== 控制器 #%{1} ===","=== 控制器 #%{1} ==="
-请选择控制器类型：,请选择控制器类型：
-"1. Frontend（前端控制器，创建在 Controller/Frontend 目录，继承 FrontendController）","1. Frontend（前端控制器，创建在 Controller/Frontend 目录，继承 FrontendController）"
-"2. Backend（后端控制器，创建在 Controller/Backend 目录，继承 BackendController）【必须配置Acl】","2. Backend（后端控制器，创建在 Controller/Backend 目录，继承 BackendController）【必须配置Acl】"
-"3. FrontendApi（前端API控制器，创建在 Api/Rest/V1/Frontend 目录，继承 FrontendRestController）【公开接口无需Acl，需要登录的接口也无需Acl】","3. FrontendApi（前端API控制器，创建在 Api/Rest/V1/Frontend 目录，继承 FrontendRestController）【公开接口无需Acl，需要登录的接口也无需Acl】"
-"4. BackendApi（后端API控制器，创建在 Api/Rest/V1/Backend 目录，继承 BackendRestController）【必须配置Acl】","4. BackendApi（后端API控制器，创建在 Api/Rest/V1/Backend 目录，继承 BackendRestController）【必须配置Acl】"
-"0. 跳过创建控制器","0. 跳过创建控制器"
-"无效选择，默认创建 Frontend 控制器","无效选择，默认创建 Frontend 控制器"
-"⚠️  重要提示：后端控制器必须配置Acl权限注解！","⚠️  重要提示：后端控制器必须配置Acl权限注解！"
-示例：,示例：
-"⚠️  重要提示：后端API控制器必须配置Acl权限注解！","⚠️  重要提示：后端API控制器必须配置Acl权限注解！"
-"ℹ️  提示：前端API控制器有两种模式：","ℹ️  提示：前端API控制器有两种模式："
-"1. 公开接口：不需要Acl注解，不需要登录即可访问","1. 公开接口：不需要Acl注解，不需要登录即可访问"
-"2. 需要登录：不需要Acl注解，但需要用户登录后才能访问（由FrontendRestController自动处理）","2. 需要登录：不需要Acl注解，但需要用户登录后才能访问（由FrontendRestController自动处理）"
-"请输入控制器名称（例如：Index、Product、User，直接回车将使用默认名称 Helloword）","请输入控制器名称（例如：Index、Product、User，直接回车将使用默认名称 Helloword）"
-请输入路由（多个路由用逗号分隔，留空则使用控制器名称作为路由）,请输入路由（多个路由用逗号分隔，留空则使用控制器名称作为路由）
-"=== 配置Acl权限信息 ===","=== 配置Acl权限信息 ==="
-"提示：前缀为 %{1}::，您只需要填写后面的部分","提示：前缀为 %{1}::，您只需要填写后面的部分"
-"请输入类级别Acl的source_id（例如完整格式：%{1}，您只需输入：api::%{2}，前缀 %{3}:: 已自动添加，直接回车使用默认值）","请输入类级别Acl的source_id（例如完整格式：%{1}，您只需输入：api::%{2}，前缀 %{3}:: 已自动添加，直接回车使用默认值）"
-"请输入类级别Acl的source_id（例如完整格式：%{1}，您只需输入：%{2}，前缀 %{3}:: 已自动添加，直接回车使用默认值）","请输入类级别Acl的source_id（例如完整格式：%{1}，您只需输入：%{2}，前缀 %{3}:: 已自动添加，直接回车使用默认值）"
-请输入类级别Acl的名称（必填，例如：%{1}管理）,请输入类级别Acl的名称（必填，例如：%{1}管理）
-Acl名称不能为空，使用默认值：%{1},Acl名称不能为空，使用默认值：%{1}
-"请输入类级别Acl的图标（可选，例如：mdi mdi-home，留空则不设置）","请输入类级别Acl的图标（可选，例如：mdi mdi-home，留空则不设置）"
-请输入类级别Acl的文档描述（可选，留空则不设置）,请输入类级别Acl的文档描述（可选，留空则不设置）
-"请输入方法级别Acl的source_id（例如完整格式：%{1}，您只需输入：index，前缀 %{2}:: 已自动添加，直接回车使用默认值 index）","请输入方法级别Acl的source_id（例如完整格式：%{1}，您只需输入：index，前缀 %{2}:: 已自动添加，直接回车使用默认值 index）"
-请输入方法级别Acl的名称（必填，例如：%{1}列表）,请输入方法级别Acl的名称（必填，例如：%{1}列表）
-"请输入方法级别Acl的图标（可选，例如：mdi mdi-list，留空则不设置）","请输入方法级别Acl的图标（可选，例如：mdi mdi-list，留空则不设置）"
-请输入方法级别Acl的文档描述（可选，留空则不设置）,请输入方法级别Acl的文档描述（可选，留空则不设置）
-"已添加控制器：%{1} (%{2})，路由：%{3}","已添加控制器：%{1} (%{2})，路由：%{3}"
-是否继续添加控制器？(y/n，默认：n),是否继续添加控制器？(y/n，默认：n)
-"=== 高级定制选项 ===","=== 高级定制选项 ==="
-请选择高级定制选项：,请选择高级定制选项：
-"1. 创建事件（Observer）","1. 创建事件（Observer）"
-"2. 创建插件（Plugin）","2. 创建插件（Plugin）"
-"3. 创建模型（Model）","3. 创建模型（Model）"
-"4. 创建服务（Service）","4. 创建服务（Service）"
-"5. 提取并翻译i18n词典","5. 提取并翻译i18n词典"
-"0. 完成高级定制","0. 完成高级定制"
-无效选项，请重新选择,无效选项，请重新选择
-"未找到可用事件（generated/events.php 不存在或为空）","未找到可用事件（generated/events.php 不存在或为空）"
-是否创建自定义事件？(y/n，默认：y),是否创建自定义事件？(y/n，默认：y)
-请输入事件名称（例如：model_save_before）,请输入事件名称（例如：model_save_before）
-事件名称不能为空,事件名称不能为空
-"自定义事件 %{1} 已添加到配置","自定义事件 %{1} 已添加到配置"
-"找到 %{1} 个可用事件","找到 %{1} 个可用事件"
-请输入搜索关键词搜索事件，或直接输入事件名称,请输入搜索关键词搜索事件，或直接输入事件名称
-留空则显示所有事件（最多显示50个）,留空则显示所有事件（最多显示50个）
-未找到匹配的事件：%{1},未找到匹配的事件：%{1}
-"是否创建自定义事件 %{1}？(y/n，默认：y)","是否创建自定义事件 %{1}？(y/n，默认：y)"
-"找到 %{1} 个匹配的事件：","找到 %{1} 个匹配的事件："
-"显示前 %{1} 个事件：","显示前 %{1} 个事件："
-"... 还有 %{1} 个事件未显示，请使用更精确的搜索关键词","... 还有 %{1} 个事件未显示，请使用更精确的搜索关键词"
-自动选择唯一匹配的事件：%{1},自动选择唯一匹配的事件：%{1}
-请选择事件（输入序号查看详情，输入序号+回车确认选择，或直接输入事件名称，留空则创建自定义事件）,请选择事件（输入序号查看详情，输入序号+回车确认选择，或直接输入事件名称，留空则创建自定义事件）
-提示：输入序号后按回车可查看该事件的详细信息,提示：输入序号后按回车可查看该事件的详细信息
-是否创建自定义事件？(y/n，默认：n),是否创建自定义事件？(y/n，默认：n)
-请输入自定义事件名称,请输入自定义事件名称
-无效的序号,无效的序号
-是否选择此事件？(y/n，默认：y),是否选择此事件？(y/n，默认：y)
-"事件 %{1} 已添加到配置（使用现有事件）","事件 %{1} 已添加到配置（使用现有事件）"
-"=== 事件详细信息 ===","=== 事件详细信息 ==="
-提示：可以在浏览器中访问上述地址查看完整文档,提示：可以在浏览器中访问上述地址查看完整文档
-"请输入插件目标类（例如：Weline\Framework\Database\Model）","请输入插件目标类（例如：Weline\Framework\Database\Model）"
-目标类不能为空,目标类不能为空
-"类 %{1} 不存在","类 %{1} 不存在"
-是否继续？(y/n，默认：n),是否继续？(y/n，默认：n)
-"类 %{1} 存在","类 %{1} 存在"
-请输入插件方法名（例如：save）,请输入插件方法名（例如：save）
-方法名不能为空,方法名不能为空
-"方法 %{1}::%{2}() 不存在","方法 %{1}::%{2}() 不存在"
-"方法 %{1}::%{2}() 存在","方法 %{1}::%{2}() 存在"
-插件已添加到配置,插件已添加到配置
-请输入模型名称（例如：Product）,请输入模型名称（例如：Product）
-模型名称不能为空,模型名称不能为空
-是否配置模型字段？(y/n，默认：n),是否配置模型字段？(y/n，默认：n)
-"=== 字段 #%{1} ===","=== 字段 #%{1} ==="
-请输入字段名（例如：product_id）,请输入字段名（例如：product_id）
-"请输入字段类型（例如：varchar, int, text, datetime）","请输入字段类型（例如：varchar, int, text, datetime）"
-请输入字段长度（可选，例如：255，int类型可留空）,请输入字段长度（可选，例如：255，int类型可留空）
-请输入字段注释（可选）,请输入字段注释（可选）
-是否为主键？(y/n，默认：n),是否为主键？(y/n，默认：n)
-是否允许为空？(y/n，默认：y),是否允许为空？(y/n，默认：y)
-"字段 %{1} 已添加","字段 %{1} 已添加"
-是否继续添加字段？(y/n，默认：n),是否继续添加字段？(y/n，默认：n)
-"模型 %{1} 已添加到配置","模型 %{1} 已添加到配置"
-"请输入服务名称（例如：ProductService 或 Product，生成时会自动添加Service后缀）","请输入服务名称（例如：ProductService 或 Product，生成时会自动添加Service后缀）"
-服务名称不能为空,服务名称不能为空
-已移除Service后缀，生成时会自动添加,已移除Service后缀，生成时会自动添加
-"服务 %{1} 已添加到配置（将生成为 %{2}）","服务 %{1} 已添加到配置（将生成为 %{2}）"
-"=== 提取并翻译i18n词典 ===","=== 提取并翻译i18n词典 ==="
-目标语言：%{1},目标语言：%{1}
-模块目录不存在，请先生成模块,模块目录不存在，请先生成模块
-正在扫描模块文件，提取需要翻译的字符串...,正在扫描模块文件，提取需要翻译的字符串...
-未找到需要翻译的字符串,未找到需要翻译的字符串
-"找到 %{1} 个需要翻译的字符串","找到 %{1} 个需要翻译的字符串"
-"=== 处理语言：%{1} ===","=== 处理语言：%{1} ==="
-尝试使用AI翻译服务...,尝试使用AI翻译服务...
-"AI翻译了 %{1} 个字符串","AI翻译了 %{1} 个字符串"
-从数据库词典中查找已翻译的内容...,从数据库词典中查找已翻译的内容...
-"数据库词典翻译了 %{1} 个字符串","数据库词典翻译了 %{1} 个字符串"
-"=== 翻译结果 ===","=== 翻译结果 ==="
-以下字符串需要手动翻译：,以下字符串需要手动翻译：
-"... 还有 %{1} 个字符串未显示","... 还有 %{1} 个字符串未显示"
-"请手动编辑 i18n 文件进行翻译","请手动编辑 i18n 文件进行翻译"
-扫描PHP文件时出错：%{1},扫描PHP文件时出错：%{1}
-扫描PHTML文件时出错：%{1},扫描PHTML文件时出错：%{1}
-AI模块未找到，跳过AI翻译,AI模块未找到，跳过AI翻译
-翻译缓存,翻译缓存
-找到AI翻译服务，开始翻译...,找到AI翻译服务，开始翻译...
-所有字符串都已翻译，无需AI翻译,所有字符串都已翻译，无需AI翻译
-"需要翻译 %{1} 个字符串（已过滤已翻译的）","需要翻译 %{1} 个字符串（已过滤已翻译的）"
-批量翻译异常：%{1},批量翻译异常：%{1}
-"AI翻译完成，成功翻译 %{1} 个字符串","AI翻译完成，成功翻译 %{1} 个字符串"
-"AI翻译完成，但没有成功翻译任何字符串（共处理 %{1} 个）","AI翻译完成，但没有成功翻译任何字符串（共处理 %{1} 个）"
-可能的原因：,可能的原因：
-"1. 翻译结果和原文相同（AI返回了原文）","1. 翻译结果和原文相同（AI返回了原文）"
-"2. AI服务调用失败或返回错误","2. AI服务调用失败或返回错误"
-"3. 适配器参数验证失败","3. 适配器参数验证失败"
-"4. 翻译模型未配置或未激活","4. 翻译模型未配置或未激活"
-"示例：原文 ""%{1}"" -> 翻译结果 ""%{2}""","示例：原文 ""%{1}"" -> 翻译结果 ""%{2}"""
-AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
-保存翻译结果失败：%{1},保存翻译结果失败：%{1}
-本地词典模型未找到，跳过数据库翻译,本地词典模型未找到，跳过数据库翻译
-数据库翻译查询失败：%{1},数据库翻译查询失败：%{1}
-已更新%{1}词典文件：%{2}（新增：%{3}，更新：%{4}）,已更新%{1}词典文件：%{2}（新增：%{3}，更新：%{4}）
-已更新%{1}词典文件：%{2}（新增：%{3}）,已更新%{1}词典文件：%{2}（新增：%{3}）
-%{1}词典文件无需更新：%{2},%{1}词典文件无需更新：%{2}
-"提示：%{1} 中包含未翻译的字符串，请手动编辑进行翻译","提示：%{1} 中包含未翻译的字符串，请手动编辑进行翻译"
-开始生成模块...,开始生成模块...
-已创建模块目录：%{1},已创建模块目录：%{1}
-模块文件生成完成！,模块文件生成完成！
-是否立即注册模块到系统？(y/n，默认：y),是否立即注册模块到系统？(y/n，默认：y)
-提示：您可以稍后运行以下命令注册模块：,提示：您可以稍后运行以下命令注册模块：
-已迁移配置文件到模块根目录：%{1},已迁移配置文件到模块根目录：%{1}
-正在注册模块到系统...,正在注册模块到系统...
-模块注册文件不存在：%{1},模块注册文件不存在：%{1}
-正在清除缓存...,正在清除缓存...
-正在刷新模块列表...,正在刷新模块列表...
-"模块 %{1} 已成功注册到系统！","模块 %{1} 已成功注册到系统！"
-注册模块时出错：%{1},注册模块时出错：%{1}
-请手动运行以下命令注册模块：,请手动运行以下命令注册模块：
-"文件 %{1} 已存在，不能覆盖","文件 %{1} 已存在，不能覆盖"
-文件路径：%{1},文件路径：%{1}
-请手动前往修改，或选择覆盖（将删除现有文件）,请手动前往修改，或选择覆盖（将删除现有文件）
-是否要覆盖？(y/n，默认：n),是否要覆盖？(y/n，默认：n)
-"已创建 register.php","已创建 register.php"
-"已创建 env.php","已创建 env.php"
-已创建控制器：%{1},已创建控制器：%{1}
-"⚠️  请记住：后端控制器必须配置Acl权限注解才能被菜单识别和访问控制！","⚠️  请记住：后端控制器必须配置Acl权限注解才能被菜单识别和访问控制！"
-请在控制器类和方法上添加Acl注解，然后重新运行菜单创建命令。,请在控制器类和方法上添加Acl注解，然后重新运行菜单创建命令。
-"⚠️  请记住：后端API控制器必须配置Acl权限注解！","⚠️  请记住：后端API控制器必须配置Acl权限注解！"
-请在控制器类和方法上添加Acl注解。,请在控制器类和方法上添加Acl注解。
-已创建默认视图文件,已创建默认视图文件
-已创建视图模板：%{1},已创建视图模板：%{1}
-"已创建 event.xml","已创建 event.xml"
-"已创建 plugin.xml","已创建 plugin.xml"
-"已从 var/module_config 迁移配置文件到模块根目录","已从 var/module_config 迁移配置文件到模块根目录"
-无法保存配置：未找到模块名,无法保存配置：未找到模块名
-更新配置文件：%{1},更新配置文件：%{1}
-配置已保存到：%{1},配置已保存到：%{1}
-模块目录不存在，将在生成模块时创建,模块目录不存在，将在生成模块时创建
-"=== 模块操作菜单 ===","=== 模块操作菜单 ==="
-模块：%{1},模块：%{1}
-状态：模块已生成,状态：模块已生成
-状态：模块未生成,状态：模块未生成
-安装状态：已安装,安装状态：已安装
-启用状态：已启用,启用状态：已启用
-启用状态：已禁用,启用状态：已禁用
-安装状态：未安装,安装状态：未安装
-"1. 新建控制器","1. 新建控制器"
-"2. 创建目录结构（Observer、Plugin、Service等）","2. 创建目录结构（Observer、Plugin、Service等）"
-"3. 创建后台菜单","3. 创建后台菜单"
-"4. 继承模块（Extends）","4. 继承模块（Extends）"
-"5. 初始化主题文件到模板","5. 初始化主题文件到模板"
-"6. 查看模块配置","6. 查看模块配置"
-"7. 继续创建流程（完成未完成的步骤）","7. 继续创建流程（完成未完成的步骤）"
-"8. 提取并翻译i18n词典","8. 提取并翻译i18n词典"
-"9. 检测模块完整性","9. 检测模块完整性"
-"10. 安装模块到系统","10. 安装模块到系统"
-"11. 重装模块","11. 重装模块"
-"12. 卸载模块","12. 卸载模块"
-"13. 回滚模块卸载","13. 回滚模块卸载"
-"14. 生成模块（使用当前配置）","14. 生成模块（使用当前配置）"
-"请输入要收集和翻译的语言（多个语言用逗号分隔，例如：zh_Hans_CN,en_US,ja_JP），默认：zh_Hans_CN","请输入要收集和翻译的语言（多个语言用逗号分隔，例如：zh_Hans_CN,en_US,ja_JP），默认：zh_Hans_CN"
-模块已生成，无需重复生成,模块已生成，无需重复生成
-退出操作,退出操作
-"=== 添加控制器 ===","=== 添加控制器 ==="
-"=== 模块继承 ===","=== 模块继承 ==="
-未找到有规约文件的模块,未找到有规约文件的模块
-请输入要继承的模块名称（例如：Weline_Demo，支持模糊搜索，直接回车显示所有模块）,请输入要继承的模块名称（例如：Weline_Demo，支持模糊搜索，直接回车显示所有模块）
-未找到匹配的模块,未找到匹配的模块
-是否显示所有模块？(y/n，默认：y),是否显示所有模块？(y/n，默认：y)
-找到以下模块：,找到以下模块：
-请选择要继承的模块（输入序号）,请选择要继承的模块（输入序号）
-无效选择,无效选择
-扫描模块时出错：%{1},扫描模块时出错：%{1}
-正在创建继承文件...,正在创建继承文件...
-继承文件已创建：%{1},继承文件已创建：%{1}
-"=== 初始化主题文件 ===","=== 初始化主题文件 ==="
-未找到可用主题,未找到可用主题
-找到以下主题：,找到以下主题：
-请选择要使用的主题（输入序号）,请选择要使用的主题（输入序号）
-主题文件初始化功能待实现,主题文件初始化功能待实现
-主题路径：%{1},主题路径：%{1}
-目标路径：%{1},目标路径：%{1}
-"=== 模块配置 ===","=== 模块配置 ==="
-"=== 已配置内容摘要 ===","=== 已配置内容摘要 ==="
-"=== 创建模块目录结构 ===","=== 创建模块目录结构 ==="
-"请选择要创建的目录（多个用逗号分隔，例如：1,2,3，或输入 all 创建所有目录）：","请选择要创建的目录（多个用逗号分隔，例如：1,2,3，或输入 all 创建所有目录）："
-未选择任何目录,未选择任何目录
-已创建目录：%{1},已创建目录：%{1}
-目录已存在：%{1},目录已存在：%{1}
-"成功创建 %{1} 个目录","成功创建 %{1} 个目录"
-"=== 后台菜单管理 ===","=== 后台菜单管理 ==="
-"1. 新建菜单","1. 新建菜单"
-"2. 修改菜单","2. 修改菜单"
-"3. 删除菜单","3. 删除菜单"
-"4. 移动菜单","4. 移动菜单"
-"5. 查看当前菜单","5. 查看当前菜单"
-"6. 刷新菜单收集（使菜单生效）","6. 刷新菜单收集（使菜单生效）"
-"2. 刷新菜单收集（使菜单生效）","2. 刷新菜单收集（使菜单生效）"
-正在刷新菜单收集...,正在刷新菜单收集...
-"步骤 1/3：收集菜单...","步骤 1/3：收集菜单..."
-菜单收集完成！,菜单收集完成！
-菜单收集可能未完全完成,菜单收集可能未完全完成
-"步骤 2/3：清除缓存...","步骤 2/3：清除缓存..."
-缓存清除完成！,缓存清除完成！
-"步骤 3/3：菜单已刷新并生效！","步骤 3/3：菜单已刷新并生效！"
-刷新菜单收集时出错：%{1},刷新菜单收集时出错：%{1}
-请手动运行以下命令刷新菜单：,请手动运行以下命令刷新菜单：
-"=== 新建菜单 ===","=== 新建菜单 ==="
-请输入菜单名称（唯一标识，例如：my_module_main，默认：%{1}）,请输入菜单名称（唯一标识，例如：my_module_main，默认：%{1}）
-菜单名称已存在：%{1},菜单名称已存在：%{1}
-请输入菜单标题（例如：我的模块）,请输入菜单标题（例如：我的模块）
-菜单标题不能为空,菜单标题不能为空
-是否选择本模块的控制器路由？(y/n，默认：y，不选择则创建父级菜单),是否选择本模块的控制器路由？(y/n，默认：y，不选择则创建父级菜单)
-找到以下控制器路由（从Acl提取）：,找到以下控制器路由（从Acl提取）：
-"请选择路由（输入序号，或输入 0 跳过）","请选择路由（输入序号，或输入 0 跳过）"
-"请输入图标类名（例如：mdi mdi-home，留空则不设置）","请输入图标类名（例如：mdi mdi-home，留空则不设置）"
-未找到控制器路由,未找到控制器路由
-重要提示：,重要提示：
-"1. 后端控制器（Backend）必须配置Acl权限注解才能被菜单识别","1. 后端控制器（Backend）必须配置Acl权限注解才能被菜单识别"
-"2. 后端API控制器（BackendApi）必须配置Acl权限注解","2. 后端API控制器（BackendApi）必须配置Acl权限注解"
-"3. 前端API控制器（FrontendApi）有两种模式：","3. 前端API控制器（FrontendApi）有两种模式："
-"- 公开接口：不需要Acl注解，不需要登录即可访问","- 公开接口：不需要Acl注解，不需要登录即可访问"
-"- 需要登录：不需要Acl注解，但需要用户登录后才能访问","- 需要登录：不需要Acl注解，但需要用户登录后才能访问"
-请手动输入菜单路由（例如：backend/index/index，留空则不设置）,请手动输入菜单路由（例如：backend/index/index，留空则不设置）
-提示：如果控制器未配置Acl，请先为控制器添加Acl注解，然后重新运行此命令,提示：如果控制器未配置Acl，请先为控制器添加Acl注解，然后重新运行此命令
-将创建父级菜单（其他菜单可以挂载在此菜单下）,将创建父级菜单（其他菜单可以挂载在此菜单下）
-请输入排序数字（默认：100）,请输入排序数字（默认：100）
-已创建菜单文件：%{1},已创建菜单文件：%{1}
-已添加菜单项到：%{1},已添加菜单项到：%{1}
-"=== 修改菜单 ===","=== 修改菜单 ==="
-请选择要修改的菜单（输入序号）,请选择要修改的菜单（输入序号）
-请选择要修改的字段：,请选择要修改的字段：
-"1. 菜单标题","1. 菜单标题"
-"2. 菜单路由","2. 菜单路由"
-"3. 父级菜单","3. 父级菜单"
-"4. 图标","4. 图标"
-"5. 排序","5. 排序"
-"0. 取消","0. 取消"
-当前标题：%{1},当前标题：%{1}
-请输入新标题,请输入新标题
-当前路由：%{1},当前路由：%{1}
-请输入新路由（留空则删除路由）,请输入新路由（留空则删除路由）
-当前父级：%{1},当前父级：%{1}
-当前图标：%{1},当前图标：%{1}
-请输入新图标（留空则删除图标）,请输入新图标（留空则删除图标）
-当前排序：%{1},当前排序：%{1}
-请输入新排序,请输入新排序
-菜单已更新,菜单已更新
-未找到要修改的菜单项,未找到要修改的菜单项
-"=== 删除菜单 ===","=== 删除菜单 ==="
-请选择要删除的菜单（输入序号）,请选择要删除的菜单（输入序号）
-确定要删除菜单：%{1}？(y/n，默认：n),确定要删除菜单：%{1}？(y/n，默认：n)
-已取消删除,已取消删除
-菜单已删除,菜单已删除
-"=== 移动菜单 ===","=== 移动菜单 ==="
-请选择要移动的菜单（输入序号）,请选择要移动的菜单（输入序号）
-已选择菜单：%{1},已选择菜单：%{1}
-"请选择目标父菜单（输入序号，输入 0 则移动到顶级）","请选择目标父菜单（输入序号，输入 0 则移动到顶级）"
-不能将菜单移动到自己的子菜单下，这会造成循环引用,不能将菜单移动到自己的子菜单下，这会造成循环引用
-顶级菜单,顶级菜单
-"菜单 %{1} 已移动到 %{2}","菜单 %{1} 已移动到 %{2}"
-未找到要移动的菜单项,未找到要移动的菜单项
-当前菜单列表：,当前菜单列表：
-解析菜单XML时出错：%{1},解析菜单XML时出错：%{1}
-扫描菜单时出错：%{1},扫描菜单时出错：%{1}
-未找到父级菜单，将创建顶级菜单,未找到父级菜单，将创建顶级菜单
-未找到顶级菜单，将创建顶级菜单,未找到顶级菜单，将创建顶级菜单
-请选择父级菜单（留空则为顶级菜单，输入数字选择菜单，输入.1/.2等展开子菜单）：,请选择父级菜单（留空则为顶级菜单，输入数字选择菜单，输入.1/.2等展开子菜单）：
-已经在顶级菜单，请输入其他选项或留空选择顶级菜单,已经在顶级菜单，请输入其他选项或留空选择顶级菜单
-当前菜单没有子菜单,当前菜单没有子菜单
-当前路径：%{1},当前路径：%{1}
-是否选择当前菜单作为父级？(y/n，默认：y),是否选择当前菜单作为父级？(y/n，默认：y)
-"请选择子菜单（输入 0 返回上级，留空选择当前路径，输入数字选择菜单，输入.1/.2等展开子菜单）：","请选择子菜单（输入 0 返回上级，留空选择当前路径，输入数字选择菜单，输入.1/.2等展开子菜单）："
-"=== 安装模块到系统 ===","=== 安装模块到系统 ==="
-"请先创建模块的 register.php 文件","请先创建模块的 register.php 文件"
-"步骤 1/3：清除缓存...","步骤 1/3：清除缓存..."
-"步骤 2/3：执行模块注册...","步骤 2/3：执行模块注册..."
-"步骤 3/3：安装模块（运行 setup:upgrade）...","步骤 3/3：安装模块（运行 setup:upgrade）..."
-"模块 %{1} 已成功安装到系统！","模块 %{1} 已成功安装到系统！"
-模块安装可能未完全完成,模块安装可能未完全完成
-请手动运行以下命令安装模块：,请手动运行以下命令安装模块：
-安装模块时出错：%{1},安装模块时出错：%{1}
-"=== 重装模块 ===","=== 重装模块 ==="
-"⚠️  警告：重装模块将执行以下操作：","⚠️  警告：重装模块将执行以下操作："
-"1. 清除系统缓存","1. 清除系统缓存"
-"2. 重新执行模块的安装脚本（setup/install.php）","2. 重新执行模块的安装脚本（setup/install.php）"
-"3. 重新执行模块的升级脚本（setup/upgrade.php）","3. 重新执行模块的升级脚本（setup/upgrade.php）"
-"4. 可能会影响数据库数据（表结构、数据等）","4. 可能会影响数据库数据（表结构、数据等）"
-"5. 可能会影响已安装的配置","5. 可能会影响已安装的配置"
-"请确认是否要继续重装模块 %{1}？","请确认是否要继续重装模块 %{1}？"
-"输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作（默认：取消）","输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作（默认：取消）"
-已取消重装操作,已取消重装操作
-"⚠️  最后确认：您确定要重装模块 %{1} 吗？","⚠️  最后确认：您确定要重装模块 %{1} 吗？"
-"再次输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作","再次输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作"
-"步骤 1/4：清除缓存...","步骤 1/4：清除缓存..."
-"步骤 2/4：执行模块注册...","步骤 2/4：执行模块注册..."
-"步骤 3/4：标记模块为需要重装...","步骤 3/4：标记模块为需要重装..."
-"步骤 4/4：重装模块（运行 setup:upgrade）...","步骤 4/4：重装模块（运行 setup:upgrade）..."
-"模块 %{1} 已成功重装！","模块 %{1} 已成功重装！"
-模块重装可能未完全完成,模块重装可能未完全完成
-请手动运行以下命令重装模块：,请手动运行以下命令重装模块：
-重装模块时出错：%{1},重装模块时出错：%{1}
-"=== 卸载模块 ===","=== 卸载模块 ==="
-"模块 %{1} 未安装，无需卸载","模块 %{1} 未安装，无需卸载"
+﻿"检测到模块 %{1} 的配置文件，进入二次操作模式","Detected configuration file for module %{1}, entering secondary operation mode."
+"=== 模块创建向导 ===","=== Module creation wizard ==="
+请输入模块名称（格式：Vendor_ModuleName，例如：Weline_Demo）,"Please enter the module name (format: Vendor_ModuleName, e.g., Weline_Demo)"
+模块名称不能为空,"Module name cannot be empty"
+"模块名称格式不正确，应为 Vendor_ModuleName 格式","Incorrect module name format, should be Vendor_ModuleName"
+"=== 检测到模块 %{1} 之前的操作记录 ===","=== Detected module %{1} Previous operation record ==="
+模块已生成,"Module has been generated"
+模块尚未生成,"Module has not been generated yet"
+请选择操作：,"Please select an action:"
+"1. 继续创建流程（从上次中断的地方继续）","1. Continue the creation process (continue where you left off)"
+"2. 进入二次操作模式（添加控制器、继承模块等）","2. Enter the secondary operation mode (add controller, inherit module, etc.)"
+"3. 直接生成模块（使用当前配置）","3. Generate module directly (using current configuration)"
+"4. 重新开始（将覆盖之前的配置）","4. Start over (previous configuration will be overwritten)"
+"0. 退出","0. Exit"
+确认要重新开始吗？这将覆盖所有之前的配置！(y/n，默认：n),"Are you sure you want to restart? This will overwrite all previous configurations! (y/n, default: n)"
+已重置配置，开始新的创建流程,"Configuration reset, starting new creation process"
+已取消操作,"Operation canceled"
+已退出,Exited
+无效选项，默认继续创建流程,"Invalid option, continuing with default creation flow"
+"模块 %{1} 已存在，直接进入二次操作模式","Module %{1} already exists, entering secondary operation mode"
+"=== 继续模块创建流程 ===","=== Continue Module Creation Flow ==="
+"步骤 1/6：请输入版本号（默认：1.0.0）","Step 1/6: Please enter the version number (default: 1.0.0)"
+版本号已设置：%{1},"Version number set: %{1}"
+"步骤 1/6：版本号（已设置：%{1}，跳过）","Step 1/6: Version number (already set: %{1}, skipped)"
+"步骤 2/6：请输入模块描述（可选，直接回车跳过）","Step 2/6: Please enter the module description (optional, press Enter to skip)"
+描述已设置：%{1},"Description Set: %{1}"
+"步骤 2/6：模块描述（已设置：%{1}，跳过）","Step 2/6: Module description (already set: %{1}, skipped)"
+"步骤 3/6：请输入路由前缀（默认：模块名转小写，留空则不创建env.php）","Step 3/6: Please enter the route prefix (default: module name in lowercase, leave empty to skip creating env.php)"
+路由前缀已设置：%{1},"Route prefix set: %{1}"
+"步骤 3/6：路由前缀（已设置：%{1}，跳过）","Step 3/6: Route prefix (already set: %{1}, skipped)"
+"步骤 4/6：是否要创建控制器？(y/n，默认：y，直接回车将创建默认 helloword 控制器)","Step 4/6: Create controller? (y/n, default: y, pressing Enter will create the default helloworld controller)"
+已跳过控制器创建,"Controller creation skipped"
+"已添加 %{1} 个控制器","Added %{1} controllers"
+"已添加默认 helloword 控制器","Added default hello world controller"
+"步骤 4/6：控制器（已配置 %{1} 个，跳过）","Step 4/6: Controllers (%{1} configured, skipped)"
+"步骤 5/6：是否进行高级定制？(y/n，默认：n)","Step 5/6: Advanced customization? (y/n, default: n)"
+已跳过高级定制,"Advanced customization skipped"
+"步骤 5/6：高级定制（已配置，跳过）","Step 5/6: Advanced customization (configured, skipped)"
+"步骤 6/6：是否现在生成模块？(y/n，默认：y)","Step 6/6: Generate module now? (y/n, default: y)"
+模块生成完成！,"Module generation complete!"
+已跳过模块生成，配置已保存，您可以稍后通过二次操作模式生成模块,"Module generation skipped; configuration saved. You can generate the module later via the secondary operation mode."
+"步骤 6/6：模块已生成，跳过","Step 6/6: Module already generated, skipping"
+创建流程完成！,"Creation process complete!"
+"=== 控制器 #%{1} ===","=== Controller #%{1} ==="
+请选择控制器类型：,"Select controller type:"
+"1. Frontend（前端控制器，创建在 Controller/Frontend 目录，继承 FrontendController）","1. Frontend (front-end controller, created in the Controller/Frontend directory, inherits FrontendController)"
+"2. Backend（后端控制器，创建在 Controller/Backend 目录，继承 BackendController）【必须配置Acl】","2. Backend (backend controller, created in the Controller/Backend directory, inherits BackendController) [Acl must be configured]"
+"3. FrontendApi（前端API控制器，创建在 Api/Rest/V1/Frontend 目录，继承 FrontendRestController）【公开接口无需Acl，需要登录的接口也无需Acl】","3. FrontendApi (front-end API controller, created in the Api/Rest/V1/Frontend directory, inherited FrontendRestController) [Acl is not required for public interfaces, and Acl is not required for interfaces that require login]"
+"4. BackendApi（后端API控制器，创建在 Api/Rest/V1/Backend 目录，继承 BackendRestController）【必须配置Acl】","4. BackendApi (backend API controller, created in the Api/Rest/V1/Backend directory, inherits BackendRestController) [Acl must be configured]"
+"0. 跳过创建控制器","0. Skip creating controller"
+"无效选择，默认创建 Frontend 控制器","Invalid selection, creating Frontend controller by default"
+"⚠️  重要提示：后端控制器必须配置Acl权限注解！","⚠️ Important: The backend controller must be configured with Acl permission annotations!"
+示例：,Example:
+"⚠️  重要提示：后端API控制器必须配置Acl权限注解！","⚠️ Important: The backend API controller must be configured with Acl permission annotations!"
+"ℹ️  提示：前端API控制器有两种模式：","ℹ️ Tip: The front-end API controller has two modes:"
+"1. 公开接口：不需要Acl注解，不需要登录即可访问","1. Public interface: no Acl annotation is required, no login is required to access"
+"2. 需要登录：不需要Acl注解，但需要用户登录后才能访问（由FrontendRestController自动处理）","2. Login required: No Acl annotation is required, but the user needs to log in before accessing (automatically handled by FrontendRestController)"
+"请输入控制器名称（例如：Index、Product、User，直接回车将使用默认名称 Helloword）","Please enter the controller name (e.g., Index, Product, User; press Enter to use the default name Helloword)"
+请输入路由（多个路由用逗号分隔，留空则使用控制器名称作为路由）,"Please enter the route (separate multiple routes with commas, leave blank to use the controller name as the route)"
+"=== 配置Acl权限信息 ===","=== Configure Acl permission information ==="
+"提示：前缀为 %{1}::，您只需要填写后面的部分","Tip: The prefix is %{1}::, you only need to fill in the part after it."
+"请输入类级别Acl的source_id（例如完整格式：%{1}，您只需输入：api::%{2}，前缀 %{3}:: 已自动添加，直接回车使用默认值）","Please enter the source_id for the class-level ACL (e.g., full format: %{1}, you only need to enter: api::%{2}, the prefix %{3}:: is already added, press Enter to use the default value)"
+"请输入类级别Acl的source_id（例如完整格式：%{1}，您只需输入：%{2}，前缀 %{3}:: 已自动添加，直接回车使用默认值）","Please enter the source_id for the class-level ACL (e.g., full format: %{1}, you only need to enter: %{2}, the prefix %{3}:: is already added, press Enter to use the default value)"
+请输入类级别Acl的名称（必填，例如：%{1}管理）,"Please enter the name for the class-level ACL (required, e.g., %{1} Management)"
+Acl名称不能为空，使用默认值：%{1},"Acl name cannot be empty, use default value: %{1}"
+"请输入类级别Acl的图标（可选，例如：mdi mdi-home，留空则不设置）","Please enter the icon for the class-level ACL (optional, e.g., mdi mdi-home, leave blank to not set)"
+请输入类级别Acl的文档描述（可选，留空则不设置）,"Please enter the documentation description for the class-level ACL (optional, leave blank to not set)"
+"请输入方法级别Acl的source_id（例如完整格式：%{1}，您只需输入：index，前缀 %{2}:: 已自动添加，直接回车使用默认值 index）","Please enter the source_id for the method-level ACL (e.g., full format: %{1}, you only need to enter: index; the prefix %{2}:: is automatically added; press Enter to use the default value index)"
+请输入方法级别Acl的名称（必填，例如：%{1}列表）,"Please enter the name for the method-level ACL (required, e.g., %{1} List)"
+"请输入方法级别Acl的图标（可选，例如：mdi mdi-list，留空则不设置）","Please enter the icon for the method-level ACL (optional, e.g., mdi mdi-list; leave blank to not set)"
+请输入方法级别Acl的文档描述（可选，留空则不设置）,"Please enter the documentation description for the method-level ACL (optional; leave blank to not set)"
+"已添加控制器：%{1} (%{2})，路由：%{3}","Added controller: %{1} (%{2}), route: %{3}"
+是否继续添加控制器？(y/n，默认：n),"Continue adding controllers? (y/n, default: n)"
+"=== 高级定制选项 ===","=== Advanced customization options ==="
+请选择高级定制选项：,"Please select advanced customization options:"
+"1. 创建事件（Observer）","1. Create an event (Observer)"
+"2. 创建插件（Plugin）","2. Create a plug-in (Plugin)"
+"3. 创建模型（Model）","3. Create model (Model)"
+"4. 创建服务（Service）","4. Create Service"
+"5. 提取并翻译i18n词典","5. Extract and translate i18n dictionary"
+"0. 完成高级定制","0. Complete advanced customization"
+无效选项，请重新选择,"Invalid option, please select again"
+"未找到可用事件（generated/events.php 不存在或为空）","No available events found (generated/events.php does not exist or is empty)"
+是否创建自定义事件？(y/n，默认：y),"Create custom event? (y/n, default: y)"
+请输入事件名称（例如：model_save_before）,"Enter event name (e.g., model_save_before)"
+事件名称不能为空,"Event name cannot be empty"
+"自定义事件 %{1} 已添加到配置","Custom event %{1} has been added to configuration"
+"找到 %{1} 个可用事件","Found %{1} available events"
+请输入搜索关键词搜索事件，或直接输入事件名称,"Please enter a search keyword to find an event, or directly enter the event name"
+留空则显示所有事件（最多显示50个）,"Leave blank to display all events (up to 50 displayed)"
+未找到匹配的事件：%{1},"Matching event not found: %{1}"
+"是否创建自定义事件 %{1}？(y/n，默认：y)","Create custom event %{1}? (y/n, default: y)"
+"找到 %{1} 个匹配的事件：","Found %{1} matching events:"
+"显示前 %{1} 个事件：","Showing the first %{1} events:"
+"... 还有 %{1} 个事件未显示，请使用更精确的搜索关键词","... and %{1} events are not displayed, please use more precise search keywords"
+自动选择唯一匹配的事件：%{1},"Automatically select the only matching event: %{1}"
+请选择事件（输入序号查看详情，输入序号+回车确认选择，或直接输入事件名称，留空则创建自定义事件）,"Select an event (enter the number to view details, enter the number + Enter to confirm selection, or directly enter the event name; leave blank to create a custom event)"
+提示：输入序号后按回车可查看该事件的详细信息,"Tip: Enter the sequence number and press Enter to view detailed information about that event."
+是否创建自定义事件？(y/n，默认：n),"Create custom event? (y/n, default: n)"
+请输入自定义事件名称,"Please enter a custom event name"
+无效的序号,"Invalid sequence number"
+是否选择此事件？(y/n，默认：y),"Select this event? (y/n, default: y)"
+"事件 %{1} 已添加到配置（使用现有事件）","Event %{1} has been added to the configuration (using existing event)"
+"=== 事件详细信息 ===","=== Event Details ==="
+提示：可以在浏览器中访问上述地址查看完整文档,"Tip: You can access the above address in your browser to view the full documentation."
+"请输入插件目标类（例如：Weline\Framework\Database\Model）","Please enter the plugin target class (e.g., Weline\Framework\Database\Model)"
+目标类不能为空,"Target class cannot be empty"
+"类 %{1} 不存在","Class %{1} does not exist"
+是否继续？(y/n，默认：n),"Continue? (y/n, default: n)"
+"类 %{1} 存在","Class %{1} exists"
+请输入插件方法名（例如：save）,"Please enter the plugin method name (e.g., save)"
+方法名不能为空,"Method name cannot be empty"
+"方法 %{1}::%{2}() 不存在","Method %{1}::%{2}() does not exist"
+"方法 %{1}::%{2}() 存在","Method %{1}::%{2}() exists"
+插件已添加到配置,"Plugin has been added to the configuration."
+请输入模型名称（例如：Product）,"Please enter the model name (e.g., Product)"
+模型名称不能为空,"Model name cannot be empty"
+是否配置模型字段？(y/n，默认：n),"Configure model fields? (y/n, default: n)"
+"=== 字段 #%{1} ===","=== Field #%{1} ==="
+请输入字段名（例如：product_id）,"Enter field name (e.g., product_id)"
+"请输入字段类型（例如：varchar, int, text, datetime）","Enter field type (e.g., varchar, int, text, datetime)"
+请输入字段长度（可选，例如：255，int类型可留空）,"Enter field length (optional, e.g., 255, can be left empty for int type)"
+请输入字段注释（可选）,"Enter field comment (optional)"
+是否为主键？(y/n，默认：n),"Is it a primary key? (y/n, default: n)"
+是否允许为空？(y/n，默认：y),"Allow empty? (y/n, default: y)"
+"字段 %{1} 已添加","Field %{1} has been added"
+是否继续添加字段？(y/n，默认：n),"Continue adding fields? (y/n, default: n)"
+"模型 %{1} 已添加到配置","Model %{1} added to configuration"
+"请输入服务名称（例如：ProductService 或 Product，生成时会自动添加Service后缀）","Please enter the service name (e.g., ProductService or Product; the Service suffix will be automatically added during generation)"
+服务名称不能为空,"Service name cannot be empty"
+已移除Service后缀，生成时会自动添加,"Removed Service suffix; it will be added automatically during generation"
+"服务 %{1} 已添加到配置（将生成为 %{2}）","Service %{1} has been added to the configuration (will be generated as %{2})"
+"=== 提取并翻译i18n词典 ===","=== Extract and translate i18n dictionary ==="
+目标语言：%{1},"Target language: %{1}"
+模块目录不存在，请先生成模块,"Module directory does not exist, please generate the module first"
+正在扫描模块文件，提取需要翻译的字符串...,"Scanning module files to extract strings for translation..."
+未找到需要翻译的字符串,"String to translate not found"
+"找到 %{1} 个需要翻译的字符串","Found %{1} strings to translate"
+"=== 处理语言：%{1} ===","=== Processing language: %{1} ==="
+尝试使用AI翻译服务...,"Attempting to use AI translation service..."
+"AI翻译了 %{1} 个字符串","AI translated %{1} strings"
+从数据库词典中查找已翻译的内容...,"Searching for translated content from the database dictionary..."
+"数据库词典翻译了 %{1} 个字符串","Database dictionary translated %{1} strings"
+"=== 翻译结果 ===","=== Translation results ==="
+以下字符串需要手动翻译：,"The following strings need manual translation:"
+"... 还有 %{1} 个字符串未显示","... and %{1} strings are not displayed"
+"请手动编辑 i18n 文件进行翻译","Please manually edit the i18n file for translation"
+扫描PHP文件时出错：%{1},"Error scanning PHP file: %{1}"
+扫描PHTML文件时出错：%{1},"Error scanning PHTML file: %{1}"
+AI模块未找到，跳过AI翻译,"AI module not found, skipping AI translation"
+翻译缓存,"Translation cache"
+找到AI翻译服务，开始翻译...,"Found AI translation service, starting translation..."
+所有字符串都已翻译，无需AI翻译,"All strings are already translated, no AI translation needed"
+"需要翻译 %{1} 个字符串（已过滤已翻译的）","Need to translate %{1} strings (filtered out already translated)"
+批量翻译异常：%{1},"Batch translation exception: %{1}"
+"AI翻译完成，成功翻译 %{1} 个字符串","AI translation completed, successfully translated %{1} strings"
+"AI翻译完成，但没有成功翻译任何字符串（共处理 %{1} 个）","AI translation completed, but no strings were successfully translated (a total of %{1} processed)"
+可能的原因：,"Possible Causes:"
+"1. 翻译结果和原文相同（AI返回了原文）","1. The translation result is the same as the original text (AI returned the original text)"
+"2. AI服务调用失败或返回错误","2. AI service call fails or returns an error"
+"3. 适配器参数验证失败","3. Adapter parameter verification failed"
+"4. 翻译模型未配置或未激活","4. The translation model is not configured or not activated"
+"示例：原文 ""%{1}"" -> 翻译结果 ""%{2}""","Example: Original ""%{1}"" -> Translation result ""%{2}"""
+AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
+保存翻译结果失败：%{1},"Failed to save translation result: %{1}"
+本地词典模型未找到，跳过数据库翻译,"Local dictionary model not found, skipping database translation"
+数据库翻译查询失败：%{1},"Database translation query failed: %{1}"
+已更新%{1}词典文件：%{2}（新增：%{3}，更新：%{4}）,"Updated %{1} dictionary files: %{2} (added: %{3}, updated: %{4})"
+已更新%{1}词典文件：%{2}（新增：%{3}）,"Updated %{1} dictionary files: %{2} (added: %{3})"
+%{1}词典文件无需更新：%{2},"%{1}Dictionary file does not need to be updated: %{2}"
+"提示：%{1} 中包含未翻译的字符串，请手动编辑进行翻译","Prompt: %{1} contains untranslated strings, please manually edit to translate"
+开始生成模块...,"Start generating modules..."
+已创建模块目录：%{1},"Created module directory: %{1}"
+模块文件生成完成！,"Module file generation complete!"
+是否立即注册模块到系统？(y/n，默认：y),"Register module to system immediately? (y/n, default: y)"
+提示：您可以稍后运行以下命令注册模块：,"Tip: You can run the following command later to register the module:"
+已迁移配置文件到模块根目录：%{1},"Configuration migrated to module root directory: %{1}"
+正在注册模块到系统...,"Registering module to system..."
+模块注册文件不存在：%{1},"Module registration file does not exist: %{1}"
+正在清除缓存...,"Purging cache..."
+正在刷新模块列表...,"Refreshing module list..."
+"模块 %{1} 已成功注册到系统！","Module %{1} has been successfully registered to the system!"
+注册模块时出错：%{1},"Error registering module: %{1}"
+请手动运行以下命令注册模块：,"Please manually run the following command to register the module:"
+"文件 %{1} 已存在，不能覆盖","File %{1} already exists, cannot overwrite"
+文件路径：%{1},"File path: %{1}"
+请手动前往修改，或选择覆盖（将删除现有文件）,"Manually go to modify, or choose to overwrite (this will delete the existing file)."
+是否要覆盖？(y/n，默认：n),"Overwrite? (y/n, default: n)"
+"已创建 register.php","Created register.php"
+"已创建 env.php","Created env.php"
+已创建控制器：%{1},"Created controller: %{1}"
+"⚠️  请记住：后端控制器必须配置Acl权限注解才能被菜单识别和访问控制！","⚠️ Please remember: the back-end controller must be configured with Acl permission annotations to be recognized and accessed by the menu!"
+请在控制器类和方法上添加Acl注解，然后重新运行菜单创建命令。,"Add the Acl annotation to the controller class and method, then re-run the menu creation command."
+"⚠️  请记住：后端API控制器必须配置Acl权限注解！","⚠️ Please remember: the backend API controller must be configured with Acl permission annotations!"
+请在控制器类和方法上添加Acl注解。,"Add the Acl annotation to the controller class and method."
+已创建默认视图文件,"Default view file created"
+已创建视图模板：%{1},"View template created: %{1}"
+"已创建 event.xml","Created event.xml"
+"已创建 plugin.xml","Created plugin.xml"
+"已从 var/module_config 迁移配置文件到模块根目录","Migrated configuration files from var/module_config to module root directory"
+无法保存配置：未找到模块名,"Unable to save configuration: Module name not found"
+更新配置文件：%{1},"Update configuration file: %{1}"
+配置已保存到：%{1},"Configuration saved to: %{1}"
+模块目录不存在，将在生成模块时创建,"Module directory does not exist, it will be created when generating the module"
+"=== 模块操作菜单 ===","=== Module operation menu ==="
+模块：%{1},"Module: %{1}"
+状态：模块已生成,"Status: Module Generated"
+状态：模块未生成,"Status: Module Not Generated"
+安装状态：已安装,"Installation status: Installed"
+启用状态：已启用,"Enable status: Enabled"
+启用状态：已禁用,"Enable status: Disabled"
+安装状态：未安装,"Installation Status: Not Installed"
+"1. 新建控制器","1. Create a new controller"
+"2. 创建目录结构（Observer、Plugin、Service等）","2. Create a directory structure (Observer, Plugin, Service, etc.)"
+"3. 创建后台菜单","3. Create backend menu"
+"4. 继承模块（Extends）","4. Inherited modules (Extends)"
+"5. 初始化主题文件到模板","5. Initialize theme files to templates"
+"6. 查看模块配置","6. View module configuration"
+"7. 继续创建流程（完成未完成的步骤）","7. Continue the creation process (complete the unfinished steps)"
+"8. 提取并翻译i18n词典","8. Extract and translate i18n dictionary"
+"9. 检测模块完整性","9. Detect module integrity"
+"10. 安装模块到系统","10. Install the module to the system"
+"11. 重装模块","11. Reinstall the module"
+"12. 卸载模块","12. Uninstall the module"
+"13. 回滚模块卸载","13. Roll back module uninstallation"
+"14. 生成模块（使用当前配置）","14. Generate module (using current configuration)"
+"请输入要收集和翻译的语言（多个语言用逗号分隔，例如：zh_Hans_CN,en_US,ja_JP），默认：zh_Hans_CN","Please enter the languages to collect and translate (multiple languages separated by commas, e.g., zh_Hans_CN,en_US,ja_JP), default: zh_Hans_CN"
+模块已生成，无需重复生成,"Module has already been generated, no need to regenerate"
+退出操作,"Exit Operation"
+"=== 添加控制器 ===","=== Add Controller ==="
+"=== 模块继承 ===","=== Module inheritance ==="
+未找到有规约文件的模块,"No module with specification files found"
+请输入要继承的模块名称（例如：Weline_Demo，支持模糊搜索，直接回车显示所有模块）,"Please enter the module name to inherit (e.g., Weline_Demo, fuzzy search supported, press Enter to show all modules)"
+未找到匹配的模块,"No matching module found"
+是否显示所有模块？(y/n，默认：y),"Show all modules? (y/n, default: y)"
+找到以下模块：,"Found the following modules:"
+请选择要继承的模块（输入序号）,"Please select the module to inherit (enter the number)"
+无效选择,"Invalid selection"
+扫描模块时出错：%{1},"Error scanning module: %{1}"
+正在创建继承文件...,"Creating inheritance file..."
+继承文件已创建：%{1},"Inherited file created: %{1}"
+"=== 初始化主题文件 ===","=== Initialize Theme Files ==="
+未找到可用主题,"No available themes found"
+找到以下主题：,"Found the following themes:"
+请选择要使用的主题（输入序号）,"Please select the theme to use (enter the number)"
+主题文件初始化功能待实现,"Theme file initialization function to be implemented"
+主题路径：%{1},"Theme Path: %{1}"
+目标路径：%{1},"Target path: %{1}"
+"=== 模块配置 ===","=== Module configuration ==="
+"=== 已配置内容摘要 ===","=== Configured content summary ==="
+"=== 创建模块目录结构 ===","=== Create Module Directory Structure ==="
+"请选择要创建的目录（多个用逗号分隔，例如：1,2,3，或输入 all 创建所有目录）：","Please select the directories to create (separate multiple with commas, e.g., 1,2,3, or enter all to create all directories):"
+未选择任何目录,"No directory selected"
+已创建目录：%{1},"Created directory: %{1}"
+目录已存在：%{1},"Directory already exists: %{1}"
+"成功创建 %{1} 个目录","Successfully created %{1} directories"
+"=== 后台菜单管理 ===","=== Backend menu management ==="
+"1. 新建菜单","1. Create a new menu"
+"2. 修改菜单","2. Modify the menu"
+"3. 删除菜单","3. Delete menu"
+"4. 移动菜单","4. Mobile menu"
+"5. 查看当前菜单","5. View the current menu"
+"6. 刷新菜单收集（使菜单生效）","6. Refresh the menu collection (make the menu effective)"
+"2. 刷新菜单收集（使菜单生效）","2. Refresh the menu collection (make the menu effective)"
+正在刷新菜单收集...,"Refreshing menu collection..."
+"步骤 1/3：收集菜单...","Step 1/3: Collecting menus..."
+菜单收集完成！,"Menu collection complete!"
+菜单收集可能未完全完成,"Menu collection may not be fully complete"
+"步骤 2/3：清除缓存...","Step 2/3: Clearing cache..."
+缓存清除完成！,"Cache Clear Complete!"
+"步骤 3/3：菜单已刷新并生效！","Step 3/3: Menu refreshed and active!"
+刷新菜单收集时出错：%{1},"Error collecting refresh menu: %{1}"
+请手动运行以下命令刷新菜单：,"Please manually run the following command to refresh the menu:"
+"=== 新建菜单 ===","=== New menu ==="
+请输入菜单名称（唯一标识，例如：my_module_main，默认：%{1}）,"Please enter the menu name (unique identifier, e.g., my_module_main, default: %{1})"
+菜单名称已存在：%{1},"Menu name already exists: %{1}"
+请输入菜单标题（例如：我的模块）,"Please enter the menu title (e.g., My Module)"
+菜单标题不能为空,"Menu title cannot be empty"
+是否选择本模块的控制器路由？(y/n，默认：y，不选择则创建父级菜单),"Select this module's controller route? (y/n, default: y, if no, create parent menu)"
+找到以下控制器路由（从Acl提取）：,"Found the following controller routes (extracted from Acl):"
+"请选择路由（输入序号，或输入 0 跳过）","Please select a route (enter the number, or enter 0 to skip)"
+"请输入图标类名（例如：mdi mdi-home，留空则不设置）","Enter icon class name (e.g., mdi mdi-home, leave empty to not set)"
+未找到控制器路由,"Controller route not found"
+重要提示：,Important:
+"1. 后端控制器（Backend）必须配置Acl权限注解才能被菜单识别","1. The backend controller (Backend) must be configured with Acl permission annotations to be recognized by the menu"
+"2. 后端API控制器（BackendApi）必须配置Acl权限注解","2. The backend API controller (BackendApi) must be configured with Acl permission annotations"
+"3. 前端API控制器（FrontendApi）有两种模式：","3. Frontend API controller (FrontendApi) has two modes:"
+"- 公开接口：不需要Acl注解，不需要登录即可访问","- Public interface: No Acl annotation is required, no login is required to access"
+"- 需要登录：不需要Acl注解，但需要用户登录后才能访问","- Login required: Acl annotation is not required, but user login is required before access"
+请手动输入菜单路由（例如：backend/index/index，留空则不设置）,"Please manually enter the menu route (e.g., backend/index/index, leave empty to not set)"
+提示：如果控制器未配置Acl，请先为控制器添加Acl注解，然后重新运行此命令,"Tip: If the controller does not have an Acl configured, first add an Acl annotation to the controller, then re-run this command."
+将创建父级菜单（其他菜单可以挂载在此菜单下）,"A parent menu will be created (other menus can be mounted under this menu)"
+请输入排序数字（默认：100）,"Enter sort number (default: 100)"
+已创建菜单文件：%{1},"Menu file created: %{1}"
+已添加菜单项到：%{1},"Added menu item to: %{1}"
+"=== 修改菜单 ===","=== Modify Menu ==="
+请选择要修改的菜单（输入序号）,"Please select the menu to modify (enter the number)"
+请选择要修改的字段：,"Please select the field to modify:"
+"1. 菜单标题","1. Menu title"
+"2. 菜单路由","2. Menu routing"
+"3. 父级菜单","3. Parent menu"
+"4. 图标","4. Icons"
+"5. 排序","5. Sort"
+"0. 取消","0. Cancel"
+当前标题：%{1},"Current title: %{1}"
+请输入新标题,"Please enter a new title"
+当前路由：%{1},"Current route: %{1}"
+请输入新路由（留空则删除路由）,"Please enter a new route (leave blank to delete the route)"
+当前父级：%{1},"Current parent: %{1}"
+当前图标：%{1},"Current icon: %{1}"
+请输入新图标（留空则删除图标）,"Please enter a new icon (leave blank to delete the icon)"
+当前排序：%{1},"Current sort: %{1}"
+请输入新排序,"Please enter a new sort order"
+菜单已更新,"Menu updated"
+未找到要修改的菜单项,"Menu item to modify not found"
+"=== 删除菜单 ===","=== Delete menu ==="
+请选择要删除的菜单（输入序号）,"Please select the menu to delete (enter the number)"
+确定要删除菜单：%{1}？(y/n，默认：n),"Are you sure you want to delete the menu: %{1}? (y/n, default: n)"
+已取消删除,"Deletion canceled"
+菜单已删除,"Menu deleted"
+"=== 移动菜单 ===","=== Mobile Menu ==="
+请选择要移动的菜单（输入序号）,"Please select the menu to move (enter the number)"
+已选择菜单：%{1},"Selected menu: %{1}"
+"请选择目标父菜单（输入序号，输入 0 则移动到顶级）","Please select the target parent menu (enter the number, enter 0 to move to top level)"
+不能将菜单移动到自己的子菜单下，这会造成循环引用,"You cannot move a menu to its own submenu, which will cause a circular reference."
+顶级菜单,"Top-level menu"
+"菜单 %{1} 已移动到 %{2}","Menu %{1} has been moved to %{2}"
+未找到要移动的菜单项,"Menu item to move not found"
+当前菜单列表：,"Current menu list:"
+解析菜单XML时出错：%{1},"Error Parsing Menu XML: %{1}"
+扫描菜单时出错：%{1},"Error scanning menu: %{1}"
+未找到父级菜单，将创建顶级菜单,"Parent menu not found, a top-level menu will be created"
+未找到顶级菜单，将创建顶级菜单,"Top-level menu not found, will create top-level menu"
+请选择父级菜单（留空则为顶级菜单，输入数字选择菜单，输入.1/.2等展开子菜单）：,"Please select the parent menu (leave blank for top-level menu, enter a number to select a menu, enter .1/.2 etc. to expand submenus):"
+已经在顶级菜单，请输入其他选项或留空选择顶级菜单,"Already at the top-level menu; enter another option or leave blank to select the top-level menu"
+当前菜单没有子菜单,"Current menu has no submenus."
+当前路径：%{1},"Current path: %{1}"
+是否选择当前菜单作为父级？(y/n，默认：y),"Select current menu as parent? (y/n, default: y)"
+"请选择子菜单（输入 0 返回上级，留空选择当前路径，输入数字选择菜单，输入.1/.2等展开子菜单）：","Select a submenu (enter 0 to go back, leave blank to select the current path, enter a number to select a menu, enter .1/.2 etc. to expand submenus):"
+"=== 安装模块到系统 ===","=== Install module to system ==="
+"请先创建模块的 register.php 文件","Please create the module's register.php file first"
+"步骤 1/3：清除缓存...","Step 1/3: Clearing cache..."
+"步骤 2/3：执行模块注册...","Step 2/3: Executing module registration..."
+"步骤 3/3：安装模块（运行 setup:upgrade）...","Step 3/3: Installing module (running setup:upgrade)..."
+"模块 %{1} 已成功安装到系统！","Module %{1} has been successfully installed to the system!"
+模块安装可能未完全完成,"Module installation may not be fully complete"
+请手动运行以下命令安装模块：,"Please manually run the following command to install the module:"
+安装模块时出错：%{1},"Error installing module: %{1}"
+"=== 重装模块 ===","=== Reinstall the module ==="
+"⚠️  警告：重装模块将执行以下操作：","⚠️ WARNING: Reinstalling the module will do the following:"
+"1. 清除系统缓存","1. Clear the system cache"
+"2. 重新执行模块的安装脚本（setup/install.php）","2. Re-execute the module installation script (setup/install.php)"
+"3. 重新执行模块的升级脚本（setup/upgrade.php）","3. Re-execute the module's upgrade script (setup/upgrade.php)"
+"4. 可能会影响数据库数据（表结构、数据等）","4. May affect database data (table structure, data, etc.)"
+"5. 可能会影响已安装的配置","5. May affect installed configurations"
+"请确认是否要继续重装模块 %{1}？","Please confirm whether to continue reinstalling module %{1}?"
+"输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作（默认：取消）","Enter ""yes"" or ""y"" to confirm, any other input will cancel the operation (default: cancel)"
+已取消重装操作,"Reinstall operation canceled"
+"⚠️  最后确认：您确定要重装模块 %{1} 吗？","⚠️ Final confirmation: Are you sure you want to reinstall module %{1}?"
+"再次输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作","Enter ""yes"" or ""y"" again to confirm; any other input will cancel the operation"
+"步骤 1/4：清除缓存...","Step 1/4: Clearing cache..."
+"步骤 2/4：执行模块注册...","Step 2/4: Executing module registration..."
+"步骤 3/4：标记模块为需要重装...","Step 3/4: Marking module for reinstallation..."
+"步骤 4/4：重装模块（运行 setup:upgrade）...","Step 4/4: Reinstalling module (running setup:upgrade)..."
+"模块 %{1} 已成功重装！","Module %{1} has been successfully reinstalled!"
+模块重装可能未完全完成,"Module reinstallation may not be fully complete"
+请手动运行以下命令重装模块：,"Please manually run the following command to reinstall the module:"
+重装模块时出错：%{1},"Error Reloading Module: %{1}"
+"=== 卸载模块 ===","=== Uninstall module ==="
+"模块 %{1} 未安装，无需卸载","Module %{1} is not installed, no need to uninstall"
 ═══════════════════════════════════════════════════════,═══════════════════════════════════════════════════════
-"⚠️  危险操作警告：卸载模块","⚠️  危险操作警告：卸载模块"
-模块名称：%{1},模块名称：%{1}
-模块路径：%{1},模块路径：%{1}
-"⚠️  卸载模块将执行以下操作：","⚠️  卸载模块将执行以下操作："
-"1. 执行模块的卸载脚本（Setup/Remove.php）","1. 执行模块的卸载脚本（Setup/Remove.php）"
-"2. 清理模块的数据库表和数据（如果卸载脚本中有定义）","2. 清理模块的数据库表和数据（如果卸载脚本中有定义）"
-"3. 从系统中移除模块注册","3. 从系统中移除模块注册"
-"4. 清除系统缓存","4. 清除系统缓存"
-"5. 备份模块文件到 var/backup 目录","5. 备份模块文件到 var/backup 目录"
-"6. 不会删除模块源代码文件（如需删除请手动操作）","6. 不会删除模块源代码文件（如需删除请手动操作）"
-"⚠️  重要提示：","⚠️  重要提示："
-"- 卸载操作不可逆，请确保已备份重要数据","- 卸载操作不可逆，请确保已备份重要数据"
-"- 如果模块有依赖关系，卸载可能会影响其他模块","- 如果模块有依赖关系，卸载可能会影响其他模块"
-"- 模块文件不会被删除，但模块将从系统中移除","- 模块文件不会被删除，但模块将从系统中移除"
-"- 卸载后如需重新安装，需要重新运行安装命令","- 卸载后如需重新安装，需要重新运行安装命令"
-"⚠️  第一次确认：您确定要卸载模块 %{1} 吗？","⚠️  第一次确认：您确定要卸载模块 %{1} 吗？"
-"请输入完整的模块名称 ""%{1}"" 以确认卸载","请输入完整的模块名称 ""%{1}"" 以确认卸载"
-"或者输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作","或者输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作"
-已取消卸载操作（确认输入不匹配）,已取消卸载操作（确认输入不匹配）
-"⚠️  最后确认：您确定要卸载模块 %{1} 吗？","⚠️  最后确认：您确定要卸载模块 %{1} 吗？"
-此操作将执行卸载脚本并移除模块注册，但不会删除源代码文件,此操作将执行卸载脚本并移除模块注册，但不会删除源代码文件
-卸载后，模块将从系统中完全移除，无法恢复！,卸载后，模块将从系统中完全移除，无法恢复！
-"⚠️  请再次输入完整的模块名称 ""%{1}"" 以最终确认卸载","⚠️  请再次输入完整的模块名称 ""%{1}"" 以最终确认卸载"
-已取消卸载操作（二次确认输入不匹配）,已取消卸载操作（二次确认输入不匹配）
-确认通过，开始卸载模块...,确认通过，开始卸载模块...
-"步骤 0/6：备份模块数据库数据...","步骤 0/6：备份模块数据库数据..."
-"数据库备份完成：备份了 %{1} 个表，共 %{2} 条记录","数据库备份完成：备份了 %{1} 个表，共 %{2} 条记录"
-备份信息已保存到：%{1},备份信息已保存到：%{1}
-数据库备份可能未完全完成：%{1},数据库备份可能未完全完成：%{1}
-"步骤 1/6：执行模块卸载脚本...","步骤 1/6：执行模块卸载脚本..."
-找到卸载脚本，正在执行...,找到卸载脚本，正在执行...
-未找到卸载脚本（Setup/Remove.php），将跳过卸载脚本执行,未找到卸载脚本（Setup/Remove.php），将跳过卸载脚本执行
-"步骤 2/6：运行模块卸载命令...","步骤 2/6：运行模块卸载命令..."
-模块卸载命令执行成功,模块卸载命令执行成功
-模块卸载命令可能未完全完成,模块卸载命令可能未完全完成
-"步骤 3/6：清除系统缓存...","步骤 3/6：清除系统缓存..."
-缓存清除完成,缓存清除完成
-缓存清除可能未完全完成,缓存清除可能未完全完成
-"步骤 4/6：刷新菜单收集（移除模块菜单）...","步骤 4/6：刷新菜单收集（移除模块菜单）..."
-菜单收集完成,菜单收集完成
-"步骤 5/6：更新模块列表...","步骤 5/6：更新模块列表..."
-模块列表更新完成,模块列表更新完成
-模块列表更新可能未完全完成,模块列表更新可能未完全完成
-"步骤 6/6：保存卸载信息...","步骤 6/6：保存卸载信息..."
-卸载信息已保存,卸载信息已保存
-"模块 %{1} 已成功卸载！","模块 %{1} 已成功卸载！"
-"提示：模块源代码文件仍保留在 %{1}，如需删除请手动操作","提示：模块源代码文件仍保留在 %{1}，如需删除请手动操作"
-如需回滚，请使用以下命令：,如需回滚，请使用以下命令：
-模块卸载可能未完全完成，模块状态仍显示为已安装,模块卸载可能未完全完成，模块状态仍显示为已安装
-请手动运行以下命令完成卸载：,请手动运行以下命令完成卸载：
-卸载模块时出错：%{1},卸载模块时出错：%{1}
-请手动运行以下命令卸载模块：,请手动运行以下命令卸载模块：
-备份信息已保存，如需回滚请使用回滚功能,备份信息已保存，如需回滚请使用回滚功能
-模块没有注册的数据库表,模块没有注册的数据库表
-"表 %{1} 不存在，跳过备份","表 %{1} 不存在，跳过备份"
-"✓ 已备份表 %{1}：%{2} 条记录","✓ 已备份表 %{1}：%{2} 条记录"
-"备份表 %{1} 失败：%{2}","备份表 %{1} 失败：%{2}"
-备份数据库时出错：%{1},备份数据库时出错：%{1}
-无法创建备份文件：%{1},无法创建备份文件：%{1}
-"=== 回滚模块卸载 ===","=== 回滚模块卸载 ==="
-备份目录不存在，无法回滚,备份目录不存在，无法回滚
-"未找到模块 %{1} 的卸载备份，无法回滚","未找到模块 %{1} 的卸载备份，无法回滚"
-备份信息文件损坏，无法回滚,备份信息文件损坏，无法回滚
-找到备份：%{1},找到备份：%{1}
-备份时间：%{1},备份时间：%{1}
-备份表数：%{1}，记录数：%{2},备份表数：%{1}，记录数：%{2}
-"⚠️  警告：回滚将执行以下操作：","⚠️  警告：回滚将执行以下操作："
-"1. 恢复模块的数据库表和数据","1. 恢复模块的数据库表和数据"
-"2. 重新注册模块到系统","2. 重新注册模块到系统"
-"3. 清除系统缓存","3. 清除系统缓存"
-请确认是否要继续回滚？,请确认是否要继续回滚？
-"输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作","输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作"
-已取消回滚操作,已取消回滚操作
-"步骤 1/3：恢复数据库表和数据...","步骤 1/3：恢复数据库表和数据..."
-"步骤 2/3：重新安装模块...","步骤 2/3：重新安装模块..."
-"步骤 3/3：清除系统缓存...","步骤 3/3：清除系统缓存..."
-"模块 %{1} 回滚成功！","模块 %{1} 回滚成功！"
-回滚时出错：%{1},回滚时出错：%{1}
-没有需要恢复的表,没有需要恢复的表
-"备份文件不存在：%{1}，跳过表 %{2}","备份文件不存在：%{1}，跳过表 %{2}"
-"备份文件为空：%{1}，跳过表 %{2}","备份文件为空：%{1}，跳过表 %{2}"
-"✓ 已恢复表 %{1}：%{2} 条记录","✓ 已恢复表 %{1}：%{2} 条记录"
-"恢复表 %{1} 失败：%{2}","恢复表 %{1} 失败：%{2}"
-"=== 模块选择 ===","=== 模块选择 ==="
-"1. 搜索已有模块","1. 搜索已有模块"
-"2. 自定义新模块名","2. 自定义新模块名"
-请输入搜索关键词（模块名或部分名称）：,请输入搜索关键词（模块名或部分名称）：
-提示：留空将显示所有模块,提示：留空将显示所有模块
-未找到任何模块,未找到任何模块
-是否返回重新选择？(y/n，默认：y),是否返回重新选择？(y/n，默认：y)
-"显示所有模块（共 %{1} 个）：","显示所有模块（共 %{1} 个）："
-搜索关键词：%{1},搜索关键词：%{1}
-总模块数：%{1}，匹配数：%{2},总模块数：%{1}，匹配数：%{2}
-未找到匹配的模块：%{1},未找到匹配的模块：%{1}
-是否重新搜索？(y/n，默认：y),是否重新搜索？(y/n，默认：y)
-"找到 %{1} 个匹配的模块：","找到 %{1} 个匹配的模块："
-"请选择模块（输入序号，或输入 0 返回）","请选择模块（输入序号，或输入 0 返回）"
-无效选择：%{1}，请重新选择,无效选择：%{1}，请重新选择
-已选择模块：%{1},已选择模块：%{1}
-请输入要检测的模块名称（支持模糊搜索）：,请输入要检测的模块名称（支持模糊搜索）：
-搜索关键词不能为空,搜索关键词不能为空
-是否重新搜索？(y/n，默认：n),是否重新搜索？(y/n，默认：n)
-找到以下匹配的模块：,找到以下匹配的模块：
-"请选择要检测的模块（输入序号，或输入 0 返回）","请选择要检测的模块（输入序号，或输入 0 返回）"
-是否重新输入？(y/n，默认：n),是否重新输入？(y/n，默认：n)
-获取模块列表时出错：%{1},获取模块列表时出错：%{1}
-"=== 模块完整性检测 ===","=== 模块完整性检测 ==="
-正在检测模块：%{1},正在检测模块：%{1}
-模块目录不存在：%{1},模块目录不存在：%{1}
-模块目录不存在,模块目录不存在
-"✓ 模块目录存在","✓ 模块目录存在"
-缺少必需文件：register.php,缺少必需文件：register.php
-"✓ register.php 存在","✓ register.php 存在"
-"register.php 中未找到模块名：%{1}","register.php 中未找到模块名：%{1}"
-缺少推荐文件：etc/env.php（用于配置路由前缀）,缺少推荐文件：etc/env.php（用于配置路由前缀）
-"✓ etc/env.php 存在","✓ etc/env.php 存在"
-"etc/env.php 中未找到 router 配置","etc/env.php 中未找到 router 配置"
-"缺少 Controller 目录","缺少 Controller 目录"
-"✓ Controller 目录存在","✓ Controller 目录存在"
-"Controller 目录为空，没有控制器文件","Controller 目录为空，没有控制器文件"
-"✓ 找到 %{1} 个控制器文件","✓ 找到 %{1} 个控制器文件"
-"缺少 view 目录","缺少 view 目录"
-"✓ view 目录存在","✓ view 目录存在"
-"缺少 view/templates 目录","缺少 view/templates 目录"
-"✓ view/templates 目录存在","✓ view/templates 目录存在"
-"缺少 etc 目录","缺少 etc 目录"
-"✓ etc 目录存在","✓ etc 目录存在"
-"✓ 找到模块配置文件：.module_config.json","✓ 找到模块配置文件：.module_config.json"
-空目录（可能未使用）：%{1},空目录（可能未使用）：%{1}
-"=== 检测结果 ===","=== 检测结果 ==="
-"正常项（%{1} 项）：","正常项（%{1} 项）："
-"警告项（%{1} 项）：","警告项（%{1} 项）："
-"错误项（%{1} 项）：","错误项（%{1} 项）："
-模块完整性检测通过！所有检查项都正常。,模块完整性检测通过！所有检查项都正常。
-"模块基本完整，但有 %{1} 个警告项需要注意","模块基本完整，但有 %{1} 个警告项需要注意"
-"模块存在 %{1} 个错误和 %{2} 个警告","模块存在 %{1} 个错误和 %{2} 个警告"
-"控制器 %{1} 的视图目录存在，但缺少 index.phtml 文件","控制器 %{1} 的视图目录存在，但缺少 index.phtml 文件"
-"控制器 %{1} 没有对应的视图目录：%{2}","控制器 %{1} 没有对应的视图目录：%{2}"
-"用法：module:data-package list [模块名筛选] | create <模块名> | restore --path=<数据包目录> [--no-truncate] [--dry-run]","用法：module:data-package list [模块名筛选] | create <模块名> | restore --path=<数据包目录> [--no-truncate] [--dry-run]"
-"暂无 MDP，目录：%{1}","暂无 MDP，目录：%{1}"
-模块数据包（新→旧）,模块数据包（新→旧）
-"请指定模块名，例如：module:data-package create Weline_Saas","请指定模块名，例如：module:data-package create Weline_Saas"
-路径：%{1},路径：%{1}
-表：%{1}，行数：%{2},表：%{1}，行数：%{2}
-"请指定 --path=数据包目录（含 manifest.json）","请指定 --path=数据包目录（含 manifest.json）"
-恢复将向数据库写入数据；生产环境请先备份整库。,恢复将向数据库写入数据；生产环境请先备份整库。
-路径：%{1}，先清空表：%{2},路径：%{1}，先清空表：%{2}
-是,是
-否,否
-"确认执行请输入 yes","确认执行请输入 yes"
-已取消,已取消
-"模块数据包 MDP：list / create / restore","模块数据包 MDP：list / create / restore"
-"列出 var/module_data_packages 下的包","列出 var/module_data_packages 下的包"
-"按 weline_module_table 登记为模块生成 MDP","按 weline_module_table 登记为模块生成 MDP"
-"从 MDP 导入；--dry-run 仅统计将恢复表/行数","从 MDP 导入；--dry-run 仅统计将恢复表/行数"
-"用法：module:table-handover --from=Weline_Saas --to=Weline_Websites --map=saas_provisioning_order=Weline\Websites\Model\ProvisioningOrder [--map=...]","用法：module:table-handover --from=Weline_Saas --to=Weline_Websites --map=saas_provisioning_order=Weline\Websites\Model\ProvisioningOrder [--map=...]"
-"至少一个 --map=逻辑表名=模型类FQCN","至少一个 --map=逻辑表名=模型类FQCN"
-"map 格式错误：%{1}","map 格式错误：%{1}"
-"已标记 successor，请对目标模块执行 setup:upgrade 完成模型登记接管","已标记 successor，请对目标模块执行 setup:upgrade 完成模型登记接管"
-"模块表登记划转（合并模块、消除 weline_module_table 冲突）","模块表登记划转（合并模块、消除 weline_module_table 冲突）"
-源模块名,源模块名
-目标模块名,目标模块名
-逻辑表名=新模型类FQCN，可重复,逻辑表名=新模型类FQCN，可重复
-"仅标记 successor，不立即改 module_name（高级）","仅标记 successor，不立即改 module_name（高级）"
-"模块状态变更后注册表更新失败: %{1}","模块状态变更后注册表更新失败: %{1}"
-操作成功！,操作成功！
-"表已存在！该表已被：%{1} 模组下的 %{2} 模型创建，请为当前模型 %{3} 更换表名。如果你确认需要移除表，请访问module_table表，手动删除表。","表已存在！该表已被：%{1} 模组下的 %{2} 模型创建，请为当前模型 %{3} 更换表名。如果你确认需要移除表，请访问module_table表，手动删除表。"
-"【冲突模组：%{1}和%{2}】：你当前安装的模型 %{3} 和模型 %{4} 的表名（%{5}）重复。请修改当前重复模型【%{6}】的表名(table)属性或者重命名模型名。","【冲突模组：%{1}和%{2}】：你当前安装的模型 %{3} 和模型 %{4} 的表名（%{5}）重复。请修改当前重复模型【%{6}】的表名(table)属性或者重命名模型名。"
-"表已存在！该表已被：%{1} 模组下的 %{2} 模型创建。请为当前模型更换表名。","表已存在！该表已被：%{1} 模组下的 %{2} 模型创建。请为当前模型更换表名。"
-"表 %{1} 为 shared，仅结构负责模块 %{2} 可执行 DDL；当前模块 %{3} 不可改结构。","表 %{1} 为 shared，仅结构负责模块 %{2} 可执行 DDL；当前模块 %{3} 不可改结构。"
-"【冲突模组：%{1} 和 %{2}】：表 %{3} 已被模块 %{4} 的模型 %{5} 使用。请为当前模型更换表名或联系管理员。","【冲突模组：%{1} 和 %{2}】：表 %{3} 已被模块 %{4} 的模型 %{5} 使用。请为当前模型更换表名或联系管理员。"
-"模块 %{1} 没有注册的数据库表，无需备份","模块 %{1} 没有注册的数据库表，无需备份"
-"备份模块 %{1} 表：%{2} → %{3}","备份模块 %{1} 表：%{2} → %{3}"
-"✓ 表 %{1} 备份完成，记录数：%{2}","✓ 表 %{1} 备份完成，记录数：%{2}"
-"模块 %{1} 的表备份失败或没有可备份的表","模块 %{1} 的表备份失败或没有可备份的表"
-"模块 %{1} 数据库备份完成：共 %{2} 个表，%{3} 条记录","模块 %{1} 数据库备份完成：共 %{2} 个表，%{3} 条记录"
-备份成功,备份成功
-"未找到模块 %{1} 的备份记录","未找到模块 %{1} 的备份记录"
-备份记录中不包含任何表信息,备份记录中不包含任何表信息
-"备份表 %{1} 不存在，跳过恢复","备份表 %{1} 不存在，跳过恢复"
-"恢复表：%{1} → %{2}","恢复表：%{1} → %{2}"
-"✓ 表 %{1} 恢复完成","✓ 表 %{1} 恢复完成"
-"模块 %{1} 数据库表已从备份恢复","模块 %{1} 数据库表已从备份恢复"
-未找到指定的备份记录,未找到指定的备份记录
-备份记录已标记为删除,备份记录已标记为删除
-无法创建数据包目录：%{1},无法创建数据包目录：%{1}
-"导出表 %{1}（分块）失败：%{2}","导出表 %{1}（分块）失败：%{2}"
-无法写入：%{1},无法写入：%{1}
-"导出表 %{1}（%{2}）失败：%{3}","导出表 %{1}（%{2}）失败：%{3}"
-模块数据包已生成,模块数据包已生成
-"未找到 manifest.json：%{1}","未找到 manifest.json：%{1}"
-"manifest 损坏","manifest 损坏"
-"不支持的 MDP 版本：%{1}","不支持的 MDP 版本：%{1}"
-"清空表 %{1} 失败：%{2}","清空表 %{1} 失败：%{2}"
-"恢复表 %{1} 批量插入失败：%{2}","恢复表 %{1} 批量插入失败：%{2}"
-"dry-run：将恢复 %{1} 张表，约 %{2} 行（未写入数据库）","dry-run：将恢复 %{1} 张表，约 %{2} 行（未写入数据库）"
-"已从数据包恢复 %{1} 张表，共 %{2} 行","已从数据包恢复 %{1} 张表，共 %{2} 行"
-缺少分块文件：%{1},缺少分块文件：%{1}
-无法读取：%{1},无法读取：%{1}
-"JSONL 解析失败：%{1}","JSONL 解析失败：%{1}"
-"恢复表 %{1} 插入失败：%{2}","恢复表 %{1} 插入失败：%{2}"
-源模块与目标模块不能为空,源模块与目标模块不能为空
-请指定至少一张表：逻辑表名=>模型类,请指定至少一张表：逻辑表名=>模型类
-无效表名或模型类：%{1},无效表名或模型类：%{1}
-"未找到登记：模块 %{1} 表 %{2}","未找到登记：模块 %{1} 表 %{2}"
-"已划转 %{1} 张表：%{2} → %{3}","已划转 %{1} 张表：%{2} → %{3}"
-"源模块无已登记表，或 map 与登记不匹配","源模块无已登记表，或 map 与登记不匹配"
-未找到登记,未找到登记
-"已标记 successor：%{1} → %{2}","已标记 successor：%{1} → %{2}"
-"模块数据包（MDP）生成失败，已中止卸载：%{1}。修复后可重试；若确需跳过 MDP，可在 env 设置 module_uninstall_mdp_strict=0（不推荐生产环境）。","模块数据包（MDP）生成失败，已中止卸载：%{1}。修复后可重试；若确需跳过 MDP，可在 env 设置 module_uninstall_mdp_strict=0（不推荐生产环境）。"
-数据库表重命名备份失败,数据库表重命名备份失败
-表重命名备份完成（时间戳：%{1}）,表重命名备份完成（时间戳：%{1}）
-"MDP：%{1}（约 %{2} 行）","MDP：%{1}（约 %{2} 行）"
-一共有,一共有
-条数据,条数据
+"⚠️  危险操作警告：卸载模块","⚠️ Dangerous operation warning: uninstall the module"
+模块名称：%{1},"Module Name: %{1}"
+模块路径：%{1},"Module path: %{1}"
+"⚠️  卸载模块将执行以下操作：","⚠️ Uninstalling a module will do the following:"
+"1. 执行模块的卸载脚本（Setup/Remove.php）","1. Execute the module's uninstall script (Setup/Remove.php)"
+"2. 清理模块的数据库表和数据（如果卸载脚本中有定义）","2. Clean the database tables and data of the module (if defined in the uninstall script)"
+"3. 从系统中移除模块注册","3. Remove module registration from the system"
+"4. 清除系统缓存","4. Clear system cache"
+"5. 备份模块文件到 var/backup 目录","5. Back up module files to the var/backup directory"
+"6. 不会删除模块源代码文件（如需删除请手动操作）","6. The module source code file will not be deleted (please do it manually if you need to delete it)"
+"⚠️  重要提示：","⚠️ IMPORTANT NOTE:"
+"- 卸载操作不可逆，请确保已备份重要数据","- The uninstallation operation is irreversible, please ensure that important data has been backed up"
+"- 如果模块有依赖关系，卸载可能会影响其他模块","- If the module has dependencies, uninstallation may affect other modules"
+"- 模块文件不会被删除，但模块将从系统中移除","- The module file will not be deleted, but the module will be removed from the system"
+"- 卸载后如需重新安装，需要重新运行安装命令","- If you need to reinstall after uninstallation, you need to rerun the installation command"
+"⚠️  第一次确认：您确定要卸载模块 %{1} 吗？","⚠️ First confirmation: Are you sure you want to uninstall module %{1}?"
+"请输入完整的模块名称 ""%{1}"" 以确认卸载","Enter the full module name ""%{1}"" to confirm uninstall"
+"或者输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作","or enter ""yes"" or ""y"" to confirm, any other input will cancel the operation"
+已取消卸载操作（确认输入不匹配）,"Uninstall operation canceled (confirmation input mismatch)"
+"⚠️  最后确认：您确定要卸载模块 %{1} 吗？","⚠️ Final confirmation: Are you sure you want to uninstall module %{1}?"
+此操作将执行卸载脚本并移除模块注册，但不会删除源代码文件,"This operation will execute the uninstall script and remove the module registration, but will not delete the source code files"
+卸载后，模块将从系统中完全移除，无法恢复！,"After uninstallation, the module will be completely removed from the system and cannot be recovered!"
+"⚠️  请再次输入完整的模块名称 ""%{1}"" 以最终确认卸载","⚠️ Please enter the complete module name ""%{1}"" again to finalize the uninstallation"
+已取消卸载操作（二次确认输入不匹配）,"Uninstall operation canceled (second confirmation input mismatch)"
+确认通过，开始卸载模块...,"Confirmed, starting module uninstallation..."
+"步骤 0/6：备份模块数据库数据...","Step 0/6: Backing up module database data..."
+"数据库备份完成：备份了 %{1} 个表，共 %{2} 条记录","Database backup completed: backed up %{1} tables, total %{2} records"
+备份信息已保存到：%{1},"Backup information saved to: %{1}"
+数据库备份可能未完全完成：%{1},"Database backup may not be fully completed: %{1}"
+"步骤 1/6：执行模块卸载脚本...","Step 1/6: Executing module uninstall script..."
+找到卸载脚本，正在执行...,"Found uninstall script, executing..."
+未找到卸载脚本（Setup/Remove.php），将跳过卸载脚本执行,"Uninstall script (Setup/Remove.php) not found, skipping uninstall script execution"
+"步骤 2/6：运行模块卸载命令...","Step 2/6: Running module uninstall command..."
+模块卸载命令执行成功,"Module uninstall command executed successfully"
+模块卸载命令可能未完全完成,"Module uninstall command may not be fully complete"
+"步骤 3/6：清除系统缓存...","Step 3/6: Clearing system cache..."
+缓存清除完成,"Cache Clear Complete"
+缓存清除可能未完全完成,"Cache Clear May Not Be Fully Complete"
+"步骤 4/6：刷新菜单收集（移除模块菜单）...","Step 4/6: Refreshing menu collection (removing module menu)..."
+菜单收集完成,"Menu collection complete"
+"步骤 5/6：更新模块列表...","Step 5/6: Updating module list..."
+模块列表更新完成,"Module list update complete"
+模块列表更新可能未完全完成,"Module list update may not be fully complete"
+"步骤 6/6：保存卸载信息...","Step 6/6: Saving uninstall information..."
+卸载信息已保存,"Uninstall information saved"
+"模块 %{1} 已成功卸载！","Module %{1} has been successfully uninstalled!"
+"提示：模块源代码文件仍保留在 %{1}，如需删除请手动操作","Tip: The module source code files are still retained in %{1}; delete them manually if needed."
+如需回滚，请使用以下命令：,"To roll back, use the following command:"
+模块卸载可能未完全完成，模块状态仍显示为已安装,"Module uninstallation may not be fully complete, module status still shows as installed"
+请手动运行以下命令完成卸载：,"Please manually run the following command to complete the uninstallation:"
+卸载模块时出错：%{1},"Error uninstalling module: %{1}"
+请手动运行以下命令卸载模块：,"Please manually run the following command to uninstall the module:"
+备份信息已保存，如需回滚请使用回滚功能,"Backup information saved. Use the rollback feature to revert if needed."
+模块没有注册的数据库表,"Module has no registered database tables"
+"表 %{1} 不存在，跳过备份","Table %{1} does not exist, skipping backup"
+"✓ 已备份表 %{1}：%{2} 条记录","✓ Backed up table %{1}: %{2} records"
+"备份表 %{1} 失败：%{2}","Backup table %{1} failed: %{2}"
+备份数据库时出错：%{1},"Error backing up database: %{1}"
+无法创建备份文件：%{1},"Unable to create backup file: %{1}"
+"=== 回滚模块卸载 ===","=== Roll back module uninstall ==="
+备份目录不存在，无法回滚,"Backup directory does not exist, cannot roll back"
+"未找到模块 %{1} 的卸载备份，无法回滚","Uninstall backup for module %{1} not found, cannot roll back"
+备份信息文件损坏，无法回滚,"Backup information file is corrupted, cannot roll back"
+找到备份：%{1},"Found backup: %{1}"
+备份时间：%{1},"Backup time: %{1}"
+备份表数：%{1}，记录数：%{2},"Number of backup tables: %{1}, number of records: %{2}"
+"⚠️  警告：回滚将执行以下操作：","⚠️ WARNING: Rollback will do the following:"
+"1. 恢复模块的数据库表和数据","1. Restore the module's database tables and data"
+"2. 重新注册模块到系统","2. Re-register the module to the system"
+"3. 清除系统缓存","3. Clear system cache"
+请确认是否要继续回滚？,"Please confirm whether to continue with the rollback?"
+"输入 ""yes"" 或 ""y"" 确认，其他任何输入将取消操作","Enter ""yes"" or ""y"" to confirm, any other input will cancel the operation"
+已取消回滚操作,"Rollback operation canceled"
+"步骤 1/3：恢复数据库表和数据...","Step 1/3: Restoring database tables and data..."
+"步骤 2/3：重新安装模块...","Step 2/3: Reinstalling module..."
+"步骤 3/3：清除系统缓存...","Step 3/3: Clearing system cache..."
+"模块 %{1} 回滚成功！","Module %{1} rolled back successfully!"
+回滚时出错：%{1},"Error during rollback: %{1}"
+没有需要恢复的表,"No tables to restore"
+"备份文件不存在：%{1}，跳过表 %{2}","Backup file does not exist: %{1}, skipping table %{2}"
+"备份文件为空：%{1}，跳过表 %{2}","Backup file is empty: %{1}, skipping table %{2}"
+"✓ 已恢复表 %{1}：%{2} 条记录","✓ Restored table %{1}: %{2} records"
+"恢复表 %{1} 失败：%{2}","Failed to restore table %{1}: %{2}"
+"=== 模块选择 ===","=== Module selection ==="
+"1. 搜索已有模块","1. Search for existing modules"
+"2. 自定义新模块名","2. Customize the new module name"
+请输入搜索关键词（模块名或部分名称）：,"Please enter a search keyword (module name or partial name):"
+提示：留空将显示所有模块,"Tip: Leave blank to display all modules."
+未找到任何模块,"No modules found"
+是否返回重新选择？(y/n，默认：y),"Go back and reselect? (y/n, default: y)"
+"显示所有模块（共 %{1} 个）：","Show all modules (%{1} total):"
+搜索关键词：%{1},"Search keyword: %{1}"
+总模块数：%{1}，匹配数：%{2},"Total Modules: %{1}, Matches: %{2}"
+未找到匹配的模块：%{1},"No matching module found: %{1}"
+是否重新搜索？(y/n，默认：y),"Search again? (y/n, default: y)"
+"找到 %{1} 个匹配的模块：","Found %{1} matching modules:"
+"请选择模块（输入序号，或输入 0 返回）","Please select a module (enter the number, or enter 0 to go back)"
+无效选择：%{1}，请重新选择,"Invalid selection: %{1}, please select again"
+已选择模块：%{1},"Selected module: %{1}"
+请输入要检测的模块名称（支持模糊搜索）：,"Please enter the module name to check (fuzzy search supported):"
+搜索关键词不能为空,"Search keyword cannot be empty"
+是否重新搜索？(y/n，默认：n),"Search again? (y/n, default: n)"
+找到以下匹配的模块：,"Found the following matching modules:"
+"请选择要检测的模块（输入序号，或输入 0 返回）","Please select the module to detect (enter the number, or enter 0 to go back)"
+是否重新输入？(y/n，默认：n),"Re-enter? (y/n, default: n)"
+获取模块列表时出错：%{1},"Error getting module list: %{1}"
+"=== 模块完整性检测 ===","=== Module integrity check ==="
+正在检测模块：%{1},"Detecting module: %{1}"
+模块目录不存在：%{1},"Module directory does not exist: %{1}"
+模块目录不存在,"Module directory does not exist"
+"✓ 模块目录存在","✓ The module directory exists"
+缺少必需文件：register.php,"Missing required file: register.php"
+"✓ register.php 存在","✓ register.php exists"
+"register.php 中未找到模块名：%{1}","Module name not found in register.php: %{1}"
+缺少推荐文件：etc/env.php（用于配置路由前缀）,"Missing recommended file: etc/env.php (used to configure route prefix)"
+"✓ etc/env.php 存在","✓ etc/env.php exists"
+"etc/env.php 中未找到 router 配置","router configuration not found in etc/env.php"
+"缺少 Controller 目录","Missing Controller directory"
+"✓ Controller 目录存在","✓ Controller directory exists"
+"Controller 目录为空，没有控制器文件","The Controller directory is empty and there is no controller file"
+"✓ 找到 %{1} 个控制器文件","✓ Found %{1} controller files"
+"缺少 view 目录","Missing view directory"
+"✓ view 目录存在","✓ The view directory exists"
+"缺少 view/templates 目录","Missing view/templates directory"
+"✓ view/templates 目录存在","✓ The view/templates directory exists"
+"缺少 etc 目录","Missing etc directory"
+"✓ etc 目录存在","✓ The etc directory exists"
+"✓ 找到模块配置文件：.module_config.json","✓ Found the module configuration file: .module_config.json"
+空目录（可能未使用）：%{1},"Empty directory (possibly unused): %{1}"
+"=== 检测结果 ===","=== Detection result ==="
+"正常项（%{1} 项）：","Normal items (%{1} items):"
+"警告项（%{1} 项）：","Warning Items (%{1} items):"
+"错误项（%{1} 项）：","Error item (%{1} items):"
+模块完整性检测通过！所有检查项都正常。,"Module integrity check passed! All checks are normal."
+"模块基本完整，但有 %{1} 个警告项需要注意","Module is mostly complete, but there are %{1} warnings to note"
+"模块存在 %{1} 个错误和 %{2} 个警告","Module has %{1} errors and %{2} warnings"
+"控制器 %{1} 的视图目录存在，但缺少 index.phtml 文件","Controller %{1} has a view directory, but the index.phtml file is missing"
+"控制器 %{1} 没有对应的视图目录：%{2}","Controller %{1} has no corresponding view directory: %{2}"
+"用法：module:data-package list [模块名筛选] | create <模块名> | restore --path=<数据包目录> [--no-truncate] [--dry-run]","Usage: module:data-package list [module name filter] | create <module name> | restore --path=<data package directory> [--no-truncate] [--dry-run]"
+"暂无 MDP，目录：%{1}","No MDP, Directory: %{1}"
+模块数据包（新→旧）,"Module data package (new → old)"
+"请指定模块名，例如：module:data-package create Weline_Saas","Please specify the module name, e.g., module:data-package create Weline_Saas"
+路径：%{1},"Path: %{1}"
+表：%{1}，行数：%{2},"Table: %{1}, Rows: %{2}"
+"请指定 --path=数据包目录（含 manifest.json）","Please specify --path=Data package directory (containing manifest.json)"
+恢复将向数据库写入数据；生产环境请先备份整库。,"Restoring will write data to the database; please back up the entire database in production environments."
+路径：%{1}，先清空表：%{2},"Path: %{1}, first clear table: %{2}"
+是,Yes
+否,No
+"确认执行请输入 yes","To confirm execution, please enter yes"
+已取消,Canceled
+"模块数据包 MDP：list / create / restore","Module data package MDP: list / create / restore"
+"列出 var/module_data_packages 下的包","List Packages Under var/module_data_packages"
+"按 weline_module_table 登记为模块生成 MDP","Register as module via weline_module_table to generate MDP"
+"从 MDP 导入；--dry-run 仅统计将恢复表/行数","Import from MDP; --dry-run only counts tables/rows to be restored"
+"用法：module:table-handover --from=Weline_Saas --to=Weline_Websites --map=saas_provisioning_order=Weline\Websites\Model\ProvisioningOrder [--map=...]","Usage: module:table-handover --from=Weline_Saas --to=Weline_Websites --map=saas_provisioning_order=Weline\Websites\Model\ProvisioningOrder [--map=...]"
+"至少一个 --map=逻辑表名=模型类FQCN","At least one --map=logical_table_name=model_class_FQCN"
+"map 格式错误：%{1}","map malformed: %{1}"
+"已标记 successor，请对目标模块执行 setup:upgrade 完成模型登记接管","Marked successor, please run setup:upgrade on the target module to complete model registration takeover"
+"模块表登记划转（合并模块、消除 weline_module_table 冲突）","Module table registration transfer (merge modules, resolve weline_module_table conflicts)"
+源模块名,"Source module name"
+目标模块名,"Target module name"
+逻辑表名=新模型类FQCN，可重复,"Logical table name = New model class FQCN, repeatable"
+"仅标记 successor，不立即改 module_name（高级）","Only mark successor, do not immediately change module_name (advanced)"
+"模块状态变更后注册表更新失败: %{1}","Registry update failed after module status change: %{1}"
+操作成功！,"Operation successful!"
+"表已存在！该表已被：%{1} 模组下的 %{2} 模型创建，请为当前模型 %{3} 更换表名。如果你确认需要移除表，请访问module_table表，手动删除表。","Table already exists! It has been created by model %{2} under module %{1}. Please change the table name for the current model %{3}. If you confirm the need to remove the table, please visit the module_table table and delete it manually."
+"【冲突模组：%{1}和%{2}】：你当前安装的模型 %{3} 和模型 %{4} 的表名（%{5}）重复。请修改当前重复模型【%{6}】的表名(table)属性或者重命名模型名。","[Conflicting modules: %{1} and %{2}]: The table names (%{5}) of your currently installed model %{3} and model %{4} are duplicated. Please modify the table name (table) attribute of the current duplicate model [%{6}] or rename the model name."
+"表已存在！该表已被：%{1} 模组下的 %{2} 模型创建。请为当前模型更换表名。","Table already exists! It has been created by model %{2} under module %{1}. Please change the table name for the current model."
+"表 %{1} 为 shared，仅结构负责模块 %{2} 可执行 DDL；当前模块 %{3} 不可改结构。","Table %{1} is shared; only the module responsible for structure, %{2}, can execute DDL; current module %{3} cannot modify the structure."
+"【冲突模组：%{1} 和 %{2}】：表 %{3} 已被模块 %{4} 的模型 %{5} 使用。请为当前模型更换表名或联系管理员。","[Conflicting modules: %{1} and %{2}]: Table %{3} is used by model %{5} of module %{4}. Please change the table name for the current model or contact the administrator."
+"模块 %{1} 没有注册的数据库表，无需备份","Module %{1} has no registered database tables, no backup needed"
+"备份模块 %{1} 表：%{2} → %{3}","Backup module %{1} table: %{2} → %{3}"
+"✓ 表 %{1} 备份完成，记录数：%{2}","✓ Table %{1} backup completed, number of records: %{2}"
+"模块 %{1} 的表备份失败或没有可备份的表","Table backup for module %{1} failed or no tables to back up"
+"模块 %{1} 数据库备份完成：共 %{2} 个表，%{3} 条记录","Module %{1} database backup complete: %{2} tables, %{3} records"
+备份成功,"Backup succeeded"
+"未找到模块 %{1} 的备份记录","Backup record for module %{1} not found"
+备份记录中不包含任何表信息,"Backup record contains no table information"
+"备份表 %{1} 不存在，跳过恢复","Backup table %{1} does not exist, skipping restore"
+"恢复表：%{1} → %{2}","Restoring table: %{1} → %{2}"
+"✓ 表 %{1} 恢复完成","✓ Table %{1} recovery completed"
+"模块 %{1} 数据库表已从备份恢复","Module %{1} database tables restored from backup"
+未找到指定的备份记录,"Specified backup record not found"
+备份记录已标记为删除,"Backup record marked as deleted"
+无法创建数据包目录：%{1},"Unable to create data package directory: %{1}"
+"导出表 %{1}（分块）失败：%{2}","Export table %{1} (chunked) failed: %{2}"
+无法写入：%{1},"Unable to write: %{1}"
+"导出表 %{1}（%{2}）失败：%{3}","Export table %{1} (%{2}) failed: %{3}"
+模块数据包已生成,"Module data package has been generated"
+"未找到 manifest.json：%{1}","manifest.json not found: %{1}"
+"manifest 损坏","corrupted manifest"
+"不支持的 MDP 版本：%{1}","Unsupported MDP version: %{1}"
+"清空表 %{1} 失败：%{2}","Failed to clear table %{1}: %{2}"
+"恢复表 %{1} 批量插入失败：%{2}","Failed to batch insert into table %{1}: %{2}"
+"dry-run：将恢复 %{1} 张表，约 %{2} 行（未写入数据库）","dry-run: will restore %{1} tables, about %{2} rows (not written to the database)"
+"已从数据包恢复 %{1} 张表，共 %{2} 行","Restored %{1} tables with %{2} rows from data packet"
+缺少分块文件：%{1},"Missing chunk file: %{1}"
+无法读取：%{1},"Unable to read: %{1}"
+"JSONL 解析失败：%{1}","JSONL parsing failed: %{1}"
+"恢复表 %{1} 插入失败：%{2}","Failed to insert into table %{1}: %{2}"
+源模块与目标模块不能为空,"Source module and target module cannot be empty"
+请指定至少一张表：逻辑表名=>模型类,"Please specify at least one table: logical table name => model class"
+无效表名或模型类：%{1},"Invalid table name or model class: %{1}"
+"未找到登记：模块 %{1} 表 %{2}","Registration not found: module %{1} table %{2}"
+"已划转 %{1} 张表：%{2} → %{3}","Transferred %{1} tables: %{2} → %{3}"
+"源模块无已登记表，或 map 与登记不匹配","No registered table in the source module, or the map does not match the registration"
+未找到登记,"Registration not found"
+"已标记 successor：%{1} → %{2}","Marked successor: %{1} → %{2}"
+"模块数据包（MDP）生成失败，已中止卸载：%{1}。修复后可重试；若确需跳过 MDP，可在 env 设置 module_uninstall_mdp_strict=0（不推荐生产环境）。","Module data package (MDP) generation failed, uninstallation aborted: %{1}. Retry after fixing; if you must skip MDP, set module_uninstall_mdp_strict=0 in env (not recommended for production)."
+数据库表重命名备份失败,"Database table rename backup failed"
+表重命名备份完成（时间戳：%{1}）,"Table rename backup completed (Timestamp: %{1})"
+"MDP：%{1}（约 %{2} 行）","MDP: %{1} (approximately %{2} lines)"
+一共有,total
+条数据,"items of data"
 ID,ID
-模组,模组
+模组,Module
 状态,Status
 描述,Description
 类型,Type
-基础命名空间,基础命名空间
-基础路径,基础路径
-上一个版本,上一个版本
-当前版本,当前版本
-路由,路由
+基础命名空间,"Base Namespace"
+基础路径,"Base Path"
+上一个版本,"Previous version"
+当前版本,"Current version"
+路由,Route
 创建时间,"Create time"
 更新时间,"Update time"
 启用,Enable
 禁用,Disable
-第三方,第三方
+第三方,"Third Party"
 Composer,Composer
-系统,系统
-模组管理,模组管理
-模组控制器,模组控制器
+系统,System
+模组管理,"Module management"
+模组控制器,"Module controller"
 操作,Operation
-开启,开启
+开启,Enable
 关闭,Close

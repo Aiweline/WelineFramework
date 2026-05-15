@@ -19,7 +19,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         $scope = $this->buildScope();
 
         $report = $service->inspectScope($scope, [
-            'home_page' => '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>Footer</footer>',
+            'home_page' => $this->responsiveStyle() . '<header>皇家棋牌游戏</header><main><section class="pb-test-section" style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>页脚导航</footer>',
         ]);
 
         self::assertTrue($report['passed'], \json_encode($report, \JSON_UNESCAPED_UNICODE));
@@ -31,12 +31,28 @@ final class AiSiteQualityGateServiceTest extends TestCase
         $scope = $this->buildScope();
 
         $report = $service->inspectScope($scope, [
-            'home_page' => '<header>Header</header><section><h2>核心卖点</h2><img src="https://example.com/hero.jpg" alt="hero"></section><footer>Footer</footer>',
+            'home_page' => '<header>Header</header><section><h2>AI content placeholder</h2><img src="https://example.com/hero.jpg" alt="hero"></section><footer>Footer</footer>',
         ]);
 
         self::assertFalse($report['passed']);
         self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
         self::assertFalse((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? true));
+    }
+
+    public function testInspectScopeRejectsStockImageUrlWithoutFileExtension(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><img src="://images.unsplash.com/photo-1601370690183-1c7796ecec61?w=1200&q=80" alt="game table"><h1>Premium card play for every table</h1><p>Clear rules, safe access, and fast support for players.</p></section></main><footer>Footer</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? true));
+        self::assertContains(
+            '://images.unsplash.com/photo-1601370690183-1c7796ecec61?w=1200&q=80',
+            $report['page_reports']['home_page']['visuals']['broken_images'] ?? []
+        );
     }
 
     public function testInspectScopeAllowsVisitorFormPlaceholderAttributes(): void
@@ -76,6 +92,112 @@ final class AiSiteQualityGateServiceTest extends TestCase
         ]);
 
         self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+    }
+
+    public function testInspectScopeRejectsBlueprintPlanningCopyInVisibleContent(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>这个页面的核心亮点</h1><p>用更清晰的卡片层级展示卖点、差异点和信任信息，避免所有内容挤成同一种视觉。</p><article><h3>Download & Play</h3><p>把主行动直接放在卡片中，减少犹豫。</p></article></section></main><footer>Footer</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+        $badMatches = \implode("\n", $report['page_reports']['home_page']['bad_matches'] ?? []);
+        self::assertStringContainsString('卡片层级', $badMatches);
+        self::assertStringContainsString('主行动', $badMatches);
+    }
+
+    public function testInspectScopeRejectsWebsiteProfileLeakInVisibleCopy(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['content_locale'] = 'en_US';
+        $scope['default_locale'] = 'en_US';
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Teenipiya websiteProfile</header><main><section style="color:#111827;background:linear-gradient(135deg,#fff7d6,#ffffff);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><h1>Premium Teen Patti APK Download</h1><p>Clear rules, secure access, and fast support for every player.</p></section></main><footer>Support and legal links</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+        self::assertContains('websiteProfile', $report['page_reports']['home_page']['bad_matches'] ?? []);
+    }
+
+    public function testInspectScopeRejectsInstructionShapedAltText(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['content_locale'] = 'en_US';
+        $scope['default_locale'] = 'en_US';
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Royal Indian Games</header><main><section style="color:#111827;background:linear-gradient(135deg,#fff7d6,#ffffff);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><img src="/pub/media/page-build/site/ai-generated/hero.jpg" alt="Introduce brand story and mission to build initial trust"><h1>Premium Teen Patti APK Download</h1><p>Clear rules, secure access, and fast support for every player.</p></section></main><footer>Support and legal links</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+        $badMatches = \implode("\n", $report['page_reports']['home_page']['bad_matches'] ?? []);
+        self::assertStringContainsString('Introduce brand story and mission', $badMatches);
+    }
+
+    public function testInspectScopeRejectsVisibleCopyOutsideSpecifiedLocale(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['content_locale'] = 'zh_Hans_CN';
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>皇家棋牌游戏</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>Best of three cards classic Indian poker. Play with friends or join tables.</p><a>Download & Play</a></section></main><footer>页脚导航</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'language_consistency')['ok'] ?? true));
+        self::assertNotEmpty($report['page_reports']['home_page']['language_violations'] ?? []);
+    }
+
+    public function testInspectScopeIgnoresHeadTitleForLanguageConsistency(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['content_locale'] = 'en_US';
+        $scope['default_locale'] = 'en_US';
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<html><head><title>&#20013;&#25991;&#26631;&#39064;</title></head><body><header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>Premium Teen Patti APK Download</h1><p>Clear rules, secure access, and fast support for every player.</p></section></main><footer>Support and legal links</footer></body></html>',
+        ]);
+
+        self::assertTrue(
+            (bool)($this->findItem($report['items'], 'language_consistency')['ok'] ?? false),
+            \json_encode($report['page_reports']['home_page']['language_violations'] ?? [], \JSON_UNESCAPED_UNICODE)
+        );
+    }
+
+    public function testContentQualityIgnoresNonVisibleSrcAndHrefPaths(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['content_locale'] = 'en_US';
+        $scope['default_locale'] = 'en_US';
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><img src="/pub/media/page-build/site/ai-generated/content/home-page-hero-banner.jpg" alt="Game Showcase featuring premium Indian-style games"><img src="/pub/media/page-build/site/ai-generated/content/home-page-trust-security.jpg" alt="Trust Security - Certified card games and secure APK downloads"><h1>Premium Teen Patti APK Download</h1><p>Clear rules, secure access, and fast support for every player.</p><a href="/content/home-page-hero-banner">Download APK</a></section></main><footer>Support and legal links</footer>',
+        ]);
+
+        $contentItem = $this->findItem($report['items'], 'content_quality');
+        self::assertTrue((bool)($contentItem['ok'] ?? false), \json_encode($contentItem, \JSON_UNESCAPED_UNICODE));
+        self::assertSame([], $report['page_reports']['home_page']['bad_matches'] ?? ['unexpected']);
+    }
+
+    public function testInspectScopeRejectsMissingAiGeneratedResponsiveSupport(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => '<header>皇家棋牌游戏</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>页脚导航</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'responsive_support')['ok'] ?? true));
+        self::assertSame([], $report['page_reports']['home_page']['responsive_signals'] ?? ['unexpected']);
     }
 
     public function testInspectScopeRejectsMalformedGeneratedHtmlTags(): void
@@ -179,6 +301,37 @@ final class AiSiteQualityGateServiceTest extends TestCase
         );
     }
 
+    public function testInspectScopeRejectsRequiredImageSlotWhenSrcDoesNotMatchFinalUrl(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['content_locale'] = 'en_US';
+        $scope['default_locale'] = 'en_US';
+        $scope['asset_manifest'] = [
+            'slots' => [
+                'page:home_page:content-home-page-hero-banner' => [
+                    'slot_type' => 'hero_image',
+                    'status' => 'done',
+                    'source' => 'generated',
+                    'final_url' => '/pub/media/page-build/site/ai-generated/hero.webp',
+                ],
+            ],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle()
+                . '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><img data-pb-ai-image-role="generated-asset" data-pb-ai-asset-slot="page:home_page:content-home-page-hero-banner" src="/pub/media/page-build/site/ai-generated/other.webp" alt="Premium Teen Patti table"><h1>Premium Teen Patti APK Download</h1><p>Clear rules, secure access, and fast support for every player.</p></section></main><footer>Support and legal links</footer>',
+        ]);
+
+        $visuals = $report['page_reports']['home_page']['visuals'] ?? [];
+        self::assertFalse((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? true));
+        self::assertSame([], $visuals['used_required_image_slot_ids'] ?? ['unexpected']);
+        self::assertSame(
+            ['page:home_page:content-home-page-hero-banner'],
+            $visuals['missing_required_image_slot_ids'] ?? []
+        );
+    }
+
     public function testInspectScopeRejectsLocalComposedFallbackAsRealImageAsset(): void
     {
         $service = $this->createService();
@@ -244,7 +397,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         /** @var list<array<string,mixed>> $normalized */
         $normalized = $reflection->invoke($service, $items, $pageReports);
 
-        self::assertCount(8, $normalized);
+        self::assertCount(10, $normalized);
         self::assertSame(
             ['demo', 'example.com'],
             $this->findItem($normalized, 'content_quality')['value']['home_page'] ?? []
@@ -252,6 +405,14 @@ final class AiSiteQualityGateServiceTest extends TestCase
         self::assertSame(
             '页面无内部标识/方案说明/demo 文案',
             $this->findItem($normalized, 'content_quality')['label'] ?? ''
+        );
+        self::assertSame(
+            '页面包含已确认方案内容',
+            $this->findItem($normalized, 'stage1_content_visible')['label'] ?? ''
+        );
+        self::assertSame(
+            '页面包含已确认视觉 token',
+            $this->findItem($normalized, 'theme_visible')['label'] ?? ''
         );
         self::assertSame([], $this->findItem($normalized, 'not_in_contract'));
     }
@@ -323,5 +484,10 @@ final class AiSiteQualityGateServiceTest extends TestCase
         }
 
         return [];
+    }
+
+    private function responsiveStyle(): string
+    {
+        return '<style>@media (max-width:420px){.pb-test-section{grid-template-columns:minmax(0,1fr);min-width:0;max-width:100%;overflow-x:hidden;padding:clamp(20px,6vw,32px)}.pb-test-section img{max-width:100%;height:auto;object-fit:cover}.pb-test-section h1{font-size:clamp(30px,9vw,48px);overflow-wrap:break-word}}</style>';
     }
 }

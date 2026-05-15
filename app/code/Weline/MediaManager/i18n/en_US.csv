@@ -1,16 +1,16 @@
-﻿支持的预览格式,支持的预览格式
-"允许其他模块注册可预览的文件格式。Observer 可向 formats 数组添加 MIME 类型。","允许其他模块注册可预览的文件格式。Observer 可向 formats 数组添加 MIME 类型。"
-文件上传前,文件上传前
-文件上传到存储之前触发，可用于验证或修改上传参数。,文件上传到存储之前触发，可用于验证或修改上传参数。
-文件上传后,文件上传后
-文件成功上传后触发，可用于后续处理如生成缩略图、记录日志等。,文件成功上传后触发，可用于后续处理如生成缩略图、记录日志等。
-文件删除前,文件删除前
-文件删除前触发，可用于验证或阻止删除。,文件删除前触发，可用于验证或阻止删除。
-存储源切换,存储源切换
-用户切换存储源时触发。,用户切换存储源时触发。
-本地存储,本地存储
-允许的文件类型：,允许的文件类型：
-允许的文件大小：,允许的文件大小：
+﻿支持的预览格式,"Supported preview formats"
+"允许其他模块注册可预览的文件格式。Observer 可向 formats 数组添加 MIME 类型。","Allow other modules to register previewable file formats. Observers can add MIME types to the formats array."
+文件上传前,"Before file upload"
+文件上传到存储之前触发，可用于验证或修改上传参数。,"Triggered before file upload to storage, can be used to validate or modify upload parameters."
+文件上传后,"After file upload"
+文件成功上传后触发，可用于后续处理如生成缩略图、记录日志等。,"Triggered after a file is successfully uploaded, can be used for subsequent processing such as generating thumbnails, logging, etc."
+文件删除前,"Before file deletion"
+文件删除前触发，可用于验证或阻止删除。,"Triggered before file deletion, can be used to validate or prevent deletion."
+存储源切换,"Storage source switch"
+用户切换存储源时触发。,"Triggered when the user switches the storage source."
+本地存储,"Local Storage"
+允许的文件类型：,"Allowed file types:"
+允许的文件大小：,"Allowed file size:"
 Storage,Storage
 "Local Storage","Local Storage"
 Folders,Folders
@@ -23,12 +23,12 @@ Refresh,Refresh
 Select,Select
 "Drop files here to upload","Drop files here to upload"
 Loading...,Loading...
-已选择,已选择
-个文件,个文件
-取消全选,取消全选
+已选择,Chosen
+个文件,files
+取消全选,"Deselect all"
 反选,"Invert Selection"
-取消,取消
-确认选择,确认选择
+取消,Cancel
+确认选择,"Confirm Selection"
 Preview,Preview
 "Select a file to preview","Select a file to preview"
 Type,Type
@@ -36,40 +36,40 @@ Size,Size
 Dimensions,Dimensions
 Cancel,Cancel
 OK,OK
-连接器URL未配置，请刷新页面,连接器URL未配置，请刷新页面
-请求超时，服务器可能繁忙,请求超时，服务器可能繁忙
-响应JSON格式无效,响应JSON格式无效
-网络错误,网络错误
-响应无效,响应无效
+连接器URL未配置，请刷新页面,"Connector URL not configured, please refresh the page"
+请求超时，服务器可能繁忙,"Request timed out, server may be busy"
+响应JSON格式无效,"Response JSON format is invalid"
+网络错误,"Network error"
+响应无效,"Invalid response"
 %{count,%{count
-"已选择 %{count","已选择 %{count"
-请选择一个项目进行重命名,请选择一个项目进行重命名
-未选择任何项目,未选择任何项目
-请至少选择一个文件,请至少选择一个文件
-请选择有效的文件（非文件夹）,请选择有效的文件（非文件夹）
-"确定删除 %{count","确定删除 %{count"
-删除成功,删除成功
-重命名成功,重命名成功
-上传完成,上传完成
-文件夹已创建,文件夹已创建
-不能访问指定路径以外的目录,不能访问指定路径以外的目录
-文件夹,文件夹
-未知,未知
-新建文件夹,新建文件夹
-文件夹名称,文件夹名称
-未命名,未命名
-重命名,重命名
-新名称,新名称
-确认,确认
-暂无文件,暂无文件
-加载中...,加载中...
-预览,预览
+"已选择 %{count","%{count} selected"
+请选择一个项目进行重命名,"Select a project to rename"
+未选择任何项目,"No project selected"
+请至少选择一个文件,"Please select at least one file"
+请选择有效的文件（非文件夹）,"Please select a valid file (not a folder)"
+"确定删除 %{count","Confirm deletion of %{count"
+删除成功,"Deletion successful"
+重命名成功,"Rename succeeded"
+上传完成,"Upload completed"
+文件夹已创建,"Folder created"
+不能访问指定路径以外的目录,"Cannot access directories outside the specified path"
+文件夹,Folder
+未知,Unknown
+新建文件夹,"New Folder"
+文件夹名称,"Folder name"
+未命名,Unnamed
+重命名,Rename
+新名称,"New Name"
+确认,Confirm
+暂无文件,"No files"
+加载中...,Loading...
+预览,Preview
 打开,Open
-下载,下载
+下载,download
 复制URL,"Copy URL"
 链接已复制到剪贴板,"Link copied to clipboard"
 复制失败，请手动复制,"Copy failed; please copy manually"
-删除,删除
+删除,Delete
 退出选择模式,"Exit Selection Mode"
 清除选择,"Clear Selection"
 选择模式,"Selection Mode"

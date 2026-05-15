@@ -1,4 +1,4 @@
-﻿"模型类不存在: %{1}","模型类不存在: %{1}"
+﻿"模型类不存在: %{1}","Model class does not exist: %{1}"
 "数据删除失败: %{1}","Data deletion failed: %{1}"
 记录不存在,"Record does not exist"
 记录已永久删除,"Record permanently deleted"
@@ -15,8 +15,8 @@
 记录更新成功,"Record updated successfully"
 记录更新失败,"Record update failed"
 "记录更新失败: %{1}","Record update failed: %{1}"
-"批量更新完成，成功: %{1}，失败: %{2}","批量更新完成，成功: %{1}，失败: %{2}"
-"批量状态变更完成，成功: %{1}，失败: %{2}","批量状态变更完成，成功: %{1}，失败: %{2}"
+"批量更新完成，成功: %{1}，失败: %{2}","Batch update completed, succeeded: %{1}, failed: %{2}"
+"批量状态变更完成，成功: %{1}，失败: %{2}","Batch status change completed, succeeded: %{1}, failed: %{2}"
 "缺少必需参数: model 和 id/ids","Missing required parameters: model and id/ids"
 "成功删除 %{1} 条记录","Successfully deleted %{1} records"
 删除失败,"Delete failed"
@@ -31,16 +31,16 @@
 "永久删除失败: %{1}","Permanent deletion failed: %{1}"
 永久删除失败,"Permanent deletion failed"
 请输入%{1},"Please enter %{1}"
-未找到任何字段,未找到任何字段
-"模型 %{1} 没有可用的字段，或者所有字段都被排除了","模型 %{1} 没有可用的字段，或者所有字段都被排除了"
-获取字段成功,获取字段成功
+未找到任何字段,"No fields found"
+"模型 %{1} 没有可用的字段，或者所有字段都被排除了","Model %{1} has no available fields, or all fields are excluded"
+获取字段成功,"Successfully got fields"
 启用,Enable
 禁用,Disable
-类型1,类型1
-类型2,类型2
-"缺少必需参数: model 或 record_id","缺少必需参数: model 或 record_id"
-获取记录成功,获取记录成功
-"获取记录失败: %{1}","获取记录失败: %{1}"
+类型1,"Type 1"
+类型2,"Type 2"
+"缺少必需参数: model 或 record_id","Missing required parameter: model or record_id"
+获取记录成功,"Successfully fetched records"
+"获取记录失败: %{1}","Failed to fetch records: %{1}"
 "DataTable Comprehensive Test","DataTable Comprehensive Test"
 "Demo Route Layout","Demo Route Layout"
 "This entry page stays on blank layout by design. The options below change how backend demo and compatibility routes open.","This entry page stays on blank layout by design. The options below change how backend demo and compatibility routes open."
@@ -59,7 +59,7 @@
 "DataTable Tag Verification","DataTable Tag Verification"
 "Verification Layout","Verification Layout"
 "Validate the tag verification report inside the same backend layout variants used by the dashboard and demo routes.","Validate the tag verification report inside the same backend layout variants used by the dashboard and demo routes."
-%{1}标签必须指定%{2}属性或位于d-table标签内！,%{1}标签必须指定%{2}属性或位于d-table标签内！
+%{1}标签必须指定%{2}属性或位于d-table标签内！,"The %{1} tag must specify the %{2} attribute or be located within the d-table tag!"
 "Demo form record loading only supports single-model records.","Demo form record loading only supports single-model records."
 "Record does not exist.","Record does not exist."
 "Joined demo tables do not support delete.","Joined demo tables do not support delete."
@@ -67,30 +67,30 @@
 "Demo table model is required.","Demo table model is required."
 "Invalid demo join condition: %{1}","Invalid demo join condition: %{1}"
 "Frontend demo access is not allowed for model %{1}","Frontend demo access is not allowed for model %{1}"
-"field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。"
-"field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。"
-"field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。"
-field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。,field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。
-"field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。","field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。"
-"field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。","field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。"
-"field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。","field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。"
-"field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。","field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。"
-field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。,field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。
-field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3},field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3}
-field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。,field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。
-"field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。","field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。"
-"field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。","field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。"
-field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3},field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3}
-娣诲姞,娣诲姞
-鏂板璁板綍,鏂板璁板綍
-缂栬緫璁板綍,缂栬緫璁板綍
-鍙栨秷,鍙栨秷
-淇濆瓨,淇濆瓨
-姝ｅ湪鍔犺浇瀛楁...,姝ｅ湪鍔犺浇瀛楁...
-閲嶇疆,閲嶇疆
+"field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","The field tag (field: %{1}) is missing the required attribute belong! Please specify along=""t-header"", along=""t-filter"", or along=""d-form""."
+"field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","The value of the belong attribute of the field tag (field: %{1}) is invalid: %{2}. Valid values: t-header, t-filter, or d-form."
+"field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","The along attribute value ""%{2}"" of the field tag (field: %{1}) does not match the parent tag type ""%{3}""! Please ensure that the along attribute value is consistent with the parent tag type."
+field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。,"field tag (field: %{1}) configuration error: %{2}. Please make sure the model attribute is set correctly in the parent tag (t-header or t-filter), or make sure the field tag is inside the d-table tag."
+"field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。","Field tag (field: %{1}) configuration error: The model corresponding to the alias ""%{2}"" was not found. Please check the model configuration of d-table."
+"field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。","Field tag validation failed: Model class ""%{1}"" does not exist! Please check whether the class name is correct and ensure that the Model class is loaded correctly. Common Model classes: Weline\Demo\Model\Demo, WeShop\Product\Model\Product, etc."
+"field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。","The field tag (field: %{1}) does not exist in the Model class ""%{2}""! Available fields: %{3}. Please check whether the field name is correct or confirm that the field is defined in the Model."
+"field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。","Field tag validation failed: An error occurred while instantiating Model class ""%{1}"": %{2}. Please check if the Model class is configured correctly."
+field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。,"The field tag (field: %{1}) does not support the type attribute in the t-header context, or the type value is invalid: %{2}. In the t-header, the field tag is mainly used to define table columns, and there is no need to specify the type attribute."
+field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3},"field tag (field: %{1}) does not support %{2} attribute in t-header context! This attribute is only used for filter fields in t-filter. Please remove the %{2} attribute or move the field tag to the t-filter tag. %{3}"
+field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。,"field tag (field: %{1}) In t-filter context, the type attribute value is invalid: %{2}. Valid values: %{3}. Please check whether the type attribute value is correct."
+"field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。","field tag (field: %{1}) In the t-filter context, the select type field must specify the options attribute! Please add the options attribute in the format: value:label,value2:label2."
+"field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。","field tag (field: %{1}) In the t-filter context, the options attribute of the select type is malformed: %{2}. Correct format: value:label,value2:label2. Please check the options attribute format."
+field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3},"field tag (field: %{1}) does not support %{2} attribute in t-filter context! This attribute is only used for table header fields in t-header. Please remove the %{2} attribute or move the field tag to the t-header tag. %{3}"
+娣诲姞,Add
+鏂板璁板綍,"Add Record"
+缂栬緫璁板綍,"Edit record"
+鍙栨秷,Cancel
+淇濆瓨,Save
+姝ｅ湪鍔犺浇瀛楁...,"Loading fields..."
+閲嶇疆,Reset
 d-table标签必须指定model属性！,"d-table tag must specify model attribute!"
 d-table标签必须指定scope属性！,"d-table tag must specify scope attribute!"
-新增,新增
+新增,Add
 新增记录,"Add Record"
 自动生成,"Auto Generated"
 数据表格,"Data Table"
@@ -100,16 +100,16 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 显示,Display
 字段配置,"Field Configuration"
 加载失败,"Load Failed"
-加载中,加载中
+加载中,Loading
 刷新数据,"Refresh Data"
 只显示重要数据,"Show Important Only"
 重置配置,"Reset Configuration"
 重置,Reset
 重置表头字段配置,"Reset Header Field Configuration"
 重置表头,"Reset Header"
-重置筛选字段配置,重置筛选字段配置
+重置筛选字段配置,"Reset Filter Field Configuration"
 重置筛选,"Reset Filter"
-重置全部配置,重置全部配置
+重置全部配置,"Reset All Configurations"
 全部重置,"Reset All"
 主题配置,"Theme Settings"
 主题,Theme
@@ -149,11 +149,11 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 请输入有效的电话号码,"Please enter a valid phone number"
 请选择图片文件,"Please select an image file"
 预览图片,"Preview Image"
-"数值不能小于 %{1}","数值不能小于 %{1}"
-"数值不能大于 %{1}","数值不能大于 %{1}"
-"输入长度不能超过 %{1}","输入长度不能超过 %{1}"
-字段格式不正确,字段格式不正确
-字段验证失败,字段验证失败
+"数值不能小于 %{1}","Value cannot be less than %{1}"
+"数值不能大于 %{1}","Value cannot exceed %{1}"
+"输入长度不能超过 %{1}","Input length cannot exceed %{1}"
+字段格式不正确,"Incorrect field format"
+字段验证失败,"Field validation failed"
 表格主题配置,"Table Theme Configuration"
 显示选项,"Display Options"
 显示斑马纹,"Show Zebra Stripes"
@@ -194,13 +194,13 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 导出失败：%{1},"Export failed: %{1}"
 不支持的导出格式,"Unsupported export format"
 获取字段失败,"Failed to get fields"
-拖动调整列顺序,拖动调整列顺序
-该列不允许移动,该列不允许移动
-无法放置到该位置,无法放置到该位置
-列顺序已更新,列顺序已更新
+拖动调整列顺序,"Drag to reorder columns"
+该列不允许移动,"This column does not allow moving."
+无法放置到该位置,"Unable to place at this location"
+列顺序已更新,"Column Order Updated"
 加载数据失败,"Failed to load data"
 "加载数据失败: %{1}","Failed to load data: %{1}"
-输入,输入
+输入,Input
 请输入过滤器名称,"Please enter filter name"
 过滤器保存成功,"Filter saved successfully"
 配置保存成功,"Configuration saved successfully"
@@ -217,7 +217,7 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 正在删除...,Deleting...
 删除成功,"Delete Success"
 您有未保存的编辑内容，确定要离开吗？,"You have unsaved changes. Are you sure you want to leave?"
-重试,重试
+重试,Retry
 受保护,Protected
 所有字段都已配置,"All fields are configured"
 筛选,Filter
@@ -248,7 +248,7 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 重置配置失败，请稍后重试,"Failed to reset configuration, please try again later"
 收起,Collapse
 网络错误：%{1},"Network error: %{1}"
-配置已保存,配置已保存
+配置已保存,"Configuration saved"
 "Blank-layout backend entry for the repaired DataTable demo suite. Use this page to seed demo data, jump into direct demo routes, and verify compatibility routes that previously returned 404.","Blank-layout backend entry for the repaired DataTable demo suite. Use this page to seed demo data, jump into direct demo routes, and verify compatibility routes that previously returned 404."
 "Back To Dashboard","Back To Dashboard"
 "Open Documentation","Open Documentation"
