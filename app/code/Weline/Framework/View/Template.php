@@ -25,6 +25,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 
@@ -787,6 +788,14 @@ class Template extends DataObject
      */
     public function getHook(string $name): string
     {
+        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $traceName = 'view::hook::' . substr($name, 0, 180);
+        $traceStart = 0.0;
+        if ($traceEnabled) {
+            $traceStart = microtime(true);
+            RequestLifecycleTrace::pushCurrentParent($traceName);
+        }
+
         $hooker_content = '';
         
         // 获取hook文件列表（已按顺序排序）
@@ -843,7 +852,24 @@ class Template extends DataObject
             
             // HookReader 已经返回正确格式：ModuleName::hooks/path/to/file.phtml
             // 直接使用，不需要再次构建路径
-            $hookHtml = $this->fetchTagHtml('hooks', $hooker_file);
+            $fileTraceName = 'view::hook_file::' . substr((string)$module . '::' . $name, 0, 180);
+            $fileTraceStart = 0.0;
+            if ($traceEnabled) {
+                $fileTraceStart = microtime(true);
+                RequestLifecycleTrace::pushCurrentParent($fileTraceName);
+            }
+            try {
+                $hookHtml = $this->fetchTagHtml('hooks', $hooker_file);
+            } finally {
+                if ($traceEnabled) {
+                    RequestLifecycleTrace::popCurrentParent();
+                    RequestLifecycleTrace::recordSpan($fileTraceName, (microtime(true) - $fileTraceStart) * 1000, 'view', null, [
+                        'hook' => $name,
+                        'module' => (string)$module,
+                        'file' => (string)$hooker_file,
+                    ]);
+                }
+            }
             
             // 检查是否是solo hook
             $isSolo = ($soloHook === $module);
@@ -934,6 +960,14 @@ class Template extends DataObject
             $hooker_content .= $content;
         }
         
+        if ($traceEnabled) {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan($traceName, (microtime(true) - $traceStart) * 1000, 'view', null, [
+                'hook' => $name,
+                'files' => count($hookFiles),
+            ]);
+        }
+
         return $hooker_content;
     }
 
