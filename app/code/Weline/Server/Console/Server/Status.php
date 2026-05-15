@@ -206,6 +206,7 @@ class Status extends CommandAbstract
 
         $this->printer->note(__('使用 server:status <name> 查看详细状态'));
         $this->printer->note(__('使用 server:stop <name> 停止实例'));
+        $this->printer->note(__('如有残留实例文件，可执行 server:clean 清理失效记录'));
     }
     
     /**
@@ -639,6 +640,7 @@ class Status extends CommandAbstract
                 __('查看所有实例') => 'php bin/w server:status',
                 __('查看指定实例') => 'php bin/w server:status api-server',
                 __('实时监控（watch 模式）') => 'php bin/w server:status -w',
+                __('清理失效实例记录') => 'php bin/w server:clean',
             ]
         );
     }

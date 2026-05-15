@@ -20,6 +20,8 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\I18n\Model\I18n;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser as PhraseParser;
+use Weline\I18n\Parser as I18nParser;
 
 class Collect implements \Weline\Framework\Console\CommandInterface
 {
@@ -77,6 +79,9 @@ class Collect implements \Weline\Framework\Console\CommandInterface
             
             // 清理phrase缓存
             w_cache('phrase')->clear();
+
+            PhraseParser::clearWorkerCaches();
+            I18nParser::clearWorkerCaches();
             
             $this->printing->success(__('翻译缓存清理成功！'));
         } catch (Exception $e) {

@@ -1,4 +1,4 @@
-﻿"AiKnowledge 查询器不支持的操作：%{1}","Operation not supported by AiKnowledge Queryer: %{1}"
+﻿"AiKnowledge 查询器不支持的操作：%{1}","AiKnowledge 查询器不支持的操作：%{1}"
 "query is required","query is required"
 "AI 知识库","AI knowledge base"
 提供混合向量检索（语义+关键词）搜索文档、API、代码,"Provides hybrid vector search (semantic + keyword) for documents, APIs, and code"
