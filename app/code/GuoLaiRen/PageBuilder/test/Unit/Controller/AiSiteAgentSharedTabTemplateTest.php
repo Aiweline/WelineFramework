@@ -55,6 +55,20 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringNotContainsString('renderTaskPlan', $script);
     }
 
+    public function testConfirmedPlanModalUsesNonEmptyBlueprintFallbackAndBindsPreviewTabs(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+
+        self::assertIsString($script);
+        self::assertStringContainsString('displayPlan: displayPlan', $script);
+        self::assertStringContainsString("displayKind: displayKind", $script);
+        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'execution_blueprint'", $script);
+        self::assertStringContainsString("buildPlanPreviewHtml('', { execution_blueprint: planData })", $script);
+        self::assertStringContainsString('bindPreviewTabButtons(planRenderedContent);', $script);
+        self::assertStringContainsString('bindPreviewActionButtons(planRenderedContent);', $script);
+    }
+
     public function testCurrentPageRefineUsesDedicatedPageApi(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);

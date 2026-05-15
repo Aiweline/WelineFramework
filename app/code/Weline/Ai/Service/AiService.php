@@ -379,6 +379,8 @@ class AiService
 
         // 6. 调用AI模型API
         $params['resolved_config'] = $resolvedConfig;
+        $params['scenario_code'] = $scenarioCode;
+        $params['locale'] = $locale;
         $response = $this->callModelApi($model, $adaptedPrompt, $params);
 
         // 7. 场景适配器后处理
@@ -959,7 +961,8 @@ class AiService
                     $account = $accModel; // 成功的账户
                     $requestTime = (int)((microtime(true) - $startTime) * 1000);
                     $this->accountService->recordUsage($account, $model, $usage, [
-                        'request_type' => 'chat',
+                        'request_type' => $params['request_type'] ?? 'chat',
+                        'request_id' => $params['request_id'] ?? null,
                         'user_id' => $params['user_id'] ?? null,
                         'user_name' => $params['user_name'] ?? null,
                         'request_time' => $requestTime,
@@ -1004,7 +1007,8 @@ class AiService
             if ($account) {
                 $requestTime = (int)((microtime(true) - $startTime) * 1000);
                 $this->accountService->recordUsage($account, $model, $usage, [
-                    'request_type' => 'chat',
+                    'request_type' => $params['request_type'] ?? 'chat',
+                    'request_id' => $params['request_id'] ?? null,
                     'user_id' => $params['user_id'] ?? null,
                     'user_name' => $params['user_name'] ?? null,
                     'request_time' => $requestTime,

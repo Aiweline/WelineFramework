@@ -1042,16 +1042,16 @@ class ComponentService
         return [
             [
                 'id' => 1,
-                'name' => 'Teen Patti',
-                'description' => 'Classic Indian card game with exciting gameplay',
+                'name' => 'Strategy Table',
+                'description' => 'A focused mode with quick onboarding and clear rules',
                 'image' => 'https://placehold.co/400x300/6c5ce7/ffffff?text=Game+1',
                 'players' => '2-6',
                 'rating' => 4.8,
             ],
             [
                 'id' => 2,
-                'name' => 'Rummy',
-                'description' => 'Popular card game requiring skill and strategy',
+                'name' => 'Quick Match',
+                'description' => 'A faster play mode for visitors who want immediate action',
                 'image' => 'https://placehold.co/400x300/00cec9/ffffff?text=Game+2',
                 'players' => '2-4',
                 'rating' => 4.6,

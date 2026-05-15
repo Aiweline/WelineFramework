@@ -1,4 +1,4 @@
-﻿搜索组件：快速构建搜索框,搜索组件：快速构建搜索框
+﻿搜索组件：快速构建搜索框,"Search Component: Quickly build a search box"
 回车搜索,"Press Enter to search"
 OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"
 排序组件：快速构建排序按钮,"Sort Component: Quickly build sort buttons"
@@ -12,11 +12,11 @@ OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"
 组件不存在,"Component does not exist"
 组件详情,"Component Details"
 "加载组件详情失败: %{1}","Failed to load component details: %{1}"
-仅支持AJAX请求,仅支持AJAX请求
-请求成功！,请求成功！
-请求失败！,请求失败！
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}"
-"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}"
+仅支持AJAX请求,"Only AJAX requests are supported"
+请求成功！,"Request succeeded!"
+请求失败！,"Request failed!"
+"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG mode: Initialization error, please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}"
+"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG mode: Save error! Please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}"
 清空条件,"Clear Conditions"
 总组件数,"Total Components"
 当前显示,"Currently Displayed"

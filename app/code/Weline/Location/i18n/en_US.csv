@@ -1,8 +1,8 @@
-﻿定位成功,定位成功
-经纬度参数不能为空,经纬度参数不能为空
-经纬度格式不正确,经纬度格式不正确
-经纬度范围不正确,经纬度范围不正确
-获取地址成功,获取地址成功
+﻿定位成功,"Location Successful"
+经纬度参数不能为空,"Latitude and longitude parameters cannot be empty"
+经纬度格式不正确,"Incorrect latitude and longitude format"
+经纬度范围不正确,"Incorrect latitude and longitude range"
+获取地址成功,"Address retrieved successfully"
 没有可用的定位服务提供者,"No available location service providers"
 "所有定位服务提供者都失败，最后错误: %{1}","All location service providers failed, last error: %{1}"
 未知错误,"Unknown error"
@@ -28,18 +28,18 @@ geojs.io返回空数据,"geojs.io returned empty data"
 "ipwhois.app返回数据解析失败: %{1}","ipwhois.app response data parsing failed: %{1}"
 "ipwhois.app定位失败: %{1}","ipwhois.app location failed: %{1}"
 本地定位服务暂未实现，将使用备用通道,"Local location service not implemented, will use fallback channels"
-定位中...,定位中...
-中国大陆,中国大陆
-配送至,配送至
-选择配送地址,选择配送地址
-自动定位,自动定位
-手动选择,手动选择
-关闭,关闭
-Geo模块未加载,Geo模块未加载
-获取地址信息失败,获取地址信息失败
-定位失败，请稍后重试,定位失败，请稍后重试
-请输入配送地址（格式：省/市/区）,请输入配送地址（格式：省/市/区）
-中国,中国
+定位中...,Locating...
+中国大陆,"Chinese mainland"
+配送至,"Ship to"
+选择配送地址,"Select Shipping Address"
+自动定位,"Auto Locate"
+手动选择,"Manual selection"
+关闭,Close
+Geo模块未加载,"Geo module not loaded"
+获取地址信息失败,"Failed to retrieve address information"
+定位失败，请稍后重试,"Location Failed, Please Try Again Later"
+请输入配送地址（格式：省/市/区）,"Please enter the delivery address (format: Province/City/District)"
+中国,China
 "浏览器不支持Geolocation API","Browser does not support Geolocation API"
 用户拒绝了定位权限,"User denied geolocation permission"
 位置信息不可用,"Position information unavailable"

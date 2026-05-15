@@ -29,4 +29,30 @@ final class AiResponseJsonParserTest extends TestCase
         self::assertIsArray($decoded);
         self::assertSame('Demo', (string)($decoded['plan_json']['site_strategy']['site_display_name'] ?? ''));
     }
+
+    public function testExtractAndDecodeUsesFirstBalancedObjectWhenModelAppendsSecondJsonObject(): void
+    {
+        $parser = new AiResponseJsonParser();
+
+        $decoded = $parser->extractAndDecode(
+            '{"html_content":"<section>First</section>","js_content":""}'
+            . '{"html_content":"<section>Second</section>","js_content":""}'
+        );
+
+        self::assertIsArray($decoded);
+        self::assertSame('<section>First</section>', (string)($decoded['html_content'] ?? ''));
+    }
+
+    public function testExtractAndDecodeRepairsMissingColonAfterKnownComponentKey(): void
+    {
+        $parser = new AiResponseJsonParser();
+
+        $decoded = $parser->extractAndDecode(
+            '{"extra_fields":"","php_variables "" ,"css_extra":"#componentId{}","css_responsive":"","html_content":"<img src=\"/pub/media/real.jpg\">","js_content":""}'
+        );
+
+        self::assertIsArray($decoded);
+        self::assertSame('', (string)($decoded['php_variables'] ?? 'missing'));
+        self::assertSame('#componentId{}', (string)($decoded['css_extra'] ?? ''));
+    }
 }

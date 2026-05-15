@@ -1,16 +1,16 @@
-﻿布局定时切换任务,布局定时切换任务
-没有需要处理的布局计划,"No layout schedules to process"
-每分钟检查并执行布局定时切换任务,"Check and execute layout scheduled switch task every minute"
-"计划 #%1 数据不完整，跳过","计划 #%1 数据不完整，跳过"
-"计划 #%1 关联的布局不存在，跳过","计划 #%1 关联的布局不存在，跳过"
-"计划 #%1 已激活，布局 '%2' 应用到 %3::%4","计划 #%1 已激活，布局 '%2' 应用到 %3::%4"
-无效的计划ID,"Invalid schedule ID"
-重置为待执行,"Reset to pending"
-标记为已完成,"Marked as completed"
-"计划 #%1 已%2","计划 #%1 已%2"
-布局切换前,布局切换前
-布局切换前触发，可用于验证或准备工作。,布局切换前触发，可用于验证或准备工作。
-布局切换后,布局切换后
-布局切换后触发，可用于清除缓存、更新索引等。,布局切换后触发，可用于清除缓存、更新索引等。
-布局计划触发,布局计划触发
-布局定时计划触发时触发。,布局定时计划触发时触发。
+﻿布局定时切换任务,Scheduled layout switch task
+没有需要处理的布局计划,No layout schedules to process
+每分钟检查并执行布局定时切换任务,Check and execute layout scheduled switch task every minute
+计划 #%{1} 数据不完整，跳过,计划 #%{1} 数据不完整，跳过
+计划 #%{1} 关联的布局不存在，跳过,计划 #%{1} 关联的布局不存在，跳过
+计划 #%{1} 已激活，布局 '%{2}' 应用到 %{3}::%{4},计划 #%{1} 已激活，布局 '%{2}' 应用到 %{3}::%{4}
+无效的计划ID,Invalid schedule ID
+重置为待执行,Reset to pending
+标记为已完成,Marked as completed
+计划 #%{1} 已%{2},计划 #%{1} 已%{2}
+布局切换前,Before layout switch
+布局切换前触发，可用于验证或准备工作。,"Triggered before layout switch, can be used for validation or preparation."
+布局切换后,After layout switch
+布局切换后触发，可用于清除缓存、更新索引等。,"Triggered after layout switch, can be used to clear cache, update indexes, etc."
+布局计划触发,Layout schedule triggered
+布局定时计划触发时触发。,Triggered when the layout schedule is triggered.

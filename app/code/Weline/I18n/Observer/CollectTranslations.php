@@ -15,6 +15,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\I18n\Service\AiTranslationQueueService;
 
 /**
  * 收集翻译词观察者
@@ -43,6 +44,7 @@ class CollectTranslations implements ObserverInterface
 
         /** @var Dictionary $dictionary */
         $dictionary = ObjectManager::getInstance(Dictionary::class);
+        $created = 0;
 
         foreach ($translations as $translation) {
             if (!isset($translation['word']) || !isset($translation['translate'])) {
@@ -62,6 +64,7 @@ class CollectTranslations implements ObserverInterface
                 $dictionary->setData(Dictionary::schema_fields_MODULE, $moduleName);
                 $dictionary->setData(Dictionary::schema_fields_IS_BACKEND, $translation['is_backend'] ?? 1);
                 $dictionary->save();
+                $created++;
             }
             
             // 保存默认语言的翻译（中文）
@@ -77,6 +80,15 @@ class CollectTranslations implements ObserverInterface
                 $localeDict->setData(LocaleDictionary::schema_fields_LOCALE_CODE, $defaultLocale);
                 $localeDict->setData(LocaleDictionary::schema_fields_TRANSLATE, $value);
                 $localeDict->save();
+            }
+        }
+
+        if ($created > 0) {
+            try {
+                ObjectManager::getInstance(AiTranslationQueueService::class)
+                    ->enqueueEnabledLocales('collect_translations_event');
+            } catch (\Throwable $throwable) {
+                w_log_error('I18n AI translation enqueue failed: ' . $throwable->getMessage(), [], 'i18n');
             }
         }
     }

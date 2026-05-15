@@ -129,15 +129,45 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $messageBody = $this->extractFunctionBody($script, 'bindWorkspacePreviewMessages');
 
         self::assertStringContainsString("doc.querySelectorAll('.component-actions [data-pb-action]')", $bridgeBody);
+        self::assertStringContainsString('button.onmousedown = handleEmbeddedPreviewActionPointerDown;', $bridgeBody);
+        self::assertStringContainsString('button.onpointerdown = handleEmbeddedPreviewActionPointerDown;', $bridgeBody);
+        self::assertStringContainsString('button.ontouchstart = handleEmbeddedPreviewActionPointerDown;', $bridgeBody);
+        self::assertStringContainsString('button.onclick = handleEmbeddedPreviewActionClick;', $bridgeBody);
+        self::assertStringContainsString("actionHost.addEventListener('click', function (event)", $bridgeBody);
+        self::assertStringContainsString("source.closest('.component-actions [data-pb-action]')", $bridgeBody);
+        self::assertStringContainsString("doc.addEventListener('pointerdown', handleEmbeddedPreviewActionCapture, true);", $bridgeBody);
+        self::assertStringContainsString("doc.addEventListener('touchstart', handleEmbeddedPreviewActionCapture, true);", $bridgeBody);
+        self::assertStringContainsString("doc.addEventListener('click', handleEmbeddedPreviewActionCapture, true);", $bridgeBody);
+        self::assertStringNotContainsString("if (button.dataset.pbWorkspaceActionBound === '1')", $bridgeBody);
         self::assertStringContainsString('var payload = buildEmbeddedPreviewPayload(wrapper, button);', $bridgeBody);
-        self::assertStringContainsString("if (action === 'edit-block' || action === 'open-editor') {", $bridgeBody);
-        self::assertStringContainsString('openBlockEditorModal(payload);', $bridgeBody);
+        self::assertStringContainsString('dispatchEmbeddedPreviewActionPayload(action, payload);', $bridgeBody);
 
+        self::assertStringContainsString("if (payload.type === 'pb-component-select') {", $messageBody);
+        self::assertStringContainsString('showEmbeddedPreviewActionDock(Object.assign({}, payload', $messageBody);
         self::assertStringContainsString("if (payload.type === 'pb-component-action') {", $messageBody);
-        self::assertStringContainsString("if (String(payload.action || '') === 'edit-block' || String(payload.action || '') === 'open-editor') {", $messageBody);
-        self::assertStringContainsString('openBlockEditorModal(payload);', $messageBody);
+        self::assertStringContainsString("dispatchEmbeddedPreviewActionPayload(String(payload.action || ''), payload);", $messageBody);
+        self::assertStringContainsString("document.body.dataset.pbRefineComponentOpenStatus", $script);
+        self::assertStringContainsString("document.body.dataset.pbEmbeddedPreviewActionStatus", $script);
+        self::assertStringContainsString("function dispatchEmbeddedPreviewActionPayload(action, payload)", $script);
+        self::assertStringContainsString("function getEmbeddedActionButtonInlineDispatch()", $script);
+        self::assertStringContainsString("function ensureEmbeddedPreviewActionDock()", $script);
+        self::assertStringContainsString("dock.id = 'pb-ai-embedded-action-dock';", $script);
+        self::assertStringContainsString("function syncEmbeddedPreviewFrameActionChrome(doc)", $script);
+        self::assertStringContainsString("data-pb-workspace-mobile-action-dock", $script);
+        self::assertStringContainsString("function syncEmbeddedPreviewActionDockPlacement()", $script);
+        self::assertStringContainsString("dock.style.bottom = '22px';", $script);
+        self::assertStringContainsString("function runEmbeddedPreviewDockAction(action)", $script);
+        self::assertStringContainsString('handleEmbeddedPreviewAction: function (payload)', $script);
+        self::assertStringContainsString("if (normalizedAction === 'refine') {", $script);
         self::assertStringNotContainsString('openLegacyBlockEditorModal', $script);
         self::assertStringNotContainsString('skipLegacyFallback', $script);
+
+        $renderer = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
+        self::assertIsString($renderer);
+        self::assertStringContainsString('onclick="\' . $actionDispatch . \'"', $renderer);
+        self::assertStringContainsString('getComponentActionInlineDispatchJs()', $renderer);
+        self::assertStringContainsString('window.parent.postMessage(payload, \'*\')', $renderer);
+        self::assertStringContainsString('window.__pbDispatchComponentActionFromButton = function(target, e)', $renderer);
     }
 
     public function testVisualPreviewImagesCanStartSingleAssetRegeneration(): void
@@ -224,8 +254,60 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $renderService = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
         self::assertIsString($renderService);
         self::assertStringContainsString('.component-actions.pb-actions-visible', $renderService);
+        self::assertStringContainsString('tabindex="0"', $renderService);
+        self::assertStringContainsString('.tpmst-component-wrapper:focus-within .component-actions', $renderService);
+        self::assertStringContainsString('.pb-component-wrapper:focus-within .component-actions', $renderService);
+        self::assertStringContainsString('.tpmst-component-wrapper.selected .component-actions', $renderService);
+        self::assertStringContainsString('.pb-component-wrapper.selected .component-actions', $renderService);
+        self::assertStringContainsString('data-page-type=', $renderService);
+        self::assertStringContainsString('type: "pb-component-action"', $renderService);
+        self::assertStringContainsString('window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)', $renderService);
+        self::assertStringContainsString('document.addEventListener("mousedown", handleComponentActionEvent, true);', $renderService);
+        self::assertStringContainsString('document.addEventListener("click", handleComponentActionEvent, true);', $renderService);
+        self::assertStringContainsString('e.target.nodeType === 3', $renderService);
+        self::assertStringContainsString('new URLSearchParams(window.location.search).get("page_type")', $renderService);
         self::assertStringContainsString('.tpmst-component-wrapper[data-region="header"] .component-actions', $renderService);
         self::assertStringContainsString('[data-pb-action="move-up"]', $renderService);
+        self::assertStringContainsString('@media (max-width: 480px)', $renderService);
+        self::assertStringContainsString('position: sticky !important;', $renderService);
+        self::assertStringContainsString('display: flex !important;', $renderService);
+        self::assertStringContainsString('max-width: calc(100% - 12px) !important;', $renderService);
+    }
+
+    public function testVirtualThemePreviewRequiresAiGeneratedResponsiveSupportWithoutRendererCompatCss(): void
+    {
+        $deviceStyles = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/styles-device.phtml');
+        self::assertIsString($deviceStyles);
+        self::assertStringContainsString('width: min(390px, 100%);', $deviceStyles);
+        self::assertStringContainsString('max-width: 100%;', $deviceStyles);
+
+        $script = $this->workspaceScript();
+        self::assertStringContainsString("frame.style.width = 'min(390px, 100%)';", $script);
+        self::assertStringContainsString("frame.style.maxWidth = '100%';", $script);
+        self::assertStringNotContainsString("frame.style.maxWidth = '390px';", $script);
+
+        $renderService = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
+        self::assertIsString($renderService);
+        self::assertStringNotContainsString('data-pb-virtual-mobile-compat="1"', $renderService);
+        self::assertStringNotContainsString('injectVirtualThemeMobileCompatibilityStyle', $renderService);
+
+        $generationService = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSitePageComponentGenerationService.php');
+        self::assertIsString($generationService);
+        self::assertStringContainsString('Responsive CSS is mandatory for every non-trivial component', $generationService);
+        self::assertStringContainsString('the renderer will not inject compatibility CSS/JS', $generationService);
+
+        $qualityGate = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteQualityGateService.php');
+        self::assertIsString($qualityGate);
+        self::assertStringContainsString("'responsive_support'", $qualityGate);
+        self::assertStringContainsString('matchResponsiveSignals', $qualityGate);
+        self::assertStringNotContainsString('sanitizeGeneratedBrandCopy', $renderService);
+        self::assertStringNotContainsString('sanitizeGeneratedLogoImages', $renderService);
+        self::assertStringNotContainsString('sanitizePersistedHeroImageLayout', $renderService);
+        self::assertStringNotContainsString('sanitizeAiHtmlBlockFragment', $renderService);
+        self::assertStringNotContainsString('containsAiInstructionLeak', $renderService);
+        self::assertStringNotContainsString('A focused highlight from this section.', $renderService);
+        self::assertStringNotContainsString('Game Card|Category|Badge', $renderService);
+        self::assertStringNotContainsString('websiteProfile', $renderService);
     }
 
     public function testBuildStageExposesFullRebuildActionAndBindsItToSchemeRebuildFlow(): void
@@ -301,6 +383,31 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertFileDoesNotExist($templateRoot . '/workspace/script-phase2-queue-progress.phtml');
     }
 
+    public function testBuildQueueDetailsDoNotRemainAutoExpandedAfterTerminalStatus(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml');
+        self::assertIsString($source);
+
+        self::assertStringContainsString('function resolveQueuePanelStatus(info, payload, eventKind)', $source);
+        self::assertStringContainsString("if (kind === 'error' || kind === 'failed')", $source);
+        self::assertStringContainsString("var shouldOpen = activeStatus === 'queued' || activeStatus === 'pending' || activeStatus === 'running' || activeStatus === 'processing';", $source);
+        self::assertStringContainsString('panelEl.open = false;', $source);
+        self::assertStringContainsString('active_operation: { operation: normalized, status: queuePanelStatus }', $source);
+        self::assertStringNotContainsString("active_operation: { operation: normalized, status: 'running' }", $source);
+    }
+
+    public function testGuidedQueueTelemetryDoesNotHijackPreviewViewport(): void
+    {
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        $styles = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/styles-guided.phtml');
+        self::assertIsString($runtime);
+        self::assertIsString($styles);
+
+        self::assertStringNotContainsString("panels[0].scrollIntoView({ behavior: 'smooth', block: 'start' });", $runtime);
+        self::assertStringContainsString('.pb-guided-sidebar .pb-ai-build-queue-embed', $styles);
+        self::assertStringContainsString('overflow-wrap: anywhere;', $styles);
+    }
+
     public function testSinglePlanBuildFlowKeepsPlanAndBuildOnly(): void
     {
         $script = $this->workspaceScript();
@@ -343,7 +450,13 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertIsString($source);
         $body = $this->extractPhpMethodBody($source, 'buildWorkspaceState');
 
-        self::assertStringContainsString('$supportedWorkspaceOperations = [\'plan\' => true, \'build\' => true, \'publish\' => true];', $body);
+        self::assertStringContainsString("'plan' => true,", $body);
+        self::assertStringContainsString("'build' => true,", $body);
+        self::assertStringContainsString("'publish' => true,", $body);
+        self::assertStringContainsString("'regenerate_page' => true,", $body);
+        self::assertStringContainsString("'block_regenerate' => true,", $body);
+        self::assertStringContainsString("'block_partial_patch' => true,", $body);
+        self::assertStringContainsString("'image_asset' => true,", $body);
         self::assertStringContainsString("'plan' => \$planQueueInfo", $body);
         self::assertStringContainsString("'build' => \$buildQueueInfo", $body);
         self::assertStringNotContainsString("'task_plan' => [", $body);
@@ -362,9 +475,14 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
     public function testBlockRefineUsesQueuedPartialPatchWithoutLegacySseFallback(): void
     {
         $script = $this->workspaceScript();
+        $modalBody = $this->extractFunctionBody($script, 'openRefineComponentModal');
         $submitBody = $this->extractFunctionBody($script, 'submitRefineComponent');
 
+        self::assertStringContainsString('document.body.appendChild(modalEl);', $modalBody);
+        self::assertStringContainsString('showBootstrapModal(modalEl);', $modalBody);
+        self::assertStringNotContainsString('modalInstance.show();', $modalBody);
         self::assertStringContainsString("if (!startPatchBlockUrl || !window.PbAiOperationRunner", $submitBody);
+        self::assertStringContainsString('hideBootstrapModal(modalEl);', $submitBody);
         self::assertStringContainsString('blockRefreshState.blockId = refineComponentState.componentCode;', $submitBody);
         self::assertStringContainsString('renderBlockStreamingState(messages.refineQueued);', $submitBody);
         self::assertStringContainsString('postForm(startPatchBlockUrl, {', $submitBody);
@@ -450,6 +568,21 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('block_id: blockId || componentCode,', $payloadBody);
         self::assertStringContainsString("page_type: String(", $payloadBody);
         self::assertStringContainsString("|| getActivePreviewPageType()", $payloadBody);
+    }
+
+    public function testQueuedVirtualThemeBlockOperationsKeepSourceInTopLevelPayload(): void
+    {
+        $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($controller);
+
+        $readBody = $this->extractFunctionBody($controller, 'handleStartPatchBlock');
+        $detailKeysBody = $this->extractFunctionBody($controller, 'getQueuedOperationDetailKeys');
+
+        self::assertStringContainsString("'source' => \$readSource,", $readBody);
+        self::assertStringContainsString("\$targetScope = \$readSource === 'virtual_theme_component'", $readBody);
+        self::assertStringContainsString("'source',", $detailKeysBody);
+        self::assertStringContainsString("'retry_of_queue_id',", $detailKeysBody);
+        self::assertStringContainsString("'retry_source',", $detailKeysBody);
     }
 
     public function testVisualPreviewFrameUsesAdaptiveHeightWithoutDirectDocumentScrollHeight(): void
@@ -581,8 +714,8 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
         self::assertStringContainsString('var selectedTypes = selectedPageTypes();', $bindBody);
         self::assertStringContainsString('ensureBuildPlanConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});', $bindBody);
-        self::assertStringContainsString('startConfirmedBuild(currentPlanTriggerButton, selectedTypes, {});', $continueBody);
-        self::assertStringContainsString('buildPlanConfirmedState = true;', $continueBody);
+        self::assertStringContainsString('buildPlanConfirmedState = !!(state && shouldUseBuildPlanV2Flow(state));', $continueBody);
+        self::assertStringContainsString('window.location.href = resolveWorkspaceRedirectUrl(state);', $continueBody);
         self::assertStringContainsString('renderBuildPlanProjectionSummary(state);', $continueBody);
         self::assertStringContainsString("['pending', 'queued', 'running', 'processing'].indexOf(activeStatus) !== -1", $resumeBody);
         self::assertStringNotContainsString("document.getElementById('pb-ai-confirm-task-plan')", $bindBody);
@@ -620,7 +753,9 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('id="pb-ai-start-build-site"', $visualEditCard);
         self::assertStringContainsString('id="pb-ai-build-queue-embed"', $layout);
         self::assertStringContainsString('data-plan-type="build_plan"', $layout);
-        self::assertStringContainsString('$hasConfirmedBuildPlan = !empty($state[\'build_plan_confirmed\'])', $layout);
+        self::assertStringContainsString('$hasConfirmedBuildPlan = $currentStage !== \'plan\' && (', $layout);
+        self::assertStringContainsString('!empty($state[\'build_plan_confirmed\'])', $layout);
+        self::assertStringContainsString('!empty($state[\'build_plan_confirmed_at\'])', $layout);
         self::assertStringContainsString('var buildReadyForBuild = buildPlanConfirmed || planConfirmed || hasBuildPlanV2;', $runtime);
         self::assertStringContainsString("getWorkspaceFlagState('getBuildPlanConfirmedState', false)", $runtime);
 
@@ -694,10 +829,12 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $visualEditPanel = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml');
         $publishCard = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/publish-card.phtml');
         $script = $this->workspaceScript();
+        $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
 
         self::assertIsString($planPanel);
         self::assertIsString($visualEditPanel);
         self::assertIsString($publishCard);
+        self::assertIsString($controller);
         self::assertStringContainsString('id="pb-ai-retry-plan-failures"', $planPanel);
         self::assertStringContainsString('data-retryable-ai-operation="plan"', $planPanel);
         self::assertStringContainsString('id="pb-ai-retry-build-failures"', $visualEditPanel);
@@ -706,6 +843,14 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('function bindRetryableAiFailureButtons()', $script);
         self::assertStringContainsString("operation !== 'plan' && operation !== 'build'", $script);
         self::assertStringContainsString('workspaceApi.retryPhaseOnePlanGeneration = function (options)', $script);
+        self::assertStringContainsString('var retryAiOperationUrl =', $script);
+        self::assertStringContainsString('function resolveRetryableAiOperationResumePayload(operation)', $script);
+        self::assertStringContainsString('postForm(retryAiOperationUrl, retryPayload)', $script);
+        self::assertStringContainsString('if (retryPayload && retryAiOperationUrl)', $script);
+        self::assertStringNotContainsString('if (retryPayload && isRetryableVisualAiOperation(retryPayload.operation))', $script);
+        self::assertStringContainsString('public function postRetryAiOperation(): string', $controller);
+        self::assertStringContainsString("post-retry-ai-operation", $controller);
+        self::assertStringContainsString('resolveRetryAiOperationFromQueueId', $controller);
         self::assertStringContainsString('startOrObserveBuildFromVisualEditEntry();', $script);
         self::assertStringNotContainsString('pb-ai-retry-task-plan-failures', $planPanel . $visualEditPanel . $publishCard);
         self::assertStringNotContainsString('retryPhaseTwoTaskPlanGeneration', $script);
@@ -836,6 +981,22 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("'latest_build_failure'", $sessionService);
         self::assertStringContainsString("'publish_blocked_by_latest_ai_failure'", $sessionService);
         self::assertStringContainsString("'publish_blocked_reason'", $sessionService);
+    }
+
+    public function testRuntimeFailureDialogShowsDecisionSummaryInsteadOfRawQueueLog(): void
+    {
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+
+        $summaryBody = $this->extractFunctionBody($runtime, 'collectQueueFailureSummaryLines');
+        $modalBody = $this->extractFunctionBody($runtime, 'showOperationFailureDetailModal');
+
+        self::assertStringContainsString('function collectQueueFailureSummaryLines(payload, operation)', $runtime);
+        self::assertStringContainsString('extractQueueFailureSummary(opMessage) || extractQueueFailureSummary(resultLog)', $summaryBody);
+        self::assertStringContainsString('详细日志已保留在队列日志区域，确认弹窗只展示可决策摘要。', $summaryBody);
+        self::assertStringContainsString('var lines = collectQueueFailureSummaryLines(payload, operation);', $modalBody);
+        self::assertStringNotContainsString("lines.push('队列日志：\\n' + resultLog);", $runtime);
+        self::assertStringNotContainsString('var lines = collectQueueFailureDetailLines(payload, operation);', $modalBody);
     }
 
     public function testLegacyTaskPlanControllerEndpointsAreDeletedInsteadOfRunningOldFlow(): void

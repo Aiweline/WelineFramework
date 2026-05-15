@@ -664,6 +664,14 @@ class Template extends DataObject
      */
     public function fetchHtml(string $fileName, array $dictionary = []) 
     {
+        try {
+            [, $moduleName] = $this->processModuleSourceFilePath(DataInterface::dir_type_TEMPLATE, $fileName);
+            if ($moduleName !== '') {
+                ObjectManager::getInstance(Request::class)->addModule($moduleName);
+            }
+        } catch (\Throwable) {
+        }
+
         $comFileName = $this->getFetchFile($fileName);
         $result = $this->ob_file($comFileName, $dictionary);
         return $result;

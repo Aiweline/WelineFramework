@@ -20,11 +20,11 @@
 "Inventory batch adjustment failed.","Inventory batch adjustment failed."
 "Invalid product id.","Invalid product id."
 库存变更,"Stock Change"
-库存数量变更时触发（增加/减少）。,库存数量变更时触发（增加/减少）。
+库存数量变更时触发（增加/减少）。,"Triggered when inventory quantity changes (increase/decrease)."
 低库存警告,"Low Stock Warning"
-库存低于阈值时触发。,库存低于阈值时触发。
+库存低于阈值时触发。,"Triggered when inventory falls below the threshold."
 缺货,"Out of Stock"
-产品库存归零时触发。,产品库存归零时触发。
+产品库存归零时触发。,"Triggered when product inventory reaches zero."
 "Inventory source does not exist.","Inventory source does not exist."
 "Inventory source item does not exist.","Inventory source item does not exist."
 "In Stock","In Stock"

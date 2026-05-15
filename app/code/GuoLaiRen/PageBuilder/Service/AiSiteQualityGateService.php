@@ -21,6 +21,8 @@ final class AiSiteQualityGateService
         'theme_visible' => ['label' => '页面包含阶段一主题色/视觉 token', 'page_report_field' => 'theme_hits'],
         'visual_assets_safe' => ['label' => '图片资源无破图且真实图片插槽已生成并被页面使用', 'page_report_field' => 'visuals'],
         'visual_depth' => ['label' => '页面块具备视觉层次与美术分层', 'page_report_field' => 'visual_depth_signals'],
+        'language_consistency' => ['label' => '每个块使用指定网站语言', 'page_report_field' => 'language_violations'],
+        'responsive_support' => ['label' => '页面具备 AI 生成的响应式支持', 'page_report_field' => 'responsive_signals'],
     ];
 
     private readonly AiSiteBuildTaskService $buildTaskService;
@@ -64,6 +66,8 @@ final class AiSiteQualityGateService
         $allThemeVisible = true;
         $allVisualsSafe = true;
         $allVisualDepth = true;
+        $allLanguageConsistent = true;
+        $allResponsive = true;
         $sharedBlocksReady = true;
 
         foreach ($pageTypes as $pageType) {
@@ -138,6 +142,8 @@ final class AiSiteQualityGateService
             $allThemeVisible = $allThemeVisible && (bool)($report['theme_visible'] ?? false);
             $allVisualsSafe = $allVisualsSafe && (bool)($report['visuals_safe'] ?? false);
             $allVisualDepth = $allVisualDepth && (bool)($report['visual_depth_ok'] ?? false);
+            $allLanguageConsistent = $allLanguageConsistent && (bool)($report['language_ok'] ?? false);
+            $allResponsive = $allResponsive && (bool)($report['responsive_ok'] ?? false);
             $sharedBlocksReady = $sharedBlocksReady && (bool)($report['shared_blocks_ready'] ?? false);
         }
 
@@ -150,6 +156,8 @@ final class AiSiteQualityGateService
             $this->buildItem('theme_visible', '页面包含阶段一主题色/视觉 token', $allThemeVisible, $this->extractPageValues($pageReports, 'theme_hits')),
             $this->buildItem('visual_assets_safe', '图片资源无破图且真实图片插槽已生成并被页面使用', $allVisualsSafe, $this->extractPageValues($pageReports, 'visuals')),
             $this->buildItem('visual_depth', '页面块具备视觉层次与美术分层', $allVisualDepth, $this->extractPageValues($pageReports, 'visual_depth_signals')),
+            $this->buildItem('language_consistency', '每个块使用指定网站语言', $allLanguageConsistent, $this->extractPageValues($pageReports, 'language_violations')),
+            $this->buildItem('responsive_support', '页面具备 AI 生成的响应式支持', $allResponsive, $this->extractPageValues($pageReports, 'responsive_signals')),
         ], $pageReports);
 
         $items = $this->finalizeQualityItems($items, $scope);
@@ -187,6 +195,7 @@ final class AiSiteQualityGateService
             'content_quality' => true,
             'stage1_content_visible' => true,
             'theme_visible' => true,
+            'language_consistency' => true,
         ];
         $items = [];
         foreach (\is_array($qualityGate['items'] ?? null) ? $qualityGate['items'] : [] as $item) {
@@ -242,6 +251,9 @@ final class AiSiteQualityGateService
         $stageOneHits = $this->matchStageOneContent($pageType, $html, $scope);
         $themeHits = $this->matchThemeTokens($html, $scope);
         $sharedBlocks = $this->detectSharedBlocks($layout, $html);
+        $expectedLocale = $this->resolveExpectedContentLocale($scope, $pageType);
+        $languageViolations = $this->matchLanguageViolations($html, $expectedLocale, $scope);
+        $responsiveSignals = $this->matchResponsiveSignals($html);
         $hasSvgVisual = \preg_match('/<svg\b|data:image\/svg\+xml|ai-site-svg-visual/i', $html) === 1;
         $hasAnyImageNeed = \preg_match('/\b(?:image|visual|media|asset|logo|icon|cards?|board|avatar|shield)\b/iu', $combined) === 1;
         $visualDepthSignals = $this->matchVisualDepthSignals($html);
@@ -287,6 +299,11 @@ final class AiSiteQualityGateService
             ],
             'visual_depth_ok' => \count($visualDepthSignals) >= 3,
             'visual_depth_signals' => $visualDepthSignals,
+            'language_ok' => $languageViolations === [],
+            'expected_locale' => $expectedLocale,
+            'language_violations' => $languageViolations,
+            'responsive_ok' => isset($responsiveSignals['media_query']) && \count($responsiveSignals) >= 4,
+            'responsive_signals' => $responsiveSignals,
         ];
     }
 
@@ -387,13 +404,15 @@ final class AiSiteQualityGateService
     private function stripNonVisibleQualityGateHtml(string $html): string
     {
         $html = \preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
+        $html = \preg_replace('/<head\b[^>]*>.*?<\/head>/is', '', $html) ?? $html;
         $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
         $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<title\b[^>]*>.*?<\/title>/is', '', $html) ?? $html;
 
         $visibleAttributeValues = [];
         if (
             \preg_match_all(
-                '/\s(?:href|src|alt|title|aria-label|placeholder|value)\s*=\s*(["\'])(.*?)\1/isu',
+                '/\s(?:alt|title|aria-label|placeholder|value)\s*=\s*(["\'])(.*?)\1/isu',
                 $html,
                 $quotedAttributes
             ) > 0
@@ -407,7 +426,7 @@ final class AiSiteQualityGateService
         }
         if (
             \preg_match_all(
-                '/\s(?:href|src|alt|title|aria-label|placeholder|value)\s*=\s*([^\s>]+)/isu',
+                '/\s(?:alt|title|aria-label|placeholder|value)\s*=\s*([^\s>]+)/isu',
                 $html,
                 $unquotedAttributes
             ) > 0
@@ -433,11 +452,15 @@ final class AiSiteQualityGateService
     private function matchBadContent(string $text): array
     {
         $patterns = [
-            '/Introduce brand story|build initial trust|Showcase available games|encourage exploration|Build user confidence|popular game categories|educate users|increase time on page|licenses, security certifications|secure download badges|reassure users|customer testimonials|build social proof|Answer common questions|remove barriers|Close the page with a compact summary|visitor has a clear endpoint|Key message|Next action/iu',
+            '/\b(?:Introduce|Build|Answer|Close|Educate|Encourage|Reassure|Remove)\s+(?:brand|common|the|users?|visitors?|trust|confidence|barriers|questions?|categories|testimonials?|page|story|mission|support|risks?|options?)\b.{0,120}\b(?:trust|confidence|proof|barriers|endpoint|exploration|users?|visitors?|page|categories|testimonials?|questions?|support|story|mission)\b/iu',
+            '/\bShowcase\s+(?:trust|confidence|proof|barriers|categories|testimonials?|questions?|features?|page|users?|visitors?)\b.{0,120}\b(?:trust|confidence|proof|barriers|endpoint|exploration|users?|visitors?|page|categories|testimonials?|questions?|features?)\b/iu',
             '/plan-derived fallback visual|ai-site-fallback|Image Placeholder|Text-to-image is not connected yet/iu',
             '/AI_GENERATED_SECTION|task_key|section_code|block_key|page_type|field_content_requirements/iu',
+            '/\b(?:websiteProfile|Website\s+Profile|site\s+profile|target_domain)\b/iu',
+            '/\b(?:Introduce|Answer|Reassure|Remove|Educate|Encourage|Close)\b.{0,120}\b(?:brand|story|mission|testimonials?|questions?|barriers?|licenses?|certifications?|badges?|trust|proof|support|download|CTA|users?|visitors?)\b/iu',
             '/content\/(?:home|about|contact|product|service)-page-[a-z0-9_-]+/iu',
-            '/核心卖点|功能特性|把首页|值得点击|放出来|方案头部|方案背景|方案结尾|当前方案|任务方案|蓝图/iu',
+            '/(?:方案|蓝图|任务|本区块|本模块|页面节奏|设计变化).{0,80}(?:头部|背景|结尾|卖点|功能|CTA|卡片|布局|信任|行动|内容|展示|规划)/iu',
+            '/(?:把|将|用|通过|让).{0,24}(?:价值|资质|流程|条件|风险|选择|主行动|卖点|功能|卡片|页面节奏|信任).{0,80}(?:展示|收口|解释|放在|呈现|拆分|承载|增强)/iu',
             '/AI content placeholder|ai-empty|placeholder content|placeholder/iu',
             '/demo|example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
             '/Generated visual|inline SVG|Visual preview generated/iu',
@@ -454,8 +477,226 @@ final class AiSiteQualityGateService
                 $matches[] = (string)$match;
             }
         }
+        foreach ($this->matchPromptPlanningLeakText($text) as $match) {
+            $matches[] = $match;
+        }
 
         return \array_slice(\array_values(\array_unique($matches)), 0, 20);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function matchPromptPlanningLeakText(string $text): array
+    {
+        $text = \trim($text);
+        if ($text === '') {
+            return [];
+        }
+
+        $matches = [];
+        $patterns = [
+            '/(?:这个|本|当前)?(?:页面|区块|模块|page|section|block).{0,24}(?:核心|关键|主要|key|core).{0,16}(?:亮点|卖点|重点|highlights?|selling\s+points?)/iu',
+            '/(?:用|使用|通过|以|use|using|display|show|present).{0,28}(?:卡片层级|视觉层级|内容层级|card\s+hierarchy|visual\s+hierarchy).{0,90}(?:展示|呈现|强调|卖点|差异|信任|selling\s+points?|differences?|trust)/iu',
+            '/(?:把|将|让|put|place|make).{0,22}(?:主行动|主要行动|主按钮|primary\s+action|main\s+action|cta).{0,60}(?:卡片|按钮|button|card).{0,60}(?:减少|降低|避免|reduce|avoid|hesitation|犹豫)/iu',
+            '/(?:避免|不要|防止|avoid|do\s+not|don\'t).{0,36}(?:内容|视觉|区块|模块|blocks?|sections?|content).{0,48}(?:挤成|同一种视觉|相同视觉|same\s+visual|same\s+layout|feel\s+like\s+one)/iu',
+            '/(?:访客|用户|visitors?|users?).{0,28}(?:看到|可以看到|see|can\s+review|can\s+verify|understand|ready\s+to).{0,100}(?:信任|下载|发布|证明|reviewable|before\s+publishing|proof|cta|action)/iu',
+            '/(?:rewrite|render|use|provide|present|include|output)\s+(?:concrete|visitor-facing|download|category|trust|proof|cta|feature).{0,90}(?:copy|language|labels?|path|cards?)/iu',
+        ];
+        foreach ($patterns as $pattern) {
+            if (\preg_match($pattern, $text, $found) === 1) {
+                $matches[] = (string)($found[0] ?? $pattern);
+            }
+        }
+
+        return \array_slice(\array_values(\array_unique($matches)), 0, 10);
+    }
+
+    private function resolveExpectedContentLocale(array $scope, string $pageType): string
+    {
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $virtualPage = \is_array($scope['virtual_pages_by_type'][$pageType] ?? null) ? $scope['virtual_pages_by_type'][$pageType] : [];
+        $pageRecord = \is_array($scope['pagebuilder_pages_by_type'][$pageType] ?? null) ? $scope['pagebuilder_pages_by_type'][$pageType] : [];
+        foreach ([
+            $scope['content_locale'] ?? null,
+            $websiteProfile['content_locale'] ?? null,
+            $virtualPage['content_locale'] ?? null,
+            $virtualPage['default_locale'] ?? null,
+            $virtualPage['locale'] ?? null,
+            $pageRecord['content_locale'] ?? null,
+            $pageRecord['default_locale'] ?? null,
+            $scope['execution_blueprint']['content_locale'] ?? null,
+            $scope['plan_json']['content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function matchLanguageViolations(string $html, string $expectedLocale, array $scope = []): array
+    {
+        $expectedLocale = \trim($expectedLocale);
+        if ($html === '' || $expectedLocale === '') {
+            return [];
+        }
+
+        $text = $this->extractVisibleTextOnly($html);
+        if ($text === '') {
+            return [];
+        }
+
+        if ($this->isCjkLocale($expectedLocale)) {
+            $violations = [];
+            if (\preg_match_all('/\b(?:Download(?:\s*(?:&|and)\s*Play|\s+Now)?|Get\s+Started|Featured\s+Download|Request\s+APK\s+link|Your\s+name|phone\s+number|Best\s+of|Play\s+with\s+friends|Start\s+now|Move\s+forward)\b/iu', $text, $phrases) > 0) {
+                $violations[] = 'English CTA/body phrase: ' . \implode(', ', \array_slice(\array_values(\array_unique($phrases[0] ?? [])), 0, 4));
+            }
+
+            $englishWords = [];
+            if (\preg_match_all('/\b[A-Za-z][A-Za-z\'-]{2,}\b/u', $text, $words) > 0) {
+                $allowed = \array_fill_keys([
+                    'apk', 'ios', 'android', 'whatsapp', 'ssl', 'upi', 'vip', 'app', 'faq', 'seo',
+                    'cta', 'api', 'html', 'css', 'json', 'url', 'www',
+                ], true);
+                foreach (\array_keys($this->collectAllowedLatinTermsFromScope($scope)) as $allowedTerm) {
+                    $allowed[$allowedTerm] = true;
+                }
+                foreach ($words[0] ?? [] as $word) {
+                    $normalized = \strtolower((string)$word);
+                    if (!isset($allowed[$normalized])) {
+                        $englishWords[] = (string)$word;
+                    }
+                }
+            }
+            $englishWords = \array_values(\array_unique($englishWords));
+            if (\count($englishWords) >= 6) {
+                $violations[] = 'Too much non-target English visible copy: ' . \implode(', ', \array_slice($englishWords, 0, 8));
+            }
+
+            return \array_slice(\array_values(\array_unique($violations)), 0, 8);
+        }
+
+        if (\preg_match_all('/\p{Han}/u', $text, $matches) > 0 && \count($matches[0] ?? []) >= 4) {
+            return ['CJK visible copy found for non-CJK locale ' . $expectedLocale];
+        }
+
+        return [];
+    }
+
+    private function extractVisibleTextOnly(string $html): string
+    {
+        $html = \preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
+        $html = \preg_replace('/<head\b[^>]*>.*?<\/head>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<title\b[^>]*>.*?<\/title>/is', '', $html) ?? $html;
+        $text = \strip_tags($html);
+        $text = \html_entity_decode($text, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+
+        return \trim(\preg_replace('/\s+/u', ' ', $text) ?? $text);
+    }
+
+    /**
+     * @return array<string,bool>
+     */
+    private function collectAllowedLatinTermsFromScope(array $scope): array
+    {
+        $sources = [];
+        $this->collectAllowedTermSources($scope, $sources);
+
+        $allowed = [];
+        foreach ($sources as $source) {
+            if (\preg_match_all('/\b(?:[A-Z][A-Za-z0-9\'-]{1,}|[A-Z0-9]{2,})\b/u', $source, $matches) < 1) {
+                continue;
+            }
+            foreach ($matches[0] ?? [] as $word) {
+                $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
+                if (\strlen($normalized) >= 2) {
+                    $allowed[$normalized] = true;
+                }
+            }
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * @param list<string> $sources
+     */
+    private function collectAllowedTermSources(mixed $value, array &$sources, string $path = '', int $depth = 0): void
+    {
+        if ($depth > 5 || \count($sources) >= 80) {
+            return;
+        }
+        if (\is_array($value)) {
+            foreach ($value as $key => $child) {
+                $nextPath = $path === '' ? (string)$key : $path . '.' . (string)$key;
+                $this->collectAllowedTermSources($child, $sources, $nextPath, $depth + 1);
+            }
+            return;
+        }
+        if (!\is_scalar($value) || !$this->isAllowedLatinTermSourcePath($path)) {
+            return;
+        }
+
+        $source = \trim((string)$value);
+        if ($source !== '') {
+            $sources[] = $source;
+        }
+    }
+
+    private function isAllowedLatinTermSourcePath(string $path): bool
+    {
+        return \preg_match(
+            '/(?:^|\.)(?:site_title|site_name|brand|brand_name|business_name|product|product_name|game|game_name|service|service_name|platform|platform_name|app_name|keyword|keywords|domain|target_domain|name|title|tagline)(?:$|\.)/i',
+            $path
+        ) === 1;
+    }
+
+    private function isCjkLocale(string $locale): bool
+    {
+        $locale = \strtolower(\str_replace('-', '_', \trim($locale)));
+
+        return \str_starts_with($locale, 'zh')
+            || \str_starts_with($locale, 'ja')
+            || \str_starts_with($locale, 'ko');
+    }
+
+    /**
+     * @return array<string,bool>
+     */
+    private function matchResponsiveSignals(string $html): array
+    {
+        $signals = [];
+        $patterns = [
+            'media_query' => '/@media\s*\(\s*(?:max|min)-width\s*:/iu',
+            'small_breakpoint' => '/@media\s*\(\s*max-width\s*:\s*(?:4[0-9]{2}|3[0-9]{2})px/iu',
+            'single_column' => '/grid-template-columns\s*:\s*(?:minmax\(\s*0\s*,\s*)?1fr|flex-direction\s*:\s*column/iu',
+            'min_width_reset' => '/min-width\s*:\s*0/iu',
+            'media_responsive' => '/(?:max-width\s*:\s*100%|height\s*:\s*auto|object-fit\s*:\s*cover)/iu',
+            'overflow_guard' => '/overflow-x\s*:\s*hidden|overflow-wrap\s*:\s*break-word/iu',
+            'fluid_type_or_space' => '/clamp\(|min\(|max\(/iu',
+            'motion_reduced' => '/prefers-reduced-motion/iu',
+        ];
+        foreach ($patterns as $key => $pattern) {
+            if (\preg_match($pattern, $html) === 1) {
+                $signals[$key] = true;
+            }
+        }
+
+        return $signals;
     }
 
     /**
@@ -611,32 +852,42 @@ final class AiSiteQualityGateService
             return [];
         }
 
-        $declared = [];
-        if (\preg_match_all('/\bdata-pb-ai-asset-slot\s*=\s*(["\'])(.*?)\1/iu', $html, $quoted, \PREG_SET_ORDER) > 0) {
-            foreach ($quoted as $row) {
-                $slotId = \trim(\html_entity_decode((string)($row[2] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'));
-                if ($slotId !== '') {
-                    $declared[$slotId] = true;
-                }
-            }
-        }
-        if (\preg_match_all('/\bdata-pb-ai-asset-slot\s*=\s*([^\s>]+)/iu', $html, $unquoted, \PREG_SET_ORDER) > 0) {
-            foreach ($unquoted as $row) {
-                $slotId = \trim(\html_entity_decode((string)($row[1] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'), " \t\n\r\0\x0B\"'");
-                if ($slotId !== '') {
-                    $declared[$slotId] = true;
-                }
-            }
+        if (\preg_match_all('/<img\b[^>]*>/iu', $html, $matches) <= 0) {
+            return [];
         }
 
         $used = [];
-        foreach (\array_keys($slotsById) as $slotId) {
-            if (isset($declared[$slotId])) {
-                $used[] = $slotId;
+        foreach ($matches[0] as $tag) {
+            $tag = (string)$tag;
+            $slotId = $this->extractHtmlAttribute($tag, 'data-pb-ai-asset-slot');
+            if ($slotId === '' || !isset($slotsById[$slotId])) {
+                continue;
             }
+            $expectedUrl = \trim((string)($slotsById[$slotId]['final_url'] ?? ''));
+            $src = $this->extractHtmlAttribute($tag, 'src');
+            if ($expectedUrl === '' || $src === '') {
+                continue;
+            }
+            if ($this->normalizeVerifiedAssetUrl($src) !== $this->normalizeVerifiedAssetUrl($expectedUrl)) {
+                continue;
+            }
+
+            $used[] = $slotId;
         }
 
         return $used;
+    }
+
+    private function extractHtmlAttribute(string $tag, string $attribute): string
+    {
+        if (\preg_match('/\s' . \preg_quote($attribute, '/') . '\s*=\s*(["\'])(.*?)\1/iu', $tag, $matches) === 1) {
+            return \html_entity_decode((string)($matches[2] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        }
+        if (\preg_match('/\s' . \preg_quote($attribute, '/') . '\s*=\s*([^\s>]+)/iu', $tag, $matches) === 1) {
+            return \html_entity_decode(\trim((string)($matches[1] ?? ''), " \t\n\r\0\x0B\"'"), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        }
+
+        return '';
     }
 
     /**
@@ -904,10 +1155,30 @@ final class AiSiteQualityGateService
             return false;
         }
         $lower = \strtolower($src);
+        if (\str_starts_with($lower, '://') || \str_starts_with($lower, '//')) {
+            return true;
+        }
         if (\str_starts_with($lower, 'data:image/') || \str_starts_with($lower, 'blob:')) {
             return false;
         }
-        foreach (['example.com', 'placeholder.com', 'placehold.co', 'via.placeholder', 'dummyimage.com', 'picsum.photos'] as $marker) {
+        foreach ([
+            'example.com',
+            'placeholder.com',
+            'placehold.co',
+            'via.placeholder',
+            'dummyimage.com',
+            'picsum.photos',
+            'loremflickr.com',
+            'unsplash.com',
+            'images.unsplash.com',
+            'source.unsplash.com',
+            'pexels.com',
+            'images.pexels.com',
+            'pixabay.com',
+            'freepik.com',
+            'shutterstock.com',
+            'stock.adobe.com',
+        ] as $marker) {
             if (\str_contains($lower, $marker)) {
                 return true;
             }
@@ -931,7 +1202,7 @@ final class AiSiteQualityGateService
         $patterns = [
             'gradient' => '/linear-gradient|radial-gradient/iu',
             'shadow' => '/box-shadow|drop-shadow|filter:\s*drop-shadow/iu',
-            'visual' => '/<svg\b|data:image\/svg\+xml|ai-site-svg-visual|vt-visual/iu',
+            'visual' => '/<img\b|data-pb-ai-image-role|background-image|url\(|vt-visual|css-only|pseudo-element/iu',
             'layout' => '/display\s*:\s*(?:grid|flex)|grid-template-columns/iu',
             'motion' => '/transition\s*:|animation\s*:|transform\s*:/iu',
             'surface' => '/border-radius|backdrop-filter|color-mix\(/iu',
@@ -959,14 +1230,23 @@ final class AiSiteQualityGateService
             }
             $blockId = \trim((string)($block['block_id'] ?? ''));
             $type = \trim((string)($block['type'] ?? ''));
-            if (\in_array($type, ['hero', 'cards', 'checklist', 'cta'], true)) {
-                $bad[] = $blockId !== '' ? $blockId : $type;
+            $componentCode = \trim((string)($block['component_code'] ?? $block['code'] ?? ''));
+            $targetScope = \trim((string)($block['target_scope'] ?? $block['scope'] ?? ''));
+            $hasGeneratedContractShape = $componentCode !== ''
+                || \str_starts_with($type, 'ai_generated_')
+                || \str_contains($blockId, '/')
+                || \str_starts_with($targetScope, 'page_type_layouts.')
+                || \is_array($block['field_schema'] ?? null);
+            if ($hasGeneratedContractShape) {
                 continue;
             }
-            foreach (['home-page-highlights', 'home-page-details', 'about-page-story', 'about-page-values'] as $legacy) {
-                if ($blockId === $legacy) {
-                    $bad[] = $blockId;
-                }
+
+            $legacyKey = $blockId !== '' ? $blockId : $type;
+            if (
+                $legacyKey !== ''
+                && \preg_match('/^(?:[a-z0-9]+(?:-[a-z0-9]+){1,}|[a-z0-9_]+)$/iu', $legacyKey) === 1
+            ) {
+                $bad[] = $legacyKey;
             }
         }
 
@@ -1001,10 +1281,25 @@ final class AiSiteQualityGateService
     {
         $samples = [];
         $pages = \is_array($scope['execution_blueprint']['pages'] ?? null) ? $scope['execution_blueprint']['pages'] : [];
+        $pagePlans = \is_array($scope['execution_blueprint']['page_plans'] ?? null) ? $scope['execution_blueprint']['page_plans'] : [];
         $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+        if ($page === [] && \is_array($pagePlans[$pageType] ?? null)) {
+            $page = $pagePlans[$pageType];
+        }
+        $blocks = [];
+        foreach (['blocks', 'display_blocks'] as $blockKey) {
+            if (\is_array($page[$blockKey] ?? null)) {
+                $blocks = \array_merge($blocks, \array_values($page[$blockKey]));
+            }
+        }
+        foreach ($blocks as $block) {
             if (!\is_array($block)) {
                 continue;
+            }
+            foreach (['title', 'heading', 'headline', 'label', 'summary', 'description'] as $key) {
+                if (\is_scalar($block[$key] ?? null)) {
+                    $samples[] = \trim((string)$block[$key]);
+                }
             }
             foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
                 if (\is_array($field) && \is_scalar($field['sample'] ?? null)) {
@@ -1189,7 +1484,7 @@ final class AiSiteQualityGateService
             }
             $normalized[] = [
                 'key' => $key,
-                'label' => $spec['label'],
+                'label' => $this->resolveQualityItemLabel($key, (string)($spec['label'] ?? $key)),
                 'ok' => (bool)($item['ok'] ?? false),
                 'blocking' => true,
                 'level' => (bool)($item['ok'] ?? false) ? 'pass' : 'error',
@@ -1198,6 +1493,15 @@ final class AiSiteQualityGateService
         }
 
         return $normalized;
+    }
+
+    private function resolveQualityItemLabel(string $key, string $fallback): string
+    {
+        return match ($key) {
+            'stage1_content_visible' => '页面包含已确认方案内容',
+            'theme_visible' => '页面包含已确认视觉 token',
+            default => $fallback,
+        };
     }
 
     /**

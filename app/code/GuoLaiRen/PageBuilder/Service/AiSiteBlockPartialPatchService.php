@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
 use GuoLaiRen\PageBuilder\Service\AI\MockPage;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestContext;
 
 class AiSiteBlockPartialPatchService
 {
@@ -18,6 +18,7 @@ class AiSiteBlockPartialPatchService
     private const META_COMPONENT_CODE = '_pb_server_component_code';
     private const META_REGION = '_pb_server_region';
     private const HISTORY_LIMIT = 3;
+    private const JSON_REPAIR_MAX_ATTEMPTS = 2;
 
     public function __construct(
         private readonly ?AiSiteAgentSessionService $sessionService = null,
@@ -100,6 +101,30 @@ class AiSiteBlockPartialPatchService
         $source = 'virtual_pages_by_type';
 
         if ($match === null) {
+            $virtualThemeBlock = $this->buildVirtualThemeComponentBlockFromScope($scope, $pageType, $blockId);
+            if ($virtualThemeBlock !== null) {
+                $actualBlockId = \trim((string)($virtualThemeBlock['block_id'] ?? $blockId));
+                $componentCode = $this->resolveBlockComponentCode($virtualThemeBlock);
+
+                return [
+                    'success' => true,
+                    'source' => 'virtual_theme_component',
+                    'page_type' => $pageType,
+                    'block_id' => $actualBlockId,
+                    'requested_block_id' => $blockId,
+                    'component_code' => $componentCode,
+                    'index' => (int)($virtualThemeBlock['_pb_server_layout_index'] ?? -1),
+                    'block' => $virtualThemeBlock,
+                    'type' => (string)($virtualThemeBlock['type'] ?? ''),
+                    'config' => \is_array($virtualThemeBlock['config'] ?? null) ? $virtualThemeBlock['config'] : [],
+                    'html' => (string)($virtualThemeBlock['html'] ?? ''),
+                    'field_schema' => \is_array($virtualThemeBlock['field_schema'] ?? null) ? $virtualThemeBlock['field_schema'] : [],
+                    'template_metadata' => $this->extractTemplateMetadata($virtualThemeBlock),
+                    'page_context' => $this->buildPageContext($scope, $pageType),
+                    'layout_context' => $this->buildLayoutContext($scope, $pageType, $componentCode, $actualBlockId),
+                ];
+            }
+
             return $this->error('BLOCK_NOT_FOUND', 'Current block not found.', [
                 'page_type' => $pageType,
                 'block_id' => $blockId,
@@ -160,6 +185,8 @@ class AiSiteBlockPartialPatchService
         }
         if (!\array_key_exists('html', $candidate) || !\is_string($candidate['html']) || \trim($candidate['html']) === '') {
             $errors[] = 'replacement.html must be a non-empty string';
+        } elseif ($this->hasUnstyledBrowserDefaultLink((string)$candidate['html'])) {
+            $errors[] = 'replacement.html contains an unstyled browser-default link';
         }
         if (!\is_array($candidate['field_schema'] ?? null)) {
             $errors[] = 'replacement.field_schema must be an object';
@@ -172,6 +199,24 @@ class AiSiteBlockPartialPatchService
             'errors' => $errors,
             'top_keys' => $topKeys,
         ];
+    }
+
+    private function hasUnstyledBrowserDefaultLink(string $html): bool
+    {
+        if (\stripos($html, '<a') === false) {
+            return false;
+        }
+
+        if (\preg_match_all('/<a\b([^>]*)>/i', $html, $matches) !== false) {
+            foreach ($matches[1] ?? [] as $attributes) {
+                $attributes = (string)$attributes;
+                if (\preg_match('/\bclass\s*=\s*["\'][^"\']+["\']/i', $attributes) !== 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -253,6 +298,10 @@ class AiSiteBlockPartialPatchService
                 'changed_fields' => $this->normalizeChangedFields($metadata['changed_fields'] ?? []),
                 'reason' => \trim((string)($metadata['reason'] ?? '')),
             ];
+        }
+
+        if ((string)($read['source'] ?? '') === 'virtual_theme_component') {
+            return $this->applyVirtualThemeComponentReplacement($scope, $pageType, $read, $currentBlock, $candidate, $metadata);
         }
 
         $virtualPages = $this->buildTargetVirtualPagesPreservingScope($scope, $pageType);
@@ -397,6 +446,35 @@ class AiSiteBlockPartialPatchService
             \is_array($generated['block'] ?? null) ? $generated['block'] : [],
             $metadata
         );
+        if (empty($result['success']) && $this->shouldRepairGeneratedPatch($result)) {
+            if ($streamCallback !== null) {
+                $streamCallback('patch_repair', [
+                    'message' => 'Generated patch failed validation; requesting one corrected replacement block.',
+                    'code' => (string)($result['code'] ?? ''),
+                ]);
+            }
+            $repaired = $this->generateReplacementBlock(
+                $read,
+                $scope,
+                $this->buildPatchRepairInstruction($instruction, $result),
+                $streamCallback
+            );
+            $repairMetadata = [
+                'change_summary' => (string)($repaired['change_summary'] ?? ''),
+                'changed_fields' => $repaired['changed_fields'] ?? [],
+                'reason' => (string)($repaired['reason'] ?? ''),
+                'execution_token' => $executionToken,
+                'repair_of_code' => (string)($result['code'] ?? ''),
+            ];
+            $result = $this->applyReplacementBlockToScope(
+                $scope,
+                $pageType,
+                (string)($read['block_id'] ?? $blockId),
+                \is_array($repaired['block'] ?? null) ? $repaired['block'] : [],
+                $repairMetadata
+            );
+            $generated = $repaired;
+        }
 
         if (!empty($result['success']) && \is_array($result['scope'] ?? null)) {
             $this->sessionService()->replaceScope((int)$session->getId(), $adminId, $result['scope']);
@@ -405,6 +483,36 @@ class AiSiteBlockPartialPatchService
         return \array_replace($result, [
             'ai_top_keys' => \array_values(\array_map('strval', \array_keys($generated))),
         ]);
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     */
+    private function shouldRepairGeneratedPatch(array $result): bool
+    {
+        $code = \strtoupper(\trim((string)($result['code'] ?? '')));
+
+        return \in_array($code, ['BLOCK_RENDER_FAILED', 'BLOCK_VALIDATION_FAILED'], true);
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     */
+    private function buildPatchRepairInstruction(string $instruction, array $result): string
+    {
+        $details = \is_array($result['details'] ?? null) ? $result['details'] : [];
+        $errors = \is_array($details['errors'] ?? null) ? $details['errors'] : [];
+        $errorText = $errors !== []
+            ? \implode('; ', \array_map(static fn($error): string => (string)$error, $errors))
+            : (string)($result['message'] ?? 'replacement block validation failed');
+
+        return \trim($instruction) . "\n\n"
+            . "Repair requirement: the previous replacement block failed PageBuilder validation before it could be saved. "
+            . "Return a corrected complete replacement block JSON for the same target block. "
+            . "Do not return a diff. Do not explain. Preserve verified generated image src and data-pb-ai-asset-slot values. "
+            . "Keep the requested visual/copy change, but make the JSON and any _pb_server_template_phtml/html fully renderable. "
+            . "If the error is PHP/PHTML syntax, rewrite the block.html and _pb_server_template_phtml as static balanced HTML with scoped CSS only; do not use PHP tags, short echo tags, variables, control structures, or template expressions. "
+            . "Validation error: " . $this->clipText($errorText, 500);
     }
 
     /**
@@ -419,10 +527,6 @@ class AiSiteBlockPartialPatchService
         string $instruction,
         ?callable $streamCallback = null
     ): array {
-        if ((bool)RequestContext::get(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, false)) {
-            return $this->buildStubReplacement($read, $instruction);
-        }
-
         $prompt = $this->buildPatchPrompt($read, $scope, $instruction);
         $buffer = '';
         $this->aiService()->generateStream(
@@ -454,6 +558,19 @@ class AiSiteBlockPartialPatchService
 
         $decoded = $this->jsonParser()->extractAndDecode($buffer);
         if (!\is_array($decoded)) {
+            $rawTemplateReplacement = $this->buildReplacementFromRawTemplateResponse($read, $buffer);
+            if ($rawTemplateReplacement !== []) {
+                return $rawTemplateReplacement;
+            }
+            $decoded = $this->decodePatchPayloadWithRepair(
+                $buffer,
+                $read,
+                $scope,
+                $instruction,
+                $streamCallback
+            );
+        }
+        if (!\is_array($decoded)) {
             throw new \RuntimeException('AI patch response is not valid JSON.');
         }
 
@@ -470,6 +587,236 @@ class AiSiteBlockPartialPatchService
             'changed_fields' => $this->normalizeChangedFields($decoded['changed_fields'] ?? []),
             'reason' => \trim((string)($decoded['reason'] ?? '')),
         ];
+    }
+
+    /**
+     * @param callable(string,array<string,mixed>):mixed|null $streamCallback
+     * @return array<string,mixed>|null
+     */
+    private function decodePatchPayloadWithRepair(
+        string $content,
+        array $read,
+        array $scope,
+        string $instruction,
+        ?callable $streamCallback = null
+    ): ?array
+    {
+        $parser = $this->jsonParser();
+        $decoded = $parser->extractAndDecode($content);
+        if (\is_array($decoded)) {
+            return $decoded;
+        }
+
+        $locallyRepairedContent = $this->repairPatchJsonTransportIssues($content);
+        if ($locallyRepairedContent !== $content) {
+            $decoded = $parser->extractAndDecode($locallyRepairedContent);
+            if (\is_array($decoded)) {
+                if ($streamCallback !== null) {
+                    $streamCallback('json_repair', ['message' => 'Patch JSON parsed after local escape repair.']);
+                }
+                return $decoded;
+            }
+        }
+
+        $currentContent = $content;
+        for ($attempt = 1; $attempt <= self::JSON_REPAIR_MAX_ATTEMPTS; $attempt++) {
+            if ($streamCallback !== null) {
+                $streamCallback('json_repair', [
+                    'message' => 'Patch JSON repair attempt ' . $attempt . '/' . self::JSON_REPAIR_MAX_ATTEMPTS . '.',
+                ]);
+            }
+            $repairContent = $this->requestPatchJsonRepair($currentContent, $read, $scope, $instruction, $streamCallback);
+            if ($repairContent === null || \trim($repairContent) === '') {
+                continue;
+            }
+            $currentContent = $repairContent;
+            $decoded = $parser->extractAndDecode($currentContent);
+            if (\is_array($decoded)) {
+                return $decoded;
+            }
+            $locallyRepairedContent = $this->repairPatchJsonTransportIssues($currentContent);
+            if ($locallyRepairedContent !== $currentContent) {
+                $decoded = $parser->extractAndDecode($locallyRepairedContent);
+                if (\is_array($decoded)) {
+                    return $decoded;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param callable(string,array<string,mixed>):mixed|null $streamCallback
+     */
+    private function requestPatchJsonRepair(
+        string $previousContent,
+        array $read,
+        array $scope,
+        string $instruction,
+        ?callable $streamCallback = null
+    ): ?string
+    {
+        $previousSnippet = $this->clipText($previousContent, 8000);
+        $prompt = "You are repairing malformed PageBuilder block_partial_patch JSON by regenerating the complete replacement block.\n"
+            . "Return ONLY one corrected JSON object. No markdown fences, comments, or explanation.\n"
+            . "Required top-level keys: block, change_summary, changed_fields.\n"
+            . "Do not include reason, why, decision_reason, markdown, or prose fields.\n"
+            . "The block object must keep the same block_id/component_code as the current block in the payload below.\n"
+            . "Use the current block from the payload as the source of truth. Preserve block_id, type, field_schema, server metadata, verified image src, and data-pb-ai-asset-slot unless the user's instruction explicitly requires changing them.\n"
+            . "All HTML, CSS, and PHTML must be encoded as JSON strings with escaped quotes and newlines.\n"
+            . "Use static balanced HTML fragments only inside block.html/_pb_server_template_phtml; no PHP tags, short echo tags, variables, control structures, markdown, or raw CSS outside JSON strings.\n"
+            . "If the previous output mixed raw HTML/PHP with JSON, discard the broken transport and regenerate a clean JSON object from the current block plus instruction.\n"
+            . "Keep the user's requested block edits, but fix JSON syntax first. For typography-only requests, preserve the existing image HTML and only adjust scoped CSS/template text styles.\n"
+            . "\nOriginal block patch payload and rules:\n"
+            . $this->buildPatchPrompt($read, $scope, $instruction)
+            . "Previous invalid output:\n"
+            . $previousSnippet;
+
+        $buffer = '';
+        $this->aiService()->generateStream(
+            $prompt,
+            function ($chunk) use (&$buffer, $streamCallback): bool {
+                if (\is_string($chunk) && $chunk !== '') {
+                    $buffer .= $chunk;
+                    if ($streamCallback !== null) {
+                        $streamCallback('json_repair_ai_response', ['content' => $chunk]);
+                    }
+                }
+                return true;
+            },
+            null,
+            'pagebuilder_component_generation',
+            $this->resolveLocale($read, $scope),
+            [
+                'allow_zero_balance_provider' => true,
+                'temperature' => 0.15,
+                'max_tokens' => 8192,
+                'timeout' => 180,
+                'response_format' => ['type' => 'json_object'],
+                'partial_patch_mode' => true,
+                'disable_conversation_history' => true,
+                'disable_conversation_persist' => true,
+                'session_id' => 'pagebuilder_block_partial_patch_json_repair',
+            ]
+        );
+
+        return $buffer !== '' ? $buffer : null;
+    }
+
+    private function repairInvalidJsonBackslashEscapes(string $content): string
+    {
+        return \preg_replace_callback(
+            '/\\\\(?!["\\\\\/bfnrtu])/u',
+            static fn(): string => '\\\\',
+            $content
+        ) ?? $content;
+    }
+
+    private function repairPatchJsonTransportIssues(string $content): string
+    {
+        $content = $this->repairInvalidJsonBackslashEscapes($content);
+
+        return $this->repairUnquotedChangedFields($content);
+    }
+
+    private function repairUnquotedChangedFields(string $content): string
+    {
+        return \preg_replace_callback(
+            '/("changed_fields"\s*:\s*\[)(.*?)(\])/is',
+            static function (array $matches): string {
+                $body = \trim((string)($matches[2] ?? ''));
+                if ($body === '') {
+                    return (string)$matches[1] . (string)$matches[3];
+                }
+                $rawTokens = \str_contains($body, ',')
+                    ? (\preg_split('/\s*,\s*/', $body) ?: [])
+                    : (\preg_split('/\s+/', $body) ?: []);
+                $tokens = [];
+                foreach ($rawTokens as $rawToken) {
+                    $token = \trim((string)$rawToken);
+                    if ($token === '') {
+                        continue;
+                    }
+                    if (\preg_match('/^[A-Za-z_][A-Za-z0-9_.:-]*$/', $token) === 1) {
+                        $tokens[] = \json_encode($token, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '""';
+                        continue;
+                    }
+                    $tokens[] = $token;
+                }
+
+                return (string)$matches[1] . \implode(', ', $tokens) . (string)$matches[3];
+            },
+            $content
+        ) ?? $content;
+    }
+
+    /**
+     * @param array<string, mixed> $read
+     * @return array<string, mixed>
+     */
+    private function buildReplacementFromRawTemplateResponse(array $read, string $response): array
+    {
+        $template = $this->normalizeRawTemplateResponse($response);
+        if ($template === '' || !$this->looksLikeTemplateResponse($template)) {
+            return [];
+        }
+
+        $currentBlock = \is_array($read['block'] ?? null) ? $read['block'] : [];
+        if ($currentBlock === []) {
+            return [];
+        }
+
+        $block = $currentBlock;
+        $block['html'] = $template;
+        if (\array_key_exists(self::META_TEMPLATE_PHTML, $block) || (string)($read['source'] ?? '') === 'virtual_theme_component') {
+            $block[self::META_TEMPLATE_PHTML] = $template;
+        }
+        if (!\is_array($block['config'] ?? null)) {
+            $block['config'] = \is_array($currentBlock['config'] ?? null) ? $currentBlock['config'] : [];
+        }
+        if (!\is_array($block['field_schema'] ?? null)) {
+            $block['field_schema'] = \is_array($currentBlock['field_schema'] ?? null) ? $currentBlock['field_schema'] : [];
+        }
+        if (!\array_key_exists('type', $block) && \array_key_exists('type', $currentBlock)) {
+            $block['type'] = $currentBlock['type'];
+        }
+
+        return [
+            'block' => $block,
+            'change_summary' => 'AI returned a raw template; normalized into the current block.',
+            'changed_fields' => ['html'],
+            'reason' => '',
+        ];
+    }
+
+    private function normalizeRawTemplateResponse(string $response): string
+    {
+        $response = \trim($response);
+        if ($response === '') {
+            return '';
+        }
+        if (\preg_match('/^```(?:html|php|phtml|blade|twig|css)?\s*\r?\n([\s\S]*?)\r?\n```$/', $response, $match)) {
+            return \trim((string)$match[1]);
+        }
+
+        return $response;
+    }
+
+    private function looksLikeTemplateResponse(string $response): bool
+    {
+        $trimmed = \trim($response);
+        if ($trimmed === '' || \str_starts_with($trimmed, '{') || \str_starts_with($trimmed, '[')) {
+            return false;
+        }
+
+        foreach (['<?', '<section', '<div', '<header', '<footer', '<style', 'class=', '<?='] as $needle) {
+            if (\stripos($trimmed, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -649,6 +996,243 @@ class AiSiteBlockPartialPatchService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>|null
+     */
+    private function buildVirtualThemeComponentBlockFromScope(array $scope, string $pageType, string $requestedBlockId): ?array
+    {
+        $themeId = $this->resolveVirtualThemeId($scope);
+        if ($themeId <= 0) {
+            return null;
+        }
+
+        $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $requestedBlockId);
+        $layoutRow = \is_array($layoutMatch['row'] ?? null) ? $layoutMatch['row'] : [];
+        $componentCode = \trim((string)($layoutRow['code'] ?? $layoutRow['component'] ?? $layoutRow['block_id'] ?? $requestedBlockId));
+        if ($componentCode === '') {
+            return null;
+        }
+
+        $component = $this->loadVirtualThemeComponent($themeId, $componentCode);
+        if (!$component instanceof VirtualThemeComponent) {
+            return null;
+        }
+
+        $componentCode = $component->getComponentCode() !== '' ? $component->getComponentCode() : $componentCode;
+        $defaultConfig = $component->getDefaultConfig();
+        $layoutConfig = \is_array($layoutRow['config'] ?? null) ? $layoutRow['config'] : [];
+        $config = \array_replace($defaultConfig, $layoutConfig);
+        $templateContent = $component->getTemplateContent();
+
+        return [
+            'block_id' => $componentCode,
+            'type' => 'ai_generated_virtual_theme_component',
+            'component_code' => $componentCode,
+            'config' => $config,
+            'html' => $templateContent,
+            'field_schema' => [],
+            self::META_COMPONENT_CODE => $componentCode,
+            self::META_REGION => 'content',
+            self::META_TEMPLATE_PHTML => $templateContent,
+            '_pb_server_virtual_theme_id' => $themeId,
+            '_pb_server_layout_index' => (int)($layoutMatch['index'] ?? -1),
+            '_pb_server_component_name' => $component->getName(),
+            '_pb_server_sort_order' => (int)($layoutRow['sort_order'] ?? 0),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function applyVirtualThemeComponentReplacement(
+        array $scope,
+        string $pageType,
+        array $read,
+        array $currentBlock,
+        array $candidate,
+        array $metadata
+    ): array {
+        $themeId = (int)($currentBlock['_pb_server_virtual_theme_id'] ?? $this->resolveVirtualThemeId($scope));
+        if ($themeId <= 0) {
+            return $this->error('VIRTUAL_THEME_NOT_FOUND', 'Virtual theme not found during replacement.', [
+                'page_type' => $pageType,
+                'block_id' => (string)($read['block_id'] ?? ''),
+            ]);
+        }
+
+        $componentCode = $this->resolveBlockComponentCode($candidate);
+        if ($componentCode === '') {
+            $componentCode = \trim((string)($read['component_code'] ?? $read['block_id'] ?? ''));
+        }
+        if ($componentCode === '') {
+            return $this->error('VIRTUAL_THEME_COMPONENT_NOT_FOUND', 'Virtual theme component not found during replacement.', [
+                'page_type' => $pageType,
+                'block_id' => (string)($read['block_id'] ?? ''),
+            ]);
+        }
+
+        $config = \is_array($candidate['config'] ?? null) ? $candidate['config'] : [];
+        $templateContent = $this->resolveVirtualThemeReplacementTemplate($currentBlock, $candidate);
+        if (\trim($templateContent) === '') {
+            return $this->error('BLOCK_VALIDATION_FAILED', 'Replacement block template is empty.', [
+                'page_type' => $pageType,
+                'block_id' => (string)($read['block_id'] ?? ''),
+            ]);
+        }
+
+        $candidate[self::META_COMPONENT_CODE] = $componentCode;
+        $candidate[self::META_REGION] = 'content';
+        $candidate[self::META_TEMPLATE_PHTML] = $templateContent;
+        $renderValidation = $this->validateReplacementRenderable($candidate);
+        if (empty($renderValidation['valid'])) {
+            return $this->error('BLOCK_RENDER_FAILED', 'Replacement block cannot be rendered.', [
+                'page_type' => $pageType,
+                'block_id' => (string)($read['block_id'] ?? ''),
+                'component_code' => $componentCode,
+                'errors' => $renderValidation['errors'],
+            ]);
+        }
+
+        $createdAt = \date('Y-m-d H:i:s');
+        $beforeBlock = $currentBlock;
+
+        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $componentCode);
+        $layoutIndex = (int)($layoutMatch['index'] ?? -1);
+        if ($layoutIndex >= 0 && \array_key_exists($layoutIndex, $content) && \is_array($content[$layoutIndex])) {
+            $content[$layoutIndex] = \array_replace($content[$layoutIndex], [
+                'code' => $componentCode,
+                'config' => $config,
+                'enabled' => true,
+            ]);
+            $layout['content'] = \array_values($content);
+            $layouts[$pageType] = $layout;
+            $scope['page_type_layouts'] = $layouts;
+        }
+
+        if (\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
+            $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = $createdAt;
+        }
+        $scope['preview_page_type'] = $pageType;
+        $scope['build_summary'] = \array_replace(
+            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
+            ['task_summary' => $this->safeSummarize($scope)]
+        );
+        $scope['block_patch_history'] = $this->appendPatchHistory(
+            \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
+            $pageType,
+            $componentCode,
+            $beforeBlock,
+            $candidate,
+            $metadata,
+            $createdAt
+        );
+
+        $this->virtualThemeService()->saveGeneratedContentComponent($themeId, $pageType, [
+            'code' => $componentCode,
+            'name' => (string)($currentBlock['_pb_server_component_name'] ?? $componentCode),
+            'phtml' => $templateContent,
+            'default_config' => $config,
+            'sort_order' => (int)($currentBlock['_pb_server_sort_order'] ?? 0),
+            'key' => $componentCode,
+        ]);
+
+        return [
+            'success' => true,
+            'page_type' => $pageType,
+            'block_id' => $componentCode,
+            'component_code' => $componentCode,
+            'source' => (string)($read['source'] ?? 'virtual_theme_component'),
+            'scope' => $scope,
+            'before_block' => $beforeBlock,
+            'after_block' => $candidate,
+            'change_summary' => \trim((string)($metadata['change_summary'] ?? '')),
+            'changed_fields' => $this->normalizeChangedFields($metadata['changed_fields'] ?? []),
+            'reason' => \trim((string)($metadata['reason'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{index:int,row:array<string,mixed>}|null
+     */
+    private function findVirtualThemeLayoutContentRow(array $scope, string $pageType, string $blockId): ?array
+    {
+        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        $match = $this->findBlockInBlocks($content, $blockId);
+        if ($match === null) {
+            return null;
+        }
+
+        return [
+            'index' => (int)($match['index'] ?? -1),
+            'row' => \is_array($match['block'] ?? null) ? $match['block'] : [],
+        ];
+    }
+
+    private function resolveVirtualThemeId(array $scope): int
+    {
+        $themeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($themeId > 0) {
+            return $themeId;
+        }
+        $virtualTheme = \is_array($scope['virtual_theme'] ?? null) ? $scope['virtual_theme'] : [];
+
+        return (int)($virtualTheme['virtual_theme_id'] ?? $virtualTheme['theme_id'] ?? $virtualTheme['id'] ?? 0);
+    }
+
+    private function loadVirtualThemeComponent(int $themeId, string $componentCode): ?VirtualThemeComponent
+    {
+        $candidates = \array_values(\array_unique(\array_filter([
+            \trim($componentCode),
+            \str_starts_with(\trim($componentCode), 'content/') ? '' : 'content/' . \trim($componentCode),
+        ], static fn(string $candidate): bool => $candidate !== '')));
+
+        foreach ($candidates as $candidate) {
+            /** @var VirtualThemeComponent $component */
+            $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+            $component->clearData()->clearQuery()
+                ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $themeId)
+                ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $candidate)
+                ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
+                ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+                ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+
+            if ((int)$component->getId() > 0) {
+                return $component;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveVirtualThemeReplacementTemplate(array $currentBlock, array $candidate): string
+    {
+        $currentTemplate = (string)($currentBlock[self::META_TEMPLATE_PHTML] ?? '');
+        $candidateTemplate = (string)($candidate[self::META_TEMPLATE_PHTML] ?? '');
+        $candidateHtml = (string)($candidate['html'] ?? '');
+        if (\trim($candidateHtml) !== '' && (
+            \trim($candidateTemplate) === ''
+            || $candidateTemplate === $currentTemplate
+            || $candidateHtml !== (string)($currentBlock['html'] ?? '')
+        )) {
+            return $candidateHtml;
+        }
+        if (\trim($candidateTemplate) !== '') {
+            return $candidateTemplate;
+        }
+
+        return $candidateHtml;
+    }
+
+    /**
      * @param list<mixed> $blocks
      * @return array{index:int,block:array<string,mixed>}|null
      */
@@ -773,6 +1357,11 @@ class AiSiteBlockPartialPatchService
         }
         if (!\array_key_exists('type', $candidate) && \array_key_exists('type', $currentBlock)) {
             $candidate['type'] = $currentBlock['type'];
+        }
+        if (!\array_key_exists('field_schema', $candidate)) {
+            $candidate['field_schema'] = \is_array($currentBlock['field_schema'] ?? null)
+                ? $currentBlock['field_schema']
+                : [];
         }
 
         return $candidate;
@@ -1074,7 +1663,7 @@ class AiSiteBlockPartialPatchService
                 'block_id' => (string)($read['block_id'] ?? ''),
                 'component_code' => (string)($read['component_code'] ?? ''),
             ],
-            'current_block' => \is_array($read['block'] ?? null) ? $read['block'] : [],
+            'current_block' => $this->buildSafePatchPromptBlock(\is_array($read['block'] ?? null) ? $read['block'] : []),
             'page_context' => \is_array($read['page_context'] ?? null) ? $read['page_context'] : [],
             'layout_context' => \is_array($read['layout_context'] ?? null) ? $read['layout_context'] : [],
         ];
@@ -1088,15 +1677,45 @@ class AiSiteBlockPartialPatchService
         }
 
         return "You are modifying one PageBuilder block in-place.\n"
-            . "Return JSON only with keys: block, change_summary, changed_fields, reason.\n"
+            . "Return one JSON object only. Required top-level keys: block, change_summary, changed_fields.\n"
+            . "The first non-whitespace character must be { and the last non-whitespace character must be }.\n"
             . "Rules:\n"
             . "- Return a complete replacement block object in block.\n"
             . "- Keep block.block_id exactly the same.\n"
             . "- Do not add, delete, move, or mention other blocks.\n"
-            . "- Preserve server metadata keys that start with _pb_server_ unless the template itself must change.\n"
-            . "- Ensure block has type, config, html, and field_schema.\n"
+            . "- Preserve server metadata keys that start with _pb_server_; the backend will automatically carry omitted _pb_server_* metadata from the current block.\n"
+            . "- Ensure block has type, config, html, and field_schema; copy current_block.field_schema unchanged when fields do not change.\n"
+            . "- Put all HTML and CSS inside JSON string fields such as block.html. Do not return _pb_server_template_phtml unless the user's instruction explicitly asks for template logic changes.\n"
+            . "- JSON transport self-check: escape every double quote inside HTML/CSS strings or use single-quoted HTML attributes. Do not put raw newlines, markdown fences, or a second object outside the JSON object.\n"
+            . "- Template safety: for this partial patch, edit block.html/config only by default. Never copy, rewrite, invent, or emit PHP/PHTML code. If existing template contains PHP, omit _pb_server_template_phtml so the backend preserves it unchanged.\n"
+            . "- Do not output raw HTML, CSS, PHTML, Markdown fences, comments, or prose outside JSON.\n"
+            . "- Do not include reason, why, or decision_reason fields; use change_summary for the visible change summary.\n"
             . "- If _pb_server_template_phtml is present, keep it renderable.\n\n"
+            . "Visible copy governance:\n"
+            . "- Visitor-facing copy and attributes must use the target website content locale.\n"
+            . "- Task labels, component labels, section labels, image-slot labels, queue/build-plan labels, and schema role labels are internal metadata. Never render them verbatim as headings, card titles, badges, CTA text, alt/title/aria text, or body copy.\n"
+            . "- Before returning, compare all headings, card titles, badges, CTA labels, alt/title/aria attributes, and paragraphs against current_block labels/config labels/layout labels. Exact copies, title-cased copies, or instruction-shaped sentences starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are invalid; rewrite them into final customer-facing copy.\n"
+            . "- Preserve the required generated image src and data-pb-ai-asset-slot attributes, but rewrite alt/title/aria text into concise visitor-facing descriptions instead of copying slot labels or prompt briefs.\n\n"
+            . "- Never leave a browser-default `<a>` in block.html or template fields. If a link is necessary, it must have a component-prefixed class and explicit CSS in the same block/template; otherwise remove the link and use plain text.\n\n"
             . $payloadJson;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function buildSafePatchPromptBlock(array $block): array
+    {
+        if (\array_key_exists(self::META_TEMPLATE_PHTML, $block)) {
+            $template = (string)$block[self::META_TEMPLATE_PHTML];
+            unset($block[self::META_TEMPLATE_PHTML]);
+            $block['_pb_server_template_phtml_preserved_by_backend'] = [
+                'present' => \trim($template) !== '',
+                'length' => \strlen($template),
+            ];
+        }
+
+        return $block;
     }
 
     /**
@@ -1109,47 +1728,6 @@ class AiSiteBlockPartialPatchService
         $locale = \trim((string)($pageContext['locale'] ?? $scope['plan_locale'] ?? ''));
 
         return $locale !== '' ? $locale : null;
-    }
-
-    /**
-     * @param array<string, mixed> $read
-     * @return array<string, mixed>
-     */
-    private function buildStubReplacement(array $read, string $instruction): array
-    {
-        $block = \is_array($read['block'] ?? null) ? $read['block'] : [];
-        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
-        $summary = \trim($instruction) !== '' ? \trim($instruction) : 'stub patch';
-        $oldValue = null;
-        $newValue = null;
-        if (isset($config['headline']) && \is_scalar($config['headline'])) {
-            $oldValue = (string)$config['headline'];
-            $newValue = $oldValue . ' - refined';
-            $config['headline'] = $newValue;
-        } elseif (isset($config['title']) && \is_scalar($config['title'])) {
-            $oldValue = (string)$config['title'];
-            $newValue = $oldValue . ' - refined';
-            $config['title'] = $newValue;
-        } else {
-            $config['partial_patch_note'] = $summary;
-            $newValue = $summary;
-        }
-        $block['config'] = $config;
-        $html = (string)($block['html'] ?? '');
-        if ($html !== '' && $oldValue !== null && $oldValue !== '' && $newValue !== null && \strpos($html, $oldValue) !== false) {
-            $block['html'] = \str_replace($oldValue, $newValue, $html);
-        } elseif (\trim($html) === '') {
-            $block['html'] = '<section data-pb-partial-patch="stub">' . \htmlspecialchars((string)($newValue ?? $summary), \ENT_QUOTES, 'UTF-8') . '</section>';
-        } else {
-            $block['html'] = $html . "\n" . '<div data-pb-partial-patch="stub">' . \htmlspecialchars((string)($newValue ?? $summary), \ENT_QUOTES, 'UTF-8') . '</div>';
-        }
-
-        return [
-            'block' => $block,
-            'change_summary' => 'Stub block partial patch applied.',
-            'changed_fields' => ['config', 'html'],
-            'reason' => 'test stub',
-        ];
     }
 
     /**
@@ -1192,6 +1770,19 @@ class AiSiteBlockPartialPatchService
         return $this->htmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
     }
 
+    private function clipText(string $value, int $limit): string
+    {
+        $value = \trim($value);
+        if ($limit <= 0 || $value === '') {
+            return '';
+        }
+        if (\mb_strlen($value, 'UTF-8') <= $limit) {
+            return $value;
+        }
+
+        return \rtrim(\mb_substr($value, 0, \max(1, $limit - 1), 'UTF-8')) . '…';
+    }
+
     private function jsonParser(): AiResponseJsonParser
     {
         return $this->jsonParser ?? ObjectManager::getInstance(AiResponseJsonParser::class);
@@ -1200,6 +1791,11 @@ class AiSiteBlockPartialPatchService
     private function aiService(): AiService
     {
         return $this->aiService ?? ObjectManager::getInstance(AiService::class);
+    }
+
+    private function virtualThemeService(): AiSiteVirtualThemeService
+    {
+        return $this->virtualThemeService ?? ObjectManager::getInstance(AiSiteVirtualThemeService::class);
     }
 
 }
