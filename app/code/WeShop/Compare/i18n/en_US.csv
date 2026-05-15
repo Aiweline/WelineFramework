@@ -1,66 +1,66 @@
-﻿Compare Management,Compare Management
-Invalid compare record ID.,Invalid compare record ID.
-Compare record deleted successfully.,Compare record deleted successfully.
-Failed to delete compare record.,Failed to delete compare record.
-Invalid request method.,Invalid request method.
-Please log in to continue.,Please log in to continue.
-Product ID is required.,Product ID is required.
-Added to compare.,Added to compare.
-Compare Products,Compare Products
-Compare item ID is required.,Compare item ID is required.
-Compare item could not be removed.,Compare item could not be removed.
-Removed from compare.,Removed from compare.
-Customer #%{1},Customer #%{1}
-Product #%{1},Product #%{1}
-In stock,In stock
-Out of stock,Out of stock
-Side-by-Side Decisions,Side-by-Side Decisions
-Open Compare,Open Compare
-Products In Compare,Products In Compare
+﻿"Compare Management","Compare Management"
+"Invalid compare record ID.","Invalid compare record ID."
+"Compare record deleted successfully.","Compare record deleted successfully."
+"Failed to delete compare record.","Failed to delete compare record."
+"Invalid request method.","Invalid request method."
+"Please log in to continue.","Please log in to continue."
+"Product ID is required.","Product ID is required."
+"Added to compare.","Added to compare."
+"Compare Products","Compare Products"
+"Compare item ID is required.","Compare item ID is required."
+"Compare item could not be removed.","Compare item could not be removed."
+"Removed from compare.","Removed from compare."
+"Customer #%1","Customer #%1"
+"Product #%1","Product #%1"
+"In stock","In stock"
+"Out of stock","Out of stock"
+"Side-by-Side Decisions","Side-by-Side Decisions"
+"Open Compare","Open Compare"
+"Products In Compare","Products In Compare"
 "Keep your shortlisted products together so price, availability, and key details stay easy to compare before checkout.","Keep your shortlisted products together so price, availability, and key details stay easy to compare before checkout."
-Add products from category and product pages to build a side-by-side shortlist inside your account center.,Add products from category and product pages to build a side-by-side shortlist inside your account center.
-Add to Compare,Add to Compare
-Review and manage customer product comparison records.,Review and manage customer product comparison records.
-"Page %{1} of %{2}, %{3} compare records found","Page %{1} of %{2}, %{3} compare records found"
-Total Compare Records,Total Compare Records
-Unique Customers,Unique Customers
-Unique Products,Unique Products
-Customer ID,Customer ID
-Product ID,Product ID
-Apply Filters,Apply Filters
+"Add products from category and product pages to build a side-by-side shortlist inside your account center.","Add products from category and product pages to build a side-by-side shortlist inside your account center."
+"Add to Compare","Add to Compare"
+"Review and manage customer product comparison records.","Review and manage customer product comparison records."
+"Page %d of %d, %d compare records found","Page %d of %d, %d compare records found"
+"Total Compare Records","Total Compare Records"
+"Unique Customers","Unique Customers"
+"Unique Products","Unique Products"
+"Customer ID","Customer ID"
+"Product ID","Product ID"
+"Apply Filters","Apply Filters"
 Reset,Reset
-Compare ID,Compare ID
+"Compare ID","Compare ID"
 Customer,Customer
 Product,Product
 SKU,SKU
-Added At,Added At
+"Added At","Added At"
 Actions,Actions
-ID: %{1},ID: %{1}
-Compare Record #%{1},Compare Record #%{1}
+"ID: %1","ID: %1"
+"Compare Record #%1","Compare Record #%1"
 Delete,Delete
-Compare pagination,Compare pagination
+"Compare pagination","Compare pagination"
 Previous,Previous
 Next,Next
-No compare records found.,No compare records found.
+"No compare records found.","No compare records found."
 "No customers have added products to compare yet, or adjust filters to find existing records.","No customers have added products to compare yet, or adjust filters to find existing records."
 "Keep shortlisted products together, inspect the differences that matter, and move the right option into checkout with less back-and-forth.","Keep shortlisted products together, inspect the differences that matter, and move the right option into checkout with less back-and-forth."
-Continue Shopping,Continue Shopping
-Back to Account,Back to Account
-Compared Items,Compared Items
-Products currently lined up for side-by-side review.,Products currently lined up for side-by-side review.
-Recommended Next,Recommended Next
-Fresh picks chosen around what you are comparing now.,Fresh picks chosen around what you are comparing now.
-Compare Board,Compare Board
-Products In Focus,Products In Focus
-SKU: %{1},SKU: %{1}
-Add to Cart,Add to Cart
-View Product,View Product
+"Continue Shopping","Continue Shopping"
+"Back to Account","Back to Account"
+"Compared Items","Compared Items"
+"Products currently lined up for side-by-side review.","Products currently lined up for side-by-side review."
+"Recommended Next","Recommended Next"
+"Fresh picks chosen around what you are comparing now.","Fresh picks chosen around what you are comparing now."
+"Compare Board","Compare Board"
+"Products In Focus","Products In Focus"
+"SKU: %1","SKU: %1"
+"Add to Cart","Add to Cart"
+"View Product","View Product"
 Remove,Remove
 Attribute,Attribute
 Price,Price
 Availability,Availability
 Brand,Brand
-No compared products yet,No compared products yet
-Add products from category or product detail pages and they will appear here for a clean side-by-side review.,Add products from category or product detail pages and they will appear here for a clean side-by-side review.
-Guess You May Like,Guess You May Like
+"No compared products yet","No compared products yet"
+"Add products from category or product detail pages and they will appear here for a clean side-by-side review.","Add products from category or product detail pages and they will appear here for a clean side-by-side review."
+"Guess You May Like","Guess You May Like"
 "As you compare more products, related recommendations will appear here automatically.","As you compare more products, related recommendations will appear here automatically."

@@ -328,6 +328,22 @@ class Parser
         }
     }
 
+    public static function clearWorkerCaches(): void
+    {
+        self::$words = [];
+        self::$workerWordsCache = [];
+        self::$workerLocaleWordsCache = [];
+        self::$workerModuleWordsCache = [];
+        self::$workerGlobalDictionaryWordsCache = [];
+        self::$workerLayeredWordsCache = [];
+        self::$workerMaterializedWordsCache = [];
+        self::$currentRequestWordsId = null;
+        self::$currentRequestWordsKey = null;
+        self::$loaded = false;
+        self::$loadedLang = null;
+        self::$isLoadingWords = false;
+    }
+
     private static function buildWordsFromWorkerCache(string $lang, array $modules, bool $includeGlobalDictionary = true): array
     {
         $module_words = [];
@@ -427,9 +443,6 @@ class Parser
     {
         $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], $modules)));
         \sort($modules);
-        if (Runtime::isPersistent()) {
-            return 'phrase_locale_words_' . $lang . (!empty($modules) ? '_' . \implode('_', $modules) : '');
-        }
 
         return 'phrase_locale_words_' . $lang . '_' . self::getWordsCacheVersion($lang, $modules)
             . (!empty($modules) ? '_' . \implode('_', $modules) : '');
@@ -439,22 +452,29 @@ class Parser
     {
         $parts = [];
         $languageFile = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
-        if (is_file($languageFile)) {
-            $parts[] = $languageFile . ':' . (string)@filemtime($languageFile) . ':' . (string)@filesize($languageFile);
-        }
+        $parts[] = $languageFile . ':' . self::getFileVersion($languageFile);
 
         foreach ($modules as $moduleName) {
             try {
                 $module = Env::getInstance()->getModuleInfo($moduleName);
                 $csvFile = ($module['base_path'] ?? '') . '/i18n/' . $lang . '.csv';
-                if (is_file($csvFile)) {
-                    $parts[] = $csvFile . ':' . (string)@filemtime($csvFile) . ':' . (string)@filesize($csvFile);
-                }
+                $parts[] = $csvFile . ':' . self::getFileVersion($csvFile);
             } catch (\Throwable) {
             }
         }
 
         return \substr(\md5(\implode('|', $parts)), 0, 12);
+    }
+
+    private static function getFileVersion(string $file): string
+    {
+        if ($file === '' || !is_file($file)) {
+            return 'missing';
+        }
+
+        clearstatcache(true, $file);
+
+        return (string)@filemtime($file) . ':' . (string)@filesize($file);
     }
 
     private static function discoverGeneratedLanguages(): array
@@ -541,20 +561,21 @@ class Parser
     protected static function loadModuleWords(string $module_name, string $lang): array
     {
         $module_name = self::getFullModuleName($module_name);
-        $cache_key = $lang . '|' . $module_name;
-        if (isset(self::$workerModuleWordsCache[$cache_key])) {
-            return self::$workerModuleWordsCache[$cache_key];
-        }
-
+        $cache_key = $lang . '|' . $module_name . '|unresolved';
         $words = [];
         try {
             // 获取模块信息
             $module_info = Env::getInstance()->getModuleInfo($module_name);
+            $module_i18n_file = ($module_info['base_path'] ?? '') . '/i18n/' . $lang . '.csv';
+            $cache_key = $lang . '|' . $module_name . '|' . self::getFileVersion($module_i18n_file);
+            if (isset(self::$workerModuleWordsCache[$cache_key])) {
+                return self::$workerModuleWordsCache[$cache_key];
+            }
+
             if (!$module_info || !isset($module_info['base_path'])) {
                 return self::$workerModuleWordsCache[$cache_key] = $words;
             }
-            
-            $module_i18n_file = $module_info['base_path'] . '/i18n/' . $lang . '.csv';
+
             if (!is_file($module_i18n_file)) {
                 return self::$workerModuleWordsCache[$cache_key] = $words;
             }
@@ -626,7 +647,9 @@ class Parser
      */
     private static function loadLocaleWords(string $lang, array $modules, bool $includeGlobalDictionary = true): array
     {
-        $cache_key = $lang . '|' . \implode(',', $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file');
+        $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], $modules)));
+        \sort($modules);
+        $cache_key = $lang . '|' . self::getWordsCacheVersion($lang, $modules) . '|' . \implode(',', $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file');
         if (isset(self::$workerLocaleWordsCache[$cache_key])) {
             return self::$workerLocaleWordsCache[$cache_key];
         }

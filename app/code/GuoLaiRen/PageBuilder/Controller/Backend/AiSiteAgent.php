@@ -70,7 +70,7 @@ class AiSiteAgent extends BaseController
     private const PARAMS_REFINE_COMPONENT = ['public_id', 'page_type', 'component_code', 'instruction'];
     private const PARAMS_PATCH_BLOCK = ['public_id', 'page_type', 'block_id|component_code', 'instruction'];
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
-    private const PARAMS_MUTATE_PLAN_BLOCK = ['public_id', 'page_type', 'action', 'block_key', 'block_config'];
+    private const PARAMS_MUTATE_PLAN_BLOCK = ['public_id', 'page_type', 'action=create|delete|refine|rebuild', 'block_key required except create', 'block_config'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
     private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
     private const STREAM_LEASE_TTL_SEC = 60;
@@ -1410,7 +1410,6 @@ class AiSiteAgent extends BaseController
             $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentStageScope, $scope));
         }
         $scope = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $scope);
-        $scope = $this->hydrateStageOnePlanPayloadFromWorkbench($scope);
         $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
         $hasStageOnePayload = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
             || (\is_array($scope['plan_structured'] ?? null) && $scope['plan_structured'] !== [])
@@ -1432,7 +1431,6 @@ class AiSiteAgent extends BaseController
                     $scope = $this->scopeCompatibilityService->normalizeScope(
                         $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
                     );
-                    $scope = $this->hydrateStageOnePlanPayloadFromWorkbench($scope);
                     $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
                     $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null)
                         ? $scope['execution_blueprint_draft']
@@ -3805,6 +3803,8 @@ class AiSiteAgent extends BaseController
                 $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
                 $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
                 $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
+                $layout = $this->virtualThemeService->mergePersistedContentIntoGeneratedLayout((int)$scope['virtual_theme_id'], $pageType, $layout);
+                $layout = $this->virtualThemeService->mergePersistedContentIntoGeneratedLayout((int)$scope['virtual_theme_id'], $pageType, $layout);
                 $this->virtualThemeService->saveGeneratedContentComponent((int)($scope['virtual_theme_id'] ?? 0), $pageType, $sectionComponent);
                 $layout = $this->virtualThemeService->mergeGeneratedContentIntoLayout($layout, $sectionComponent);
                 $layout = $this->sortVirtualThemeLayoutContentByBuildTasks($layout, $scope, $pageType);
@@ -8239,7 +8239,6 @@ class AiSiteAgent extends BaseController
         $normalized['reference_images'] = $referenceImages;
         $normalized = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($normalized);
         $normalized = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $normalized);
-        $normalized = $this->hydrateStageOnePlanPayloadFromWorkbench($normalized);
         $normalized = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($normalized);
         // 读取工作区状态时避免触发外部 AI 生成，防止首开/轮询被远程调用阻塞。
         $profileStartedAt = \microtime(true);
@@ -8574,6 +8573,7 @@ class AiSiteAgent extends BaseController
             'plan_json' => \is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : [],
             'plan_markdown' => (string)($normalized['plan_markdown'] ?? ''),
             'plan_structured' => \is_array($normalized['plan_structured'] ?? null) ? $normalized['plan_structured'] : (\is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : []),
+            'plan_workbench' => \is_array($normalized['plan_workbench'] ?? null) ? $normalized['plan_workbench'] : [],
             'plan_confirmed' => (int)($normalized['plan_confirmed'] ?? 0),
             'has_stage_one_plan' => $hasStageOnePlan,
             'has_execution_blueprint' => \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== [],
@@ -8628,63 +8628,6 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 某些历史会话会把建站方案主数据压缩在 plan_workbench.confirmed，
-     * 但 plan_markdown/plan_json/plan_structured 为空。此处在组装工作区状态时做只读回填，
-     * 避免前端出现“方案已存在但预览空白”。
-     *
-     * 设计约束（与前端预览契约一致）：
-     *  - 仅回填**结构化**字段（plan_structured / plan_json），让前端始终走结构化可编辑预览；
-     *  - 不再从 plan_workbench.confirmed.plan_book_markdown 拾回 plan_markdown，避免
-     *    “只剩 markdown”而触发前端 buildPlanPreviewHtml 的 markdown 兜底渲染分支
-     *    （该分支会以 markdown 列表形式展示已确认态，不符合“始终从草稿读取、确认态不展示”的约定）。
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function hydrateStageOnePlanPayloadFromWorkbench(array $scope): array
-    {
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        if ($planJson !== [] || $planStructured !== []) {
-            return $scope;
-        }
-
-        $workbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
-        $confirmed = \is_array($workbench['confirmed'] ?? null) ? $workbench['confirmed'] : [];
-        if ($confirmed === []) {
-            return $scope;
-        }
-
-        $confirmedPlanJson = \is_array($confirmed['plan_json'] ?? null) ? $confirmed['plan_json'] : [];
-        $confirmedStructured = \is_array($confirmed['structured_plan'] ?? null) ? $confirmed['structured_plan'] : [];
-        $confirmedPlanBookStructured = \is_array($confirmed['plan_book']['structured'] ?? null)
-            ? $confirmed['plan_book']['structured']
-            : [];
-        $confirmedContractsStructured = $this->extractStageOneStructuredPlanFromContracts(
-            \is_array($confirmed['contracts'] ?? null) ? $confirmed['contracts'] : []
-        );
-
-        if ($confirmedPlanJson !== []) {
-            $scope['plan_json'] = $confirmedPlanJson;
-        } elseif ($confirmedContractsStructured !== []) {
-            $scope['plan_json'] = $confirmedContractsStructured;
-        }
-        if ($confirmedStructured === [] && $confirmedPlanBookStructured !== []) {
-            $scope['plan_structured'] = $confirmedPlanBookStructured;
-        } elseif ($confirmedStructured === [] && $confirmedContractsStructured !== []) {
-            $scope['plan_structured'] = $confirmedContractsStructured;
-        }
-        if ($confirmedStructured !== []) {
-            $scope['plan_structured'] = $confirmedStructured;
-        } elseif ($confirmedPlanBookStructured !== []) {
-            // structured_plan 已被压缩成 ref 时，回退用 plan_book.structured 反推一份给前端预览。
-            $scope['plan_structured'] = $confirmedPlanBookStructured;
-        }
-
-        return $scope;
-    }
-
-    /**
      * 部分会话在确认后会把阶段一结构化内容压缩/迁移，导致 plan_markdown 仍在，
      * 但 plan_json / plan_structured 为空数组，前端只能退化成 markdown 只读视图。
      * 这里在工作区态做只读兜底：当 execution_blueprint 含 page_plans/pages 时，
@@ -8693,69 +8636,6 @@ class AiSiteAgent extends BaseController
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    /**
-     * @param array<string, mixed> $contracts
-     * @return array<string, mixed>
-     */
-    private function extractStageOneStructuredPlanFromContracts(array $contracts): array
-    {
-        $blockPayload = \is_array($contracts['block_plan']['payload'] ?? null)
-            ? $contracts['block_plan']['payload']
-            : [];
-        $pagePayload = \is_array($contracts['page_contract']['payload'] ?? null)
-            ? $contracts['page_contract']['payload']
-            : [];
-        $designPayload = \is_array($contracts['design_manifest']['payload'] ?? null)
-            ? $contracts['design_manifest']['payload']
-            : [];
-        $sitePayload = \is_array($contracts['site_brief']['payload'] ?? null)
-            ? $contracts['site_brief']['payload']
-            : [];
-
-        $structured = [];
-        $pages = \is_array($blockPayload['pages'] ?? null) && $blockPayload['pages'] !== []
-            ? $blockPayload['pages']
-            : (\is_array($pagePayload['pages'] ?? null) ? $pagePayload['pages'] : []);
-        if ($pages !== []) {
-            $structured['pages'] = $pages;
-        }
-
-        foreach (['page_types', 'navigation_plan', 'footer_plan', 'page_type_overviews', 'seo_strategy'] as $key) {
-            if (\is_array($pagePayload[$key] ?? null) && $pagePayload[$key] !== []) {
-                $structured[$key] = $pagePayload[$key];
-            }
-        }
-
-        if (\is_array($blockPayload['shared_blocks'] ?? null) && $blockPayload['shared_blocks'] !== []) {
-            $structured['shared_blocks'] = $blockPayload['shared_blocks'];
-        }
-        if (\is_array($blockPayload['block_index'] ?? null) && $blockPayload['block_index'] !== []) {
-            $structured['block_index'] = $blockPayload['block_index'];
-        }
-        if (\is_array($blockPayload['counts'] ?? null) && $blockPayload['counts'] !== []) {
-            $structured['counts'] = $blockPayload['counts'];
-        }
-
-        foreach (['palette', 'theme_style', 'theme_design', 'shared_components', 'shared_prompt_context', 'theme_context_snapshot'] as $key) {
-            if (\is_array($designPayload[$key] ?? null) && $designPayload[$key] !== []) {
-                $structured[$key] = $designPayload[$key];
-            }
-        }
-
-        foreach (['site_title', 'brief_description', 'content_locale'] as $key) {
-            if (\array_key_exists($key, $sitePayload) && \trim((string)$sitePayload[$key]) !== '') {
-                $structured[$key] = $sitePayload[$key];
-            }
-        }
-        foreach (['site_strategy', 'request_summary', 'requirement_expansion'] as $key) {
-            if (\is_array($sitePayload[$key] ?? null) && $sitePayload[$key] !== []) {
-                $structured[$key] = $sitePayload[$key];
-            }
-        }
-
-        return $structured;
-    }
-
     private function hydrateStageOnePlanPayloadFromExecutionBlueprint(array $scope): array
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
@@ -14087,6 +13967,7 @@ class AiSiteAgent extends BaseController
             'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
             'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
             'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_signature'] ?? ''),
+            'plan_confirmed' => 0,
         ]);
         if (!$saved) {
             return $this->fetchJson(['success' => false, 'message' => 'Failed to persist plan order.']);
@@ -14117,7 +13998,7 @@ class AiSiteAgent extends BaseController
         $action = \strtolower(\trim((string)$this->getRequestBodyValue('action', '')));
         $blockKey = \trim((string)$this->getRequestBodyValue('block_key', ''));
         $blockKeys = $this->normalizeStringList($this->getRequestBodyValue('block_keys', []));
-        if ($blockKey !== '' && !\in_array($blockKey, $blockKeys, true)) {
+        if ($action !== 'create' && $blockKey !== '' && !\in_array($blockKey, $blockKeys, true)) {
             \array_unshift($blockKeys, $blockKey);
         }
         foreach (['component_codes', 'section_codes'] as $requestKey) {

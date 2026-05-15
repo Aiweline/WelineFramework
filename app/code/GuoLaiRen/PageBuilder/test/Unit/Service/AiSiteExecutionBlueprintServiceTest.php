@@ -1700,6 +1700,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertLessThanOrEqual(6144, (int)($calls[2]['params']['max_tokens'] ?? 0));
         self::assertGreaterThan(4096, (int)($calls[2]['params']['max_tokens'] ?? 0));
         self::assertNotEmpty($artifacts['plan_json']['requirement_expansion']['expanded_brief'] ?? '');
+        self::assertNotEmpty($artifacts['plan_json']['overview_expanded_brief'] ?? '');
+        self::assertNotEmpty($artifacts['plan_json']['overview_business_goals'] ?? []);
+        self::assertNotEmpty($artifacts['plan_json']['overview_content_focus'] ?? '');
+        self::assertNotEmpty($artifacts['plan_json']['overview_domain_strategy'] ?? '');
+        self::assertSame($artifacts['plan_json']['overview_business_goals'], $artifacts['structured']['overview_business_goals'] ?? []);
         self::assertNotEmpty($artifacts['plan_json']['pages'][Page::TYPE_HOME]['display_blocks'] ?? []);
 
         $homeBlocks = \array_values(\array_map(static fn(array $block): string => (string)($block['block_key'] ?? ''), $artifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []));

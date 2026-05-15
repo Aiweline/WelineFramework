@@ -315,15 +315,6 @@ $guidedScopeDefaults = [
     'site_profile_manual' => \is_array($scope['site_profile_manual'] ?? null) ? $scope['site_profile_manual'] : [],
     'fake_mode' => $pbAiGuidedFakeMode ? 1 : 0,
 ];
-$guidedSessionSummary = [
-    'site_title' => (string)($guidedScopeDefaults['site_title'] ?? ''),
-    'site_tagline' => (string)($guidedScopeDefaults['site_tagline'] ?? ''),
-    'target_domain' => (string)($guidedScopeDefaults['target_domain'] ?? ''),
-    'brief_description' => (string)($guidedScopeDefaults['brief_description'] ?? ''),
-    'default_locale' => (string)($guidedScopeDefaults['default_locale'] ?? ''),
-    'plan_locale' => (string)($guidedScopeDefaults['plan_locale'] ?? ''),
-    'page_types' => $selectedPageTypesSafe,
-];
 $domainStatus = (string)($domainPurchaseState['status'] ?? 'idle');
 $domainStatusBadgeClass = match ($domainStatus) {
     'completed' => 'bg-soft-success text-success',

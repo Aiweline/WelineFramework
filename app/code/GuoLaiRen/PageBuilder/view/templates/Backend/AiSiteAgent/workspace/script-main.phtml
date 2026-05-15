@@ -527,8 +527,7 @@
             json: pickFirstNonEmptyPlanObject(plan.json, state.plan_json, scope.plan_json),
             structured: pickFirstNonEmptyPlanObject(plan.structured, state.plan_structured, scope.plan_structured),
             execution_blueprint: pickFirstNonEmptyPlanObject(plan.execution_blueprint, state.execution_blueprint, scope.execution_blueprint),
-            build_plan_v2: pickFirstNonEmptyPlanObject(plan.build_plan_v2, state.build_plan_v2, scope.build_plan_v2),
-            plan_workbench: pickFirstNonEmptyPlanObject(state.plan_workbench, scope.plan_workbench, plan.plan_workbench)
+            build_plan_v2: pickFirstNonEmptyPlanObject(plan.build_plan_v2, state.build_plan_v2, scope.build_plan_v2)
         };
         if (!hasNonEmptyPlanArtifact(payload.structured) && hasNonEmptyPlanArtifact(payload.json)) {
             payload.structured = payload.json;
@@ -538,7 +537,6 @@
             || hasNonEmptyPlanArtifact(payload.json)
             || hasNonEmptyPlanArtifact(payload.structured)
             || hasNonEmptyPlanArtifact(payload.execution_blueprint)
-            || hasNonEmptyPlanArtifact(payload.plan_workbench)
         ) {
             return payload;
         }
@@ -1250,6 +1248,94 @@
             || hasRetryableAiFailures(workspaceState, 'build');
     }
 
+    function collectRetryableAiFailureItems(workspaceState, operation) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var normalizedOperation = String(operation || '').trim();
+        var items = [];
+        function appendItem(item) {
+            if (!item || typeof item !== 'object') {
+                return;
+            }
+            if (normalizedOperation !== '' && String(item.operation || '').trim() !== normalizedOperation) {
+                return;
+            }
+            items.push(item);
+        }
+        function appendBucket(bucket) {
+            if (!bucket) {
+                return;
+            }
+            if (Array.isArray(bucket)) {
+                bucket.forEach(appendItem);
+                return;
+            }
+            if (typeof bucket !== 'object') {
+                return;
+            }
+            if (Array.isArray(bucket.items)) {
+                bucket.items.forEach(appendItem);
+            }
+            if (Array.isArray(bucket.failures)) {
+                bucket.failures.forEach(appendItem);
+            }
+        }
+        var summary = state.retryable_ai_failure_summary && typeof state.retryable_ai_failure_summary === 'object'
+            ? state.retryable_ai_failure_summary
+            : {};
+        appendBucket(summary);
+        [state.retryable_ai_failures, scope.retryable_ai_failures].forEach(function (ledger) {
+            if (!ledger || typeof ledger !== 'object') {
+                return;
+            }
+            if (normalizedOperation !== '' && ledger[normalizedOperation]) {
+                appendBucket(ledger[normalizedOperation]);
+                return;
+            }
+            appendBucket(ledger);
+        });
+        if (items.length === 0 && normalizedOperation === 'build') {
+            [state.latest_build_failure, scope.latest_build_failure].forEach(appendItem);
+        }
+        return items;
+    }
+
+    function formatRetryableAiFailureItem(item, index) {
+        var failure = item && typeof item === 'object' ? item : {};
+        var parts = [];
+        ['operation', 'page_type', 'section_code', 'item_key', 'retry_scope'].forEach(function (key) {
+            var value = String(failure[key] || '').trim();
+            if (value !== '') {
+                parts.push(key + '=' + value);
+            }
+        });
+        var label = parts.length > 0 ? parts.join(' / ') : String(failure.message || failure.error || 'unknown');
+        var message = String(failure.message || failure.error || '').trim();
+        return '<li>'
+            + escapeHtml('失败项 ' + String(index + 1) + ': ' + label)
+            + (message !== '' ? '<div class="text-muted">' + escapeHtml(message) + '</div>' : '')
+            + '</li>';
+    }
+
+    function syncPublishFailureListFromWorkspaceState(workspaceState) {
+        var listEl = document.getElementById('pb-ai-publish-failure-list');
+        if (!listEl) {
+            return;
+        }
+        var items = collectRetryableAiFailureItems(workspaceState, 'build');
+        if (items.length === 0) {
+            listEl.classList.add('d-none');
+            listEl.innerHTML = '';
+            return;
+        }
+        listEl.classList.remove('d-none');
+        listEl.innerHTML = '<div class="fw-semibold mb-1">失败项明细</div><ul class="mb-0 ps-3">'
+            + items.map(formatRetryableAiFailureItem).join('')
+            + '</ul>';
+    }
+
     function getRetryableAiFailureMessage(workspaceState, operation) {
         if (hasRunningQueueForUi(workspaceState, operation)) {
             return String(messages.retryableAiQueueRunning || 'Current queue is still running.');
@@ -1342,6 +1428,7 @@
                 syncRetryableAiFailureButton(button, operation, state);
             }
         });
+        syncPublishFailureListFromWorkspaceState(state);
     }
 
     function guardRetryableAiFailuresBeforeProgress(operation) {
@@ -4091,12 +4178,6 @@
         }
         setPlanViewMode('pb-ai-plan-preview-content');
         // 绑定「查看已确认方案」按钮。
-        document.querySelectorAll('.pb-ai-view-confirmed-plan').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var planType = btn.getAttribute('data-plan-type') || 'stage1';
-                showConfirmedPlanModal(planType);
-            });
-        });
         // 绑定「复制方案 JSON」按钮。
         var copyJsonBtn = document.getElementById('pb-ai-copy-plan-json');
         if (copyJsonBtn) copyJsonBtn.addEventListener('click', copyConfirmedPlanJson);
@@ -4332,8 +4413,7 @@
             state.selected_skill_codes,
             scope.selected_skill_codes,
             state.plan_workbench && state.plan_workbench.contract_context ? state.plan_workbench.contract_context.selected_skill_codes : null,
-            scope.plan_workbench && scope.plan_workbench.contract_context ? scope.plan_workbench.contract_context.selected_skill_codes : null,
-            scope.plan_workbench && scope.plan_workbench.confirmed && scope.plan_workbench.confirmed.contract_context ? scope.plan_workbench.confirmed.contract_context.selected_skill_codes : null
+            scope.plan_workbench && scope.plan_workbench.contract_context ? scope.plan_workbench.contract_context.selected_skill_codes : null
         ];
         for (var i = 0; i < candidates.length; i += 1) {
             if (Array.isArray(candidates[i])) {
@@ -9065,79 +9145,9 @@
         return !!(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0);
     }
 
-    function buildStructuredPlanRootFromWorkbenchContracts(contracts) {
-        if (!contracts || typeof contracts !== 'object') {
-            return null;
-        }
-        var blockPayload = contracts.block_plan && contracts.block_plan.payload && typeof contracts.block_plan.payload === 'object'
-            ? contracts.block_plan.payload
-            : {};
-        var pagePayload = contracts.page_contract && contracts.page_contract.payload && typeof contracts.page_contract.payload === 'object'
-            ? contracts.page_contract.payload
-            : {};
-        var designPayload = contracts.design_manifest && contracts.design_manifest.payload && typeof contracts.design_manifest.payload === 'object'
-            ? contracts.design_manifest.payload
-            : {};
-        var sitePayload = contracts.site_brief && contracts.site_brief.payload && typeof contracts.site_brief.payload === 'object'
-            ? contracts.site_brief.payload
-            : {};
-        var root = {};
-        var pages = isNonEmptyObject(blockPayload.pages) ? blockPayload.pages : (isNonEmptyObject(pagePayload.pages) ? pagePayload.pages : null);
-        if (pages) {
-            root.pages = pages;
-        }
-        ['page_types', 'navigation_plan', 'footer_plan', 'page_type_overviews', 'seo_strategy'].forEach(function (key) {
-            var value = pagePayload[key];
-            if ((Array.isArray(value) && value.length > 0) || isNonEmptyObject(value)) {
-                root[key] = value;
-            }
-        });
-        ['shared_blocks', 'block_index', 'counts'].forEach(function (key) {
-            if (isNonEmptyObject(blockPayload[key])) {
-                root[key] = blockPayload[key];
-            }
-        });
-        ['palette', 'theme_style', 'theme_design', 'shared_components', 'shared_prompt_context', 'theme_context_snapshot'].forEach(function (key) {
-            if (isNonEmptyObject(designPayload[key])) {
-                root[key] = designPayload[key];
-            }
-        });
-        ['site_title', 'brief_description', 'content_locale'].forEach(function (key) {
-            if (String(sitePayload[key] || '').trim() !== '') {
-                root[key] = sitePayload[key];
-            }
-        });
-        ['site_strategy', 'request_summary', 'requirement_expansion'].forEach(function (key) {
-            if (isNonEmptyObject(sitePayload[key])) {
-                root[key] = sitePayload[key];
-            }
-        });
-        return isNonEmptyObject(root) ? root : null;
-    }
-
     function pickStructuredPlanRoot(payload) {
         if (!payload || typeof payload !== 'object') {
             return null;
-        }
-        // v2 工作台：confirmed.plan_book.structured 已展开为 pages/shared_blocks，优先用于阶段一预览。
-        if (payload.plan_workbench && typeof payload.plan_workbench === 'object') {
-            var wb = payload.plan_workbench;
-            var conf = wb.confirmed && typeof wb.confirmed === 'object' ? wb.confirmed : null;
-            if (conf && conf.plan_book && typeof conf.plan_book === 'object' && isNonEmptyObject(conf.plan_book.structured)) {
-                return conf.plan_book.structured;
-            }
-            if (conf && conf.contracts && typeof conf.contracts === 'object') {
-                var contractRoot = buildStructuredPlanRootFromWorkbenchContracts(conf.contracts);
-                if (contractRoot) {
-                    return contractRoot;
-                }
-            }
-            if (wb.stage1 && typeof wb.stage1 === 'object' && (
-                isNonEmptyObject(wb.stage1.page_plans)
-                || isNonEmptyObject(wb.stage1.pages)
-            )) {
-                return wb.stage1;
-            }
         }
         if (hasNonEmptyPlanArtifact(payload.structured)) {
             return normalizeStageOneStructuredRootForPreview(payload.structured);
@@ -9837,31 +9847,49 @@
         if (!planRoot || typeof planRoot !== 'object') {
             return '';
         }
+        var requirementExpansion = planRoot.requirement_expansion && typeof planRoot.requirement_expansion === 'object'
+            ? planRoot.requirement_expansion
+            : {};
+        var siteStrategy = planRoot.site_strategy && typeof planRoot.site_strategy === 'object'
+            ? planRoot.site_strategy
+            : {};
         var briefInput = document.getElementById('pb-ai-brief-description');
         var briefFallback = briefInput && typeof briefInput.value === 'string'
             ? String(briefInput.value || '').trim()
             : '';
         var expandedBrief = pickPreviewValue(
             planRoot.overview_expanded_brief,
+            requirementExpansion.expanded_brief,
+            requirementExpansion.planning_summary,
             planRoot.plan_summary,
             planRoot.summary,
+            siteStrategy.summary,
             planRoot.one_sentence_expansion,
             briefFallback
         );
         var businessGoals = pickPreviewValue(
             planRoot.overview_business_goals,
+            requirementExpansion.business_goals,
+            requirementExpansion.site_goal,
+            siteStrategy.core_goal,
             planRoot.business_goals,
             planRoot.goal_focus,
             planRoot.website_goals
         );
         var contentFocus = pickPreviewValue(
             planRoot.overview_content_focus,
+            requirementExpansion.content_direction,
+            siteStrategy.content_strategy,
             planRoot.content_focus,
             planRoot.content_strategy,
             planRoot.value_proposition
         );
         var domainStrategy = pickPreviewValue(
             planRoot.overview_domain_strategy,
+            requirementExpansion.conversion_strategy,
+            requirementExpansion.primary_cta,
+            siteStrategy.conversion_path,
+            siteStrategy.primary_cta,
             planRoot.cta_strategy,
             planRoot.conversion_strategy,
             planRoot.action_strategy

@@ -834,6 +834,12 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     }
                     \clearstatcache(true);
                     \Weline\Framework\Manager\ObjectManager::clearInstances();
+                    if (\class_exists(\Weline\Framework\Phrase\Parser::class)) {
+                        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+                    }
+                    if (\class_exists(\Weline\I18n\Parser::class)) {
+                        \Weline\I18n\Parser::clearWorkerCaches();
+                    }
                     if (\function_exists('handleStaticFile')) {
                         handleStaticFile('__CLEAR_CACHE__', '');
                     }

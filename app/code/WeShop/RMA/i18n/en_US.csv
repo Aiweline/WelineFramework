@@ -1,80 +1,80 @@
-﻿RMA ID不能为空,RMA ID cannot be empty
-RMA已批准,RMA approved
-RMA ID is required.,RMA ID is required.
-RMA has been rejected.,RMA has been rejected.
-RMA record not found.,RMA record not found.
+﻿"RMA ID不能为空","RMA ID cannot be empty"
+RMA已批准,"RMA approved"
+"RMA ID is required.","RMA ID is required."
+"RMA has been rejected.","RMA has been rejected."
+"RMA record not found.","RMA record not found."
 Pending,Pending
 Approved,Approved
 Rejected,Rejected
-Order ID is required.,Order ID is required.
-Order and reason are required.,Order and reason are required.
-You do not have access to this order.,You do not have access to this order.
-Please log in to continue.,Please log in to continue.
-Returns & Exchanges,Returns & Exchanges
+"Order ID is required.","Order ID is required."
+"Order and reason are required.","Order and reason are required."
+"You do not have access to this order.","You do not have access to this order."
+"Please log in to continue.","Please log in to continue."
+"Returns & Exchanges","Returns & Exchanges"
 Return,Return
 Exchange,Exchange
-Wrong size,Wrong size
-Damaged in transit,Damaged in transit
-Defective item,Defective item
-Item not as described,Item not as described
-Changed my mind,Changed my mind
+"Wrong size","Wrong size"
+"Damaged in transit","Damaged in transit"
+"Defective item","Defective item"
+"Item not as described","Item not as described"
+"Changed my mind","Changed my mind"
 Other,Other
-Return reason is required.,Return reason is required.
-RMA Management,RMA Management
-RMA Detail,RMA Detail
+"Return reason is required.","Return reason is required."
+"RMA Management","RMA Management"
+"RMA Detail","RMA Detail"
 After-Sales,After-Sales
-Open RMA,Open RMA
-Requests Submitted,Requests Submitted
-Manage Return Requests,Manage Return Requests
+"Open RMA","Open RMA"
+"Requests Submitted","Requests Submitted"
+"Manage Return Requests","Manage Return Requests"
 WeShop,WeShop
-Total RMA Requests,Total RMA Requests
-No RMA Requests,No RMA Requests
+"Total RMA Requests","Total RMA Requests"
+"No RMA Requests","No RMA Requests"
 ID,ID
-Order ID,Order ID
-Customer ID,Customer ID
+"Order ID","Order ID"
+"Customer ID","Customer ID"
 Reason,Reason
 Status,Status
-Created At,Created At
+"Created At","Created At"
 Actions,Actions
-Search by Order ID...,Search by Order ID...
-All Status,All Status
+"Search by Order ID...","Search by Order ID..."
+"All Status","All Status"
 Search,Search
-Clear Filter,Clear Filter
-View Detail,View Detail
-Are you sure you want to approve this RMA request?,Are you sure you want to approve this RMA request?
+"Clear Filter","Clear Filter"
+"View Detail","View Detail"
+"Are you sure you want to approve this RMA request?","Are you sure you want to approve this RMA request?"
 Approve,Approve
-Are you sure you want to reject this RMA request?,Are you sure you want to reject this RMA request?
+"Are you sure you want to reject this RMA request?","Are you sure you want to reject this RMA request?"
 Reject,Reject
 Detail,Detail
-RMA ID,RMA ID
-Back to List,Back to List
-RMA Information,RMA Information
-Updated At,Updated At
-Reason & Description,Reason & Description
+"RMA ID","RMA ID"
+"Back to List","Back to List"
+"RMA Information","RMA Information"
+"Updated At","Updated At"
+"Reason & Description","Reason & Description"
 Description,Description
-Audit Trail,Audit Trail
-RMA Request Submitted,RMA Request Submitted
-RMA Approved,RMA Approved
-RMA Rejected,RMA Rejected
-Quick Actions,Quick Actions
-Approve RMA,Approve RMA
-Reject RMA,Reject RMA
-Returns Center,Returns Center
-Back To Orders,Back To Orders
-Account Center,Account Center
-Total Requests,Total Requests
-Selected Order,Selected Order
-None selected,None selected
-Choose an order from your order list to start a request instantly.,Choose an order from your order list to start a request instantly.
-New Request,New Request
-Submit Return / Exchange,Submit Return / Exchange
-Input your order id,Input your order id
-Request Type,Request Type
-Select a reason,Select a reason
-Tell us more details about your request,Tell us more details about your request
-Submit Request,Submit Request
-Request Timeline,Request Timeline
-Your Latest RMA Records,Your Latest RMA Records
-Order #%{1},Order #%{1}
-Submitted at: %{1},Submitted at: %{1}
-Unable to submit your request right now.,Unable to submit your request right now.
+"Audit Trail","Audit Trail"
+"RMA Request Submitted","RMA Request Submitted"
+"RMA Approved","RMA Approved"
+"RMA Rejected","RMA Rejected"
+"Quick Actions","Quick Actions"
+"Approve RMA","Approve RMA"
+"Reject RMA","Reject RMA"
+"Returns Center","Returns Center"
+"Back To Orders","Back To Orders"
+"Account Center","Account Center"
+"Total Requests","Total Requests"
+"Selected Order","Selected Order"
+"None selected","None selected"
+"Choose an order from your order list to start a request instantly.","Choose an order from your order list to start a request instantly."
+"New Request","New Request"
+"Submit Return / Exchange","Submit Return / Exchange"
+"Input your order id","Input your order id"
+"Request Type","Request Type"
+"Select a reason","Select a reason"
+"Tell us more details about your request","Tell us more details about your request"
+"Submit Request","Submit Request"
+"Request Timeline","Request Timeline"
+"Your Latest RMA Records","Your Latest RMA Records"
+"Order #%1","Order #%1"
+"Submitted at: %1","Submitted at: %1"
+"Unable to submit your request right now.","Unable to submit your request right now."

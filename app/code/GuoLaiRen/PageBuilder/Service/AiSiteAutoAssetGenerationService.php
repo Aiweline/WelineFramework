@@ -830,7 +830,7 @@ class AiSiteAutoAssetGenerationService
         $hash = \substr(\sha1($slotId . ':' . $session->getPublicId() . ':' . $bytes), 0, 12);
         $extension = $this->extensionForMimeType($mimeType);
 
-        return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlot . '-' . $hash . '.' . $extension;
+        return 'pub/media/page-build/ai-generated/' . $handle . '/' . $safeSlot . '-' . $hash . '.' . $extension;
     }
 
     private function extensionForMimeType(string $mimeType): string
@@ -852,7 +852,7 @@ class AiSiteAutoAssetGenerationService
         $safeSlot = $this->sanitizePathSegment($slotId);
         $hash = \substr(\sha1('placeholder:' . $slotId . ':' . $session->getPublicId()), 0, 12);
 
-        return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlot . '-' . $hash . '.svg';
+        return 'pub/media/page-build/ai-generated/' . $handle . '/' . $safeSlot . '-' . $hash . '.svg';
     }
 
     /**
@@ -863,17 +863,30 @@ class AiSiteAutoAssetGenerationService
         foreach ([
             $scope['target_domain'] ?? null,
             $scope['selected_domain'] ?? null,
-            $scope['website_profile']['site_title'] ?? null,
-            $scope['site_title'] ?? null,
-            $session->getPublicId(),
+            $scope['website_profile']['target_domain'] ?? null,
+            $scope['website_profile']['domain'] ?? null,
+            $scope['domain'] ?? null,
+            $scope['website_profile']['site_domain'] ?? null,
+            $scope['site_domain'] ?? null,
+            $scope['website_profile']['public_domain'] ?? null,
+            $scope['public_domain'] ?? null,
         ] as $value) {
-            $handle = $this->sanitizePathSegment((string)$value);
+            $handle = $this->sanitizePathSegmentOrEmpty((string)$value);
             if ($handle !== '') {
                 return $handle;
             }
         }
 
-        return 'site';
+        foreach ([
+            $session->getPublicId(),
+        ] as $value) {
+            $handle = $this->sanitizePathSegmentOrEmpty((string)$value);
+            if ($handle !== '') {
+                return $handle;
+            }
+        }
+
+        return $this->sanitizePathSegment($session->getPublicId() ?: 'site');
     }
 
     private function sanitizePathSegment(string $value): string
@@ -881,5 +894,15 @@ class AiSiteAutoAssetGenerationService
         $value = \strtolower(\trim($value));
         $value = \preg_replace('/[^a-z0-9._-]+/', '-', $value) ?? '';
         return \trim($value, '-_.') ?: 'asset';
+    }
+
+    private function sanitizePathSegmentOrEmpty(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        $value = \preg_replace('#^https?://#i', '', $value) ?? $value;
+        $value = \preg_replace('/[\/?#].*$/', '', $value) ?? $value;
+        $value = \preg_replace('/[^a-z0-9._-]+/', '-', $value) ?? '';
+
+        return \trim($value, '-_.');
     }
 }

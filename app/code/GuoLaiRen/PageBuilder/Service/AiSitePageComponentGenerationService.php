@@ -1326,8 +1326,8 @@ class AiSitePageComponentGenerationService
                 'scenario_code' => 'pagebuilder_component_generation',
                 'params' => $this->buildAiRuntimeParams([
                     'allow_zero_balance_provider' => true,
-                    'temperature' => 0.35,
-                    'max_tokens' => 4096,
+                    'temperature' => 0.25,
+                    'max_tokens' => 8192,
                     'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                     'response_format' => ['type' => 'json_object'],
                 ], true),
@@ -3811,7 +3811,10 @@ class AiSitePageComponentGenerationService
     private function assertGeneratedImageSourcesUseVerifiedAssets(array $aiData, array $renderContext, array $defaultConfig): void
     {
         $verifiedMap = $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig);
-        $verifiedUrls = \array_values(\array_filter(\array_map('strval', \array_values($verifiedMap))));
+        $verifiedUrls = \array_values(\array_filter(\array_map('strval', \array_merge(
+            \array_values($verifiedMap),
+            $this->extractVerifiedAssetUrlsFromRenderContextManifest($renderContext)
+        ))));
         if ($verifiedUrls === []) {
             return;
         }
@@ -3869,6 +3872,28 @@ class AiSitePageComponentGenerationService
 
         return \str_contains($lower, '/ai-generated/')
             || \str_contains($lower, '/page-build/');
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @return list<string>
+     */
+    private function extractVerifiedAssetUrlsFromRenderContextManifest(array $renderContext): array
+    {
+        $manifest = \is_array($renderContext['asset_manifest'] ?? null) ? $renderContext['asset_manifest'] : [];
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        $urls = [];
+        foreach ($slots as $slot) {
+            if (!\is_array($slot) || $this->isPlaceholderAssetSlot($slot)) {
+                continue;
+            }
+            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($finalUrl !== '') {
+                $urls[] = $finalUrl;
+            }
+        }
+
+        return \array_values(\array_unique($urls));
     }
 
     private function htmlContainsGeneratedAssetImage(string $html, string $slotId, string $url): bool
@@ -4145,8 +4170,8 @@ class AiSitePageComponentGenerationService
                 'scenario_code' => 'pagebuilder_component_generation',
                 'params' => $this->buildAiRuntimeParams([
                     'allow_zero_balance_provider' => true,
-                    'temperature' => 0.35,
-                    'max_tokens' => 4096,
+                    'temperature' => 0.25,
+                    'max_tokens' => 8192,
                     'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                     'response_format' => ['type' => 'json_object'],
                 ], true),
@@ -4278,8 +4303,11 @@ class AiSitePageComponentGenerationService
             '- Ensure all JSON string values are properly escaped and syntactically valid.',
             '- Backslashes are only legal for JSON escapes like \\", \\\\, \\/, \\n, \\r, \\t, or \\uXXXX. Do not output stray backslashes before HTML text, class names, tag names, or visitor copy.',
             '- HTML string fields must be well-formed fragments: balanced tags, closed attribute quotes, no orphan closing tags, and no framework wrapper leakage.',
+            '- HTML close-tag contract is strict: never merge adjacent closing tags, never invent tags such as </h3p>, </h2div>, </pa>, or </divsection>, and never close a parent element while a child heading/span/strong is still open.',
+            '- Use one simple root wrapper and shallow child blocks. Avoid nested inline tags inside headings; put emphasis in sibling spans or paragraphs instead.',
             '- Every `<` inside html_content must begin a valid HTML tag name or be escaped as visitor text; never leave dangling `<`, empty tag names, or comparison symbols in copy.',
             '- Use single quotes for all HTML attributes inside JSON strings. When the prompt provides exact editable image templates, copy their concrete src and data-pb-ai-asset-slot values; never return symbolic URL or slot placeholders.',
+            '- Every custom class in html_content must use the requested component prefix and start with `pb-`; never output generic classes such as card, btn, item, panel, icon, title, active, row, container, or numbered classes like gem1.',
             '- Never place standalone punctuation/symbol-only decorations in visible HTML text. Build arrows, dividers, stars, suit marks, plus signs, and other ornaments with CSS borders, gradients, pseudo-elements, or background layers instead.',
         ];
         if ($retry) {
@@ -4312,6 +4340,8 @@ class AiSitePageComponentGenerationService
             'returned empty content',
             'empty content',
             'no content',
+            '流式生成完成但未返回任何内容',
+            '未返回任何内容',
         ] as $marker) {
             if (\str_contains($message, $marker)) {
                 return true;
@@ -4701,6 +4731,16 @@ class AiSitePageComponentGenerationService
             'is_preview' => true,
             '_content_locale' => $this->resolvePrimaryLocale($websiteProfile, $scope),
             '_content_locale_explicit' => $this->hasResolvedContentLocale($websiteProfile, $scope),
+            '_website_profile' => $websiteProfile,
+            '_scope_identity' => [
+                'site_title' => $scope['site_title'] ?? null,
+                'target_domain' => $scope['target_domain'] ?? null,
+                'selected_domain' => $scope['selected_domain'] ?? null,
+                'website_profile' => $scope['website_profile'] ?? null,
+                'shared_prompt_context' => $scope['execution_blueprint']['shared_prompt_context']
+                    ?? $scope['plan_workbench']['confirmed']['shared_prompt_context']
+                    ?? null,
+            ],
             '_visual_contract' => $this->decodeRuntimeVisualContract($defaultConfig),
             'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => $this->extractVerifiedAssetsForRenderContext($scope, $pageType, $defaultConfig),
@@ -5922,6 +5962,7 @@ class AiSitePageComponentGenerationService
             . "- REQUIRED EXACT IMAGE TAG: copy one concrete template above for each required slot and keep src, data-pb-ai-image-role, and data-pb-ai-asset-slot on the same <img>. Do not output data-pb-ai-asset-slot on an <img> whose src is missing or different from the matching final_url. Do not return symbolic placeholder strings for URL or slot values.\n"
             . "- Slot placement: the copied/adapted <img> must be inside html_content for this component, not only in CSS, config, comments, or alt text. Put the copied <img> as a direct child of this component's root wrapper or inside the first real media wrapper under that root, before decorative-only layers. This rule applies even for testimonial, FAQ, trust, or category sections.\n"
             . "- Image URL exclusivity: the src for each editable image slot must be copied exactly from the matching final_url above. Do not add, shorten, translate, encode, prefix, trim query strings from, or replace that URL.\n"
+            . "- URL character fidelity: treat each final_url as an opaque literal string. Copy every slash, dash, underscore, extension, and fingerprint character exactly; never retype from memory, normalize separators, remove dashes before hashes, or concatenate path segments.\n"
             . "- Image alt text: replace the template alt='...' with concise visitor-facing image alt text in the website content locale. Never copy slot labels, task labels, component labels, prompt briefs, or action/instruction sentences into alt/title/aria attributes. Invalid examples: 'Introduce brand story and mission', 'Showcase testimonials', 'Answer common questions', 'licenses, security certifications'. Valid examples are concrete visual descriptions such as 'Players at a premium Teen Patti table' or 'Secure APK download badge cluster'.\n"
             . "- IMAGE_SRC_SELF_CHECK: before returning JSON, inspect every <img src> and every CSS url(...). If any image URL is not exactly one value in verified_asset_src_allowlist, the output is invalid; replace it with the correct final_url or remove the image reference. Do not leave stock-photo URLs in failed-payload repairs.\n"
             . "- External image ban: never use Unsplash, Pexels, Pixabay, Freepik, Shutterstock, Adobe Stock, source.unsplash.com, images.unsplash.com, picsum.photos, loremflickr.com, scheme-less URLs like ://... or //..., or any image URL not listed in verified_asset_src_allowlist.\n";
@@ -6009,15 +6050,13 @@ class AiSitePageComponentGenerationService
         }
 
         $localeHint = $this->describeLocaleForAiPrompt($contentLocale);
-        $scriptGuard = $this->isNonCjkLocale($contentLocale)
-            ? "- Script guard for final visible copy: do not output Chinese/Japanese/Korean sentences in headings, body, nav labels, buttons, footer text, alt/title/aria-label/placeholder/value attributes, badges, or trust points. If any planned sample contains CJK text, rewrite it into {$contentLocale} before rendering.\n"
-            : "- Script guard for final visible copy: keep all visitor-visible text in {$contentLocale}; if planned samples use another language, rewrite them to match the content locale before rendering.\n";
+        $languageRule = "- Visitor-visible content language: write headings, body copy, navigation labels, button labels, footer text, form labels, and alt/title/aria text in {$contentLocale}. Product names, brand names, domain names, acronyms, model names, URLs, and user-provided proper nouns may keep their original spelling when that is natural for the site.\n";
 
         return "Stage-3 language execution contract (hard requirement):\n"
             . "- source_of_truth_locale: {$contentLocale} ({$localeHint})\n"
             . "- Internal planning language is not output language. stage-1/build-plan/story/task samples are intent only.\n"
             . "- Before composing html_content/html_extra/footer text/nav labels, normalize every candidate sentence to source_of_truth_locale.\n"
-            . $scriptGuard
+            . $languageRule
             . "- Final self-check before returning JSON: if any visitor-visible sentence is not in source_of_truth_locale, rewrite it now and then return.\n";
     }
 
@@ -6736,7 +6775,6 @@ class AiSitePageComponentGenerationService
                 \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
             );
         }
-        $defaultConfig = $this->repairDefaultVisibleCopyFromStageOneSamples($defaultConfig, $stageOneSamples);
         $resolvedTitle = \trim((string)($defaultConfig['content.title'] ?? $defaultConfig['title'] ?? ''));
         $resolvedSubtitle = \trim((string)($defaultConfig['content.subtitle'] ?? $defaultConfig['subtitle'] ?? ''));
         $resolvedDescription = \trim((string)($defaultConfig['content.description'] ?? $defaultConfig['description'] ?? ''));
@@ -6783,7 +6821,6 @@ class AiSitePageComponentGenerationService
         );
 
         $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $buildPlanTask, $locale);
-        $defaultConfig = $this->repairDefaultVisibleCopyFromStageOneSamples($defaultConfig, $stageOneSamples);
         $resolvedTitle = \trim((string)($defaultConfig['content.title'] ?? $defaultConfig['title'] ?? ''));
         $resolvedSubtitle = \trim((string)($defaultConfig['content.subtitle'] ?? $defaultConfig['subtitle'] ?? ''));
         $resolvedDescription = \trim((string)($defaultConfig['content.description'] ?? $defaultConfig['description'] ?? ''));
@@ -6894,25 +6931,6 @@ class AiSitePageComponentGenerationService
             $value = \trim((string)($defaultConfig[$key] ?? ''));
             if ($value === '' || $this->containsPlanningObservationCopy($value)) {
                 $defaultConfig[$key] = '';
-            }
-        }
-
-        $samples = \array_values(\array_filter($stageOneSamples, static fn(string $sample): bool => \trim($sample) !== ''));
-        if ($samples === []) {
-            return $defaultConfig;
-        }
-
-        if (\trim((string)($defaultConfig['content.title'] ?? '')) === '') {
-            $defaultConfig['content.title'] = $this->clipText($samples[0], 72);
-        }
-
-        if (\trim((string)($defaultConfig['content.description'] ?? '')) === '') {
-            $title = \trim((string)($defaultConfig['content.title'] ?? ''));
-            foreach ($samples as $sample) {
-                if ($sample !== $title && \mb_strlen($sample) >= 12) {
-                    $defaultConfig['content.description'] = $this->clipText($sample, 180);
-                    break;
-                }
             }
         }
 
@@ -7612,38 +7630,6 @@ class AiSitePageComponentGenerationService
      */
     private function fillDefaultConfigVisibleCopyFromContractSamples(array $defaultConfig, string $locale = ''): array
     {
-        $samples = [];
-        foreach ($this->decodeConfigStringList($defaultConfig['contract.stage1_samples'] ?? null) as $sample) {
-            $sample = $this->sanitizeVisibleCopy($sample);
-            if ($locale !== '') {
-                $sample = $this->filterVisibleCopyForLocale($sample, $locale);
-            }
-            if ($sample === '' || \in_array($sample, $samples, true)) {
-                continue;
-            }
-            $samples[] = $sample;
-        }
-        if ($samples === []) {
-            return $defaultConfig;
-        }
-
-        if (\array_key_exists('content.title', $defaultConfig) && \trim((string)$defaultConfig['content.title']) === '') {
-            $defaultConfig['content.title'] = $this->clipText($samples[0], 72);
-        }
-
-        if (\array_key_exists('content.description', $defaultConfig) && \trim((string)$defaultConfig['content.description']) === '') {
-            $title = \trim((string)($defaultConfig['content.title'] ?? ''));
-            foreach ($samples as $sample) {
-                if ($sample === $title || \preg_match('#^https?://#iu', $sample) === 1) {
-                    continue;
-                }
-                if (\mb_strlen($sample) >= 12) {
-                    $defaultConfig['content.description'] = $this->clipText($sample, 180);
-                    break;
-                }
-            }
-        }
-
         return $defaultConfig;
     }
 
@@ -7683,7 +7669,7 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        return $this->fillDefaultConfigVisibleCopyFromContractSamples($defaultConfig, $locale);
+        return $defaultConfig;
     }
 
     private function normalizeBuildPlanRequirementField(mixed $fieldRaw): string
@@ -7977,11 +7963,6 @@ class AiSitePageComponentGenerationService
         if ($this->isSymbolOnlyVisibleCopy($value)) {
             return '';
         }
-        $value = $this->stripPlanningKeywordPrefix($value);
-        if ($value === '') {
-            return '';
-        }
-
         $normalized = \mb_strtolower($value);
         if (\in_array($normalized, ['棣栭〉', '涓婚〉', '鍏充簬鎴戜滑', '鍏充簬', 'home', 'home page', 'about', 'about page', 'about us'], true)) {
             return '';
@@ -8609,6 +8590,9 @@ class AiSitePageComponentGenerationService
             $scope['content_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $scope['website_profile']['content_locale'] ?? null,
+            $scope['execution_blueprint']['content_locale'] ?? null,
+            $scope['plan_json']['content_locale'] ?? null,
+            $scope['plan_json']['i18n']['content_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['default_language'] ?? null,
             $websiteProfile['default_locale'] ?? null,
@@ -8620,8 +8604,6 @@ class AiSitePageComponentGenerationService
             $scope['plan_generated_locale'] ?? null,
             $scope['plan_workbench']['confirmed']['plan_generated_locale'] ?? null,
             $scope['plan_structured']['plan_generated_locale'] ?? null,
-            $scope['plan_json']['content_locale'] ?? null,
-            $scope['plan_json']['i18n']['content_locale'] ?? null,
         ] as $candidate) {
             $locale = \trim((string)$candidate);
             if ($locale !== '') {
@@ -9334,6 +9316,117 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * @param array<string,bool> $allowedTerms
+     */
+    private function hasDominantLatinProseForNonEnglishLocale(string $text, string $locale, array $allowedTerms = []): bool
+    {
+        if ($this->isEnglishLocale($locale)) {
+            return false;
+        }
+        $text = \html_entity_decode($text, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $text = (string)\preg_replace('/https?:\/\/\S+|\/pub\/media\/\S+/iu', ' ', $text);
+        $segments = \preg_split('/[\r\n.!?;:銆傦紒锛??锛?|]+/u', $text) ?: [$text];
+
+        foreach ($segments as $segment) {
+            $segment = \trim((string)\preg_replace('/\s+/u', ' ', (string)$segment));
+            if ($segment === '') {
+                continue;
+            }
+
+            \preg_match_all('/[A-Za-z][A-Za-z0-9\'-]*/u', $segment, $matches);
+            $words = $matches[0] ?? [];
+            if ($words === []) {
+                continue;
+            }
+            $words = \array_values(\array_filter($words, static function (string $word) use ($allowedTerms): bool {
+                return !isset($allowedTerms[\strtolower(\trim($word, " \t\n\r\0\x0B'\"-"))]);
+            }));
+            if ($words === []) {
+                continue;
+            }
+
+            $letterCount = 0;
+            foreach ($words as $word) {
+                $letterCount += \strlen((string)$word);
+            }
+            if (\count($words) >= 5 && $letterCount >= 28) {
+                return true;
+            }
+            if (
+                \count($words) >= 3
+                && \preg_match('/\b(?:home|about|featured|pages|policy|info|privacy|terms|support|reserved|rights|destination|clear|trusted|simple|next|steps|download|play|get|started|contact|subscribe|explore|learn|more)\b/iu', $segment) === 1
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @return array<string,bool>
+     */
+    private function collectAllowedLatinTermsFromRenderContext(array $renderContext): array
+    {
+        $allowed = \array_fill_keys([
+            'apk', 'ios', 'android', 'whatsapp', 'ssl', 'upi', 'vip', 'app', 'faq', 'seo',
+            'cta', 'api', 'html', 'css', 'json', 'url', 'www',
+        ], true);
+        $sources = [];
+        $this->collectAllowedLatinTermSources($renderContext['_website_profile'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['_scope_identity'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['page'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['component_config'] ?? [], $sources);
+
+        foreach ($sources as $source) {
+            if (\preg_match_all('/\b(?:[A-Z][A-Za-z0-9\'-]{1,}|[A-Z0-9]{2,})\b/u', $source, $matches) < 1) {
+                continue;
+            }
+            foreach ($matches[0] ?? [] as $word) {
+                $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
+                if (\strlen($normalized) >= 2) {
+                    $allowed[$normalized] = true;
+                }
+            }
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * @param list<string> $sources
+     */
+    private function collectAllowedLatinTermSources(mixed $value, array &$sources, string $path = '', int $depth = 0): void
+    {
+        if ($depth > 5 || \count($sources) >= 80) {
+            return;
+        }
+        if (\is_array($value)) {
+            foreach ($value as $key => $child) {
+                $nextPath = $path === '' ? (string)$key : $path . '.' . (string)$key;
+                $this->collectAllowedLatinTermSources($child, $sources, $nextPath, $depth + 1);
+            }
+            return;
+        }
+        if (!\is_scalar($value) || !$this->isAllowedLatinTermSourcePath($path)) {
+            return;
+        }
+        $source = \trim((string)$value);
+        if ($source !== '') {
+            $sources[] = $source;
+        }
+    }
+
+    private function isAllowedLatinTermSourcePath(string $path): bool
+    {
+        return \preg_match(
+            '/(?:^|\.)(?:site_title|site_name|brand|brand_name|business_name|product|product_name|game|game_name|service|service_name|platform|platform_name|app_name|keyword|keywords|domain|target_domain|name|title|tagline)(?:$|\.)/i',
+            $path
+        ) === 1;
+    }
+
+    /**
      * @param array<string,mixed> $renderContext
      */
     private function assertRenderedHtmlMatchesLocale(string $html, array $renderContext): void
@@ -9348,17 +9441,33 @@ class AiSitePageComponentGenerationService
             return;
         }
 
-        $visibleHtml = (string)\preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', ' ', $html);
-        $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($visibleHtml)));
-        if ($plain === '') {
-            return;
+        // Language selection is enforced through the generation contract.
+        // Do not reject output just because it contains Latin letters: Chinese and
+        // other non-English sites may legitimately contain brands, acronyms, URLs,
+        // model names, APK/SEO terms, or user-provided proper nouns.
+    }
+
+    /**
+     * @param array<string,bool> $allowedTerms
+     */
+    private function summarizeNonTargetLatinCopyForLocaleError(string $text, array $allowedTerms): string
+    {
+        $words = [];
+        if (\preg_match_all('/\b[A-Za-z][A-Za-z\'-]{2,}\b/u', $text, $matches) > 0) {
+            foreach ($matches[0] ?? [] as $word) {
+                $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
+                if ($normalized !== '' && !isset($allowedTerms[$normalized])) {
+                    $words[] = (string)$word;
+                }
+            }
         }
-        if ($this->isNonCjkLocale($locale) && $this->hasMeaningfulCjkContent($plain)) {
-            throw new \RuntimeException('Rendered component visible copy does not match website content locale.');
-        }
-        if ($this->isCjkLocale($locale) && $this->hasDominantLatinProseForCjkLocale($plain)) {
-            throw new \RuntimeException('Rendered component visible copy does not match website content locale.');
-        }
+        $words = \array_slice(\array_values(\array_unique($words)), 0, 10);
+        $snippet = \trim(\mb_substr($text, 0, 240));
+
+        return 'Unexpected Latin words: '
+            . ($words !== [] ? \implode(', ', $words) : 'none')
+            . '; visible snippet: '
+            . $snippet;
     }
 
     private function assertRenderedHtmlPassesBuildQualityGate(string $componentCode, string $html): void
@@ -9529,8 +9638,11 @@ class AiSitePageComponentGenerationService
     ): string {
         $cssPrefix = $this->normalizeComponentCssPrefix($componentCode);
         $structuralFailure = $this->isStructuralComponentGenerationFailureReason($reason);
+        $imageAllowlistFailure = \stripos($reason, 'Generated image source is outside verified asset allowlist') !== false
+            || \stripos($reason, 'Image source allowlist') !== false
+            || \stripos($reason, 'outside verified asset') !== false;
         $failedPayload = '';
-        if ($failedAiData !== [] && !$structuralFailure) {
+        if ($failedAiData !== [] && !$structuralFailure && !$imageAllowlistFailure) {
             $failedAiData = $this->redactUnverifiedImageReferencesForRetryPrompt(
                 $this->normalizeComponentPayload($failedAiData),
                 $verifiedAssets
@@ -9554,7 +9666,10 @@ class AiSitePageComponentGenerationService
             . "\n- The renderer does not perform post-render content replacements or mobile/aesthetic CSS injection. Fix the JSON itself; do not assume PHP will rename labels, split card copy, add responsive CSS, or restyle a weak layout after generation."
             . "\n- Before reading or reusing failed payload media, obey the closed verified_asset_src_allowlist from the base prompt. Failed payload image URLs are untrusted unless they exactly match a supplied final_url."
             . $retryVerifiedAssetContract
+            . ($imageAllowlistFailure ? "\n- IMAGE ALLOWLIST REWRITE MODE: do not reuse or edit the failed payload image URL. Rebuild image markup from the copyable_verified_asset_img_template only, copying the final_url literally. Never construct, shorten, normalize, or infer image filenames from slot IDs." : '')
             . ($structuralFailure ? "\n- STRUCTURAL REWRITE MODE: the previous payload failed JSON/HTML/CSS grammar. Do not reuse or patch the failed payload markup/CSS. Rebuild a clean component from the base prompt, visual contract, verified asset template, and component prefix." : '')
+            . ($structuralFailure ? "\n- STRUCTURAL PRIORITY OVERRIDE: valid balanced HTML is more important than ornate composition for this retry. Use a simple shallow tree, no anchors around block elements, no inline tags inside headings, no adjacent tags merged together, and no visitor text containing raw < or > characters." : '')
+            . ($structuralFailure ? "\n- STRUCTURAL TAG LAYOUT: write one root wrapper, then sibling div/h2/h3/p/a/img/ul/li elements. Close each tag before opening the next major block. Do not nest h2/h3 inside p/a/span/strong, and do not close a parent while a child tag is still open." : '')
             . ($structuralFailure ? "\n- STRUCTURAL SAFE HTML SUBSET: use only section, div, h2, h3, p, a, img, ul, li, small, strong, and span. Do not use details, summary, button, form, input, custom elements, nested inline tags inside headings, empty wrappers, or any tag not in this list. Keep html_content under 1400 characters." : '')
             . ($structuralFailure ? "\n- STRUCTURAL SAFE CSS SUBSET: use only stable properties: position, inset, z-index, display, grid-template-columns, gap, align-items, justify-content, width, max-width, min-width, height, min-height, padding, margin, border, border-radius, background, color, font-size, font-weight, line-height, letter-spacing, text-transform, box-shadow, overflow, object-fit, object-position, opacity, transform, transition. Keep css_extra under 1600 characters and css_responsive under 800 characters." : '')
             . ($structuralFailure ? "\n- STRUCTURAL CSS FORMAT: one selector block at a time, one `property: value;` declaration per line. Avoid quoted CSS values; if a string value is unavoidable, close the quote before the semicolon. Do not output CSS variables, vendor-prefixed properties, pseudo-elements, `content:`, `filter`, `backdrop-filter`, `color-mix()`, `calc()`, `mask`, `clip-path`, or more than one CSS function in a single value." : '')
@@ -9571,8 +9686,8 @@ class AiSitePageComponentGenerationService
             . "\n- IMAGE_SRC_SELF_CHECK before returning: every <img src> and every CSS url(...) must be either an exact verified final_url from the prompt or not present. Required slots must have one same <img> containing exact src, data-pb-ai-image-role='generated-asset', and data-pb-ai-asset-slot."
             . "\n- Do not paste planning/observation copy into visible text. Rewrite \"Visitors see\" and \"Visitors can review\" sentences into direct marketing, legal, support, or editorial copy."
             . "\n- If the failed output used internal schema labels shaped like role + number, replace them with customer-specific visible titles and descriptions from the brief/build plan."
-            . "\n- Do not downgrade to a generic grid: preserve a distinctive composition, theme-matched surface treatment, and at least two visible design devices."
-            . "\n- If the failed output looked like plain cards or a flat strip, rewrite the composition with richer layout, stronger art direction, and complete scoped CSS instead of reducing detail."
+            . ($structuralFailure ? "\n- Because this is a structural retry, keep visual richness in CSS backgrounds, spacing, borders, shadows, and gradients instead of deeper HTML nesting." : "\n- Do not downgrade to a generic grid: preserve a distinctive composition, theme-matched surface treatment, and at least two visible design devices.")
+            . ($structuralFailure ? '' : "\n- If the failed output looked like plain cards or a flat strip, rewrite the composition with richer layout, stronger art direction, and complete scoped CSS instead of reducing detail.")
             . "\n- If this is a hero/banner component and no explicit user adjustment asks for another layout, rebuild it as a true premium 1920x750-style banner: full-background generated image or cover visual layer, dark gradient overlay, and floating content inside a centered max-width container. A small side image plus boxed text is invalid as the default repair target. If explicit user adjustment conflicts, follow the user composition but keep premium generated imagery, readable overlay, and strong hierarchy."
             . "\n- If the failure mentions CSS scope or #componentId.component-class, rewrite root/wrapper selectors as descendant selectors, e.g. `#componentId .pb-component-root`. The html_content fragment is nested inside the framework root."
             . "\n- If the failure mentions hero image cover CSS, keep the editable <img> but fix its class/CSS selector spelling exactly and style that selector with position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; then layer overlay and content above it."
