@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI\Contract;
 
 use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContractValidator;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
 use GuoLaiRen\PageBuilder\Service\AiSiteDesignPolicyRegistry;
 use PHPUnit\Framework\TestCase;
 
@@ -53,9 +54,13 @@ final class BuildPlanContractValidatorTest extends TestCase
         return [
             'contract_meta' => [
                 'version' => '2.2',
-                'type' => 'build_plan_contract',
+                'id' => 'build_plan_v2_contract',
+                'type' => 'build_plan_v2',
+                'stage' => 'stage1',
                 'status' => 'draft',
-                'created_by' => 'AiSitePlanQueue',
+                'creator' => 'AiSitePlanQueue',
+                'adapter_type' => 'build_plan_contract_v2_2',
+                'created_at' => '2026-05-15T00:00:00+00:00',
             ],
             'source_of_truth' => [
                 'user_brief' => 'Build an AI tool website.',
@@ -135,6 +140,13 @@ final class BuildPlanContractValidatorTest extends TestCase
                 ],
             ],
             'build_order' => ['task.hero'],
+            'source_contracts' => [
+                ['id' => 'contract_source_truth', 'type' => ContractType::TYPE_SOURCE_TRUTH, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
+                ['id' => 'contract_site_brief', 'type' => ContractType::TYPE_SITE_BRIEF, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
+                ['id' => 'contract_design_manifest', 'type' => ContractType::TYPE_DESIGN_MANIFEST, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
+                ['id' => 'contract_page_contract', 'type' => ContractType::TYPE_PAGE_CONTRACT, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
+                ['id' => 'contract_block_plan', 'type' => ContractType::TYPE_BLOCK_PLAN, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
+            ],
             'permission_matrix' => [
                 'read' => ['policy_ref', 'policy_projection', 'design_manifest', 'content_manifest', 'pages', 'blocks', 'tasks'],
                 'patch' => ['render_data.*', 'asset_manifest.*', 'content_manifest.items.*'],
@@ -150,6 +162,20 @@ final class BuildPlanContractValidatorTest extends TestCase
                 'headline_key' => 'home.title',
             ],
         ];
+    }
+
+    public function testRejectsMissingRequiredSourceContracts(): void
+    {
+        $contract = $this->validContract();
+        $contract['source_contracts'] = [
+            ['id' => 'contract_page_contract', 'type' => ContractType::TYPE_PAGE_CONTRACT, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
+        ];
+
+        $result = (new BuildPlanContractValidator())->validate($contract);
+
+        self::assertFalse($result['valid']);
+        self::assertContains('Missing source contract: ' . ContractType::TYPE_SOURCE_TRUTH, $result['errors']);
+        self::assertContains('Missing source contract: ' . ContractType::TYPE_SITE_BRIEF, $result['errors']);
     }
 
     /**

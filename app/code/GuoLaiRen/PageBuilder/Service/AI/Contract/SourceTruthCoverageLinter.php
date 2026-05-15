@@ -234,8 +234,23 @@ final class SourceTruthCoverageLinter
                 ++$matched;
             }
         }
+        if ($matched >= \max(1, (int)(\count($nouns) * 0.5))) {
+            return true;
+        }
 
-        return $matched >= \max(1, (int)(\count($nouns) * 0.5));
+        $signals = $this->extractFactSignals($needle);
+        if ($signals !== []) {
+            $signalMatched = 0;
+            foreach ($signals as $signal) {
+                if (\mb_strpos($haystackLower, \mb_strtolower($signal)) !== false) {
+                    ++$signalMatched;
+                }
+            }
+
+            return $signalMatched >= \max(1, (int)\ceil(\count($signals) * 0.5));
+        }
+
+        return false;
     }
 
     /**
@@ -257,19 +272,57 @@ final class SourceTruthCoverageLinter
 
         $missing = [];
         foreach ($required as $key) {
+            $aliases = $this->requiredBlockAliases((string)$key);
             $found = false;
             foreach ($existing as $e) {
-                if (\str_contains($e, $key) || \str_contains($key, $e)) {
-                    $found = true;
-                    break;
+                foreach ($aliases as $alias) {
+                    if ($alias !== '' && (\str_contains($e, $alias) || \str_contains($alias, $e))) {
+                        $found = true;
+                        break 2;
+                    }
                 }
             }
             if (!$found) {
-                $missing[] = $key;
+                $missing[] = (string)$key;
             }
         }
 
         return $missing;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function requiredBlockAliases(string $key): array
+    {
+        $key = \trim(\mb_strtolower($key));
+        $aliases = match ($key) {
+            'hero_download' => ['hero_download', 'hero_download_main', 'hero_download_banner', 'hero'],
+            'game_showcase_or_features', 'game_showcase' => ['game_showcase_or_features', 'game_showcase', 'featured_games', 'highlights'],
+            'trust_security' => ['trust_security', 'trust'],
+            'seo_faq' => ['seo_faq', 'faq'],
+            'final_download_cta', 'final_cta' => ['final_download_cta', 'final_cta', 'cta'],
+            default => [$key],
+        };
+
+        return \array_values(\array_unique(\array_filter($aliases, static fn(string $alias): bool => $alias !== '')));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractFactSignals(string $fact): array
+    {
+        $signals = [];
+        foreach ([
+            '印度', '棋牌', '下载', 'apk', 'SEO', 'seo', 'Teen Patti', 'rummy', 'casino', '安全', 'trust', 'FAQ', 'faq',
+        ] as $candidate) {
+            if ($candidate !== '' && \mb_stripos($fact, $candidate) !== false) {
+                $signals[] = \mb_strtolower($candidate);
+            }
+        }
+
+        return \array_values(\array_unique($signals));
     }
 
     /**

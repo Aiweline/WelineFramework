@@ -103,6 +103,46 @@ class AiSitePageBlueprintServiceTest extends TestCase
         }
     }
 
+    public function testBuildPageBlueprintPolicySectionsUseDistinctKeys(): void
+    {
+        $service = new AiSitePageBlueprintService();
+
+        $blueprint = $service->buildPageBlueprint(Page::TYPE_REFUND_POLICY, [
+            'brief_description' => 'Explain refund rules clearly for visitors before they download the app.',
+        ], [
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Explain refund rules clearly for visitors before they download the app.',
+        ]);
+
+        $keys = \array_values(\array_map(
+            static fn(array $section): string => (string)($section['key'] ?? ''),
+            \is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []
+        ));
+
+        self::assertSame(['hero', 'coverage', 'rights', 'cta'], $keys);
+        self::assertSame($keys, \array_values(\array_unique($keys)));
+    }
+
+    public function testBuildPageBlueprintHomeUsesCanonicalDownloadSiteBlockKeys(): void
+    {
+        $service = new AiSitePageBlueprintService();
+
+        $blueprint = $service->buildPageBlueprint(Page::TYPE_HOME, [
+            'brief_description' => '印度市场的棋牌网站，推广棋牌apk下载的seo网站。',
+            'user_description' => '印度市场的棋牌网站，推广棋牌apk下载的seo网站。',
+        ], [
+            'site_title' => 'Teenipiya',
+            'brief_description' => '印度市场的棋牌网站，推广棋牌apk下载的seo网站。',
+        ]);
+
+        $keys = \array_values(\array_map(
+            static fn(array $section): string => (string)($section['key'] ?? ''),
+            \is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []
+        ));
+
+        self::assertSame(['hero_download', 'game_showcase_or_features', 'seo_faq', 'final_download_cta'], $keys);
+    }
+
     public function testBuildPageBlueprintDoesNotLeakInternalBriefOrPromptMarkers(): void
     {
         $service = new AiSitePageBlueprintService();
