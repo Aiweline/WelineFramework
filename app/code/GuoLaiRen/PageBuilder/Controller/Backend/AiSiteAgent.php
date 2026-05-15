@@ -4648,6 +4648,41 @@ class AiSiteAgent extends BaseController
             && $session->getPublishStatus() !== AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED;
     }
 
+    /**
+     * 发布门禁前刷新 qa_report_contract：构建任务全部完成后重新汇总 RenderData/SourceTruth findings，
+     * 让 inspectScope 能消费最新的 source_truth_coverage / render_data_quality 结果。
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function refreshScopeQualityContractsForPublishGate(array $scope): array
+    {
+        unset($scope['quality_gate_preflight_error']);
+        $summary = $this->buildTaskService->summarize($scope);
+        $total = (int)($summary['total'] ?? 0);
+        if ($total <= 0) {
+            return $scope;
+        }
+        if (
+            (int)($summary['pending'] ?? 0) > 0
+            || (int)($summary['running'] ?? 0) > 0
+            || (int)($summary['failed'] ?? 0) > 0
+            || (int)($summary['done'] ?? 0) < $total
+        ) {
+            return $scope;
+        }
+
+        try {
+            return $this->buildTaskService->attachBuildRenderDataContract($scope);
+        } catch (\Throwable $throwable) {
+            $scope['quality_gate_preflight_error'] = \trim($throwable->getMessage()) !== ''
+                ? $throwable->getMessage()
+                : (string)__('渲染数据契约预检失败，请先修复构建产物后再发布。');
+
+            return $scope;
+        }
+    }
+
     private function handlePublishChecklist(): string
     {
         $adminId = (int)$this->getLoginUserId();
@@ -4704,6 +4739,7 @@ class AiSiteAgent extends BaseController
         if ($publishBlockedItem !== null) {
             \array_unshift($checkItems, $publishBlockedItem);
         }
+        $scope = $this->refreshScopeQualityContractsForPublishGate($scope);
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
         $qualityReport = $qualityGate->inspectScope($scope);
         foreach (\is_array($qualityReport['items'] ?? null) ? $qualityReport['items'] : [] as $qualityItem) {
@@ -13383,6 +13419,7 @@ class AiSiteAgent extends BaseController
         if ($websiteId <= 0 || $virtualThemeId <= 0) {
             throw new \RuntimeException((string)__('发布前请先完成主题构建'));
         }
+        $scope = $this->refreshScopeQualityContractsForPublishGate($scope);
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
         $qualityReport = $qualityGate->inspectScope($scope);
         if (empty($qualityReport['passed'])) {
