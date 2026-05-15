@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Search\Service;
 
+use WeShop\Search\Api\SearchBrowseEngineInterface;
 use WeShop\Search\Api\SearchEngineInterface;
 use WeShop\Search\Engine\AlgoliaEngine;
 use WeShop\Search\Engine\ElasticsearchEngine;
@@ -15,45 +16,53 @@ use Weline\Framework\Manager\ObjectManager;
 
 class SearchEngineFactory
 {
+    private const USABILITY_CACHE_TTL_SECONDS = 30;
+
+    private const BROWSE_ENGINE_TYPES = [
+        SearchEngineConfig::ENGINE_OPENSEARCH => true,
+        SearchEngineConfig::ENGINE_ELASTICSEARCH => true,
+    ];
+
+    /**
+     * @var array<string, array{usable: bool, expires_at: int}>
+     */
+    private static array $usabilityCache = [];
+
     public static function create(string $scope = 'default'): ?SearchEngineInterface
     {
-        /** @var SearchEngineConfig $configModel */
-        $configModel = ObjectManager::getInstance(SearchEngineConfig::class);
-        /** @var SearchEngineEnvConfig $envConfig */
-        $envConfig = ObjectManager::getInstance(SearchEngineEnvConfig::class);
-        $defaultEngineType = $envConfig->getDefaultEngineType();
-
-        $config = $configModel->getActiveEngineConfig($scope);
-
-        if (!$config) {
-            $engine = self::createEngineByType($defaultEngineType);
-            if ($engine) {
-                $engine->initConfig($envConfig->getEngineConfig($defaultEngineType));
-            }
-
-            return $engine;
-        }
-
-        $engineType = $envConfig->normalizeEngineType((string) ($config[SearchEngineConfig::schema_fields_ENGINE_TYPE] ?? ''));
-        if ($engineType === '') {
-            $engineType = $defaultEngineType;
-        }
-
-        $configData = $configModel->setData($config)->getConfigData();
+        [$engineType, $configData, $defaultEngineType, $envConfig] = self::resolveEngineConfig($scope);
         $engine = self::createEngineByType($engineType);
         if ($engine) {
             $engine->initConfig($configData);
         }
 
-        if ($engine && $engineType !== $defaultEngineType && !self::isEngineUsable($engine)) {
+        if ($engine && $engineType !== $defaultEngineType && !self::isEngineUsableCached($engine, $engineType, $configData)) {
             $fallback = self::createEngineByType($defaultEngineType);
+            $fallbackConfig = $envConfig->getEngineConfig($defaultEngineType);
             if ($fallback) {
-                $fallback->initConfig($envConfig->getEngineConfig($defaultEngineType));
-                if (self::isEngineUsable($fallback)) {
+                $fallback->initConfig($fallbackConfig);
+                if (self::isEngineUsableCached($fallback, $defaultEngineType, $fallbackConfig)) {
                     return $fallback;
                 }
             }
         }
+
+        return $engine;
+    }
+
+    public static function createBrowse(string $scope = 'default'): ?SearchBrowseEngineInterface
+    {
+        [$engineType, $configData] = self::resolveEngineConfig($scope);
+        if (!isset(self::BROWSE_ENGINE_TYPES[$engineType])) {
+            return null;
+        }
+
+        $engine = self::createEngineByType($engineType);
+        if (!$engine instanceof SearchBrowseEngineInterface) {
+            return null;
+        }
+
+        $engine->initConfig($configData);
 
         return $engine;
     }
@@ -126,5 +135,60 @@ class SearchEngineFactory
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * @return array{0: string, 1: array<string, mixed>, 2: string, 3: SearchEngineEnvConfig}
+     */
+    private static function resolveEngineConfig(string $scope): array
+    {
+        /** @var SearchEngineConfig $configModel */
+        $configModel = ObjectManager::getInstance(SearchEngineConfig::class);
+        /** @var SearchEngineEnvConfig $envConfig */
+        $envConfig = ObjectManager::getInstance(SearchEngineEnvConfig::class);
+        $defaultEngineType = $envConfig->getDefaultEngineType();
+
+        $config = $configModel->getActiveEngineConfig($scope);
+        if (!$config) {
+            return [
+                $defaultEngineType,
+                $envConfig->getEngineConfig($defaultEngineType),
+                $defaultEngineType,
+                $envConfig,
+            ];
+        }
+
+        $engineType = $envConfig->normalizeEngineType((string) ($config[SearchEngineConfig::schema_fields_ENGINE_TYPE] ?? ''));
+        if ($engineType === '') {
+            $engineType = $defaultEngineType;
+        }
+
+        return [
+            $engineType,
+            $configModel->setData($config)->getConfigData(),
+            $defaultEngineType,
+            $envConfig,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private static function isEngineUsableCached(SearchEngineInterface $engine, string $engineType, array $config): bool
+    {
+        $cacheKey = $engineType . ':' . sha1((string) json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $now = time();
+        $cached = self::$usabilityCache[$cacheKey] ?? null;
+        if (is_array($cached) && ($cached['expires_at'] ?? 0) >= $now) {
+            return (bool) ($cached['usable'] ?? false);
+        }
+
+        $usable = self::isEngineUsable($engine);
+        self::$usabilityCache[$cacheKey] = [
+            'usable' => $usable,
+            'expires_at' => $now + self::USABILITY_CACHE_TTL_SECONDS,
+        ];
+
+        return $usable;
     }
 }

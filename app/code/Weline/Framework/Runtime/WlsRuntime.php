@@ -176,6 +176,15 @@ class WlsRuntime implements RuntimeInterface
         $app = new App();
 
         $globalsEmulator = null;
+        $requestMeta = [
+            'method' => 'GET',
+            'ip' => 'unknown',
+            'instance' => '',
+            'worker_id' => '',
+            'worker_port' => '',
+            'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
+            'request_count' => $this->requestCount + 1,
+        ];
         
         $this->requestCount++;
         
@@ -224,6 +233,15 @@ class WlsRuntime implements RuntimeInterface
                 }
                 $globalsEmulator = new GlobalsEmulator();
                 $globalsEmulator->emulate($request);
+                $requestMeta = [
+                    'method' => (string)($_SERVER['REQUEST_METHOD'] ?? $request->getMethod() ?: 'GET'),
+                    'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
+                    'instance' => (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? ''),
+                    'worker_id' => (string)($_SERVER['WLS_WORKER_ID'] ?? ''),
+                    'worker_port' => (string)($_SERVER['WLS_PORT'] ?? ''),
+                    'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
+                    'request_count' => $this->requestCount,
+                ];
                 WelineEnv::getInstance()->initFromRequest($request);
             }
             // WLS：请求入口再清一次 URL/ACL 请求级缓存，避免上一 finally 未跑全、fiber 交错或 parser 前
@@ -549,6 +567,12 @@ class WlsRuntime implements RuntimeInterface
             // StateManager::reset() 会清空 HeaderCollector，必须在此之前提取
             $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
             $this->snapshotPendingResponseState($hc);
+            if (RequestLifecycleTrace::isEnabled()) {
+                $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
+                $timing['trace_top'] = $this->summarizeTraceSpans($traceSpans);
+                $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', 12);
+                $timing['trace_category_totals'] = $this->summarizeTraceCategoryTotals($traceSpans);
+            }
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
             $this->reset();
             FiberOutputBuffer::ensureInstalled('request_end');
@@ -561,10 +585,15 @@ class WlsRuntime implements RuntimeInterface
             // 性能监控：记录所有超过500ms的请求，或DEV模式下记录所有请求
             $isDev = \defined('DEV') && DEV;
             // 添加请求方法、IP等信息
-            $timing['method'] = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-            $timing['ip'] = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+            $timing['method'] = $requestMeta['method'] ?: 'GET';
+            $timing['ip'] = $requestMeta['ip'] ?: 'unknown';
             $timing['timestamp'] = date('Y-m-d H:i:s');
             $timing['redirect_count'] = (int) ($_SERVER['WLS_REDIRECT_COUNT'] ?? 0);
+            $timing['instance'] = $requestMeta['instance'];
+            $timing['worker_id'] = $requestMeta['worker_id'];
+            $timing['worker_port'] = $requestMeta['worker_port'];
+            $timing['pid'] = $requestMeta['pid'];
+            $timing['request_count'] = $requestMeta['request_count'];
             // 同步到 WelineEnv
             WelineEnv::set('request.method', $timing['method'], 'WlsRuntime finally');
             WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
@@ -1072,6 +1101,79 @@ class WlsRuntime implements RuntimeInterface
     private function getPerformanceLogFile(): string
     {
         return $this->resolveLogPath((string)$this->getPerformanceConfig()['timing_log_file']);
+    }
+
+    /**
+     * @param array<int, array{name?:string,duration_ms?:float|int,category?:string,parent?:string,db_duration_ms?:float|int,meta?:array}> $spans
+     * @return array<int, array{name:string,duration_ms:float,category:string,parent:string,db_duration_ms?:float,meta?:array}>
+     */
+    private function summarizeTraceSpans(array $spans, int $limit = 12): array
+    {
+        if (empty($spans)) {
+            return [];
+        }
+
+        \usort($spans, static function (array $left, array $right): int {
+            return ((float)($right['duration_ms'] ?? 0)) <=> ((float)($left['duration_ms'] ?? 0));
+        });
+
+        $summary = [];
+        foreach (\array_slice($spans, 0, \max(1, $limit)) as $span) {
+            $item = [
+                'name' => (string)($span['name'] ?? ''),
+                'duration_ms' => \round((float)($span['duration_ms'] ?? 0), 2),
+                'category' => (string)($span['category'] ?? 'framework'),
+                'parent' => (string)($span['parent'] ?? ''),
+            ];
+            if (isset($span['db_duration_ms'])) {
+                $item['db_duration_ms'] = \round((float)$span['db_duration_ms'], 2);
+            }
+            if (isset($span['meta']) && \is_array($span['meta'])) {
+                $item['meta'] = $span['meta'];
+            }
+            $summary[] = $item;
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @param array<int, array{name?:string,duration_ms?:float|int,category?:string,parent?:string,db_duration_ms?:float|int,meta?:array}> $spans
+     * @return array<int, array{name:string,duration_ms:float,category:string,parent:string,db_duration_ms?:float,meta?:array}>
+     */
+    private function summarizeTraceSpansByCategory(array $spans, string $category, int $limit = 12): array
+    {
+        if ($category === '') {
+            return [];
+        }
+
+        return $this->summarizeTraceSpans(
+            \array_values(\array_filter($spans, static fn(array $span): bool => (string)($span['category'] ?? '') === $category)),
+            $limit
+        );
+    }
+
+    /**
+     * @param array<int, array{duration_ms?:float|int,category?:string}> $spans
+     * @return array<string, float>
+     */
+    private function summarizeTraceCategoryTotals(array $spans): array
+    {
+        $totals = [];
+        foreach ($spans as $span) {
+            $category = (string)($span['category'] ?? 'framework');
+            if ($category === '') {
+                $category = 'unknown';
+            }
+            $totals[$category] = ($totals[$category] ?? 0.0) + (float)($span['duration_ms'] ?? 0);
+        }
+
+        \arsort($totals);
+        foreach ($totals as $category => $duration) {
+            $totals[$category] = \round((float)$duration, 2);
+        }
+
+        return $totals;
     }
 
     private function resolveLogPath(string $path): string
