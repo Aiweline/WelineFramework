@@ -1,414 +1,414 @@
 ﻿钉钉,DingTalk
-主题: %{topic},Theme: %{topic}
-钉钉渠道测试,DingTalk Channel Test
+"主题: %{topic}","Theme: %{topic}"
+钉钉渠道测试,"DingTalk Channel Test"
 这是一条测试消息，如果您收到此消息，说明钉钉渠道配置正确。,"This is a test message. If you receive this message, the DingTalk channel configuration is correct."
-Webhook URL,Webhook URL
-签名密钥,Signing Key
-加签密钥（SEC 开头）,Signing key (starts with SEC)
+"Webhook URL","Webhook URL"
+签名密钥,"Signing Key"
+"加签密钥（SEC 开头）","Signing key (starts with SEC)"
 邮件,Mail
-邮件渠道测试,Email channel test
+邮件渠道测试,"Email channel test"
 这是一条测试消息，如果您收到此邮件，说明邮件渠道配置正确。,"This is a test message. If you receive this email, the email channel configuration is correct."
-收件邮箱,Recipient Email
-发件人（可选）,Sender (optional)
-使用默认,Use default
+收件邮箱,"Recipient Email"
+发件人（可选）,"Sender (optional)"
+使用默认,"Use default"
 飞书,Feishu
-飞书渠道测试,Feishu Channel Test
+飞书渠道测试,"Feishu Channel Test"
 这是一条测试消息，如果您收到此消息，说明飞书渠道配置正确。,"This is a test message. If you receive this message, the Feishu channel configuration is correct."
-签名密钥（可选）,Signing Key (Optional)
+签名密钥（可选）,"Signing Key (Optional)"
 Telegram,Telegram
-Telegram 渠道测试,Telegram channel test
-这是一条测试消息，如果您收到了它，说明 Telegram 渠道配置是可用的。,"This is a test message. If you receive it, the Telegram channel configuration is available."
-Bot Token（建议填在渠道配置）,Bot Token (it is recommended to fill in the channel configuration)
-Chat ID（建议填在联系人配置）,Chat ID (it is recommended to fill in the contact configuration)
-消息格式,Message format
-默认 HTML,Default HTML
-关闭链接预览,Close link preview
-默认否,Default No
+"Telegram 渠道测试","Telegram channel test"
+"这是一条测试消息，如果您收到了它，说明 Telegram 渠道配置是可用的。","This is a test message. If you receive it, the Telegram channel configuration is available."
+"Bot Token（建议填在渠道配置）","Bot Token (it is recommended to fill in the channel configuration)"
+"Chat ID（建议填在联系人配置）","Chat ID (it is recommended to fill in the contact configuration)"
+消息格式,"Message format"
+"默认 HTML","Default HTML"
+关闭链接预览,"Close link preview"
+默认否,"Default No"
 否,No
 是,Yes
 Webhook,Webhook
-Webhook 渠道测试,Webhook channel test
-这是一条测试消息，如果您的服务收到此请求，说明 Webhook 渠道配置正确。,"This is a test message. If your service receives this request, the Webhook channel configuration is correct."
-用于生成 X-Signature 头,Used to generate the X-Signature header
-自定义请求头（可选）,Custom Request Headers (Optional)
-跳过格式不正确的菜单配置文件：%{1},Skipped malformed menu configuration file: %{1}
+"Webhook 渠道测试","Webhook channel test"
+"这是一条测试消息，如果您的服务收到此请求，说明 Webhook 渠道配置正确。","This is a test message. If your service receives this request, the Webhook channel configuration is correct."
+"用于生成 X-Signature 头","Used to generate the X-Signature header"
+自定义请求头（可选）,"Custom Request Headers (Optional)"
+跳过格式不正确的菜单配置文件：%{1},"Skipped malformed menu configuration file: %{1}"
 "菜单配置错误：menu元素缺少source属性,文件：%{1}","Menu configuration error: menu element missing source attribute, file: %{1}"
 "菜单配置错误：menu元素缺少name属性,文件：%{1}","Menu configuration error: menu element missing name attribute, file: %{1}"
 "菜单配置错误：menu元素缺少title属性,文件：%{1}","Menu configuration error: menu element missing title attribute, file: %{1}"
 "菜单配置错误：menu元素缺少order属性,文件：%{1}","Menu configuration error: menu element missing order attribute, file: %{1}"
-刷新模块列表...,Refresh Module List...
-已刷新：%{1} 个激活模块,Refreshed: %{1} active module(s)
-模块刷新失败：%{1},Module refresh failed: %{1}
-开始收集模块 %{1} 的菜单...,Start collecting menus for module %{1}
-开始收集菜单...,Start collecting menus...
-未从 menu.xml 解析到任何菜单。,No menus parsed from menu.xml.
-发现 %{1} 个配置文件但解析失败，请检查 XML 格式。,"Found %{1} configuration files but parsing failed, please check the XML format."
-菜单收集完成！共解析 %{1} 条菜单（来自 %{2} 个 menu.xml 文件）,Menu collection complete! Parsed %{1} menus (from %{2} menu.xml files)
-新增 %{1} 条菜单：,Add %{1} Menu Items:
-更新 %{1} 条菜单：,Updated %{1} menu items:
-删除 %{1} 条菜单（模块已移除）：,Deleted %{1} menu(s) (module removed):
-禁用 %{1} 条菜单（模块已禁用）：,Disable %{1} menu items (module disabled):
-菜单无变化。,No changes to menu.
-清理事件缓存...,Clearing Event Cache...
-事件缓存清理失败：%{1},Event cache cleanup failed: %{1}
-编译插件/DI...,Compile plugin/DI...
-DI编译失败：%{1},DI compilation failed: %{1}
-清理全部缓存...,Clearing All Cache...
-全部缓存清理完成！,All Cache Cleared!
-缓存清理失败：%{1},Cache Cleanup Failed: %{1}
-清理模板缓存...,Cleaning template cache...
-模板缓存清理完成！,Template cache cleanup complete!
-模板缓存清理失败：%{1},Template cache cleanup failed: %{1}
-清理菜单相关缓存...,Cleaning menu-related cache...
-菜单相关缓存已清理！,Menu-related cache has been cleared!
-菜单缓存清理失败：%{1},Menu cache clearing failed: %{1}
-菜单收集和系统更新完成！菜单已生效。,Menu collection and system update complete! Menu is now active.
-对比后端用户/角色数据与 getAclContext 结果，排查没角色或没权限。,Compare backend user/role data with getAclContext results to troubleshoot missing roles or permissions.
-指定用户ID，不传则查 1 和 3,"Specify user ID; if not provided, query 1 and 3"
-请指定 --username=、--user_id= 或 --email= 之一,"Please specify one of --username=, --user_id=, or --email="
-请指定 --role_id= 或 --role= 选择要分配的角色,Specify --role_id= or --role= to select role
-用户不存在,User does not exist
-已为用户分配角色,Role assigned to user
-该用户已拥有该角色,User already has this role
-分配失败,Assignment failed
-角色 ID %{id} 不存在,Role ID %{id} does not exist
+刷新模块列表...,"Refresh Module List..."
+"已刷新：%{1} 个激活模块","Refreshed: %{1} active module(s)"
+模块刷新失败：%{1},"Module refresh failed: %{1}"
+"开始收集模块 %{1} 的菜单...","Start collecting menus for module %{1}"
+开始收集菜单...,"Start collecting menus..."
+"未从 menu.xml 解析到任何菜单。","No menus parsed from menu.xml."
+"发现 %{1} 个配置文件但解析失败，请检查 XML 格式。","Found %{1} configuration files but parsing failed, please check the XML format."
+"菜单收集完成！共解析 %{1} 条菜单（来自 %{2} 个 menu.xml 文件）","Menu collection complete! Parsed %{1} menus (from %{2} menu.xml files)"
+"新增 %{1} 条菜单：","Add %{1} Menu Items:"
+"更新 %{1} 条菜单：","Updated %{1} menu items:"
+"删除 %{1} 条菜单（模块已移除）：","Deleted %{1} menu(s) (module removed):"
+"禁用 %{1} 条菜单（模块已禁用）：","Disable %{1} menu items (module disabled):"
+菜单无变化。,"No changes to menu."
+清理事件缓存...,"Clearing Event Cache..."
+事件缓存清理失败：%{1},"Event cache cleanup failed: %{1}"
+编译插件/DI...,"Compile plugin/DI..."
+DI编译失败：%{1},"DI compilation failed: %{1}"
+清理全部缓存...,"Clearing All Cache..."
+全部缓存清理完成！,"All Cache Cleared!"
+缓存清理失败：%{1},"Cache Cleanup Failed: %{1}"
+清理模板缓存...,"Cleaning template cache..."
+模板缓存清理完成！,"Template cache cleanup complete!"
+模板缓存清理失败：%{1},"Template cache cleanup failed: %{1}"
+清理菜单相关缓存...,"Cleaning menu-related cache..."
+菜单相关缓存已清理！,"Menu-related cache has been cleared!"
+菜单缓存清理失败：%{1},"Menu cache clearing failed: %{1}"
+菜单收集和系统更新完成！菜单已生效。,"Menu collection and system update complete! Menu is now active."
+"对比后端用户/角色数据与 getAclContext 结果，排查没角色或没权限。","Compare backend user/role data with getAclContext results to troubleshoot missing roles or permissions."
+"指定用户ID，不传则查 1 和 3","Specify user ID; if not provided, query 1 and 3"
+"请指定 --username=、--user_id= 或 --email= 之一","Please specify one of --username=, --user_id=, or --email="
+"请指定 --role_id= 或 --role= 选择要分配的角色","Specify --role_id= or --role= to select role"
+用户不存在,"User does not exist"
+已为用户分配角色,"Role assigned to user"
+该用户已拥有该角色,"User already has this role"
+分配失败,"Assignment failed"
+"角色 ID %{id} 不存在","Role ID %{id} does not exist"
 角色名「%{name}」不存在,"Role name ""%{name}"" does not exist"
-暂无可用角色，请先在后台创建角色,No roles available. Create roles in backend first.
-可用角色：,Available roles:
-为指定后台用户分配所选角色。,Assign selected role to backend user.
+暂无可用角色，请先在后台创建角色,"No roles available. Create roles in backend first."
+可用角色：,"Available roles:"
+为指定后台用户分配所选角色。,"Assign selected role to backend user."
 用户名,Username
-用户ID,User ID
+用户ID,"User ID"
 邮箱,Email
-角色ID,Role ID
-角色名,Role Name
-显示帮助信息,Show help information
-分配超管,Assign super admin
-分配其他角色,Assign other roles
-已为用户分配超管角色,Assigned super admin role
-该用户已是超管角色,This user is already a super admin
-为指定后台用户分配超管角色。,Assign super management roles to specified backend users.
-用户名不能为空,Username cannot be empty
-邮箱不能为空,Email cannot be empty
-密码不能为空,Password cannot be empty
-用户已存在,User already exists
-用户创建失败,User creation failed
-用户创建成功,User created successfully
-用户创建失败：%{1},用户创建失败：%{1}
-用户邮箱不能为空,User email cannot be empty
-用户密码不能为空,User password cannot be empty
-重置成功,Reset Successful
-加载访问日志失败：%{1},Failed to load access logs: %{1}
-用户名和密码不能为空,Username and password cannot be empty
-用户已被禁用,User has been disabled
-密码错误,Incorrect Password
-创建token失败,Failed to create token
-登录成功,Login successful
-登录失败：%{1},Login failed: %{1}
-Token不能为空,Token cannot be empty
-Token无效或已过期,Token is invalid or expired
-Token刷新成功,Token refreshed successfully
-刷新token失败：%{1},Failed to refresh token: %{1}
-撤销token失败,Failed to revoke token
-Token已撤销,Token has been revoked
-撤销token失败：%{1},Failed to revoke token: %{1}
-用户未登录,User not logged in
-获取用户信息成功,Successfully got user info
-获取用户信息失败：%{1},Failed to get user info: %{1}
-Token无效,Token is invalid
-获取token信息成功,Successfully got token information
-获取token信息失败：%{1},Failed to get token information: %{1}
-消息主题不能为空,Message subject cannot be empty
-消息标题不能为空,Message title cannot be empty
-消息内容不能为空,Message content cannot be empty
-通知已发送,Notification sent
-发送通知失败：%{error},Failed to send notification: %{error}
+角色ID,"Role ID"
+角色名,"Role Name"
+显示帮助信息,"Show help information"
+分配超管,"Assign super admin"
+分配其他角色,"Assign other roles"
+已为用户分配超管角色,"Assigned super admin role"
+该用户已是超管角色,"This user is already a super admin"
+为指定后台用户分配超管角色。,"Assign super management roles to specified backend users."
+用户名不能为空,"Username cannot be empty"
+邮箱不能为空,"Email cannot be empty"
+密码不能为空,"Password cannot be empty"
+用户已存在,"User already exists"
+用户创建失败,"User creation failed"
+用户创建成功,"User created successfully"
+用户创建失败：%s,用户创建失败：%s
+用户邮箱不能为空,"User email cannot be empty"
+用户密码不能为空,"User password cannot be empty"
+重置成功,"Reset Successful"
+加载访问日志失败：%{1},"Failed to load access logs: %{1}"
+用户名和密码不能为空,"Username and password cannot be empty"
+用户已被禁用,"User has been disabled"
+密码错误,"Incorrect Password"
+创建token失败,"Failed to create token"
+登录成功,"Login successful"
+登录失败：%{1},"Login failed: %{1}"
+Token不能为空,"Token cannot be empty"
+Token无效或已过期,"Token is invalid or expired"
+Token刷新成功,"Token refreshed successfully"
+刷新token失败：%{1},"Failed to refresh token: %{1}"
+撤销token失败,"Failed to revoke token"
+Token已撤销,"Token has been revoked"
+撤销token失败：%{1},"Failed to revoke token: %{1}"
+用户未登录,"User not logged in"
+获取用户信息成功,"Successfully got user info"
+获取用户信息失败：%{1},"Failed to get user info: %{1}"
+Token无效,"Token is invalid"
+获取token信息成功,"Successfully got token information"
+获取token信息失败：%{1},"Failed to get token information: %{1}"
+消息主题不能为空,"Message subject cannot be empty"
+消息标题不能为空,"Message title cannot be empty"
+消息内容不能为空,"Message content cannot be empty"
+通知已发送,"Notification sent"
+发送通知失败：%{error},"Failed to send notification: %{error}"
 信息,Information
 成功,Success
 警告,Warning
 错误,Error
 紧急,Urgent
-参数错误,Parameter error
-已标记为已读,Marked as read
-标记失败,Mark failed
-操作失败,Operation failed
-未登录,Not logged in
-已标记全部已读,Marked all as read
-外观与 Logo,Appearance & Logo
-加载配置失败：%{1},Failed to load configuration: %{1}
-无效的请求方法,Invalid request method
-保存成功,Saved successfully
-保存失败：%{1},Save failed: %{1}
-默认联系人,Default Contact
+参数错误,"Parameter error"
+已标记为已读,"Marked as read"
+标记失败,"Mark failed"
+操作失败,"Operation failed"
+未登录,"Not logged in"
+已标记全部已读,"Marked all as read"
+"外观与 Logo","Appearance & Logo"
+加载配置失败：%{1},"Failed to load configuration: %{1}"
+无效的请求方法,"Invalid request method"
+保存成功,"Saved successfully"
+保存失败：%{1},"Save failed: %{1}"
+默认联系人,"Default Contact"
 联系人,Contact
-联系人名称不能为空,Contact name cannot be empty
-联系人不存在,Contact does not exist
-更新成功,Update successful
-创建成功,Created successfully
-保存失败,Save Failed
-联系人和渠道不能为空,Contact and channel cannot be empty
+联系人名称不能为空,"Contact name cannot be empty"
+联系人不存在,"Contact does not exist"
+更新成功,"Update successful"
+创建成功,"Created successfully"
+保存失败,"Save Failed"
+联系人和渠道不能为空,"Contact and channel cannot be empty"
 已移除,Removed
-删除成功,Deletion successful
-删除失败,Deletion failed
-通知中心,Notification Center
-通知不存在或无权查看,Notification does not exist or you do not have permission to view it.
-通知详情,Notification Details
-请指定主题类型,Please specify topic type
-已将该类 %{count} 条通知标记为已读,Marked %{count} notifications of this type as read
-渠道配置,Channel configuration
-编辑渠道,Edit Channel
-新建渠道,New Channel
-渠道标识和名称不能为空,Channel identifier and name cannot be empty
-渠道不存在,Channel does not exist
-渠道标识已存在,Channel identifier already exists
-请选择渠道类型,Please select a channel type
-渠道适配器不存在,Channel adapter does not exist
+删除成功,"Deletion successful"
+删除失败,"Deletion failed"
+通知中心,"Notification Center"
+通知不存在或无权查看,"Notification does not exist or you do not have permission to view it."
+通知详情,"Notification Details"
+请指定主题类型,"Please specify topic type"
+"已将该类 %{count} 条通知标记为已读","Marked %{count} notifications of this type as read"
+渠道配置,"Channel configuration"
+编辑渠道,"Edit Channel"
+新建渠道,"New Channel"
+渠道标识和名称不能为空,"Channel identifier and name cannot be empty"
+渠道不存在,"Channel does not exist"
+渠道标识已存在,"Channel identifier already exists"
+请选择渠道类型,"Please select a channel type"
+渠道适配器不存在,"Channel adapter does not exist"
 测试成功，渠道配置正确,"Test Passed, Channel Configuration Correct"
 测试失败，请检查配置,"Test failed, please check configuration"
-测试失败：%{1},Test Failed: %{1}
-消息订阅,Message subscription
-主题和渠道不能为空,Topic and channel cannot be empty
+测试失败：%{1},"Test Failed: %{1}"
+消息订阅,"Message subscription"
+主题和渠道不能为空,"Topic and channel cannot be empty"
 已启用,Enabled
 已禁用,Disabled
-后台通知,Backend Notification
+后台通知,"Backend Notification"
 短信,SMS
-我的联系人,My Contacts
-渠道和联系方式不能为空,Channel and contact information cannot be empty
-保存失败，请稍后重试或联系管理员,Save failed. Please try again later or contact the administrator
-更新失败,Update failed
-已设为默认,Set as default
-设置失败,Setting failed
-加载备份管理失败：%{1},Failed to load backup management: %{1}
-备份创建成功,Backup created successfully
-备份创建失败：%{1},Backup creation failed: %{1}
-加载维护模式失败：%{1},Failed to load maintenance mode: %{1}
-维护模式状态已更新,Maintenance mode status updated
-更新失败：%{1},Update failed: %{1}
-IP白名单格式错误：%{1},IP whitelist format error: %{1}
-配置保存成功,Configuration saved successfully
-保存配置失败：%{1},Save Configuration Failed: %{1}
-系统维护中，请稍后再试,System is under maintenance. Please try again later.
+我的联系人,"My Contacts"
+渠道和联系方式不能为空,"Channel and contact information cannot be empty"
+保存失败，请稍后重试或联系管理员,"Save failed. Please try again later or contact the administrator"
+更新失败,"Update failed"
+已设为默认,"Set as default"
+设置失败,"Setting failed"
+加载备份管理失败：%{1},"Failed to load backup management: %{1}"
+备份创建成功,"Backup created successfully"
+备份创建失败：%{1},"Backup creation failed: %{1}"
+加载维护模式失败：%{1},"Failed to load maintenance mode: %{1}"
+维护模式状态已更新,"Maintenance mode status updated"
+更新失败：%{1},"Update failed: %{1}"
+IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
+配置保存成功,"Configuration saved successfully"
+保存配置失败：%{1},"Save Configuration Failed: %{1}"
+系统维护中，请稍后再试,"System is under maintenance. Please try again later."
 自动备份失败：%{1}，维护模式已开启,"Auto Backup Failed: %{1}, Maintenance Mode Enabled"
-加载系统监控失败：%{1},Failed to load system monitoring: %{1}
-加载基础设置失败：%{1},Failed to load basic settings: %{1}
-加载邮件设置失败：%{1},Failed to load email settings: %{1}
-加载存储设置失败：%{1},Failed to load storage settings: %{1}
-加载数据统计失败：%{1},Failed to load data statistics: %{1}
-保存失败，请重试!,Save failed. Please try again!
-保存失败，请重试！%{1},Save failed. Please try again! %{1}
-保存失败，请重试!不支持的类型：%{1},Save failed. Please try again! Unsupported type: %{1}
+加载系统监控失败：%{1},"Failed to load system monitoring: %{1}"
+加载基础设置失败：%{1},"Failed to load basic settings: %{1}"
+加载邮件设置失败：%{1},"Failed to load email settings: %{1}"
+加载存储设置失败：%{1},"Failed to load storage settings: %{1}"
+加载数据统计失败：%{1},"Failed to load data statistics: %{1}"
+保存失败，请重试!,"Save failed. Please try again!"
+保存失败，请重试！%{1},"Save failed. Please try again! %{1}"
+保存失败，请重试!不支持的类型：%{1},"Save failed. Please try again! Unsupported type: %{1}"
 "保存成功,缓存清理成功！","Saved successfully, cache cleared successfully!"
-保存失败! %{1},Save Failed! %{1}
-保存成功！,Saved successfully!
-系统信息,System Information
+"保存失败! %{1}","Save Failed! %{1}"
+保存成功！,"Saved successfully!"
+系统信息,"System Information"
 系统,System
-一般系统信息通知,General system information notifications
-系统警告,System Warning
-系统警告通知,System Warning Notification
-系统告警,System Alert
-系统错误告警,System Error Alert
-安全告警,Security alert
+一般系统信息通知,"General system information notifications"
+系统警告,"System Warning"
+系统警告通知,"System Warning Notification"
+系统告警,"System Alert"
+系统错误告警,"System Error Alert"
+安全告警,"Security alert"
 安全,Security
-安全相关告警通知,Security-related alert notifications
-用户活动,User activity
+安全相关告警通知,"Security-related alert notifications"
+用户活动,"User activity"
 用户,User
 用户登录、操作等活动通知,"Notifications for user login, operations, and other activities"
-后台头部,Backend Header
-在后台页面的 <head> 标签内注入内容，允许其他模块在后台页面头部注入额外的 CSS、JavaScript 或其他资源。,"Injects content into the <head> tag of backend pages, allowing other modules to inject additional CSS, JavaScript, or other resources into the backend page head."
-AI 使用统计区块,AI usage statistics block
-在后台统计/仪表盘等 Tab 面板中展示 AI 使用量统计（今日 tokens、花费等），可由 Weline_Ai 等模块实现。,"Displays AI usage statistics (today's tokens, costs, etc.) in backend statistics/dashboard tab panels, which can be implemented by modules such as Weline_Ai."
-找不到模组: %{1},Cannot find module: %{1}
-请先登录,Please login first
-框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。,Framework Convention Error: Menu ACL discontinuity. Menu %{1} (Module %{2}) declares a non-existent parent %{3}. Please fix the parent/source chain in menu.xml.
-系统菜单,System Menu
-用户菜单,User menu
-模块不存在：%{1},Module does not exist: %{1}
+后台头部,"Backend Header"
+"在后台页面的 <head> 标签内注入内容，允许其他模块在后台页面头部注入额外的 CSS、JavaScript 或其他资源。","Injects content into the <head> tag of backend pages, allowing other modules to inject additional CSS, JavaScript, or other resources into the backend page head."
+"AI 使用统计区块","AI usage statistics block"
+"在后台统计/仪表盘等 Tab 面板中展示 AI 使用量统计（今日 tokens、花费等），可由 Weline_Ai 等模块实现。","Displays AI usage statistics (today's tokens, costs, etc.) in backend statistics/dashboard tab panels, which can be implemented by modules such as Weline_Ai."
+"找不到模组: %{1}","Cannot find module: %{1}"
+请先登录,"Please login first"
+"框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。","Framework Convention Error: Menu ACL discontinuity. Menu %{1} (Module %{2}) declares a non-existent parent %{3}. Please fix the parent/source chain in menu.xml."
+系统菜单,"System Menu"
+用户菜单,"User menu"
+模块不存在：%{1},"Module does not exist: %{1}"
 其他,Other
-JS: inject_path函数path路径不允许为空！,JS: The inject_path function path is not allowed to be empty!
+"JS: inject_path函数path路径不允许为空！","JS: The inject_path function path is not allowed to be empty!"
 通知,Notification
-全部已读,Mark All as Read
-暂无通知,No notifications
+全部已读,"Mark All as Read"
+暂无通知,"No notifications"
 已读,Read
 未读,Unread
-查看全部,View all
-管理订阅,Manage subscriptions
-访问日志,Access log
+查看全部,"View all"
+管理订阅,"Manage subscriptions"
+访问日志,"Access log"
 提示,Prompt
 访问日志功能正在开发中，敬请期待。,"The access log feature is under development, please stay tuned."
 关键词,Keywords
 搜索,Search
 重置,Reset
-日志列表,Log list
+日志列表,"Log list"
 时间,Time
-IP地址,IP address
+IP地址,"IP address"
 URL,URL
-状态码,Status Code
-User Agent,User Agent
-暂无访问日志记录,No access log records found
-搜索IP地址或URL,Search IP address or URL
-系统备份,System Backup
+状态码,"Status Code"
+"User Agent","User Agent"
+暂无访问日志记录,"No access log records found"
+搜索IP地址或URL,"Search IP address or URL"
+系统备份,"System Backup"
 系统备份功能正在开发中，敬请期待。,"The system backup feature is under development, please stay tuned."
-创建备份,Create backup
-备份类型,Backup type
-完整备份,Full Backup
-仅数据库,Database only
-仅文件,File only
-备份列表,Backup list
-备份文件,Backup file
+创建备份,"Create backup"
+备份类型,"Backup type"
+完整备份,"Full Backup"
+仅数据库,"Database only"
+仅文件,"File only"
+备份列表,"Backup list"
+备份文件,"Backup file"
 类型,Type
 大小,Size
-创建时间,Creation time
+创建时间,"Creation time"
 操作,Operation
 下载,download
 删除,Delete
-暂无备份文件,No backup files
-创建备份失败,Failed to create backup
-下载备份：,Download backup:
-确定要删除这个备份吗？,Are you sure you want to delete this backup?
-删除备份：,Delete backup:
-配置后台 Logo（深色/浅色/小图）及站点名称、描述，将显示在顶部栏等位置。,Configure backend logo (dark/light/small)
-Logo配置,Logo configuration
-深色Logo（大图）,Dark Logo (large)
+暂无备份文件,"No backup files"
+创建备份失败,"Failed to create backup"
+下载备份：,"Download backup:"
+确定要删除这个备份吗？,"Are you sure you want to delete this backup?"
+删除备份：,"Delete backup:"
+"配置后台 Logo（深色/浅色/小图）及站点名称、描述，将显示在顶部栏等位置。","Configure backend logo (dark/light/small)"
+Logo配置,"Logo configuration"
+深色Logo（大图）,"Dark Logo (large)"
 用于深色主题的大尺寸Logo，建议高度70px,"Large logo for dark theme, recommended height 70px"
-浅色Logo（大图）,Light Logo (Large)
+浅色Logo（大图）,"Light Logo (Large)"
 用于浅色主题的大尺寸Logo，建议高度70px,"Large logo for light theme, recommended height 70px"
-小Logo,Small Logo
+小Logo,"Small Logo"
 用于侧边栏折叠时的小尺寸Logo，建议高度50px,"Small logo for when the sidebar is collapsed, recommended height 50px"
-登录页背景,Login Page Background
-登录页背景图,Login Page Background Image
-建议尺寸 1920x1080，留空使用默认背景,Recommended 1920x1080
-站点信息,Site Information
-站点名称,Site Name
-后台管理系统的名称,Backend Management System Name
-站点描述,Site Description
-后台管理系统的描述信息,Backend Management System Description
-保存配置,Save Configuration
-确定要重置表单吗？,Are you sure you want to reset the form?
-新建联系人,New Contact
+登录页背景,"Login Page Background"
+登录页背景图,"Login Page Background Image"
+"建议尺寸 1920x1080，留空使用默认背景","Recommended 1920x1080"
+站点信息,"Site Information"
+站点名称,"Site Name"
+后台管理系统的名称,"Backend Management System Name"
+站点描述,"Site Description"
+后台管理系统的描述信息,"Backend Management System Description"
+保存配置,"Save Configuration"
+确定要重置表单吗？,"Are you sure you want to reset the form?"
+新建联系人,"New Contact"
 暂无联系人，请先新建联系人，再为其添加渠道配置。,"No contacts. Please create a contact first, then add channel configuration for them."
 尚未添加渠道配置，通知不会发到此联系人。,"No channel configuration added yet, notifications will not be sent to this contact."
-添加渠道,Add Channel
-再添加渠道,Add another channel
-联系人名称,Contact name
+添加渠道,"Add Channel"
+再添加渠道,"Add another channel"
+联系人名称,"Contact name"
 取消,Cancel
 保存,Save
-添加渠道配置,Add Channel Configuration
+添加渠道配置,"Add Channel Configuration"
 渠道,Channel
-请选择渠道,Please select a channel
-请先选择渠道,Please select a channel first
+请选择渠道,"Please select a channel"
+请先选择渠道,"Please select a channel first"
 未命名,Unnamed
-编辑名称,Edit name
-删除联系人,Delete contact
+编辑名称,"Edit name"
+删除联系人,"Delete contact"
 可用,Available
-未配置,Not configured
+未配置,"Not configured"
 编辑,Edit
 移除,Remove
 如：运维值班,"e.g., Operations Duty"
-编辑联系人,Edit Contact
-请输入联系人名称,Please enter the contact name
-编辑渠道配置,Edit Channel Configuration
-确定要移除此渠道配置吗？,Are you sure you want to remove this channel configuration?
-确定要删除此联系人吗？,Are you sure you want to delete this contact?
-系统维护模式,System Maintenance Mode
-重要提示,Important Notice
+编辑联系人,"Edit Contact"
+请输入联系人名称,"Please enter the contact name"
+编辑渠道配置,"Edit Channel Configuration"
+确定要移除此渠道配置吗？,"Are you sure you want to remove this channel configuration?"
+确定要删除此联系人吗？,"Are you sure you want to delete this contact?"
+系统维护模式,"System Maintenance Mode"
+重要提示,"Important Notice"
 开启维护模式后，前台将显示维护页面，但后台仍可正常访问。,"After enabling maintenance mode, the frontend will display a maintenance page, but the backend will remain accessible."
-维护模式设置,Maintenance mode settings
-启用维护模式,Enable maintenance mode
-维护消息,Maintenance message
-此消息将显示给访问前台的用户,This message will be displayed to users visiting the frontend
-保存设置,Save Settings
-当前状态,Current status
-系统当前处于维护模式,The system is currently in maintenance mode
-系统当前正常运行,The system is currently running normally
-系统监控,System Monitoring
-系统监控功能正在开发中，敬请期待。,System monitoring is under development. Stay tuned.
-PHP版本,PHP version
-服务器软件,Server Software
-内存限制,Memory limit
-最大执行时间,Max Execution Time
+维护模式设置,"Maintenance mode settings"
+启用维护模式,"Enable maintenance mode"
+维护消息,"Maintenance message"
+此消息将显示给访问前台的用户,"This message will be displayed to users visiting the frontend"
+保存设置,"Save Settings"
+当前状态,"Current status"
+系统当前处于维护模式,"The system is currently in maintenance mode"
+系统当前正常运行,"The system is currently running normally"
+系统监控,"System Monitoring"
+系统监控功能正在开发中，敬请期待。,"System monitoring is under development. Stay tuned."
+PHP版本,"PHP version"
+服务器软件,"Server Software"
+内存限制,"Memory limit"
+最大执行时间,"Max Execution Time"
 秒,second
 上一条,Previous
-已是第一条,This is the first one
-返回列表,Return to List
+已是第一条,"This is the first one"
+返回列表,"Return to List"
 下一条,Next
-附加信息,Additional Info
-已推送渠道,Pushed channel
-返回通知中心,Return to Notification Center
-使用 ← → 方向键可切换上/下一条,Use ← → to switch between notifications
-此类全部已读,Mark all of this type as read
-订阅设置,Subscription Settings
-已是最后一条,This is the last one
-确定要将「%{name}」类的所有通知标记为已读吗？,Mark all notifications of type「%{name}」as read?
+附加信息,"Additional Info"
+已推送渠道,"Pushed channel"
+返回通知中心,"Return to Notification Center"
+"使用 ← → 方向键可切换上/下一条","Use ← → to switch between notifications"
+此类全部已读,"Mark all of this type as read"
+订阅设置,"Subscription Settings"
+已是最后一条,"This is the last one"
+确定要将「%{name}」类的所有通知标记为已读吗？,"Mark all notifications of type「%{name}」as read?"
 网络错误，请重试,"Network error, please try again"
-发生错误,An error occurred
-全部类型,All types
+发生错误,"An error occurred"
+全部类型,"All types"
 状态,Status
-暂无通知消息,No notification messages
-查看详情,View Details
+暂无通知消息,"No notification messages"
+查看详情,"View Details"
 共,Total
 条通知，第,"items of notifications, page"
 页,Page
-搜索标题或内容,Search title or content
+搜索标题或内容,"Search title or content"
 全部,All
-确定要将所有通知标记为已读吗？,Are you sure you want to mark all notifications as read?
-渠道类型,Channel type
-请选择,Please select
-渠道名称,Channel name
-最低通知级别,Minimum notification level
-只发送达到此级别的通知,Only send notifications that reach this level
-启用此渠道,Enable this channel
-请先选择渠道类型,Please select a channel type first
-订阅主题,Subscribe to Topic
-留空表示订阅所有主题,Leave blank to subscribe to all topics
-测试连接,Test Connection
+确定要将所有通知标记为已读吗？,"Are you sure you want to mark all notifications as read?"
+渠道类型,"Channel type"
+请选择,"Please select"
+渠道名称,"Channel name"
+最低通知级别,"Minimum notification level"
+只发送达到此级别的通知,"Only send notifications that reach this level"
+启用此渠道,"Enable this channel"
+请先选择渠道类型,"Please select a channel type first"
+订阅主题,"Subscribe to Topic"
+留空表示订阅所有主题,"Leave blank to subscribe to all topics"
+测试连接,"Test Connection"
 帮助,Help
-渠道类型说明,Channel type description
-通过飞书机器人 Webhook 发送消息,Send message via Feishu bot Webhook
-通过钉钉机器人 Webhook 发送消息,Send message via DingTalk bot Webhook
-使用系统 SMTP 配置发送邮件,Send email using the system SMTP configuration
-向自定义 URL 发送 POST 请求,Send POST request to custom URL
-通知级别,Notification Level
-只有达到设定级别的通知才会发送到此渠道。级别从低到高：,Only notifications that reach the set level will be sent to this channel. Levels from low to high:
+渠道类型说明,"Channel type description"
+"通过飞书机器人 Webhook 发送消息","Send message via Feishu bot Webhook"
+"通过钉钉机器人 Webhook 发送消息","Send message via DingTalk bot Webhook"
+"使用系统 SMTP 配置发送邮件","Send email using the system SMTP configuration"
+"向自定义 URL 发送 POST 请求","Send POST request to custom URL"
+通知级别,"Notification Level"
+只有达到设定级别的通知才会发送到此渠道。级别从低到高：,"Only notifications that reach the set level will be sent to this channel. Levels from low to high:"
 如：飞书机器人-研发群,"e.g., Feishu Bot - Dev Group"
 ≥,≥
-正在测试连接...,Testing connection...
-测试失败,Test Failed
-暂无渠道配置,No channel configuration
-创建第一个渠道,Create first channel
-最低级别,Minimum level
-全部主题,All Themes
+正在测试连接...,"Testing connection..."
+测试失败,"Test Failed"
+暂无渠道配置,"No channel configuration"
+创建第一个渠道,"Create first channel"
+最低级别,"Minimum level"
+全部主题,"All Themes"
 个主题,topics
 启用,Enable
 禁用,Disable
 确定要删除此渠道吗？删除后将停止向该渠道发送通知。,"Are you sure you want to delete this channel? After deletion, notifications will stop being sent to this channel."
-管理联系人,Manage contacts
-选择您希望通过哪些渠道接收不同类型的消息通知。外部渠道需要先在联系人里配置对应渠道信息。,Select the channels through which you wish to receive different types of message notifications. External channels require configuring the corresponding channel information in Contacts first.
-暂无可订阅的消息主题,No subscribable message topics
-消息主题,Message Subject
-已配置联系人,Contact configured
-未配置联系人,Contact not configured
-基础设置,Basic Settings
+管理联系人,"Manage contacts"
+选择您希望通过哪些渠道接收不同类型的消息通知。外部渠道需要先在联系人里配置对应渠道信息。,"Select the channels through which you wish to receive different types of message notifications. External channels require configuring the corresponding channel information in Contacts first."
+暂无可订阅的消息主题,"No subscribable message topics"
+消息主题,"Message Subject"
+已配置联系人,"Contact configured"
+未配置联系人,"Contact not configured"
+基础设置,"Basic Settings"
 基础设置功能正在开发中，敬请期待。,"Basic settings feature is under development, please stay tuned."
-站点URL,Site URL
-时区,Time zone
-默认语言,Default Language
-邮件设置,Email settings
+站点URL,"Site URL"
+时区,"Time zone"
+默认语言,"Default Language"
+邮件设置,"Email settings"
 邮件设置功能正在开发中，敬请期待。,"Email settings feature is under development, please stay tuned."
-存储设置,Storage settings
+存储设置,"Storage settings"
 存储设置功能正在开发中，敬请期待。,"Storage settings feature is under development, please stay tuned."
-数据统计,Data statistics
-总用户数,Total Users
-总订单数,Total Orders
-总产品数,Total Products
-总访问数,Total Visits
-数据统计功能正在开发中，敬请期待。,The data statistics feature is under development. Please stay tuned.
-添加联系人,Add Contact
-暂无联系人,No contacts
+数据统计,"Data statistics"
+总用户数,"Total Users"
+总订单数,"Total Orders"
+总产品数,"Total Products"
+总访问数,"Total Visits"
+数据统计功能正在开发中，敬请期待。,"The data statistics feature is under development. Please stay tuned."
+添加联系人,"Add Contact"
+暂无联系人,"No contacts"
 添加,Add
 默认,Default
-添加更多,Add More
-联系方式,Contact information
-备注名称,Remark name
-设为默认,Set as Default
-邮箱、手机号或用户 ID,"Email, phone number, or user ID"
+添加更多,"Add More"
+联系方式,"Contact information"
+备注名称,"Remark name"
+设为默认,"Set as Default"
+"邮箱、手机号或用户 ID","Email, phone number, or user ID"
 可选,Optional
-确定要将此联系人设为默认吗？,Are you sure you want to set this contact as the default?
+确定要将此联系人设为默认吗？,"Are you sure you want to set this contact as the default?"

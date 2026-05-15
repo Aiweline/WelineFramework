@@ -1,4 +1,4 @@
-﻿"检测到模块 %{1} 的配置文件，进入二次操作模式","Detected configuration file for module %{1}, entering secondary operation mode."
+﻿"检测到模块 %{1} 的配置文件，进入二次操作模式","检测到模块 %{1} 的配置文件，进入二次操作模式"
 "=== 模块创建向导 ===","=== Module creation wizard ==="
 请输入模块名称（格式：Vendor_ModuleName，例如：Weline_Demo）,"Please enter the module name (format: Vendor_ModuleName, e.g., Weline_Demo)"
 模块名称不能为空,"Module name cannot be empty"

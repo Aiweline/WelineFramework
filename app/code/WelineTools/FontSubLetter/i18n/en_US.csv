@@ -1,98 +1,98 @@
-﻿记录ID不能为空,Record ID cannot be empty
-记录不存在,Record does not exist
-记录删除成功,Record deleted successfully
-文件不存在,File does not exist
-字符提取成功,Character extraction successful
-字符数据格式错误,Character Data Format Error
-请选择要包含的字符,Please select characters to include
-子集字体生成成功,Subset font generated successfully
-在线字体压缩工具,Online Font Subset Tool
-Font Subset Tool,Font Subset Tool
-字体处理记录,Font Processing Records
-Font Processing Records,Font Processing Records
-删除成功,Deletion Successful
-请求方法错误,Request method error
-请选择字体文件,Please select a font file
-字体文件上传成功,Font file uploaded successfully
-文件上传失败: %{1},文件上传失败: %{1}
-没有接收到文件数据,No file data received
-无法解析文件数据,Unable to parse file data
-文件数据解析失败,File data parsing failed
+﻿记录ID不能为空,"Record ID cannot be empty"
+记录不存在,"Record does not exist"
+记录删除成功,"Record deleted successfully"
+文件不存在,"File does not exist"
+字符提取成功,"Character extraction successful"
+字符数据格式错误,"Character Data Format Error"
+请选择要包含的字符,"Please select characters to include"
+子集字体生成成功,"Subset font generated successfully"
+在线字体压缩工具,"Online Font Subset Tool"
+"Font Subset Tool","Font Subset Tool"
+字体处理记录,"Font Processing Records"
+"Font Processing Records","Font Processing Records"
+删除成功,"Deletion Successful"
+请求方法错误,"Request method error"
+请选择字体文件,"Please select a font file"
+字体文件上传成功,"Font file uploaded successfully"
+"文件上传失败: %1","文件上传失败: %1"
+没有接收到文件数据,"No file data received"
+无法解析文件数据,"Unable to parse file data"
+文件数据解析失败,"File data parsing failed"
 已上传,Uploaded
 处理中,Processing
 已完成,Completed
 失败,Failed
 文件上传失败，无法移动到目标位置,"File upload failed, unable to move to target location"
-文件写入失败,File write failed
-原始字体文件不存在,Original font file does not exist
-无法加载字体文件,Cannot load font file
-文件大小超过限制 (最大: %{1} MB),文件大小超过限制 (最大: %{1} MB)
-不支持的字体格式: %{1} (支持的格式: %{2}),不支持的字体格式: %{1} (支持的格式: %{2})
-文件名不能为空,File name cannot be empty
-文件内容不能为空,File content cannot be empty
-OpenType子集创建失败,OpenType subset creation failed
-无法读取原始字体文件,Unable to read original font file
-无法写入OpenType子集文件,Unable to write OpenType subset file
-TrueType子集创建失败,TrueType subset creation failed
-无法写入TrueType子集文件,Unable to write TrueType subset file
-字体子集创建失败,Font Subset Creation Failed
-字符提取统计,Character Extraction Statistics
-分析用户提取的字符使用情况,Analyze User Extracted Character Usage
-返回管理后台,Return to admin panel
-总提取次数,Total Extractions
-唯一字符数,Unique Character Count
-平均使用次数,Average Uses
-热门字符,Popular characters
-字符类型分布,Character Type Distribution
-热门字符排行,Popular Character Ranking
-完整字符使用统计,Full Character Usage Statistics
+文件写入失败,"File write failed"
+原始字体文件不存在,"Original font file does not exist"
+无法加载字体文件,"Cannot load font file"
+"文件大小超过限制 (最大: %1 MB)","文件大小超过限制 (最大: %1 MB)"
+"不支持的字体格式: %1 (支持的格式: %2)","不支持的字体格式: %1 (支持的格式: %2)"
+文件名不能为空,"File name cannot be empty"
+文件内容不能为空,"File content cannot be empty"
+OpenType子集创建失败,"OpenType subset creation failed"
+无法读取原始字体文件,"Unable to read original font file"
+无法写入OpenType子集文件,"Unable to write OpenType subset file"
+TrueType子集创建失败,"TrueType subset creation failed"
+无法写入TrueType子集文件,"Unable to write TrueType subset file"
+字体子集创建失败,"Font Subset Creation Failed"
+字符提取统计,"Character Extraction Statistics"
+分析用户提取的字符使用情况,"Analyze User Extracted Character Usage"
+返回管理后台,"Return to admin panel"
+总提取次数,"Total Extractions"
+唯一字符数,"Unique Character Count"
+平均使用次数,"Average Uses"
+热门字符,"Popular characters"
+字符类型分布,"Character Type Distribution"
+热门字符排行,"Popular Character Ranking"
+完整字符使用统计,"Full Character Usage Statistics"
 排名,Rank
 字符,Character
-使用次数,Usage Count
-使用率,Usage rate
-字符类型,Character Type
+使用次数,"Usage Count"
+使用率,"Usage rate"
+字符类型,"Character Type"
 数字,Numbers
-大写字母,Uppercase Letters
-小写字母,Lowercase Letters
-中文字符,Chinese characters
+大写字母,"Uppercase Letters"
+小写字母,"Lowercase Letters"
+中文字符,"Chinese characters"
 标点符号,Punctuation
-特殊符号,Special Symbols
-其他字符,Other Characters
-使用%{1}次,Use %{1} times
+特殊符号,"Special Symbols"
+其他字符,"Other Characters"
+使用%{1}次,"Use %{1} times"
 个,items
-字体子集管理后台,Font Subset Management Console
-查看字体上传记录和字符提取统计,View font upload history and character extraction statistics
-总记录数,Total Records
-今日上传,Uploads Today
-本周上传,This Week's Upload
-总文件大小,Total File Size
-每日上传趋势,Daily upload trend
-字体格式分布,Font Format Distribution
-文件名搜索,File name search
+字体子集管理后台,"Font Subset Management Console"
+查看字体上传记录和字符提取统计,"View font upload history and character extraction statistics"
+总记录数,"Total Records"
+今日上传,"Uploads Today"
+本周上传,"This Week's Upload"
+总文件大小,"Total File Size"
+每日上传趋势,"Daily upload trend"
+字体格式分布,"Font Format Distribution"
+文件名搜索,"File name search"
 状态,Status
-全部状态,All Status
+全部状态,"All Status"
 格式,Format
-全部格式,All formats
-日期范围,Date range
+全部格式,"All formats"
+日期范围,"Date range"
 搜索,Search
 重置,Reset
-字符统计,Character Statistics
-用户统计,User Statistics
-导出数据,Export Data
-用户ID,User ID
-文件名,File name
+字符统计,"Character Statistics"
+用户统计,"User Statistics"
+导出数据,"Export Data"
+用户ID,"User ID"
+文件名,"File name"
 大小,Size
-提取字符,Extract Characters
-自定义字符,Custom Characters
-创建时间,Created At
+提取字符,"Extract Characters"
+自定义字符,"Custom Characters"
+创建时间,"Created At"
 操作,Actions
-暂无数据,No Data
-输入文件名...,Enter file name...
-选择日期范围...,Select date range...
-查看详情,View details
-下载子集,Download Subset
+暂无数据,"No Data"
+输入文件名...,"Enter file name..."
+选择日期范围...,"Select date range..."
+查看详情,"View details"
+下载子集,"Download Subset"
 删除,Delete
-分页导航,Pagination Navigation
+分页导航,"Pagination Navigation"
 确定,Confirm
 取消,Cancel
 从,From
@@ -117,148 +117,148 @@ TrueType子集创建失败,TrueType subset creation failed
 十月,October
 十一月,November
 十二月,December
-上传数量,Upload Count
+上传数量,"Upload Count"
 确认组件未加载，无法进行删除确认,"Confirmation component not loaded, unable to confirm deletion"
-确定要删除这条记录吗？,Are you sure you want to delete this record?
-删除失败,Delete failed
-分析用户上传行为和活跃度,Analyze User Upload Behavior and Activity
-总用户数,Total Users
-活跃用户,Active users
-平均上传数,Average Uploads
-最高上传,Highest Upload
-用户上传趋势（最近30天）,User Upload Trend (Last 30 Days)
-用户活跃度分布,User Activity Distribution
-活跃用户排行（最近7天）,Active user ranking (last 7 days)
+确定要删除这条记录吗？,"Are you sure you want to delete this record?"
+删除失败,"Delete failed"
+分析用户上传行为和活跃度,"Analyze User Upload Behavior and Activity"
+总用户数,"Total Users"
+活跃用户,"Active users"
+平均上传数,"Average Uploads"
+最高上传,"Highest Upload"
+用户上传趋势（最近30天）,"User Upload Trend (Last 30 Days)"
+用户活跃度分布,"User Activity Distribution"
+活跃用户排行（最近7天）,"Active user ranking (last 7 days)"
 用户,User
-最近7天上传,Uploaded in Last 7 Days
+最近7天上传,"Uploaded in Last 7 Days"
 次,times
-用户详细统计,User Detailed Statistics
-上传次数,Upload Count
-平均文件大小,Average File Size
+用户详细统计,"User Detailed Statistics"
+上传次数,"Upload Count"
+平均文件大小,"Average File Size"
 活跃度,Activity
-最近活动,Recent Activity
-高活跃,Highly Active
+最近活动,"Recent Activity"
+高活跃,"Highly Active"
 中活跃,Active
-低活跃,Low Activity
-高活跃用户,Highly Active Users
-中活跃用户,Active Users
-低活跃用户,Low Activity Users
-上传字体文件,Upload Font File
-拖拽字体文件到此处或点击选择文件,Drag font files here or click to select
-支持格式,Supported Formats
-最大文件大小,Maximum File Size
+低活跃,"Low Activity"
+高活跃用户,"Highly Active Users"
+中活跃用户,"Active Users"
+低活跃用户,"Low Activity Users"
+上传字体文件,"Upload Font File"
+拖拽字体文件到此处或点击选择文件,"Drag font files here or click to select"
+支持格式,"Supported Formats"
+最大文件大小,"Maximum File Size"
 上传中...,Uploading...
-选择字符,Select Characters
-检测到本地存储数据,Local storage data detected
+选择字符,"Select Characters"
+检测到本地存储数据,"Local storage data detected"
 加载,Loading
 保存,Save
-清理,Clean up
-全选,Select All
-取消全选,Deselect All
-添加到自定义,Add to custom
+清理,"Clean up"
+全选,"Select All"
+取消全选,"Deselect All"
+添加到自定义,"Add to custom"
 已选择,Selected
 个字符,characters
 清空,Clear
-自定义字符会与选中的字符合并生成字体子集,Custom characters will merge with selected characters to generate a font subset
-生成字体,Generate Font
-使用说明,Usage Instructions
-提取字体中的字符,Extract Characters from Font
-选择需要的字符,Select desired characters
-生成子集字体并下载,Generate Subset Font and Download
-本地存储功能,Local Storage Feature
-自动保存自定义字符,Auto-save custom characters
-记住选中的字符子集,Remember selected character subset
-下次访问自动恢复,Auto-Restore on Next Visit
-支持手动保存和清理,Supports manual saving and cleanup
-数据仅存储在浏览器中,Data is stored only in the browser
+自定义字符会与选中的字符合并生成字体子集,"Custom characters will merge with selected characters to generate a font subset"
+生成字体,"Generate Font"
+使用说明,"Usage Instructions"
+提取字体中的字符,"Extract Characters from Font"
+选择需要的字符,"Select desired characters"
+生成子集字体并下载,"Generate Subset Font and Download"
+本地存储功能,"Local Storage Feature"
+自动保存自定义字符,"Auto-save custom characters"
+记住选中的字符子集,"Remember selected character subset"
+下次访问自动恢复,"Auto-Restore on Next Visit"
+支持手动保存和清理,"Supports manual saving and cleanup"
+数据仅存储在浏览器中,"Data is stored only in the browser"
 功能特性,Features
-支持多种字体格式,Supports multiple font formats
-智能字符提取,Smart Character Extraction
-可视化字符选择,Visual Character Selection
-高效字体压缩,Efficient font compression
-一键下载,One-click download
-处理记录,Processing Records
+支持多种字体格式,"Supports multiple font formats"
+智能字符提取,"Smart Character Extraction"
+可视化字符选择,"Visual Character Selection"
+高效字体压缩,"Efficient font compression"
+一键下载,"One-click download"
+处理记录,"Processing Records"
 "请输入要包含的字符，或从上方选择字符后点击""添加到自定义""","Enter the characters to include, or select characters above and click ""Add to Custom"""
-数据已保存到本地存储,Data saved to local storage
-保存失败,Save failed
-本地存储数据已清理,Local Storage Data Cleared
-清理失败,Cleanup failed
+数据已保存到本地存储,"Data saved to local storage"
+保存失败,"Save failed"
+本地存储数据已清理,"Local Storage Data Cleared"
+清理失败,"Cleanup failed"
 检测到本地存储数据，可以加载使用,"Local storage data detected, can be loaded and used"
-上传失败,Upload failed
-请先上传字体文件,Please upload a font file first
-提取字符中...,Extracting characters...
-提取失败,Extraction failed
-没有可显示的字符,No characters to display
-没有有效的字符可以显示,No valid characters to display
-请先选择字符,Please select characters first
+上传失败,"Upload failed"
+请先上传字体文件,"Please upload a font file first"
+提取字符中...,"Extracting characters..."
+提取失败,"Extraction failed"
+没有可显示的字符,"No characters to display"
+没有有效的字符可以显示,"No valid characters to display"
+请先选择字符,"Please select characters first"
 已添加,Added
-个字符到自定义区域,characters to custom area
-确认对话框不可用,Confirmation dialog unavailable
-确定要清空自定义字符吗？,Are you sure you want to clear custom characters?
+个字符到自定义区域,"characters to custom area"
+确认对话框不可用,"Confirmation dialog unavailable"
+确定要清空自定义字符吗？,"Are you sure you want to clear custom characters?"
 提示,Tip
 确认,Confirm
-自定义字符已清空,Custom characters cleared
-数据加载成功,Data loaded successfully
-没有找到存储数据,No stored data found
-确定要清理本地存储数据吗？此操作不可恢复。,Are you sure you want to clear local storage data? This action cannot be undone.
-请选择要包含的字符或输入自定义字符,Please select characters to include or enter custom characters
-生成字体中...,Generating font...
-生成失败,Generation failed
-新建处理,New processing
-处理记录列表,Processing Record List
-暂无处理记录,No processing records
-开始处理字体,Start Font Processing
+自定义字符已清空,"Custom characters cleared"
+数据加载成功,"Data loaded successfully"
+没有找到存储数据,"No stored data found"
+确定要清理本地存储数据吗？此操作不可恢复。,"Are you sure you want to clear local storage data? This action cannot be undone."
+请选择要包含的字符或输入自定义字符,"Please select characters to include or enter custom characters"
+生成字体中...,"Generating font..."
+生成失败,"Generation failed"
+新建处理,"New processing"
+处理记录列表,"Processing Record List"
+暂无处理记录,"No processing records"
+开始处理字体,"Start Font Processing"
 ID,ID
-原始文件名,Original Filename
-字体格式,Font Format
-文件大小,File Size
+原始文件名,"Original Filename"
+字体格式,"Font Format"
+文件大小,"File Size"
 处理后,Processed
 下载,Download
-上一页,Previous page
-下一页,Next Page
-确定要提取字符吗？,Are you sure you want to extract characters?
+上一页,"Previous page"
+下一页,"Next Page"
+确定要提取字符吗？,"Are you sure you want to extract characters?"
 成功,Success
-字体记录管理,Font Record Management
-前往前端上传,Go to frontend upload
-搜索文件名...,Search file name...
-所有状态,All Statuses
-下载子集字体,Download Subset Font
+字体记录管理,"Font Record Management"
+前往前端上传,"Go to frontend upload"
+搜索文件名...,"Search file name..."
+所有状态,"All Statuses"
+下载子集字体,"Download Subset Font"
 缺少确认组件，无法执行删除操作。,"Missing confirmation component, unable to perform deletion."
-删除确认,Delete Confirmation
-未知错误,Unknown Error
-字体记录详情,Font Record Details
-返回列表,Return to list
-基本信息,Basic Information
-记录ID,Record ID
-更新时间,Update Time
-文件信息,File info
-原始文件路径,Original file path
-文件存在,File exists
-处理后文件路径,Processed File Path
-处理后文件名,Processed Filename
-提取的字符,Extracted Characters
-错误信息,Error message
-上传新字体,Upload New Font
+删除确认,"Delete Confirmation"
+未知错误,"Unknown Error"
+字体记录详情,"Font Record Details"
+返回列表,"Return to list"
+基本信息,"Basic Information"
+记录ID,"Record ID"
+更新时间,"Update Time"
+文件信息,"File info"
+原始文件路径,"Original file path"
+文件存在,"File exists"
+处理后文件路径,"Processed File Path"
+处理后文件名,"Processed Filename"
+提取的字符,"Extracted Characters"
+错误信息,"Error message"
+上传新字体,"Upload New Font"
 专业的在线字体压缩工具，支持多种字体格式，智能字符提取，高效字体压缩,"Professional online font compression tool, supporting multiple font formats, intelligent character extraction, and efficient font compression"
 "TTF, OTF, WOFF, WOFF2","TTF, OTF, WOFF, WOFF2"
 10MB,10MB
 上传后可以重新上传新文件，失败后可以继续尝试,"After uploading, you can re-upload a new file; after failure, you can continue trying"
 提示：失败后请重新选择文件，即使选择相同文件也可以,"Tip: If it fails, please reselect the file. Even selecting the same file is acceptable."
-请输入要包含的字符,Please enter characters to include
-1. 上传字体文件,1. Upload font file
-2. 提取字体中的字符,2. Extract characters from font
-3. 选择需要的字符,3. Select required characters
-4. 生成子集字体并下载,4. Generate subset font and download
-技术优势,Technical Advantages
-压缩率高达80%,Compression ratio up to 80%
-处理速度快,Fast Processing Speed
-安全可靠,Secure and Reliable
-在线处理,Online Processing
+请输入要包含的字符,"Please enter characters to include"
+"1. 上传字体文件","1. Upload font file"
+"2. 提取字体中的字符","2. Extract characters from font"
+"3. 选择需要的字符","3. Select required characters"
+"4. 生成子集字体并下载","4. Generate subset font and download"
+技术优势,"Technical Advantages"
+压缩率高达80%,"Compression ratio up to 80%"
+处理速度快,"Fast Processing Speed"
+安全可靠,"Secure and Reliable"
+在线处理,"Online Processing"
 关闭,Close
-请选择有效的文件,Please select a valid file
+请选择有效的文件,"Please select a valid file"
 错误,Error
-请重新选择文件进行上传。,Please re-select a file to upload.
-确定要清理记住的字符信息吗？,Are you sure you want to clear remembered character information?
-（再次点击确认）,(Click again to confirm)
-再次点击确认清理,Click Again to Confirm Cleanup
+请重新选择文件进行上传。,"Please re-select a file to upload."
+确定要清理记住的字符信息吗？,"Are you sure you want to clear remembered character information?"
+（再次点击确认）,"(Click again to confirm)"
+再次点击确认清理,"Click Again to Confirm Cleanup"
 已清理,Cleaned
