@@ -1,281 +1,281 @@
-﻿根分类不能修改,Root category cannot be modified
-参数错误！,Parameter error!
-分类找不到！,Category not found!
+﻿根分类不能修改,"Root category cannot be modified"
+参数错误！,"Parameter error!"
+分类找不到！,"Category not found!"
 无,None
-分类不存在！,Category does not exist!
-分类保存成功！,Category saved successfully!
-分类保存失败！请检查参数！,Failed to save category! Please check the parameters!
-分类保存失败！,Failed to save category!
-EAV属性保存失败：%{1},EAV attribute saving failed: %{1}
-该分类不存在！,The category does not exist!
-分类删除成功！,Category deleted successfully!
-保存失败:,Save failed:
+分类不存在！,"Category does not exist!"
+分类保存成功！,"Category saved successfully!"
+分类保存失败！请检查参数！,"Failed to save category! Please check the parameters!"
+分类保存失败！,"Failed to save category!"
+EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
+该分类不存在！,"The category does not exist!"
+分类删除成功！,"Category deleted successfully!"
+保存失败:,"Save failed:"
 "保存失败,请重试!","Save failed, please try again!"
-部分属性不存在,Some attributes do not exist
-缺少产品ID,Missing product ID
-删除成功,Delete successful
-删除失败:,Deletion failed:
-您编辑的产品已不存在！,The product you edited no longer exists!
-修改成功！,Modification successful!
-请选择产品,Please select a product
-产品不存在,Product does not exist
-产品详情,Product Detail
-产品列表,Product List
-参数不完整,Incomplete parameters
-布局配置保存成功,Layout configuration saved successfully
-布局配置保存失败,Layout configuration save failed
-请选择要删除的布局,Please select a layout to delete
-布局配置已删除,Layout configuration deleted
-布局配置不存在,Layout configuration does not exist
-请填写完整信息,Please fill in complete information
-布局计划创建成功,Layout schedule created successfully
-布局计划创建失败,Layout schedule creation failed
-请选择要编辑的计划,Please select a schedule to edit
-计划不存在,Schedule does not exist
-布局计划更新成功,Layout schedule updated successfully
-布局计划更新失败,Layout schedule update failed
-请选择要删除的计划,Please select a schedule to delete
-布局计划已删除,Layout schedule deleted
-布局计划删除失败,Layout schedule deletion failed
+部分属性不存在,"Some attributes do not exist"
+缺少产品ID,"Missing product ID"
+删除成功,"Delete successful"
+删除失败:,"Deletion failed:"
+您编辑的产品已不存在！,"The product you edited no longer exists!"
+修改成功！,"Modification successful!"
+请选择产品,"Please select a product"
+产品不存在,"Product does not exist"
+产品详情,"Product Detail"
+产品列表,"Product List"
+参数不完整,"Incomplete parameters"
+布局配置保存成功,"Layout configuration saved successfully"
+布局配置保存失败,"Layout configuration save failed"
+请选择要删除的布局,"Please select a layout to delete"
+布局配置已删除,"Layout configuration deleted"
+布局配置不存在,"Layout configuration does not exist"
+请填写完整信息,"Please fill in complete information"
+布局计划创建成功,"Layout schedule created successfully"
+布局计划创建失败,"Layout schedule creation failed"
+请选择要编辑的计划,"Please select a schedule to edit"
+计划不存在,"Schedule does not exist"
+布局计划更新成功,"Layout schedule updated successfully"
+布局计划更新失败,"Layout schedule update failed"
+请选择要删除的计划,"Please select a schedule to delete"
+布局计划已删除,"Layout schedule deleted"
+布局计划删除失败,"Layout schedule deletion failed"
 最新,Latest
 价格,Price
 名称,Name
 库存,Inventory
-Product ID is required.,Product ID is required.
-Product is unavailable.,Product is unavailable.
-产品布局定时切换任务,Product Layout Scheduled Switch Task
-产品 #%{1} 的布局计划 #%{2} 已激活，布局 '%{3}' 应用到 %{4},产品 #%{1} 的布局计划 #%{2} 已激活，布局 '%{3}' 应用到 %{4}
-重置为待执行,Reset to Pending
-标记为已完成,Mark as Completed
-产品 #%{1} 的布局计划 #%{2} 已%{3},产品 #%{1} 的布局计划 #%{2} 已%{3}
-没有需要处理的产品布局计划,No product layout schedules to process
-每分钟检查并执行产品布局定时切换任务,Check and execute product layout scheduled switch task every minute
-产品保存前,Before Product Save
+"Product ID is required.","Product ID is required."
+"Product is unavailable.","Product is unavailable."
+产品布局定时切换任务,"Product Layout Scheduled Switch Task"
+"产品 #%1 的布局计划 #%2 已激活，布局 '%3' 应用到 %4","产品 #%1 的布局计划 #%2 已激活，布局 '%3' 应用到 %4"
+重置为待执行,"Reset to Pending"
+标记为已完成,"Mark as Completed"
+"产品 #%1 的布局计划 #%2 已%3","产品 #%1 的布局计划 #%2 已%3"
+没有需要处理的产品布局计划,"No product layout schedules to process"
+每分钟检查并执行产品布局定时切换任务,"Check and execute product layout scheduled switch task every minute"
+产品保存前,"Before Product Save"
 产品保存前触发，可用于验证产品数据。,"Triggered before saving a product, can be used to validate product data."
-产品保存后,After Product Save
+产品保存后,"After Product Save"
 产品保存后触发，可用于更新索引、缓存、库存等。,"Triggered after saving a product, can be used to update indexes, caches, inventory, etc."
-产品删除前,Before Product Deletion
+产品删除前,"Before Product Deletion"
 产品删除前触发，可用于验证是否可删除。,"Triggered before deleting a product, can be used to verify if deletion is allowed."
-产品删除后,After Product Deletion
+产品删除后,"After Product Deletion"
 产品删除后触发，可用于清理相关数据。,"Triggered after deleting a product, can be used to clean up related data."
-分类保存后,After category is saved
+分类保存后,"After category is saved"
 分类保存后触发，可用于更新分类缓存。,"Triggered after category is saved, can be used to update category cache."
-分类删除后,After category is deleted
+分类删除后,"After category is deleted"
 分类删除后触发，可用于清理相关数据。,"Triggered after category is deleted, can be used to clean up related data."
-产品状态变更,Product Status Change
-产品状态变更时触发（启用/禁用）。,Triggered when the product status changes (enabled/disabled).
-产品价格变更,Product Price Change
-产品价格变更时触发。,Triggered when the product price changes.
-Default product attribute set is missing. Run setup:upgrade first.,Default product attribute set is missing. Run setup:upgrade first.
-Failed to resolve product after save: %{1},Failed to resolve product after save: %{1}
-Product 查询器不支持的操作：%{1},Operations not supported by Product query: %{1}
-产品查询,Product Query
-提供产品信息与价格统计查询能力,Provides product information and price statistics query capabilities
-根据 ID 获取产品信息,Get product info by ID
-批量获取产品信息,Batch get product information
-根据分类 ID 获取关联的商品 ID 列表,Get associated product ID list by category ID
-按关键字与筛选条件搜索商品,Search products by keyword and filter criteria
-获取商品搜索建议,Product search suggestions retrieved
-获取产品价格统计 min/max/avg,Product price statistics (min/max/avg) retrieved
-按价格区间筛选产品 ID,Filter product IDs by price range
+产品状态变更,"Product Status Change"
+产品状态变更时触发（启用/禁用）。,"Triggered when the product status changes (enabled/disabled)."
+产品价格变更,"Product Price Change"
+产品价格变更时触发。,"Triggered when the product price changes."
+"Default product attribute set is missing. Run setup:upgrade first.","Default product attribute set is missing. Run setup:upgrade first."
+"Failed to resolve product after save: %{1}","Failed to resolve product after save: %{1}"
+"Product 查询器不支持的操作：%{1}","Operations not supported by Product query: %{1}"
+产品查询,"Product Query"
+提供产品信息与价格统计查询能力,"Provides product information and price statistics query capabilities"
+"根据 ID 获取产品信息","Get product info by ID"
+批量获取产品信息,"Batch get product information"
+"根据分类 ID 获取关联的商品 ID 列表","Get associated product ID list by category ID"
+按关键字与筛选条件搜索商品,"Search products by keyword and filter criteria"
+获取商品搜索建议,"Product search suggestions retrieved"
+"获取产品价格统计 min/max/avg","Product price statistics (min/max/avg) retrieved"
+"按价格区间筛选产品 ID","Filter product IDs by price range"
 "[{min, max?}, ...]","[{min, max?}, ...]"
-统计价格区间内产品数量,Count Products Within Price Range
-获取产品 EAV 属性信息,Product EAV attribute information retrieved
-从 EAV 值表读取产品属性值列表,Read product attribute value list from EAV value table
-按 EAV 属性值筛选产品 ID,Filter product IDs by EAV attribute value
+统计价格区间内产品数量,"Count Products Within Price Range"
+"获取产品 EAV 属性信息","Product EAV attribute information retrieved"
+"从 EAV 值表读取产品属性值列表","Read product attribute value list from EAV value table"
+"按 EAV 属性值筛选产品 ID","Filter product IDs by EAV attribute value"
 提供商品搜索文档（名称、SKU、分类、价格、库存等）,"Provides product search documents (name, SKU, category, price, inventory, etc.)"
-产品详情页加入购物车之后,After Adding to Cart on Product Details Page
+产品详情页加入购物车之后,"After Adding to Cart on Product Details Page"
 在产品详情页面加入购物车之后触发，允许其他模块在加入购物车后执行自定义逻辑。,"Triggered after adding a product to the cart on the product detail page, allowing other modules to execute custom logic after adding to cart."
-产品加入购物车按钮,Add to Cart Button
+产品加入购物车按钮,"Add to Cart Button"
 产品加入购物车按钮的slot，其他模块（如Cart模块）可以实现此hook来处理加购逻辑。对于可配置产品，会弹出规格选择弹窗。,"Slot for the Add to Cart button; other modules (e.g., Cart module) can implement this hook to handle add-to-cart logic. For configurable products, a specification selection popup will appear."
-可配置产品规格选择弹窗,Configurable product specification selection popup
+可配置产品规格选择弹窗,"Configurable product specification selection popup"
 可配置产品的规格选择弹窗，用户选择规格后再加入购物车。,"Configurable product specification selection popup, users select specifications before adding to cart."
-产品列表分页内容,Product List Pagination Content
+产品列表分页内容,"Product List Pagination Content"
 在产品列表页分页区域渲染分页组件，包括页码导航、跳转功能等。如果只有一页或没有数据，则不渲染分页。,"Render pagination components in the pagination area of the product list page, including page number navigation, jump functionality, etc. If there is only one page or no data, pagination is not rendered."
-产品列表网格内容,Product List Grid Content
+产品列表网格内容,"Product List Grid Content"
 在产品列表页网格区域渲染产品列表，支持网格视图和列表视图两种显示模式。如果没有产品数据，不渲染任何内容。,"Render the product list in the grid area of the product list page, supporting both grid view and list view display modes. If there are no products, nothing is rendered."
-产品列表工具栏内容,Product List Toolbar Content
+产品列表工具栏内容,"Product List Toolbar Content"
 在产品列表页工具栏区域渲染排序、视图切换、每页数量等选项，允许用户自定义产品列表的显示方式和排序规则。,"Render sorting, view switching, items per page, and other options in the toolbar area of the product list page, allowing users to customize the display and sorting rules of the product list."
-产品详情主内容,Product Details Main Content
+产品详情主内容,"Product Details Main Content"
 在产品详情页主内容区域渲染产品图片、信息、购买选项等。包括产品图片画廊、基本信息、价格、库存状态、购买按钮等核心内容。,"Render product images, information, purchase options, etc., in the main content area of the product detail page. Includes core content such as product image gallery, basic information, price, stock status, and purchase button."
-产品详情标签内容,Product Details Tab Content
+产品详情标签内容,"Product Details Tab Content"
 在产品详情页标签区域渲染产品描述、规格、评价、问答等内容。支持多个标签页切换，包括商品详情、规格参数、用户评价、问答等。,"Render product description, specifications, reviews, Q&A, etc., in the tab area of the product detail page. Supports multiple tab switching, including product details, specifications, user reviews, Q&A, etc."
-Product Description,Product Description
-暂无图片,No images
+"Product Description","Product Description"
+暂无图片,"No images"
 SKU,SKU
-库存状态,Inventory Status
-有货,In stock
-缺货,Out of Stock
+库存状态,"Inventory Status"
+有货,"In stock"
+缺货,"Out of Stock"
 件,items
 优惠,Discount
 数量,Quantity
-加入购物车,Add to Cart
-立即购买,Buy Now
-产品规格,Product Specifications
+加入购物车,"Add to Cart"
+立即购买,"Buy Now"
+产品规格,"Product Specifications"
 已添加,Added
 Specifications,Specifications
 Q&A,Q&A
 Reviews,Reviews
-快速查看,Quick View
+快速查看,"Quick View"
 收藏,Favorite
 对比,Compare
-产品列表分页,Product List Pagination
-显示 %{1}-%{2}，共 %{3} 件,显示 %{1}-%{2}，共 %{3} 件
+产品列表分页,"Product List Pagination"
+"显示 %d-%d，共 %d 件","显示 %d-%d，共 %d 件"
 首页,Homepage
-上一页,Previous page
-下一页,Next page
-末页,Last page
-跳转到,Jump to
+上一页,"Previous page"
+下一页,"Next page"
+末页,"Last page"
+跳转到,"Jump to"
 页,Page
 确定,OK
-默认排序,Default Sort Order
-价格从低到高,Price: Low to High
-价格从高到低,Price: High to Low
-名称 A-Z,Name A-Z
-名称 Z-A,Name Z-A
-最新上架,Newly Listed
-销量最高,Best Selling
-共 %{1} 件商品,共 %{1} 件商品
+默认排序,"Default Sort Order"
+价格从低到高,"Price: Low to High"
+价格从高到低,"Price: High to Low"
+"名称 A-Z","Name A-Z"
+"名称 Z-A","Name Z-A"
+最新上架,"Newly Listed"
+销量最高,"Best Selling"
+"共 %d 件商品","共 %d 件商品"
 排序,Sort
-每页,Per page
-网格视图,Grid View
-列表视图,List View
+每页,"Per page"
+网格视图,"Grid View"
+列表视图,"List View"
 提交,Submit
-下一步,Next step
+下一步,"Next step"
 分类,Classification
 编辑,Edit
 添加,Add
-新增分类,Add Category
-分类名,Category name
-填写正确！,Correct entry!
-请正确填写分类名！,Please fill in the category name correctly!
-搜索父分类,Search Parent Category
-父分类,Parent Category
-顶层分类,Top-level category
-父分类必选！,Parent category is required!
+新增分类,"Add Category"
+分类名,"Category name"
+填写正确！,"Correct entry!"
+请正确填写分类名！,"Please fill in the category name correctly!"
+搜索父分类,"Search Parent Category"
+父分类,"Parent Category"
+顶层分类,"Top-level category"
+父分类必选！,"Parent category is required!"
 位置,Position
-请设置分类位置,Please set the category position
-默认属性集,Default Attribute Set
--- 请选择属性集 --,-- Please Select Attribute Set --
-在此分类下创建的产品将默认使用该属性集,Products created under this category will use this attribute set by default
+请设置分类位置,"Please set the category position"
+默认属性集,"Default Attribute Set"
+"-- 请选择属性集 --","-- Please Select Attribute Set --"
+在此分类下创建的产品将默认使用该属性集,"Products created under this category will use this attribute set by default"
 启用状态,Status
 启用,Enable
 禁用,Disable
-分类描述,Category Description
-分类图片,Category Image
-可输入图片URL或使用媒体库,Enter image URL or use media library
-SEO 设置,SEO Settings
-Meta 标题,Meta Title
-Meta 关键词,Meta Keywords
-Meta 描述,Meta Description
-分类属性设置,Category attribute settings
-标记为右侧菜单分类,Mark as right menu category
+分类描述,"Category Description"
+分类图片,"Category Image"
+可输入图片URL或使用媒体库,"Enter image URL or use media library"
+"SEO 设置","SEO Settings"
+"Meta 标题","Meta Title"
+"Meta 关键词","Meta Keywords"
+"Meta 描述","Meta Description"
+分类属性设置,"Category attribute settings"
+标记为右侧菜单分类,"Mark as right menu category"
 勾选后，此分类将显示在页面右侧菜单中,"When checked, this category will be displayed in the menu on the right side of the page"
 保存,Save
-搜素父分类...,Search parent category...
-图片URL,Image URL
-父分类 #%{1},Parent Category #%{1}
+搜素父分类...,"Search parent category..."
+图片URL,"Image URL"
+"父分类 #%{1}","Parent Category #%{1}"
 警告！,Warning!
 好的,OK
-分类管理,Category management
-全部展开,Expand All
-全部收起,Collapse All
-添加根分类,Add Root Category
-暂无分类数据,No Category Data
-添加第一个分类,Add First Category
+分类管理,"Category management"
+全部展开,"Expand All"
+全部收起,"Collapse All"
+添加根分类,"Add Root Category"
+暂无分类数据,"No Category Data"
+添加第一个分类,"Add First Category"
 已禁用,Disabled
-分类表单,Category form
-树形结构管理分类，最多支持 %{1} 级分类,"Tree structure management categories, supports up to %{1} levels"
-添加子分类,Add Subcategory
+分类表单,"Category form"
+"树形结构管理分类，最多支持 %{1} 级分类","Tree structure management categories, supports up to %{1} levels"
+添加子分类,"Add Subcategory"
 删除,Delete
 关闭,Close
-编辑分类,Edit category
-确定要删除分类,Are you sure you want to delete the category
+编辑分类,"Edit category"
+确定要删除分类,"Are you sure you want to delete the category"
 吗？,?
-警告：该分类包含子分类，删除后子分类也会被删除！,Warning: This category contains subcategories. Deleting it will also delete the subcategories!
-确认删除,Confirm deletion
+警告：该分类包含子分类，删除后子分类也会被删除！,"Warning: This category contains subcategories. Deleting it will also delete the subcategories!"
+确认删除,"Confirm deletion"
 取消,Cancel
-基础信息,Basic Info
+基础信息,"Basic Info"
 类型,Type
 属性,Attribute
-你选择了,You selected
-属性集,Attribute Set
-配置信息（可选）,Configuration Information (Optional)
+你选择了,"You selected"
+属性集,"Attribute Set"
+配置信息（可选）,"Configuration Information (Optional)"
 已创建,Created
-待创建,To create
-产品名,Product Name
-请输入产品名,Enter product name
-请输入SKU,Please enter the SKU
+待创建,"To create"
+产品名,"Product Name"
+请输入产品名,"Enter product name"
+请输入SKU,"Please enter the SKU"
 SPU,SPU
-请输入SPU,Please enter the SPU
-成本价,Cost price
-请输入正确填写！,Please enter correctly!
+请输入SPU,"Please enter the SPU"
+成本价,"Cost price"
+请输入正确填写！,"Please enter correctly!"
 重量,Weight
 状态,Status
-请选择分类,Select a category
-主图,Main picture
+请选择分类,"Select a category"
+主图,"Main picture"
 子图,Subgraph
-请选择图片,Select an image
+请选择图片,"Select an image"
 简述,Summary
 详情,Details
----请选择---,---Please select---
-Meta元数据名,Meta metadata name
-Meta元数据描述,Meta metadata description
-Meta关键词,Meta keywords
-返回上一步,Go back to previous step
-请输入,Please enter
-产品ID,Product ID
+---请选择---,"---Please select---"
+Meta元数据名,"Meta metadata name"
+Meta元数据描述,"Meta metadata description"
+Meta关键词,"Meta keywords"
+返回上一步,"Go back to previous step"
+请输入,"Please enter"
+产品ID,"Product ID"
 图片,Image
 标题,Title
 操作,Operation
-选择产品图片,Select Product Image
-允许的文件类型：,Allowed file types:
-允许的最大文件大小：,Maximum allowed file size:
-请输入成本价,Enter cost price
-请输入价格,Enter price
-请输入重量,Please enter the weight
-请输入库存,Enter stock
-请选择主图,Select the main image
-请输入简述,Please enter a brief description
-请输入详情内容,Please enter the detail content
-请输入Meta元数据名,Please enter the Meta metadata name
-请输入Meta关键词,Please enter the Meta keywords
-暂无可配置项,No configurable items
-没有可配置项,No configurable items
-你创建了,You created
+选择产品图片,"Select Product Image"
+允许的文件类型：,"Allowed file types:"
+允许的最大文件大小：,"Maximum allowed file size:"
+请输入成本价,"Enter cost price"
+请输入价格,"Enter price"
+请输入重量,"Please enter the weight"
+请输入库存,"Enter stock"
+请选择主图,"Select the main image"
+请输入简述,"Please enter a brief description"
+请输入详情内容,"Please enter the detail content"
+请输入Meta元数据名,"Please enter the Meta metadata name"
+请输入Meta关键词,"Please enter the Meta keywords"
+暂无可配置项,"No configurable items"
+没有可配置项,"No configurable items"
+你创建了,"You created"
 个产品,products
-文件管理器,File manager
-子产品有部分SKU已存在!请确保产品SKU唯一性。,Some SKUs already exist in the sub-product! Please ensure product SKU uniqueness.
-主SKU:,Main SKU:
-已存在!,Already exists!
-请填写必填项：,Fill in required items:
-请填写所有必填项！,Fill in all required fields!
---请选择--,--Please select--
-已不存在!,No longer exists!
+文件管理器,"File manager"
+子产品有部分SKU已存在!请确保产品SKU唯一性。,"Some SKUs already exist in the sub-product! Please ensure product SKU uniqueness."
+主SKU:,"Main SKU:"
+已存在!,"Already exists!"
+请填写必填项：,"Fill in required items:"
+请填写所有必填项！,"Fill in all required fields!"
+--请选择--,"--Please select--"
+已不存在!,"No longer exists!"
 SKU:,SKU:
-请输入属性集,Enter attribute set
-店铺 > 产品管理,Store > Product Management
-系统配置,System Configuration
+请输入属性集,"Enter attribute set"
+"店铺 > 产品管理","Store > Product Management"
+系统配置,"System Configuration"
 店铺,Store
 产品,Product
-产品管理,Product Management
-管理产品,Manage Products
+产品管理,"Product Management"
+管理产品,"Manage Products"
 关联,Associate
-产品关联详情,Product Association Details
+产品关联详情,"Product Association Details"
 子产品,Sub-Product
-组产品,Group Products
-绑定产品,Bind product
-关联产品,Associated Products
-正在加载子产品...,Loading sub-products...
-暂无子产品,No sub-products
-组产品功能即将上线,Group Products feature coming soon
-绑定产品功能即将上线,The bind product feature is coming soon
-关联产品功能即将上线,Associated Product Feature Coming Soon
-属性配置项弹窗,Attribute configuration item popup
-保存更改,Save changes
-你确定要删除么？,Are you sure you want to delete it?
+组产品,"Group Products"
+绑定产品,"Bind product"
+关联产品,"Associated Products"
+正在加载子产品...,"Loading sub-products..."
+暂无子产品,"No sub-products"
+组产品功能即将上线,"Group Products feature coming soon"
+绑定产品功能即将上线,"The bind product feature is coming soon"
+关联产品功能即将上线,"Associated Product Feature Coming Soon"
+属性配置项弹窗,"Attribute configuration item popup"
+保存更改,"Save changes"
+你确定要删除么？,"Are you sure you want to delete it?"
 ID,ID
-创建时间,Create time
-更新时间,Update time
+创建时间,"Create time"
+更新时间,"Update time"
 加载失败，请重试,"Failed to load, please retry"
-操作成功!,Operation successful!
+操作成功!,"Operation successful!"

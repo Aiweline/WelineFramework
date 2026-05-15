@@ -240,6 +240,75 @@ class AiSiteVirtualThemeService
     }
 
     /**
+     * Concurrent build batches may carry only the current in-memory page subset.
+     * Before appending a newly generated block, merge the already persisted
+     * virtual-theme content rows back in so later batches cannot overwrite earlier
+     * generated blocks.
+     *
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>
+     */
+    public function mergePersistedContentIntoGeneratedLayout(int $themeId, string $pageType, array $layout): array
+    {
+        if ($themeId <= 0 || $pageType === '') {
+            return $layout;
+        }
+
+        $persisted = $this->loadGeneratedPageLayout($themeId, $pageType);
+        $persistedContent = \is_array($persisted['content'] ?? null) ? $persisted['content'] : [];
+        if ($persistedContent === []) {
+            return $layout;
+        }
+
+        $currentContent = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        $merged = [];
+        foreach (\array_merge($persistedContent, $currentContent) as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $code = \trim((string)($row['code'] ?? $row['component'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $merged[$code] = $row;
+        }
+        if ($merged === []) {
+            return $layout;
+        }
+
+        \uasort($merged, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+        $layout['content'] = \array_values($merged);
+
+        return $layout;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function loadGeneratedPageLayout(int $themeId, string $pageType): array
+    {
+        if ($themeId <= 0 || $pageType === '') {
+            return [];
+        }
+
+        /** @var VirtualThemeLayout $themeLayout */
+        $themeLayout = clone ObjectManager::getInstance(VirtualThemeLayout::class);
+        $themeLayout->clearData()->clearQuery()
+            ->where(VirtualThemeLayout::schema_fields_VIRTUAL_THEME_ID, $themeId)
+            ->where(VirtualThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+            ->where(VirtualThemeLayout::schema_fields_AREA, 'frontend')
+            ->order(VirtualThemeLayout::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
+        if ((int)$themeLayout->getId() <= 0) {
+            return [];
+        }
+
+        $config = $themeLayout->getConfig();
+        return \is_array($config) ? $config : [];
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      * @param list<string> $pageTypes
@@ -350,7 +419,17 @@ class AiSiteVirtualThemeService
                 );
             }
 
+            $persistedLayout = $this->loadGeneratedPageLayout($themeId, $pageType);
             $layout = \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [];
+            if ($layout === [] && $persistedLayout !== []) {
+                $layout = $persistedLayout;
+            } elseif (
+                !\is_array($layout['content'] ?? null)
+                && \is_array($persistedLayout['content'] ?? null)
+                && $persistedLayout['content'] !== []
+            ) {
+                $layout['content'] = $persistedLayout['content'];
+            }
             $layout['header'] = \is_array($layout['header'] ?? null) ? $layout['header'] : ['component' => '', 'config' => []];
             $layout['footer'] = \is_array($layout['footer'] ?? null) ? $layout['footer'] : ['component' => '', 'config' => []];
             $layout['content'] = \is_array($layout['content'] ?? null) ? $layout['content'] : [];

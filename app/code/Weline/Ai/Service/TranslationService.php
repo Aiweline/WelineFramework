@@ -161,7 +161,7 @@ class TranslationService
         
         // 准备适配器参数
         $targetLanguage = $this->getLanguageName($targetLocale);
-        $sourceLanguage = $sourceLocale === 'auto' ? '自动检测' : $this->getLanguageName($sourceLocale);
+        $sourceLanguage = $sourceLocale === 'auto' ? 'auto-detected language' : $this->getLanguageName($sourceLocale);
         $adapterStrategy = $strategy === self::STRATEGY_HIGH_FIDELITY ? 'professional' : 'standard';
         
         // 构建批量翻译提示词
@@ -172,7 +172,7 @@ class TranslationService
             $response = $this->aiService->generate(
                 $batchPrompt,
                 $modelCode,
-                'translation',
+                null,
                 null,
                 [
                     'target_language' => $targetLanguage,
@@ -328,7 +328,7 @@ class TranslationService
         // 注意：$targetLocale 已经被 validateAndGetLocale 标准化了（如 ja-JP）
         // 但 getLanguageName 需要处理标准化后的格式
         $targetLanguage = $this->getLanguageName($targetLocale);
-        $sourceLanguage = $sourceLocale === 'auto' ? '自动检测' : $this->getLanguageName($sourceLocale);
+        $sourceLanguage = $sourceLocale === 'auto' ? 'auto-detected language' : $this->getLanguageName($sourceLocale);
         
         // 检查语言名称是否正确获取
         if (empty($targetLanguage) || $targetLanguage === $targetLocale) {
@@ -378,7 +378,7 @@ class TranslationService
         string $strategy
     ): string {
         $targetLanguage = $this->getLanguageName($targetLocale);
-        $sourceLanguage = $sourceLocale === 'auto' ? '自动检测' : $this->getLanguageName($sourceLocale);
+        $sourceLanguage = $sourceLocale === 'auto' ? 'auto-detected language' : $this->getLanguageName($sourceLocale);
         
         if ($strategy === self::STRATEGY_HIGH_FIDELITY) {
             return "请将以下文本从{$sourceLanguage}翻译成{$targetLanguage}，要求：\n" .
@@ -427,15 +427,15 @@ class TranslationService
         $normalized = str_replace('_', '-', $localeCode);
         
         $languageNames = [
-            'zh-CN' => '中文',
-            'zh-Hans-CN' => '中文',
-            'en-US' => '英文',
-            'ja-JP' => '日文',
-            'ko-KR' => '韩文',
-            'fr-FR' => '法文',
-            'de-DE' => '德文',
-            'es-ES' => '西班牙文',
-            'ru-RU' => '俄文'
+            'zh-CN' => 'Chinese',
+            'zh-Hans-CN' => 'Chinese',
+            'en-US' => 'English',
+            'ja-JP' => 'Japanese',
+            'ko-KR' => 'Korean',
+            'fr-FR' => 'French',
+            'de-DE' => 'German',
+            'es-ES' => 'Spanish',
+            'ru-RU' => 'Russian'
         ];
         
         // 先尝试完整匹配
@@ -448,14 +448,14 @@ class TranslationService
         $langCode = strtolower($parts[0] ?? '');
         
         $langMap = [
-            'zh' => '中文',
-            'en' => '英文',
-            'ja' => '日文',
-            'ko' => '韩文',
-            'fr' => '法文',
-            'de' => '德文',
-            'es' => '西班牙文',
-            'ru' => '俄文'
+            'zh' => 'Chinese',
+            'en' => 'English',
+            'ja' => 'Japanese',
+            'ko' => 'Korean',
+            'fr' => 'French',
+            'de' => 'German',
+            'es' => 'Spanish',
+            'ru' => 'Russian'
         ];
         
         return $langMap[$langCode] ?? $localeCode;
@@ -494,11 +494,7 @@ class TranslationService
      */
     public function clearTranslationCache(?string $pattern = null): bool
     {
-        if ($pattern) {
-            return $this->cache->deleteByPattern('ai_translation_' . $pattern);
-        } else {
-            return $this->cache->deleteByPattern('ai_translation_*');
-        }
+        return $this->cache->clear();
     }
 
     /**
