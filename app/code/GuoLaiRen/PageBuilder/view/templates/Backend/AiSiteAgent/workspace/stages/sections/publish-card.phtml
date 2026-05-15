@@ -19,7 +19,7 @@ $pbAiCanPublishContract = !empty($state['can_publish']);
 $pbAiPublishDisabled = $pbAiLatestBuildFailed || $pbAiRetryablePending || !$pbAiCanPublishContract || $pbAiActiveOperationBlocking;
 $pbAiPublishBlockingMessage = '';
 if ($pbAiRetryablePending) {
-    $pbAiPublishBlockingMessage = (string)__('存在 retry_allowed 或 partial_retry_required 失败项，发布前必须先完成重试。');
+    $pbAiPublishBlockingMessage = (string)__('AI 生成失败项已阻断发布；系统不再自动重试，请调整底座提示词后重新生成。');
 } elseif ($pbAiActiveOperationBlocking) {
     $pbAiPublishBlockingMessage = (string)__('AI 队列仍处于 pending、queued 或 running 状态，发布按钮已锁定。');
 } elseif ($pbAiLatestBuildFailed) {
@@ -83,11 +83,13 @@ $pbAiPublishBlockingClass = ($pbAiLatestBuildFailed || $pbAiRetryablePending) ? 
         </button>
         <button
             type="button"
-            class="btn btn-outline-warning mb-3 ms-2<?= $pbAiRetryablePending ? '' : ' d-none' ?>"
+            class="btn btn-outline-warning mb-3 ms-2 d-none"
             id="pb-ai-retry-build-failures"
-            data-retryable-ai-label="<?= htmlspecialchars((string)__('继续重试失败项'), ENT_QUOTES, 'UTF-8') ?>"
-            data-retryable-ai-operation="build">
-            <span data-retryable-ai-label-text><?= htmlspecialchars((string)__('继续重试失败项'), ENT_QUOTES, 'UTF-8') ?></span>
+            data-retryable-ai-label="<?= htmlspecialchars((string)__('AI 生成失败'), ENT_QUOTES, 'UTF-8') ?>"
+            data-pb-retry-disabled="1"
+            disabled
+            aria-disabled="true">
+            <span data-retryable-ai-label-text><?= htmlspecialchars((string)__('AI 生成失败'), ENT_QUOTES, 'UTF-8') ?></span>
             <span class="badge text-bg-light ms-1" data-retryable-ai-count><?= (int)$pbAiRetryableCount ?></span>
         </button>
         <pre class="bg-light rounded p-3 small mb-0 d-none" id="pb-ai-publish-check-output" style="max-height:320px;overflow:auto;"></pre>

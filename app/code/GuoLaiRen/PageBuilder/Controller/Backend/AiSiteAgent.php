@@ -1453,7 +1453,7 @@ class AiSiteAgent extends BaseController
             $summary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'plan');
             return $this->jsonError(
                 'RETRYABLE_AI_FAILURES_PENDING',
-                (string)__('阶段一仍有 AI 生成失败项，请先点击重试失败项。'),
+                (string)__('阶段一仍有 AI 生成失败项；系统不会自动重试，请调整底座提示词后重新生成。'),
                 ['public_id'],
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
@@ -2007,7 +2007,7 @@ class AiSiteAgent extends BaseController
             $summary = $this->buildTaskService->summarizeRetryableAiFailures($mergedScope, 'plan');
             return $this->jsonError(
                 'RETRYABLE_AI_FAILURES_PENDING',
-                (string)__('仍有 AI 生成失败项，请先点击重试失败项。'),
+                (string)__('仍有 AI 生成失败项；系统不会自动重试，请调整底座提示词后重新生成。'),
                 ['public_id'],
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
@@ -2456,7 +2456,7 @@ class AiSiteAgent extends BaseController
         $safeSlot = $this->sanitizeAiSiteAssetPathSegment($slotId);
         $hash = \substr(\sha1($slotId . ':' . $executionToken), 0, 12);
 
-        return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlot . '-' . $hash . '.webp';
+        return 'pub/media/page-build/ai-generated/' . $handle . '/' . $safeSlot . '-' . $hash . '.webp';
     }
 
     /**
@@ -4251,18 +4251,25 @@ class AiSiteAgent extends BaseController
             $changed = true;
         } else {
             $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+            $matchedContentIndex = null;
+            $normalizedComponentCode = $this->normalizeLayoutComponentIdentity($componentCode);
+            $normalizedBlockId = $this->normalizeLayoutComponentIdentity($blockId);
             foreach ($content as $index => $item) {
                 if (!\is_array($item)) {
                     continue;
                 }
                 $itemCode = \trim((string)($item['code'] ?? $item['component'] ?? ''));
                 $itemBlockId = $this->normalizeGeneratedComponentCodeToBlockId($itemCode);
+                $normalizedItemCode = $this->normalizeLayoutComponentIdentity($itemCode);
                 if (
                     ($componentCode !== '' && $itemCode === $componentCode)
+                    || ($normalizedComponentCode !== '' && $normalizedItemCode === $normalizedComponentCode)
                     || ($blockId !== '' && $itemBlockId === $blockId)
+                    || ($normalizedBlockId !== '' && $normalizedItemCode === $normalizedBlockId)
                 ) {
                     $item['config'] = $blockConfig;
                     $content[$index] = $item;
+                    $matchedContentIndex = $index;
                     $changed = true;
                     break;
                 }
@@ -4276,6 +4283,15 @@ class AiSiteAgent extends BaseController
                     'sort_order' => (\count($content) + 1) * 10,
                 ];
                 $changed = true;
+                $matchedContentIndex = \array_key_last($content);
+            }
+            if ($matchedContentIndex !== null) {
+                $content = $this->dedupeLayoutContentAfterBlockConfigUpdate(
+                    $content,
+                    (int)$matchedContentIndex,
+                    $normalizedComponentCode,
+                    $normalizedBlockId
+                );
             }
             $layout['content'] = \array_values($content);
         }
@@ -5570,9 +5586,9 @@ class AiSiteAgent extends BaseController
                     $adminId,
                     [
                         'status' => 'error',
-                        'message' => (string)__('部分页面方案生成失败，请重试失败项。'),
-                        'retry_allowed' => 1,
-                        'failure_mode' => 'partial_retry_required',
+                        'message' => (string)__('部分页面方案生成失败；系统不会自动重试，请调整底座提示词后重新生成。'),
+                        'retry_allowed' => 0,
+                        'failure_mode' => 'plan_failed',
                         'retryable_ai_failure_count' => \count($retryablePlanFailures),
                     ],
                     AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
@@ -10124,6 +10140,19 @@ class AiSiteAgent extends BaseController
                 ];
             }
         }
+        if ($this->isAiSiteQueueBackedOperation($operation)) {
+            $activeQueueRow = $this->findActiveAiSiteSessionQueueRow($session, $operation);
+            if (\is_array($activeQueueRow) && $activeQueueRow !== []) {
+                return $this->buildActiveAiSiteQueueAlreadyRunningResult(
+                    $session,
+                    $adminId,
+                    $operation,
+                    $stage,
+                    $scope,
+                    $activeQueueRow
+                );
+            }
+        }
 
         $baseScope = $scope;
         if ($operation === 'build') {
@@ -10573,6 +10602,156 @@ class AiSiteAgent extends BaseController
         return $requestedOperation === $runningOperation
             && $this->isAiSiteQueueBackedOperation($requestedOperation)
             && $this->isAiSiteQueueBackedOperation($runningOperation);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildActiveAiSiteQueueAlreadyRunningResult(
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $requestedOperation,
+        string $stage,
+        array $scope,
+        array $queueRow
+    ): array {
+        $queueId = (int)($queueRow['queue_id'] ?? 0);
+        $content = $this->decodeAiSiteQueueRowContent($queueRow);
+        $runningOperation = \trim((string)(
+            $content['operation']
+            ?? $queueRow['_resolved_operation']
+            ?? $requestedOperation
+        ));
+        if (!$this->isAiSiteQueueBackedOperation($runningOperation)) {
+            $runningOperation = $requestedOperation;
+        }
+        $executionToken = \trim((string)($content['execution_token'] ?? $content['token'] ?? ''));
+        $queueStatus = \strtolower(\trim((string)($queueRow['status'] ?? '')));
+        $operationStatus = \in_array($queueStatus, ['running', 'processing'], true) ? 'running' : 'queued';
+        $sameOperation = $requestedOperation === $runningOperation;
+        $shouldSuppressPriorBuildFailure = $sameOperation
+            && $this->isPublishBlockingAiBuildOperation($runningOperation)
+            && $this->isPublishBlockingAiRunningStatus($operationStatus);
+        $message = $sameOperation
+            ? $this->buildRunningOperationReuseMessage($runningOperation)
+            : $this->buildRunningOperationBusyMessage($requestedOperation, $runningOperation);
+
+        $activeOperation = \array_replace(
+            $this->buildOperationQueueEnvelope($session, $runningOperation, $executionToken, $operationStatus),
+            [
+                'operation' => $runningOperation,
+                'execution_token' => $executionToken,
+                'status' => $operationStatus,
+                'queue_id' => $queueId,
+                'message' => $message,
+                'queue_waiting_for_scheduler' => $operationStatus !== 'running',
+                'can_close_stream' => true,
+                'continue_other_operations' => true,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ]
+        );
+        $scope = $this->writeActiveOperationStateToScope($scope, $activeOperation);
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
+        if ($shouldSuppressPriorBuildFailure) {
+            $scope['latest_build_failed'] = 0;
+            $scope['publish_blocked_by_latest_ai_failure'] = 0;
+            unset($scope['latest_build_failure'], $scope['publish_blocked_reason']);
+        }
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $state = $this->buildWorkspaceState($fresh, $adminId, 24, true);
+        $streamUrl = $executionToken !== '' ? $this->buildOperationStreamUrl($fresh->getPublicId(), $executionToken) : '';
+
+        return [
+            'success' => $sameOperation,
+            'http_status' => $sameOperation ? 200 : 409,
+            'status_code' => $sameOperation ? 200 : 409,
+            'code' => 'AI_SITE_QUEUE_ALREADY_ACTIVE',
+            'message' => $message,
+            'operation' => $sameOperation ? $runningOperation : $requestedOperation,
+            'running_operation' => $runningOperation,
+            'execution_token' => $sameOperation ? $executionToken : '',
+            'stream_url' => $sameOperation ? $streamUrl : '',
+            'queue_id' => $queueId,
+            'start_sse' => $sameOperation && $streamUrl !== '',
+            'active_operation' => [
+                'operation' => $runningOperation,
+                'execution_token' => $executionToken,
+                'stream_url' => $streamUrl,
+                'queue_id' => $queueId,
+            ],
+            'data' => $this->buildWorkspaceOperationPayload($state, $runningOperation),
+            'queue_wait' => $this->buildAiSiteQueueSchedulerWaitPayload($runningOperation, $queueId, 'existing_active_queue'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findActiveAiSiteSessionQueueRow(AiSiteAgentSession $session, string $requestedOperation): ?array
+    {
+        foreach ($this->resolveAiSiteQueueBackedOperationsForStartGuard($requestedOperation) as $operation) {
+            foreach ($this->resolveAiSiteQueueLookupBizKeys((int)$session->getId(), $operation) as $bizKey) {
+                foreach ($this->findAiSiteQueueRowsByBizKey($bizKey) as $row) {
+                    if (!$this->isAiSiteQueueRowForOperation($row, $operation)) {
+                        continue;
+                    }
+                    if (!$this->isAiSiteQueueRowLiveInProgress($row)) {
+                        continue;
+                    }
+                    $row['_resolved_operation'] = $operation;
+
+                    return $row;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveAiSiteQueueBackedOperationsForStartGuard(string $requestedOperation): array
+    {
+        $operations = ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'];
+        $requestedOperation = \trim($requestedOperation);
+        if ($requestedOperation !== '' && \in_array($requestedOperation, $operations, true)) {
+            \array_unshift($operations, $requestedOperation);
+        }
+
+        return \array_values(\array_unique($operations));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveAiSiteQueueLookupBizKeys(int $sessionId, string $operation): array
+    {
+        return \array_values(\array_unique(\array_merge(
+            [$this->buildAiSiteQueueBizKey($sessionId, $operation)],
+            $this->resolveAiSiteLegacyQueueBizKeys($sessionId, $operation)
+        )));
+    }
+
+    /**
+     * @param array<string, mixed> $queueRow
+     */
+    private function isAiSiteQueueRowLiveInProgress(array $queueRow): bool
+    {
+        if (!$this->isObservedQueueInProgress($queueRow)) {
+            return false;
+        }
+
+        $status = \strtolower(\trim((string)($queueRow['status'] ?? '')));
+        if (!\in_array($status, ['running', 'processing'], true)) {
+            return true;
+        }
+
+        $pid = (int)($queueRow['pid'] ?? 0);
+
+        return $pid > 0 && \Weline\Framework\System\Process\Processer::isRunningByPid($pid);
     }
 
     /**
@@ -11798,10 +11977,10 @@ class AiSiteAgent extends BaseController
                 'status' => 'error',
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
-                    ? (string)__('HTML blocks partially generated; retry failed items before publishing.')
+                    ? (string)__('HTML block build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
                     : (string)__('仍存在未归档的构建任务；请在工作区刷新后重试未完成任务再继续。'),
-                'retry_allowed' => 1,
-                'failure_mode' => 'partial_retry_required',
+                'retry_allowed' => 0,
+                'failure_mode' => 'build_failed',
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
                 'queue_waiting_for_scheduler' => false,
             ] : [
@@ -11824,7 +12003,7 @@ class AiSiteAgent extends BaseController
             'build',
             ($hasBuildFailures || $hasOutstandingTasks)
                 ? ($hasBuildFailures
-                    ? __('HTML blocks partially generated; retry failed items before publishing.')
+                    ? __('HTML block build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
                     : __('仍存在未归档的 HTML 区块任务；请刷新后完成剩余任务后再试。'))
                 : __('HTML blocks ready for preview or publish'),
             100,
@@ -11835,7 +12014,7 @@ class AiSiteAgent extends BaseController
 
         return [
             'message' => $hasBuildFailures
-                ? (string)__('HTML block build partially complete; retry failed items before publishing.')
+                ? (string)__('HTML block build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
                 : ($hasOutstandingTasks
                     ? (string)__('HTML 区块构建未完全归档；请刷新并完成剩余任务。')
                     : (string)__('HTML block build complete')),
@@ -11967,6 +12146,52 @@ class AiSiteAgent extends BaseController
         }
 
         return \str_replace(['content/', '/'], ['', '-'], $componentCode);
+    }
+
+    private function normalizeLayoutComponentIdentity(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        if ($value === '') {
+            return '';
+        }
+
+        return \str_replace(['/', '_'], '-', $value);
+    }
+
+    /**
+     * @param array<int,array<string,mixed>|mixed> $content
+     * @return array<int,array<string,mixed>|mixed>
+     */
+    private function dedupeLayoutContentAfterBlockConfigUpdate(
+        array $content,
+        int $matchedIndex,
+        string $normalizedComponentCode,
+        string $normalizedBlockId
+    ): array {
+        if (!isset($content[$matchedIndex]) || !\is_array($content[$matchedIndex])) {
+            return $content;
+        }
+
+        $matchedItem = $content[$matchedIndex];
+        $matchedCode = $this->normalizeLayoutComponentIdentity((string)($matchedItem['code'] ?? $matchedItem['component'] ?? ''));
+        $matchedInstance = $this->normalizeLayoutComponentIdentity((string)($matchedItem['instance_id'] ?? ''));
+        $targets = \array_filter(\array_unique([$matchedCode, $matchedInstance, $normalizedComponentCode, $normalizedBlockId]));
+        if ($targets === []) {
+            return $content;
+        }
+
+        foreach ($content as $index => $item) {
+            if ((int)$index === $matchedIndex || !\is_array($item)) {
+                continue;
+            }
+            $itemCode = $this->normalizeLayoutComponentIdentity((string)($item['code'] ?? $item['component'] ?? ''));
+            $itemInstance = $this->normalizeLayoutComponentIdentity((string)($item['instance_id'] ?? ''));
+            if (($itemCode !== '' && \in_array($itemCode, $targets, true)) || ($itemInstance !== '' && \in_array($itemInstance, $targets, true))) {
+                unset($content[$index]);
+            }
+        }
+
+        return \array_values($content);
     }
 
     /**
@@ -12555,7 +12780,7 @@ class AiSiteAgent extends BaseController
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $this->emitBuildInfoEvent(
             $sse,
-            (string)__('Build task failed and is waiting for retry: %{task} — %{reason}', [
+            (string)__('Build task failed without automatic retry: %{task} — %{reason}', [
                 'task' => $taskKey,
                 'reason' => $reason,
             ]),
@@ -13304,10 +13529,10 @@ class AiSiteAgent extends BaseController
                 'status' => 'error',
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
-                    ? (string)__('Virtual theme partially generated; retry failed items before publishing.')
+                    ? (string)__('Virtual theme build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
                     : (string)__('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'),
-                'retry_allowed' => 1,
-                'failure_mode' => 'partial_retry_required',
+                'retry_allowed' => 0,
+                'failure_mode' => 'build_failed',
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
                 'queue_waiting_for_scheduler' => false,
             ] : [
@@ -13332,7 +13557,7 @@ class AiSiteAgent extends BaseController
             'build',
             ($hasBuildFailures || $hasOutstandingTasks)
                 ? ($hasBuildFailures
-                    ? __('Virtual theme partially generated; retry failed items before publishing.')
+                    ? __('Virtual theme build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
                     : __('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'))
                 : __('Virtual theme ready for editing'),
             100,
@@ -13342,7 +13567,7 @@ class AiSiteAgent extends BaseController
         );
         return [
             'message' => $hasBuildFailures
-                ? (string)__('Virtual theme build partially complete; retry failed items before publishing.')
+                ? (string)__('Virtual theme build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
                 : ($hasOutstandingTasks
                     ? (string)__('虚拟主题构建未完全归档；请刷新并完成剩余任务。')
                     : (string)__('Virtual theme build complete')),

@@ -29,6 +29,7 @@
     var skillSaveUrl = <?= \json_encode((string)($skillSaveUrl ?? $this->getData('skillSaveUrl') ?? $this->getData('skill_save_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var skillDisableUrl = <?= \json_encode((string)($skillDisableUrl ?? $this->getData('skillDisableUrl') ?? $this->getData('skill_disable_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var initialSelectedSkillCodes = <?= \json_encode(\array_values(\array_filter(\array_map('strval', \is_array($scope['selected_skill_codes'] ?? null) ? $scope['selected_skill_codes'] : (\is_array($state['selected_skill_codes'] ?? null) ? $state['selected_skill_codes'] : (\is_array($state['scope']['selected_skill_codes'] ?? null) ? $state['scope']['selected_skill_codes'] : []))))), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var defaultSelectedSkillCodes = ['claude-design'];
     var queueUiStateByStage = {};
     /** 构建方案队列一旦终端态变为「已完成」，刷新整页以拉齐 SSE 终端、进度条与会话状态（避免已完成仍显示生成中）。 */
     var skillManagerEditingCode = '';
@@ -44,7 +45,7 @@
     var startPatchBlockUrl = <?= \json_encode($startPatchBlockUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var retryAiOperationUrl = <?= \json_encode($retryAiOperationUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var updateBlockConfigUrl = <?= \json_encode($updateBlockConfigUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var componentConfigStreamUrl = <?= \json_encode((string)$this->getBackendUrlPath('pagebuilder/backend/ai-generate/component-config-stream'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var componentConfigStreamUrl = <?= \json_encode((string)$this->getBackendUrlPath('pagebuilder/backend/aigenerate/componentconfigstream'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var switchPreviewPageUrl = <?= \json_encode($switchPreviewPageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var guidedUrl = <?= \json_encode($guidedUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -958,14 +959,10 @@
         buildQueueBusyActionBlocked: <?= \json_encode((string)__('构建队列正在执行，请等待完成或失败后再操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         assetImageGenerationFailuresTitle: <?= \json_encode((string)__('文生图生成有部分失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         assetImageGenerationFailuresHint: <?= \json_encode((string)__('以下为最近失败的槽位与接口返回摘要；修复模型配置或网络后可重新生成以重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiQueueRunning: <?= \json_encode((string)__('当前队列仍在运行，等待完成后再重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiFailuresPending: <?= \json_encode((string)__('当前仍有 AI 生成失败项，请先点击“重试失败项”。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiFailuresPendingWithCount: <?= \json_encode((string)__('当前仍有 %{count} 个 AI 生成失败项，请先点击“重试失败项”。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiResumePromptTitle: <?= \json_encode((string)__('检测到可重试失败项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiResumePromptMessage: <?= \json_encode((string)__('检测到 %{operation} 仍有 %{count} 个失败项。队列当前未运行，是否立即继续重试失败项？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiResumePromptConfirm: <?= \json_encode((string)__('继续重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiResumePromptCancel: <?= \json_encode((string)__('稍后再说'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiResumePromptStarted: <?= \json_encode((string)__('已继续重试 %{operation} 失败项。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiQueueRunning: <?= \json_encode((string)__('当前队列仍在运行，等待完成后查看失败结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailuresPending: <?= \json_encode((string)__('当前仍有 AI 生成失败项，系统不会自动重试；请调整底座提示词后重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailuresPendingWithCount: <?= \json_encode((string)__('当前仍有 %{count} 个 AI 生成失败项，系统不会自动重试；请调整底座提示词后重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumePromptStarted: <?= \json_encode((string)__('AI 失败项不会自动重试，请调整底座提示词后重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryableAiResumeOperationPlan: <?= \json_encode((string)__('建站方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryableAiResumeOperationBuild: <?= \json_encode((string)__('构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开字段编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1403,7 +1400,7 @@
         button.disabled = busy;
         button.setAttribute('aria-disabled', busy ? 'true' : 'false');
         if (visible) {
-            button.setAttribute('title', busy ? getRetryableAiFailureMessage(state, operation) : String(button.dataset.retryableAiLabel || 'Retry failed items'));
+            button.setAttribute('title', getRetryableAiFailureMessage(state, operation));
         } else {
             button.removeAttribute('title');
         }
@@ -1618,67 +1615,12 @@
     }
 
     function scheduleRetryableAiFailureResumePrompt(workspaceState) {
-        ensureRetryableAiResumePromptState();
-        var state = workspaceState && typeof workspaceState === 'object'
-            ? normalizeWorkspaceStateShape(workspaceState)
-            : getLatestWorkspaceStateForQueuePrompt();
         if (retryableAiResumePromptTimer) {
             window.clearTimeout(retryableAiResumePromptTimer);
             retryableAiResumePromptTimer = 0;
         }
-        var candidate = resolveRetryableAiFailurePromptCandidate(state);
-        if (!candidate) {
-            retryableAiResumePromptFingerprint = '';
-            if (!hasRetryableAiFailures(state, null)) {
-                retryableAiResumePromptDismissed = {};
-            }
-            return;
-        }
-        var fingerprint = String(candidate.operation) + ':' + String(candidate.count);
-        if (retryableAiResumePromptDismissed[fingerprint]) {
-            return;
-        }
-        if (retryableAiResumePromptFingerprint === fingerprint) {
-            return;
-        }
-        retryableAiResumePromptFingerprint = fingerprint;
-        retryableAiResumePromptTimer = window.setTimeout(function () {
-            retryableAiResumePromptTimer = 0;
-            var latest = getLatestWorkspaceStateForQueuePrompt();
-            var freshCandidate = resolveRetryableAiFailurePromptCandidate(latest);
-            if (!freshCandidate) {
-                retryableAiResumePromptFingerprint = '';
-                return;
-            }
-            var operationLabel = freshCandidate.operation === 'plan'
-                ? String(messages.retryableAiResumeOperationPlan || 'Build plan')
-                : String(messages.retryableAiResumeOperationBuild || 'Build');
-            var message = String(messages.retryableAiResumePromptMessage || '')
-                .replace('%{operation}', operationLabel)
-                .replace('%{count}', String(freshCandidate.count));
-            var title = String(messages.retryableAiResumePromptTitle || 'Retry failed AI items');
-            var confirmText = String(messages.retryableAiResumePromptConfirm || 'Retry');
-            var cancelText = String(messages.retryableAiResumePromptCancel || 'Later');
-            if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-                window.BackendConfirm.show(message, {
-                    title: title,
-                    confirmText: confirmText,
-                    cancelText: cancelText,
-                    type: 'warning'
-                }).then(function (confirmed) {
-                    if (confirmed) {
-                        triggerRetryableAiFailureResumeOperation(freshCandidate.operation);
-                        toast('info', String(messages.retryableAiResumePromptStarted || '').replace('%{operation}', operationLabel));
-                        return;
-                    }
-                    retryableAiResumePromptDismissed[fingerprint] = true;
-                }).catch(function () {
-                    retryableAiResumePromptDismissed[fingerprint] = true;
-                });
-                return;
-            }
-            toast('warning', getRetryableAiFailureMessage(latest, freshCandidate.operation));
-        }, 400);
+        retryableAiResumePromptFingerprint = '';
+        retryableAiResumePromptDismissed = {};
     }
 
     function handleRetryableAiFailureButtonClick(button, operation) {
@@ -4343,7 +4285,7 @@
             seen[code] = true;
             out.push(code);
         });
-        return out;
+        return out.length > 0 ? out : defaultSelectedSkillCodes.slice();
     }
 
     var needsFormSkillOptions = [];
@@ -5523,7 +5465,7 @@
         }
     }
 
-    function setPreviewFrameUrl(url) {
+    function setPreviewFrameUrl(url, forceReload) {
         var frame = document.getElementById('pb-ai-visual-preview-frame');
         if (!frame || !url) {
             return;
@@ -5551,7 +5493,7 @@
                 return prefix === '?' && suffix ? '?' : (suffix && suffix !== '&' ? suffix : '');
             }).replace(/[?&]$/, '');
         }
-        if (normalizedCurrent !== '' && normalizedCurrent === normalizedTarget) {
+        if (!forceReload && normalizedCurrent !== '' && normalizedCurrent === normalizedTarget) {
             return;
         }
         clearVisualPreviewErrorOverlay();
@@ -6900,7 +6842,7 @@
                 }, 120);
             }, { once: true });
         }
-        setPreviewFrameUrl(currentEmbeddedVisualUrl);
+        setPreviewFrameUrl(currentEmbeddedVisualUrl, true);
     }
 
     function openRefineComponentModal(payload) {
@@ -7204,8 +7146,22 @@
                     value = textInput.value;
                 }
             }
+            if (String(value || '').trim() === '' && input.hasAttribute('data-ai-generated-value')) {
+                value = input.getAttribute('data-ai-generated-value') || value;
+            }
             config[key] = value;
         });
+        if (modalElement.__pbAiGeneratedConfig && typeof modalElement.__pbAiGeneratedConfig === 'object') {
+            Object.keys(modalElement.__pbAiGeneratedConfig).forEach(function (key) {
+                if (!key || String(key).indexOf('_') === 0) {
+                    return;
+                }
+                var generatedValue = convertComponentConfigValueToDisplayText(modalElement.__pbAiGeneratedConfig[key]);
+                if (String(config[key] || '').trim() === '' && String(generatedValue || '').trim() !== '') {
+                    config[key] = generatedValue;
+                }
+            });
+        }
         return config;
     }
 
@@ -7413,6 +7369,7 @@
 
                     function applyConfigData(data) {
                         var filledCount = 0;
+                        modalElement.__pbAiGeneratedConfig = Object.assign({}, modalElement.__pbAiGeneratedConfig || {}, data || {});
                         Object.keys(data || {}).forEach(function (key) {
                             var input = findComponentConfigInput(modalElement, key);
                             if (!input) {
@@ -7420,6 +7377,7 @@
                             }
                             var displayValue = convertComponentConfigValueToDisplayText(data[key]);
                             input.value = displayValue;
+                            input.setAttribute('data-ai-generated-value', displayValue);
                             input.style.borderColor = '#2563eb';
                             input.style.boxShadow = '0 0 0 2px rgba(37,99,235,0.18)';
                             input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -12968,7 +12926,7 @@
         if (explicitPercent > 0) {
             return Math.max(0, Math.min(100, explicitPercent));
         }
-        if (data.deferred_queue_progress || data.queue_waiting_for_scheduler || data.can_close_stream) {
+        if (data.deferred_queue_progress || data.queue_waiting_for_scheduler) {
             return 10;
         }
         return resolveQueueObserverProgressPercent(data, fallbackPercent);
@@ -13479,7 +13437,6 @@
         if (jsonTruthyFlag(state.latest_build_failed)
             || jsonTruthyFlag(state.publish_blocked_by_latest_ai_failure)
             || jsonTruthyFlag(existingFailure.blocked)
-            || hasRetryableAiFailures(state, 'build')
         ) {
             return true;
         }
@@ -13562,9 +13519,10 @@
         var activeOperation = String(active.operation || '').toLowerCase();
         var activeStatus = String(active.status || '').toLowerCase();
         var blockedByFailure = hasPublishBlockingLatestBuildFailureFromWorkspaceState(state);
+        var blockedByRunning = hasPublishBlockingAiOperationRunningFromWorkspaceState(state);
         var blockedByRetryable = hasPublishBlockingRetryableAiFailures(state);
         var building = workspaceStatus === 'building'
-            || hasPublishBlockingAiOperationRunningFromWorkspaceState(state)
+            || blockedByRunning
             || (isPublishBlockingOperationName(activeOperation) && isPublishRunningStatus(activeStatus))
             || ((blockedByFailure || blockedByRetryable) && hasAnyRunningQueueForUi());
         var published = publishStatus === 'published' || workspaceStatus === 'published';

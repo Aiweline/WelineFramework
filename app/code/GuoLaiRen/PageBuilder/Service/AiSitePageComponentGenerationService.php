@@ -24,11 +24,7 @@ class AiSitePageComponentGenerationService
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
     public const REQUEST_KEY_FAST_BLOCK_ARTIFACT = 'pagebuilder.ai.fast_block_artifact';
-    /** Allow one AI-owned transport repair before surfacing invalid JSON as a retry item. */
-    private const JSON_REPAIR_MAX_ATTEMPTS = 1;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
-    /** Keep recoverable component repairs inside the AI contract before surfacing a retry item. */
-    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
     // BuildPlan v2.2: generated visitor sections must pass quality gates; no fallback copy can ship.
     private const ENFORCE_COMPONENT_QUALITY_VALIDATION = true;
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
@@ -1568,8 +1564,10 @@ class AiSitePageComponentGenerationService
             'name_en' => $name,
             'description' => $safeDescription !== '' ? $safeDescription : ($name !== '' ? $name : $componentCode),
         ];
+        $componentCode = $this->normalizeOptionalComponentCode($componentCode);
         $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
         $aiData = $this->sanitizeGeneratedAssetAttributes($aiData);
+        $aiData = $this->repairAiDataImageTagAttributeGrammar($aiData);
         $aiData = $this->ensureGeneratedAssetImageAttributes($aiData, $renderContext, $defaultConfig);
         $this->assertGeneratedImageSourcesUseVerifiedAssets($aiData, $renderContext, $defaultConfig);
         $aiData = $this->ensureRequiredNonHeroImageSlotElement($aiData, $region, $renderContext, $defaultConfig, $componentCode);
@@ -1689,6 +1687,12 @@ class AiSitePageComponentGenerationService
                 function (array $matches) use ($assetMap): string {
                     $tag = (string)($matches[0] ?? '');
                     $src = $this->extractHtmlAttribute($tag, 'src');
+                    $slot = $this->extractHtmlAttribute($tag, 'data-pb-ai-asset-slot');
+                    if ($slot !== '' && isset($assetMap[$slot])) {
+                        $tag = $this->upsertHtmlAttribute($tag, 'src', (string)$assetMap[$slot]);
+                        $tag = $this->upsertHtmlAttribute($tag, 'data-pb-ai-image-role', 'generated-asset');
+                        return $tag;
+                    }
                     if ($src === '') {
                         return $tag;
                     }
@@ -1844,8 +1848,7 @@ class AiSitePageComponentGenerationService
 
         return \in_array($template, ['hero', 'banner'], true)
             || \str_contains($slotType, 'hero')
-            || \str_contains($slotType, 'banner')
-            || ($html !== '' && \preg_match('/\b(?:hero|banner)\b/i', $html) === 1);
+            || \str_contains($slotType, 'banner');
     }
 
     private function upsertHtmlAttribute(string $tag, string $name, string $value): string
@@ -1884,58 +1887,23 @@ class AiSitePageComponentGenerationService
         array $renderContext
     ): array {
         $attemptPrompt = $this->appendComponentCssScopeInstruction($prompt, $componentCode);
-        $lastThrowable = null;
+        try {
+            $aiData = $this->runAiGeneration($region, $attemptPrompt, $defaultConfig, $renderContext);
 
-        for ($attempt = 1; $attempt <= self::COMPONENT_GENERATION_MAX_ATTEMPTS; $attempt++) {
-            $aiData = [];
-            try {
-                $aiData = $this->runAiGeneration($region, $attemptPrompt, $defaultConfig, $renderContext);
-
-                return $this->buildComponentArtifactFromAiData(
-                    $componentCode,
-                    $name,
-                    $region,
-                    $prompt,
-                    $defaultConfig,
-                    $renderContext,
-                    $aiData
-                );
-            } catch (\Throwable $throwable) {
-                $lastThrowable = $throwable;
-                if (!$this->shouldRetryComponentGeneration($throwable)) {
-                    break;
-                }
-                if ($attempt >= self::COMPONENT_GENERATION_MAX_ATTEMPTS) {
-                    break;
-                }
-
-                $reason = $this->summarizeThrowable($throwable);
-                $attemptPrompt = $this->buildRetryGenerationPrompt(
-                    $region,
-                    $componentCode,
-                    $prompt,
-                    $reason,
-                    $attempt + 1,
-                    $aiData,
-                    $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig)
-                );
-                $this->emitComponentRetryNotice($region, $componentCode, $reason, $attempt + 1);
-                \w_log_warning('[AI Site Component Retry] ' . $componentCode . ' (' . $region . ') attempt '
-                    . ($attempt + 1) . '/' . self::COMPONENT_GENERATION_MAX_ATTEMPTS . ': ' . $reason);
-            }
+            return $this->buildComponentArtifactFromAiData(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext,
+                $aiData
+            );
+        } catch (\Throwable $throwable) {
+            $finalReason = $this->summarizeThrowable($throwable);
+            $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
+            throw new \RuntimeException('AI component generation failed: ' . $finalReason, 0, $throwable);
         }
-
-        $finalReason = $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown'));
-        $recoverable = $this->shouldRetryComponentGeneration($lastThrowable ?? new \RuntimeException('unknown'));
-        $message = $recoverable
-            ? 'AI component generation failed after '
-                . self::COMPONENT_GENERATION_MAX_ATTEMPTS
-                . ' real-AI attempts: '
-                . $finalReason
-            : 'AI component generation failed: ' . $finalReason;
-
-        $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
-        throw new \RuntimeException($message, 0, $lastThrowable);
 
     }
 
@@ -1981,40 +1949,6 @@ class AiSitePageComponentGenerationService
         }
 
         return $this->clipText($message, 220);
-    }
-
-    private function shouldRetryComponentGeneration(\Throwable $throwable): bool
-    {
-        $message = \strtolower(\trim($throwable->getMessage()));
-        if ($message === '') {
-            return true;
-        }
-
-        $nonRetryableMarkers = [
-            'http 401',
-            'http 402',
-            'http 403',
-            'insufficient balance',
-            'api key',
-            'missing api key',
-            'model selection',
-            'no available',
-            'provider account',
-            'provider configuration',
-            'quota',
-            'balance',
-            'secret',
-            'configuration',
-            'account',
-        ];
-
-        foreach ($nonRetryableMarkers as $marker) {
-            if (\str_contains($message, $marker)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private function attemptSyntaxFix(string $phtml, string $region, array $componentInfo, array $aiData, array $initialCheck): string
@@ -2078,6 +2012,7 @@ class AiSitePageComponentGenerationService
         array $verifiedAssets = []
     ): array
     {
+        $componentCode = $this->normalizeOptionalComponentCode($componentCode);
         $aiData = $this->getCodeFixer()->fixAiData($aiData);
         $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region, $verifiedAssets);
         $aiData = $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
@@ -2150,7 +2085,14 @@ class AiSitePageComponentGenerationService
         }
 
         if (self::ENFORCE_COMPONENT_QUALITY_VALIDATION && $region === 'content') {
-            $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason((string)($aiData['html_content'] ?? ''));
+            $lowQualityInspectionSource = (string)($aiData['html_content'] ?? '')
+                . "\n"
+                . (string)($aiData['css_extra'] ?? '')
+                . "\n"
+                . (string)($aiData['css_responsive'] ?? '')
+                . "\n"
+                . (string)($aiData['css_content'] ?? '');
+            $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason($lowQualityInspectionSource, $componentCode);
             if ($lowQualityReason !== null) {
                 throw new \RuntimeException('AI component content quality failed: ' . $lowQualityReason);
             }
@@ -2658,7 +2600,7 @@ class AiSitePageComponentGenerationService
         }
 
         $html = (string)($aiData['html_content'] ?? '');
-        if ($html === '' || \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $componentCode . ' ' . $html) !== 1) {
+        if ($html === '' || \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $componentCode) !== 1) {
             return;
         }
 
@@ -3124,6 +3066,8 @@ class AiSitePageComponentGenerationService
             . "- Do not create an inner `id='componentId'` wrapper. The framework root already owns that id; use a class-only wrapper like `<section class='{$prefix}-root'>`.\n"
             . "- Minimal valid HTML skeleton for this component: `<section class='{$prefix}-root'><div class='{$prefix}-wrap'><h2 class='{$prefix}-title'>Visitor-facing title</h2><p class='{$prefix}-copy'>Concrete visitor-facing copy.</p></div></section>`.\n"
             . "- Minimal valid CSS skeleton for this component: `#componentId .{$prefix}-root { position:relative; overflow:hidden; background:linear-gradient(135deg,#111827,#1f2937); } #componentId .{$prefix}-wrap { position:relative; z-index:1; min-width:0; } @media (max-width:768px){ #componentId .{$prefix}-grid { grid-template-columns:1fr; } }`.\n"
+            . "- Hero/banner generated-image skeleton: when this component is a hero/banner and uses a generated asset, put `class='{$prefix}-hero-image'` on the copied <img> and include this exact cover rule in css_extra: `#componentId .{$prefix}-hero-image { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; }`. The HTML class and CSS selector spelling must match byte-for-byte.\n"
+            . "- Hero/banner readability skeleton: every hero/banner with media must include a named scrim element and a named text-safe panel, for example `<div class='{$prefix}-scrim'></div><div class='{$prefix}-text-panel'><h1 class='{$prefix}-title'>...</h1><p class='{$prefix}-copy'>...</p></div>`. Include matching CSS: `#componentId .{$prefix}-scrim { position:absolute; inset:0; background:linear-gradient(90deg,rgba(0,0,0,.72),rgba(0,0,0,.32)); } #componentId .{$prefix}-text-panel { position:relative; z-index:2; max-width:720px; padding:clamp(24px,4vw,48px); border-radius:24px; background:rgba(0,0,0,.42); backdrop-filter:blur(10px); color:#fff; }`.\n"
             . "- Valid JSON envelope shape: `{\"extra_fields\":\"\",\"php_variables\":\"\",\"css_extra\":\"#componentId .{$prefix}-root { position:relative; overflow:hidden; }\",\"css_responsive\":\"@media (max-width:768px){ #componentId .{$prefix}-root { padding:24px; } }\",\"html_content\":\"<section class='{$prefix}-root'><div class='{$prefix}-wrap'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-copy'>Finished copy.</p></div></section>\",\"js_content\":\"\"}`. Replace example words and CSS values with finished customer content before returning.\n"
             . "- Prefix self-check: every custom class must literally start with `{$prefix}-`, including the leading `pb`. A class that starts with `-`, `content-`, or any value missing the leading `pb-` is invalid.\n"
             . "- Before returning, self-check that every custom class used in CSS exists with the exact same spelling in html_content and starts with `{$prefix}-`.\n"
@@ -3151,6 +3095,7 @@ class AiSitePageComponentGenerationService
         if ($hardPolicyReason !== null) {
             throw new \RuntimeException('AI component content hard policy failed: ' . $hardPolicyReason);
         }
+        $html = $this->repairHtmlFragmentTagBalance(\trim($html));
         $this->assertGeneratedHtmlFragmentWellFormed($html);
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
@@ -3197,6 +3142,10 @@ class AiSitePageComponentGenerationService
                     $repaired .= $quote;
                     $quote = '';
                 }
+                if ($char === '>' && ($index === 0 || $tag[$index - 1] !== '\\')) {
+                    $repaired .= $quote;
+                    $quote = '';
+                }
                 $repaired .= $char;
                 if ($char === $quote && ($index === 0 || $tag[$index - 1] !== '\\')) {
                     $quote = '';
@@ -3207,6 +3156,9 @@ class AiSitePageComponentGenerationService
                 $quote = $char;
             }
             $repaired .= $char;
+        }
+        if ($quote !== '') {
+            $repaired .= $quote;
         }
 
         return $repaired;
@@ -3263,6 +3215,21 @@ class AiSitePageComponentGenerationService
             },
             $html
         ) ?? $html;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     * @return array<string,mixed>
+     */
+    private function repairAiDataImageTagAttributeGrammar(array $aiData): array
+    {
+        foreach (['html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'] as $key) {
+            if (\is_string($aiData[$key] ?? null) && \stripos((string)$aiData[$key], '<img') !== false) {
+                $aiData[$key] = $this->repairGeneratedImageTagAttributeGrammar((string)$aiData[$key]);
+            }
+        }
+
+        return $aiData;
     }
 
     /**
@@ -3610,8 +3577,9 @@ class AiSitePageComponentGenerationService
         return null;
     }
 
-    private function detectLowQualityGeneratedSectionHtmlReason(string $html): ?string
+    private function detectLowQualityGeneratedSectionHtmlReason(string $html, ?string $componentCode = ''): ?string
     {
+        $componentCode = $this->normalizeOptionalComponentCode($componentCode);
         $trimmed = \trim($html);
         if ($trimmed === '') {
             return 'empty html';
@@ -3627,6 +3595,9 @@ class AiSitePageComponentGenerationService
         if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
         }
+        if ($this->containsEnglishBoilerplateVisibleCopy($visibleText)) {
+            return 'English boilerplate copy leaked into visitor content';
+        }
 
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
             return 'internal task identifiers leaked';
@@ -3634,6 +3605,9 @@ class AiSitePageComponentGenerationService
 
         if ($this->containsPlanningObservationCopy($plain)) {
             return 'planning observation copy leaked into visitor content';
+        }
+        if (\preg_match('/\d(?:[.,]\d+)?[\p{Lu}\p{L}]{2,}/u', $visibleText) === 1) {
+            return 'missing whitespace between number and visible label';
         }
 
         if (\preg_match('/<(h[1-6]|p|a)\b[^>]*>\s*<\/\1>/iu', $trimmed) === 1) {
@@ -3656,7 +3630,16 @@ class AiSitePageComponentGenerationService
         if (!$hasVisual && !$hasRealCopy && !$hasVisitorLinkCluster && !$hasVisitorArticleList) {
             return 'missing real copy, visual hierarchy, or visitor content structure';
         }
-        if (\preg_match('/\b(hero|banner|opening|above[-_ ]?fold)\b/i', $trimmed) === 1
+        if ($this->looksLikeSparseOversizedSection($trimmed, $plain)) {
+            return 'oversized low-density section with too much empty space';
+        }
+        if ($this->looksLikeSparseMetricCards($trimmed, $plain)) {
+            return 'metric cards are oversized and lack supporting proof copy';
+        }
+        if ($this->looksLikeIsolatedCtaIsland($trimmed, $plain)) {
+            return 'CTA is isolated inside a mostly empty section';
+        }
+        if (\preg_match('/\b(hero|banner|opening|above[-_ ]?fold)\b/i', $componentCode) === 1
             && \preg_match('/<img\b|background-image|data-pb-ai-image-role=["\']generated-asset["\']/iu', $trimmed) === 1
         ) {
             $heroReason = $this->detectHeroBannerQualityViolation($trimmed);
@@ -3667,6 +3650,51 @@ class AiSitePageComponentGenerationService
 
         return null;
     }
+
+    private function looksLikeSparseOversizedSection(string $html, string $plain): bool
+    {
+        if (\mb_strlen($plain) > 220) {
+            return false;
+        }
+
+        return \preg_match('/(?:min-height|height)\s*:\s*(?:[5-9]\d{2}|[1-9]\d{3})px/iu', $html) === 1
+            || \preg_match('/padding\s*:\s*(?:clamp\([^)]*(?:9|10|11|12)\dpx|(?:9|10|11|12)\dpx)/iu', $html) === 1;
+    }
+
+    private function looksLikeSparseMetricCards(string $html, string $plain): bool
+    {
+        if (!\preg_match('/\b(?:10\s*млн|4\.8|звезд|скачив|безопасн|downloads?|rating|secure)\b/iu', $plain)) {
+            return false;
+        }
+        if (\mb_strlen($plain) > 260) {
+            return false;
+        }
+
+        $largeCardCount = \preg_match_all('/(?:min-height|height)\s*:\s*(?:1[6-9]\d|[2-9]\d{2})px/iu', $html);
+        return $largeCardCount >= 2;
+    }
+
+    private function looksLikeIsolatedCtaIsland(string $html, string $plain): bool
+    {
+        if (!\preg_match('/\b(?:скачать|download|get started|start now|начать)\b/iu', $plain)) {
+            return false;
+        }
+        if (\mb_strlen($plain) > 160) {
+            return false;
+        }
+
+        return \preg_match('/(?:min-height|height)\s*:\s*(?:[6-9]\d{2}|[1-9]\d{3})px/iu', $html) === 1;
+    }
+
+    private function normalizeOptionalComponentCode(mixed $componentCode): string
+    {
+        if (!\is_scalar($componentCode) && !(\is_object($componentCode) && \method_exists($componentCode, '__toString'))) {
+            return '';
+        }
+
+        return \trim((string)$componentCode);
+    }
+
     private function detectHeroBannerQualityViolation(string $html): ?string
     {
         $normalized = \preg_replace('/\s+/u', ' ', $html) ?? $html;
@@ -4207,58 +4235,15 @@ class AiSitePageComponentGenerationService
             return $this->normalizeComponentPayload($partialPayload);
         }
 
-        if (!$this->shouldRecoverComponentStreamFailure($streamThrowable)) {
-            throw new \RuntimeException(
-                'AI component stream failed (non-stream recovery skipped): '
-                . $this->summarizeThrowable($streamThrowable),
-                0,
-                $streamThrowable
-            );
-        }
-
         $this->emitComponentStreamFallbackNotice(
             $region,
-            'stream returned no usable JSON; retrying once with non-stream JSON mode'
+            'stream returned no usable JSON; failing without non-stream retry'
         );
-
-        try {
-            $recoveryPrompt = $this->prependComponentJsonOnlyGuard(
-                "RECOVERY CONTEXT: previous streaming attempt failed before returning usable JSON.\n"
-                . 'Failure summary: ' . $this->summarizeThrowable($streamThrowable) . "\n"
-                . "Return the final PageBuilder component JSON object now.\n\n"
-                . $prompt,
-                true
-            );
-            $response = $this->callAiOperation('generate', [
-                'prompt' => $recoveryPrompt,
-                'scenario_code' => 'pagebuilder_component_generation',
-                'params' => $this->buildAiRuntimeParams([
-                    'allow_zero_balance_provider' => true,
-                    'temperature' => 0.2,
-                    'max_tokens' => 8192,
-                    'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
-                    'response_format' => ['type' => 'json_object'],
-                ], false),
-            ]);
-            if (!\is_string($response) || \trim($response) === '') {
-                throw new \RuntimeException('non-stream recovery returned empty content');
-            }
-
-            return $this->decodeAndNormalizeComponentContent(
-                $response,
-                $region,
-                'AI component non-stream recovery did not return a valid component JSON payload'
-            );
-        } catch (\Throwable $recoveryThrowable) {
-            throw new \RuntimeException(
-                'AI component stream failed and non-stream recovery failed: '
-                . $this->summarizeThrowable($streamThrowable)
-                . ' | recovery: '
-                . $this->summarizeThrowable($recoveryThrowable),
-                0,
-                $recoveryThrowable
-            );
-        }
+        throw new \RuntimeException(
+            'AI component stream failed without retry: ' . $this->summarizeThrowable($streamThrowable),
+            0,
+            $streamThrowable
+        );
     }
 
     /**
@@ -4325,72 +4310,6 @@ class AiSitePageComponentGenerationService
         }
 
         return \implode(' | ', $messages);
-    }
-
-    private function shouldRecoverComponentStreamFailure(\Throwable $throwable): bool
-    {
-        $message = \strtolower($this->collectThrowableMessages($throwable));
-        if (\trim($message) === '') {
-            return true;
-        }
-
-        foreach ([
-            'streaming completed without final content',
-            'completed without final content',
-            'returned empty content',
-            'empty content',
-            'no content',
-            '流式生成完成但未返回任何内容',
-            '未返回任何内容',
-        ] as $marker) {
-            if (\str_contains($message, $marker)) {
-                return true;
-            }
-        }
-
-        foreach ([
-            'http 401',
-            'http 402',
-            'http 403',
-            'invalid api key',
-            'incorrect api key',
-            'missing api key',
-            'unauthorized',
-            'authentication',
-            'model unavailable',
-            'model selection',
-            'no available',
-            'provider account',
-            'provider configuration',
-            'provider temporarily unavailable',
-            'insufficient balance',
-            'quota',
-            'account',
-        ] as $marker) {
-            if (\str_contains($message, $marker)) {
-                return false;
-            }
-        }
-
-        foreach ([
-            'stream disconnected',
-            'stream failed',
-            'unexpected eof',
-            'unexpected end',
-            'unterminated',
-            'invalid json',
-            'malformed json',
-            'json payload',
-            'control character',
-            'tls connect error',
-            'while reading',
-        ] as $marker) {
-            if (\str_contains($message, $marker)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function emitComponentStreamFallbackNotice(string $region, string $reason): void
@@ -4550,71 +4469,6 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        if (self::JSON_REPAIR_MAX_ATTEMPTS <= 0) {
-            return null;
-        }
-
-        $this->emitJsonRepairChunk(
-            $region,
-            (string)__(
-                '鏈湴瑙ｆ瀽涓庝慨澶嶄粛鏈緱鍒版湁鏁?JSON锛屽皢鎸夎疆娆¤皟鐢?AI 杩涜缁撴瀯淇锛堝叡 %{1} 杞級',
-                [self::JSON_REPAIR_MAX_ATTEMPTS]
-            )
-        );
-
-        $currentContent = $content;
-        for ($attempt = 1; $attempt <= self::JSON_REPAIR_MAX_ATTEMPTS; $attempt++) {
-            $this->emitJsonRepairChunk(
-                $region,
-                (string)__(
-                    'JSON repair attempt %{1}/%{2}.',
-                    [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
-                )
-            );
-            $retryContent = $this->requestJsonRepair(
-                $region,
-                'AI did not return valid component JSON.',
-                $currentContent
-            );
-            if ($retryContent === null || \trim($retryContent) === '') {
-                $this->emitJsonRepairChunk(
-                    $region,
-                    (string)__(
-                        'JSON repair attempt %{1}/%{2} returned empty content.',
-                        [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
-                    )
-                );
-                continue;
-            }
-
-            $currentContent = $retryContent;
-            $this->emitJsonRepairChunk(
-                $region,
-                (string)__(
-                    'JSON repair attempt %{1}/%{2} returned content; validating.',
-                    [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
-                )
-            );
-            $decoded = $parser->extractAndDecode($currentContent);
-            if (\is_array($decoded)) {
-                $this->emitJsonRepairChunk(
-                    $region,
-                    (string)__(
-                        'JSON repair attempt %{1}/%{2} parsed successfully.',
-                        [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
-                    )
-                );
-                return $decoded;
-            }
-            $this->emitJsonRepairChunk(
-                $region,
-                (string)__(
-                    'JSON repair attempt %{1}/%{2} still failed validation.',
-                    [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
-                )
-            );
-        }
-
         return null;
     }
 
@@ -4641,39 +4495,6 @@ class AiSitePageComponentGenerationService
         }
     }
 
-    private function requestJsonRepair(string $region, string $validationError, string $previousContent): ?string
-    {
-        $previousSnippet = $this->clipText($previousContent, 8000);
-        $expectedFields = match ($region) {
-            'header' => 'extra_fields, php_variables, css_extra, html_extra, js_content',
-            'footer' => 'extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content',
-            default => 'extra_fields, php_variables, css_extra, css_responsive, html_content, js_content',
-        };
-        $safety = $this->buildComponentJsonPhpSafetyRulesEn();
-        $prompt = "You are repairing a malformed PageBuilder {$region} component JSON.\n"
-            . "The previous output failed because: {$validationError}\n"
-            . "Return ONLY one corrected JSON object. No markdown. No explanation.\n"
-            . "Keep valid content when possible, but fix the JSON structure first.\n"
-            . "Expected JSON fields: {$expectedFields}\n"
-            . "After JSON is valid, ensure php_variables / html_* / css_* / js_content will not cause PHP parse errors when merged into a .phtml template (especially complete array syntax and no => outside valid PHP arrays).\n"
-            . $safety
-            . "Previous invalid output:\n{$previousSnippet}";
-
-        $response = $this->callAiOperation('generate', [
-            'prompt' => $prompt,
-            'scenario_code' => 'pagebuilder_component_generation',
-            'params' => $this->buildAiRuntimeParams([
-                'temperature' => 0.2,
-                'max_tokens' => 8192,
-                'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
-                'response_format' => ['type' => 'json_object'],
-                'allow_zero_balance_provider' => true,
-            ]),
-        ]);
-
-        return \is_string($response) ? $response : null;
-    }
-
     /**
      * @param array<string,mixed> $params
      * @return array<string,mixed>
@@ -4688,10 +4509,10 @@ class AiSitePageComponentGenerationService
         }
 
         if (\PHP_SAPI === 'cli' && $isStream) {
-            $params['timeout'] = 0;
-            $params['disable_ai_timeout'] = true;
-            $params['disable_cli_timeout'] = true;
-            $params['enforce_timeout_in_stream'] = false;
+            $params['timeout'] = (int)($params['timeout'] ?? self::AI_REQUEST_TIMEOUT_SECONDS);
+            $params['disable_ai_timeout'] = false;
+            $params['disable_cli_timeout'] = false;
+            $params['enforce_timeout_in_stream'] = true;
         }
 
         return $params;
@@ -5772,9 +5593,10 @@ class AiSitePageComponentGenerationService
             . "6. Footer completeness contract (hard requirement): render at least 3 visible link labels in html_extra_column/html_extra, include at least one support/contact entry, and include at least one legal/compliance entry. Do not return empty link groups.\n"
             . "7. Footer visibility contract (hard requirement): never hide or collapse the footer by default (no display:none, visibility:hidden, opacity:0, height:0, off-canvas positioning, or clipped-to-zero wrappers).\n"
             . "8. CSS EFFECTS REQUIRED: the footer must have visible depth -a top border/shadow separator from the page body, hover lift on social icons with shadow, hover underline animation on link items, and transition effects on any interactive element. Grouped link columns should have heading separation.\n"
-            . "9. Style should follow the reference theme direction without naming the theme in visible text.\n"
-            . "9. The framework already provides brand/link/social/copyright fields. Set extra_fields, php_variables, and js_content to empty strings unless explicitly required.\n"
-            . "10. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars and footer_extra_text as one short visitor-facing sentence.\n"
+            . "9. Footer language contract: translate/rewrite every group heading, link label, tagline, support/legal sentence, and copyright phrase into source_of_truth_locale. Do not output English boilerplate such as Featured Pages, Policy Info, All Pages, A curated destination, or All rights reserved unless source_of_truth_locale is English.\n"
+            . "10. Style should follow the reference theme direction without naming the theme in visible text.\n"
+            . "11. The framework already provides brand/link/social/copyright fields. Set extra_fields, php_variables, and js_content to empty strings unless explicitly required.\n"
+            . "12. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars and footer_extra_text as one short visitor-facing sentence.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -5868,6 +5690,8 @@ class AiSitePageComponentGenerationService
             . "2a. Do not output blueprint meta-copy or instruction-shaped headings such as page-level highlight labels, design-task sentences, or layout instructions about card hierarchy, trust proof, or primary actions. Rewrite them into concrete business copy for this customer and locale.\n"
             . "2b. Card/list titles must be concrete visitor labels with descriptions. CTA labels belong on actual buttons/links, not as repeated ordinary card headings. Do not repeat the same title/description pair inside one component.\n"
             . "2c. Before returning, compare every heading, card title, badge, CTA label, alt/title/aria text, and paragraph against task labels, component labels, section labels, slot labels, and build-plan labels. Exact copies, title-cased copies, or lightly reworded instruction sentences starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are invalid visible copy; rewrite them into final customer-facing website copy.\n"
+            . "2d. Internal identifier ban (hard requirement): never render internal identifiers, queue/build labels, section codes, page_type values, slot ids, asset paths, or planning keys as visible copy. Strings such as home_page, about_page, page:..., shared:..., task_key, section_code, plan_locale, runtime_context, content/... , app/code/... , and var/... may exist only in system metadata/attributes, never in headings, paragraphs, badges, nav labels, CTA text, or alt/title/aria copy.\n"
+            . "2e. Spacing proofread gate (hard requirement): visible copy must read like final published prose, not token glue. Never concatenate a number directly with a word or label in headings, metrics, badges, steps, cards, or CTA copy in any language. Write `24 Hours`, `3 Steps`, `10 Years`, `4.9 Rating`, `7 Day Support`, `10 млн`, `4.8 звезды`, and `24 часа`, not `24Hours`, `3Steps`, `10Years`, `4.9Rating`, `7DaySupport`, `10млн`, `4.8звезды`, or `24часа`.\n"
             . "3. The section must be meaningfully different for its page type and role; home, about, contact, policy, and blog sections should not read the same.\n"
             . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
             . "5. CSS EFFECTS REQUIRED ON ALL BLOCKS (DO NOT SKIP): every block -title, subtitle, description, card, image, CTA, list, divider, icon -MUST have at least two visible CSS effects from: gradient text on headings, card hover lift with shadow, pill/badge style subtitles, decorative underlines on titles with gradient, border or background transitions, backdrop-filter glass effect, CSS-only decorations/pseudo-elements, or fade-in animation. Flat unstyled blocks are invalid unless the user EXPLICITLY indicated 'no effects', 'minimal', or 'clean' in the refine instruction.\n"
@@ -5880,6 +5704,9 @@ class AiSitePageComponentGenerationService
             . "10c. HERO/BANNER COVER-LAYER CONTRACT: for hero/banner generated images, the <img> class and CSS selector must match exactly, and that selector must set position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; with overlay/content above it. Include both a named overlay/scrim/veil layer and a named text/content panel class; the panel CSS must set readable foreground color, background/scrim, padding, border-radius, and max-width. If the image is inside html_content, style it with `#componentId .your-image-class`, never `#componentId.your-image-class`.\n"
             . "10a. MOBILE READABILITY REQUIRED: at 390px width, grids/flex rows must stack to one column, children need min-width:0, long headings must not be constrained to tiny ch-width columns, and image/media panels must not overlap or cover text/CTA content.\n"
             . "11. Do not repeat the framework title/description in the body as empty h1/h2/p tags. The body must add useful content such as cards, trust points, game tiles, proof points, or CTA support.\n"
+            . "11a. INFORMATION DENSITY GATE: do not create oversized empty cards, giant bordered boxes, or tall sections with only a number, one label, or one CTA. Every large card/panel must contain a concrete title, supporting sentence, and at least one proof/detail/action element. Metric cards need context, source meaning, or a short trust explanation; CTA bands need headline, supporting copy, and at least one secondary trust cue.\n"
+            . "11b. CTA COMPOSITION GATE: a button alone floating in the middle/bottom of a dark or blank section is invalid. Conversion blocks must have visible message hierarchy: headline, benefit copy, CTA, and trust/support note in a compact readable composition.\n"
+            . "11c. SPATIAL RHYTHM GATE: avoid excessive min-height/padding that creates empty voids. Use compact, content-led spacing; if a section is tall because of imagery, the image, overlay, text panel, and CTA must all contribute to the composition.\n"
             . "12. Preserve page-level color layering: this block must have its own surface/contrast role and must not make the whole page feel like one solid theme color.\n"
             . "13. Implement like a UI/interaction designer handoff: section-specific visual hierarchy, spatial rhythm, motion restraint, hover/focus states, and mobile stacking must be visible in html_content/css_extra.\n"
             . "14. Accessibility contrast gate: before returning, inspect every visible text/link/button/chip against its immediate background; rewrite CSS if any foreground/background pair is low-contrast.\n"
@@ -6035,6 +5862,8 @@ class AiSitePageComponentGenerationService
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
             . "- Renderer will not repair visitor copy after generation; the JSON you return must already contain final customer-specific visible copy.\n"
             . "- Never output internal list labels shaped like schema role + number, for example card/category/badge/step placeholders. Each card/list item needs a customer-specific title and description from the brief, build plan, or verified content data.\n"
+            . "- Internal identifier rewrite: if any candidate visible text still contains home_page, about_page, contact_page, page_type, section_code, task_key, plan_locale, runtime_context, shared:, page:, content/, app/code/, or var/, treat it as leaked metadata and rewrite it into natural customer-facing copy before returning.\n"
+            . "- Number-label spacing audit: check every metric, badge, stat, step, timeline chip, CTA, and nav label in every script. If a number is immediately followed by Latin or Cyrillic letters in visible copy, insert a readable space or rewrite the phrase into natural copy before returning. Examples: use `10 млн`, `4.8 звезды`, `24 часа`; never `10млн`, `4.8звезды`, or `24часа`.\n"
             . "- Never render broken image placeholders. If a verified uploaded asset URL is absent, create the visual with CSS-only shapes/pseudo-elements; never use <svg>.\n";
     }
 
@@ -6057,6 +5886,8 @@ class AiSitePageComponentGenerationService
             . "- Internal planning language is not output language. stage-1/build-plan/story/task samples are intent only.\n"
             . "- Before composing html_content/html_extra/footer text/nav labels, normalize every candidate sentence to source_of_truth_locale.\n"
             . $languageRule
+            . "- Proofread the final visible copy in source_of_truth_locale before returning: fix misspelled words, broken word fragments, and missing spaces between sentence text and CTA/link labels. Do not concatenate two labels or a paragraph plus CTA without whitespace or punctuation.\n"
+            . "- Numeric label spacing: write metric labels with a visible space or line break between numbers and words, e.g. `4.8 звезды`, never `4.8ЗВЕЗДЫ`.\n"
             . "- Final self-check before returning JSON: if any visitor-visible sentence is not in source_of_truth_locale, rewrite it now and then return.\n";
     }
 
@@ -6126,13 +5957,15 @@ class AiSitePageComponentGenerationService
             . "- Hero/banner mobile contract: immersive image-backed hero/banner layouts must use clamp() typography, max-width text columns, safe line-height, and breakpoint-specific overlay strength. At phone width, headings must not exceed the viewport, paragraphs must remain readable, and media/text/CTA layers must not overlap.\n"
             . "- Responsive audit contract: validate the component mentally at 1440px, 1024px, 768px, and 390px before returning. If any breakpoint would produce horizontal overflow, cropped text, unreadable text-on-image contrast, or absolute-position overlap, rewrite css_extra/css_responsive in the AI output.\n"
             . "- Card readability contract: card icons, bullets, badges, titles, body copy, and CTAs must have explicit spacing and cannot collide or visually sit on top of each other. Do not shrink cards into tiny unreadable strips; keep body text at a readable size and use normal wrapping/line-height.\n"
+            . "- Information density contract: large cards and panels must not be empty frames. If a card is taller than a simple text row, it must include a meaningful heading, supporting copy, and a detail/proof/action. Metric cards must explain why the number matters; CTA sections must not be a single button in a large blank area.\n"
+            . "- Layout economy contract: avoid giant vertical voids, excessive min-height, and over-padded sections unless a real image composition fills the space. Dense, readable, content-led layouts are preferred over decorative empty surfaces.\n"
             . "- Typography restraint contract: decorative letter-spacing is allowed only for short eyebrow labels, not full headings or CTA headlines. Main headings must read naturally on desktop and mobile without huge word gaps, clipped letters, or awkward forced line breaks.\n"
             . "- Block-specific baseline: use the role-specific base pattern unless explicitly overridden: hero/banner defaults to an immersive image-backed banner; trust defaults to badge/proof/credential rhythm; game/product defaults to media-led showcase or feature tiles; FAQ defaults to accordion/help rhythm; story defaults to timeline/editorial narrative; CTA defaults to a cinematic conversion band. Do not render every block as the same centered title + three small cards + image.\n"
             . "- Shadow/depth effects required: use box-shadow, drop-shadow, or CSS filters to create visual depth on cards, images, and interactive elements. At minimum, implement a subtle card shadow with a hover lift (transition: box-shadow 0.3s ease, transform 0.3s ease). Do not leave interactive surfaces flat.\n"
             . "- Richer text colors: do not rely on just one heading color and one body color. Use accent-colored spans, gradient text (via background-clip), highlighted/inline marks, and color-mix() to create typographic hierarchy and visual rhythm in headings and key phrases.\n"
             . "- Customer-intent lock: the final HTML/CSS must visibly match the user's actual business/game/service scenario through motifs, labels, CTA affordances, proof details, and interaction behavior; do not generate a category-neutral section.\n"
             . "- Editable-field completeness: if default_config contains content.title/content.subtitle/content.description or alias fields such as title, heading, headline, description, body, section_title, or eyebrow, keep them populated with coherent visitor copy. Do not overwrite framework-provided copy fields with empty strings; empty editable fields make the preview fall back to generic labels and are invalid.\n"
-            . "- No post-render cleanup dependency: invalid copy or layout fails validation and triggers AI retry. Do not rely on the renderer to rename labels, rewrite copy, or restyle a weak composition after JSON return.\n"
+            . "- No post-render cleanup dependency: invalid copy or layout fails validation and stops the task. Do not rely on the renderer to rename labels, rewrite copy, retry generation, or restyle a weak composition after JSON return.\n"
             . "- Interaction/effects requirement: implement at least one friendly visible hover/focus/reveal/ambient effect with CSS transition/transform/animation plus a reduced-motion-safe fallback when motion is used; do not describe effects without CSS.\n"
             . "- Color quality requirement: define explicit readable background/text/CTA/focus pairings; dark surfaces require light foregrounds, and neighboring blocks must differ by surface depth, divider, texture, or layout rhythm.\n"
             . "- HTML structure contract: every HTML field must be a valid fragment with a component-owned root wrapper, closed attribute quotes, and balanced tags. Never emit framework wrappers like `.pb-ai-html-block`, never close a `div/section/article` that was not opened inside the same field, and never concatenate neighboring blocks into one field.\n"
@@ -6621,6 +6454,9 @@ class AiSitePageComponentGenerationService
             ),
             $locale
         );
+        if ($brandSummary === '') {
+            $brandSummary = $this->localizeBuildText('brand_summary', $locale);
+        }
         $legalLines = [];
         $featuredLines = [];
         $allLines = [];
@@ -7353,7 +7189,7 @@ class AiSitePageComponentGenerationService
                 . "- Rules: use the supplied final_url value without changing it; match the asset by slot_id context. If no asset matches this section, render CSS-only decorative structure; never use <svg>.\n"
                 . "- Slot placement contract: place the editable <img> for the matching slot inside this component's root wrapper before decorative-only layers. For non-hero sections, use it as a media card, portrait/avatar rail, proof image, or editorial visual; never omit it because the section is text-heavy.\n"
                 . "- The same <img> must keep the concrete src, data-pb-ai-asset-slot, and data-pb-ai-image-role='generated-asset' values from the copied template.\n"
-                . "- Required slot shape: for hero/background designs, make that <img> a cover layer with CSS object-fit/absolute/inset/width/height, then place overlay text above it; do not replace the editable <img> with CSS background-image only.\n"
+                . "- Required slot shape: for hero/background designs, make that <img> a cover layer with CSS object-fit/absolute/inset/width/height, then place overlay text above it; do not replace the editable <img> with CSS background-image only. Add a component-prefixed hero image class to the <img> and style the exact same selector with position:absolute; inset:0; width:100%; height:100%; object-fit:cover.\n"
                 . $this->buildVerifiedAssetPromptContract($verifiedAssets)
             : "- verified_assets: []\n- verified asset rule: no verified real image URL is available, so render visual media as CSS-only shapes/pseudo-elements and do not invent image URLs or use <svg>.\n";
 
@@ -8141,6 +7977,12 @@ class AiSitePageComponentGenerationService
             'Visitors can verify',
             'Visitors understand',
             'Visitors are guided',
+            'Show popular',
+            'Showcase popular',
+            'Highlight benefits',
+            'Emphasize benefits',
+            'Strengthen trust',
+            'Build trust',
             'before publishing',
             'reviewable page content',
             'priority from stage one',
@@ -8183,6 +8025,7 @@ class AiSitePageComponentGenerationService
 
         $matches = [];
         $patterns = [
+            '/^(?:показать|представить|подчеркнуть|укрепить|сформировать|объяснить|рассказать|помочь|закрыть)\b.{0,120}[.!?。]?\s*$/iu',
             '/(?:这个|本|当前)?(?:页面|区块|模块|page|section|block).{0,24}(?:核心|关键|主要|key|core).{0,16}(?:亮点|卖点|重点|highlights?|selling\s+points?)/iu',
             '/(?:用|使用|通过|以|use|using|display|show|present).{0,28}(?:卡片层级|视觉层级|内容层级|card\s+hierarchy|visual\s+hierarchy).{0,90}(?:展示|呈现|强调|卖点|差异|信任|selling\s+points?|differences?|trust)/iu',
             '/(?:把|将|让|put|place|make).{0,22}(?:主行动|主要行动|主按钮|primary\s+action|main\s+action|cta).{0,60}(?:卡片|按钮|button|card).{0,60}(?:减少|降低|避免|reduce|avoid|hesitation|犹豫)/iu',
@@ -9002,6 +8845,9 @@ class AiSitePageComponentGenerationService
         if ($locale !== '' && $this->isCjkLocale($locale) && $this->hasDominantLatinProseForCjkLocale($value)) {
             return '';
         }
+        if ($locale !== '' && !$this->isEnglishLocale($locale) && $this->containsEnglishBoilerplateVisibleCopy($value)) {
+            return '';
+        }
         if ($this->containsPlanningObservationCopy($value)) {
             return '';
         }
@@ -9034,6 +8880,21 @@ class AiSitePageComponentGenerationService
 
     private function localizePageTypeTitle(string $pageType, string $locale): string
     {
+        if ($this->isRussianLocale($locale)) {
+            return match ($pageType) {
+                Page::TYPE_HOME => 'Главная',
+                Page::TYPE_ABOUT => 'О нас',
+                Page::TYPE_CONTACT => 'Контакты',
+                Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => 'Блог',
+                Page::TYPE_PRIVACY_POLICY => 'Политика конфиденциальности',
+                Page::TYPE_TERMS_OF_SERVICE => 'Условия использования',
+                Page::TYPE_REFUND_POLICY => 'Политика возврата',
+                Page::TYPE_SHIPPING_POLICY => 'Доставка',
+                Page::TYPE_COOKIE_POLICY => 'Политика Cookie',
+                default => '',
+            };
+        }
+
         if ($this->isChineseLocale($locale)) {
             return match ($pageType) {
                 Page::TYPE_HOME => '首页',
@@ -9065,8 +8926,27 @@ class AiSitePageComponentGenerationService
 
     private function localizeBuildText(string $key, string $locale): string
     {
+        if ($this->isRussianLocale($locale) && $key === 'brand_summary') {
+            return 'Надёжный источник карточных игр и APK для игроков в Индии.';
+        }
         if ($key === 'site_name_fallback') {
+            if ($this->isRussianLocale($locale)) {
+                return 'Сайт';
+            }
             return $this->isChineseLocale($locale) ? "\u{7AD9}\u{70B9}" : 'Website';
+        }
+
+        if ($this->isRussianLocale($locale)) {
+            return match ($key) {
+                'policy_info' => 'Правовая информация',
+                'featured_pages' => 'Основные разделы',
+                'all_pages' => 'Все разделы',
+                'all_rights_reserved' => 'Все права защищены.',
+                'contact_us' => 'Связаться с нами',
+                'explore_more' => 'Подробнее',
+                'get_started' => 'Начать',
+                default => $key,
+            };
         }
 
         if ($this->isChineseLocale($locale)) {
@@ -9087,6 +8967,7 @@ class AiSitePageComponentGenerationService
             'featured_pages' => 'Featured Pages',
             'all_pages' => 'All Pages',
             'all_rights_reserved' => 'All rights reserved.',
+            'brand_summary' => 'A curated destination with clear information, trusted support, and simple next steps.',
             'contact_us' => 'Contact Us',
             'explore_more' => 'Explore More',
             'get_started' => 'Get Started',
@@ -9217,6 +9098,40 @@ class AiSitePageComponentGenerationService
     private function isChineseLocale(string $locale): bool
     {
         return \str_starts_with(\strtolower(\trim($locale)), 'zh');
+    }
+
+    private function isEnglishLocale(string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        return $locale === 'en' || \str_starts_with($locale, 'en_') || \str_starts_with($locale, 'en-');
+    }
+
+    private function isRussianLocale(string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        return $locale === 'ru' || \str_starts_with($locale, 'ru_') || \str_starts_with($locale, 'ru-');
+    }
+
+    private function containsEnglishBoilerplateVisibleCopy(string $value): bool
+    {
+        $normalized = \preg_replace('/\s+/u', ' ', \trim($value)) ?? $value;
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach ([
+            'A curated destination with clear information, trusted support, and simple next steps.',
+            'Featured Pages',
+            'Policy Info',
+            'All Pages',
+            'All rights reserved.',
+        ] as $phrase) {
+            if (\mb_stripos($normalized, $phrase) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isJapaneseLocale(string $locale): bool
@@ -9588,27 +9503,6 @@ class AiSitePageComponentGenerationService
         return "Website content language (locale {$locale} - {$hint}): all visitor-visible copy (headings, buttons, nav labels, body text, footer, alt text) must be written in this language from the website requirement. Do not use the planning/plan language as visitor copy unless it matches this locale.\n";
     }
 
-    private function emitComponentRetryNotice(string $region, string $componentCode, string $reason, int $attempt): void
-    {
-        $sse = RequestContext::get(RequestContext::SSE_WRITER_KEY);
-        if (!$sse || !\method_exists($sse, 'sendEvent')) {
-            return;
-        }
-
-        try {
-            $sse->sendEvent('warning', [
-                'region' => $region,
-                'component_code' => $componentCode,
-                'message' => (string)__('AI component generation failed validation; retrying with AI repair attempt %{1}. Reason: %{2}', [
-                    $attempt,
-                    $reason,
-                ]),
-                'retry_attempt' => $attempt,
-            ]);
-        } catch (\Throwable) {
-        }
-    }
-
     private function emitComponentFallbackNotice(string $region, string $componentCode, string $reason): void
     {
         $sse = RequestContext::get(RequestContext::SSE_WRITER_KEY);
@@ -9625,106 +9519,6 @@ class AiSitePageComponentGenerationService
             ]);
         } catch (\Throwable) {
         }
-    }
-
-    private function buildRetryGenerationPrompt(
-        string $region,
-        string $componentCode,
-        string $basePrompt,
-        string $reason,
-        int $attempt,
-        array $failedAiData = [],
-        array $verifiedAssets = []
-    ): string {
-        $cssPrefix = $this->normalizeComponentCssPrefix($componentCode);
-        $structuralFailure = $this->isStructuralComponentGenerationFailureReason($reason);
-        $imageAllowlistFailure = \stripos($reason, 'Generated image source is outside verified asset allowlist') !== false
-            || \stripos($reason, 'Image source allowlist') !== false
-            || \stripos($reason, 'outside verified asset') !== false;
-        $failedPayload = '';
-        if ($failedAiData !== [] && !$structuralFailure && !$imageAllowlistFailure) {
-            $failedAiData = $this->redactUnverifiedImageReferencesForRetryPrompt(
-                $this->normalizeComponentPayload($failedAiData),
-                $verifiedAssets
-            );
-            $failedPayload = $this->clipText(
-                (string)\json_encode($failedAiData, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR),
-                5000
-            );
-        }
-        $retryVerifiedAssetContract = $verifiedAssets !== []
-            ? "\n" . $this->buildVerifiedAssetPromptContract($verifiedAssets)
-            : '';
-
-        return $basePrompt
-            . "\n\nAI enhanced repair/rewrite mode (attempt {$attempt}/" . self::COMPONENT_GENERATION_MAX_ATTEMPTS . "):"
-            . "\n- The previous AI output failed validation because: {$reason}"
-            . "\n- Regenerate the SAME component as a full-quality AI design repair, not a stub; keep the complete planned component scope."
-            . "\n- Preserve the original page/task intent and customer brief; strengthen visitor-facing copy, hierarchy, surface depth, CTA states, and theme-specific visual devices."
-            . "\n- If the previous output used the wrong language, rewrite every visitor-visible heading, body paragraph, CTA label, nav label, badge, form label, legal/support sentence, and alt text into the website content locale before returning JSON."
-            . "\n- Treat task labels, component labels, section labels, image-slot labels, queue/build-plan labels, and schema role labels as internal metadata only. If they read like instructions such as Introduce..., Showcase..., Answer..., Reassure..., or Remove..., rewrite them into final customer-facing copy before returning JSON."
-            . "\n- The renderer does not perform post-render content replacements or mobile/aesthetic CSS injection. Fix the JSON itself; do not assume PHP will rename labels, split card copy, add responsive CSS, or restyle a weak layout after generation."
-            . "\n- Before reading or reusing failed payload media, obey the closed verified_asset_src_allowlist from the base prompt. Failed payload image URLs are untrusted unless they exactly match a supplied final_url."
-            . $retryVerifiedAssetContract
-            . ($imageAllowlistFailure ? "\n- IMAGE ALLOWLIST REWRITE MODE: do not reuse or edit the failed payload image URL. Rebuild image markup from the copyable_verified_asset_img_template only, copying the final_url literally. Never construct, shorten, normalize, or infer image filenames from slot IDs." : '')
-            . ($structuralFailure ? "\n- STRUCTURAL REWRITE MODE: the previous payload failed JSON/HTML/CSS grammar. Do not reuse or patch the failed payload markup/CSS. Rebuild a clean component from the base prompt, visual contract, verified asset template, and component prefix." : '')
-            . ($structuralFailure ? "\n- STRUCTURAL PRIORITY OVERRIDE: valid balanced HTML is more important than ornate composition for this retry. Use a simple shallow tree, no anchors around block elements, no inline tags inside headings, no adjacent tags merged together, and no visitor text containing raw < or > characters." : '')
-            . ($structuralFailure ? "\n- STRUCTURAL TAG LAYOUT: write one root wrapper, then sibling div/h2/h3/p/a/img/ul/li elements. Close each tag before opening the next major block. Do not nest h2/h3 inside p/a/span/strong, and do not close a parent while a child tag is still open." : '')
-            . ($structuralFailure ? "\n- STRUCTURAL SAFE HTML SUBSET: use only section, div, h2, h3, p, a, img, ul, li, small, strong, and span. Do not use details, summary, button, form, input, custom elements, nested inline tags inside headings, empty wrappers, or any tag not in this list. Keep html_content under 1400 characters." : '')
-            . ($structuralFailure ? "\n- STRUCTURAL SAFE CSS SUBSET: use only stable properties: position, inset, z-index, display, grid-template-columns, gap, align-items, justify-content, width, max-width, min-width, height, min-height, padding, margin, border, border-radius, background, color, font-size, font-weight, line-height, letter-spacing, text-transform, box-shadow, overflow, object-fit, object-position, opacity, transform, transition. Keep css_extra under 1600 characters and css_responsive under 800 characters." : '')
-            . ($structuralFailure ? "\n- STRUCTURAL CSS FORMAT: one selector block at a time, one `property: value;` declaration per line. Avoid quoted CSS values; if a string value is unavoidable, close the quote before the semicolon. Do not output CSS variables, vendor-prefixed properties, pseudo-elements, `content:`, `filter`, `backdrop-filter`, `color-mix()`, `calc()`, `mask`, `clip-path`, or more than one CSS function in a single value." : '')
-            . ($failedPayload !== '' ? "\n- Start from this failed component JSON and repair it in place instead of inventing a fresh unrelated block:\n" . $failedPayload : '')
-            . "\n- Return exactly one JSON object with exactly these six string keys: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. Do not append a second JSON object, raw CSS, `php_variables:` labels, markdown fences, or explanation after the closing brace."
-            . "\n- JSON transport repair: the corrected output must be one parseable JSON object on its own. If content is too long, shorten nonessential detail while preserving the block intent; never truncate mid-string, mid-tag, or mid-CSS-rule."
-            . "\n- Escape JSON strings correctly: use backslashes only for valid JSON escapes (\\\", \\\\, \\/, \\n, \\r, \\t, \\uXXXX). Never output stray sequences like \\d, \\R, \\<, or class-name\\Text inside html_content/css_extra."
-            . "\n- Repair quote balance before returning: use single quotes for HTML attributes, including required generated-image <img> attributes. When a verified asset exists, copy the concrete editable image template so src, data-pb-ai-image-role='generated-asset', and data-pb-ai-asset-slot stay on the same <img>."
-            . "\n- If the failure mentions invalid JSON, valid component JSON payload, opening tag, unclosed quote, or missing element name, rebuild the HTML fragment with one root wrapper plus balanced child elements, then rebuild styling in css_extra/css_responsive. Do not put raw `<` or `>` in visitor text, and do not paste raw double-quoted HTML attributes inside JSON strings."
-            . "\n- If the failure mentions a Required image slot, locate the matching slot_id and final_url from Block visual contract, verified_asset_src_allowlist, verified_assets, or copyable_verified_asset_img_template, then copy the concrete editable image template into html_content as a direct child of the root wrapper or inside the first media wrapper. Use CSS for cover/overlay behavior, but do not use CSS background-image only for a required slot."
-            . "\n- If the failure mentions skipped real images, verified assets exist, or none referenced in html_content, copy one concrete editable image template into html_content for this section. Put it in a real media wrapper immediately under the component root, then design the surrounding testimonial/trust/category/FAQ/story content around that media."
-            . "\n- If the failed payload contains any img src that is not the supplied final_url for its slot, replace that src with the matching supplied final_url. Never preserve invented image URLs, stock URLs, placeholders, or malformed scheme-less URLs like ://images.example/..."
-            . "\n- Image source allowlist is closed: do not use Unsplash, Pexels, Pixabay, Freepik, Shutterstock, Adobe Stock, source.unsplash.com, images.unsplash.com, picsum.photos, loremflickr.com, external stock/CDN URLs, or any image URL not supplied as a verified final_url."
-            . "\n- IMAGE_SRC_SELF_CHECK before returning: every <img src> and every CSS url(...) must be either an exact verified final_url from the prompt or not present. Required slots must have one same <img> containing exact src, data-pb-ai-image-role='generated-asset', and data-pb-ai-asset-slot."
-            . "\n- Do not paste planning/observation copy into visible text. Rewrite \"Visitors see\" and \"Visitors can review\" sentences into direct marketing, legal, support, or editorial copy."
-            . "\n- If the failed output used internal schema labels shaped like role + number, replace them with customer-specific visible titles and descriptions from the brief/build plan."
-            . ($structuralFailure ? "\n- Because this is a structural retry, keep visual richness in CSS backgrounds, spacing, borders, shadows, and gradients instead of deeper HTML nesting." : "\n- Do not downgrade to a generic grid: preserve a distinctive composition, theme-matched surface treatment, and at least two visible design devices.")
-            . ($structuralFailure ? '' : "\n- If the failed output looked like plain cards or a flat strip, rewrite the composition with richer layout, stronger art direction, and complete scoped CSS instead of reducing detail.")
-            . "\n- If this is a hero/banner component and no explicit user adjustment asks for another layout, rebuild it as a true premium 1920x750-style banner: full-background generated image or cover visual layer, dark gradient overlay, and floating content inside a centered max-width container. A small side image plus boxed text is invalid as the default repair target. If explicit user adjustment conflicts, follow the user composition but keep premium generated imagery, readable overlay, and strong hierarchy."
-            . "\n- If the failure mentions CSS scope or #componentId.component-class, rewrite root/wrapper selectors as descendant selectors, e.g. `#componentId .pb-component-root`. The html_content fragment is nested inside the framework root."
-            . "\n- If the failure mentions hero image cover CSS, keep the editable <img> but fix its class/CSS selector spelling exactly and style that selector with position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; then layer overlay and content above it."
-            . "\n- If the failure mentions HTML/CSS scope, attribute, class, or structure contract, rebuild the fragment with one class-only wrapper using `{$cssPrefix}-root`; every custom class must start with the exact prefix `{$cssPrefix}-`, including the leading `pb`. Never output `id='componentId'`, `<tag='...'>`, attributes glued after a closing quote, or class names outside that prefix."
-            . "\n- If the failure mentions CSS structure, rewrite css_extra/css_responsive from scratch with simple complete declarations: each declaration must be `property: value;`, with a semicolon before the next property. Use `z-index`, never `-index`; no property name may start with a single hyphen. Remove empty declarations, bare percent values like `height:%`, merged declarations caused by missing semicolons, unclosed strings, orphan parentheses, color-mix(), mask, clip-path, nested calc(), and filter chains."
-            . "\n- Mobile repair is mandatory: at 390px width, reset narrow heading max-widths, stack grids/flex rows, set min-width:0 on columns/cards, and ensure images or absolute media layers never cover body copy, CTA, or card text."
-            . "\n- If this is not hero/banner, choose a section-specific recipe for the role: trust badge wall, game showcase, FAQ accordion, story timeline, testimonial quote rail, or cinematic CTA band. Do not reuse the same three-card row plus image from adjacent blocks."
-            . "\n- Never reuse generic CTA/category/navigation labels as a repeated card trio; labels must come from the customer brief, verified data, or approved build plan."
-            . "\n- If validation failed for crossed closing tags, rebuild html_content with separate adjacent closing tags. Never merge `</p></a>` into `</pa>`, `</small></div>` into `</smalldiv>`, or `</div></section>` into `</divsection>`."
-            . "\n- If validation failed for malformed tags, do not abbreviate heading tags or infer closing tags. Every heading must close with the exact same element name, for example `<h2>...</h2>` or `<h3>...</h3>`; outputs like `</h>`, `</h2div>`, or closing a parent while a span/strong is still open are invalid."
-            . "\n- If validation failed near `<details>` or `<summary>`, rebuild the component without those tags. Use static FAQ cards with div/h3/p/a/img and scoped CSS; do not attempt to repair malformed disclosure markup."
-            . "\n- If validation failed for an unstyled browser-default link, remove nonessential links or rebuild every `<a>` with a `{$cssPrefix}-...` class and explicit normal, hover, and focus CSS. Do not rely on global link styling."
-            . "\n- If validation failed for symbol-only decorative control, remove standalone glyph text such as arrows, stars, card suits, plus signs, bullets, or separators from html_content and rebuild those ornaments in css_extra/css_responsive with pseudo-elements, gradients, borders, or shadows."
-            . "\n- For link/contact/social blocks, include real visitor-facing labels, short supporting copy where useful, clear interaction states, and visible grouping or motif treatment."
-            . "\n- For blog/article/category blocks, render editorial-quality visitor content: category headline, article teasers, meta chips, related links, reading CTA, and theme-specific layout treatment; use internal anchors or provided URLs, never example.com."
-            . "\n- Keep `extra_fields`, `php_variables`, and `js_content` empty unless absolutely necessary."
-            . "\n- Do not use generic CSS classes such as .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active; use `{$cssPrefix}-...` classes in both CSS and HTML, and scope CSS selectors with #componentId."
-            . "\n- Fix contrast explicitly: no dark text on dark surfaces, no pale text on pale surfaces, and every CTA/link/focus state must be readable against its immediate background."
-            . "\n- Fix page hierarchy explicitly: do not repaint the block as one uniform theme color; use role-based palette surfaces, elevation, dividers, texture, or composition contrast."
-            . "\n- Fix HTML structure explicitly: every html_* fragment must be balanced, no stray closing tags, no unclosed non-void tags, and no full HTML document wrapper."
-            . "\n- Keep CSS within the requested budget but visually complete: every selector and @media block must close its braces before the JSON field ends."
-            . "\n- Keep the component complete for its planned purpose, with a component-specific wrapper and enough real content to stand alone in the final preview."
-            . "\n- Avoid loops, complex PHP, embedded arrays, dynamic calculations, markdown fences, placeholder copy, and unverified external assets."
-            . "\n- Return pure JSON only for component `{$componentCode}`.";
-    }
-
-    private function isStructuralComponentGenerationFailureReason(string $reason): bool
-    {
-        $reason = \strtolower($reason);
-        if ($reason === '') {
-            return false;
-        }
-
-        return \preg_match(
-            '/(?:valid component json payload|invalid json|json payload|html structure invalid|css structure contract|opening tag|closing tag|crossed closing|orphan closing|unclosed tag|unclosed quote|missing whitespace|attribute name is missing|attribute glued|malformed css|merged css|missing semicolon|unbalanced css|parentheses|declaration|unterminated tag)/i',
-            $reason
-        ) === 1;
     }
 
     /**
@@ -9764,68 +9558,6 @@ class AiSitePageComponentGenerationService
         return $assets;
     }
 
-    /**
-     * Keep retry prompts useful without letting a rejected image URL become an
-     * anchor the model copies again. This changes only prompt context, not the
-     * generated block output.
-     *
-     * @param array<string,mixed> $payload
-     * @param array<string,string> $verifiedAssets
-     * @return array<string,mixed>
-     */
-    private function redactUnverifiedImageReferencesForRetryPrompt(array $payload, array $verifiedAssets): array
-    {
-        $allowedUrls = \array_values(\array_filter(\array_map('trim', \array_values($verifiedAssets)), static fn(string $url): bool => $url !== ''));
-        foreach ($payload as $key => $value) {
-            if (\is_array($value)) {
-                $payload[$key] = $this->redactUnverifiedImageReferencesForRetryPrompt($value, $verifiedAssets);
-                continue;
-            }
-            if (!\is_string($value) || $value === '') {
-                continue;
-            }
-            $payload[$key] = $this->redactUnverifiedImageReferencesInString($value, $allowedUrls);
-        }
-
-        return $payload;
-    }
-
-    /**
-     * @param list<string> $allowedUrls
-     */
-    private function redactUnverifiedImageReferencesInString(string $value, array $allowedUrls): string
-    {
-        $replaceUrl = function (string $url) use ($allowedUrls): string {
-            $url = \html_entity_decode(\trim($url), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-            if ($url === '') {
-                return '';
-            }
-            foreach ($allowedUrls as $allowedUrl) {
-                if ($url === $allowedUrl || $this->normalizeVerifiedAssetUrl($url) === $this->normalizeVerifiedAssetUrl($allowedUrl)) {
-                    return $url;
-                }
-            }
-
-            return '[UNVERIFIED_IMAGE_URL_REMOVED_USE_VERIFIED_FINAL_URL]';
-        };
-
-        $value = \preg_replace_callback(
-            '/(<img\b[^>]*\bsrc\s*=\s*)(["\'])(.*?)\2/isu',
-            static function (array $matches) use ($replaceUrl): string {
-                return (string)$matches[1] . (string)$matches[2] . $replaceUrl((string)$matches[3]) . (string)$matches[2];
-            },
-            $value
-        ) ?? $value;
-
-        return \preg_replace_callback(
-            '/url\(\s*([\'"]?)(.*?)\1\s*\)/isu',
-            static function (array $matches) use ($replaceUrl): string {
-                return 'url(' . (string)$matches[1] . $replaceUrl((string)$matches[2]) . (string)$matches[1] . ')';
-            },
-            $value
-        ) ?? $value;
-    }
-
     private function describeLocaleForAiPrompt(string $locale): string
     {
         return match ($locale) {
@@ -9834,6 +9566,7 @@ class AiSitePageComponentGenerationService
             'en_US' => 'English',
             'ja_JP' => 'Japanese',
             'ko_KR' => 'Korean',
+            'ru_RU' => 'Russian',
             default => $locale,
         };
     }
