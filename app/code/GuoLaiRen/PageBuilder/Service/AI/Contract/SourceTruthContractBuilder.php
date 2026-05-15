@@ -6,6 +6,13 @@ namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
 
 final class SourceTruthContractBuilder
 {
+    public function __construct(
+        private readonly ?ContractMetaBuilder $metaBuilder = null,
+        private readonly ?PermissionMatrix $permissionMatrix = null,
+        private readonly ?QaGateHelper $qaGateHelper = null
+    ) {
+    }
+
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -37,9 +44,50 @@ final class SourceTruthContractBuilder
             $siteName = $this->fallbackSiteNameFromBrief($brief);
         }
 
+        $frozenFields = [
+            'site_identity',
+            'must_include_facts',
+            'must_include_keywords',
+            'conversion_goals',
+            'required_home_blocks',
+            'visual_must_honor',
+            'must_not_do',
+            'content_locale',
+            'input_locale',
+        ];
+        $qa = $this->qaGateHelper ?? new QaGateHelper();
+        $metaBuilder = $this->metaBuilder ?? new ContractMetaBuilder();
+
         return [
             'contract_type' => 'source_truth',
             'version' => 'v1',
+            'contract_meta' => $metaBuilder->build(
+                ContractType::TYPE_SOURCE_TRUTH,
+                ContractType::STAGE_STAGE1,
+                ContractType::STATUS_DRAFT,
+                'source_truth_builder',
+                'json_strict',
+                [
+                    'site_name' => $siteName,
+                    'page_type_count' => \count($pageTypes),
+                ]
+            ),
+            'permission_matrix' => ($this->permissionMatrix ?? new PermissionMatrix())->forStage(ContractType::STAGE_STAGE1),
+            'frozen_fields' => $frozenFields,
+            'mutable_fields' => ['qa_gates.*'],
+            'source_contracts' => [],
+            'qa_gates' => [
+                'schema_shape' => $qa->gate(
+                    'schema_shape',
+                    QaGateHelper::STATUS_PASS,
+                    'Source truth contract shape is present.'
+                ),
+                'human_review' => $qa->gate(
+                    'human_review',
+                    QaGateHelper::STATUS_PENDING,
+                    'Human review is required before downstream stages treat source truth as frozen.'
+                ),
+            ],
             'content_locale' => $contentLocale,
             'input_locale' => $userLocale,
             'site_identity' => [
@@ -80,16 +128,37 @@ final class SourceTruthContractBuilder
             if ($line === '' || \str_starts_with($line, '#')) {
                 continue;
             }
-            ++$id;
-            $facts[] = [
-                'id' => 'f' . \str_pad((string)$id, 2, '0', \STR_PAD_LEFT),
-                'source' => 'user_brief',
-                'text' => $line,
-                'visible_copy_requirement' => $inputLocale !== $contentLocale
-                    ? "Translate meaning into {$contentLocale}, preserve core intent"
-                    : 'Use directly in website copy',
-                'weight' => $id <= 3 ? 10 : 8,
-            ];
+            $clauses = \preg_split('/[，,；;。！？!?]+/u', $line) ?: [];
+            $addedFromLine = false;
+            foreach ($clauses as $clause) {
+                $clause = \trim((string)$clause);
+                if ($clause === '' || $this->isStyleOnlyBriefClause($clause)) {
+                    continue;
+                }
+                ++$id;
+                $facts[] = [
+                    'id' => 'f' . \str_pad((string)$id, 2, '0', \STR_PAD_LEFT),
+                    'source' => 'user_brief',
+                    'text' => $clause,
+                    'visible_copy_requirement' => $inputLocale !== $contentLocale
+                        ? "Translate meaning into {$contentLocale}, preserve core intent"
+                        : 'Use directly in website copy',
+                    'weight' => $id <= 3 ? 10 : 8,
+                ];
+                $addedFromLine = true;
+            }
+            if (!$addedFromLine) {
+                ++$id;
+                $facts[] = [
+                    'id' => 'f' . \str_pad((string)$id, 2, '0', \STR_PAD_LEFT),
+                    'source' => 'user_brief',
+                    'text' => $line,
+                    'visible_copy_requirement' => $inputLocale !== $contentLocale
+                        ? "Translate meaning into {$contentLocale}, preserve core intent"
+                        : 'Use directly in website copy',
+                    'weight' => $id <= 3 ? 10 : 8,
+                ];
+            }
         }
 
         if ($instruction !== '') {
@@ -104,6 +173,11 @@ final class SourceTruthContractBuilder
         }
 
         return $facts;
+    }
+
+    private function isStyleOnlyBriefClause(string $clause): bool
+    {
+        return \preg_match('/(?:风格|丝滑|动效|视觉|配色|色彩|土豪气|高级感|氛围感|质感|UI|界面效果)/iu', $clause) === 1;
     }
 
     /**
@@ -179,10 +253,13 @@ final class SourceTruthContractBuilder
     private function resolveRequiredHomeBlocks(string $brief, string $instruction): array
     {
         $combined = $brief . "\n" . $instruction;
-        $blocks = ['hero_download', 'final_download_cta'];
+        $downloadIntent = \preg_match('/(?:APK|download|app|安装|下载|推广)/iu', $combined) === 1;
+        $blocks = $downloadIntent
+            ? ['hero_download', 'final_download_cta']
+            : ['hero', 'final_cta'];
 
         if (\preg_match('/(?:游戏|game|棋牌|card|Teen\s*Patti|rummy)/iu', $combined)) {
-            $blocks[] = 'game_showcase';
+            $blocks[] = 'game_showcase_or_features';
         }
         if (\preg_match('/(?:信任|trust|安全|secure|放心)/iu', $combined)) {
             $blocks[] = 'trust_security';
@@ -191,7 +268,7 @@ final class SourceTruthContractBuilder
             $blocks[] = 'seo_faq';
         }
 
-        return $blocks;
+        return \array_values(\array_unique($blocks));
     }
 
     /**

@@ -7,6 +7,8 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContractSchema;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContractValidator;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceContractHelper;
 
 final class AiSiteBuildPlanService
 {
@@ -75,6 +77,7 @@ final class AiSiteBuildPlanService
         ]);
         $sourceSignature = $this->sourceSignature($scope, $sourcePlan, $executionBlueprint);
         $contractId = 'build_plan_v2_' . \substr($sourceSignature, 0, 16);
+        $sourceContracts = $this->buildSourceContractRefs($scope, $sourceSignature);
 
         [$pages, $blocks, $tasks, $buildOrder, $contentItems] = $this->buildPageBlockTaskGraph(
             $scope,
@@ -97,7 +100,11 @@ final class AiSiteBuildPlanService
             'contract_meta' => [
                 'id' => $contractId,
                 'version' => BuildPlanContractSchema::VERSION,
+                'type' => 'build_plan_v2',
+                'stage' => ContractType::STAGE_STAGE1,
                 'status' => 'draft',
+                'creator' => 'AiSitePlanQueue',
+                'adapter_type' => 'build_plan_contract_v2_2',
                 'created_at' => \date('Y-m-d H:i:s'),
                 'source_signature' => $sourceSignature,
             ],
@@ -140,6 +147,7 @@ final class AiSiteBuildPlanService
             'blocks' => $blocks,
             'tasks' => $tasks,
             'build_order' => $buildOrder,
+            'source_contracts' => $sourceContracts,
             'permission_matrix' => [
                 'read' => ['policy_ref', 'policy_projection', 'design_manifest', 'content_manifest', 'pages', 'blocks', 'tasks', 'build_order'],
                 'create' => ['task_results', 'qa_report', 'repair_patch'],
@@ -229,8 +237,63 @@ final class AiSiteBuildPlanService
                 'primary_goal' => $this->firstNonEmpty([$websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, 'Present the business clearly.']),
             ];
         }
+        if (!\is_array($contract['source_contracts'] ?? null) || $contract['source_contracts'] === []) {
+            $sourcePlan = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+            $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== []
+                ? $scope['execution_blueprint_draft']
+                : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+            $contract['source_contracts'] = $this->buildSourceContractRefs($scope, $this->sourceSignature($scope, $sourcePlan, $executionBlueprint));
+        }
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        $meta['type'] = (string)($meta['type'] ?? 'build_plan_v2');
+        $meta['stage'] = (string)($meta['stage'] ?? ContractType::STAGE_STAGE1);
+        $meta['creator'] = (string)($meta['creator'] ?? 'AiSitePlanQueue');
+        $meta['adapter_type'] = (string)($meta['adapter_type'] ?? 'build_plan_contract_v2_2');
+        $contract['contract_meta'] = $meta;
 
         return $contract;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{id:string,type:string,version:string,status:string}>
+     */
+    private function buildSourceContractRefs(array $scope, string $sourceSignature): array
+    {
+        $refs = [];
+        $contracts = \is_array($scope['plan_workbench']['contracts'] ?? null) ? $scope['plan_workbench']['contracts'] : [];
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+
+        foreach ([
+            ContractType::TYPE_SOURCE_TRUTH => $sourceTruth,
+            ContractType::TYPE_SITE_BRIEF => \is_array($contracts[ContractType::TYPE_SITE_BRIEF] ?? null) ? $contracts[ContractType::TYPE_SITE_BRIEF] : [],
+            ContractType::TYPE_DESIGN_MANIFEST => \is_array($contracts[ContractType::TYPE_DESIGN_MANIFEST] ?? null) ? $contracts[ContractType::TYPE_DESIGN_MANIFEST] : [],
+            ContractType::TYPE_PAGE_CONTRACT => \is_array($contracts[ContractType::TYPE_PAGE_CONTRACT] ?? null) ? $contracts[ContractType::TYPE_PAGE_CONTRACT] : [],
+            ContractType::TYPE_BLOCK_PLAN => \is_array($contracts[ContractType::TYPE_BLOCK_PLAN] ?? null) ? $contracts[ContractType::TYPE_BLOCK_PLAN] : [],
+        ] as $type => $contract) {
+            if (\is_array($contract) && $contract !== []) {
+                $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+                $id = \trim((string)($meta['id'] ?? $meta['contract_id'] ?? ''));
+                if ($id !== '') {
+                    $refs[] = [
+                        'id' => $id,
+                        'type' => $type,
+                        'version' => \trim((string)($meta['version'] ?? ContractType::VERSION_V1)),
+                        'status' => \trim((string)($meta['status'] ?? ContractType::STATUS_DRAFT)),
+                    ];
+                    continue;
+                }
+            }
+
+            $refs[] = [
+                'id' => 'compat_' . $type . '_' . \substr($sourceSignature, 0, 16),
+                'type' => $type,
+                'version' => ContractType::VERSION_V1,
+                'status' => ContractType::STATUS_COMPATIBILITY,
+            ];
+        }
+
+        return (new SourceContractHelper())->normalize($refs);
     }
 
     /**
@@ -382,10 +445,21 @@ final class AiSiteBuildPlanService
         $pageTypes = $this->resolvePageTypes($scope, $sourcePlan, $executionBlueprint);
         $pages = [];
         foreach ($pageTypes as $pageType) {
+            $pageTitle = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
             $pages[] = [
                 'page_type' => $pageType,
-                'title' => (string)(Page::getPageTypes()[$pageType] ?? $pageType),
-                'page_goal' => 'Present the ' . $pageType . ' content clearly.',
+                'title' => $pageTitle,
+                'page_goal' => match ($pageType) {
+                    Page::TYPE_HOME => 'Capture core intent, explain value, and surface primary conversion actions.',
+                    Page::TYPE_ABOUT => 'Build trust by explaining brand background and delivery capability.',
+                    Page::TYPE_CONTACT => 'Reduce friction and collect qualified leads quickly.',
+                    Page::TYPE_REFUND_POLICY => 'Explain refund eligibility, timing, and request steps so customers can act with confidence.',
+                    Page::TYPE_PRIVACY_POLICY => 'Explain what data is collected, how it is used, and what control visitors keep.',
+                    Page::TYPE_TERMS_OF_SERVICE => 'Clarify usage rules, responsibilities, and account expectations before purchase or signup.',
+                    Page::TYPE_SHIPPING_POLICY => 'Set delivery timing, shipping regions, and exception handling expectations clearly.',
+                    Page::TYPE_COOKIE_POLICY => 'Explain what cookies are used, why they exist, and how visitors can manage consent.',
+                    default => $pageTitle . ' gives visitors specific context, useful proof, and a clear route to continue.',
+                },
                 'blocks' => [['block_key' => 'hero', 'block_type' => 'hero']],
             ];
         }

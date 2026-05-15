@@ -52,7 +52,7 @@ final class BuildPlanContractValidator
                 $errors[] = $field . ' must be an object';
             }
         }
-        foreach (['pages', 'blocks', 'tasks', 'build_order', 'frozen_fields', 'mutable_fields', 'qa_gates'] as $field) {
+        foreach (['pages', 'blocks', 'tasks', 'build_order', 'frozen_fields', 'mutable_fields', 'source_contracts', 'qa_gates'] as $field) {
             if (\array_key_exists($field, $contract) && !\is_array($contract[$field])) {
                 $errors[] = $field . ' must be an array';
             }
@@ -60,6 +60,8 @@ final class BuildPlanContractValidator
 
         $errors = \array_merge(
             $errors,
+            $this->validateContractMeta($contract),
+            $this->validateSourceContracts($contract),
             $this->validatePolicyRef($contract),
             $this->validateSiteBrief($contract),
             $this->validateBlocks($contract),
@@ -81,6 +83,56 @@ final class BuildPlanContractValidator
             'valid' => $errors === [],
             'errors' => \array_values(\array_unique($errors)),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @return list<string>
+     */
+    private function validateContractMeta(array $contract): array
+    {
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        if ($meta === []) {
+            return [];
+        }
+
+        $errors = [];
+        foreach (['id', 'version', 'type', 'stage', 'status', 'created_at', 'creator', 'adapter_type'] as $field) {
+            if (\trim((string)($meta[$field] ?? '')) === '') {
+                $errors[] = 'contract_meta.' . $field . ' is required';
+            }
+        }
+        if ((string)($meta['type'] ?? '') !== 'build_plan_v2') {
+            $errors[] = 'contract_meta.type must be build_plan_v2';
+        }
+
+        return $errors;
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @return list<string>
+     */
+    private function validateSourceContracts(array $contract): array
+    {
+        $sourceContracts = \is_array($contract['source_contracts'] ?? null) ? $contract['source_contracts'] : null;
+        if ($sourceContracts === null) {
+            return [];
+        }
+
+        if ($sourceContracts === []) {
+            return ['source_contracts must not be empty'];
+        }
+
+        $result = (new SourceContractHelper())->validateRequired($contract, [
+            ContractType::TYPE_SOURCE_TRUTH,
+            ContractType::TYPE_SITE_BRIEF,
+            ContractType::TYPE_DESIGN_MANIFEST,
+            ContractType::TYPE_PAGE_CONTRACT,
+            ContractType::TYPE_BLOCK_PLAN,
+        ]);
+
+        return \is_array($result['errors'] ?? null) ? \array_values(\array_map('strval', $result['errors'])) : [];
     }
 
     /**
