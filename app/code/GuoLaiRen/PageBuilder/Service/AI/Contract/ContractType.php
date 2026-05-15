@@ -15,6 +15,7 @@ final class ContractType
     public const STAGE_REPAIR = 'repair';
 
     public const TYPE_SITE_BRIEF = 'site_brief';
+    public const TYPE_SOURCE_TRUTH = 'source_truth';
     public const TYPE_DESIGN_MANIFEST = 'design_manifest';
     public const TYPE_PAGE_CONTRACT = 'page_contract';
     public const TYPE_BLOCK_PLAN = 'block_plan';
@@ -38,6 +39,7 @@ final class ContractType
     {
         return [
             self::TYPE_SITE_BRIEF,
+            self::TYPE_SOURCE_TRUTH,
             self::TYPE_DESIGN_MANIFEST,
             self::TYPE_PAGE_CONTRACT,
             self::TYPE_BLOCK_PLAN,
@@ -54,6 +56,7 @@ final class ContractType
     {
         return match ($type) {
             self::TYPE_SITE_BRIEF,
+            self::TYPE_SOURCE_TRUTH,
             self::TYPE_DESIGN_MANIFEST,
             self::TYPE_PAGE_CONTRACT,
             self::TYPE_BLOCK_PLAN => self::STAGE_STAGE1,

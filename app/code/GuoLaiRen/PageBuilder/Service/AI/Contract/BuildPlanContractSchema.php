@@ -34,6 +34,7 @@ final class BuildPlanContractSchema
             'permission_matrix',
             'frozen_fields',
             'mutable_fields',
+            'source_contracts',
             'qa_gates',
             'presentation_projection',
         ];
