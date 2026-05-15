@@ -1,115 +1,36 @@
 <?php
 /**
  * Search Form Category Dropdown Hook
- * 在搜索表单之前渲染分类下拉菜单
- * Hook名称：Weline_Theme::frontend::partials::header::search-form-before
- * 
- * @hook-priority 150      Hook优先级：150（composer位置默认优先级）
- * @hook-sort-order 0      Hook排序顺序：0（默认值）
- * @hook-solo false        Hook独享：false（不独占）
+ *
+ * @hook-priority 150
+ * @hook-sort-order 0
+ * @hook-solo false
  */
 
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Catalog\Service\CategoryService;
 
-// 获取分类服务
 /** @var CategoryService $categoryService */
 $categoryService = ObjectManager::getInstance(CategoryService::class);
+$categoryOptions = $categoryService->getHeaderSearchCategoryOptions(0);
+$selectedCategory = (string)($this->request->getParam('category') ?? '');
 
-// 获取分类树（只获取启用的分类）
-$categories = $categoryService->getCategoryTree(0);
-
-// 获取当前选中的分类
-$selectedCategory = $this->request->getParam('category') ?? '';
-
-// 递归函数：将分类数据转换为选项格式（支持多级分类）
-$convertCategoryToOptions = function($category, $level = 0, $parentPath = '') use (&$convertCategoryToOptions) {
-    // 只处理启用的分类，支持所有层级
-    if (empty($category['is_active']) || $category['is_active'] != 1) {
-        return [];
-    }
-    
-    $options = [];
-    
-    // 获取分类的 handle
-    $handle = $category['handle'] ?? '';
-    
-    // 构建完整的路径（用于 value）
-    $fullPath = '';
-    if (!empty($handle)) {
-        // 如果有父级路径，拼接完整路径
-        if (!empty($parentPath)) {
-            $fullPath = $parentPath . '/' . $handle;
-        } else {
-            $fullPath = $handle;
-        }
-    } else {
-        // 如果没有 handle，使用 category_id 构建路径
-        $categoryId = $category['category_id'] ?? '';
-        if (!empty($parentPath)) {
-            $fullPath = $parentPath . '/' . $categoryId;
-        } else {
-            $fullPath = $categoryId;
-        }
-    }
-    
-    // 使用完整路径作为 value，支持多级选择
-    $value = $fullPath;
-    
-    // 构建显示标签（使用缩进显示层级关系）
-    $label = $category['name'] ?? '';
-    // 如果有层级，添加缩进前缀（使用非断行空格和分隔符）
-    if ($level > 0) {
-        $indent = str_repeat('&nbsp;&nbsp;&nbsp;', $level); // 每级缩进3个空格
-        $separator = $level > 1 ? ' › ' : ' > '; // 多级使用 › 符号
-        $label = $indent . $separator . $label;
-    }
-    
-    // 添加当前分类选项
-    $options[] = [
-        'value' => $value,
-        'label' => $label,
-        'display_label' => $category['name'] ?? '', // 保存原始标签用于显示
-        'level' => $level,
-        'full_path' => $fullPath
-    ];
-    
-    // 递归处理子分类（支持所有层级）
-    if (!empty($category['children']) && is_array($category['children'])) {
-        foreach ($category['children'] as $child) {
-            $childOptions = $convertCategoryToOptions($child, $level + 1, $fullPath);
-            $options = array_merge($options, $childOptions);
-        }
-    }
-    
-    return $options;
-};
-
-// 转换分类数据为选项（只包含启用的分类）
-$categoryOptions = [];
-foreach ($categories as $category) {
-    $options = $convertCategoryToOptions($category);
-    $categoryOptions = array_merge($categoryOptions, $options);
-}
-
-// 如果分类为空，不输出任何内容（让默认的分类下拉菜单显示）
 if (empty($categoryOptions)) {
     return;
 }
 ?>
 
-<!-- 分类下拉菜单 -->
 <div class="search-category-dropdown">
     <select name="category" class="search-category-select" title="<lang>选择分类</lang>">
         <option value=""><lang>全部分类</lang></option>
         <?php foreach ($categoryOptions as $option): ?>
             <?php
-            $value = htmlspecialchars($option['value']);
-            // 使用带缩进的标签显示层级关系
-            $label = $option['label']; // 已经包含 HTML 实体（&nbsp;），不需要再次转义
-            $selected = ($selectedCategory === $value) ? 'selected' : '';
+            $rawValue = (string)($option['value'] ?? '');
+            $value = htmlspecialchars($rawValue, ENT_QUOTES, 'UTF-8');
+            $label = (string)($option['label'] ?? '');
+            $selected = ($selectedCategory === $rawValue) ? 'selected' : '';
             ?>
-            <option value="<?= $value ?>" <?= $selected ?> data-level="<?= $option['level'] ?>" data-display-label="<?= htmlspecialchars($option['display_label']) ?>"><?= $label ?></option>
+            <option value="<?= $value ?>" <?= $selected ?> data-level="<?= (int)($option['level'] ?? 0) ?>" data-display-label="<?= htmlspecialchars((string)($option['display_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= $label ?></option>
         <?php endforeach; ?>
     </select>
     <div class="search-category-facade">
@@ -118,14 +39,13 @@ if (empty($categoryOptions)) {
                 <?php
                 $selectedLabel = '全部分类';
                 foreach ($categoryOptions as $option) {
-                    if (($option['value'] ?? '') === $selectedCategory) {
-                        // 使用原始显示标签（不包含缩进），更简洁
-                        $selectedLabel = $option['display_label'] ?? $option['label'] ?? '全部分类';
+                    if ((string)($option['value'] ?? '') === $selectedCategory) {
+                        $selectedLabel = (string)($option['display_label'] ?? $option['label'] ?? '全部分类');
                         break;
                     }
                 }
                 ?>
-                <lang><?= htmlspecialchars($selectedLabel) ?></lang>
+                <lang><?= htmlspecialchars($selectedLabel, ENT_QUOTES, 'UTF-8') ?></lang>
             <?php else: ?>
                 <lang>全部分类</lang>
             <?php endif; ?>

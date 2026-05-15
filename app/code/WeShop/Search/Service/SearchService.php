@@ -16,6 +16,7 @@ use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Search\Model\SearchHistory;
 use Weline\Eav\Service\AttributeFilterService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class SearchService
 {
@@ -54,8 +55,19 @@ class SearchService
         $categoryIds = array_values(array_unique(array_filter(array_map('intval', $categoryIds))));
         $primaryCategoryId = (int) ($categoryIds[0] ?? 0);
 
-        $providers = $includeFacets ? $this->getFacetProviders($primaryCategoryId) : [];
-        $facetDefinitions = $includeFacets ? $this->buildFacetDefinitions($providers, $primaryCategoryId, $filters, $categoryIds, $keyword) : [];
+        $providers = $includeFacets ? $this->traceStep(
+            'search::facet_providers',
+            fn () => $this->getFacetProviders($primaryCategoryId),
+            ['category_id' => $primaryCategoryId]
+        ) : [];
+        $facetDefinitions = $includeFacets ? $this->traceStep(
+            'search::facet_definitions',
+            fn () => $this->buildFacetDefinitions($providers, $primaryCategoryId, $filters, $categoryIds, $keyword),
+            [
+                'category_id' => $primaryCategoryId,
+                'provider_count' => count($providers),
+            ]
+        ) : [];
 
         $request = [
             'keyword' => $keyword,
@@ -68,15 +80,42 @@ class SearchService
             'facet_definitions' => $facetDefinitions,
         ];
 
-        $engine = $this->createEngine($scope);
+        $engine = $this->traceStep(
+            'search::create_browse_engine',
+            fn () => $this->createBrowseEngine($scope),
+            ['scope' => $scope]
+        );
         if ($engine instanceof SearchBrowseEngineInterface) {
-            $result = $engine->browseProducts($request);
+            $result = $this->traceStep(
+                'search::engine_browse::' . $engine->getEngineType(),
+                fn () => $engine->browseProducts($request),
+                [
+                    'scope' => $scope,
+                    'include_facets' => $includeFacets,
+                    'facet_definition_count' => count($facetDefinitions),
+                ]
+            );
             if (empty($result['fallback']) || !$includeFacets) {
-                return $this->finalizeBrowseResult($result, $providers, $filters);
+                return $this->traceStep(
+                    'search::finalize_engine_result',
+                    fn () => $this->finalizeBrowseResult($result, $providers, $filters),
+                    [
+                        'provider_count' => count($providers),
+                        'filter_count' => count($filters),
+                    ]
+                );
             }
         }
 
-        return $this->fallbackBrowseProducts($request, $providers);
+        return $this->traceStep(
+            'search::fallback_browse_products',
+            fn () => $this->fallbackBrowseProducts($request, $providers),
+            [
+                'provider_count' => count($providers),
+                'category_id_count' => count($categoryIds),
+                'include_facets' => $includeFacets,
+            ]
+        );
     }
 
     public function getSearchSuggestions(string $keyword, int $limit = 10, string $scope = 'default'): array
@@ -154,6 +193,11 @@ class SearchService
         return SearchEngineFactory::create($scope);
     }
 
+    protected function createBrowseEngine(string $scope): ?SearchBrowseEngineInterface
+    {
+        return SearchEngineFactory::createBrowse($scope);
+    }
+
     protected function getSearchHistoryModel(): SearchHistory
     {
         return ObjectManager::getInstance(SearchHistory::class);
@@ -175,9 +219,17 @@ class SearchService
      */
     private function getFacetProviders(int $categoryId): array
     {
-        $providers = $this->getBaseFacetProviders($categoryId);
+        $providers = $this->traceStep(
+            'search::base_facet_providers',
+            fn () => $this->getBaseFacetProviders($categoryId),
+            ['category_id' => $categoryId]
+        );
         try {
-            $metadata = $this->getDynamicFilterableAttributeMetadata('product');
+            $metadata = $this->traceStep(
+                'search::dynamic_filterable_metadata',
+                fn () => $this->getDynamicFilterableAttributeMetadata('product'),
+                ['entity' => 'product']
+            );
         } catch (\Throwable) {
             $metadata = [];
         }
@@ -374,21 +426,42 @@ class SearchService
     {
         $categoryIds = $this->normalizeCategoryIds($request['category_ids'] ?? []);
         if ($categoryIds !== []) {
-            $productIds = [];
-            foreach ($categoryIds as $categoryId) {
-                $ids = w_query('product', 'getProductIdsByCategoryId', ['category_id' => $categoryId]);
-                if (is_array($ids)) {
-                    $productIds = array_merge($productIds, array_map('intval', $ids));
-                }
-            }
-            $productIds = array_values(array_unique(array_filter($productIds)));
+            $productIds = $this->traceStep(
+                'search::fallback_category_product_ids',
+                function () use ($categoryIds): array {
+                    $productIds = [];
+                    foreach ($categoryIds as $categoryId) {
+                        $ids = w_query('product', 'getProductIdsByCategoryId', ['category_id' => $categoryId]);
+                        if (is_array($ids)) {
+                            $productIds = array_merge($productIds, array_map('intval', $ids));
+                        }
+                    }
 
-            $filterResult = ObjectManager::getInstance(FilterService::class)->getFilterResult((int) ($categoryIds[0] ?? 0), $productIds, $request['filters'] ?? [], false);
+                    return array_values(array_unique(array_filter($productIds)));
+                },
+                ['category_id_count' => count($categoryIds)]
+            );
+
+            $filterResult = $this->traceStep(
+                'search::fallback_filter_result',
+                fn () => ObjectManager::getInstance(FilterService::class)->getFilterResult((int) ($categoryIds[0] ?? 0), $productIds, $request['filters'] ?? [], false),
+                [
+                    'category_id' => (int) ($categoryIds[0] ?? 0),
+                    'product_count' => count($productIds),
+                ]
+            );
             $filteredIds = array_values(array_map('intval', $filterResult->getProductIds()));
             $page = (int) ($request['page'] ?? 1);
             $pageSize = (int) ($request['page_size'] ?? 20);
             $slice = array_slice($filteredIds, ($page - 1) * $pageSize, $pageSize);
-            $items = w_query('product', 'getProductByIds', ['product_ids' => $slice]);
+            $items = $this->traceStep(
+                'search::fallback_product_items',
+                fn () => w_query('product', 'getProductByIds', ['product_ids' => $slice]),
+                [
+                    'filtered_count' => count($filteredIds),
+                    'slice_count' => count($slice),
+                ]
+            );
 
             return [
                 'items' => is_array($items) ? $items : [],
@@ -410,10 +483,34 @@ class SearchService
         }
 
         return $this->finalizeBrowseResult(
-            $this->fallbackEngineBrowseResult($request),
+            $this->traceStep(
+                'search::fallback_engine_browse',
+                fn () => $this->fallbackEngineBrowseResult($request),
+                ['include_facets' => (bool) ($request['include_facets'] ?? false)]
+            ),
             $providers,
             is_array($request['filters'] ?? null) ? $request['filters'] : []
         );
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function traceStep(string $name, callable $callback, array $meta = []): mixed
+    {
+        if (!RequestLifecycleTrace::isEnabled()) {
+            return $callback();
+        }
+
+        $start = microtime(true);
+        RequestLifecycleTrace::pushCurrentParent($name);
+
+        try {
+            return $callback();
+        } finally {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, 'search', null, $meta);
+        }
     }
 
     /**

@@ -13,6 +13,7 @@ use WeShop\Product\Model\ProductCategory;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class View extends BaseController
 {
@@ -28,10 +29,21 @@ class View extends BaseController
         $categoriesCtx = $this->request->getData('categories') ?? null;
         $handle = $this->request->getParam('handle') ?? $this->request->getGet('handle');
         $categoryId = (int) ($this->request->getParam('id') ?? $this->request->getGet('id') ?? 0);
-        $category = $handle ? $categoryService->getCategoryByHandle($handle) : null;
-        if (!$category && $categoryId) {
-            $category = $categoryService->getCategory($categoryId);
-        }
+        $category = $this->traceControllerStep(
+            'category::load_current',
+            function () use ($categoryService, $handle, $categoryId) {
+                $category = $handle ? $categoryService->getCategoryByHandle($handle) : null;
+                if (!$category && $categoryId) {
+                    $category = $categoryService->getCategory($categoryId);
+                }
+
+                return $category;
+            },
+            [
+                'handle' => (string) ($handle ?? ''),
+                'category_id' => $categoryId,
+            ]
+        );
 
         if (!$category || !$category->getId()) {
             MessageManager::error(__('Category not found.'));
@@ -52,38 +64,93 @@ class View extends BaseController
             'parent_id' => (int) ($category->getData(\WeShop\Catalog\Model\Category::schema_fields_PARENT_ID) ?? 0),
             'sort_order' => (int) ($category->getData(\WeShop\Catalog\Model\Category::schema_fields_SORT_ORDER) ?? 0),
         ];
-        $categoryData['children'] = $categoryService->getChildCategories($category->getId());
-        $categoryData['breadcrumbs'] = $this->buildBreadcrumbs($categoryService, $categoryData);
+        $categoryData['children'] = $this->traceControllerStep(
+            'category::load_children',
+            fn () => $categoryService->getChildCategories($category->getId()),
+            ['category_id' => (int) $category->getId()]
+        );
+        $categoryData['breadcrumbs'] = $this->traceControllerStep(
+            'category::build_breadcrumbs',
+            fn () => $this->buildBreadcrumbs($categoryService, $categoryData),
+            ['category_id' => (int) $category->getId()]
+        );
 
         if (!is_array($categoriesCtx) || empty($categoriesCtx['current']['category_id'])) {
-            $this->hydrateCategoryContext($categoryData);
+            $this->traceControllerStep(
+                'category::hydrate_context',
+                function () use ($categoryData): void {
+                    $this->hydrateCategoryContext($categoryData);
+                },
+                ['category_id' => (int) $category->getId()]
+            );
         }
 
         // Must match WeShop\Filters\Controller\Frontend\Ajax::getBrowseCategoryIds():
         // browse + /filters/filter use descendant category tree, not current node only.
-        $categoryIds = $this->getBrowseCategoryIds((int) $category->getId());
+        $categoryIds = $this->traceControllerStep(
+            'category::browse_category_ids',
+            fn () => $this->getBrowseCategoryIds((int) $category->getId()),
+            ['category_id' => (int) $category->getId()]
+        );
 
-        $filters = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
-            ? $this->collectBrowseFilters($this->request->getQuery())
+        $query = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
+            ? $this->request->getQuery()
             : [];
+        $filters = $this->traceControllerStep(
+            'category::collect_filters',
+            fn () => $this->collectBrowseFilters($query),
+            [
+                'query_keys' => array_keys($query),
+            ]
+        );
+        $page = max(1, (int) ($this->request->getParam('page') ?? 1));
+        $pageSize = max(1, (int) ($this->request->getParam('page_size') ?? 24));
 
-        $browse = w_query('search', 'browseProducts', [
-            'keyword' => '',
-            'filters' => $filters,
-            'page' => max(1, (int) ($this->request->getParam('page') ?? 1)),
-            'page_size' => max(1, (int) ($this->request->getParam('page_size') ?? 24)),
-            'category_ids' => $categoryIds,
-            'include_facets' => true,
-        ]);
+        $browse = $this->traceControllerStep(
+            'category::search_browse_products',
+            fn () => w_query('search', 'browseProducts', [
+                'keyword' => '',
+                'filters' => $filters,
+                'page' => $page,
+                'page_size' => $pageSize,
+                'category_ids' => $categoryIds,
+                'include_facets' => true,
+            ]),
+            [
+                'category_id_count' => count($categoryIds),
+                'filter_count' => count($filters),
+                'page' => $page,
+                'page_size' => $pageSize,
+            ]
+        );
         $browse = is_array($browse) ? $browse : [];
 
         $products = is_array($browse['items'] ?? null) ? $browse['items'] : [];
+        if ($products === []) {
+            $products = $this->traceControllerStep(
+                'category::fallback_products_db',
+                fn () => $this->loadProductsFromDatabaseFallback($categoryIds, $page, $pageSize),
+                [
+                    'category_id_count' => count($categoryIds),
+                    'page' => $page,
+                    'page_size' => $pageSize,
+                ]
+            );
+        }
         $appliedFilters = is_array($browse['applied_filters'] ?? null) ? $browse['applied_filters'] : [];
         $facetFilters = is_array($browse['facets'] ?? null) ? $browse['facets'] : [];
         if ($facetFilters === [] && $products !== []) {
-            $facetFilters = $this->loadFacetFiltersViaFilterService(
-                (int) $category->getId(),
-                $categoryIds
+            $facetFilters = $this->traceControllerStep(
+                'category::fallback_facets_filter_service',
+                fn () => $this->loadFacetFiltersViaFilterService(
+                    (int) $category->getId(),
+                    $categoryIds
+                ),
+                [
+                    'category_id' => (int) $category->getId(),
+                    'category_id_count' => count($categoryIds),
+                    'product_count' => count($products),
+                ]
             );
         }
         $clearAllUrl = (string) ($browse['clear_all_url'] ?? $this->getUrl('catalog/category/view', ['id' => $category->getId()]));
@@ -117,14 +184,60 @@ class View extends BaseController
             'product_ids' => $filteredProductIds,
         ];
         $eventPayload = ['data' => $eventData];
-        $eventsManager->dispatch('WeShop_Catalog::category_load_after', $eventPayload);
+        $this->traceControllerStep(
+            'category::dispatch_load_after',
+            function () use ($eventsManager, &$eventPayload): void {
+                $eventsManager->dispatch('WeShop_Catalog::category_load_after', $eventPayload);
+            },
+            [
+                'category_id' => (int) $category->getId(),
+                'product_count' => count($filteredProductIds),
+            ]
+        );
 
         $this->assign('title', $categoryData['name']);
         $this->assign('meta_title', $category->getData('meta_title') ?? $categoryData['name']);
         $this->assign('meta_description', $category->getData('meta_description') ?? $categoryData['description']);
         $this->assign('meta_keywords', $category->getData('meta_keywords') ?? '');
 
-        return $this->fetch('WeShop_Catalog::templates/Frontend/Category/content.phtml');
+        return $this->traceControllerStep(
+            'category::fetch_content',
+            fn (): string => $this->fetch('WeShop_Catalog::templates/Frontend/Category/content.phtml'),
+            [
+                'category_id' => (int) $category->getId(),
+                'product_count' => count($products),
+                'filter_count' => count($facetFilters),
+            ]
+        );
+    }
+
+    /**
+     * Keep category-page diagnostics inside the controller span so WLS timing can
+     * distinguish search, filter, event, and render costs without changing output.
+     *
+     * @param array<string, mixed> $meta
+     */
+    private function traceControllerStep(string $name, callable $callback, array $meta = []): mixed
+    {
+        if (!RequestLifecycleTrace::isEnabled()) {
+            return $callback();
+        }
+
+        $start = microtime(true);
+        RequestLifecycleTrace::pushCurrentParent($name);
+
+        try {
+            return $callback();
+        } finally {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan(
+                $name,
+                (microtime(true) - $start) * 1000,
+                'controller',
+                'controller_chain::action_execute',
+                $meta
+            );
+        }
     }
 
     private function buildBreadcrumbs(CategoryService $categoryService, array $categoryData): array
@@ -300,6 +413,68 @@ class View extends BaseController
             $filterResult = $filterService->getFilterResult($categoryId, $productIds, $urlService->getFilterParams());
 
             return $filterResult->getFilters();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<int, int> $categoryIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadProductsFromDatabaseFallback(array $categoryIds, int $page, int $pageSize): array
+    {
+        if ($categoryIds === []) {
+            return [];
+        }
+
+        try {
+            /** @var ProductCategory $productCategory */
+            $productCategory = ObjectManager::getInstance(ProductCategory::class);
+            /** @var Product $productModel */
+            $productModel = ObjectManager::getInstance(Product::class);
+
+            $rows = $productCategory->reset()
+                ->fields('main_table.' . ProductCategory::schema_fields_product_id)
+                ->joinProduct()
+                ->where('main_table.' . ProductCategory::schema_fields_category_id, $categoryIds, 'in')
+                ->where('product.' . Product::schema_fields_status, 1)
+                ->where('product.' . Product::schema_fields_parent_id, 0)
+                ->groupBy('main_table.' . ProductCategory::schema_fields_product_id)
+                ->order('main_table.' . ProductCategory::schema_fields_product_id, 'desc')
+                ->page($page, $pageSize)
+                ->select()
+                ->fetchArray();
+
+            $products = [];
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                $productId = (int) ($row[ProductCategory::schema_fields_product_id] ?? 0);
+                if ($productId <= 0) {
+                    continue;
+                }
+
+                $productData = $productModel->clear()->load($productId)->getData();
+                if (!is_array($productData) || $productData === []) {
+                    continue;
+                }
+
+                $stock = (int) ($productData[Product::schema_fields_stock] ?? 0);
+                $products[] = [
+                    'product_id' => $productId,
+                    'entity_id' => $productId,
+                    'name' => (string) ($productData[Product::schema_fields_name] ?? ''),
+                    'short_description' => (string) ($productData[Product::schema_fields_short_description] ?? ''),
+                    'description' => (string) ($productData[Product::schema_fields_description] ?? ''),
+                    'price' => (float) ($productData[Product::schema_fields_price] ?? 0),
+                    'image' => (string) ($productData[Product::schema_fields_image] ?? ''),
+                    'sku' => (string) ($productData[Product::schema_fields_sku] ?? ''),
+                    'handle' => (string) ($productData[Product::schema_fields_HANDLE] ?? ''),
+                    'stock' => $stock,
+                    'in_stock' => $stock > 0,
+                ];
+            }
+
+            return $products;
         } catch (\Throwable) {
             return [];
         }

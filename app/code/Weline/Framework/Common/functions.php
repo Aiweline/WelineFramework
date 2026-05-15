@@ -392,6 +392,14 @@ if (!function_exists('framework_view_process_block')) {
             }
         }
         $params['vars'] = $vars;
+        $traceEnabled = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled();
+        $traceName = 'view::block::' . substr($block_class, 0, 180);
+        $traceStart = 0.0;
+        $cacheStatus = 'none';
+        if ($traceEnabled) {
+            $traceStart = microtime(true);
+            \Weline\Framework\Runtime\RequestLifecycleTrace::pushCurrentParent($traceName);
+        }
         if (isset($params['cache']) && $cache_time = intval($params['cache'])) {
             /**@var CacheInterface $cache */
             $cache = ObjectManager::getInstance(ViewCache::class)->create();
@@ -399,16 +407,26 @@ if (!function_exists('framework_view_process_block')) {
             $request = ObjectManager::getInstance(Request::class);
             $cache_key = $block_class . '_' . json_encode(array_merge($request->getParams(), $params));
             $result = $cache->get($cache_key) ?: '';
+            $cacheStatus = $result === '' ? 'miss' : 'hit';
             // form_key 不能做缓存，否则 key 不对（每个 session 不同）
             $hasFormKey = str_contains($result, 'name="form_key"');
             if (empty($result) || $hasFormKey) {
+                $cacheStatus = $hasFormKey ? 'dynamic' : 'miss';
                 $result = ObjectManager::make($block_class, ['data' => $params])->render();
                 if (!str_contains($result, 'name="form_key"')) {
                     $cache->set($cache_key, $result, $cache_time);
+                    $cacheStatus = 'store';
                 }
             }
         } else {
             $result = ObjectManager::make($block_class, ['data' => $params])->render();
+        }
+        if ($traceEnabled) {
+            \Weline\Framework\Runtime\RequestLifecycleTrace::popCurrentParent();
+            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan($traceName, (microtime(true) - $traceStart) * 1000, 'view', null, [
+                'class' => $block_class,
+                'cache' => $cacheStatus,
+            ]);
         }
         return $result;
     }
