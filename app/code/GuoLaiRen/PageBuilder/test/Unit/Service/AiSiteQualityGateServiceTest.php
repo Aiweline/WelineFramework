@@ -140,7 +140,13 @@ final class AiSiteQualityGateServiceTest extends TestCase
         self::assertStringContainsString('Introduce brand story and mission', $badMatches);
     }
 
-    public function testInspectScopeRejectsVisibleCopyOutsideSpecifiedLocale(): void
+    /**
+     * 设计决策对齐：language_consistency 在门禁层固定通过，外语片段由生成阶段的 prompt 合同
+     * （AiSitePageComponentGenerationService::buildVisibleCopyGovernancePromptAddon +
+     * buildStage3LocaleExecutionPromptAddon）以硬约束阻断，不再用 NLP 启发式做发布期检测。
+     * 测试明确钉死这一行为，防止后续误把启发式检测加回来导致中文站合法英文（品牌/APK/SDK 等）被误报。
+     */
+    public function testInspectScopeLanguageConsistencyAlwaysPassesByDesign(): void
     {
         $service = $this->createService();
         $scope = $this->buildScope();
@@ -150,8 +156,11 @@ final class AiSiteQualityGateServiceTest extends TestCase
             'home_page' => $this->responsiveStyle() . '<header>皇家棋牌游戏</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>Best of three cards classic Indian poker. Play with friends or join tables.</p><a>Download & Play</a></section></main><footer>页脚导航</footer>',
         ]);
 
-        self::assertFalse((bool)($this->findItem($report['items'], 'language_consistency')['ok'] ?? true));
-        self::assertNotEmpty($report['page_reports']['home_page']['language_violations'] ?? []);
+        self::assertTrue(
+            (bool)($this->findItem($report['items'], 'language_consistency')['ok'] ?? false),
+            'language_consistency must pass at the gate layer; locale is enforced by the prompt contract instead.'
+        );
+        self::assertSame([], $report['page_reports']['home_page']['language_violations'] ?? ['unexpected']);
     }
 
     public function testInspectScopeIgnoresHeadTitleForLanguageConsistency(): void
@@ -397,7 +406,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         /** @var list<array<string,mixed>> $normalized */
         $normalized = $reflection->invoke($service, $items, $pageReports);
 
-        self::assertCount(10, $normalized);
+        self::assertCount(13, $normalized);
         self::assertSame(
             ['demo', 'example.com'],
             $this->findItem($normalized, 'content_quality')['value']['home_page'] ?? []
@@ -415,6 +424,224 @@ final class AiSiteQualityGateServiceTest extends TestCase
             $this->findItem($normalized, 'theme_visible')['label'] ?? ''
         );
         self::assertSame([], $this->findItem($normalized, 'not_in_contract'));
+    }
+
+    public function testInspectScopeTaskCoveragePassesWhenScheduledMatchesExpected(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏</p></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'task_coverage');
+        self::assertTrue((bool)($item['ok'] ?? false), \json_encode($item, \JSON_UNESCAPED_UNICODE));
+        self::assertSame([], $item['value']['missing_blocks'] ?? ['unexpected']);
+        self::assertSame([], $item['value']['extra_blocks'] ?? ['unexpected']);
+        self::assertTrue((bool)($item['value']['evaluated'] ?? false));
+    }
+
+    public function testInspectScopeTaskCoverageBlocksPublishWhenExpectedBlockIsMissingFromBuildTasks(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][] = [
+            'block_key' => 'trust_proof',
+            'field_plan' => [],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section style="color:#FFD700"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'task_coverage');
+        self::assertFalse((bool)($item['ok'] ?? true), \json_encode($item, \JSON_UNESCAPED_UNICODE));
+        self::assertSame(['trust_proof'], $item['value']['missing_blocks']['home_page'] ?? []);
+        self::assertFalse($report['passed']);
+    }
+
+    public function testInspectScopeTaskCoverageBlocksPublishWhenBuildTaskIsOrphaned(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['build_blueprint']['tasks'][] = [
+            'task_key' => 'page:home_page:legacy_orphan',
+            'task_type' => 'page_section',
+            'page_type' => 'home_page',
+            'block_key' => 'legacy_orphan',
+            'section_code' => 'content/home-page-legacy-orphan',
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section><h1>Hero</h1></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'task_coverage');
+        self::assertFalse((bool)($item['ok'] ?? true));
+        self::assertSame(['legacy_orphan'], $item['value']['extra_blocks']['home_page'] ?? []);
+    }
+
+    public function testInspectScopeTaskCoverageSkipsWhenBlueprintNotYetGenerated(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        unset($scope['execution_blueprint'], $scope['build_blueprint']);
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section><h1>Hero</h1></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'task_coverage');
+        // 蓝图未生成时 task_coverage 不应阻断，由 build_tasks_done 等门禁兜底。
+        self::assertTrue((bool)($item['ok'] ?? false), \json_encode($item, \JSON_UNESCAPED_UNICODE));
+        self::assertFalse((bool)($item['value']['evaluated'] ?? true));
+    }
+
+    public function testInspectScopeSourceTruthCoverageBlocksPublishOnErrorFinding(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['qa_report_contract'] = [
+            'payload' => [
+                'content_quality' => [
+                    'status' => 'fail',
+                    'findings' => [
+                        [
+                            'severity' => 'error',
+                            'category' => 'content_quality',
+                            'contract_type' => 'source_truth',
+                            'message' => 'Missing must-include fact [f01]: APK 安全下载',
+                            'path' => 'content_quality.missing_must_include_fact',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section><h1>Hero</h1></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'source_truth_coverage');
+        self::assertFalse((bool)($item['ok'] ?? true), \json_encode($item, \JSON_UNESCAPED_UNICODE));
+        self::assertSame(1, $item['value']['error_count'] ?? 0);
+        self::assertFalse($report['passed']);
+    }
+
+    public function testInspectScopeSourceTruthCoverageDoesNotBlockOnWarningOnly(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['qa_report_contract'] = [
+            'payload' => [
+                'content_quality' => [
+                    'status' => 'warn',
+                    'findings' => [
+                        [
+                            'severity' => 'warning',
+                            'category' => 'content_quality',
+                            'contract_type' => 'source_truth',
+                            'message' => 'Missing must-include fact [f02]: 多语言客服',
+                            'path' => 'content_quality.missing_must_include_fact',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'source_truth_coverage');
+        self::assertTrue((bool)($item['ok'] ?? false), \json_encode($item, \JSON_UNESCAPED_UNICODE));
+        self::assertSame(1, $item['value']['warning_count'] ?? 0);
+    }
+
+    public function testInspectScopeRenderDataQualityBlocksPublishOnSeoErrorFinding(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['qa_report_contract'] = [
+            'payload' => [
+                'content_quality' => [
+                    'status' => 'fail',
+                    'findings' => [
+                        [
+                            'severity' => 'error',
+                            'category' => 'seo',
+                            'rule' => 'seo.missing_title',
+                            'message' => 'Page is missing SEO title metadata.',
+                            'target_path' => 'payload.materialized_pages_by_type.home_page.seo_title',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section><h1>Hero</h1></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'render_data_quality');
+        self::assertFalse((bool)($item['ok'] ?? true), \json_encode($item, \JSON_UNESCAPED_UNICODE));
+        self::assertSame(1, $item['value']['error_count'] ?? 0);
+        self::assertFalse($report['passed']);
+    }
+
+    public function testInspectScopeRenderDataQualityBlocksOnPreflightError(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['quality_gate_preflight_error'] = 'Page layout has no rendered sections.';
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section><h1>Hero</h1></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'render_data_quality');
+        self::assertFalse((bool)($item['ok'] ?? true));
+        self::assertStringContainsString('Page layout has no rendered sections', (string)($item['detail'] ?? ''));
+        self::assertFalse($report['passed']);
+    }
+
+    public function testInspectScopeTaskCoverageFailureIncludesDetailText(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][] = [
+            'block_key' => 'trust_proof',
+            'field_plan' => [],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section><h1>Hero</h1></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'task_coverage');
+        self::assertFalse((bool)($item['ok'] ?? true));
+        self::assertStringContainsString('trust_proof', (string)($item['detail'] ?? ''));
+    }
+
+    public function testInspectScopeQaReportGatesPassWhenQaReportContractIsAbsent(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        // 不设置 qa_report_contract：尚未到 buildRenderDataContract 阶段时不应阻断发布。
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>Footer</footer>',
+        ]);
+
+        self::assertTrue(
+            (bool)($this->findItem($report['items'], 'source_truth_coverage')['ok'] ?? false),
+            'source_truth_coverage should not block when qa_report_contract is absent'
+        );
+        self::assertTrue(
+            (bool)($this->findItem($report['items'], 'render_data_quality')['ok'] ?? false),
+            'render_data_quality should not block when qa_report_contract is absent'
+        );
     }
 
     private function createService(): AiSiteQualityGateService
