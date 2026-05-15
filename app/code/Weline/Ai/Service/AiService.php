@@ -409,6 +409,9 @@ class AiService
     ): array {
         $model = $this->selectModel($modelCode, $scenarioCode, AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE);
         if (!$model) {
+            if ($modelCode === null && $scenarioCode !== null && \trim($scenarioCode) !== '') {
+                throw new Exception('Scenario adapter "' . $scenarioCode . '" must bind an active text2image model. Image generation will not fallback to global/default models.');
+            }
             throw new Exception('未配置可用的 text2image 模型，图片生成不会回退到 text2text 模型');
         }
 
@@ -588,6 +591,9 @@ class AiService
                         ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                         ->find()
                         ->fetch();
+                }
+                if ($primaryModality !== AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT && !$modelCode) {
+                    return ($model && $model->getId() && $model->supportsPrimaryModality($primaryModality)) ? $model : null;
                 }
             }
         }

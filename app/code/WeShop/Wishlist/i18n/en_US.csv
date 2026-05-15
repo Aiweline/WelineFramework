@@ -1,43 +1,43 @@
-﻿Wishlist Management,Wishlist Management
-Customer Wishlist,Customer Wishlist
-Wishlist item ID is required.,Wishlist item ID is required.
-Removed from wishlist.,Removed from wishlist.
-Failed to remove from wishlist.,Failed to remove from wishlist.
-Please log in to continue.,Please log in to continue.
-Product ID is required.,Product ID is required.
-Added to wishlist.,Added to wishlist.
-You are not allowed to remove this wishlist item.,You are not allowed to remove this wishlist item.
+﻿"Wishlist Management","Wishlist Management"
+"Customer Wishlist","Customer Wishlist"
+"Wishlist item ID is required.","Wishlist item ID is required."
+"Removed from wishlist.","Removed from wishlist."
+"Failed to remove from wishlist.","Failed to remove from wishlist."
+"Please log in to continue.","Please log in to continue."
+"Product ID is required.","Product ID is required."
+"Added to wishlist.","Added to wishlist."
+"You are not allowed to remove this wishlist item.","You are not allowed to remove this wishlist item."
 Wishlist,Wishlist
-Resume with %{1} saved item(s).,Resume with %{1} saved item(s).
-店铺 > 收藏管理,Store > Favorites Management
-系统配置,System Configuration
+"Resume with %1 saved item(s).","Resume with %1 saved item(s)."
+"店铺 > 收藏管理","Store > Favorites Management"
+系统配置,"System Configuration"
 店铺,Store
 收藏,Favorite
-总收藏数,Total Favorites
-收藏客户数,Number of Favorited Customers
-当前筛选,Current filter
-客户ID:,Customer ID:
+总收藏数,"Total Favorites"
+收藏客户数,"Number of Favorited Customers"
+当前筛选,"Current filter"
+客户ID:,"Customer ID:"
 搜索:,Search:
 全部,All
-收藏列表,Favorites List
-管理店铺客户收藏商品,Manage Customer Favorites for the Store
-重置筛选,Reset Filter
+收藏列表,"Favorites List"
+管理店铺客户收藏商品,"Manage Customer Favorites for the Store"
+重置筛选,"Reset Filter"
 ID,ID
-客户ID,Customer ID
-客户名称,Customer Name
-产品ID,Product ID
-收藏时间,Favorite Time
+客户ID,"Customer ID"
+客户名称,"Customer Name"
+产品ID,"Product ID"
+收藏时间,"Favorite Time"
 操作,Operation
-未知客户,Unknown customer
-查看客户收藏,View customer favorites
-你确定要删除该收藏记录么？,Are you sure you want to delete this bookmark?
+未知客户,"Unknown customer"
+查看客户收藏,"View customer favorites"
+你确定要删除该收藏记录么？,"Are you sure you want to delete this bookmark?"
 删除,Delete
-请输入客户ID或产品ID回车搜索,Enter customer ID or product ID and press Enter to search
-My Wishlist,My Wishlist
-Your wishlist is empty,Your wishlist is empty
-Browse our products and add items you love to your wishlist.,Browse our products and add items you love to your wishlist.
-Start Shopping,Start Shopping
-In Stock,In Stock
-Out of Stock,Out of Stock
-Add to Cart,Add to Cart
+请输入客户ID或产品ID回车搜索,"Enter customer ID or product ID and press Enter to search"
+"My Wishlist","My Wishlist"
+"Your wishlist is empty","Your wishlist is empty"
+"Browse our products and add items you love to your wishlist.","Browse our products and add items you love to your wishlist."
+"Start Shopping","Start Shopping"
+"In Stock","In Stock"
+"Out of Stock","Out of Stock"
+"Add to Cart","Add to Cart"
 Remove,Remove

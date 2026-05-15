@@ -1126,6 +1126,7 @@ final class AiSiteExecutionBlueprintService
             : (\is_array($source['expanded_requirement_plan'] ?? null) ? $source['expanded_requirement_plan'] : []);
 
         $planJson['requirement_expansion'] = $this->normalizeStageOneRequirementExpansion($candidate, $oneLineRequirement, $pageTypes);
+        $planJson = $this->syncStageOneOverviewFieldsFromRequirementExpansion($planJson);
 
         return $planJson;
     }
@@ -1190,6 +1191,7 @@ final class AiSiteExecutionBlueprintService
             \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [],
             \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : []
         );
+        $planJson = $this->syncStageOneOverviewFieldsFromRequirementExpansion($planJson);
         if (\is_array($planJson['theme_design'] ?? null)) {
             $planJson['theme_design'] = $this->repairAiStageOneThemeSelectionReasonBeforeValidation(
                 $planJson['theme_design'],
@@ -1325,6 +1327,8 @@ final class AiSiteExecutionBlueprintService
         $siteGoal = \trim((string)($candidate['site_goal'] ?? $candidate['core_goal'] ?? ''));
         $conversionStrategy = \trim((string)($candidate['conversion_strategy'] ?? $candidate['conversion_direction'] ?? ''));
         $contentDirection = \trim((string)($candidate['content_direction'] ?? $candidate['content_strategy'] ?? ''));
+        $businessGoals = $this->normalizeStringList($candidate['business_goals'] ?? $candidate['goals'] ?? []);
+        $primaryCta = \trim((string)($candidate['primary_cta'] ?? $candidate['main_cta'] ?? $candidate['cta'] ?? ''));
 
         if ($expandedBrief === '' && $oneLineRequirement !== '') {
             $expandedBrief = $oneLineRequirement;
@@ -1366,13 +1370,96 @@ final class AiSiteExecutionBlueprintService
             'expanded_brief' => $expandedBrief,
             'planning_summary' => $planningSummary,
             'site_goal' => $siteGoal !== '' ? $siteGoal : $planningSummary,
+            'business_goals' => $businessGoals !== [] ? $businessGoals : [$siteGoal !== '' ? $siteGoal : $planningSummary],
             'target_users' => $this->normalizeStringList($candidate['target_users'] ?? []),
             'business_context' => \trim((string)($candidate['business_context'] ?? $candidate['market_context'] ?? '')),
             'content_direction' => $contentDirection,
             'conversion_strategy' => $conversionStrategy,
+            'primary_cta' => $primaryCta,
             'page_strategy' => $pageStrategy,
             'technical_direction' => $this->normalizeStringList($candidate['technical_direction'] ?? $candidate['technical_notes'] ?? []),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array<string, mixed>
+     */
+    private function syncStageOneOverviewFieldsFromRequirementExpansion(array $planJson): array
+    {
+        $expansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+        if ($expansion === []) {
+            return $planJson;
+        }
+
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+        $expandedBrief = $this->firstNonEmptyString([
+            $planJson['overview_expanded_brief'] ?? null,
+            $expansion['expanded_brief'] ?? null,
+            $expansion['planning_summary'] ?? null,
+            $siteStrategy['summary'] ?? null,
+            $expansion['original_brief'] ?? null,
+        ]);
+        if ($expandedBrief !== '') {
+            $planJson['overview_expanded_brief'] = $expandedBrief;
+        }
+
+        $businessGoals = $this->normalizeStringList($planJson['overview_business_goals'] ?? []);
+        if ($businessGoals === []) {
+            $businessGoals = $this->normalizeStringList($expansion['business_goals'] ?? []);
+        }
+        foreach ([$expansion['site_goal'] ?? null, $siteStrategy['core_goal'] ?? null] as $candidate) {
+            $goal = \trim((string)$candidate);
+            if ($goal !== '' && !\in_array($goal, $businessGoals, true)) {
+                $businessGoals[] = $goal;
+            }
+        }
+        if ($businessGoals !== []) {
+            $planJson['overview_business_goals'] = \array_values($businessGoals);
+        }
+
+        $contentFocus = $this->firstNonEmptyString([
+            $planJson['overview_content_focus'] ?? null,
+            $expansion['content_direction'] ?? null,
+            $siteStrategy['content_strategy'] ?? null,
+            $expansion['planning_summary'] ?? null,
+        ]);
+        if ($contentFocus === '' && \is_array($expansion['page_strategy'] ?? null)) {
+            $focusItems = [];
+            foreach ($expansion['page_strategy'] as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $focus = \trim((string)($row['content_focus'] ?? ''));
+                if ($focus !== '') {
+                    $focusItems[$focus] = $focus;
+                }
+            }
+            $contentFocus = \implode("\n", \array_values($focusItems));
+        }
+        if ($contentFocus !== '') {
+            $planJson['overview_content_focus'] = $contentFocus;
+        }
+
+        $primaryCta = $this->firstNonEmptyString([
+            $expansion['primary_cta'] ?? null,
+            $siteStrategy['primary_cta'] ?? null,
+        ]);
+        $domainStrategy = $this->firstNonEmptyString([
+            $planJson['overview_domain_strategy'] ?? null,
+            $expansion['conversion_strategy'] ?? null,
+            $siteStrategy['conversion_path'] ?? null,
+        ]);
+        if ($primaryCta !== '' && $domainStrategy !== '' && \stripos($domainStrategy, $primaryCta) === false) {
+            $domainStrategy .= "\nCTA: " . $primaryCta;
+        } elseif ($domainStrategy === '' && $primaryCta !== '') {
+            $domainStrategy = 'CTA: ' . $primaryCta;
+        }
+        if ($domainStrategy !== '') {
+            $planJson['overview_domain_strategy'] = $domainStrategy;
+        }
+
+        return $planJson;
     }
 
     /**
@@ -1844,8 +1931,8 @@ final class AiSiteExecutionBlueprintService
             'Every page_strategy row must cite which visual_contract elements matter for that page_type.',
             'Do not output visual patterns listed in forbidden_visuals.',
             'Schema:',
-            '{"requirement_expansion":{"original_brief":"string","expanded_brief":"string","planning_summary":"string","site_goal":"string","target_users":["string"],"business_context":"string","content_direction":"string","conversion_strategy":"string","page_strategy":[{"page_type":"string","intent":"string","content_focus":"string","conversion_role":"string"}],"technical_direction":["string"]}}',
-            'Hard rules: expanded_brief must be a larger concrete version of the user requirement; page_strategy must cover every selected page type; all values must be customer-visible planning content, not prompt instructions.',
+            '{"requirement_expansion":{"original_brief":"string","expanded_brief":"string","planning_summary":"string","site_goal":"string","business_goals":["string"],"target_users":["string"],"business_context":"string","content_direction":"string","conversion_strategy":"string","primary_cta":"string","page_strategy":[{"page_type":"string","intent":"string","content_focus":"string","conversion_role":"string"}],"technical_direction":["string"]}}',
+            'Hard rules: expanded_brief must be a larger concrete version of the user requirement; business_goals, content_direction, conversion_strategy, and primary_cta are required because they feed the editable plan overview; page_strategy must cover every selected page type; all values must be customer-visible planning content, not prompt instructions.',
             'Self-check before return: remove any sentence that still reads like "围绕/突出/说明/优化"; replace with named offers, nouns, and visible outcomes.',
         ]);
     }
@@ -1896,7 +1983,7 @@ final class AiSiteExecutionBlueprintService
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Schema:',
-            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"internal fit summary, not shown as a plan reason"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"internal palette fit summary, not shown as a plan reason"},"theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","reference_style_context":{"summary":"string","style_keywords":["string"],"color_palette":["#hex"],"layout_cues":["string"],"component_cues":["string"],"typography_cues":["string"],"do_not_use":["string"],"implementation_rule":"string"},"art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"internal brief-alignment summary; must copy at least one exact noun/action phrase from Brief or Instruction"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
+            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","content_strategy":"string","conversion_path":"string","primary_cta":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"internal fit summary, not shown as a plan reason"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"internal palette fit summary, not shown as a plan reason"},"theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","reference_style_context":{"summary":"string","style_keywords":["string"],"color_palette":["#hex"],"layout_cues":["string"],"component_cues":["string"],"typography_cues":["string"],"do_not_use":["string"],"implementation_rule":"string"},"art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"internal brief-alignment summary; must copy at least one exact noun/action phrase from Brief or Instruction"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
             'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; navigation_plan.header_items must include exact labels and hrefs for selected page types plus the primary CTA; footer_plan must include featured links, policy/help links, and any trust/support/social entries implied by the brief; shared_components.header/footer must include visible content, editable slots, responsive behavior, and implementation_detail; page_type_overviews must cover every selected page type with page role, content focus, theme color application, section layering hint, interaction intent, and differentiation note; these overviews are conceptual page planning only, not block lists; keep output compact.',
             'Reference-image carryover rule: if Reference image insights are not "-", theme_design.reference_style_context MUST copy/adapt those insights and theme_design.style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, and forbidden_styles MUST visibly use them. Do not merely mention reference images as inspiration.',
             'Visual quality bar: theme_design.style_signature and art_direction are mandatory. They must describe a polished, customer-fit visual identity that a frontend generator can execute, including composition motif, background/texture system, surface treatment, detail language, and motion restraint.',
@@ -3379,9 +3466,14 @@ final class AiSiteExecutionBlueprintService
 
         $executionBlueprint = \is_array($baseline['execution_blueprint'] ?? null) ? $baseline['execution_blueprint'] : [];
         $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+        $planJson = $this->syncStageOneOverviewFieldsFromRequirementExpansion($planJson);
         $structured = \array_replace(
             \is_array($baseline['structured'] ?? null) ? $baseline['structured'] : [],
             [
+                'overview_expanded_brief' => (string)($planJson['overview_expanded_brief'] ?? ''),
+                'overview_business_goals' => \is_array($planJson['overview_business_goals'] ?? null) ? $planJson['overview_business_goals'] : [],
+                'overview_content_focus' => (string)($planJson['overview_content_focus'] ?? ''),
+                'overview_domain_strategy' => (string)($planJson['overview_domain_strategy'] ?? ''),
                 'requirement_expansion' => $requirementExpansion,
                 'site_strategy' => \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [],
                 'theme_style' => \is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : [],
@@ -11516,18 +11608,10 @@ final class AiSiteExecutionBlueprintService
 
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
-        $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
-        $confirmedPlanBook = \is_array($confirmedWorkbench['plan_book'] ?? null) ? $confirmedWorkbench['plan_book'] : [];
         $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null)
             ? $executionBlueprint['page_plans']
             : (\is_array($structured['page_plans'] ?? null) ? $structured['page_plans'] : []);
-        if ($pagePlans === []) {
-            $pagePlans = \is_array($confirmedWorkbench['structured_plan']['page_plans'] ?? null)
-                ? $confirmedWorkbench['structured_plan']['page_plans']
-                : (\is_array($confirmedPlanBook['structured']['page_plans'] ?? null) ? $confirmedPlanBook['structured']['page_plans'] : []);
-        }
         $pages = \is_array($executionBlueprint['pages'] ?? null)
             ? $executionBlueprint['pages']
             : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
@@ -11536,11 +11620,6 @@ final class AiSiteExecutionBlueprintService
         }
         if ($pages === []) {
             $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
-        }
-        if ($pages === []) {
-            $pages = \is_array($confirmedWorkbench['plan_json']['pages'] ?? null)
-                ? $confirmedWorkbench['plan_json']['pages']
-                : (\is_array($confirmedPlanBook['structured']['pages'] ?? null) ? $confirmedPlanBook['structured']['pages'] : []);
         }
         $pagePlan = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
         if ($pagePlan === []) {

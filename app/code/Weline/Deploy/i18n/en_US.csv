@@ -1,4 +1,4 @@
-﻿"从 Git 仓库拉取代码并更新部署项目","Pull code from Git repository and update the deployment project"
+﻿"从 Git 仓库拉取代码并更新部署项目","从 Git 仓库拉取代码并更新部署项目"
 "Git 部署开始...","Git deployment begins..."
 "步骤 1/5：读取配置文件...","Step 1/5: Reading configuration file..."
 "错误：无法读取 .env 配置文件或配置为空！","Error: Unable to read the .env configuration file or the configuration is empty!"

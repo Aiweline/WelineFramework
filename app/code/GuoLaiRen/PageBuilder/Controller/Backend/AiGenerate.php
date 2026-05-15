@@ -283,7 +283,7 @@ class AiGenerate extends BackendController
             $response = $aiService->generate(
                 $prompt,
                 null, // 自动选择模型
-                'pagebuilder_content_generation', // 场景代码：页面构建器内容生成
+                'pagebuilder_component_generation',
                 $locale,
                 [],
                 null, // userId
@@ -392,7 +392,7 @@ class AiGenerate extends BackendController
             $response = $aiService->generate(
                 $prompt,
                 null, // 自动选择模型
-                'pagebuilder_content_generation', // 场景代码：页面构建器内容生成
+                'pagebuilder_component_generation',
                 $locale,
                 [],
                 null, // userId
@@ -536,7 +536,7 @@ class AiGenerate extends BackendController
             $response = $aiService->generate(
                 $prompt,
                 null, // 自动选择模型
-                'pagebuilder_content_generation', // 场景代码：页面构建器内容生成
+                'pagebuilder_component_generation',
                 $locale,
                 [],
                 null, // userId

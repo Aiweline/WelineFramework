@@ -292,6 +292,90 @@ class ServerInstanceManager
     }
 
     /**
+     * 清理实例文件中已经标记为停机的记录。
+     *
+     * 这是人工命令 server:clean 的轻量入口：
+     * 仅依据实例文件中的 lifecycle_state/startup_phase 判断，
+     * 不做任何运行中 PID/端口探测。
+     *
+     * @return string[] 已清理的实例名称列表
+     */
+    public function cleanupInactiveInstances(): array
+    {
+        $cleanedNames = [];
+
+        foreach ($this->listRawInstanceNames() as $name) {
+            $rawData = $this->getRawInstanceData($name);
+            if ($rawData === null) {
+                continue;
+            }
+
+            if ($this->isStartLockHeld($name)) {
+                continue;
+            }
+
+            if (!$this->shouldPurgeStoppedInstanceRecord($rawData)) {
+                continue;
+            }
+
+            $this->purgeInactiveInstanceArtifacts($name, $rawData);
+            $cleanedNames[] = $name;
+        }
+
+        if ($cleanedNames !== []) {
+            Processer::cleanupStalePidFiles();
+        }
+
+        return $cleanedNames;
+    }
+
+    private function shouldPurgeStoppedInstanceRecord(array $rawData): bool
+    {
+        $lifecycleState = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
+        return \in_array($lifecycleState, ['stopped', 'stale_cleanup', 'master_exited'], true);
+    }
+
+    /**
+     * 人工清场：删除停机实例的全部本地记录文件。
+     */
+    private function purgeInactiveInstanceArtifacts(string $name, array $rawData): void
+    {
+        foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
+            Processer::removePidFile($processName);
+        }
+
+        $pidFile = $this->getPidFile($name);
+        if (\is_file($pidFile)) {
+            @\unlink($pidFile);
+        }
+
+        $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
+        if (\is_file($lockFile)) {
+            @\unlink($lockFile);
+        }
+
+        $exceptionFile = MasterProcess::getServiceExceptionFile($name);
+        if (\is_file($exceptionFile)) {
+            @\unlink($exceptionFile);
+        }
+
+        $instanceFile = $this->getInstanceFile($name);
+        if (\is_file($instanceFile)) {
+            @\unlink($instanceFile);
+        }
+
+        $instanceLockFile = $instanceFile . '.lock';
+        if (\is_file($instanceLockFile)) {
+            @\unlink($instanceLockFile);
+        }
+
+        $resurrectLockFile = $this->getInstanceDir() . $name . '.resurrect.lock';
+        if (\is_file($resurrectLockFile)) {
+            @\unlink($resurrectLockFile);
+        }
+    }
+
+    /**
      * 根据端口查找正在运行的实例
      */
     public function findRunningInstanceNameByPort(int $port): ?string

@@ -59,10 +59,59 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             self::assertSame('image/png', (string)($variant['mime_type'] ?? ''));
             self::assertSame('auto_build', (string)($variant['mode'] ?? ''));
             self::assertArrayNotHasKey('placeholder', $variant);
+            self::assertStringStartsWith('pub/media/page-build/ai-generated/' . $publicId . '/', $relativePath);
             self::assertStringEndsWith('.png', $relativePath);
             self::assertFileExists($absolutePath);
             self::assertSame('fake-png-bytes', (string)\file_get_contents($absolutePath));
             self::assertSame((string)($slot['final_url'] ?? ''), (string)($resultScope['verified_assets']['home:hero'] ?? ''));
+        } finally {
+            if ($relativePath !== '' && \is_file($absolutePath)) {
+                \unlink($absolutePath);
+            }
+        }
+    }
+
+    public function testPrepareBuildAssetsStoresGeneratedFilesUnderDomainHandle(): void
+    {
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, 'asset-domain-path');
+
+        $scope = [
+            'target_domain' => 'https://cards.example.com/path?x=1',
+            'site_title' => '印度市场的棋牌网站',
+            'asset_manifest' => [
+                'slots' => [
+                    'home:hero' => [
+                        'slot_id' => 'home:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home',
+                        'label' => 'Hero visual',
+                        'brief' => 'A premium homepage hero image.',
+                    ],
+                ],
+            ],
+        ];
+
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static fn(): array => [
+                'images' => [[
+                    'b64_json' => \base64_encode('domain-path-image'),
+                    'mime_type' => 'image/jpeg',
+                ]],
+                'model' => 'fake-image-model',
+            ]
+        );
+        $result = $service->prepareBuildAssets($session, 2, $scope, 1);
+        $slot = $result['scope']['asset_manifest']['slots']['home:hero'] ?? [];
+        $variant = $slot['variants'][0] ?? [];
+        $relativePath = (string)($variant['path'] ?? '');
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
+
+        try {
+            self::assertStringStartsWith('pub/media/page-build/ai-generated/cards.example.com/', $relativePath);
+            self::assertSame('/' . $relativePath, (string)($slot['final_url'] ?? ''));
         } finally {
             if ($relativePath !== '' && \is_file($absolutePath)) {
                 \unlink($absolutePath);

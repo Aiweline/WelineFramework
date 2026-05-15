@@ -1,46 +1,46 @@
-﻿CMS Page Management,CMS Page Management
-Page title is required.,页面标题不能为空。
-Page identifier is required.,页面标识符不能为空。
-CMS page saved successfully.,CMS页面保存成功。
-CMS page save failed.,CMS页面保存失败。
-Invalid page ID.,无效的页面ID。
-CMS page deleted successfully.,CMS页面删除成功。
-CMS page delete failed.,CMS页面删除失败。
-Page not found.,页面未找到。
-CMS page not found.,CMS页面未找到。
-Create and manage static content pages for your storefront.,Create and manage static content pages for your storefront.
-Total %{1} pages,Total %{1} pages
-Edit Page,编辑页面
-Create New Page,创建新页面
+﻿"CMS Page Management","CMS Page Management"
+"Page title is required.",页面标题不能为空。
+"Page identifier is required.",页面标识符不能为空。
+"CMS page saved successfully.",CMS页面保存成功。
+"CMS page save failed.",CMS页面保存失败。
+"Invalid page ID.",无效的页面ID。
+"CMS page deleted successfully.",CMS页面删除成功。
+"CMS page delete failed.",CMS页面删除失败。
+"Page not found.",页面未找到。
+"CMS page not found.",CMS页面未找到。
+"Create and manage static content pages for your storefront.","Create and manage static content pages for your storefront."
+"Total %d pages","Total %d pages"
+"Edit Page",编辑页面
+"Create New Page",创建新页面
 Title,标题
 Identifier,标识符
 "URL key used to access this page (e.g., ""about-us"", ""privacy-policy"").","URL key used to access this page (e.g., ""about-us"", ""privacy-policy"")."
-Content Heading,内容标题
+"Content Heading",内容标题
 Content,内容
-Meta Title,Meta标题
-Meta Description,Meta描述
-Meta Keywords,Meta关键词
+"Meta Title",Meta标题
+"Meta Description",Meta描述
+"Meta Keywords",Meta关键词
 Status,状态
 Enabled,启用
 Disabled,禁用
-Sort Order,排序
-Page Layout,页面布局
+"Sort Order",排序
+"Page Layout",页面布局
 Default,Default
-1 Column,1 Column
-2 Columns Left,2 Columns Left
-2 Columns Right,2 Columns Right
-Full Width,Full Width
-Save Page,保存页面
+"1 Column","1 Column"
+"2 Columns Left","2 Columns Left"
+"2 Columns Right","2 Columns Right"
+"Full Width","Full Width"
+"Save Page",保存页面
 Cancel,Cancel
 All,All
 Search,搜索
 Reset,Reset
 Actions,操作
 Edit,Edit
-Are you sure you want to delete this page?,确定要删除此页面吗？
+"Are you sure you want to delete this page?",确定要删除此页面吗？
 Delete,删除
 Previous,Previous
 Next,Next
-No CMS pages found.,No CMS pages found.
-Use the form to create your first CMS page or adjust filters.,Use the form to create your first CMS page or adjust filters.
-No content available for this page.,No content available for this page.
+"No CMS pages found.","No CMS pages found."
+"Use the form to create your first CMS page or adjust filters.","Use the form to create your first CMS page or adjust filters."
+"No content available for this page.","No content available for this page."

@@ -4,7 +4,10 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser as PhraseParser;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\I18n\Parser as I18nParser;
 
 class AiTranslationPublisher
 {
@@ -45,10 +48,26 @@ class AiTranslationPublisher
             return false;
         }
 
-        w_cache('i18n')->clear();
-        w_cache('phrase')->clear();
+        $this->refreshRuntimeCaches($filename);
 
         return true;
+    }
+
+    private function refreshRuntimeCaches(string $filename): void
+    {
+        clearstatcache(true, $filename);
+        w_cache('i18n')->clear();
+        w_cache('phrase')->clear();
+        PhraseParser::clearWorkerCaches();
+        I18nParser::clearWorkerCaches();
+
+        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
+        if (class_exists($dispatchClass)) {
+            try {
+                ObjectManager::getInstance($dispatchClass)->cacheClear();
+            } catch (\Throwable) {
+            }
+        }
     }
 
     /**
