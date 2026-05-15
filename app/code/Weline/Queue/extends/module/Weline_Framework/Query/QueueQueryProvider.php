@@ -85,17 +85,18 @@ class QueueQueryProvider implements QueryProviderInterface
             throw new \InvalidArgumentException((string)__('请提供 biz_key。'));
         }
         $queue = clone $this->queueModel;
-        $queue->clearData()->reset()
+        $rows = $queue->clearData()->reset()
             ->where(Queue::schema_fields_BIZ_KEY, $bizKey)
             ->order(Queue::schema_fields_ID, 'DESC')
             ->limit(1)
             ->select()
-            ->fetch();
-        if ((int)$queue->getId() <= 0) {
+            ->fetchArray();
+        $row = $rows[0] ?? [];
+        if (!is_array($row) || $row === []) {
             return null;
         }
 
-        return $queue->getData();
+        return $row;
     }
 
     /**

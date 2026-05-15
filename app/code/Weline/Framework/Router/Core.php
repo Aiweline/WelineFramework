@@ -24,6 +24,7 @@ use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
 
 class Core
 {
@@ -88,6 +89,9 @@ class Core
 
     /** @var array<string, int> */
     private static array $generatedRouterFileMtimes = [];
+
+    /** @var array<string, bool> */
+    private static array $generatedRouterFileFrozen = [];
     
     /**
      * @DESC         |任何时候都会初始化
@@ -668,8 +672,7 @@ class Core
             // 检测api路由
             $router_filepath = Env::path_FRONTEND_REST_API_ROUTER_FILE;
         }
-        if (file_exists($router_filepath)) {
-            $routers = self::loadGeneratedRouterFile($router_filepath);
+        $routers = self::loadGeneratedRouterFile($router_filepath);
             $requestMethod = strtoupper($this->request->getMethod());
             $method = '::' . $requestMethod;
             // HEAD 请求应该回退到 GET 路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
@@ -692,7 +695,6 @@ class Core
                 }
                 return $this->route();
             }
-        }
         // 如果是API后端请求，找不到路由就直接404
         if ($is_api_admin) {
             $this->request->getResponse()->noRouter();
@@ -704,16 +706,63 @@ class Core
     {
         self::$generatedRouterFileCache = [];
         self::$generatedRouterFileMtimes = [];
+        self::$generatedRouterFileFrozen = [];
+    }
+
+    public static function preloadGeneratedRouterFiles(): void
+    {
+        foreach (Env::router_files_PATH as $routerFilepath) {
+            self::loadGeneratedRouterFile($routerFilepath);
+        }
     }
 
     private static function loadGeneratedRouterFile(string $routerFilepath): array
     {
+        $persistentRuntime = Runtime::isPersistent();
+        $cachedRouters = self::$generatedRouterFileCache[$routerFilepath] ?? [];
+        $hasCachedRouters = $persistentRuntime && $cachedRouters !== [];
+
+        if ($persistentRuntime && \array_key_exists($routerFilepath, self::$generatedRouterFileCache)) {
+            return $cachedRouters;
+        }
+
+        if (!empty(self::$generatedRouterFileFrozen[$routerFilepath]) && $hasCachedRouters) {
+            return $cachedRouters;
+        }
+
+        if (!is_file($routerFilepath)) {
+            if ($hasCachedRouters) {
+                self::$generatedRouterFileFrozen[$routerFilepath] = true;
+                return $cachedRouters;
+            }
+
+            self::$generatedRouterFileCache[$routerFilepath] = [];
+            self::$generatedRouterFileMtimes[$routerFilepath] = 0;
+            return [];
+        }
+
         $mtime = (int)(@\filemtime($routerFilepath) ?: 0);
         if (!isset(self::$generatedRouterFileCache[$routerFilepath])
             || (self::$generatedRouterFileMtimes[$routerFilepath] ?? -1) !== $mtime
         ) {
-            $routers = include $routerFilepath;
-            self::$generatedRouterFileCache[$routerFilepath] = \is_array($routers) ? $routers : [];
+            try {
+                $routers = include $routerFilepath;
+            } catch (\Throwable $throwable) {
+                if ($hasCachedRouters) {
+                    self::$generatedRouterFileFrozen[$routerFilepath] = true;
+                    return $cachedRouters;
+                }
+
+                throw $throwable;
+            }
+
+            $routers = \is_array($routers) ? $routers : [];
+            if ($routers === [] && $hasCachedRouters) {
+                self::$generatedRouterFileFrozen[$routerFilepath] = true;
+                return $cachedRouters;
+            }
+
+            self::$generatedRouterFileCache[$routerFilepath] = $routers;
             self::$generatedRouterFileMtimes[$routerFilepath] = $mtime;
         }
 
@@ -766,12 +815,11 @@ class Core
         } else {
             $router_filepath = Env::path_FRONTEND_PC_ROUTER_FILE;
         }
-        if (is_file($router_filepath)) {
-            try {
-                $routers = self::loadGeneratedRouterFile($router_filepath);
-            } catch (\Throwable $includeE) {
-                throw $includeE;
-            }
+        try {
+            $routers = self::loadGeneratedRouterFile($router_filepath);
+        } catch (\Throwable $includeE) {
+            throw $includeE;
+        }
             
             $requestMethod = strtoupper($this->request->getMethod());
             $method = '::' . $requestMethod;
@@ -801,7 +849,6 @@ class Core
                 
                 return $this->route();
             }
-        }
         // 如果是PC后端请求，找不到路由就直接404
         if ($is_pc_admin) {
             // 诊断日志：记录后台路由 404 的关键信息，便于排查间歇性 404 问题

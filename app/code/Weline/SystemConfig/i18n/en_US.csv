@@ -1,9 +1,9 @@
-﻿配置读取,配置读取
-当系统配置被读取时触发，允许其他模块拦截或修改配置值。,当系统配置被读取时触发，允许其他模块拦截或修改配置值。
-配置设置前,配置设置前
-在配置写入数据库前触发，允许其他模块验证或修改配置值。,在配置写入数据库前触发，允许其他模块验证或修改配置值。
-配置设置后,配置设置后
-"在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。","在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。"
+﻿配置读取,"Configuration read"
+当系统配置被读取时触发，允许其他模块拦截或修改配置值。,"Triggered when the system configuration is read, allowing other modules to intercept or modify configuration values."
+配置设置前,"Before configuration settings"
+在配置写入数据库前触发，允许其他模块验证或修改配置值。,"Triggered before configuration is written to the database, allowing other modules to validate or modify configuration values."
+配置设置后,"After configuration settings"
+"在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。","Triggered after configuration is successfully written to the database, notifying other modules that the configuration has changed. The Server module listens for this event to detect configuration changes."
 "SystemConfig query provider does not support: %{1}","SystemConfig query provider does not support: %{1}"
 "System config query","System config query"
 "Provides system config read and write operations.","Provides system config read and write operations."

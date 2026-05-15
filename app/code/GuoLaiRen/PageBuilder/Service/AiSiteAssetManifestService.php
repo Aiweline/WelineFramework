@@ -244,7 +244,7 @@ final class AiSiteAssetManifestService
 
     /**
      * 强行契约：图像 prompt 必须以"业务主体"开头，brand 名称仅作次要装饰，否则 AI 会忽略
-     * 用户的真实业务诉求（如"印度棋牌/扑克"），照着 site_title 字面（"Teenipiya"）凭空发挥
+     * 用户的真实业务诉求（如行业、产品、服务场景），照着 site_title 字面凭空发挥
      * 出无关吉祥物/插画。重构原则：
      *   1. PRIMARY SUBJECT 必须是 prompt 的第 1 行；
      *   2. brand name 仅作 wordmark text reference / brand context，不作主体；

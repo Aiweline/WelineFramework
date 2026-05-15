@@ -1,527 +1,527 @@
 ﻿========================================,========================================
-"AutoLeadAgent WASM 编译工具","AutoLeadAgent WASM 编译工具"
-清理构建目录...,清理构建目录...
-"✓ 构建目录已清理","✓ 构建目录已清理"
-清理构建目录时出现问题,清理构建目录时出现问题
-"【步骤 1/4】检查编译环境...","【步骤 1/4】检查编译环境..."
-"WASM 源码不存在！","WASM 源码不存在！"
-请确保以下文件存在：,请确保以下文件存在：
+"AutoLeadAgent WASM 编译工具","AutoLeadAgent WASM compilation tool"
+清理构建目录...,"Cleaning build directory..."
+"✓ 构建目录已清理","✓ The build directory has been cleaned"
+清理构建目录时出现问题,"Problem cleaning build directory"
+"【步骤 1/4】检查编译环境...","[Step 1/4] Check the compilation environment..."
+"WASM 源码不存在！","WASM source code does not exist!"
+请确保以下文件存在：,"Please ensure the following files exist:"
 "- %{1}agent_core.cpp","- %{1}agent_core.cpp"
 "- %{1}agent_core.h","- %{1}agent_core.h"
 "- %{1}binding.cpp","- %{1}binding.cpp"
-【安装依赖】,【安装依赖】
-"强制重新安装 WASI SDK...","强制重新安装 WASI SDK..."
-"✓ WASI SDK 重新安装成功","✓ WASI SDK 重新安装成功"
-"✗ WASI SDK 重新安装失败：%{1}","✗ WASI SDK 重新安装失败：%{1}"
-"【步骤 2/4】强制重新安装 WASI SDK...","【步骤 2/4】强制重新安装 WASI SDK..."
-"WASI SDK 重新安装失败：%{1}","WASI SDK 重新安装失败：%{1}"
-请尝试：,请尝试：
-"1. 以管理员身份运行此命令","1. 以管理员身份运行此命令"
-"2. 手动删除目录：%{1}wasi-sdk/","2. 手动删除目录：%{1}wasi-sdk/"
-"3. 然后重新运行编译命令","3. 然后重新运行编译命令"
-"WASI SDK 未安装！","WASI SDK 未安装！"
-"已指定 --no-install 参数，跳过自动安装","已指定 --no-install 参数，跳过自动安装"
-"请手动下载 WASI SDK：","请手动下载 WASI SDK："
+【安装依赖】,"[Installation dependencies]"
+"强制重新安装 WASI SDK...","Force Reinstall WASI SDK..."
+"✓ WASI SDK 重新安装成功","✓ WASI SDK reinstalled successfully"
+"✗ WASI SDK 重新安装失败：%{1}","✗ WASI SDK reinstallation failed: %{1}"
+"【步骤 2/4】强制重新安装 WASI SDK...","[Step 2/4] Forced reinstallation of WASI SDK..."
+"WASI SDK 重新安装失败：%{1}","WASI SDK reinstallation failed: %{1}"
+请尝试：,Try:
+"1. 以管理员身份运行此命令","1. Run this command as an administrator"
+"2. 手动删除目录：%{1}wasi-sdk/","2. Manually delete the directory: %{1}wasi-sdk/"
+"3. 然后重新运行编译命令","3. Then rerun the compile command"
+"WASI SDK 未安装！","WASI SDK is not installed!"
+"已指定 --no-install 参数，跳过自动安装","Specified --no-install parameter, skipping automatic installation"
+"请手动下载 WASI SDK：","Manually download the WASI SDK:"
 https://github.com/WebAssembly/wasi-sdk/releases,https://github.com/WebAssembly/wasi-sdk/releases
-下载后解压到：,下载后解压到：
+下载后解压到：,"After downloading, extract it to:"
 %{1}wasi-sdk/,%{1}wasi-sdk/
-"【步骤 2/4】自动安装 WASI SDK...","【步骤 2/4】自动安装 WASI SDK..."
-"WASI SDK 安装失败，无法继续编译","WASI SDK 安装失败，无法继续编译"
-"2. 使用 --reinstall 参数强制重新安装","2. 使用 --reinstall 参数强制重新安装"
-"3. 手动下载 WASI SDK：","3. 手动下载 WASI SDK："
-"WASI SDK 安装后验证失败","WASI SDK 安装后验证失败"
-"【步骤 2/4】WASI SDK 已就绪","【步骤 2/4】WASI SDK 已就绪"
-"【步骤 3/4】检查是否需要编译...","【步骤 3/4】检查是否需要编译..."
-"✓ WASM 文件已是最新，无需重新编译","✓ WASM 文件已是最新，无需重新编译"
-"使用 --force 或 -f 参数强制重新编译","使用 --force 或 -f 参数强制重新编译"
-强制重新编译模式,强制重新编译模式
-检测到源文件更新，需要重新编译,检测到源文件更新，需要重新编译
-"【步骤 4/4】执行编译...","【步骤 4/4】执行编译..."
-"✓ WASM 编译成功！","✓ WASM 编译成功！"
-"输出文件: %{1}","输出文件: %{1}"
-"文件大小: %{1}","文件大小: %{1}"
+"【步骤 2/4】自动安装 WASI SDK...","[Step 2/4] Automatically install WASI SDK..."
+"WASI SDK 安装失败，无法继续编译","WASI SDK installation failed, cannot continue compilation"
+"2. 使用 --reinstall 参数强制重新安装","2. Use the --reinstall parameter to force reinstallation"
+"3. 手动下载 WASI SDK：","3. Manually download WASI SDK:"
+"WASI SDK 安装后验证失败","WASI SDK post-installation verification failed"
+"【步骤 2/4】WASI SDK 已就绪","【Step 2/4】WASI SDK is ready"
+"【步骤 3/4】检查是否需要编译...","[Step 3/4] Check whether compilation is required..."
+"✓ WASM 文件已是最新，无需重新编译","✓ WASM file is up to date, no need to recompile"
+"使用 --force 或 -f 参数强制重新编译","Force recompilation using the --force or -f parameter"
+强制重新编译模式,"Force Recompile Mode"
+检测到源文件更新，需要重新编译,"Detected source file update, recompilation required."
+"【步骤 4/4】执行编译...","[Step 4/4] Execute compilation..."
+"✓ WASM 编译成功！","✓ WASM compiled successfully!"
+"输出文件: %{1}","Output file: %{1}"
+"文件大小: %{1}","File size: %{1}"
 "SHA256:   %{1}","SHA256:   %{1}"
-"正在注册 WASM 哈希到数据库...","正在注册 WASM 哈希到数据库..."
-"✓ WASM 哈希已注册","✓ WASM 哈希已注册"
-哈希注册失败：%{1},哈希注册失败：%{1}
-"这不影响 WASM 模块的使用","这不影响 WASM 模块的使用"
-"✗ WASM 编译失败","✗ WASM 编译失败"
-"错误信息: %{1}","错误信息: %{1}"
-编译过程中发生错误：%{1},编译过程中发生错误：%{1}
-【编译环境信息】,【编译环境信息】
-【路径信息】,【路径信息】
-"WASM 源码目录: %{1}","WASM 源码目录: %{1}"
-"WASM 输出文件: %{1}","WASM 输出文件: %{1}"
-"依赖安装目录: %{1}","依赖安装目录: %{1}"
-"【WASM 文件状态】","【WASM 文件状态】"
-"✓ WASM 文件已存在","✓ WASM 文件已存在"
-"修改时间: %{1}","修改时间: %{1}"
-"✗ WASM 文件不存在，需要编译","✗ WASM 文件不存在，需要编译"
-"✓ WASI SDK 已安装","✓ WASI SDK 已安装"
-"路径: %{1}","路径: %{1}"
-"✗ WASI SDK 未安装（将自动下载，约50MB）","✗ WASI SDK 未安装（将自动下载，约50MB）"
-"✓ WASM 源码文件存在","✓ WASM 源码文件存在"
-"✗ WASM 源码文件不存在","✗ WASM 源码文件不存在"
-已安装的组件：,已安装的组件：
+"正在注册 WASM 哈希到数据库...","Registering WASM hash to database..."
+"✓ WASM 哈希已注册","✓ WASM hash has been registered"
+哈希注册失败：%{1},"Hash registration failed: %{1}"
+"这不影响 WASM 模块的使用","This does not affect the use of the WASM module"
+"✗ WASM 编译失败","✗ WASM compilation failed"
+"错误信息: %{1}","Error message: %{1}"
+编译过程中发生错误：%{1},"An error occurred during compilation: %{1}"
+【编译环境信息】,"[Compilation environment information]"
+【路径信息】,"【Path information】"
+"WASM 源码目录: %{1}","WASM source code directory: %{1}"
+"WASM 输出文件: %{1}","WASM output file: %{1}"
+"依赖安装目录: %{1}","Dependency Installation Directory: %{1}"
+"【WASM 文件状态】","[WASM file status]"
+"✓ WASM 文件已存在","✓ WASM file already exists"
+"修改时间: %{1}","Modification time: %{1}"
+"✗ WASM 文件不存在，需要编译","✗ WASM file does not exist and needs to be compiled"
+"✓ WASI SDK 已安装","✓ WASI SDK installed"
+"路径: %{1}","Path: %{1}"
+"✗ WASI SDK 未安装（将自动下载，约50MB）","✗ WASI SDK not installed (will be downloaded automatically, about 50MB)"
+"✓ WASM 源码文件存在","✓ WASM source code file exists"
+"✗ WASM 源码文件不存在","✗ WASM source code file does not exist"
+已安装的组件：,"Installed components:"
 "✓ %{1}","✓ %{1}"
-安装过程中的警告/错误：,安装过程中的警告/错误：
+安装过程中的警告/错误：,"Warnings/Errors During Installation:"
 "• %{1}","• %{1}"
-"编译自动寻客模块的 WASM 核心算法（自动安装 WASI SDK）","编译自动寻客模块的 WASM 核心算法（自动安装 WASI SDK）"
-"强制重新编译，即使 WASM 文件已是最新","强制重新编译，即使 WASM 文件已是最新"
-"跳过自动安装 WASI SDK","跳过自动安装 WASI SDK"
-"仅安装 WASI SDK，不执行编译","仅安装 WASI SDK，不执行编译"
-"强制重新安装 WASI SDK（解决权限问题）","强制重新安装 WASI SDK（解决权限问题）"
-清理构建目录,清理构建目录
-显示编译环境信息,显示编译环境信息
-显示调试信息,显示调试信息
-编译（自动安装）,编译（自动安装）
-强制重新编译,强制重新编译
-"重新安装 WASI SDK","重新安装 WASI SDK"
-跳过自动安装,跳过自动安装
-"仅安装 WASI SDK","仅安装 WASI SDK"
-清理后重新编译,清理后重新编译
-查看环境信息,查看环境信息
-Token或域名参数缺失,Token或域名参数缺失
-Token验证失败,Token验证失败
-核心代码文件不存在,核心代码文件不存在
-店铺ID参数无效,店铺ID参数无效
-搜索任务创建成功,搜索任务创建成功
-任务ID参数无效,任务ID参数无效
-获取搜索结果成功,获取搜索结果成功
-域名参数不能为空,域名参数不能为空
-Token生成成功,Token生成成功
-Token参数不能为空,Token参数不能为空
-Token无效或已过期,Token无效或已过期
-Token验证成功,Token验证成功
-获取WASM哈希成功,获取WASM哈希成功
-WASM文件不存在,WASM文件不存在
-获取配置失败：%{1},获取配置失败：%{1}
+"编译自动寻客模块的 WASM 核心算法（自动安装 WASI SDK）","Compile the WASM core algorithm for the automatic customer acquisition module (automatically install WASI SDK)"
+"强制重新编译，即使 WASM 文件已是最新","Force Recompile Even If WASM File Is Up-to-Date"
+"跳过自动安装 WASI SDK","Skipped automatic installation of WASI SDK"
+"仅安装 WASI SDK，不执行编译","Install WASI SDK Only, Do Not Compile"
+"强制重新安装 WASI SDK（解决权限问题）","Force Reinstall WASI SDK (Resolve Permission Issues)"
+清理构建目录,"Clean build directory"
+显示编译环境信息,"Show compilation environment information"
+显示调试信息,"Show debug information"
+编译（自动安装）,"Compile (auto-install)"
+强制重新编译,"Force Recompile"
+"重新安装 WASI SDK","Reinstall WASI SDK"
+跳过自动安装,"Skipped automatic installation"
+"仅安装 WASI SDK","Install WASI SDK Only"
+清理后重新编译,"Recompile After Cleanup"
+查看环境信息,"View Environment Information"
+Token或域名参数缺失,"Token or domain name parameters are missing"
+Token验证失败,"Token verification failed"
+核心代码文件不存在,"Core code file does not exist"
+店铺ID参数无效,"Invalid Store ID parameter"
+搜索任务创建成功,"Search task created successfully"
+任务ID参数无效,"Invalid task ID parameter"
+获取搜索结果成功,"Successfully got search results"
+域名参数不能为空,"Domain parameter cannot be empty"
+Token生成成功,"Token generation successful"
+Token参数不能为空,"Token parameter cannot be empty"
+Token无效或已过期,"Token is invalid or expired"
+Token验证成功,"Token verification successful"
+获取WASM哈希成功,"Successfully got WASM hash"
+WASM文件不存在,"WASM file does not exist"
+获取配置失败：%{1},"Failed to fetch configuration: %{1}"
 仅支持POST请求,"Only POST requests are supported"
-配置保存成功,配置保存成功
-配置保存失败：%{1},配置保存失败：%{1}
-配置已重置为默认值,配置已重置为默认值
-重置配置失败：%{1},重置配置失败：%{1}
-请求失败：%{1},请求失败：%{1}
-"API 请求失败，状态码：%{1}%{2}","API 请求失败，状态码：%{1}%{2}"
-"API 返回格式错误","API 返回格式错误"
-搜索模型失败：%{1},搜索模型失败：%{1}
-模型ID不能为空,模型ID不能为空
-"API 请求失败，状态码：%{1}","API 请求失败，状态码：%{1}"
-获取模型信息失败：%{1},获取模型信息失败：%{1}
-"缓存大小必须在 100-10240 MB 之间","缓存大小必须在 100-10240 MB 之间"
-模型配置保存成功,模型配置保存成功
-保存模型配置失败：%{1},保存模型配置失败：%{1}
+配置保存成功,"Configuration saved successfully"
+配置保存失败：%{1},"Failed to save configuration: %{1}"
+配置已重置为默认值,"Configuration reset to default values"
+重置配置失败：%{1},"Configuration Reset Failed: %{1}"
+请求失败：%{1},"Request failed: %{1}"
+"API 请求失败，状态码：%{1}%{2}","API request failed, status code: %{1}%{2}"
+"API 返回格式错误","API return format error"
+搜索模型失败：%{1},"Search Model Failed: %{1}"
+模型ID不能为空,"Model ID cannot be empty"
+"API 请求失败，状态码：%{1}","API request failed, status code: %{1}"
+获取模型信息失败：%{1},"Failed to get model info: %{1}"
+"缓存大小必须在 100-10240 MB 之间","Cache size must be between 100-10240 MB"
+模型配置保存成功,"Model configuration saved successfully"
+保存模型配置失败：%{1},"Failed to save model configuration: %{1}"
 网络配置保存成功,"Network settings saved successfully"
 保存网络配置失败：%{1},"Failed to save network settings: %{1}"
-模型未缓存,模型未缓存
-模型已缓存,模型已缓存
-模型未完全缓存,模型未完全缓存
-检查模型缓存失败：%{1},检查模型缓存失败：%{1}
-无法获取模型文件列表，仅进行基本检查,无法获取模型文件列表，仅进行基本检查
-文件列表格式错误,文件列表格式错误
-模型文件完整,模型文件完整
-模型文件不完整,模型文件不完整
-检查模型完整性失败：%{1},检查模型完整性失败：%{1}
-文件名不能为空,文件名不能为空
-检查模型文件失败：%{1},检查模型文件失败：%{1}
-模型缓存不存在,模型缓存不存在
-模型缓存已删除,模型缓存已删除
-删除模型缓存失败：%{1},删除模型缓存失败：%{1}
-任务不存在：%{1},任务不存在：%{1}
-网站ID,网站ID
-请至少选择一个搜索引擎,请至少选择一个搜索引擎
-请至少选择一个目标网站,请至少选择一个目标网站
-来源ID参数无效,来源ID参数无效
-创建搜索任务失败：%{1},创建搜索任务失败：%{1}
-仅支持AJAX请求,仅支持AJAX请求
-搜索任务不存在：%{1},搜索任务不存在：%{1}
-当前任务状态不允许继续：%{1},当前任务状态不允许继续：%{1}
-任务缺少搜索引擎配置，无法执行。请先编辑任务并选择至少一个搜索引擎。,任务缺少搜索引擎配置，无法执行。请先编辑任务并选择至少一个搜索引擎。
-任务缺少目标网站配置，无法执行。请先编辑任务并选择至少一个目标网站。,任务缺少目标网站配置，无法执行。请先编辑任务并选择至少一个目标网站。
-更新任务状态失败,更新任务状态失败
-任务已继续执行,任务已继续执行
-"已标记 %{1} 个中断任务为异常","已标记 %{1} 个中断任务为异常"
-任务不存在,任务不存在
-任务状态不是运行中,任务状态不是运行中
-任务已标记为异常中断,任务已标记为异常中断
-获取店铺列表成功,获取店铺列表成功
-进度更新成功,进度更新成功
-更新进度失败：%{1},更新进度失败：%{1}
-没有候选客户需要保存,没有候选客户需要保存
-"成功保存 %{1} 位候选客户","成功保存 %{1} 位候选客户"
-保存候选客户失败：%{1},保存候选客户失败：%{1}
-错误已记录,错误已记录
-记录错误失败：%{1},记录错误失败：%{1}
-获取来源类型列表成功,获取来源类型列表成功
-获取来源类型列表失败：%{1},获取来源类型列表失败：%{1}
-仅支持POST或DELETE请求,仅支持POST或DELETE请求
-任务ID无效,任务ID无效
-无法删除正在运行的任务，请先停止任务,无法删除正在运行的任务，请先停止任务
-任务删除失败，请重试,任务删除失败，请重试
-任务删除成功,任务删除成功
-删除失败：%{1},删除失败：%{1}
-扩展目录不存在,扩展目录不存在
-无法创建ZIP文件,无法创建ZIP文件
-关键词参数无效,关键词参数无效
-无法翻译关键词：%{1},无法翻译关键词：%{1}
-翻译完成,翻译完成
-翻译失败：%{1},翻译失败：%{1}
-获取场景映射规则失败：%{1},获取场景映射规则失败：%{1}
-获取列表失败：%{1},获取列表失败：%{1}
-地区名称不能为空,地区名称不能为空
-语言代码不能为空,语言代码不能为空
-至少需要选择一个搜索引擎,至少需要选择一个搜索引擎
-映射记录不存在,映射记录不存在
-该地区-语言组合已存在,该地区-语言组合已存在
-数据验证失败,数据验证失败
-映射更新成功,映射更新成功
-映射创建成功,映射创建成功
-保存失败：%{1},保存失败：%{1}
-映射ID无效,映射ID无效
-映射删除成功,映射删除成功
-获取数据失败：%{1},获取数据失败：%{1}
-已启用,已启用
-已禁用,已禁用
-操作失败：%{1},操作失败：%{1}
-网站名称不能为空,网站名称不能为空
-域名不能为空,域名不能为空
-搜索语法模板不能为空,搜索语法模板不能为空
-目标网站不存在,目标网站不存在
-该域名已存在,该域名已存在
-更新成功,更新成功
-创建成功,创建成功
-目标网站ID无效,目标网站ID无效
-删除成功,删除成功
-缺少哈希ID参数,缺少哈希ID参数
-WASM记录不存在,WASM记录不存在
-自动寻客来源类型收集,自动寻客来源类型收集
-用于在创建自动寻客任务前，收集各个模块提供的来源类型和配置项，例如店铺、产品等。,用于在创建自动寻客任务前，收集各个模块提供的来源类型和配置项，例如店铺、产品等。
-自动生成,自动生成
-手动设置,手动设置
-混合模式,混合模式
-"检测到部分更新模式（%{1}），跳过 WASM 编译检查","检测到部分更新模式（%{1}），跳过 WASM 编译检查"
-"=== AutoLeadAgent WASM 编译检查 ===","=== AutoLeadAgent WASM 编译检查 ==="
-"WASM 源码不存在，跳过编译","WASM 源码不存在，跳过编译"
-"WASM 文件存在但数据库表中没有哈希记录，需要重新编译并注册","WASM 文件存在但数据库表中没有哈希记录，需要重新编译并注册"
-"WASM 文件已是最新，无需重新编译","WASM 文件已是最新，无需重新编译"
-"✓ WASM 文件已复制到静态资源目录","✓ WASM 文件已复制到静态资源目录"
-"⚠️ WASM 文件复制失败","⚠️ WASM 文件复制失败"
-"✓ WASM 文件已更新到静态资源目录","✓ WASM 文件已更新到静态资源目录"
-"⚠️ WASM 文件更新失败","⚠️ WASM 文件更新失败"
+模型未缓存,"Model not cached"
+模型已缓存,"Model cached"
+模型未完全缓存,"Model not fully cached"
+检查模型缓存失败：%{1},"Model cache check failed: %{1}"
+无法获取模型文件列表，仅进行基本检查,"Unable to get model file list, performing only basic checks"
+文件列表格式错误,"Invalid file list format"
+模型文件完整,"Model file is complete"
+模型文件不完整,"Model file is incomplete"
+检查模型完整性失败：%{1},"Model integrity check failed: %{1}"
+文件名不能为空,"File name cannot be empty"
+检查模型文件失败：%{1},"Model file check failed: %{1}"
+模型缓存不存在,"Model cache does not exist"
+模型缓存已删除,"Model cache deleted"
+删除模型缓存失败：%{1},"Failed to delete model cache: %{1}"
+任务不存在：%{1},"Task does not exist: %{1}"
+网站ID,"Site ID"
+请至少选择一个搜索引擎,"Please select at least one search engine"
+请至少选择一个目标网站,"Please select at least one target website"
+来源ID参数无效,"Invalid source ID parameter"
+创建搜索任务失败：%{1},"Failed to create search task: %{1}"
+仅支持AJAX请求,"Only AJAX requests are supported"
+搜索任务不存在：%{1},"Search task does not exist: %{1}"
+当前任务状态不允许继续：%{1},"Current task status does not allow continuation: %{1}"
+任务缺少搜索引擎配置，无法执行。请先编辑任务并选择至少一个搜索引擎。,"The task lacks a search engine configuration and cannot be executed. Please edit the task and select at least one search engine."
+任务缺少目标网站配置，无法执行。请先编辑任务并选择至少一个目标网站。,"The task lacks a target website configuration and cannot be executed. Please edit the task and select at least one target website."
+更新任务状态失败,"Failed to update task status"
+任务已继续执行,"Task has resumed execution"
+"已标记 %{1} 个中断任务为异常","Marked %{1} interrupted tasks as abnormal"
+任务不存在,"Task does not exist"
+任务状态不是运行中,"Task status is not running"
+任务已标记为异常中断,"Task has been marked as abnormally interrupted"
+获取店铺列表成功,"Successfully got store list"
+进度更新成功,"Progress update successful"
+更新进度失败：%{1},"Update progress failed: %{1}"
+没有候选客户需要保存,"No candidate customers to save"
+"成功保存 %{1} 位候选客户","Successfully saved %{1} candidate customers"
+保存候选客户失败：%{1},"Failed to save candidate customer: %{1}"
+错误已记录,"Error logged"
+记录错误失败：%{1},"Record Error Failed: %{1}"
+获取来源类型列表成功,"Successfully got source type list"
+获取来源类型列表失败：%{1},"Failed to get source type list: %{1}"
+仅支持POST或DELETE请求,"Only POST or DELETE requests are supported"
+任务ID无效,"Invalid task ID"
+无法删除正在运行的任务，请先停止任务,"Unable to delete a running task, please stop the task first"
+任务删除失败，请重试,"Failed to delete task, please try again"
+任务删除成功,"Task deleted successfully"
+删除失败：%{1},"Deletion failed: %{1}"
+扩展目录不存在,"Extension directory does not exist"
+无法创建ZIP文件,"Unable to create ZIP file"
+关键词参数无效,"Invalid Keyword Parameter"
+无法翻译关键词：%{1},"Unable to translate keyword: %{1}"
+翻译完成,"Translation completed"
+翻译失败：%{1},"Translation failed: %{1}"
+获取场景映射规则失败：%{1},"Failed to retrieve scene mapping rules: %{1}"
+获取列表失败：%{1},"Failed to retrieve list: %{1}"
+地区名称不能为空,"Region name cannot be empty."
+语言代码不能为空,"Language code cannot be empty"
+至少需要选择一个搜索引擎,"At least one search engine must be selected"
+映射记录不存在,"Mapping record does not exist"
+该地区-语言组合已存在,"The region-language combination already exists"
+数据验证失败,"Data validation failed"
+映射更新成功,"Mapping updated successfully"
+映射创建成功,"Mapping created successfully"
+保存失败：%{1},"Save failed: %{1}"
+映射ID无效,"Invalid mapping ID"
+映射删除成功,"Mapping deleted successfully"
+获取数据失败：%{1},"Failed to get data: %{1}"
+已启用,Enabled
+已禁用,Disabled
+操作失败：%{1},"Operation failed: %{1}"
+网站名称不能为空,"Site name cannot be empty"
+域名不能为空,"Domain cannot be empty"
+搜索语法模板不能为空,"Search syntax template cannot be empty"
+目标网站不存在,"Target website does not exist"
+该域名已存在,"The domain name already exists"
+更新成功,"Update successful"
+创建成功,"Created successfully"
+目标网站ID无效,"Invalid target website ID"
+删除成功,"Deletion successful"
+缺少哈希ID参数,"Missing hash ID parameter"
+WASM记录不存在,"WASM record does not exist"
+自动寻客来源类型收集,"Auto Lead Generation Source Type Collection"
+用于在创建自动寻客任务前，收集各个模块提供的来源类型和配置项，例如店铺、产品等。,"Used to collect source types and configuration items provided by each module before creating an automatic lead generation task, such as stores, products, etc."
+自动生成,Auto-generate
+手动设置,"Manual settings"
+混合模式,"Mixed mode"
+"检测到部分更新模式（%{1}），跳过 WASM 编译检查","Partial update mode detected (%{1}), skipping WASM compilation check."
+"=== AutoLeadAgent WASM 编译检查 ===","=== AutoLeadAgent WASM Compilation Check ==="
+"WASM 源码不存在，跳过编译","WASM source code does not exist, skip compilation"
+"WASM 文件存在但数据库表中没有哈希记录，需要重新编译并注册","WASM file exists but there is no hash record in the database table, need to be recompiled and registered"
+"WASM 文件已是最新，无需重新编译","WASI SDK file is already up to date, no need to recompile"
+"✓ WASM 文件已复制到静态资源目录","✓ WASM file has been copied to the static resource directory"
+"⚠️ WASM 文件复制失败","⚠️ WASM file copy failed"
+"✓ WASM 文件已更新到静态资源目录","✓ WASM file has been updated to the static resource directory"
+"⚠️ WASM 文件更新失败","⚠️ WASM file update failed"
 "WASI SDK is not installed; skipping automatic download during setup upgrade.","WASI SDK is not installed; skipping automatic download during setup upgrade."
-"WASI SDK 未安装，开始自动安装依赖...","WASI SDK 未安装，开始自动安装依赖..."
-"✓ WASI SDK 自动安装成功","✓ WASI SDK 自动安装成功"
-"WASI SDK 安装后验证失败，无法编译 WASM","WASI SDK 安装后验证失败，无法编译 WASM"
-"模块将使用纯 JavaScript 推理引擎作为备用方案","模块将使用纯 JavaScript 推理引擎作为备用方案"
-安装失败，未知错误,安装失败，未知错误
-"WASI SDK 自动安装失败：%{1}","WASI SDK 自动安装失败：%{1}"
-"检测到 WASM 源码有更新，开始自动编译...","检测到 WASM 源码有更新，开始自动编译..."
-"✓ WASM 自动编译成功！","✓ WASM 自动编译成功！"
+"WASI SDK 未安装，开始自动安装依赖...","WASI SDK is not installed, start automatically installing dependencies..."
+"✓ WASI SDK 自动安装成功","✓ WASI SDK automatically installed successfully"
+"WASI SDK 安装后验证失败，无法编译 WASM","WASI SDK post-installation verification failed and WASM could not be compiled"
+"模块将使用纯 JavaScript 推理引擎作为备用方案","Module will use a pure JavaScript inference engine as a fallback"
+安装失败，未知错误,"Installation failed due to unknown error"
+"WASI SDK 自动安装失败：%{1}","WASI SDK automatic installation failed: %{1}"
+"检测到 WASM 源码有更新，开始自动编译...","Detected WASM source code update, starting automatic compilation..."
+"✓ WASM 自动编译成功！","✓ WASM automatically compiled successfully!"
 "SHA256: %{1}","SHA256: %{1}"
-"✓ WASM 文件已复制到静态资源目录: %{1}","✓ WASM 文件已复制到静态资源目录: %{1}"
-"⚠️ WASM 文件复制失败，请手动复制: %{1} -> %{2}","⚠️ WASM 文件复制失败，请手动复制: %{1} -> %{2}"
-"✓ WASM 哈希已自动注册","✓ WASM 哈希已自动注册"
-"WASM 自动编译失败：%{1}","WASM 自动编译失败：%{1}"
-"WASM 编译检查时发生错误：%{1}","WASM 编译检查时发生错误：%{1}"
+"✓ WASM 文件已复制到静态资源目录: %{1}","✓ WASM file has been copied to the static resource directory: %{1}"
+"⚠️ WASM 文件复制失败，请手动复制: %{1} -> %{2}","⚠️ WASM file copy failed, please copy manually: %{1} -> %{2}"
+"✓ WASM 哈希已自动注册","✓ WASM hash has been automatically registered"
+"WASM 自动编译失败：%{1}","WASM automatic compilation failed: %{1}"
+"WASM 编译检查时发生错误：%{1}","WASM compile check error: %{1}"
 =================================,=================================
-自动寻客端侧模型模块,自动寻客端侧模型模块
-批量保存配置失败：%{1},批量保存配置失败：%{1}
-Agent执行间隔必须在1-3600秒之间,Agent执行间隔必须在1-3600秒之间
-评分阈值必须在0-100之间,评分阈值必须在0-100之间
-无效的关键词策略,无效的关键词策略
-API调用频率必须在1-1000次/分钟之间,API调用频率必须在1-1000次/分钟之间
-最大并发任务数必须在1-10之间,最大并发任务数必须在1-10之间
-推理超时时间必须在1000-120000毫秒之间,推理超时时间必须在1000-120000毫秒之间
-必须至少选择一个搜索引擎,必须至少选择一个搜索引擎
-必须至少选择一个目标网站,必须至少选择一个目标网站
-创建搜索任务失败,创建搜索任务失败
-获取搜索结果失败：%{1},获取搜索结果失败：%{1}
-获取未完成任务失败：%{1},获取未完成任务失败：%{1}
-获取任务详情失败：%{1},获取任务详情失败：%{1}
-未找到来源类型处理器：%{1},未找到来源类型处理器：%{1}
-来源类型处理器未实现SourceTypeHandlerInterface接口,来源类型处理器未实现SourceTypeHandlerInterface接口
-"未找到来源类型详情：%{1} #%{2}","未找到来源类型详情：%{1} #%{2}"
-获取来源类型画像失败：%{1},获取来源类型画像失败：%{1}
-店铺不存在：%{1},店铺不存在：%{1}
-提取店铺画像失败：%{1},提取店铺画像失败：%{1}
-其他,其他
-通用,通用
-生成Token失败：%{1},生成Token失败：%{1}
-"正在安装 WASI SDK（便携编译工具）...","正在安装 WASI SDK（便携编译工具）..."
-"✓ WASI SDK 安装成功","✓ WASI SDK 安装成功"
-"✗ WASI SDK 安装失败：%{1}","✗ WASI SDK 安装失败：%{1}"
-"✓ WASI SDK 已存在，跳过下载","✓ WASI SDK 已存在，跳过下载"
-不支持的操作系统：%{1},不支持的操作系统：%{1}
-下载地址：%{1},下载地址：%{1}
-"正在下载 WASI SDK（约50MB，请耐心等待）...","正在下载 WASI SDK（约50MB，请耐心等待）..."
-下载文件不完整（%{1}），请重试,下载文件不完整（%{1}），请重试
-下载完成（%{1}），正在解压...,下载完成（%{1}），正在解压...
-"清理旧的 WASI SDK 安装...","清理旧的 WASI SDK 安装..."
-已将旧安装重命名为备份目录,已将旧安装重命名为备份目录
-"无法删除或重命名旧的 WASI SDK 目录，可能是权限问题或文件被占用。请手动删除：%{1}","无法删除或重命名旧的 WASI SDK 目录，可能是权限问题或文件被占用。请手动删除：%{1}"
-重命名失败，尝试复制文件...,重命名失败，尝试复制文件...
-"无法安装 WASI SDK：权限不足或文件被占用。请检查目录权限：%{1}","无法安装 WASI SDK：权限不足或文件被占用。请检查目录权限：%{1}"
-解压后的目录未找到，解压可能失败。请检查：%{1},解压后的目录未找到，解压可能失败。请检查：%{1}
-"WASI SDK 安装后验证失败：无法获取 clang 路径","WASI SDK 安装后验证失败：无法获取 clang 路径"
-"WASI SDK 目录不存在：%{1}","WASI SDK 目录不存在：%{1}"
-"bin 目录不存在：%{1}","bin 目录不存在：%{1}"
-期望的文件：%{1},期望的文件：%{1}
-"bin 目录中的文件：%{1}","bin 目录中的文件：%{1}"
-"WASI SDK 安装后验证失败：clang 文件不存在。%{1}","WASI SDK 安装后验证失败：clang 文件不存在。%{1}"
-"使用缓存文件（%{1}，剩余 %{2} 天有效）","使用缓存文件（%{1}，剩余 %{2} 天有效）"
-"缓存文件已过期（%{1} 天），重新下载...","缓存文件已过期（%{1} 天），重新下载..."
-"第 %{1} 次重试...","第 %{1} 次重试..."
-下载的文件大小为0,下载的文件大小为0
-下载失败,下载失败
-下载失败（已重试%{1}次）：%{2},下载失败（已重试%{1}次）：%{2}
-"使用 PHP 下载（显示进度）...","使用 PHP 下载（显示进度）..."
-"速度: %{1} MB/s","速度: %{1} MB/s"
+自动寻客端侧模型模块,"Auto Lead Generation Client-Side Model Module"
+批量保存配置失败：%{1},"Failed to save batch configuration: %{1}"
+Agent执行间隔必须在1-3600秒之间,"Agent execution interval must be between 1-3600 seconds"
+评分阈值必须在0-100之间,"Rating threshold must be between 0 and 100"
+无效的关键词策略,"Invalid Keyword Strategy"
+API调用频率必须在1-1000次/分钟之间,"API call frequency must be between 1-1000 times/minute"
+最大并发任务数必须在1-10之间,"Max concurrent tasks must be between 1 and 10"
+推理超时时间必须在1000-120000毫秒之间,"Inference timeout must be between 1000 and 120000 milliseconds"
+必须至少选择一个搜索引擎,"Must select at least one search engine"
+必须至少选择一个目标网站,"Must select at least one target website"
+创建搜索任务失败,"Failed to create search task"
+获取搜索结果失败：%{1},"Failed to get search results: %{1}"
+获取未完成任务失败：%{1},"Failed to get incomplete tasks: %{1}"
+获取任务详情失败：%{1},"Failed to retrieve task details: %{1}"
+未找到来源类型处理器：%{1},"Source type handler not found: %{1}"
+来源类型处理器未实现SourceTypeHandlerInterface接口,"Source type processor does not implement the SourceTypeHandlerInterface interface"
+"未找到来源类型详情：%{1} #%{2}","Source type details not found: %{1} #%{2}"
+获取来源类型画像失败：%{1},"Failed to get source type profile: %{1}"
+店铺不存在：%{1},"Store does not exist: %{1}"
+提取店铺画像失败：%{1},"Failed to extract store profile: %{1}"
+其他,Other
+通用,General
+生成Token失败：%{1},"Failed to generate Token: %{1}"
+"正在安装 WASI SDK（便携编译工具）...","Installing WASI SDK (portable compilation tool)..."
+"✓ WASI SDK 安装成功","✓ WASI SDK installed successfully"
+"✗ WASI SDK 安装失败：%{1}","✗ WASI SDK installation failed: %{1}"
+"✓ WASI SDK 已存在，跳过下载","✓ WASI SDK already exists, skip downloading"
+不支持的操作系统：%{1},"Unsupported operating system: %{1}"
+下载地址：%{1},"Download address: %{1}"
+"正在下载 WASI SDK（约50MB，请耐心等待）...","Downloading WASI SDK (approx. 50MB, please wait)..."
+下载文件不完整（%{1}），请重试,"The download file is incomplete (%{1}), please try again"
+下载完成（%{1}），正在解压...,"Download completed (%{1}), decompressing..."
+"清理旧的 WASI SDK 安装...","Cleaning up old WASI SDK installation..."
+已将旧安装重命名为备份目录,"Renamed old installation to backup directory"
+"无法删除或重命名旧的 WASI SDK 目录，可能是权限问题或文件被占用。请手动删除：%{1}","Unable to delete or rename old WASI SDK directory, possibly due to permission issues or file in use. Please delete manually: %{1}"
+重命名失败，尝试复制文件...,"Rename failed, attempting to copy file..."
+"无法安装 WASI SDK：权限不足或文件被占用。请检查目录权限：%{1}","Unable to install WASI SDK: insufficient permissions or file is in use. Please check directory permissions: %{1}"
+解压后的目录未找到，解压可能失败。请检查：%{1},"The extracted directory was not found. Extraction may have failed. Please check: %{1}"
+"WASI SDK 安装后验证失败：无法获取 clang 路径","WASI SDK post-installation verification failed: cannot be obtained clang path"
+"WASI SDK 目录不存在：%{1}","WASI SDK directory does not exist: %{1}"
+"bin 目录不存在：%{1}","bin directory does not exist: %{1}"
+期望的文件：%{1},"Expected file: %{1}"
+"bin 目录中的文件：%{1}","Files in bin directory: %{1}"
+"WASI SDK 安装后验证失败：clang 文件不存在。%{1}","WASI SDK post-installation verification failed: clang file does not exist. %{1}"
+"使用缓存文件（%{1}，剩余 %{2} 天有效）","Use cache file (%{1}, valid for %{2} days remaining)"
+"缓存文件已过期（%{1} 天），重新下载...","Cache file expired (%{1} days), re-downloading..."
+"第 %{1} 次重试...","Retry for the %{1} time..."
+下载的文件大小为0,"Downloaded file size is 0"
+下载失败,"Download failed"
+下载失败（已重试%{1}次）：%{2},"Download failed (retried %{1} times): %{2}"
+"使用 PHP 下载（显示进度）...","Downloading with PHP (showing progress)..."
+"速度: %{1} MB/s","Speed: %{1} MB/s"
 %{1},%{1}
-"剩余: %{1}%{2}","剩余: %{1}%{2}"
-"剩余: %{1}","剩余: %{1}"
-下载中,下载中
-已下载,已下载
-"耗时: %{1}秒","耗时: %{1}秒"
-"耗时: %{1}分钟","耗时: %{1}分钟"
-"耗时: %{1}小时","耗时: %{1}小时"
-"平均速度: %{1} MB/s","平均速度: %{1} MB/s"
-下载完成,下载完成
-"PowerShell 下载失败","PowerShell 下载失败"
-"PHP fopen 打开URL失败","PHP fopen 打开URL失败"
-无法创建目标文件,无法创建目标文件
-写入文件失败,写入文件失败
-下载失败：未下载任何数据,下载失败：未下载任何数据
-解压失败：%{1},解压失败：%{1}
-"使用 WASI SDK 编译...","使用 WASI SDK 编译..."
-"WASI SDK 未安装，请先运行安装","WASI SDK 未安装，请先运行安装"
-执行编译命令...,执行编译命令...
-尝试备选编译方式...,尝试备选编译方式...
-"WASI SDK 编译失败：权限不足。可能的原因：1) 文件被其他程序占用 2) 目录权限不足 3) 需要管理员权限。请尝试：1) 关闭可能占用文件的程序 2) 以管理员身份运行 3) 检查目录权限：%{1}","WASI SDK 编译失败：权限不足。可能的原因：1) 文件被其他程序占用 2) 目录权限不足 3) 需要管理员权限。请尝试：1) 关闭可能占用文件的程序 2) 以管理员身份运行 3) 检查目录权限：%{1}"
-"WASI SDK 编译失败：%{1}","WASI SDK 编译失败：%{1}"
-编译输出文件不存在,编译输出文件不存在
-注册WASM哈希失败：%{1},注册WASM哈希失败：%{1}
-"正在清理旧的 WASI SDK 安装...","正在清理旧的 WASI SDK 安装..."
-"无法删除旧的 WASI SDK 安装。请手动删除目录：%{1}","无法删除旧的 WASI SDK 安装。请手动删除目录：%{1}"
-已将旧安装移动到备份目录：%{1},已将旧安装移动到备份目录：%{1}
-WASM文件不存在：%{1},WASM文件不存在：%{1}
-计算WASM文件哈希失败,计算WASM文件哈希失败
-计算WASM哈希失败：%{1},计算WASM哈希失败：%{1}
-未找到WASM哈希记录，且WASM文件不存在,未找到WASM哈希记录，且WASM文件不存在
-获取最新WASM哈希失败：%{1},获取最新WASM哈希失败：%{1}
-搜索引擎映射表已有数据，跳过初始化,搜索引擎映射表已有数据，跳过初始化
-开始初始化默认搜索引擎映射数据...,开始初始化默认搜索引擎映射数据...
-"插入映射失败：%{1} - %{2}","插入映射失败：%{1} - %{2}"
-"默认映射数据初始化完成，共插入 %{1} 条记录","默认映射数据初始化完成，共插入 %{1} 条记录"
-搜索目标网站表已有数据，跳过初始化,搜索目标网站表已有数据，跳过初始化
-开始初始化默认搜索目标网站数据...,开始初始化默认搜索目标网站数据...
-"插入目标网站失败：%{1} - %{2}","插入目标网站失败：%{1} - %{2}"
-"默认目标网站数据初始化完成，共插入 %{1} 条记录","默认目标网站数据初始化完成，共插入 %{1} 条记录"
-正在初始化...,正在初始化...
-域名未授权,域名未授权
-Token未找到，请先获取Token,Token未找到，请先获取Token
-Agent初始化成功,Agent初始化成功
-初始化失败：%{1},初始化失败：%{1}
-正在加载核心代码...,正在加载核心代码...
-"加载核心代码失败：HTTP %{1}","加载核心代码失败：HTTP %{1}"
-核心代码加载成功,核心代码加载成功
-加载核心代码失败：%{1},加载核心代码失败：%{1}
-Token已过期，请重新获取,Token已过期，请重新获取
-潜在客户,潜在客户
-系统,系统
-暂无潜在客户,暂无潜在客户
-客户ID,客户ID
-店铺ID,店铺ID
-评分,评分
-来源URL,来源URL
-状态,状态
-创建时间,创建时间
-操作,操作
-查看,查看
-配置管理,配置管理
-自动寻客,自动寻客
-基础配置,基础配置
-Agent执行间隔,Agent执行间隔
-秒,秒
-Agent每次执行的间隔时间,Agent每次执行的间隔时间
-关键词策略,关键词策略
-选择搜索关键词的生成方式,选择搜索关键词的生成方式
-浏览器扩展状态,浏览器扩展状态
-未检测到,未检测到
-扩展已就绪,扩展已就绪
-"重新安装 / 查看步骤","重新安装 / 查看步骤"
-您可以正常使用端侧推理、自动化爬取和模型下载功能。,您可以正常使用端侧推理、自动化爬取和模型下载功能。
-端侧推理和智能爬取功能需要配合浏览器扩展使用。,端侧推理和智能爬取功能需要配合浏览器扩展使用。
-查看安装步骤,查看安装步骤
-评分配置,评分配置
-最低评分阈值,最低评分阈值
-分,分
-只有评分高于此阈值的客户才会被记录,只有评分高于此阈值的客户才会被记录
-API配置,API配置
-API调用频率,API调用频率
-次/分钟,次/分钟
-每分钟最大API调用次数,每分钟最大API调用次数
-最大并发任务数,最大并发任务数
-个,个
-同时运行的最大任务数量,同时运行的最大任务数量
-目标网站配置,目标网站配置
-默认目标网站,默认目标网站
-用于搜索潜在客户的默认社交媒体网站，每行一个,用于搜索潜在客户的默认社交媒体网站，每行一个
-WASM模型配置,WASM模型配置
-启用WASM模型,启用WASM模型
-启用浏览器端侧WASM模型进行智能分析,启用浏览器端侧WASM模型进行智能分析
-推理超时时间,推理超时时间
-毫秒,毫秒
-WASM模型单次推理的最大等待时间,WASM模型单次推理的最大等待时间
-"端侧模型配置（Hugging Face）","端侧模型配置（Hugging Face）"
-未配置模型,未配置模型
-模型状态,模型状态
-未加载,未加载
-加载模型,加载模型
-卸载模型,卸载模型
-内存使用,内存使用
-加载模型中...,加载模型中...
-启用端侧推理模型,启用端侧推理模型
-启用后，任务必须使用端侧模型进行推理和决策,启用后，任务必须使用端侧模型进行推理和决策
-模型缓存上限,模型缓存上限
-用于在浏览器本地缓存模型文件的最大空间（100-10240MB）,用于在浏览器本地缓存模型文件的最大空间（100-10240MB）
+"剩余: %{1}%{2}","Remaining: %{1}%{2}"
+"剩余: %{1}","Remaining: %{1}"
+下载中,Downloading
+已下载,Downloaded
+"耗时: %{1}秒","Time taken: %{1} seconds"
+"耗时: %{1}分钟","Time taken: %{1} minutes"
+"耗时: %{1}小时","Time taken: %{1} hours"
+"平均速度: %{1} MB/s","Average speed: %{1} MB/s"
+下载完成,"Download completed"
+"PowerShell 下载失败","PowerShell download failed"
+"PHP fopen 打开URL失败","PHP fopen fails to open the URL"
+无法创建目标文件,"Unable to create target file"
+写入文件失败,"Failed to write file"
+下载失败：未下载任何数据,"Download failed: No data downloaded"
+解压失败：%{1},"Extraction failed: %{1}"
+"使用 WASI SDK 编译...","Compiling with WASI SDK..."
+"WASI SDK 未安装，请先运行安装","WASI SDK is not installed, please run the installation first"
+执行编译命令...,"Running compile command..."
+尝试备选编译方式...,"Attempting alternative compilation method..."
+"WASI SDK 编译失败：权限不足。可能的原因：1) 文件被其他程序占用 2) 目录权限不足 3) 需要管理员权限。请尝试：1) 关闭可能占用文件的程序 2) 以管理员身份运行 3) 检查目录权限：%{1}","WASI SDK compilation fails: Insufficient permissions Possible reasons: 1) The file is occupied by other programs. 2) Insufficient directory permissions 3) Administrator permissions are required. Please try: 1) Close the program that may occupy the file 2) Run as administrator 3) Check directory permissions: %{1}"
+"WASI SDK 编译失败：%{1}","WASI SDK compilation fails: %{1}"
+编译输出文件不存在,"Compiled output file does not exist"
+注册WASM哈希失败：%{1},"Failed to register WASM hash: %{1}"
+"正在清理旧的 WASI SDK 安装...","Cleaning old WASI SDK installation..."
+"无法删除旧的 WASI SDK 安装。请手动删除目录：%{1}","Unable to delete old WASI SDK installation. Please delete the directory manually: %{1}"
+已将旧安装移动到备份目录：%{1},"Moved old installation to backup directory: %{1}"
+WASM文件不存在：%{1},"WASM file does not exist: %{1}"
+计算WASM文件哈希失败,"Failed to compute WASM file hash"
+计算WASM哈希失败：%{1},"Failed to compute WASM hash: %{1}"
+未找到WASM哈希记录，且WASM文件不存在,"WASM hash record not found, and WASM file does not exist"
+获取最新WASM哈希失败：%{1},"Failed to get latest WASM hash: %{1}"
+搜索引擎映射表已有数据，跳过初始化,"Search Engine Mapping Table Already Has Data, Skipping Initialization"
+开始初始化默认搜索引擎映射数据...,"Initializing default search engine mapping data..."
+"插入映射失败：%{1} - %{2}","Insert mapping failed: %{1} - %{2}"
+"默认映射数据初始化完成，共插入 %{1} 条记录","Default Mapping Data Initialization Complete, %{1} records inserted in total."
+搜索目标网站表已有数据，跳过初始化,"Target website table already has data, skipping initialization"
+开始初始化默认搜索目标网站数据...,"Initializing default search target website data..."
+"插入目标网站失败：%{1} - %{2}","Failed to insert into target site: %{1} - %{2}"
+"默认目标网站数据初始化完成，共插入 %{1} 条记录","Default Target Website Data Initialization Complete, %{1} records inserted in total."
+正在初始化...,Initializing...
+域名未授权,"Domain not authorized"
+Token未找到，请先获取Token,"Token not found, please obtain Token first"
+Agent初始化成功,"Agent initialization successful"
+初始化失败：%{1},"Initialization failed: %{1}"
+正在加载核心代码...,"Loading core code..."
+"加载核心代码失败：HTTP %{1}","Failed to load core code: HTTP %{1}"
+核心代码加载成功,"Core code loaded successfully"
+加载核心代码失败：%{1},"Failed to load core code: %{1}"
+Token已过期，请重新获取,"Token has expired, please obtain it again"
+潜在客户,"Potential customers"
+系统,System
+暂无潜在客户,"No potential customers"
+客户ID,"Customer ID"
+店铺ID,"Store ID"
+评分,Rating
+来源URL,"Source URL"
+状态,Status
+创建时间,"Creation time"
+操作,Operation
+查看,View
+配置管理,"Configuration management"
+自动寻客,"Auto Lead Generation"
+基础配置,"Basic Configuration"
+Agent执行间隔,"Agent execution interval"
+秒,second
+Agent每次执行的间隔时间,"The interval between each execution of Agent"
+关键词策略,"Keyword Strategy"
+选择搜索关键词的生成方式,"Select How Search Keywords Are Generated"
+浏览器扩展状态,"Browser Extension Status"
+未检测到,"Not detected"
+扩展已就绪,"Extension ready"
+"重新安装 / 查看步骤","Reinstall / View steps"
+您可以正常使用端侧推理、自动化爬取和模型下载功能。,"You can normally use on-device inference, automated crawling, and model download features."
+端侧推理和智能爬取功能需要配合浏览器扩展使用。,"On-device inference and intelligent crawling require the browser extension to be used."
+查看安装步骤,"View installation steps"
+评分配置,"Rating configuration"
+最低评分阈值,"Minimum rating threshold"
+分,Minute
+只有评分高于此阈值的客户才会被记录,"Only customers with a rating higher than this threshold will be recorded"
+API配置,"API configuration"
+API调用频率,"API call frequency"
+次/分钟,Times/minute
+每分钟最大API调用次数,"Maximum API calls per minute"
+最大并发任务数,"Max Concurrent Tasks"
+个,indivual
+同时运行的最大任务数量,"Maximum number of simultaneous tasks"
+目标网站配置,"Target website configuration"
+默认目标网站,"Default Target Website"
+用于搜索潜在客户的默认社交媒体网站，每行一个,"Default social media sites for searching potential customers, one per line"
+WASM模型配置,"WASM model configuration"
+启用WASM模型,"Enable WASM model"
+启用浏览器端侧WASM模型进行智能分析,"Enable browser-side WASM model for intelligent analysis"
+推理超时时间,"Inference timeout"
+毫秒,Milliseconds
+WASM模型单次推理的最大等待时间,"Maximum waiting time for a single inference of the WASM model"
+"端侧模型配置（Hugging Face）","On-device Model Configuration (Hugging Face)"
+未配置模型,"Model not configured"
+模型状态,"Model status"
+未加载,"Not loaded"
+加载模型,"Loading model"
+卸载模型,"Uninstall Model"
+内存使用,"Memory usage"
+加载模型中...,"Loading model..."
+启用端侧推理模型,"Enable on-device inference model"
+启用后，任务必须使用端侧模型进行推理和决策,"After enabling, tasks must use the on-device model for inference and decision-making"
+模型缓存上限,"Model cache limit"
+用于在浏览器本地缓存模型文件的最大空间（100-10240MB）,"Maximum space for caching model files locally in the browser (100-10240MB)"
 网络配置,"Network Settings"
 使用镜像站点,"Use Mirror Site"
 "在中国大陆推荐使用 hf-mirror.com","Recommended to use hf-mirror.com in mainland China"
 使用代理,"Use Proxy"
 "格式：http://host:port 或 socks5://host:port","Format: http://host:port or socks5://host:port"
 "如果无法连接 HuggingFace，请启用镜像或配置代理","If you cannot connect to HuggingFace, please enable mirror or configure proxy"
-模型管理,模型管理
-清理所有模型,清理所有模型
-查看缓存信息,查看缓存信息
-清理所有已下载的模型以释放磁盘空间,清理所有已下载的模型以释放磁盘空间
-"搜索 Hugging Face 模型","搜索 Hugging Face 模型"
-"输入模型关键词，例如: qwen llama mistral","输入模型关键词，例如: qwen llama mistral"
-文本生成,文本生成
-指令对话/翻译,指令对话/翻译
-搜索,搜索
-仅显示支持文本生成或指令对话的模型，建议选择已量化的小模型以提升加载速度,仅显示支持文本生成或指令对话的模型，建议选择已量化的小模型以提升加载速度
-推荐模型：,推荐模型：
-1.5B参数，原生多语言支持,1.5B参数，原生多语言支持
-3.8B参数，多语言支持良好,3.8B参数，多语言支持良好
-1.1B参数，快速推理,1.1B参数，快速推理
-注意：,注意：
-"如果选择的模型类型不被支持（如 qwen3），系统将自动尝试使用 Chrome Built-in AI（如果可用）作为降级方案。","如果选择的模型类型不被支持（如 qwen3），系统将自动尝试使用 Chrome Built-in AI（如果可用）作为降级方案。"
-模型名称,模型名称
-大小,大小
-下载量,下载量
-模型详情,模型详情
-尚未选择模型,尚未选择模型
-刷新当前模型信息,刷新当前模型信息
-保存为当前模型,保存为当前模型
-智能体测试,智能体测试
-测试输入,测试输入
-输入测试指令，例如：你好，帮我访问google首页,输入测试指令，例如：你好，帮我访问google首页
-输入测试指令，智能体会分析并执行相应的操作（如访问网页、搜索等）,输入测试指令，智能体会分析并执行相应的操作（如访问网页、搜索等）
-开始测试,开始测试
-清空结果,清空结果
-重置为默认,重置为默认
-保存配置,保存配置
-下载模型,下载模型
-准备下载...,准备下载...
-"当前文件: 等待开始...","当前文件: 等待开始..."
-"剩余时间: 计算中...","剩余时间: 计算中..."
-关闭,关闭
-自动寻客管理,自动寻客管理
-潜在客户总数,潜在客户总数
-"AI 模型","AI 模型"
-加载/卸载模型,加载/卸载模型
-待机,待机
-正在检测端侧模型配置...,正在检测端侧模型配置...
-配置,配置
-重新检测模型配置,重新检测模型配置
-手动加载模型,手动加载模型
-加载,加载
-卸载模型以释放内存,卸载模型以释放内存
-卸载,卸载
-推理耗时,推理耗时
-内存占用,内存占用
-浏览器扩展未检测到,浏览器扩展未检测到
-"请安装 AutoLeadAgent 浏览器扩展以启用真实社交媒体爬取功能。未安装扩展时将使用模拟数据。","请安装 AutoLeadAgent 浏览器扩展以启用真实社交媒体爬取功能。未安装扩展时将使用模拟数据。"
-安装扩展,安装扩展
-浏览器扩展已连接,浏览器扩展已连接
-扩展已就绪，将使用真实爬取功能搜索潜在客户。,扩展已就绪，将使用真实爬取功能搜索潜在客户。
-重新安装扩展,重新安装扩展
-任务运行状态,任务运行状态
-任务启动中...,任务启动中...
-已找到,已找到
-个客户,个客户
-暂停,暂停
-停止,停止
-推理日志,推理日志
-爬取日志,爬取日志
-等待爬取开始...,等待爬取开始...
-搜索任务列表,搜索任务列表
-新建寻找客户任务,新建寻找客户任务
-加载中...,加载中...
-加载任务列表...,加载任务列表...
-任务详情,任务详情
-任务信息,任务信息
-任务ID,任务ID
-来源类型,来源类型
-找到数量,找到数量
-搜索引擎,搜索引擎
-未选择,未选择
-目标网站,目标网站
-进度,进度
-更新时间,更新时间
-返回列表,返回列表
-暂无潜在客户数据,暂无潜在客户数据
+模型管理,"Model management"
+清理所有模型,"Clear All Models"
+查看缓存信息,"View Cache Information"
+清理所有已下载的模型以释放磁盘空间,"Clear All Downloaded Models to Free Up Disk Space"
+"搜索 Hugging Face 模型","Search Hugging Face models"
+"输入模型关键词，例如: qwen llama mistral","Enter model keywords, e.g., qwen llama mistral"
+文本生成,"Text generation"
+指令对话/翻译,"Command chat/translation"
+搜索,Search
+仅显示支持文本生成或指令对话的模型，建议选择已量化的小模型以提升加载速度,"Only show models that support text generation or instruction-based dialogue. It is recommended to select a quantized small model to improve loading speed"
+推荐模型：,"Recommended Model:"
+1.5B参数，原生多语言支持,"1.5B parameters, native multi-language support"
+3.8B参数，多语言支持良好,"3.8B parameters, good multi-language support"
+1.1B参数，快速推理,"1.1B parameters, fast reasoning"
+注意：,Note:
+"如果选择的模型类型不被支持（如 qwen3），系统将自动尝试使用 Chrome Built-in AI（如果可用）作为降级方案。","If the selected model type is not supported (e.g., qwen3), the system will automatically attempt to use Chrome Built-in AI (if available) as a fallback."
+模型名称,"Model Name"
+大小,Size
+下载量,Downloads
+模型详情,"Model details"
+尚未选择模型,"No model selected yet"
+刷新当前模型信息,"Refresh Current Model Info"
+保存为当前模型,"Save as Current Model"
+智能体测试,"Agent test"
+测试输入,"Test Input"
+输入测试指令，例如：你好，帮我访问google首页,"Enter a test command, e.g., Hello, help me visit the Google homepage"
+输入测试指令，智能体会分析并执行相应的操作（如访问网页、搜索等）,"Enter a test command, and the agent will analyze and execute the corresponding action (e.g., visit a webpage, search, etc.)"
+开始测试,"Start testing"
+清空结果,"Clear results"
+重置为默认,"Reset to default"
+保存配置,"Save Configuration"
+下载模型,"Download model"
+准备下载...,"Preparing to download..."
+"当前文件: 等待开始...","Current file: Waiting to start..."
+"剩余时间: 计算中...","Time Remaining: Calculating..."
+关闭,Close
+自动寻客管理,"Auto Lead Generation Management"
+潜在客户总数,"Total potential customers"
+"AI 模型","AI model"
+加载/卸载模型,"Load/Unload model"
+待机,Standby
+正在检测端侧模型配置...,"Detecting edge model configuration..."
+配置,Configuration
+重新检测模型配置,"Re-detect model configuration"
+手动加载模型,"Manual model loading"
+加载,Loading
+卸载模型以释放内存,"Uninstall model to free memory"
+卸载,Uninstall
+推理耗时,"Inference time"
+内存占用,"Memory footprint"
+浏览器扩展未检测到,"Browser Extension Not Detected"
+"请安装 AutoLeadAgent 浏览器扩展以启用真实社交媒体爬取功能。未安装扩展时将使用模拟数据。","Install the AutoLeadAgent browser extension to enable real social media scraping. Without the extension, simulated data will be used."
+安装扩展,"Install extension"
+浏览器扩展已连接,"Browser Extension Connected"
+扩展已就绪，将使用真实爬取功能搜索潜在客户。,"Extension ready. Real crawling will be used to search for potential customers."
+重新安装扩展,"Reinstall extension"
+任务运行状态,"Task running status"
+任务启动中...,"Starting task..."
+已找到,Found
+个客户,customers
+暂停,Pause
+停止,Stop
+推理日志,"Inference log"
+爬取日志,"Crawl Log"
+等待爬取开始...,"Waiting for crawl to start..."
+搜索任务列表,"Search task list"
+新建寻找客户任务,"New Lead Generation Task"
+加载中...,Loading...
+加载任务列表...,"Loading task list..."
+任务详情,"Task details"
+任务信息,"Task info"
+任务ID,"Task ID"
+来源类型,"Source type"
+找到数量,"Found quantity"
+搜索引擎,"Search Engine"
+未选择,"Not selected"
+目标网站,"Target website"
+进度,Progress
+更新时间,"Update time"
+返回列表,"Return to List"
+暂无潜在客户数据,"No potential customer data"
 ID,ID
-姓名/信息,姓名/信息
-联系方式,联系方式
-社媒账户,社媒账户
-来源,来源
-匹配度,匹配度
-查看来源,查看来源
-客户主页,客户主页
-详情,详情
-候选客户详情,候选客户详情
-姓名,姓名
-匹配的文本段,匹配的文本段
-关键词,关键词
-搜索来源网址,搜索来源网址
-客户主页链接,客户主页链接
-完整画像数据,完整画像数据
-搜索引擎映射管理,搜索引擎映射管理
-搜索引擎映射,搜索引擎映射
-映射列表,映射列表
-添加映射,添加映射
-地区,地区
-输入地区名称,输入地区名称
-语言,语言
-输入语言代码,输入语言代码
-全部,全部
-启用,启用
-禁用,禁用
-排序,排序
-搜索目标网站管理,搜索目标网站管理
-搜索目标网站,搜索目标网站
-目标网站列表,目标网站列表
-添加目标网站,添加目标网站
-输入网站名称或域名,输入网站名称或域名
-网站名称,网站名称
-域名,域名
-搜索语法模板,搜索语法模板
-Token管理,Token管理
-暂无Token记录,暂无Token记录
+姓名/信息,Name/Info
+联系方式,"Contact information"
+社媒账户,"Social Media Account"
+来源,Source
+匹配度,"Match Score"
+查看来源,"View Source"
+客户主页,"Customer Homepage"
+详情,Details
+候选客户详情,"Candidate customer details"
+姓名,"Full Name"
+匹配的文本段,"Matched Text Segment"
+关键词,Keywords
+搜索来源网址,"Search Source URL"
+客户主页链接,"Customer Homepage Link"
+完整画像数据,"Complete Profile Data"
+搜索引擎映射管理,"Search Engine Mapping Management"
+搜索引擎映射,"Search Engine Mapping"
+映射列表,"Mapping list"
+添加映射,"Add Mapping"
+地区,Region
+输入地区名称,"Enter the region name"
+语言,Language
+输入语言代码,"Enter the language code"
+全部,All
+启用,Enable
+禁用,Disable
+排序,Sort
+搜索目标网站管理,"Search target website management"
+搜索目标网站,"Search target website"
+目标网站列表,"Target website list"
+添加目标网站,"Add Target Website"
+输入网站名称或域名,"Enter the website name or domain"
+网站名称,"Site Name"
+域名,Domain
+搜索语法模板,"Search syntax template"
+Token管理,"Token management"
+暂无Token记录,"No Token Records"
 "Token ID","Token ID"
-授权域名,授权域名
-过期时间,过期时间
-WASM哈希,WASM哈希
-WASM管理,WASM管理
-暂无WASM文件记录,暂无WASM文件记录
-哈希ID,哈希ID
-文件哈希,文件哈希
-文件路径,文件路径
-版本,版本
-WASM详情,WASM详情
-基本信息,基本信息
-"SHA-256 哈希","SHA-256 哈希"
-文件状态,文件状态
-文件存在,文件存在
-文件不存在,文件不存在
+授权域名,"Authorized domain"
+过期时间,"Expiration time"
+WASM哈希,"WASM hash"
+WASM管理,"WASM management"
+暂无WASM文件记录,"No WASM File Records"
+哈希ID,"Hash ID"
+文件哈希,"File hash"
+文件路径,"File path"
+版本,Version
+WASM详情,"WASM details"
+基本信息,"Basic information"
+"SHA-256 哈希","SHA-256 hash"
+文件状态,"File status"
+文件存在,"File exists"
+文件不存在,"File does not exist"

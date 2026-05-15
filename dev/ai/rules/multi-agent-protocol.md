@@ -41,7 +41,7 @@ Note: Full e2e + deep regression can be added after smoke pass. **NO delivery of
 ## E. Bound Rule Files (MUST follow)
 - `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md`
 - `dev/ai/rules/efficiency_rules.md`
-- `CLAUDE.md` "Multi-Agent Engineering Delivery Flow (MANDATORY)" section
+- `dev/ai/global-constraints.md`
 
 ## F. Issue Closure & Autonomous Management (MANDATORY)
 - **Tech Lead handles all issues**: Register, prioritize, assign, track to closure. **NO repeated trivial requests to boss**.

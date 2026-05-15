@@ -1,71 +1,71 @@
-﻿维护模式已关闭！,维护模式已关闭！
+﻿维护模式已关闭！,"Maintenance mode is off!"
 "指定 WLS 实例名；省略则向当前所有运行中的实例同步维护入口","WLS instance name; omit to sync maintenance routing to all running instances"
 维护模式已开启！,"Maintenance mode has been enabled!"
 无效的请求方法,"Invalid request method"
 不支持的备份类型,"Unsupported backup type"
 备份创建成功,"Backup created successfully"
-备份创建失败：%{1},备份创建失败：%{1}
+备份创建失败：%{1},"Backup creation failed: %{1}"
 无效的备份ID,"Invalid backup ID"
 备份文件不存在,"Backup file does not exist"
-下载失败：%{1},下载失败：%{1}
+下载失败：%{1},"Download failed: %{1}"
 备份删除成功,"Backup deleted successfully"
 备份删除失败,"Failed to delete backup"
-删除失败：%{1},删除失败：%{1}
+删除失败：%{1},"Deletion failed: %{1}"
 维护模式自动备份任务,"Maintenance Mode Auto Backup Task"
 定时执行系统备份任务（数据库和代码），自动清理过期备份,"Scheduled system backup task (database and code), automatically clean up expired backups"
 Cron自动备份未启用,"Cron auto backup is not enabled"
 未配置备份类型,"No backup type configured"
-%{1}备份成功,%{1}备份成功
-%{1}备份失败：%{2},%{1}备份失败：%{2}
-"清理过期备份：删除 %{1} 个备份，释放空间 %{2}","清理过期备份：删除 %{1} 个备份，释放空间 %{2}"
-清理过期备份失败：%{1},清理过期备份失败：%{1}
-自动备份任务执行失败：%{1},自动备份任务执行失败：%{1}
+%{1}备份成功,"%{1} Backup successful"
+%{1}备份失败：%{2},"%{1} Backup failed: %{2}"
+"清理过期备份：删除 %{1} 个备份，释放空间 %{2}","Clean expired backups: deleted %{1} backups, freed %{2} space"
+清理过期备份失败：%{1},"Failed to clean expired backups: %{1}"
+自动备份任务执行失败：%{1},"Auto Backup Task Execution Failed: %{1}"
 维护模式,"Maintenance Mode"
 "在系统进入维护模式时触发，允许其他模块添加维护模式白名单URL。可以通过修改 white_urls 字段来添加白名单URL。","Triggered when the system enters maintenance mode, allowing other modules to add maintenance mode whitelist URLs. You can add whitelist URLs by modifying the white_urls field."
 "WLS 维护入口已同步：%{1}","WLS maintenance routing synced: %{1}"
 "WLS 维护入口同步未完全成功：%{1}","WLS maintenance routing sync incomplete: %{1}"
 "WLS 维护入口同步失败：%{1}","WLS maintenance routing sync failed: %{1}"
-创建完整备份失败：%{1},创建完整备份失败：%{1}
-数据库备份失败：%{1},数据库备份失败：%{1}
-代码备份失败：%{1},代码备份失败：%{1}
-配置文件备份失败：%{1},配置文件备份失败：%{1}
-不支持的备份类型：%{1},不支持的备份类型：%{1}
-无法创建备份文件：%{1},无法创建备份文件：%{1}
-备份数据库失败：%{1},备份数据库失败：%{1}
-获取数据库表列表失败：%{1},获取数据库表列表失败：%{1}
-程序化备份失败：%{1},程序化备份失败：%{1}
-无法创建备份压缩文件：%{1},无法创建备份压缩文件：%{1}
-配置文件备份失败,配置文件备份失败
-备份配置文件失败：%{1},备份配置文件失败：%{1}
-无法创建压缩文件：%{1},无法创建压缩文件：%{1}
-创建压缩文件失败,创建压缩文件失败
-压缩文件失败：%{1},压缩文件失败：%{1}
-备份文件不存在：%{1},备份文件不存在：%{1}
-保存备份文件失败：%{1},保存备份文件失败：%{1}
+创建完整备份失败：%{1},"Failed to create full backup: %{1}"
+数据库备份失败：%{1},"Database backup failed: %{1}"
+代码备份失败：%{1},"Code backup failed: %{1}"
+配置文件备份失败：%{1},"Configuration file backup failed: %{1}"
+不支持的备份类型：%{1},"Unsupported backup type: %{1}"
+无法创建备份文件：%{1},"Unable to create backup file: %{1}"
+备份数据库失败：%{1},"Backup database failed: %{1}"
+获取数据库表列表失败：%{1},"Failed to get database table list: %{1}"
+程序化备份失败：%{1},"Programmatic backup failed: %{1}"
+无法创建备份压缩文件：%{1},"Unable to create backup compressed file: %{1}"
+配置文件备份失败,"Configuration file backup failed"
+备份配置文件失败：%{1},"Failed to back up configuration file: %{1}"
+无法创建压缩文件：%{1},"Unable to create compressed file: %{1}"
+创建压缩文件失败,"Failed to create archive"
+压缩文件失败：%{1},"Failed to compress file: %{1}"
+备份文件不存在：%{1},"Backup file does not exist: %{1}"
+保存备份文件失败：%{1},"Failed to save backup file: %{1}"
 创建备份,"Create Backup"
-备份设置,备份设置
+备份设置,"Backup settings"
 备份类型,"Backup Type"
-完整备份（数据库+代码）,完整备份（数据库+代码）
+完整备份（数据库+代码）,"Full Backup (Database + Code)"
 数据库备份,"Database Backup"
 代码备份,"Code Backup"
 配置文件备份,"Config Backup"
-创建备份可能需要几分钟时间，请耐心等待。,创建备份可能需要几分钟时间，请耐心等待。
-返回列表,返回列表
-创建中...,创建中...
-创建备份失败,创建备份失败
+创建备份可能需要几分钟时间，请耐心等待。,"Creating a backup may take a few minutes, please wait."
+返回列表,"Return to List"
+创建中...,Creating...
+创建备份失败,"Failed to create backup"
 备份管理,"Backup Management"
-备份ID,备份ID
-备份名称,备份名称
-文件大小,文件大小
-状态,状态
-创建时间,创建时间
-操作,操作
-暂无备份记录,暂无备份记录
-下载,下载
+备份ID,"Backup ID"
+备份名称,"Backup name"
+文件大小,"File size"
+状态,Status
+创建时间,"Creation time"
+操作,Operation
+暂无备份记录,"No backup records"
+下载,download
 删除,Delete
 完整备份,"Full Backup"
-已完成,已完成
-进行中,进行中
-失败,失败
-确定要删除此备份吗？,确定要删除此备份吗？
-操作失败,操作失败
+已完成,Completed
+进行中,"In Progress"
+失败,Failed
+确定要删除此备份吗？,"Are you sure you want to delete this backup?"
+操作失败,"Operation failed"

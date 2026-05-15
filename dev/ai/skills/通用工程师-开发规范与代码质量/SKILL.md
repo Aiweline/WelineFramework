@@ -18,9 +18,9 @@ This shared skill owns baseline development standards for all WelineFramework en
 
 # Source Material
 
+- `dev/ai/global-constraints.md`
 - `AI-ENTRY.md`
 - `AI-README.md`
-- `CLAUDE.md`
 - `dev/ai/skills/_index.md`
 - `dev/ai/skills/README.md`
 - `dev/ai/skills/MIGRATION_REPORT.md`
@@ -29,7 +29,7 @@ This shared skill owns baseline development standards for all WelineFramework en
 
 # Responsibilities
 
-- Enforce the repository reading order before deep source-code inspection.
+- Enforce `dev/ai/global-constraints.md` and the repository reading order before deep source-code inspection.
 - Keep changes within the correct module or framework boundary.
 - Prefer small, isolated, testable changes over broad rewrites.
 - Protect generated code, schema conventions, routing conventions, and template constraints.
@@ -39,7 +39,7 @@ This shared skill owns baseline development standards for all WelineFramework en
 
 # Workflow
 
-1. Read `AI-ENTRY.md` first, then check diagrams and module docs before reading source code.
+1. Read `AI-ENTRY.md` and `dev/ai/global-constraints.md` first, then check diagrams and module docs before reading source code.
 2. Identify whether the target is framework-level code, a business module, runtime behavior, frontend/theme work, documentation, tests, or automation.
 3. Define the smallest safe change boundary and avoid crossing module ownership unless the task requires it.
 4. Check Weline constraints that apply to the target files, such as generated-code, route, i18n, template, WLS, schema, and documentation rules.
@@ -51,26 +51,9 @@ This shared skill owns baseline development standards for all WelineFramework en
 
 # Weline Rules
 
-- Read `AI-ENTRY.md` first.
-- Prefer diagrams and module docs before reading source code.
-- Do not edit `generated/` directly.
-- Do not use `routes.xml`.
-- Do not alter schema through generated files or direct `Setup/Upgrade.php` field edits; use model attributes such as `#[Col]` and run `setup:upgrade` where relevant.
-- Do not use JavaScript `alert`, `confirm`, or `prompt`.
-- Do not hardcode user-facing text; use i18n such as `__("text")`, `<lang>text</lang>`, or the correct framework-safe form.
-- Do not add `declare(strict_types=1)` inside `.phtml` files.
-- Do not use `sleep`, `die`, or `exit` inside WLS runtime-sensitive code.
-- Do not write detailed fix reports to the repository root.
-- Write fix reports inside the related module `doc/` directory.
-- Update module README after fixing bugs.
-- Update architecture docs if the design changes.
-- Update API docs if interfaces change.
-- Do not use default WLS port `9501` for AI testing.
-- Always start a dedicated WLS test instance with port `9502+` and a unique name such as `ai-test-{timestamp}` when WLS validation is required.
-- Always stop the dedicated WLS test instance after validation.
-- Do not pollute global state.
-- Keep module boundaries intact.
-- Provide unit test and E2E or HTTP validation evidence where relevant.
+- The single source of shared Weline AI rules is `dev/ai/global-constraints.md`.
+- This skill must not duplicate the full global rule list. Use it to route ownership, enforce code quality, and require validation evidence.
+- Specialist skills may add role-specific constraints, but cross-role rules must be maintained in `dev/ai/global-constraints.md`.
 
 # Team Collaboration Rules
 

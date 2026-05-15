@@ -1,15 +1,15 @@
-﻿待开始,待开始
-进行中,进行中
-测试中,测试中
-已完成,已完成
-升级中,升级中
-低,低
-普通,普通
-高,高
-紧急,紧急
-周报任务已逾期,周报任务已逾期
-"%{mark}任务「%{task}」已逾期 %{days} 天，当前状态：%{status}，请尽快处理！","%{mark}任务「%{task}」已逾期 %{days} 天，当前状态：%{status}，请尽快处理！"
-周报任务即将到期,周报任务即将到期
-"%{mark}任务「%{task}」将于 %{urgency} 截止（%{date}），当前状态：%{status}","%{mark}任务「%{task}」将于 %{urgency} 截止（%{date}），当前状态：%{status}"
+﻿待开始,"To begin"
+进行中,"In Progress"
+测试中,Testing
+已完成,Completed
+升级中,Upgrading
+低,Low
+普通,Normal
+高,High
+紧急,Urgent
+周报任务已逾期,"Weekly report task is overdue"
+"%{mark}任务「%{task}」已逾期 %{days} 天，当前状态：%{status}，请尽快处理！","%{mark}Task ""%{task}"" has been overdue for %{days} days, current status: %{status}, please handle it as soon as possible!"
+周报任务即将到期,"Weekly report task is about to expire"
+"%{mark}任务「%{task}」将于 %{urgency} 截止（%{date}），当前状态：%{status}","%{mark}Task ""%{task}"" will end on %{urgency} (%{date}), current status: %{status}"
 "Weekly report","Weekly report"
 "Weekly report hub description","Backend entry for weekly reporting; use CLI for import, deadlines, and exports."

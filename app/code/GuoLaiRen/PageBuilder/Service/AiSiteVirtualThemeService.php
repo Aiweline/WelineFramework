@@ -123,7 +123,7 @@ class AiSiteVirtualThemeService
                 'region' => $region,
                 'phtml' => (string)$component->getTemplateContent(),
                 'html' => '',
-                'default_config' => $component->getDefaultConfig(),
+                'default_config' => $this->sanitizeConfigAssetUrls($component->getDefaultConfig()),
                 'ai_data' => [],
             ];
         }
@@ -152,7 +152,7 @@ class AiSiteVirtualThemeService
             $category,
             (string)($component['name'] ?? ''),
             (string)($component['phtml'] ?? ''),
-            \is_array($component['default_config'] ?? null) ? $component['default_config'] : [],
+            $this->sanitizeConfigAssetUrls(\is_array($component['default_config'] ?? null) ? $component['default_config'] : []),
             ['position' => [$region], 'page_layouts' => ['*'], 'sort_order' => $region === 'header' ? 10 : 20]
         );
     }
@@ -236,7 +236,7 @@ class AiSiteVirtualThemeService
             throw new \InvalidArgumentException((string)__('Invalid generated page layout payload'));
         }
 
-        $this->saveThemeLayout($themeId, $pageType, $layout);
+        $this->saveThemeLayout($themeId, $pageType, $this->sanitizeLayoutAssetUrls($layout));
     }
 
     /**
@@ -1083,6 +1083,85 @@ PHTML;
 
             $this->saveComponentVersion($component, $templateContent, $defaultConfig, $meta);
         }
+    }
+
+    /**
+     * @param array<string,mixed> $layout
+     * @return array<string,mixed>
+     */
+    private function sanitizeLayoutAssetUrls(array $layout): array
+    {
+        foreach (['header', 'footer'] as $region) {
+            if (!\is_array($layout[$region] ?? null)) {
+                continue;
+            }
+            $row = $layout[$region];
+            if (\is_array($row['config'] ?? null)) {
+                $row['config'] = $this->sanitizeConfigAssetUrls($row['config']);
+            }
+            $layout[$region] = $row;
+        }
+
+        if (\is_array($layout['content'] ?? null)) {
+            $content = [];
+            foreach ($layout['content'] as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                if (\is_array($row['config'] ?? null)) {
+                    $row['config'] = $this->sanitizeConfigAssetUrls($row['config']);
+                }
+                $content[] = $row;
+            }
+            $layout['content'] = $content;
+        }
+
+        return $layout;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function sanitizeConfigAssetUrls(array $config): array
+    {
+        foreach (['logo', 'logo.image', 'logo.url', 'brand.logo', 'brand.image', 'brand.logo_url'] as $field) {
+            if (!\array_key_exists($field, $config)) {
+                continue;
+            }
+            $config[$field] = \is_scalar($config[$field])
+                ? $this->normalizePublishableMediaUrl((string)$config[$field])
+                : '';
+        }
+
+        return $config;
+    }
+
+    private function normalizePublishableMediaUrl(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $lower = \strtolower($value);
+        if (\str_starts_with($lower, 'data:') || \str_contains($lower, '<svg')) {
+            return '';
+        }
+        if (\preg_match('/placeholder|example\.com|picsum\.photos|source\.unsplash\.com|images\.unsplash\.com|dummyimage\.com|placehold\.co|via\.placeholder/iu', $value) === 1) {
+            return '';
+        }
+
+        $path = \parse_url($value, \PHP_URL_PATH);
+        $path = \is_string($path) ? \trim($path) : $value;
+        if ($path === '' || \str_ends_with($path, '/')) {
+            return '';
+        }
+        if (\preg_match('/\.(?:png|jpe?g|webp|gif|avif|svg)(?:$|\?)/i', $path) !== 1) {
+            return '';
+        }
+
+        return $value;
     }
 
     private function saveComponentVersion(

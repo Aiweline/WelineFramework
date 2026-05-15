@@ -9,7 +9,6 @@ use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
-use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
@@ -158,7 +157,7 @@ class AiSiteBuildQueue implements QueueInterface
                 $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
                 if ($forceFullBuildRegeneration) {
                     $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
-                    $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope);
+                    $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope, false);
                 }
                 $normalizedScope = $buildTaskService->normalizeConfirmedBuildPlanFlag($scope);
                 $scopeChanged = $normalizedScope !== $confirmedScope;
@@ -176,8 +175,6 @@ class AiSiteBuildQueue implements QueueInterface
             if (!$buildTaskService->hasConfirmedBuildPlanForBuild($scope)) {
                 throw new \RuntimeException('请先确认建站方案，再开始执行构建。');
             }
-
-            $allowStubAiInTest = false;
 
             $sse = new QueueDbWriter(
                 (int)$session->getId(),
@@ -229,7 +226,7 @@ class AiSiteBuildQueue implements QueueInterface
                 );
                 if ($forceFullBuildRegeneration) {
                     $resetScope = $buildTaskService->clearBuildArtifactsForRegeneration($resumeScope);
-                    $resetScope = $buildTaskService->resetBuildTasksToPendingForRebuild($resetScope);
+                    $resetScope = $buildTaskService->resetBuildTasksToPendingForRebuild($resetScope, false);
                     if ($resetScope !== $resumeScope) {
                         $sessionService->replaceScope((int)$session->getId(), $adminId, $resetScope);
                         $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
@@ -254,47 +251,38 @@ class AiSiteBuildQueue implements QueueInterface
                 ? $this->resolveQueuedOperationContexts($content, $sessionService, $session, $scopeService)
                 : [];
 
-            if ($allowStubAiInTest) {
-                RequestContext::set(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, true);
-            }
-            try {
-                if ($operation === 'block_regenerate') {
-                    foreach ($operationContexts as $operationContext) {
-                        $this->invokePrivate($controller, 'runRegenerateBlockOperation', [
-                            $sse,
-                            $session,
-                            $adminId,
-                            (string)($operationContext['page_type'] ?? ''),
-                            (string)($operationContext['component_code'] ?? ''),
-                            (string)($operationContext['instruction'] ?? ''),
-                        ]);
-                        $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-                    }
-                } elseif ($operation === 'block_partial_patch') {
-                    $operationContext = $this->resolveQueuedOperationContext($content, $sessionService, $session, $scopeService);
-                    $this->invokePrivate($controller, 'runBlockPartialPatchOperation', [
+            if ($operation === 'block_regenerate') {
+                foreach ($operationContexts as $operationContext) {
+                    $this->invokePrivate($controller, 'runRegenerateBlockOperation', [
                         $sse,
                         $session,
                         $adminId,
                         (string)($operationContext['page_type'] ?? ''),
                         (string)($operationContext['component_code'] ?? ''),
                         (string)($operationContext['instruction'] ?? ''),
-                        $effectiveExecutionToken,
                     ]);
-                } elseif ($operation === 'regenerate_page') {
-                    $this->invokePrivate($controller, 'runRegeneratePageOperation', [
-                        $sse,
-                        $session,
-                        $adminId,
-                        $this->resolveQueuedPageType($content, $sessionService, $session, $scopeService),
-                    ]);
-                } else {
-                    $this->invokePrivate($controller, 'runBuildOperation', [$sse, $session, $adminId]);
+                    $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
                 }
-            } finally {
-                if ($allowStubAiInTest) {
-                    RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
-                }
+            } elseif ($operation === 'block_partial_patch') {
+                $operationContext = $this->resolveQueuedOperationContext($content, $sessionService, $session, $scopeService);
+                $this->invokePrivate($controller, 'runBlockPartialPatchOperation', [
+                    $sse,
+                    $session,
+                    $adminId,
+                    (string)($operationContext['page_type'] ?? ''),
+                    (string)($operationContext['component_code'] ?? ''),
+                    (string)($operationContext['instruction'] ?? ''),
+                    $effectiveExecutionToken,
+                ]);
+            } elseif ($operation === 'regenerate_page') {
+                $this->invokePrivate($controller, 'runRegeneratePageOperation', [
+                    $sse,
+                    $session,
+                    $adminId,
+                    $this->resolveQueuedPageType($content, $sessionService, $session, $scopeService),
+                ]);
+            } else {
+                $this->invokePrivate($controller, 'runBuildOperation', [$sse, $session, $adminId]);
             }
             $this->queueTrace($sse, '队列操作已返回 operation=' . $operation);
 
@@ -445,10 +433,6 @@ class AiSiteBuildQueue implements QueueInterface
             $details['section_code'] ?? null,
             $active['section_code'] ?? null,
             $activeDetails['section_code'] ?? null,
-            $content['task_key'] ?? null,
-            $details['task_key'] ?? null,
-            $active['task_key'] ?? null,
-            $activeDetails['task_key'] ?? null,
         ]);
         $componentCodes = $this->mergeStringLists([
             $singleComponentCode,
@@ -466,9 +450,19 @@ class AiSiteBuildQueue implements QueueInterface
             $activeDetails['block_keys'] ?? null,
             $content['section_codes'] ?? null,
             $details['section_codes'] ?? null,
-            $content['task_keys'] ?? null,
-            $details['task_keys'] ?? null,
         ]);
+        if ($componentCodes === []) {
+            $componentCodes = $this->mergeStringLists([
+                $content['task_key'] ?? null,
+                $details['task_key'] ?? null,
+                $active['task_key'] ?? null,
+                $activeDetails['task_key'] ?? null,
+                $content['task_keys'] ?? null,
+                $details['task_keys'] ?? null,
+                $active['task_keys'] ?? null,
+                $activeDetails['task_keys'] ?? null,
+            ]);
+        }
         $instruction = $this->firstNonEmptyString([$content['instruction'] ?? null, $details['instruction'] ?? null, $active['instruction'] ?? null, $activeDetails['instruction'] ?? null]);
 
         if ($pageTypes === [] || $componentCodes === []) {
@@ -621,7 +615,7 @@ class AiSiteBuildQueue implements QueueInterface
             $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
         );
         $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
-        $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope);
+        $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope, false);
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
             'build_blueprint' => \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [],
             'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],

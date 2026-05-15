@@ -1,34 +1,34 @@
 ﻿"请指定 --module=ModuleName 或 --tables=table1,table2","请指定 --module=ModuleName 或 --tables=table1,table2"
-"手动表备份: %{1}","手动表备份: %{1}"
-创建备份记录失败,创建备份记录失败
-"备份表 %{1} 失败: %{2}","备份表 %{1} 失败: %{2}"
-"手动备份完成 (migration_id: %{1})，已备份表: %{2}","手动备份完成 (migration_id: %{1})，已备份表: %{2}"
-"未找到迁移文件: %{1}","未找到迁移文件: %{1}"
+"手动表备份: %{1}","Manual table backup: %{1}"
+创建备份记录失败,"Failed to create backup record"
+"备份表 %{1} 失败: %{2}","Backup table %{1} failed: %{2}"
+"手动备份完成 (migration_id: %{1})，已备份表: %{2}","Manual backup completed (migration_id: %{1}), backed up tables: %{2}"
+"未找到迁移文件: %{1}","Migration file not found: %{1}"
 "迁移文件不存在: %{1}","Migration file not found: %{1}"
 "迁移类不存在: %{1}","Migration class not found: %{1}"
-"迁移类未实现 MigrationInterface","迁移类未实现 MigrationInterface"
-"迁移脚本 %{1} 未要求备份 (requiresBackup=false)","迁移脚本 %{1} 未要求备份 (requiresBackup=false)"
-"预备份: %{1}","预备份: %{1}"
-"迁移文件备份完成 (migration_id: %{1})","迁移文件备份完成 (migration_id: %{1})"
-"模块 %{1} 没有待执行的迁移","模块 %{1} 没有待执行的迁移"
-"已备份: %{1} (migration_id: %{2})","已备份: %{1} (migration_id: %{2})"
-"模块 %{1} 没有需要备份的迁移","模块 %{1} 没有需要备份的迁移"
-"共备份 %{1} 个迁移","共备份 %{1} 个迁移"
-数据库迁移备份命令,数据库迁移备份命令
-模块名称,模块名称
-迁移文件名（可选）,迁移文件名（可选）
-手动备份的表名列表，逗号分隔（可选）,手动备份的表名列表，逗号分隔（可选）
+"迁移类未实现 MigrationInterface","Migration class does not implement MigrationInterface"
+"迁移脚本 %{1} 未要求备份 (requiresBackup=false)","Migration script %{1} does not require backup (requiresBackup=false)"
+"预备份: %{1}","Pre-backup: %{1}"
+"迁移文件备份完成 (migration_id: %{1})","Migration file backup completed (migration_id: %{1})"
+"模块 %{1} 没有待执行的迁移","Module %{1} has no pending migrations"
+"已备份: %{1} (migration_id: %{2})","Backed up: %{1} (migration_id: %{2})"
+"模块 %{1} 没有需要备份的迁移","Module %{1} has no migrations to back up"
+"共备份 %{1} 个迁移","Backed up %{1} migrations"
+数据库迁移备份命令,"Database migration backup command"
+模块名称,"Module name"
+迁移文件名（可选）,"Migration file name (optional)"
+手动备份的表名列表，逗号分隔（可选）,"List of table names for manual backup, comma-separated (optional)"
 显示帮助信息,"Show help information"
-"请指定 --backup-id=N 或 --migration-id=N","请指定 --backup-id=N 或 --migration-id=N"
-"正在恢复备份 (backup_id: %{1})...","正在恢复备份 (backup_id: %{1})..."
-"备份恢复完成 (backup_id: %{1})","备份恢复完成 (backup_id: %{1})"
-"备份恢复失败 (backup_id: %{1})","备份恢复失败 (backup_id: %{1})"
-"未找到迁移 %{1} 关联的备份记录","未找到迁移 %{1} 关联的备份记录"
-"正在恢复迁移 %{1} 的 %{2} 条备份...","正在恢复迁移 %{1} 的 %{2} 条备份..."
-"恢复完成: 成功 %{1}，失败 %{2}","恢复完成: 成功 %{1}，失败 %{2}"
-数据库迁移备份恢复命令,数据库迁移备份恢复命令
-"备份记录 ID（恢复单条备份）","备份记录 ID（恢复单条备份）"
-"迁移记录 ID（恢复该迁移的所有备份）","迁移记录 ID（恢复该迁移的所有备份）"
+"请指定 --backup-id=N 或 --migration-id=N","Please specify --backup-id=N or --migration-id=N"
+"正在恢复备份 (backup_id: %{1})...","Restoring backup (backup_id: %{1})..."
+"备份恢复完成 (backup_id: %{1})","Backup restore completed (backup_id: %{1})"
+"备份恢复失败 (backup_id: %{1})","Backup restore failed (backup_id: %{1})"
+"未找到迁移 %{1} 关联的备份记录","Backup record associated with migration %{1} not found"
+"正在恢复迁移 %{1} 的 %{2} 条备份...","Restoring %{2} backups of migration %{1}..."
+"恢复完成: 成功 %{1}，失败 %{2}","Restore complete: Success %{1}, Failed %{2}"
+数据库迁移备份恢复命令,"Database migration backup restore command"
+"备份记录 ID（恢复单条备份）","Backup record ID (restore single backup)"
+"迁移记录 ID（恢复该迁移的所有备份）","Migration record ID (restore all backups for this migration)"
 "请指定模块名称: --module=ModuleName","Please specify module name: --module=ModuleName"
 "开始回滚最近 %{1} 个迁移: %{2}","Starting rollback of last %{1} migrations: %{2}"
 (预演模式),"(dry-run mode)"
@@ -37,7 +37,7 @@
 "跨版本回滚完成: %{1} -> %{2}","Cross-version rollback completed: %{1} -> %{2}"
 "请指定版本号: --version=1.0.0，或使用 --to-version/--steps 参数","Please specify version: --version=1.0.0, or use --to-version/--steps parameter"
 "开始回滚迁移: %{1} -> 版本 %{2}","Starting migration rollback: %{1} -> version %{2}"
-"-> 文件 %{1}","-> 文件 %{1}"
+"-> 文件 %{1}","-> File %{1}"
 迁移回滚完成,"Migration rollback completed"
 迁移回滚失败,"Migration rollback failed"
 数据库迁移回滚命令,"Database migration rollback command"
@@ -56,7 +56,7 @@
 "总迁移数: %{1}","Total migrations: %{1}"
 "已安装: %{1}","Installed: %{1}"
 "待执行: %{1}","Pending: %{1}"
-"失败: %{1}","失败: %{1}"
+"失败: %{1}","Failed: %{1}"
 "=== 已安装的迁移 ===","=== Installed Migrations ==="
 "✓ %{1} - %{2}","✓ %{1} - %{2}"
 "=== 待执行的迁移 ===","=== Pending Migrations ==="
@@ -69,40 +69,40 @@
 数据库迁移状态查询命令,"Database migration status query command"
 "版本号 (可选)","Version number (optional)"
 "请指定版本号: --version=1.0.0","Please specify version: --version=1.0.0"
-"开始卸载迁移: %{1} -> 版本 %{2}","开始卸载迁移: %{1} -> 版本 %{2}"
-迁移卸载完成,迁移卸载完成
+"开始卸载迁移: %{1} -> 版本 %{2}","Starting uninstall migration: %{1} -> version %{2}"
+迁移卸载完成,"Migration uninstall completed"
 迁移卸载失败,"Migration uninstall failed"
-数据库迁移卸载命令,数据库迁移卸载命令
-"版本号 (必需)","版本号 (必需)"
-"迁移文件名 (可选)","迁移文件名 (可选)"
-"开始升级迁移: %{1} -> 版本 %{2}","开始升级迁移: %{1} -> 版本 %{2}"
-迁移升级完成,迁移升级完成
-迁移升级失败,迁移升级失败
-数据库迁移升级命令,数据库迁移升级命令
-数据库管理,数据库管理
-数据写入成功,数据写入成功
-"删除操作需要确认短语 I_UNDERSTAND_THE_RISK","删除操作需要确认短语 I_UNDERSTAND_THE_RISK"
-删除成功,删除成功
-"请提供 csv_content 参数","请提供 csv_content 参数"
-导入完成,导入完成
-"SQL 执行成功","SQL 执行成功"
-"结构删除类操作需要确认短语 I_UNDERSTAND_THE_RISK","结构删除类操作需要确认短语 I_UNDERSTAND_THE_RISK"
-"未知结构操作: %{1}","未知结构操作: %{1}"
-结构变更成功,结构变更成功
-"模块 %{1} 升级 %{2} -> %{3}，执行 %{4} 个迁移","模块 %{1} 升级 %{2} -> %{3}，执行 %{4} 个迁移"
-"迁移完成: 成功 %{1}，失败 %{2}","迁移完成: 成功 %{1}，失败 %{2}"
-"模块升级迁移失败: %{1}","模块升级迁移失败: %{1}"
-新增数据不能为空,新增数据不能为空
-更新操作必须提供主键与数据,更新操作必须提供主键与数据
-删除操作必须提供条件,删除操作必须提供条件
-"CSV 内容为空或格式不正确","CSV 内容为空或格式不正确"
-"第 %{1} 行列数不匹配","第 %{1} 行列数不匹配"
-"第 %{1} 行导入失败: %{2}","第 %{1} 行导入失败: %{2}"
-"非法标识符 %{1}: %{2}","非法标识符 %{1}: %{2}"
-索引字段不能为空,索引字段不能为空
-"视图语句必须以 SELECT 开头","视图语句必须以 SELECT 开头"
-写操作需要二次确认后才能执行,写操作需要二次确认后才能执行
-"高危 SQL 必须输入确认短语 I_UNDERSTAND_THE_RISK","高危 SQL 必须输入确认短语 I_UNDERSTAND_THE_RISK"
+数据库迁移卸载命令,"Database migration uninstall command"
+"版本号 (必需)","Version Number (Required)"
+"迁移文件名 (可选)","Migration file name (optional)"
+"开始升级迁移: %{1} -> 版本 %{2}","Starting upgrade migration: %{1} -> version %{2}"
+迁移升级完成,"Migration upgrade completed"
+迁移升级失败,"Migration upgrade failed"
+数据库迁移升级命令,"Database migration upgrade command"
+数据库管理,"Database management"
+数据写入成功,"Data written successfully"
+"删除操作需要确认短语 I_UNDERSTAND_THE_RISK","The delete operation requires the confirmation phrase I_UNDERSTAND_THE_RISK"
+删除成功,"Deletion successful"
+"请提供 csv_content 参数","Please provide the csv_content parameter"
+导入完成,"Import Complete"
+"SQL 执行成功","SQL execution successful"
+"结构删除类操作需要确认短语 I_UNDERSTAND_THE_RISK","Structural deletion operations require confirmation phrase I_UNDERSTAND_THE_RISK"
+"未知结构操作: %{1}","Unknown structure operation: %{1}"
+结构变更成功,"Structure change successful"
+"模块 %{1} 升级 %{2} -> %{3}，执行 %{4} 个迁移","Module %{1} upgraded %{2} -> %{3}, executed %{4} migrations."
+"迁移完成: 成功 %{1}，失败 %{2}","Migration completed: %{1} succeeded, %{2} failed"
+"模块升级迁移失败: %{1}","Module upgrade migration failed: %{1}"
+新增数据不能为空,"Added data cannot be empty"
+更新操作必须提供主键与数据,"Update operation must provide primary key and data"
+删除操作必须提供条件,"A condition must be provided for the delete operation"
+"CSV 内容为空或格式不正确","CSV content is empty or incorrectly formatted"
+"第 %{1} 行列数不匹配","Row and column count mismatch for row %{1}"
+"第 %{1} 行导入失败: %{2}","Import failed for row %{1}: %{2}"
+"非法标识符 %{1}: %{2}","Invalid identifier %{1}: %{2}"
+索引字段不能为空,"Index field cannot be empty"
+"视图语句必须以 SELECT 开头","View statements must start with SELECT"
+写操作需要二次确认后才能执行,"Write operations require a second confirmation before execution"
+"高危 SQL 必须输入确认短语 I_UNDERSTAND_THE_RISK","High-risk SQL must enter confirmation phrase I_UNDERSTAND_THE_RISK"
 "表 %{1} 没有数据需要备份","Table %{1} has no data to backup"
 "表 %{1} 数据备份完成，共 %{2} 条记录","Table %{1} backup completed, %{2} records total"
 "备份表数据失败: %{1}","Failed to backup table data: %{1}"
@@ -173,16 +173,16 @@
 "当前版本 %{1} 已经是最新或更高版本","Current version %{1} is already latest or higher"
 "模块 %{1} 版本已升级: %{2} -> %{3}","Module %{1} version upgraded: %{2} -> %{3}"
 "记录版本历史失败: %{1}","Failed to record version history: %{1}"
-数据库,数据库
-数据表,数据表
-加载数据,加载数据
-查看结构,查看结构
-行数据,行数据
-请先选择数据库与数据表,请先选择数据库与数据表
-结构信息,结构信息
-点击“查看结构”加载字段和索引,点击“查看结构”加载字段和索引
-"SQL 控制台（写操作需确认）","SQL 控制台（写操作需确认）"
-确认执行写操作,确认执行写操作
-高危确认短语,高危确认短语
-"执行 SQL","执行 SQL"
-"审计日志（最近 50 条）","审计日志（最近 50 条）"
+数据库,Database
+数据表,"Data table"
+加载数据,"Loading data"
+查看结构,"View Structure"
+行数据,"Row Data"
+请先选择数据库与数据表,"Please select a database and table first"
+结构信息,"Structure information"
+点击“查看结构”加载字段和索引,"Click ""View Structure"" to load fields and indexes"
+"SQL 控制台（写操作需确认）","SQL console (write operation requires confirmation)"
+确认执行写操作,"Confirm execute write operation"
+高危确认短语,"High-risk confirmation phrase"
+"执行 SQL","Execute SQL"
+"审计日志（最近 50 条）","Audit Log (Last 50 Entries)"

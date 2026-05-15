@@ -6,9 +6,9 @@
 
 - 将原有按技术主题组织的技能重构为按团队角色组织的技能。
 - 每个技能目录都可以被 Multica 独立导入。
-- 保留 WelineFramework 的开发约束、阅读顺序、验证规则和文档边界。
+- 保留 WelineFramework 的开发约束、阅读顺序、验证规则和文档边界，并统一引用 `dev/ai/global-constraints.md`。
 - 明确技术主管、专项工程师、QA、CI、文档角色之间的协作边界。
-- 将开发规范、代码质量、国际化与用户提示等跨角色规则沉淀为 `通用工程师-开发规范与代码质量`。
+- 将开发规范、代码质量、国际化与用户提示等跨角色执行方式沉淀为 `通用工程师-开发规范与代码质量`；总则正文仍以 `dev/ai/global-constraints.md` 为准。
 
 ## 导入规则
 
@@ -16,40 +16,28 @@
 - 目录名必须与 `SKILL.md` frontmatter 中的 `name` 完全一致。
 - 技能名使用中文。
 - `SKILL.md` 正文使用英文，便于 Multica 路由与复用。
+- 专业技能不得复制总则正文；跨角色规则统一维护在 `dev/ai/global-constraints.md`。
 
 ## 先读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/diagrams/00-INDEX.txt`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. `CLAUDE.md`
+2. `dev/ai/global-constraints.md`
+3. `dev/ai/diagrams/00-INDEX.txt`
+4. `dev/ai/diagrams/08-module-docs-index.txt`
 5. 当前目录下命中的角色技能
 6. Source code as the last resort
 
 ## 共享约束
 
-- Do not edit `generated/` directly.
-- Do not use `routes.xml`.
-- Do not use JavaScript `alert` / `confirm` / `prompt`.
-- Do not hardcode user-facing text.
-- Use i18n for visible text.
-- Do not add `declare(strict_types=1)` inside `.phtml`.
-- Do not use `sleep` / `die` / `exit` in WLS runtime-sensitive paths.
-- Do not write detailed fix reports to the repository root.
-- Write fix reports in the related module `doc/` directory.
-- Update module README after bug fixes.
-- Update architecture docs when design changes.
-- Update API docs when interfaces change.
-- Do not test AI changes on default WLS port `9501`.
-- Always create a dedicated WLS test instance on port `9502+`.
-- Always use a unique AI test instance name such as `ai-test-{timestamp}`.
-- Always stop the dedicated AI test instance after validation.
+共享约束不在本文件重复维护。所有技能必须遵守：
+
+- `dev/ai/global-constraints.md`
 
 ## 智能体名录
 
 - 智能体入口：`dev/ai/agent/README.md`
 - 每个智能体文件包含“指令”和“Skill”两部分。
-- 所有工程智能体都必须加载 `通用工程师-开发规范与代码质量` 作为共识技能。
+- 所有工程智能体都必须遵守 `dev/ai/global-constraints.md`，并加载 `通用工程师-开发规范与代码质量` 作为共识技能。
 - 专业技能按智能体前缀组织，例如 `框架核心工程师-*`、`文档知识库工程师-*`。
 
 ## 目录导航

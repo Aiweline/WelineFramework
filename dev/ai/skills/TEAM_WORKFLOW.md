@@ -14,7 +14,7 @@
 ## 标准执行流
 
 1. Technical Director 下达任务与验收目标。
-2. 技术主管先读 `AI-ENTRY.md`、图谱和模块文档，完成任务拆分。
+2. 技术主管先读 `AI-ENTRY.md`、`dev/ai/global-constraints.md`、图谱和模块文档，完成任务拆分。
 3. 技术主管按职责派发到框架、业务、前端、运行时、安全、测试、CI、文档角色。
 4. Specialist Engineers 在各自边界内实现并输出证据。
 5. QA测试主管定义门禁并组织单测、HTTP、E2E、WLS 验证。

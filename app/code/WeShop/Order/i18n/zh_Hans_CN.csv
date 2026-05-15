@@ -1,34 +1,34 @@
-﻿"Please log in first","Please log in first"
+﻿Please log in first,Please log in first
 Success,Success
-"Order Management",订单管理
-"Order ID is required.",订单ID不能为空。
-"Invalid order status.","Invalid order status."
-"Order status updated.",订单状态已更新。
-"Order status update failed.",订单状态更新失败。
-"Order not found.",订单不存在。
-"Order Detail",订单详情
-"Please log in to continue.","Please log in to continue."
-"This order cannot be cancelled.","This order cannot be cancelled."
-"Order cancelled. Refund processing will follow your payment method rules.","Order cancelled. Refund processing will follow your payment method rules."
-"Order cancelled.","Order cancelled."
-"My Orders","My Orders"
-"This order cannot continue to payment.","This order cannot continue to payment."
-"Continue the payment flow from checkout.","Continue the payment flow from checkout."
-"Failed to load order details.","Failed to load order details."
-"Order Details","Order Details"
-"Unsupported order provider operation: %{1}","Unsupported order provider operation: %{1}"
-"Order Query","Order Query"
+Order Management,订单管理
+Order ID is required.,订单ID不能为空。
+Invalid order status.,Invalid order status.
+Order status updated.,订单状态已更新。
+Order status update failed.,订单状态更新失败。
+Order not found.,订单不存在。
+Order Detail,订单详情
+Please log in to continue.,Please log in to continue.
+This order cannot be cancelled.,This order cannot be cancelled.
+Order cancelled. Refund processing will follow your payment method rules.,Order cancelled. Refund processing will follow your payment method rules.
+Order cancelled.,Order cancelled.
+My Orders,My Orders
+This order cannot continue to payment.,This order cannot continue to payment.
+Continue the payment flow from checkout.,Continue the payment flow from checkout.
+Failed to load order details.,Failed to load order details.
+Order Details,Order Details
+Unsupported order provider operation: %{1},Unsupported order provider operation: %{1}
+Order Query,Order Query
 "Provides order creation, order item persistence, and account-summary queries.","Provides order creation, order item persistence, and account-summary queries."
-"Persist order items in batch.","Persist order items in batch."
-"Return recent and unpaid orders for the customer account center.","Return recent and unpaid orders for the customer account center."
-"Order list content before","Order list content before"
-"Inject content before the storefront order list page body.","Inject content before the storefront order list page body."
-"Order list content after","Order list content after"
-"Inject content after the storefront order list page body.","Inject content after the storefront order list page body."
-"Order detail content before","Order detail content before"
-"Inject content before the storefront order detail page body.","Inject content before the storefront order detail page body."
-"Order detail content after","Order detail content after"
-"Inject content after the storefront order detail page body.","Inject content after the storefront order detail page body."
+Persist order items in batch.,Persist order items in batch.
+Return recent and unpaid orders for the customer account center.,Return recent and unpaid orders for the customer account center.
+Order list content before,Order list content before
+Inject content before the storefront order list page body.,Inject content before the storefront order list page body.
+Order list content after,Order list content after
+Inject content after the storefront order list page body.,Inject content after the storefront order list page body.
+Order detail content before,Order detail content before
+Inject content before the storefront order detail page body.,Inject content before the storefront order detail page body.
+Order detail content after,Order detail content after
+Inject content after the storefront order detail page body.,Inject content after the storefront order detail page body.
 Pending,待处理
 Processing,处理中
 Paid,已支付
@@ -36,49 +36,49 @@ Fulfilled,已发货
 Completed,已完成
 Cancelled,已取消
 Refunded,已退款
-"Unsupported order status.",不支持的订单状态。
-"Order status transition %{1} -> %{2} is not allowed.","Order status transition %{1} -> %{2} is not allowed."
-"Unsupported payment status.","Unsupported payment status."
-"Order does not exist.","Order does not exist."
-"You cannot cancel this order.","You cannot cancel this order."
-"The order has already been cancelled.","The order has already been cancelled."
-"The order has already been refunded.","The order has already been refunded."
-"The current order status does not allow cancellation.","The current order status does not allow cancellation."
-"The order cannot be cancelled.","The order cannot be cancelled."
+Unsupported order status.,不支持的订单状态。
+Order status transition %{1} -> %{2} is not allowed.,Order status transition %{1} -> %{2} is not allowed.
+Unsupported payment status.,Unsupported payment status.
+Order does not exist.,Order does not exist.
+You cannot cancel this order.,You cannot cancel this order.
+The order has already been cancelled.,The order has already been cancelled.
+The order has already been refunded.,The order has already been refunded.
+The current order status does not allow cancellation.,The current order status does not allow cancellation.
+The order cannot be cancelled.,The order cannot be cancelled.
 "Manage order search, review, and status transitions from one place.",在一个页面内完成订单检索、查看与状态流转。
-"Total Orders",订单总数
-"Completed / Cancelled","已完成 / 已取消"
-"Order Number",订单号
-"Search by order number",按订单号搜索
-"Customer ID",客户ID
-"Search by customer ID",按客户ID搜索
+Total Orders,订单总数
+Completed / Cancelled,已完成 / 已取消
+Order Number,订单号
+Search by order number,按订单号搜索
+Customer ID,客户ID
+Search by customer ID,按客户ID搜索
 Status,状态
-"All statuses",全部状态
-"Apply Filters",应用筛选
+All statuses,全部状态
+Apply Filters,应用筛选
 Reset,重置
-"Payment Status",支付状态
+Payment Status,支付状态
 Total,总额
-"Created At",创建时间
+Created At,创建时间
 Actions,操作
 View,查看
-"No orders found.",暂无订单。
-"Try adjusting the filters or create a new order flow from the storefront.",请调整筛选条件，或先从前台创建订单流程。
-"Back to Orders",返回订单列表
+No orders found.,暂无订单。
+Try adjusting the filters or create a new order flow from the storefront.,请调整筛选条件，或先从前台创建订单流程。
+Back to Orders,返回订单列表
 "Review the order payload, items, and current status.",查看订单信息、商品明细和当前状态。
-"Order Summary",订单摘要
-"Grand Total",订单总额
-"Update Status",更新状态
-"Save Status",保存状态
-"Order Items",订单商品
+Order Summary,订单摘要
+Grand Total,订单总额
+Update Status,更新状态
+Save Status,保存状态
+Order Items,订单商品
 Product,商品
 SKU,SKU
 Qty,数量
 Price,价格
-"Row Total",小计
-"No order items found.",未找到订单商品。
+Row Total,小计
+No order items found.,未找到订单商品。
 我的订单,我的订单
 查看订单进度与支付状态,查看订单进度与支付状态
-"您有 %1 个订单待支付","您有 %1 个订单待支付"
+您有 %{1} 个订单待支付,您有 %{1} 个订单待支付
 请及时完成支付，避免订单自动取消,请及时完成支付，避免订单自动取消
 查看全部,查看全部
 您还没有订单,您还没有订单
@@ -90,7 +90,7 @@ Price,价格
 已完成,已完成
 已取消,已取消
 已退款,已退款
-订单号：%1,订单号：%1
+订单号：%{1},订单号：%{1}
 待支付,待支付
 订单金额：,订单金额：
 查看详情,查看详情
@@ -100,11 +100,11 @@ Price,价格
 取消订单,取消订单
 申请退货,申请退货
 不可取消,不可取消
-"Order Snapshot","Order Snapshot"
-"Recent Orders","Recent Orders"
-"View All","View All"
+Order Snapshot,Order Snapshot
+Recent Orders,Recent Orders
+View All,View All
 Unpaid,Unpaid
-"No orders yet. Place your first order to see activity here.","No orders yet. Place your first order to see activity here."
+No orders yet. Place your first order to see activity here.,No orders yet. Place your first order to see activity here.
 订单管理,订单管理
 WeShop,WeShop
 订单总数,订单总数
@@ -144,28 +144,28 @@ ID,ID
 确定要取消此订单吗？此操作不可恢复。,确定要取消此订单吗？此操作不可恢复。
 确认,确认
 取消,取消
-"Order Center","Order Center"
+Order Center,Order Center
 "Track your purchases, complete unpaid orders, and review delivery progress in one place.","Track your purchases, complete unpaid orders, and review delivery progress in one place."
-"Continue Shopping","Continue Shopping"
-"Back to Account","Back to Account"
-"Awaiting Payment","Awaiting Payment"
-"No orders yet","No orders yet"
-"Your order history will appear here after you place your first purchase.","Your order history will appear here after you place your first purchase."
-"Browse Products","Browse Products"
+Continue Shopping,Continue Shopping
+Back to Account,Back to Account
+Awaiting Payment,Awaiting Payment
+No orders yet,No orders yet
+Your order history will appear here after you place your first purchase.,Your order history will appear here after you place your first purchase.
+Browse Products,Browse Products
 Order,Order
-"View Details",查看详情
-"Pay Now","Pay Now"
-"Cancel this order?","Cancel this order?"
-"Cancel Order",取消订单
-"Request Return","Request Return"
-"Not Cancellable","Not Cancellable"
+View Details,查看详情
+Pay Now,Pay Now
+Cancel this order?,Cancel this order?
+Cancel Order,取消订单
+Request Return,Request Return
+Not Cancellable,Not Cancellable
 "Review the latest status, payment state, and ordered products for this order.","Review the latest status, payment state, and ordered products for this order."
-"Retry Payment","Retry Payment"
-"Order Information","Order Information"
-"Order ID",订单ID
-"Increment ID","Increment ID"
+Retry Payment,Retry Payment
+Order Information,Order Information
+Order ID,订单ID
+Increment ID,Increment ID
 Timeline,Timeline
 N/A,N/A
-"Updated At",更新时间
+Updated At,更新时间
 Items,Items
-"No order items are available for this order yet.","No order items are available for this order yet."
+No order items are available for this order yet.,No order items are available for this order yet.
