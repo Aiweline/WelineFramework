@@ -26,6 +26,9 @@ class TemplateCacheManager
     /** @var array L1: Process-local memory cache */
     private static array $memoryCache = [];
 
+    /** @var array<string, array{mtime:int, size:int, key:string}> */
+    private static array $sourceFileKeyCache = [];
+
     /** @var string Cache root directory */
     private string $cacheRoot;
 
@@ -67,7 +70,31 @@ class TemplateCacheManager
         if (!is_file($sourceFile)) {
             throw new \RuntimeException(__('源模板文件不存在：%{1}', $sourceFile));
         }
-        return md5_file($sourceFile) . '-' . filesize($sourceFile);
+        if (!$this->shouldUseSourceKeyCache()) {
+            return $this->buildCacheKeyFromFile($sourceFile);
+        }
+
+        $sourceSize = (int) filesize($sourceFile);
+        $sourceMtime = (int) (@filemtime($sourceFile) ?: 0);
+        $normalizedSource = $this->normalizePath($sourceFile);
+        $cached = self::$sourceFileKeyCache[$normalizedSource] ?? null;
+        if (
+            is_array($cached)
+            && ($cached['mtime'] ?? -1) === $sourceMtime
+            && ($cached['size'] ?? -1) === $sourceSize
+            && isset($cached['key'])
+        ) {
+            return $cached['key'];
+        }
+
+        $cacheKey = $this->buildCacheKeyFromFile($sourceFile);
+        self::$sourceFileKeyCache[$normalizedSource] = [
+            'mtime' => $sourceMtime,
+            'size' => $sourceSize,
+            'key' => $cacheKey,
+        ];
+
+        return $cacheKey;
     }
 
     /**
@@ -374,6 +401,7 @@ class TemplateCacheManager
     {
         // Clear L1 memory cache
         self::$memoryCache = [];
+        self::$sourceFileKeyCache = [];
 
         // Clear disk cache
         $this->ensureCacheDir();
@@ -399,6 +427,7 @@ class TemplateCacheManager
     public function clearMemoryCache(): void
     {
         self::$memoryCache = [];
+        self::$sourceFileKeyCache = [];
     }
 
     /**
@@ -412,9 +441,11 @@ class TemplateCacheManager
 
         $cacheKey = $this->getCacheKey($sourceFile);
         $sourceHash = substr($cacheKey, 0, 32);
+        $normalizedSource = $this->normalizePath($sourceFile);
 
         // Remove from L1
         unset(self::$memoryCache[$cacheKey]);
+        unset(self::$sourceFileKeyCache[$normalizedSource]);
 
         // Remove from disk
         $metaFile = $this->getMetaFilePath($sourceHash);
@@ -425,7 +456,6 @@ class TemplateCacheManager
 
         // Update manifest
         $this->loadManifest();
-        $normalizedSource = $this->normalizePath($sourceFile);
         if (isset($this->manifest[$normalizedSource])) {
             unset($this->manifest[$normalizedSource]);
             file_put_contents($this->manifestFile, serialize($this->manifest));
@@ -474,6 +504,7 @@ class TemplateCacheManager
 
         return [
             'memory_cache_entries' => count(self::$memoryCache),
+            'source_key_cache_entries' => count(self::$sourceFileKeyCache),
             'manifest_entries' => count($this->manifest),
             'disk_files' => $fileCount,
             'disk_size_bytes' => $totalSize,
@@ -487,6 +518,25 @@ class TemplateCacheManager
     private function normalizePath(string $path): string
     {
         return str_replace(['/', '\\'], DS, rtrim($path, '/\\'));
+    }
+
+    private function shouldUseSourceKeyCache(): bool
+    {
+        if (\defined('DEV') && DEV) {
+            return false;
+        }
+
+        return \Weline\Framework\Runtime\Runtime::isPersistent();
+    }
+
+    private function buildCacheKeyFromFile(string $sourceFile): string
+    {
+        $hash = md5_file($sourceFile);
+        if ($hash === false) {
+            throw new \RuntimeException(__('Failed to hash template source file: %{1}', $sourceFile));
+        }
+
+        return $hash . '-' . filesize($sourceFile);
     }
 
     /**

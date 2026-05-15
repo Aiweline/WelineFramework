@@ -26,6 +26,7 @@ use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Register\Register;
 use Weline\Framework\Rules\RulesManager;
+use Weline\Framework\Router\Core as RouterCore;
 use Weline\Framework\Setup\Stage\StageUpdateManager;
 use Weline\Framework\Setup\Stage\RouteUpdateStage;
 use Weline\Framework\Setup\Stage\FileUpdateStage;
@@ -1386,6 +1387,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             //        // 删除路由文件
             $this->printing->warning($i . '、路由更新...', '系统');
             $this->printing->warning('清除文件：');
+            RouterCore::snapshotGeneratedRouterFiles();
             /**@var System $system */
             $system = ObjectManager::getInstance(System::class);
             foreach (Env::router_files_PATH as $path) {
