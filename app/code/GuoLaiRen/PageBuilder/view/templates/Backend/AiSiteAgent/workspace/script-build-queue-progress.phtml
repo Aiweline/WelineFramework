@@ -212,6 +212,33 @@
         }
     }
 
+    function resolveQueuePanelStatus(info, payload, eventKind) {
+        var snapshot = info && info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        var parsedPayload = payload && typeof payload === 'object' ? payload : {};
+        var status = String(
+            parsedPayload.queue_status
+            || parsedPayload.job_status
+            || parsedPayload.status
+            || snapshot.job_status
+            || snapshot.status
+            || ''
+        ).toLowerCase().trim();
+        if (status) {
+            return status;
+        }
+        var kind = String(eventKind || '').toLowerCase().trim();
+        if (kind === 'error' || kind === 'failed') {
+            return 'error';
+        }
+        if (kind === 'done' || kind === 'complete' || kind === 'completed') {
+            return 'done';
+        }
+        if (kind === 'progress' || kind === 'task_progress' || kind === 'total') {
+            return 'running';
+        }
+        return '';
+    }
+
     function getLastWorkspaceState() {
         try {
             return window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
@@ -331,11 +358,13 @@
             : {};
         var op = normalizeOperation(active.operation);
         var activeStatus = String(active.status || '').toLowerCase();
-        var shouldOpen = activeStatus === 'queued' || activeStatus === 'running';
+        var shouldOpen = activeStatus === 'queued' || activeStatus === 'pending' || activeStatus === 'running' || activeStatus === 'processing';
         Object.keys(panelMap).forEach(function (key) {
             var panelEl = document.getElementById(panelMap[key].panel);
             if (panelEl && key === op && shouldOpen) {
                 panelEl.open = true;
+            } else if (panelEl && key === op && !shouldOpen) {
+                panelEl.open = false;
             }
         });
     }
@@ -351,8 +380,9 @@
         }
         renderQueueInfoPanel(normalized, info);
         rememberQueueInfo(normalized, info);
+        var queuePanelStatus = resolveQueuePanelStatus(info, payload, eventKind);
         syncPanelOpenState(Object.assign({}, getLastWorkspaceState(), {
-            active_operation: { operation: normalized, status: 'running' }
+            active_operation: { operation: normalized, status: queuePanelStatus }
         }));
     }
 

@@ -21,7 +21,11 @@ final class AiSiteDesignPolicyRegistryTest extends TestCase
         self::assertSame($policy['hash'], $registry->get()['hash']);
         self::assertTrue($registry->hasRule('layout.4_8_spacing'));
         self::assertTrue($registry->hasRule('image.integrated_not_pasted'));
+        self::assertTrue($registry->hasRule('image.text_safe_zone'));
+        self::assertTrue($registry->hasRule('background.scrim_text_panel'));
         self::assertTrue($registry->hasRule('ban.reason_fields'));
+        self::assertStringContainsString('visible scrim/text-panel safe zone', (string)$policy['full_policy_prompt']);
+        self::assertStringContainsString('readable scrim/text-panel safe zones', (string)$policy['compact_policy_prompt']);
     }
 
     public function testPolicyRefUsesLightweightRegistryPointer(): void

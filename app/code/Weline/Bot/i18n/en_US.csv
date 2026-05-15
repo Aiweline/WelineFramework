@@ -22,30 +22,30 @@
 "Describe business context and project count","Describe business context and project count"
 "Generate AI suggestion","Generate AI suggestion"
 "Review and save","Review and save"
-任务不存在,任务不存在
-任务名称和提示词不能为空,任务名称和提示词不能为空
+任务不存在,"Task does not exist"
+任务名称和提示词不能为空,"Task name and prompt cannot be empty"
 保存成功,"Saved successfully"
 删除成功,"Deleted successfully"
 状态已更新,"Status updated"
-任务已加入执行队列,任务已加入执行队列
+任务已加入执行队列,"Task has been added to the execution queue"
 已归档,Archived
 已删除,Deleted
-技能不存在,技能不存在
+技能不存在,"Skill does not exist"
 文件系统,Filesystem
-"Shell 命令","Shell 命令"
-浏览器,浏览器
-"API 请求","API 请求"
-数据库,数据库
-代码执行,代码执行
-编码智能体,编码智能体
-"专为代码编写、编辑、分析设计的智能体。支持读取文件、搜索替换、grep 搜索、目录浏览、glob 查找、执行终端命令等工具。","专为代码编写、编辑、分析设计的智能体。支持读取文件、搜索替换、grep 搜索、目录浏览、glob 查找、执行终端命令等工具。"
-"正在调用 AI...","正在调用 AI..."
+"Shell 命令","Shell command"
+浏览器,Browser
+"API 请求","API request"
+数据库,Database
+代码执行,"Code execution"
+编码智能体,"Encoding Agent"
+"专为代码编写、编辑、分析设计的智能体。支持读取文件、搜索替换、grep 搜索、目录浏览、glob 查找、执行终端命令等工具。","An agent designed specifically for code writing, editing, and analysis. Supports tools such as reading files, searching and replacing, grep search, directory browsing, glob search, and executing terminal commands."
+"正在调用 AI...","Calling AI..."
 "Tool not found: %{1}","Tool not found: %{1}"
-"执行失败: %{1}","执行失败: %{1}"
-聊天侧边栏扩展,聊天侧边栏扩展
-在聊天控制台的侧边栏区域触发，允许其他模块在侧边栏添加自定义内容，如快捷指令、历史会话列表等。,在聊天控制台的侧边栏区域触发，允许其他模块在侧边栏添加自定义内容，如快捷指令、历史会话列表等。
-消息工具栏扩展,消息工具栏扩展
-在聊天消息的工具栏区域触发，允许其他模块为消息添加自定义操作按钮，如复制、重新生成、收藏等。,在聊天消息的工具栏区域触发，允许其他模块为消息添加自定义操作按钮，如复制、重新生成、收藏等。
+"执行失败: %{1}","Execution failed: %{1}"
+聊天侧边栏扩展,"Chat sidebar extension"
+在聊天控制台的侧边栏区域触发，允许其他模块在侧边栏添加自定义内容，如快捷指令、历史会话列表等。,"Triggered in the sidebar area of the chat console, allowing other modules to add custom content to the sidebar, such as quick commands, history session lists, etc."
+消息工具栏扩展,"Message toolbar extension"
+在聊天消息的工具栏区域触发，允许其他模块为消息添加自定义操作按钮，如复制、重新生成、收藏等。,"Triggered in the toolbar area of chat messages, allowing other modules to add custom action buttons to messages, such as copy, regenerate, bookmark, etc."
 "Semantic search over codebase: finds relevant code, classes, APIs by meaning. Use for exploring structure, finding similar implementations, or understanding how something works.","Semantic search over codebase: finds relevant code, classes, APIs by meaning. Use for exploring structure, finding similar implementations, or understanding how something works."
 "Filter: all|docs|api|code|config. Default all","Filter: all|docs|api|code|config. Default all"
 "Filter by module, e.g. Weline_Framework, Weline_Ai","Filter by module, e.g. Weline_Framework, Weline_Ai"
@@ -92,7 +92,7 @@
 "Failed to write file: %{1}","Failed to write file: %{1}"
 "%{1} replacement(s) applied","%{1} replacement(s) applied"
 数据库查询,"Database Query"
-"执行数据库查询（仅限 SELECT）","执行数据库查询（仅限 SELECT）"
+"执行数据库查询（仅限 SELECT）","Execute a database query (SELECT only)"
 "SQL 查询语句（仅支持 SELECT）","SQL Query (SELECT only)"
 返回行数限制,"Row Limit"
 偏移量,Offset
@@ -105,7 +105,7 @@
 文件写入成功,"File written successfully"
 文件删除成功,"File deleted successfully"
 "HTTP 请求","HTTP Request"
-"发送 HTTP 请求","发送 HTTP 请求"
+"发送 HTTP 请求","Send HTTP request"
 "请求 URL","Request URL"
 "HTTP 方法","HTTP Method"
 请求头,Headers

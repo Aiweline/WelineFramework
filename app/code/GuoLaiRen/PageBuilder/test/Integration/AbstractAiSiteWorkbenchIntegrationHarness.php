@@ -18,7 +18,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\UnitTest\TestCore;
-use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use Weline\Queue\Model\Queue;
 
 /**
@@ -48,7 +47,6 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
             'pid' => 0,
             'message' => 'Queue auto-dispatch disabled by PHPUnit; queue:run executes explicitly.',
         ]);
-        RequestContext::set(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, true);
     }
 
     protected function tearDown(): void
@@ -56,7 +54,6 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         try {
             $this->cleanupTrackedHarnessArtifacts();
             RequestContext::remove('pagebuilder.ai.queue.dispatcher');
-            RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
             parent::tearDown();
         } finally {
             while (\ob_get_level() > $this->outputBufferBaseline) {

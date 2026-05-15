@@ -1,252 +1,306 @@
-﻿仅开发模式可用,仅开发模式可用
-"参数 sql 不能为空","参数 sql 不能为空"
-"仅支持对 SELECT 语句执行 EXPLAIN","仅支持对 SELECT 语句执行 EXPLAIN"
-开发文档,开发文档
-"📚 开始扫描模块文档...","📚 StartScanModule documents..."
-"✅ 文档扫描完成！","✅ DocumentScanComplete！"
-"📊 扫描统计:","📊 ScanStatistics:"
-"总共扫描: %{count} 个文档","TotalScan: %{count} Document"
+﻿仅开发模式可用,"Available in developer mode only"
+"参数 sql 不能为空","The sql parameter cannot be empty"
+"仅支持对 SELECT 语句执行 EXPLAIN","EXPLAIN only supports SELECT statements"
+开发文档,"Developer Docs"
+"📚 开始扫描模块文档...","📚 Start scanning module documents..."
+"✅ 文档扫描完成！","✅ Document scan complete!"
+"📊 扫描统计:","📊 Scan statistics:"
+"总共扫描: %{count} 个文档","Total scanned: %{count} documents"
 "新增: %{count} 个","New: %{count}"
-"更新: %{count} 个","Update: %{count}"
-"清理重复: %{count} 个（重复导入的文档）","清理重复: %{count} 个（重复导入的文档）"
-"删除文档: %{count} 个（不在文件中的文档）","Delete documents: %{count} (documents not in files)"
-"删除分类: %{count} 个（不存在于导入目录的分类）","Delete categories: %{count} (categories not in import directory)"
+"更新: %{count} 个","Updated: %{count}"
+"清理重复: %{count} 个（重复导入的文档）","Cleaned duplicates: %{count} duplicate imported documents"
+"删除文档: %{count} 个（不在文件中的文档）","Deleted documents: %{count} documents not found in files"
+"删除分类: %{count} 个（不存在于导入目录的分类）","Deleted categories: %{count} categories no longer present in import directories"
 "📦 模块详情:","📦 Module Details:"
-"• %{name}: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","• %{name}: Scan %{scanned}, new %{new}, updated %{updated}"
-扫描并导入各模块的开发文档,"Scan and importEach module'sDevelopment Documentation"
-显示帮助信息,ShowHelpInformation
-强制重新扫描（会删除旧的自动导入文档）,"Force rescan（Will deleteOldAuto importedDocument）"
-扫描所有模块文档（增量导入）,"Scan allModule documents（Incremental import）"
-强制重新扫描所有文档,"Force rescanAllDocument"
-分类ID不能为空,"Category IDCannot be empty"
+"• %{name}: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","• %{name}: scanned %{scanned}, new %{new}, updated %{updated}"
+扫描并导入各模块的开发文档,"Scan and import developer documents from each module"
+显示帮助信息,"Show help information"
+强制重新扫描（会删除旧的自动导入文档）,"Force rescan and delete old auto-imported documents"
+扫描所有模块文档（增量导入）,"Scan all module documents with incremental import"
+强制重新扫描所有文档,"Force rescan all documents"
+"Manage DeveloperWorkspace document AI translation jobs.","Manage DeveloperWorkspace document AI translation jobs."
+"Scan AI scenario adapters before running.","Scan AI scenario adapters before running."
+"Enqueue and process a batch.","Enqueue and process a batch."
+"Only enqueue missing or stale translations.","Only enqueue missing or stale translations."
+"Print translation overview.","Print translation overview."
+分类ID不能为空,"Category ID cannot be empty"
 分类不存在,"Category does not exist"
-系统分类不允许删除,"System categoryNot allowed to delete"
-下层有系统分类，不允许删除,"Lower level hasSystem category，Not allowed to delete"
+系统分类不允许删除,"System categories cannot be deleted"
+下层有系统分类，不允许删除,"Cannot delete because child system categories exist"
 删除成功,"Delete successful"
 删除成功！,"Delete successful!"
-不能自己选择自己作为父类！,"CannotSelect yourselfAs parent！"
-目录名不能为空！,"Directory nameCannot be empty！"
+不能自己选择自己作为父类！,"A category cannot use itself as its parent!"
+目录名不能为空！,"Directory name cannot be empty!"
+"分类名称""%{name}""在同一父分类下已存在！","Category name ""%{name}"" already exists under the same parent category!"
+"该记录已不存在！ID: %{id}","The record no longer exists! ID: %{id}"
 修改成功！,"Modify successful!"
 添加成功！,"Add successful!"
-不能将自己作为父分类,"CannotYourself asParent Category"
-系统分类不允许拖动排序,"System categoryNot allowed to drag and sort"
+不能将自己作为父分类,"A category cannot be its own parent"
+系统分类不允许拖动排序,"System categories cannot be reordered by dragging"
 排序已保存,"Sort saved"
-保存失败：,保存失败：
+保存失败：,"Save failed:"
 获取成功,"Get successful"
+文档管理配置,"Document Management Config"
+配置已保存,"Config saved"
+扫描完成,"Scan complete"
+任务已执行,"Task executed"
+失败任务已重置,"Failed tasks reset"
+适配器测试完成,"Adapter test complete"
 添加,Add
 修改,Modify
 文件上传失败！,"File uploadFailed!"
-文档ID不能为空,"Document IDCannot be empty"
+文档ID不能为空,"Document ID cannot be empty"
 文档不存在,"Document does not exist"
 未知,Unknown
-启动Key错误,"Start KeyError"
-"沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！","Sandbox environmentHas been closed,NextOperated dataWill affectFormal online database！"
-"沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！","Sandbox environmentHas been started! NextOperated dataWill write toSandbox database！"
-沙盒启动Key设置成功,"Sandbox Start KeySet successful"
-沙盒环境已关闭,沙盒环境已关闭
-加载Debug配置失败：%{1},加载Debug配置失败：%{1}
-无效的请求方法,无效的请求方法
-保存成功,保存成功
-保存失败：%{1},保存失败：%{1}
-加载开发面板配置失败：%{1},加载开发面板配置失败：%{1}
-加载沙盒配置失败：%{1},加载沙盒配置失败：%{1}
-WelineFramework开发文档,"WelineFrameworkDevelopment Documentation"
-文档路径信息不完整,"Document pathInformation incomplete"
-无法读取文档文件,"Unable to readDocument file"
-搜索关键词不能为空,"Search keywordCannot be empty"
-API文档管理,API文档管理
-开发工具面板,开发工具面板
-在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。
-开发工具面板-扩展标签,开发工具面板-扩展标签
-"在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。","在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。"
-开发工具面板-扩展搜索区,开发工具面板-扩展搜索区
-"在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。","在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。"
-开发工具标题,开发工具标题
-在开发工具面板中显示标题内容。,在开发工具面板中显示标题内容。
+启动Key错误,"Invalid startup key"
+"沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！","Sandbox mode is off. Subsequent operations will affect the production database!"
+"沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！","Sandbox mode is on. Subsequent operations will write to the sandbox database!"
+沙盒启动Key设置成功,"Sandbox startup key saved"
+沙盒环境已关闭,"Sandbox mode is off"
+加载Debug配置失败：%{1},"Failed to load debug config: %{1}"
+无效的请求方法,"Invalid request method"
+保存成功,"Saved successfully"
+保存失败：%{1},"Save failed: %{1}"
+加载开发面板配置失败：%{1},"Failed to load developer panel config: %{1}"
+加载沙盒配置失败：%{1},"Failed to load sandbox config: %{1}"
+WelineFramework开发文档,"WelineFramework Developer Docs"
+文档路径信息不完整,"Document path information is incomplete"
+无法读取文档文件,"Unable to read document file"
+搜索关键词不能为空,"Search keyword cannot be empty"
+API文档管理,"API Documentation"
+开发工具面板,"Developer Tools Panel"
+在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,"Show the developer tools panel on the page, including route inspection and API docs. Displayed only in developer mode."
+开发工具面板-扩展标签,"Developer Tools Panel - Extension Tabs"
+"在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。","Inject extension tab buttons after the Timing tab in the developer tools panel. Implemented by each module, such as WLS."
+开发工具面板-扩展搜索区,"Developer Tools Panel - Extension Search Area"
+"在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。","Inject search area HTML and registration scripts for extension tabs after the developer tools search area."
+开发工具标题,"Developer Tools Title"
+在开发工具面板中显示标题内容。,"Show title content in the developer tools panel."
 开发助手,"Development Assistant"
 关闭沙盒环境,"Close sandbox environment"
 确定,OK
-正在清理旧的API文档...,正在清理旧的API文档...
+正在清理旧的API文档...,"Cleaning old API documents..."
 清理完成,"Cleanup complete"
-正在生成API文档...,正在生成API文档...
-"更新API文档: %{method}","更新API文档: %{method}"
-"新增API文档: %{method}","新增API文档: %{method}"
-"处理模块分类: %{name}","处理模块分类: %{name}"
-正在清理旧的自动导入文档和分类...,"CleaningOldAuto importedDocuments and categories..."
-"找到 %{count} 个模块包含 doc 目录，开始扫描...","Found %{count} modulesContain doc Directory, start scanning..."
-"[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] ScanningModule: %{name}"
+正在生成API文档...,"Generating API documents..."
+"更新API文档: %{method}","Updated API document: %{method}"
+"新增API文档: %{method}","Added API document: %{method}"
+"处理模块分类: %{name}","Processing module category: %{name}"
+"No AI translation locale is enabled.","No AI translation locale is enabled."
+"Document translation adapter is not registered.","Document translation adapter is not registered."
+"Selected model is not an active text-to-text model.","Selected model is not an active text-to-text model."
+"Document translation adapter is not available.","Document translation adapter is not available."
+"Document AI translation is disabled.","Document AI translation is disabled."
+"No target locale has AI translation enabled.","No target locale has AI translation enabled."
+"No document translation scope is enabled.","No document translation scope is enabled."
+"Daily document translation token limit has been reached.","Daily document translation token limit has been reached."
+"Monthly document translation token limit has been reached.","Monthly document translation token limit has been reached."
+"Document translation adapter is missing. Scan adapters first.","Document translation adapter is missing. Scan adapters first."
+"Document translation adapter is inactive.","Document translation adapter is inactive."
+"No text-to-text model is bound to the document translation adapter.","No text-to-text model is bound to the document translation adapter."
+"Bound model is not an active text-to-text model.","Bound model is not an active text-to-text model."
+"No available provider account for the bound model.","No available provider account for the bound model."
+Ready,Ready
+"Unknown document translation target type: %{1}","Unknown document translation target type: %{1}"
+"Source document no longer exists.","Source document no longer exists."
+"Source catalog no longer exists.","Source catalog no longer exists."
+"AI translation adapter missed one or more split segment parts: %{1}","AI translation adapter missed one or more split segment parts: %{1}"
+"AI translation adapter returned invalid JSON segments.","AI translation adapter returned invalid JSON segments."
+"AI translation adapter returned a segment without id or text.","AI translation adapter returned a segment without id or text."
+"AI translation adapter missed segment id: %{1}","AI translation adapter missed segment id: %{1}"
+正在清理旧的自动导入文档和分类...,"Cleaning old auto-imported documents and categories..."
+"找到 %{count} 个模块包含 doc 目录，开始扫描...","Found %{count} modules with doc directories. Starting scan..."
+"[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] Scanning module: %{name}"
 "路径: %{path}","Path: %{path}"
-"模块 %{name} 的开发文档","模块 %{name} 的开发文档"
-"扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个","ScanComplete: Document %{scanned} , new %{new} , updated %{updated}"
-正在清理不存在的文档和分类...,"CleaningNon-existentDocuments and categories..."
-"跳过深层目录（超过6层）: %{path}","跳过深层目录（超过6层）: %{path}"
-"无法获取文件时间: %{path}","无法获取文件时间: %{path}"
-"分类变更: %{path}","分类变更: %{path}"
-"无法读取文件: %{path}","Unable to readFile: %{path}"
+"模块 %{name} 的开发文档","Developer documents for module %{name}"
+"扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个","Scan complete: %{scanned} documents, %{new} new, %{updated} updated"
+正在清理不存在的文档和分类...,"Cleaning documents and categories that no longer exist..."
+"跳过深层目录（超过6层）: %{path}","Skipped deep directory over 6 levels: %{path}"
+"无法获取文件时间: %{path}","Unable to get file time: %{path}"
+"无法读取文件: %{path}","Unable to read file: %{path}"
+"跳过重复内容: %{path}","Skipped duplicate content: %{path}"
+"分类变更: %{path}","Category changed: %{path}"
 "更新: %{path}","Update: %{path}"
 "新增: %{path}","New: %{path}"
 "目录 %{name}","Directory %{name}"
-"已删除 %{count} 个不存在的文档","已删除 %{count} 个不存在的文档"
-无需删除文档,"No need to deleteDocument"
-"已删除 %{count} 个不存在的分类","Deleted %{count} non-existentCategory"
-无需删除分类,"No need to deleteCategory"
-正在检查并清理重复文档...,正在检查并清理重复文档...
-没有发现需要清理的文档,没有发现需要清理的文档
-"共清理 %{count} 条重复文档","共清理 %{count} 条重复文档"
-"📡 开始导入API文档...","📡 开始导入API文档..."
-"API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
-"API文档导入失败: %{error}","API文档导入失败: %{error}"
-前言,前言
-说在前面,说在前面
-安装,安装
-安装文档,安装文档
-快速开始,快速开始
-框架模组,框架模组
-框架规范,框架规范
-框架类的规范,框架类的规范
-模型文档,模型文档
-使用控制器,使用控制器
-模组事件,模组事件
-WelineFramework插件功能,WelineFramework插件功能
+"已删除 %{count} 个不存在的文档","Deleted %{count} documents that no longer exist"
+无需删除文档,"No documents need deletion"
+"已删除 %{count} 个不存在的分类","Deleted %{count} categories that no longer exist"
+无需删除分类,"No categories need deletion"
+正在检查并清理重复文档...,"Checking and cleaning duplicate documents..."
+没有发现需要清理的文档,"No documents need cleanup"
+"共清理 %{count} 条重复文档","Cleaned %{count} duplicate documents"
+"📡 开始导入API文档...","📡 Start importing API documents..."
+"API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API document import complete: scanned %{scanned}, new %{new}, updated %{updated}"
+"API文档导入失败: %{error}","API document import failed: %{error}"
+前言,Preface
+说在前面,"Before You Start"
+安装,Installation
+安装文档,"Installation Docs"
+快速开始,"Quick Start"
+框架模组,"Framework Modules"
+框架规范,"Framework Standards"
+框架类的规范,"Framework Class Standards"
+模型文档,"Model Docs"
+使用控制器,"Using Controllers"
+模组事件,"Module Events"
+WelineFramework插件功能,"WelineFramework Plugin Features"
 开发,Development
-管理开发文档,"ManagementDevelopment Documentation"
-"开发文档编辑器 有新的开发文档时可以随时编辑","Development DocumentationEditor When there is a newDevelopment documentationCan at any timeEdit"
+管理开发文档,"Manage developer documents"
+"开发文档编辑器 有新的开发文档时可以随时编辑","Developer document editor. Edit new developer documents at any time."
 保存,Save
 返回,Back
 标题,Title
-请输入标题,"Please enterTitle"
+请输入标题,"Enter a title"
 作者,Author
-请输入作者,"Please enterAuthor"
+请输入作者,"Enter an author"
 摘要,Summary
-请输入摘要,"Please enterSummary"
+请输入摘要,"Enter a summary"
 分类,Category
-文章内容,"Article content"
-文章内容不能为空,"Article contentCannot be empty"
+文章内容,"Article Content"
+文章内容不能为空,"Article content cannot be empty"
 粗体,Bold
-红色文字,RedText
-红色标题,RedTitle
+红色文字,"Red Text"
+红色标题,"Red Title"
 示例1,Example1
 示例2,Example2
-表格样式,TableStyle
-表格行1,表格行1
-开发文档分类管理,"Development DocumentationCategory Management"
-左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动,"Click category on the left to edit on the right, drag nodes to adjust category order and hierarchy, hold mouse in blank area to drag left and right"
-添加顶级分类,"AddTop Category"
+表格样式,"Table Style"
+表格行1,"Table Row 1"
+开发文档分类管理,"Developer Document Category Management"
+左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动,"Click a category on the left to edit it on the right. Drag nodes to adjust order and hierarchy. Hold and drag blank space to pan horizontally."
+添加顶级分类,"Add Top-level Category"
 关闭,Close
 加载中...,Loading...
-正在加载分类树...,"LoadingCategory tree..."
-"暂无分类，点击""添加顶级分类""开始创建","NoCategory, click""AddTop Category""Start creating"
-添加分类,AddCategory
-添加子分类,"AddSub categories"
-编辑分类,EditCategory
-分类名称,"Category name"
-分类描述,"Category description"
-启用分类,EnableCategory
-请输入分类名称,"Please enterCategory name"
-请输入分类描述,"Please enterCategory description"
+正在加载分类树...,"Loading category tree..."
+"暂无分类，点击""添加顶级分类""开始创建","No categories yet. Click ""Add Top-level Category"" to create one."
+添加分类,"Add Category"
+添加子分类,"Add Child Category"
+编辑分类,"Edit Category"
+分类名称,"Category Name"
+分类描述,"Category Description"
+启用分类,"Enable Category"
+请输入分类名称,"Enter category name"
+请输入分类描述,"Enter category description"
 取消,Cancel
 删除,Delete
 编辑,Edit
-删除分类,DeleteCategory
-系统分类不允许编辑,"System categoryNot allowedEdit"
-系统分类,"System category"
-保存成功！,"Save successful！"
+删除分类,"Delete Category"
+系统分类不允许编辑,"System categories cannot be edited"
+系统分类,"System Category"
+保存成功！,"Saved successfully!"
 保存失败,"Save failed"
 删除失败,"Delete failed"
-分类名称不能为空,"Category nameCannot be empty"
-分类树未初始化，请刷新页面重试,"Category treeNot initialized, please refreshPageRetry"
-jstree实例不可用，请刷新页面重试,"jstreeInstanceNot available, please refreshPageRetry"
-节点不存在，ID:,"NodeDoes not exist，ID:"
-节点数据格式错误，请刷新页面,"Node dataFormat error, please refreshPage"
-节点数据格式错误,"Node dataFormat error"
-编辑节点失败:,EditNodeFailed:
-添加子分类失败:,"AddSub categoriesFailed:"
-删除节点失败:,DeleteNodeFailed:
-无法找到对话框元素，请刷新页面重试,"Unable to findDialogElement, please refreshPageRetry"
-无法打开添加分类对话框，请刷新页面重试,"Unable to openAddCategoryDialog, please refreshPageRetry"
-无法打开编辑分类对话框，请刷新页面重试,"Unable to openEditCategoryDialog, please refreshPageRetry"
-加载分类树失败：,"LoadCategory treeFailed:"
-目标位置已存在同名分类,"Target positionAlready existsSame name category"
-保存排序失败，已恢复原位置,"SaveSortFailed, restoredOriginal position"
-确定要删除该分类吗？此操作不可恢复！,确定要删除该分类吗？此操作不可恢复！
-确定要删除分类,"Are you sure toDeleteCategory"
+分类名称不能为空,"Category name cannot be empty"
+分类树未初始化，请刷新页面重试,"Category tree is not initialized. Refresh the page and retry."
+jstree实例不可用，请刷新页面重试,"jstree instance is unavailable. Refresh the page and retry."
+节点不存在，ID:,"Node does not exist, ID:"
+节点数据格式错误，请刷新页面,"Node data format error. Refresh the page."
+节点数据格式错误,"Node data format error"
+编辑节点失败:,"Failed to edit node:"
+添加子分类失败:,"Failed to add child category:"
+删除节点失败:,"Failed to delete node:"
+无法找到对话框元素，请刷新页面重试,"Dialog element not found. Refresh the page and retry."
+无法打开添加分类对话框，请刷新页面重试,"Unable to open add category dialog. Refresh the page and retry."
+无法打开编辑分类对话框，请刷新页面重试,"Unable to open edit category dialog. Refresh the page and retry."
+加载分类树失败：,"Failed to load category tree:"
+目标位置已存在同名分类,"A category with the same name already exists at the target position"
+保存排序失败，已恢复原位置,"Failed to save order. Restored the original position."
+确定要删除该分类吗？此操作不可恢复！,"Are you sure you want to delete this category? This cannot be undone!"
+确定要删除分类,"Confirm category deletion"
 "⚠️ 警告：删除分类会同时删除其所有子分类！","⚠️ Warning: Deleting category will also delete all its subcategories!"
-此操作不可恢复，请谨慎操作！,"This operationCannot be recovered, please be carefulOperation！"
-未命名分类,UnnamedCategory
+此操作不可恢复，请谨慎操作！,"This action cannot be undone. Proceed carefully!"
+未命名分类,"Unnamed Category"
 确认,Confirm
-确认删除吗？,ConfirmDelete?
-删除请求失败,DeleteRequestFailed
-分类树,"Category tree"
-分类信息,CategoryInformation
-请从左侧选择一个分类进行编辑,请从左侧选择一个分类进行编辑
+确认删除吗？,"Confirm deletion?"
+删除请求失败,"Delete request failed"
+分类树,"Category Tree"
+分类信息,"Category Information"
+请从左侧选择一个分类进行编辑,"Select a category on the left to edit it"
 父分类,"Parent Category"
-顶级分类,"Top Category"
+顶级分类,"Top-level Category"
 层级,Level
-系统分类不允许修改名称,"System categoryNot allowedModifyName"
-这是系统分类，部分字段不允许修改,"This isSystem category, someFieldsNot allowedModify"
-编写和管理开发文档,"Write andManagementDevelopment Documentation"
-API文档,API文档
-目录管理,DirectoryManagement
-新增文章,NewArticle
-文档分类,DocumentCategory
-暂无文章,NoArticle
-"点击""新增文章""按钮开始创建您的第一篇文档","Click""NewArticle""ButtonStart creatingYourFirstDocument"
-自动导入,"Auto imported"
+系统分类不允许修改名称,"System category names cannot be changed"
+这是系统分类，部分字段不允许修改,"This is a system category. Some fields cannot be changed."
+Prompt,Prompt
+Completion,Completion
+"总开关。关闭后不会自动入队或执行 AI 翻译，已存在译文仍可按读取逻辑展示。","Master switch. When disabled, no AI translation tasks are enqueued or executed automatically; existing translations can still be displayed by the read logic."
+"文档导入事实源固定为 zh_Hans_CN，不提供界面配置；翻译结果只写数据库，不回写模块 doc 文件。","The document import source of truth is fixed to zh_Hans_CN and is not configurable in the UI; translation results are stored only in the database and are not written back to module doc files."
+"支持语言决定前台/后台语言选择器可选项；AI 自动补齐决定该语言缺失或过期时是否进入异步翻译队列。","Supported languages determine the options shown in frontend and backend language selectors. AI auto-fill determines whether missing or stale translations for that language enter the async translation queue."
+开启后，缺失译文或源文档更新导致过期时会进入翻译队列；不会同步阻塞当前页面访问。,"When enabled, missing translations or translations made stale by source document updates enter the translation queue. Page access is not blocked synchronously."
+"控制哪些类型会被自动入队翻译。普通文档、API 文档、目录树互相独立；全不勾选时即使语言开启也不会产生翻译任务。","Controls which content types are automatically enqueued for translation. Regular documents, API documents, and catalog trees are independent. If none are selected, no translation tasks are created even when languages are enabled."
+开发文档列表和详情页中的普通模块文档。,"Regular module documents in the developer documentation list and detail pages."
+"API 文档页的接口标题、摘要、参数说明、响应说明等由导入器生成的文档内容。","Importer-generated API documentation content such as endpoint titles, summaries, parameter descriptions, and response descriptions."
+左侧目录节点名称和描述。关闭后目录仍显示源语言或已有译文，不会自动补齐新译文。,"Names and descriptions of left-side catalog nodes. When disabled, the catalog still shows source text or existing translations, but new translations are not auto-filled."
+"文档翻译适配器使用的文本模型。模型上下文大小会影响单篇大文档如何自动拆分成多次 AI 请求。","Text model used by the document translation adapter. The model context size affects how a large document is split into multiple AI requests."
+"每次定时任务或手动执行最多处理的翻译任务数量。它不是文档总数，也不是单篇大文档的 AI 分段大小；大文档分段由适配器按模型上下文自动处理。","Maximum number of translation tasks processed by each scheduled or manual run. It is not the total number of documents and not the AI segment size for one large document; large-document splitting is handled automatically by the adapter based on model context."
+单个翻译任务遇到网络、限流等可重试错误时允许自动重试的最大次数。格式错误、配置缺失等不可重试错误不会无限重试。,"Maximum automatic retries for one translation task after retryable errors such as network failures or rate limits. Non-retryable errors such as invalid response format or missing configuration are not retried indefinitely."
+"单篇源文档允许进入 AI 翻译链路的安全上限。超过模型单次上下文时会自动拆分请求；超过这里的业务上限才会被阻止。","Safety limit for one source document entering the AI translation pipeline. If it exceeds the model's single-request context, requests are split automatically; only documents exceeding this business limit are blocked."
+目标语言译文缺失、待翻译、失败或过期时的读取策略。回退源文档会显示中文源内容；空内容会让前台显示为空或由页面自行处理。,"Read policy when the target-language translation is missing, pending, failed, or stale. Fallback to source shows Chinese source content; empty content leaves the frontend empty or lets the page handle it."
+"当天文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。","Stops executing document translation tasks when today's accumulated token usage reaches this value. Use 0 for unlimited."
+"当月文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。","Stops executing document translation tasks when this month's accumulated token usage reaches this value. Use 0 for unlimited."
+"开启后，非源语言页面会显示 missing、pending、translated、stale、failed 等状态，方便调试；源语言页面不显示 translated 状态。","When enabled, non-source-language pages show statuses such as missing, pending, translated, stale, and failed for debugging. Source-language pages do not show translated status."
+编写和管理开发文档,"Write and manage developer documents"
+API文档,"API Docs"
+目录管理,"Catalog Management"
+新增文章,"New Article"
+文档分类,"Document Categories"
+暂无文章,"No articles"
+"点击""新增文章""按钮开始创建您的第一篇文档","Click ""New Article"" to create your first document"
+自动导入,"Auto Imported"
 作者:,Author:
 查看,View
-文档详情,DocumentDetails
-正在加载文档...,LoadingDocument...
-加载文档失败，请重试,"LoadDocumentFailed, please retry"
-加载文档失败，请刷新页面重试,"LoadDocumentFailed, please refreshPageRetry"
+文档详情,"Document Details"
+正在加载文档...,"Loading document..."
+加载文档失败，请重试,"Failed to load document. Retry."
+加载文档失败，请刷新页面重试,"Failed to load document. Refresh the page and retry."
 分类:,Category:
 未分类,Uncategorized
-创建时间:,CreateTime:
-更新时间:,UpdateTime:
+创建时间:,"Created At:"
+更新时间:,"Updated At:"
 模块:,Module:
 无标题,"No Title"
-暂无内容,NoContent
+暂无内容,"No content"
 错误,Error
 jstree库未加载，请刷新页面重试,"jstree library not loaded, please refresh page and retry"
-全部文档,AllDocument
-该分类下暂无文档,该分类下暂无文档
+全部文档,"All Documents"
+该分类下暂无文档,"No documents in this category"
 你确定要操作么？,"Are you sure you want to proceed?"
-操作后你将无法恢复！,Operation后你将无法恢复！
-是的，我确定要删除！,是的，我确定要Delete！
+操作后你将无法恢复！,"You will not be able to recover after this operation!"
+是的，我确定要删除！,"Yes, delete it!"
 不要，取消吧！,"No, cancel!"
-已删除！,已Delete！
-文章已经被删除了！,文章已经被Delete了！
-好的,好的
-删除提示！,DeleteTip！
-文章删除失败，请重试！,"ArticleDeleteFailed, please retry！"
-开发文档管理器,"Development DocumentationManager"
+已删除！,Deleted!
+文章已经被删除了！,"The article has been deleted!"
+好的,OK
+删除提示！,"Delete Notice!"
+文章删除失败，请重试！,"Failed to delete article. Retry!"
+开发文档管理器,"Developer Document Manager"
 系统,System
-新建文档,NewDocument
-新建一篇开发文档,"NewADevelopment Documentation"
-沙盒环境配置,"Sandbox environmentConfigure"
-沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。,沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。
-可配置参数：,ConfigurableParameters:
-控制沙盒环境参数来达到测试系统环境。,"ControlSandbox environmentParameterTo achieveTest systemEnvironment。"
-沙盒启动Key,"Sandbox Start Key"
+新建文档,"New Document"
+新建一篇开发文档,"Create a new developer document"
+沙盒环境配置,"Sandbox Environment Config"
+沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。,"Sandbox mode provides an isolated data environment for testers. Test data is written to the sandbox database instead of the production database."
+可配置参数：,"Configurable Parameters:"
+控制沙盒环境参数来达到测试系统环境。,"Control sandbox parameters to configure the test environment."
+沙盒启动Key,"Sandbox Startup Key"
 当前沙盒状态：,"Current Sandbox Status:"
 @if{enabled=>'开启'|'关闭'},@if{enabled=>'Open'|'Close'}
 当前Key：,"Current Key:"
 沙盒Key,"Sandbox Key"
-沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：,沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：
-开启沙盒,OpenSandbox
+沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：,"Sandbox startup key config. Add the sandbox parameter to requests when using it. Example:"
+开启沙盒,"Enable Sandbox"
 关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：,"To close sandbox, please delete or set w_sandbox value in Cookie. Example:"
-关闭沙盒,CloseSandbox
-请输入沙盒Key,"Please enterSandbox Key"
-Debug配置,Debug配置
-提示,提示
-Debug配置功能正在开发中，敬请期待。,Debug配置功能正在开发中，敬请期待。
-开发面板配置,开发面板配置
-开发面板配置功能正在开发中，敬请期待。,开发面板配置功能正在开发中，敬请期待。
-沙盒配置,沙盒配置
-沙盒配置功能正在开发中，敬请期待。,沙盒配置功能正在开发中，敬请期待。
-返回欢迎页,"BackWelcome Page"
-返回上一页,"BackPrevious Page"
+关闭沙盒,"Disable Sandbox"
+请输入沙盒Key,"Enter sandbox key"
+Debug配置,"Debug Config"
+提示,Notice
+Debug配置功能正在开发中，敬请期待。,"Debug config is under development. Stay tuned."
+开发面板配置,"Developer Panel Config"
+开发面板配置功能正在开发中，敬请期待。,"Developer panel config is under development. Stay tuned."
+沙盒配置,"Sandbox Config"
+沙盒配置功能正在开发中，敬请期待。,"Sandbox config is under development. Stay tuned."
+返回欢迎页,"Back to Welcome Page"
+返回上一页,"Back to Previous Page"
 "搜索 ...","Search ..."
-头部语言,HeaderLanguage
+头部语言,"Header Language"
 中国,China
 头像,Avatar
 资料,Profile
@@ -254,123 +308,123 @@ Debug配置功能正在开发中，敬请期待。,Debug配置功能正在开发
 设置,Settings
 锁定屏幕,LockScreen
 退出,Exit
-菜单布局,MenuLayout
-菜单明亮,MenuBright
-图标菜单,IconMenu
-图文菜单,"Image TextMenu"
-主题布局,ThemeLayout
-水平布局,HorizontalLayout
-水平顶黑,"HorizontalTop Black"
-水平盒子,HorizontalBox
-主题颜色,ThemeColor
-明亮模式,BrightMode
-暗黑模式,DarkMode
-RTL模式,RTLMode
-当前货币,当前货币
-当前语言,当前语言
-默认货币,默认货币
-默认语言,默认语言
-语言,语言
-货币,货币
-API接口,API接口
-选择接口查看详情,选择接口查看详情
-收起/展开,收起/展开
-前端API,前端API
-后端API,后端API
-搜索接口名称、路径、方法、描述...,搜索接口名称、路径、方法、描述...
-清除搜索,清除搜索
-"Weline Framework API接口文档和测试工具","Weline Framework API接口文档和测试工具"
-正式环境调试,正式环境调试
-登录,登录
-切换主题,切换主题
-暂无API文档,暂无API文档
-请选择API接口,请选择API接口
-从左侧列表中选择一个API接口查看详细信息,从左侧列表中选择一个API接口查看详细信息
-等待选择API,等待选择API
-请从左侧选择一个API接口开始测试,请从左侧选择一个API接口开始测试
-API用户登录,API用户登录
-用户名,用户名
-密码,密码
-正式环境调试模式已开启,正式环境调试模式已开启
-目前接口直达正式环境，请谨慎操作！所有请求将直接修改正式环境数据，可能造成不可逆的损失。,目前接口直达正式环境，请谨慎操作！所有请求将直接修改正式环境数据，可能造成不可逆的损失。
-接口描述,接口描述
-请求参数,请求参数
-参数名,参数名
-类型,类型
-必填,必填
-获取方式,获取方式
-说明,说明
-是,是
-否,否
-方法签名参数,方法签名参数
-POST参数,POST参数
-GET参数,GET参数
-URL参数,URL参数
-请求头,请求头
-Body参数,Body参数
-Authorization头,Authorization头
-X-API-Token头,X-API-Token头
-请求示例,请求示例
-复制路径,复制路径
-复制请求体,复制请求体
-复制响应体,复制响应体
-路径,路径
-请求体,请求体
-响应体,响应体
-在线测试,在线测试
-编辑请求参数并发送测试请求,编辑请求参数并发送测试请求
+菜单布局,"Menu Layout"
+菜单明亮,"Light Menu"
+图标菜单,"Icon Menu"
+图文菜单,"Icon and Text Menu"
+主题布局,"Theme Layout"
+水平布局,"Horizontal Layout"
+水平顶黑,"Horizontal Dark Header"
+水平盒子,"Horizontal Boxed"
+主题颜色,"Theme Color"
+明亮模式,"Light Mode"
+暗黑模式,"Dark Mode"
+RTL模式,"RTL Mode"
+当前货币,"Current Currency"
+当前语言,"Current Language"
+默认货币,"Default Currency"
+默认语言,"Default Language"
+语言,Language
+货币,Currency
+API接口,"API Endpoints"
+选择接口查看详情,"Select an endpoint to view details"
+收起/展开,"Collapse / Expand"
+前端API,"Frontend API"
+后端API,"Backend API"
+搜索接口名称、路径、方法、描述...,"Search endpoint name, path, method, or description..."
+清除搜索,"Clear Search"
+"Weline Framework API接口文档和测试工具","Weline Framework API Documentation and Testing Tool"
+正式环境调试,"Production Debugging"
+登录,Login
+切换主题,"Switch Theme"
+暂无API文档,"No API documents"
+请选择API接口,"Select an API endpoint"
+从左侧列表中选择一个API接口查看详细信息,"Select an API endpoint from the left list to view details"
+等待选择API,"Waiting for API Selection"
+请从左侧选择一个API接口开始测试,"Select an API endpoint on the left to start testing"
+API用户登录,"API User Login"
+用户名,Username
+密码,Password
+正式环境调试模式已开启,"Production debugging mode is enabled"
+目前接口直达正式环境，请谨慎操作！所有请求将直接修改正式环境数据，可能造成不可逆的损失。,"Requests are currently sent directly to production. Proceed carefully! All requests modify production data directly and may cause irreversible loss."
+接口描述,"API Description"
+请求参数,"Request Parameters"
+参数名,Parameter
+类型,Type
+必填,Required
+获取方式,Source
+说明,Description
+是,Yes
+否,No
+方法签名参数,"Method Signature"
+POST参数,"POST Parameter"
+GET参数,"GET Parameter"
+URL参数,"URL Parameter"
+请求头,"Request Headers"
+Body参数,"Body Parameter"
+Authorization头,"Authorization Header"
+X-API-Token头,"X-API-Token Header"
+请求示例,"Request Example"
+复制路径,"Copy Path"
+复制请求体,"Copy Request Body"
+复制响应体,"Copy Response Body"
+路径,Path
+请求体,"Request Body"
+响应体,"Response Body"
+在线测试,"Online Test"
+编辑请求参数并发送测试请求,"Edit request parameters and send a test request"
 此接口需要登录，请先登录,"This API requires login, please login first"
 登录后发起请求,"Login to Send Request"
-发送请求,发送请求
-语言和货币,语言和货币
-路径切换,路径切换
-参数切换,参数切换
-请求配置,请求配置
-方法,方法
-请求URL,请求URL
-请输入请求URL,请输入请求URL
-导入示例请求参数,导入示例请求参数
-导入示例,导入示例
-参数值,参数值
-添加参数,添加参数
-导入示例请求头,导入示例请求头
-Header名称,Header名称
-Header值,Header值
-添加请求头,添加请求头
-导入示例请求体,导入示例请求体
-请输入JSON格式的请求体,请输入JSON格式的请求体
-响应信息,响应信息
-响应头,响应头
-复制,复制
-格式化,格式化
-请先选择一个API接口,请先选择一个API接口
-后端,后端
-前端,前端
-此接口需要登录，请先登录%{1}API账户后再发起请求,此接口需要登录，请先登录%{1}API账户后再发起请求
-请求体格式错误，请输入有效的JSON,请求体格式错误，请输入有效的JSON
-状态,状态
-状态码,状态码
-响应Code,响应Code
-响应消息,响应消息
-请求时间,请求时间
-响应大小,响应大小
-请求失败,请求失败
-已复制到剪贴板,已复制到剪贴板
-复制失败,复制失败
-路径已复制到剪贴板,路径已复制到剪贴板
-请求体已复制到剪贴板,请求体已复制到剪贴板
-响应体已复制到剪贴板,响应体已复制到剪贴板
-无法格式化，内容不是有效的JSON,无法格式化，内容不是有效的JSON
-没有可用的示例请求体,没有可用的示例请求体
-已导入示例请求体,已导入示例请求体
-没有可用的示例请求参数,没有可用的示例请求参数
-已导入示例请求参数,已导入示例请求参数
-后端API用户登录,后端API用户登录
-前端API用户登录,前端API用户登录
-"Weline Framework API接口文档","Weline Framework API接口文档"
+发送请求,"Send Request"
+语言和货币,"Language and Currency"
+路径切换,"Path Switching"
+参数切换,"Parameter Switching"
+请求配置,"Request Config"
+方法,Method
+请求URL,"Request URL"
+请输入请求URL,"Enter request URL"
+导入示例请求参数,"Import Example Request Parameters"
+导入示例,"Import Example"
+参数值,"Parameter Value"
+添加参数,"Add Parameter"
+导入示例请求头,"Import Example Request Headers"
+Header名称,"Header Name"
+Header值,"Header Value"
+添加请求头,"Add Request Header"
+导入示例请求体,"Import Example Request Body"
+请输入JSON格式的请求体,"Enter a JSON request body"
+响应信息,"Response Info"
+响应头,"Response Headers"
+复制,Copy
+格式化,Format
+请先选择一个API接口,"Select an API endpoint first"
+后端,Backend
+前端,Frontend
+此接口需要登录，请先登录%{1}API账户后再发起请求,"This endpoint requires login. Log in to the %{1} API account before sending the request."
+请求体格式错误，请输入有效的JSON,"Request body format error. Enter valid JSON."
+状态,Status
+状态码,"Status Code"
+响应Code,"Response Code"
+响应消息,"Response Message"
+请求时间,"Request Time"
+响应大小,"Response Size"
+请求失败,"Request Failed"
+已复制到剪贴板,"Copied to clipboard"
+复制失败,"Copy failed"
+路径已复制到剪贴板,"Path copied to clipboard"
+请求体已复制到剪贴板,"Request body copied to clipboard"
+响应体已复制到剪贴板,"Response body copied to clipboard"
+无法格式化，内容不是有效的JSON,"Unable to format because the content is not valid JSON"
+没有可用的示例请求体,"No example request body available"
+已导入示例请求体,"Example request body imported"
+没有可用的示例请求参数,"No example request parameters available"
+已导入示例请求参数,"Example request parameters imported"
+后端API用户登录,"Backend API User Login"
+前端API用户登录,"Frontend API User Login"
+"Weline Framework API接口文档","Weline Framework API Documentation"
 "WelineFramework 开发文档","WelineFramework Development Documentation"
-选择分类查看文档,SelectCategoryViewDocument
-搜索文档...,SearchDocument...
-返回文档列表,BackDocumentList
-返回网站,返回网站
-请从左侧选择分类查看文档,"Please fromLeftSelectCategoryViewDocument"
+选择分类查看文档,"Select a category to view documents"
+搜索文档...,"Search documents..."
+返回文档列表,"Back to Document List"
+返回网站,"Back to Website"
+请从左侧选择分类查看文档,"Select a category on the left to view documents"

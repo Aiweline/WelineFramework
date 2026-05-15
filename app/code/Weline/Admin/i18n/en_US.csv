@@ -1,4 +1,4 @@
-﻿用户ID无效,用户ID无效
+﻿用户ID无效,"Invalid user ID"
 用户不存在,"User does not exist"
 修改成功！,"Modified successfully!"
 修改失败！,"Modification failed!"
@@ -20,8 +20,8 @@
 %{1}管理员成功,"%{1} administrator successfully"
 保存失败,"Save failed"
 超级管理员不能被删除,"Super administrator cannot be deleted"
-删除成功,删除成功
-删除失败,删除失败
+删除成功,"Deletion successful"
+删除失败,"Deletion failed"
 超级管理员状态不能被修改,"Super administrator status cannot be modified"
 无效的操作类型,"Invalid operation type"
 用户已激活,"User has been activated"
@@ -37,39 +37,39 @@
 "WelineFramework Admin","WelineFramework Admin"
 WelineFramework,WelineFramework
 你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。,"Your account has been locked due to multiple login attempts! Please contact another administrator to unlock it."
-未登录,未登录
-访问后台需要先登录。,访问后台需要先登录。
-账户异常,账户异常
-该账户不存在或已被删除，请使用有效账户重新登录。,该账户不存在或已被删除，请使用有效账户重新登录。
-无权限,无权限
-用户没有分配角色，请联系管理员。,用户没有分配角色，请联系管理员。
-您没有任何后台权限，请联系管理员。,您没有任何后台权限，请联系管理员。
-您没有访问该页面的权限，请联系管理员。,您没有访问该页面的权限，请联系管理员。
-当前没有可用的访问入口，请重新登录或联系管理员。,当前没有可用的访问入口，请重新登录或联系管理员。
-您没有访问该页面的权限，请先登录或联系管理员。,您没有访问该页面的权限，请先登录或联系管理员。
+未登录,"Not logged in"
+访问后台需要先登录。,"Accessing the backend requires logging in first."
+账户异常,"Account Exception"
+该账户不存在或已被删除，请使用有效账户重新登录。,"This account does not exist or has been deleted. Please log in with a valid account."
+无权限,"No permission"
+用户没有分配角色，请联系管理员。,"User has no role assigned, please contact the administrator."
+您没有任何后台权限，请联系管理员。,"You do not have any backend permissions. Please contact the administrator."
+您没有访问该页面的权限，请联系管理员。,"You do not have permission to access this page. Please contact the administrator."
+当前没有可用的访问入口，请重新登录或联系管理员。,"No access entry available. Please log in again or contact the administrator."
+您没有访问该页面的权限，请先登录或联系管理员。,"You do not have permission to access this page. Please log in or contact the administrator."
 异常的登录操作！,"Abnormal login operation!"
 账户不存在！,"Account does not exist!"
 账户被禁用！,"Account is disabled!"
 登录异常！,"Login exception!"
 "Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
-您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。
+您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,"Your account has not been assigned a role and cannot log in to the backend. Please contact the system administrator to assign a role."
 登录凭据错误！,"Invalid login credentials!"
-验证码生成失败，请刷新重试。,验证码生成失败，请刷新重试。
+验证码生成失败，请刷新重试。,"Verification code generation failed, please refresh and try again."
 关键参数ID不存在！,"Key parameter ID does not exist!"
-菜单不存在！,菜单不存在！
-该菜单下有子菜单，请先删除子菜单！,该菜单下有子菜单，请先删除子菜单！
-参数错误：缺少排序数据,参数错误：缺少排序数据
-排序更新成功,排序更新成功
-参数错误：缺少菜单ID,参数错误：缺少菜单ID
-菜单不存在,菜单不存在
-后台首页顶部统计卡片,后台首页顶部统计卡片
-在后台首页顶部区域渲染统计卡片，例如访客数、事件数、站点数等。,在后台首页顶部区域渲染统计卡片，例如访客数、事件数、站点数等。
-后台首页主要概览,后台首页主要概览
-在后台首页主要内容区域渲染核心数据概览，例如趋势、热门事件等。,在后台首页主要内容区域渲染核心数据概览，例如趋势、热门事件等。
-后台首页标签页导航,后台首页标签页导航
-在后台首页标签页导航区域动态追加标签页按钮，例如像素统计、数据分析等。,在后台首页标签页导航区域动态追加标签页按钮，例如像素统计、数据分析等。
-后台首页标签页内容,后台首页标签页内容
-在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。,在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。
+菜单不存在！,"Menu does not exist!"
+该菜单下有子菜单，请先删除子菜单！,"This menu has submenus. Please delete the submenus first!"
+参数错误：缺少排序数据,"Parameter error: missing sort data"
+排序更新成功,"Sort updated successfully"
+参数错误：缺少菜单ID,"Parameter error: missing menu ID"
+菜单不存在,"Menu does not exist"
+后台首页顶部统计卡片,"Backend Homepage Top Statistics Cards"
+在后台首页顶部区域渲染统计卡片，例如访客数、事件数、站点数等。,"Renders statistics cards in the top area of the backend homepage, such as visitor count, event count, site count, etc."
+后台首页主要概览,"Backend Homepage Main Overview"
+在后台首页主要内容区域渲染核心数据概览，例如趋势、热门事件等。,"Renders core data overviews in the main content area of the backend homepage, such as trends, hot events, etc."
+后台首页标签页导航,"Backend Homepage Tab Navigation"
+在后台首页标签页导航区域动态追加标签页按钮，例如像素统计、数据分析等。,"Dynamically appends tab buttons to the tab navigation area of the backend homepage, such as pixel statistics, data analysis, etc."
+后台首页标签页内容,"Backend Homepage Tab Content"
+在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。,"Dynamically appends tab content panels to the tab content area of the backend homepage, such as pixel statistics panels, data analysis panels, etc."
 "Backend login providers","Backend login providers"
 "Inject third-party sign-in providers above the backend login form.","Inject third-party sign-in providers above the backend login form."
 系统消息数据格式错误,"System message data format error"
@@ -99,9 +99,9 @@ content,content
 <var>title</var>,<var>title</var>
 <var>tip</var>,<var>tip</var>
 通知,Notification
-全部已读,全部已读
-暂无通知,暂无通知
-管理订阅,管理订阅
+全部已读,"Mark All as Read"
+暂无通知,"No notifications"
+管理订阅,"Manage subscriptions"
 确定删除该菜单吗？,"Are you sure you want to delete this menu?"
 删除后不可恢复！,"Cannot be recovered after deletion!"
 取消,Cancel
@@ -109,7 +109,7 @@ content,content
 删除!,Delete!
 知道了,"Got it"
 value,value
-"Weline Admin 绠＄悊闈㈡澘","Weline Admin 绠＄悊闈㈡澘"
+"Weline Admin 绠＄悊闈㈡澘","Weline Admin 绠＄悊汱㈡澘"
 角色归配,"Role Assignment"
 系统,System
 管理员,Administrator
@@ -125,7 +125,7 @@ value,value
 暂无管理员数据,"No administrator data"
 网络错误，请检查网络后重试,"Network error, please check your network and try again"
 用户管理,"User Management"
-编辑,编辑
+编辑,Edit
 用户名,Username
 用户名称验证成功,"Username validation successful"
 请输入用户名称,"Please enter username"
@@ -136,19 +136,19 @@ value,value
 密码输入验证成功,"Password validation successful"
 请输入用户密码,"Please enter password"
 提交,Submit
-请输入用户名,请输入用户名
-请输入邮箱,请输入邮箱
-请输入密码,请输入密码
+请输入用户名,"Please enter the username"
+请输入邮箱,"Please enter the email"
+请输入密码,"Enter password"
 管理员管理,"Administrator Management"
 新增管理员,"Add Administrator"
 创建时间,"Create time"
 操作,Operation
-超管,超管
+超管,"Super admin"
 已删除,Deleted
-已激活,已激活
+已激活,Activated
 已禁用,Disabled
-受保护,受保护
-请输入有效邮箱,请输入有效邮箱
+受保护,Protected
+请输入有效邮箱,"Please enter a valid email"
 留空则不修改密码,"Leave empty to keep current password"
 保存,Save
 保存中...,Saving...
@@ -165,14 +165,11 @@ value,value
 确认删除,"Confirm Delete"
 激活用户,"Activate User"
 禁用用户,"Disable User"
-确认操作,确认操作
+确认操作,"Confirm operation"
 请重试,"Please try again"
 加载失败,"Load failed"
 输入,Input
-搜索菜单,"Search Menu"
-搜索菜单...,"Search Menu..."
 常用菜单,"Frequently Used Menus"
-搜索结果,"Search Results"
 "响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
 网站正在维护中...,"Website is under maintenance..."
 请稍等片刻,"Please wait a moment"
@@ -187,7 +184,7 @@ value,value
 选择布局预设,"Select Layout Preset"
 默认布局,"Default Layout"
 浅色侧边栏,"Light Sidebar"
-深色菜单,深色菜单
+深色菜单,"Dark menu"
 图标侧边栏,"Icon Sidebar"
 紧凑侧边栏,"Compact Sidebar"
 水平布局,"Horizontal Layout"
@@ -219,47 +216,47 @@ RTL模式,"RTL Mode"
 四月,April
 三月,March
 二月,February
-一月,一月
+一月,January
 十二月,December
 订单统计,"Order Statistics"
 区域营收,"Regional Revenue"
 查看更多,"View More"
 最近成交,"Recent Transactions"
-登录保护,登录保护
-连续异常登录会自动提高验证强度，减少后台入口暴露面。,连续异常登录会自动提高验证强度，减少后台入口暴露面。
-统一工作台,统一工作台
-内容、配置、权限和模块操作都在同一后台闭环处理。,内容、配置、权限和模块操作都在同一后台闭环处理。
-可信发布,可信发布
-后台入口、品牌标识和基础样式都保持统一的可回退策略。,后台入口、品牌标识和基础样式都保持统一的可回退策略。
-权限边界清晰,权限边界清晰
-角色、菜单与访问入口统一受控。,角色、菜单与访问入口统一受控。
-发布动作集中,发布动作集中
-配置调整、内容发布和模块维护在同一工作流里完成。,配置调整、内容发布和模块维护在同一工作流里完成。
-受信任环境,受信任环境
-仅在可信设备和网络环境中保存登录状态。,仅在可信设备和网络环境中保存登录状态。
-账号开通,账号开通
-密码重置,密码重置
-权限分配,权限分配
+登录保护,"Login protection"
+连续异常登录会自动提高验证强度，减少后台入口暴露面。,"Consecutive abnormal logins will automatically increase verification strength, reducing the exposure of the backend entry point."
+统一工作台,"Unified Workbench"
+内容、配置、权限和模块操作都在同一后台闭环处理。,"Content, configuration, permissions, and module operations are all processed in the same backend closed loop."
+可信发布,"Trusted Release"
+后台入口、品牌标识和基础样式都保持统一的可回退策略。,"Background entry, brand identity, and base styles all maintain a consistent fallback strategy."
+权限边界清晰,"Clear permission boundaries"
+角色、菜单与访问入口统一受控。,"Roles, menus, and access points are centrally managed."
+发布动作集中,"Publish action set"
+配置调整、内容发布和模块维护在同一工作流里完成。,"Configuration adjustments, content publishing, and module maintenance are completed within the same workflow."
+受信任环境,"Trusted Environment"
+仅在可信设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
+账号开通,"Account Activation"
+密码重置,"Reset Password"
+权限分配,"Permission assignment"
 "登录 %{name} 管理面板","Login to %{name} Admin Panel"
-后台安全入口,后台安全入口
-"把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里","把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里"
-这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。,这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。
-保持后台环境可信,保持后台环境可信
-建议仅在受信任设备上保存登录状态；如果检测到异常锁定、账号状态变化或权限缺失，请联系超级管理员处理。,建议仅在受信任设备上保存登录状态；如果检测到异常锁定、账号状态变化或权限缺失，请联系超级管理员处理。
-欢迎回来,欢迎回来
-输入管理员账号后即可继续处理后台任务、配置变更与权限操作。,输入管理员账号后即可继续处理后台任务、配置变更与权限操作。
-安全验证已启用,安全验证已启用
-请输入管理员账号,请输入管理员账号
-验证码,验证码
-点击刷新验证码,点击刷新验证码
-请输入验证码,请输入验证码
+后台安全入口,"Backend Security Entry"
+"把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里","Consolidate the configuration, permissions, and publishing process of %{name} into a single backend workspace"
+这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。,"This is used for handling content publishing, configuration adjustments, permission assignment, and module maintenance. After logging in, you can continue your previous backend operation context."
+保持后台环境可信,"Keep Backend Environment Trustworthy"
+建议仅在受信任设备上保存登录状态；如果检测到异常锁定、账号状态变化或权限缺失，请联系超级管理员处理。,"Suggestion: Only save login status on trusted devices; if abnormal locking, account status changes, or missing permissions are detected, contact the super administrator for handling."
+欢迎回来,"Welcome back"
+输入管理员账号后即可继续处理后台任务、配置变更与权限操作。,"Enter the admin account to proceed with backend tasks, configuration changes, and permission operations."
+安全验证已启用,"Security verification enabled"
+请输入管理员账号,"Please enter the admin account"
+验证码,"Verification code"
+点击刷新验证码,"Click to refresh the verification code."
+请输入验证码,"Please enter the verification code"
 记住我,"Remember Me"
-仅在你确认可信的设备和网络环境中保存登录状态。,仅在你确认可信的设备和网络环境中保存登录状态。
-登录,登录
-登录中,登录中
-管理员账号由超级管理员统一开通与维护,管理员账号由超级管理员统一开通与维护
-如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。,如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。
-"若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。","若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。"
+仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
+登录,"Log in"
+登录中,"Logging in"
+管理员账号由超级管理员统一开通与维护,"Admin accounts are created and maintained uniformly by the super admin"
+如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。,"To reset your password, unlock your account, or supplement backend permissions, please contact an existing super administrator."
+"若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。","If no custom admin logo is configured, the login page will automatically fall back to the built-in Weline logo."
 网站维护,"Website Maintenance"
 返回首页重试,"Return to Home and Retry"
 刷新,Refresh
@@ -267,55 +264,56 @@ Cms内容管理,"CMS Content Management"
 内容管理,"Content Management"
 后台可视化建设页面等的内容管理。,"Content management for backend visual page building, etc."
 系统事件,"System Events"
-查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件,查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件
-配置文件,配置文件
-事件类型,事件类型
-观察者总数,观察者总数
-已启用,已启用
-搜索事件名、观察者、实例类...,搜索事件名、观察者、实例类...
-所有状态,所有状态
-所有模块,所有模块
-所有事件,所有事件
-展开全部,展开全部
-折叠全部,折叠全部
-暂无事件配置,暂无事件配置
-个事件,个事件
-个观察者,个观察者
-观察者名,观察者名
-实例类,实例类
-共享,共享
+查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件,"View all registered events and observers in the system, making it easy for developers to subscribe to system events using the observer pattern"
+配置文件,"Configuration file"
+事件类型,"Event type"
+观察者总数,"Total Observers"
+已启用,Enabled
+搜索事件名、观察者、实例类...,"Search event name, observer, instance class..."
+所有状态,"All Statuses"
+所有模块,"All Modules"
+所有事件,"All Events"
+展开全部,"Expand all"
+折叠全部,"Collapse All"
+暂无事件配置,"No Event Configuration"
+个事件,events
+个观察者,observer
+观察者名,"Observer Name"
+实例类,"Instance Class"
+共享,Shared
 排序,Sort
-独占,独占
-找到,找到
-个观察者，来自,个观察者，来自
-个配置文件,个配置文件
+独占,Exclusive
+找到,Found
+个观察者，来自,"observers from"
+个配置文件,"configuration files"
 菜单管理,"Menu Management"
-菜单树,菜单树
-新增菜单,新增菜单
-暂无菜单数据,暂无菜单数据
-菜单代码,菜单代码
-资源标识,资源标识
-模块,模块
-自定义,自定义
-添加子菜单,添加子菜单
-系统菜单无法删除,系统菜单无法删除
-总计,总计
-系统菜单,系统菜单
-自定义菜单,自定义菜单
-顶级菜单,顶级菜单
-编辑菜单,编辑菜单
-菜单名称,菜单名称
-菜单标题,菜单标题
-父级资源,父级资源
-无（顶级菜单）,无（顶级菜单）
-动作URL,动作URL
-所属模块,所属模块
-图标类,图标类
+菜单树,"Menu tree"
+搜索菜单...,"Search Menu..."
+新增菜单,"Add Menu"
+暂无菜单数据,"No menu data"
+菜单代码,"Menu Code"
+资源标识,"Resource identifier"
+模块,Module.
+自定义,Custom
+添加子菜单,"Add Submenu"
+系统菜单无法删除,"System menu cannot be deleted"
+总计,Total
+系统菜单,"System Menu"
+自定义菜单,"Custom Menu"
+顶级菜单,"Top-level menu"
+编辑菜单,"Edit Menu"
+菜单名称,"Menu Name"
+菜单标题,"Menu title"
+父级资源,"Parent Resource"
+无（顶级菜单）,"None (top-level menu)"
+动作URL,"Action URL"
+所属模块,"Parent Module"
+图标类,"Icon class"
 启用,Enable
-获取菜单信息失败,获取菜单信息失败
-请求失败,请求失败
-确定要删除菜单,确定要删除菜单
-吗？,吗？
+获取菜单信息失败,"Failed to fetch menu information"
+请求失败,"Request failed"
+确定要删除菜单,"Are you sure you want to delete the menu"
+吗？,?
 模组管理,"Module Management"
 系统中安装的模组。,"Modules installed in the system."
 模组名,"Module Name"
@@ -325,30 +323,30 @@ Cms内容管理,"CMS Content Management"
 路由,Route
 版本,Version
 描述,Description
-路由管理,路由管理
-查看和管理系统中所有已注册的路由，支持按模块分组浏览,查看和管理系统中所有已注册的路由，支持按模块分组浏览
-路由总数,路由总数
-涉及模块,涉及模块
-"GET 路由","GET 路由"
-"POST 路由","POST 路由"
-搜索路由路径、控制器...,搜索路由路径、控制器...
-所有方法,所有方法
-暂无路由数据,暂无路由数据
-条路由,条路由
-方法,方法
-路由路径,路由路径
+路由管理,"Route management"
+查看和管理系统中所有已注册的路由，支持按模块分组浏览,"View and manage all registered routes in the system, supports browsing grouped by module"
+路由总数,"Total routes"
+涉及模块,"Involved modules"
+"GET 路由","GET route"
+"POST 路由","POST routing"
+搜索路由路径、控制器...,"Search route path, controller..."
+所有方法,"All Methods"
+暂无路由数据,"No routing data"
+条路由,"items of routes"
+方法,Method
+路由路径,"Route path"
 控制器信息,"Controller Information"
-控制器,控制器
-设为首页,设为首页
-条路由，来自,条路由，来自
-个模块,个模块
+控制器,Controller
+设为首页,"Set as Homepage"
+条路由，来自,"items of routes, from"
+个模块,modules
 插件管理,"Plugin Management"
-查看系统中所有已注册的插件（拦截器），了解函数修改情况,查看系统中所有已注册的插件（拦截器），了解函数修改情况
-插件数,插件数
-搜索插件类、实例类、名称...,搜索插件类、实例类、名称...
-暂无插件配置,暂无插件配置
-个拦截器,个拦截器
-插件：,插件：
-拦截器名,拦截器名
-目标类,目标类
-个拦截器，来自,个拦截器，来自
+查看系统中所有已注册的插件（拦截器），了解函数修改情况,"View all registered plugins (interceptors) in the system to understand function modifications"
+插件数,"Number of plugins"
+搜索插件类、实例类、名称...,"Search Plugin Class, Instance Class, Name..."
+暂无插件配置,"No plugin configuration"
+个拦截器,interceptor
+插件：,Plugin:
+拦截器名,"Interceptor name"
+目标类,"Target class"
+个拦截器，来自,"interceptors from"

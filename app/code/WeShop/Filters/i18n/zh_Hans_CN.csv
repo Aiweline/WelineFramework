@@ -1,13 +1,13 @@
 ﻿无效的筛选配置,无效的筛选配置
 筛选配置已保存,筛选配置已保存
-"保存失败: %1","保存失败: %1"
+保存失败: %{1},保存失败: %{1}
 无效的价格区间配置,无效的价格区间配置
 价格区间已保存,价格区间已保存
 分类筛选缓存已清除,分类筛选缓存已清除
 所有筛选缓存已清除,所有筛选缓存已清除
-"清除缓存失败: %1","清除缓存失败: %1"
-"Invalid category ID.","Invalid category ID."
-"Missing required filter parameters.","Missing required filter parameters."
+清除缓存失败: %{1},清除缓存失败: %{1}
+Invalid category ID.,Invalid category ID.
+Missing required filter parameters.,Missing required filter parameters.
 筛选器收集,筛选器收集
 收集所有可用的筛选器，其他模块可通过此事件添加自定义筛选,收集所有可用的筛选器，其他模块可通过此事件添加自定义筛选
 筛选条件应用前,筛选条件应用前
@@ -66,10 +66,10 @@ EAV属性筛选,EAV属性筛选
 7折及以上,7折及以上
 5折及以上,5折及以上
 Shipping,配送方式
-"Free Shipping",免运费
-"Same Day Delivery",当日达
-"Next Day Delivery",次日达
-"Express Delivery",快递
+Free Shipping,免运费
+Same Day Delivery,当日达
+Next Day Delivery,次日达
+Express Delivery,快递
 尺寸,尺寸
 库存状态,库存状态
 有货,有货
@@ -82,39 +82,39 @@ Shipping,配送方式
 移除,移除
 展开更多筛选,展开更多筛选
 收起筛选,收起筛选
-"共 %{count} 件商品","共 %{count} 件商品"
+共 %{count} 件商品,共 %{count} 件商品
 该分类下暂无商品,该分类下暂无商品
-"Filter Configuration","Filter Configuration"
-"Manage global storefront filters and decide which options are shown first.","Manage global storefront filters and decide which options are shown first."
-"Price Ranges","Price Ranges"
-"Clear Filter Cache","Clear Filter Cache"
-"Global Filter Switches","Global Filter Switches"
+Filter Configuration,Filter Configuration
+Manage global storefront filters and decide which options are shown first.,Manage global storefront filters and decide which options are shown first.
+Price Ranges,Price Ranges
+Clear Filter Cache,Clear Filter Cache
+Global Filter Switches,Global Filter Switches
 Enabled,Enabled
-"Sort Order","Sort Order"
-"Display Type","Display Type"
+Sort Order,Sort Order
+Display Type,Display Type
 List,List
 Chips,Chips
 Dropdown,Dropdown
-"Collapsed By Default","Collapsed By Default"
+Collapsed By Default,Collapsed By Default
 No,No
 Yes,Yes
-"No filter providers are currently available.","No filter providers are currently available."
-"Save Global Filter Config","Save Global Filter Config"
-"Filter Summary","Filter Summary"
-"Registered Providers","Registered Providers"
-"EAV Attributes","EAV Attributes"
-"Filterable Attributes","Filterable Attributes"
-"No filterable product attributes found.","No filterable product attributes found."
-"Price Range Configuration","Price Range Configuration"
-"Define price buckets used by the storefront filter panel.","Define price buckets used by the storefront filter panel."
-"Back to Filter Config","Back to Filter Config"
-"Category ID","Category ID"
-"Use 0 to apply globally.","Use 0 to apply globally."
+No filter providers are currently available.,No filter providers are currently available.
+Save Global Filter Config,Save Global Filter Config
+Filter Summary,Filter Summary
+Registered Providers,Registered Providers
+EAV Attributes,EAV Attributes
+Filterable Attributes,Filterable Attributes
+No filterable product attributes found.,No filterable product attributes found.
+Price Range Configuration,Price Range Configuration
+Define price buckets used by the storefront filter panel.,Define price buckets used by the storefront filter panel.
+Back to Filter Config,Back to Filter Config
+Category ID,Category ID
+Use 0 to apply globally.,Use 0 to apply globally.
 Ranges,Ranges
 Sort,Sort
 Label,Label
 Min,Min
 Max,Max
-"e.g. Budget","e.g. Budget"
-"e.g. Under 100","e.g. Under 100"
-"Save Price Ranges","Save Price Ranges"
+e.g. Budget,e.g. Budget
+e.g. Under 100,e.g. Under 100
+Save Price Ranges,Save Price Ranges

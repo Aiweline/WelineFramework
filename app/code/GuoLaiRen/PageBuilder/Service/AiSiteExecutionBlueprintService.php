@@ -2106,9 +2106,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $existingPlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $pages = \is_array($executionBlueprint['pages'] ?? null)
             ? $executionBlueprint['pages']
@@ -2896,7 +2894,7 @@ final class AiSiteExecutionBlueprintService
             '- Never write blueprint guidance such as "围绕...说明", "首页先讲清...", "阶段一仅给方向", "List 2-4 points", or "Specify heading font".',
             '- For each block, content must read like real website copy that can be shown to a client immediately.',
             '- Example for hero: write concrete title, subtitle, description, CTA label, trust points, and support text. Do not describe what should be written.',
-            '- field_plan.sample must be direct content, for example "欢迎来到 Teenipiya 棋牌中心" or "立即开始", not "标题围绕核心价值展开".',
+            '- field_plan.sample must be direct content, for example "欢迎来到示例品牌服务中心" or "立即开始", not "标题围绕核心价值展开".',
             '- field_plan.implementation_note must be a customer-readable implementation note such as layout handling, editable constraint, delivery requirement, or asset direction; never write abstract design rationale or prompt guidance.',
             '- For media/image fields, field_plan.sample must be a concrete asset brief the client can review, not a generic instruction like "使用一张主视觉图".',
             '- Do not output fake image URLs such as hero.jpg, about.jpg, example.com, placeholder services, or unverified .jpg/.png/.webp paths. When an image is needed, describe a concrete SVG-expressible visual (cards, board, shield, avatars, icons, texture) that stage 3 can render inline until real assets are uploaded.',
@@ -9169,6 +9167,20 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function resolveStageOneExecutionBlueprint(array $scope): array
+    {
+        $draft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
+        if ($draft !== []) {
+            return $draft;
+        }
+
+        return \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+    }
+
+    /**
      * @param array<string, mixed> $structured
      * @param array<string, mixed> $executionBlueprint
      * @return array<string, mixed>
@@ -11507,9 +11519,7 @@ final class AiSiteExecutionBlueprintService
         $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
         $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
         $confirmedPlanBook = \is_array($confirmedWorkbench['plan_book'] ?? null) ? $confirmedWorkbench['plan_book'] : [];
-        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null)
             ? $executionBlueprint['page_plans']
             : (\is_array($structured['page_plans'] ?? null) ? $structured['page_plans'] : []);
@@ -11645,9 +11655,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $pages = \is_array($executionBlueprint['pages'] ?? null)
             ? $executionBlueprint['pages']
             : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
@@ -11975,9 +11983,7 @@ final class AiSiteExecutionBlueprintService
         array $blockPatch = []
     ): array {
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
         $mutatedComponent = '';
         $mutatedBlock = null;
@@ -12293,9 +12299,7 @@ final class AiSiteExecutionBlueprintService
     private function reorderDraftSharedPlanBlocks(array $scope, array $orderedBlockKeys): array
     {
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
         if (\count($sharedComponents) < 2) {
             throw new \RuntimeException('Stage-1 shared block list needs at least two blocks to reorder.');

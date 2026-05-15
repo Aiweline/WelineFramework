@@ -49,11 +49,16 @@ class LanguageSelect implements TaglibInterface
             'allow-empty' => false,
             'display-only' => false,
             'readonly-values' => false,
+            'allowed-values' => false,
+            'option-values' => false,
+            'options-values' => false,
+            'display-locale' => false,
             'input-id' => false,
             'empty-text' => false,
             'search-placeholder' => false,
             'on-change' => false,
             'inline-dropdown' => false,
+            'show-reference' => false,
         ];
     }
 
@@ -64,20 +69,19 @@ class LanguageSelect implements TaglibInterface
                 throw new \Exception(__('id属性不能为空'));
             }
 
-            $displayLocale = State::getLang() ?: State::getLangLocal() ?: 'zh_Hans_CN';
-            $itemsJson = \json_encode(
-                self::getLanguageItems($displayLocale),
-                JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-            );
-            if ($itemsJson === false) {
-                $itemsJson = '[]';
-            }
-
             $code = \Weline\Taglib\Taglib::attributes($attributes);
 
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';
-            $html[] = '<?php $__wls_items_json = ' . var_export($itemsJson, true) . '; ?>';
+$html[] = <<<'PHP'
+<?php
+$__wls_display_locale = \trim((string)($Taglib__display_locale ?? ''));
+if ($__wls_display_locale === '') {
+    $__wls_display_locale = \Weline\Framework\App\State::getLang() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN';
+}
+$__wls_items_json = \Weline\I18n\Taglib\LanguageSelect::getLanguageItemsJson($__wls_display_locale);
+?>
+PHP;
 $html[] = <<<'PHP'
 <?php
 $__wls_normalize_bool = static function ($value, bool $default = false): bool {
@@ -146,6 +150,9 @@ $__wls_required = $__wls_normalize_bool($Taglib__required ?? false, false);
 $__wls_allow_empty = $__wls_normalize_bool($Taglib__allow_empty ?? (!$__wls_required), !$__wls_required);
 $__wls_selected_values = $__wls_parse_values($Taglib__value ?? []);
 $__wls_readonly_values = $__wls_parse_values($Taglib__readonly_values ?? []);
+$__wls_allowed_values = $__wls_parse_values(
+    $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? []))
+);
 foreach ($__wls_readonly_values as $__wls_readonly_value) {
     if (!\in_array($__wls_readonly_value, $__wls_selected_values, true)) {
         $__wls_selected_values[] = $__wls_readonly_value;
@@ -168,7 +175,7 @@ $__wls_search_placeholder = $__wls_trim_text(
     __('搜索国家、语言或代码...')
 );
 $__wls_on_change = $__wls_trim_text($Taglib__on_change ?? '');
-$__wls_inline_dropdown = $__wls_normalize_bool($Taglib__inline_dropdown ?? false, false);
+$__wls_show_reference = $__wls_normalize_bool($Taglib__show_reference ?? true, true);
 $__wls_selected_json = \json_encode(
     $__wls_selected_values,
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
@@ -183,12 +190,31 @@ $__wls_readonly_json = \json_encode(
 if ($__wls_readonly_json === false) {
     $__wls_readonly_json = '[]';
 }
+$__wls_allowed_json = \json_encode(
+    $__wls_allowed_values,
+    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+if ($__wls_allowed_json === false) {
+    $__wls_allowed_json = '[]';
+}
 ?>
 PHP;
             $html[] = <<<'HTML'
 <style>
 .weline-language-select {
     position: relative;
+    display: inline-block;
+    max-width: 100%;
+    overflow: visible;
+    box-sizing: border-box;
+    isolation: isolate;
+}
+.weline-language-select,
+.weline-language-select * {
+    box-sizing: border-box;
+}
+.weline-language-select.is-open {
+    z-index: 4200;
 }
 .weline-language-select-trigger {
     display: flex;
@@ -290,7 +316,9 @@ PHP;
     position: absolute;
     top: calc(100% + 0.25rem);
     left: 0;
-    right: 0;
+    right: auto;
+    width: 100%;
+    box-sizing: border-box;
     z-index: 1080;
     padding: 0.75rem;
     border: 1px solid var(--backend-color-border-default, #dee2e6);
@@ -299,7 +327,9 @@ PHP;
     box-shadow: var(--backend-shadow-lg, 0 0.75rem 2rem rgba(15, 23, 42, 0.14));
 }
 .weline-language-select-search {
+    display: block;
     width: 100%;
+    max-width: 100%;
     margin-bottom: 0.65rem;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--backend-color-border-default, #ced4da);
@@ -455,14 +485,28 @@ HTML;
     var items = <?= $__wls_items_json ?> || [];
     var selectedValues = <?= $__wls_selected_json ?> || [];
     var readonlyValues = <?= $__wls_readonly_json ?> || [];
+    var allowedValues = <?= $__wls_allowed_json ?> || [];
     var onChangeName = <?= json_encode($__wls_on_change, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var inlineDropdown = <?= $__wls_inline_dropdown ? 'true' : 'false' ?>;
+    var showReference = <?= $__wls_show_reference ? 'true' : 'false' ?>;
     var emptyText = <?= json_encode($__wls_empty_text, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var displayOnlyText = <?= json_encode((string) __('仅展示'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var noMatchText = <?= json_encode((string) __('未找到匹配的语言'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var unknownCountryText = <?= json_encode((string) __('未分组国家'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var removeText = <?= json_encode((string) __('移除'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var clearText = <?= json_encode((string) __('清空选择'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    allowedValues = normalizeValues(allowedValues);
+    var allowedMap = {};
+    allowedValues.forEach(function (code) {
+        allowedMap[code] = true;
+    });
+    if (allowedValues.length) {
+        items = items.filter(function (item) {
+            return item && isAllowed(item.code);
+        });
+    }
+    selectedValues = filterAllowedValues(selectedValues);
+    readonlyValues = filterAllowedValues(readonlyValues);
 
     var map = {};
     items.forEach(function (item) {
@@ -477,88 +521,9 @@ HTML;
     var searchInput = document.getElementById(componentId + '_search');
     var fieldInput = document.getElementById(fieldId);
     var inputsContainer = isMultiple ? document.getElementById(fieldId + '_inputs') : null;
-    var floatingApi = null;
 
     if (!wrapper || !fieldInput || !tags) {
         return;
-    }
-
-    if (!window.WelineSmartDropdown) {
-        window.WelineSmartDropdown = (function () {
-            function compute(anchorRect, panelRect, cfg) {
-                var margin = cfg.margin || 8;
-                var gap = cfg.gap || 4;
-                var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1200;
-                var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 900;
-                var panelWidth = Math.max(cfg.minWidth || 0, panelRect.width || anchorRect.width);
-                var panelHeight = panelRect.height || 0;
-                var spaceBottom = viewportHeight - anchorRect.bottom - margin;
-                var spaceTop = anchorRect.top - margin;
-                var openUp = spaceBottom < Math.min(cfg.preferredHeight || 260, panelHeight) && spaceTop > spaceBottom;
-                var top = openUp ? (anchorRect.top - panelHeight - gap) : (anchorRect.bottom + gap);
-
-                if (top < margin) {
-                    top = margin;
-                }
-                if (top + panelHeight > viewportHeight - margin) {
-                    top = Math.max(margin, viewportHeight - margin - panelHeight);
-                }
-
-                var left = anchorRect.left;
-                if (left + panelWidth > viewportWidth - margin) {
-                    left = Math.max(margin, viewportWidth - margin - panelWidth);
-                }
-                if (left < margin) {
-                    left = margin;
-                }
-
-                return { top: top, left: left, width: panelWidth, maxHeight: Math.max(160, viewportHeight - margin * 2), openUp: openUp };
-            }
-
-            return {
-                mount: function (anchor, panel, config) {
-                    if (!anchor || !panel) {
-                        return null;
-                    }
-                    var cfg = config || {};
-                    if (!panel.__welineOriginalParent) {
-                        panel.__welineOriginalParent = panel.parentNode || null;
-                        panel.__welineOriginalNext = panel.nextSibling || null;
-                    }
-                    panel.style.position = 'fixed';
-                    panel.style.zIndex = String(cfg.zIndex || 4000);
-                    panel.style.left = '0px';
-                    panel.style.top = '0px';
-                    panel.style.minWidth = Math.max(cfg.minWidth || 0, Math.round(anchor.getBoundingClientRect().width)) + 'px';
-                    panel.style.maxWidth = 'calc(100vw - 16px)';
-                    document.body.appendChild(panel);
-                    panel.style.display = 'block';
-
-                    var rect = anchor.getBoundingClientRect();
-                    var panelRect = panel.getBoundingClientRect();
-                    var next = compute(rect, panelRect, cfg);
-                    panel.style.left = Math.round(next.left) + 'px';
-                    panel.style.top = Math.round(next.top) + 'px';
-                    panel.style.width = Math.round(next.width) + 'px';
-                    panel.style.maxHeight = Math.round(next.maxHeight) + 'px';
-                    panel.setAttribute('data-placement', next.openUp ? 'top' : 'bottom');
-                    return next;
-                },
-                unmount: function (panel) {
-                    if (!panel) {
-                        return;
-                    }
-                    panel.style.display = 'none';
-                    if (panel.__welineOriginalParent) {
-                        if (panel.__welineOriginalNext && panel.__welineOriginalNext.parentNode === panel.__welineOriginalParent) {
-                            panel.__welineOriginalParent.insertBefore(panel, panel.__welineOriginalNext);
-                        } else {
-                            panel.__welineOriginalParent.appendChild(panel);
-                        }
-                    }
-                }
-            };
-        })();
     }
 
     function escapeHtml(text) {
@@ -594,6 +559,17 @@ HTML;
         return normalized;
     }
 
+    function isAllowed(code) {
+        code = String(code || '').trim();
+        return !allowedValues.length || !!allowedMap[code];
+    }
+
+    function filterAllowedValues(values) {
+        return normalizeValues(values).filter(function (code) {
+            return isAllowed(code);
+        });
+    }
+
     function getLocale(code) {
         if (map[code]) {
             return map[code];
@@ -602,6 +578,10 @@ HTML;
             code: code,
             name: code,
             self_name: code,
+            english_name: code,
+            display_name: code,
+            tag_label: code,
+            reference_name: code,
             country_code: '',
             country_name: unknownCountryText,
             flag: ''
@@ -609,7 +589,8 @@ HTML;
     }
 
     function ensureReadonlySelected() {
-        readonlyValues = normalizeValues(readonlyValues);
+        readonlyValues = filterAllowedValues(readonlyValues);
+        selectedValues = filterAllowedValues(selectedValues);
         readonlyValues.forEach(function (code) {
             if (selectedValues.indexOf(code) === -1) {
                 selectedValues.push(code);
@@ -629,11 +610,14 @@ HTML;
 
     function buildTagHtml(code) {
         var locale = getLocale(code);
+        var label = showReference
+            ? (locale.display_name || locale.tag_label || locale.name || code)
+            : (locale.name || locale.reference_name || code);
         var locked = displayOnly || readonlyValues.indexOf(code) !== -1;
         var html = '';
         html += '<span class="weline-language-select-tag' + (locked ? ' is-readonly' : '') + '" data-code="' + escapeHtml(code) + '">';
         html += '<span class="weline-language-select-flag">' + renderFlag(locale) + '</span>';
-        html += '<span class="weline-language-select-label">' + escapeHtml(locale.name) + '</span>';
+        html += '<span class="weline-language-select-label">' + escapeHtml(label) + '</span>';
         html += '<span class="weline-language-select-code">' + escapeHtml(locale.code) + '</span>';
         if (locked) {
             html += '<span class="weline-language-select-state">' + escapeHtml(displayOnlyText) + '</span>';
@@ -716,18 +700,30 @@ HTML;
         groupItems(filteredItems).forEach(function (group) {
             html += '<div class="weline-language-select-group-label"><span>' + escapeHtml(group.country_name) + '</span><small>' + escapeHtml(group.country_code) + '</small></div>';
             group.items.forEach(function (item) {
+                var label = showReference
+                    ? (item.display_name || item.tag_label || item.name || item.code)
+                    : (item.name || item.reference_name || item.code);
                 var selected = selectedValues.indexOf(item.code) !== -1;
                 var locked = readonlyValues.indexOf(item.code) !== -1 && selected;
                 var icon = isMultiple
                     ? (selected ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline')
                     : (selected ? 'mdi-radiobox-marked' : 'mdi-radiobox-blank');
+                var metaParts = [item.code];
+                var englishName = String(item.english_name || item.reference_name || '').trim();
+                if (englishName && englishName !== label && metaParts.indexOf(englishName) === -1) {
+                    metaParts.push(englishName);
+                }
+                var countryName = String(item.country_name || '').trim();
+                if (countryName && metaParts.indexOf(countryName) === -1) {
+                    metaParts.push(countryName);
+                }
 
                 html += '<button type="button" class="weline-language-select-item' + (selected ? ' is-selected' : '') + (locked ? ' is-readonly' : '') + '" data-code="' + escapeHtml(item.code) + '">';
                 html += '<span class="weline-language-select-indicator"><i class="mdi ' + icon + '"></i></span>';
                 html += '<span class="weline-language-select-flag">' + renderFlag(item) + '</span>';
                 html += '<span class="weline-language-select-item-copy">';
-                html += '<strong>' + escapeHtml(item.name) + '</strong>';
-                html += '<small>' + escapeHtml(item.code + (item.country_name ? ' · ' + item.country_name : '')) + '</small>';
+                html += '<strong>' + escapeHtml(label) + '</strong>';
+                html += '<small>' + escapeHtml(metaParts.join(' | ')) + '</small>';
                 html += '</span>';
                 if (locked) {
                     html += '<span class="weline-language-select-state">' + escapeHtml(displayOnlyText) + '</span>';
@@ -816,20 +812,20 @@ HTML;
     }
 
     function setValues(values) {
-        selectedValues = normalizeValues(values);
+        selectedValues = filterAllowedValues(values);
         ensureReadonlySelected();
         syncInputs();
     }
 
     function setReadonlyValues(values) {
-        readonlyValues = normalizeValues(values);
+        readonlyValues = filterAllowedValues(values);
         ensureReadonlySelected();
         syncInputs();
     }
 
     function addValue(code) {
         code = String(code || '').trim();
-        if (!code || selectedValues.indexOf(code) !== -1) {
+        if (!code || !isAllowed(code) || selectedValues.indexOf(code) !== -1) {
             return;
         }
         selectedValues.push(code);
@@ -855,28 +851,42 @@ HTML;
         addValue(code);
     }
 
+    function positionDropdown() {
+        if (!dropdown || !trigger) {
+            return;
+        }
+
+        var width = Math.max(
+            1,
+            Math.round(
+                trigger.getBoundingClientRect().width
+                || trigger.offsetWidth
+                || wrapper.getBoundingClientRect().width
+                || 0
+            )
+        );
+
+        dropdown.style.position = 'absolute';
+        dropdown.style.left = '0px';
+        dropdown.style.right = 'auto';
+        dropdown.style.top = 'calc(100% + 0.25rem)';
+        dropdown.style.bottom = 'auto';
+        dropdown.style.width = width + 'px';
+        dropdown.style.minWidth = width + 'px';
+        dropdown.style.maxWidth = 'none';
+        dropdown.style.maxHeight = 'calc(100vh - 24px)';
+        dropdown.style.boxSizing = 'border-box';
+        dropdown.style.zIndex = '4200';
+        dropdown.setAttribute('data-placement', 'internal');
+    }
+
     function openDropdown() {
         if (displayOnly || !dropdown) {
             return;
         }
-        if (inlineDropdown) {
-            dropdown.style.position = '';
-            dropdown.style.left = '';
-            dropdown.style.top = '';
-            dropdown.style.width = '';
-            dropdown.style.maxHeight = '';
-            dropdown.style.minWidth = '';
-            dropdown.style.maxWidth = '';
-            dropdown.style.zIndex = '';
-            dropdown.style.display = 'block';
-        } else {
-            floatingApi = window.WelineSmartDropdown.mount(trigger, dropdown, {
-                minWidth: trigger ? trigger.offsetWidth : 0,
-                preferredHeight: 320,
-                zIndex: 4200,
-                gap: 4
-            });
-        }
+        positionDropdown();
+        wrapper.classList.add('is-open');
+        dropdown.style.display = 'block';
         renderList(searchInput ? searchInput.value : '');
         if (searchInput) {
             window.setTimeout(function () {
@@ -885,28 +895,20 @@ HTML;
         }
         document.addEventListener('click', handleOutsideClick);
         document.addEventListener('keydown', handleEscape);
-        if (!inlineDropdown) {
-            window.addEventListener('resize', handleViewportChange);
-            window.addEventListener('scroll', handleViewportChange, true);
-        }
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
     }
 
     function closeDropdown() {
         if (!dropdown) {
             return;
         }
-        if (inlineDropdown) {
-            dropdown.style.display = 'none';
-        } else {
-            window.WelineSmartDropdown.unmount(dropdown);
-        }
-        floatingApi = null;
+        dropdown.style.display = 'none';
+        wrapper.classList.remove('is-open');
         document.removeEventListener('click', handleOutsideClick);
         document.removeEventListener('keydown', handleEscape);
-        if (!inlineDropdown) {
-            window.removeEventListener('resize', handleViewportChange);
-            window.removeEventListener('scroll', handleViewportChange, true);
-        }
+        window.removeEventListener('resize', handleViewportChange);
+        window.removeEventListener('scroll', handleViewportChange, true);
     }
 
     function handleOutsideClick(event) {
@@ -916,18 +918,10 @@ HTML;
     }
 
     function handleViewportChange() {
-        if (inlineDropdown) {
-            return;
-        }
         if (!dropdown || dropdown.style.display !== 'block') {
             return;
         }
-        floatingApi = window.WelineSmartDropdown.mount(trigger, dropdown, {
-            minWidth: trigger ? trigger.offsetWidth : 0,
-            preferredHeight: 320,
-            zIndex: 4200,
-            gap: 4
-        });
+        positionDropdown();
     }
 
     function handleEscape(event) {
@@ -1085,8 +1079,8 @@ HTML;
 
     window.WelineLanguageSelect[componentId] = api;
 
-    selectedValues = normalizeValues(selectedValues);
-    readonlyValues = normalizeValues(readonlyValues);
+    selectedValues = filterAllowedValues(selectedValues);
+    readonlyValues = filterAllowedValues(readonlyValues);
     ensureReadonlySelected();
     syncInputs();
 })();
@@ -1151,25 +1145,23 @@ DOC;
             $rowsByCode[$code][] = $row;
         }
 
-        if (!$rowsByCode) {
-            $localeRows = $localeModel
-                ->clearQuery()
-                ->where(Locale::schema_fields_IS_ACTIVE, 1)
-                ->where(Locale::schema_fields_IS_INSTALL, 1)
-                ->select()
-                ->fetchArray();
+        $localeRows = $localeModel
+            ->clearQuery()
+            ->where(Locale::schema_fields_IS_ACTIVE, 1)
+            ->where(Locale::schema_fields_IS_INSTALL, 1)
+            ->select()
+            ->fetchArray();
 
-            foreach ($localeRows as $row) {
-                $code = (string)($row[Locale::schema_fields_CODE] ?? '');
-                if ($code === '') {
-                    continue;
-                }
-                $rowsByCode[$code][] = [
-                    Locals::schema_fields_CODE => $code,
-                    Locals::schema_fields_TARGET_CODE => $displayLocale,
-                    Locals::schema_fields_NAME => $i18n->getLocaleName($code, $displayLocale),
-                ];
+        foreach ($localeRows as $row) {
+            $code = (string)($row[Locale::schema_fields_CODE] ?? '');
+            if ($code === '' || isset($rowsByCode[$code])) {
+                continue;
             }
+            $rowsByCode[$code][] = [
+                Locals::schema_fields_CODE => $code,
+                Locals::schema_fields_TARGET_CODE => $displayLocale,
+                Locals::schema_fields_NAME => $i18n->getLocaleName($code, $displayLocale),
+            ];
         }
 
         $localeMetaRows = $localeModel
@@ -1221,27 +1213,38 @@ DOC;
             $iso2 = (string)($meta[Locale::schema_fields_ISO2] ?? '');
             $iso3 = (string)($meta[Locale::schema_fields_ISO3] ?? '');
             $selfName = $i18n->getLocaleName($code, $code);
+            $referenceName = $i18n->getLocaleName($code, 'en');
+            $displayName = self::buildDisplayName($name, $referenceName, $selfName, $code);
+            $tagLabel = self::buildTagLabel($name, $selfName, $referenceName, $code);
+            $searchTerms = self::buildSearchTerms([
+                $code,
+                $name,
+                $selfName,
+                $referenceName,
+                $displayName,
+                $tagLabel,
+                $countryCode,
+                $countryName,
+                $shortCode,
+                $iso2,
+                $iso3,
+            ]);
 
             $items[] = [
                 'code' => $code,
                 'name' => $name,
                 'self_name' => $selfName,
+                'english_name' => $referenceName,
+                'reference_name' => $referenceName,
+                'display_name' => $displayName,
+                'tag_label' => $tagLabel,
                 'country_code' => $countryCode,
                 'country_name' => $countryName,
                 'flag' => $flag,
                 'short_code' => $shortCode,
                 'iso2' => $iso2,
                 'iso3' => $iso3,
-                'search' => \implode(' ', \array_filter([
-                    $code,
-                    $name,
-                    $selfName,
-                    $countryCode,
-                    $countryName,
-                    $shortCode,
-                    $iso2,
-                    $iso3,
-                ])),
+                'search' => \implode(' ', $searchTerms),
             ];
         }
 
@@ -1261,6 +1264,78 @@ DOC;
 
         self::$itemsCache[$displayLocale] = $items;
         return $items;
+    }
+
+    public static function getLanguageItemsJson(string $displayLocale): string
+    {
+        $displayLocale = trim($displayLocale) !== '' ? trim($displayLocale) : (State::getLang() ?: State::getLangLocal() ?: 'zh_Hans_CN');
+        $itemsJson = \json_encode(
+            self::getLanguageItems($displayLocale),
+            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        );
+
+        return $itemsJson === false ? '[]' : $itemsJson;
+    }
+
+    private static function buildDisplayName(string $localizedName, string $referenceName, string $selfName, string $code): string
+    {
+        $localizedName = \trim($localizedName);
+        $referenceName = \trim($referenceName);
+        $selfName = \trim($selfName);
+
+        if ($localizedName === '') {
+            $localizedName = $selfName !== '' ? $selfName : ($referenceName !== '' ? $referenceName : $code);
+        }
+
+        $locatorName = '';
+        if ($referenceName !== '' && $referenceName !== $localizedName) {
+            $locatorName = $referenceName;
+        } elseif ($selfName !== '' && $selfName !== $localizedName) {
+            $locatorName = $selfName;
+        } elseif ($code !== $localizedName) {
+            $locatorName = $code;
+        }
+
+        return $locatorName !== '' ? $localizedName . ' (' . $locatorName . ')' : $localizedName;
+    }
+
+    private static function buildTagLabel(string $localizedName, string $selfName, string $referenceName, string $code): string
+    {
+        foreach ([$localizedName, $selfName, $referenceName, $code] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return $code;
+    }
+
+    /**
+     * @param array<int, mixed> $values
+     * @return list<string>
+     */
+    private static function buildSearchTerms(array $values): array
+    {
+        $terms = [];
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+
+            $value = \trim((string)$value);
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = \mb_strtolower($value, 'UTF-8');
+            if (isset($terms[$normalized])) {
+                continue;
+            }
+            $terms[$normalized] = $value;
+        }
+
+        return \array_values($terms);
     }
 
     private static function extractCountryCode(string $localeCode): string

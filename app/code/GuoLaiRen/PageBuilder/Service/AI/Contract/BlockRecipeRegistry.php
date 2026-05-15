@@ -63,46 +63,46 @@ final class BlockRecipeRegistry
     private function loadDefaultRecipes(): array
     {
         return [
-            'hero_download_gaming_apk' => [
-                'page_types' => ['home_page', 'game_landing'],
+            'hero_primary_conversion' => [
+                'page_types' => ['home_page', 'landing_page', 'game_landing'],
                 'required_slots' => [
-                    'eyebrow' => 'SEO / APK / India keyword line',
-                    'headline' => 'APK download headline with game name',
-                    'subheadline' => 'Game + bonus + trust summary',
-                    'primary_cta' => 'Download APK button',
-                    'secondary_trust' => 'Secure / smooth / fast app experience',
-                    'hero_media' => 'Poster or app visual',
-                    'floating_motifs' => 'Cards / coins / chips',
+                    'eyebrow' => 'Audience or positioning line from the brief',
+                    'headline' => 'Primary promise with the concrete offer name',
+                    'subheadline' => 'Benefit + proof + next-step summary',
+                    'primary_cta' => 'Brief-specific primary action button',
+                    'secondary_trust' => 'Trust, support, or eligibility note',
+                    'hero_media' => 'Generated image or visual matched to the offer',
+                    'floating_motifs' => 'Brief-specific motifs and proof chips',
                 ],
                 'layout' => [
-                    'desktop' => 'Two-column or centered poster with surrounding feature cards',
-                    'mobile' => 'Headline, CTA, poster, trust chips stacked',
+                    'desktop' => 'Full-bleed or split hero with generated image, overlay, and proof chips',
+                    'mobile' => 'Headline, CTA, media, and trust chips stacked without overlap',
                     'max_hero_height' => '900px',
                     'above_fold_cta' => true,
                 ],
                 'forbidden' => [
                     'unframed raw image',
                     'flat single-color background without texture',
-                    'generic three-card SaaS hero',
+                    'generic three-card hero unrelated to the brief',
                 ],
             ],
-            'game_showcase_grid' => [
+            'feature_showcase_grid' => [
                 'page_types' => ['home_page'],
                 'required_slots' => [
-                    'section_title' => 'Games category heading',
-                    'game_cards' => 'Array of game cards with icon, name, description',
-                    'cta_link' => 'View all or Play now link',
+                    'section_title' => 'Feature or offering category heading',
+                    'feature_cards' => 'Array of brief-specific cards with title, description, and proof',
+                    'cta_link' => 'Relevant next-step link',
                 ],
                 'layout' => ['desktop' => '3-4 column grid', 'mobile' => 'single column scroll'],
                 'forbidden' => ['single row without scrolling on mobile'],
             ],
-            'apk_install_steps' => [
-                'page_types' => ['home_page', 'game_landing', 'about_page'],
+            'process_steps' => [
+                'page_types' => ['home_page', 'game_landing', 'about_page', 'service_page'],
                 'required_slots' => [
-                    'step_1' => 'Pick APK',
-                    'step_2' => 'Install',
-                    'step_3' => 'Join table',
-                    'step_4' => 'Play',
+                    'step_1' => 'First visitor action',
+                    'step_2' => 'Setup or qualification step',
+                    'step_3' => 'Engagement or conversion step',
+                    'step_4' => 'Success or follow-up step',
                 ],
                 'layout' => ['desktop' => 'horizontal numbered steps', 'mobile' => 'vertical numbered list'],
                 'forbidden' => ['generic text list without numbered steps'],
@@ -117,13 +117,13 @@ final class BlockRecipeRegistry
                 'layout' => ['desktop' => 'horizontal strip', 'mobile' => '2x2 grid'],
                 'forbidden' => [],
             ],
-            'final_download_cta_luxury' => [
-                'page_types' => ['home_page', 'game_landing'],
+            'final_conversion_cta' => [
+                'page_types' => ['home_page', 'game_landing', 'landing_page'],
                 'required_slots' => [
-                    'headline' => 'Final download call-to-action',
+                    'headline' => 'Final brief-specific call-to-action',
                     'subheadline' => 'Reinforce trust and urgency',
-                    'primary_cta' => 'Download APK button',
-                    'trust_line' => 'Security and compatibility note',
+                    'primary_cta' => 'Primary action button from the brief',
+                    'trust_line' => 'Trust, support, or compatibility note',
                 ],
                 'layout' => ['desktop' => 'full-width centered', 'mobile' => 'full-width stacked'],
                 'forbidden' => ['bare text link as primary CTA'],
