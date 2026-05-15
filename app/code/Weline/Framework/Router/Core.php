@@ -92,6 +92,8 @@ class Core
 
     /** @var array<string, bool> */
     private static array $generatedRouterFileFrozen = [];
+
+    private const GENERATED_ROUTER_SNAPSHOT_DIR = 'generated_router_snapshots';
     
     /**
      * @DESC         |任何时候都会初始化
@@ -716,13 +718,40 @@ class Core
         }
     }
 
+    public static function snapshotGeneratedRouterFiles(): void
+    {
+        foreach (Env::router_files_PATH as $routerFilepath) {
+            if (!is_file($routerFilepath)) {
+                continue;
+            }
+
+            try {
+                $routers = include $routerFilepath;
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if (!is_array($routers)) {
+                $routers = [];
+            }
+
+            if ($routers === []) {
+                self::deleteGeneratedRouterSnapshot($routerFilepath);
+                continue;
+            }
+
+            self::writeGeneratedRouterSnapshot($routerFilepath, $routers);
+        }
+    }
+
     private static function loadGeneratedRouterFile(string $routerFilepath): array
     {
         $persistentRuntime = Runtime::isPersistent();
         $cachedRouters = self::$generatedRouterFileCache[$routerFilepath] ?? [];
+        $hasCacheEntry = \array_key_exists($routerFilepath, self::$generatedRouterFileCache);
         $hasCachedRouters = $persistentRuntime && $cachedRouters !== [];
 
-        if ($persistentRuntime && \array_key_exists($routerFilepath, self::$generatedRouterFileCache)) {
+        if ($persistentRuntime && $hasCachedRouters) {
             return $cachedRouters;
         }
 
@@ -736,14 +765,27 @@ class Core
                 return $cachedRouters;
             }
 
-            self::$generatedRouterFileCache[$routerFilepath] = [];
-            self::$generatedRouterFileMtimes[$routerFilepath] = 0;
+            if ($persistentRuntime && self::shouldUseGeneratedRouterSnapshotFallback()) {
+                $snapshotRouters = self::loadGeneratedRouterSnapshot($routerFilepath);
+                if ($snapshotRouters !== []) {
+                    self::$generatedRouterFileCache[$routerFilepath] = $snapshotRouters;
+                    self::$generatedRouterFileMtimes[$routerFilepath] = 0;
+                    self::$generatedRouterFileFrozen[$routerFilepath] = true;
+                    return $snapshotRouters;
+                }
+            }
+
+            if (!$persistentRuntime) {
+                self::$generatedRouterFileCache[$routerFilepath] = [];
+                self::$generatedRouterFileMtimes[$routerFilepath] = 0;
+            }
             return [];
         }
 
         $mtime = (int)(@\filemtime($routerFilepath) ?: 0);
-        if (!isset(self::$generatedRouterFileCache[$routerFilepath])
+        if (!$hasCacheEntry
             || (self::$generatedRouterFileMtimes[$routerFilepath] ?? -1) !== $mtime
+            || ($persistentRuntime && $cachedRouters === [])
         ) {
             try {
                 $routers = include $routerFilepath;
@@ -751,6 +793,16 @@ class Core
                 if ($hasCachedRouters) {
                     self::$generatedRouterFileFrozen[$routerFilepath] = true;
                     return $cachedRouters;
+                }
+
+                if ($persistentRuntime && self::shouldUseGeneratedRouterSnapshotFallback()) {
+                    $snapshotRouters = self::loadGeneratedRouterSnapshot($routerFilepath);
+                    if ($snapshotRouters !== []) {
+                        self::$generatedRouterFileCache[$routerFilepath] = $snapshotRouters;
+                        self::$generatedRouterFileMtimes[$routerFilepath] = $mtime;
+                        self::$generatedRouterFileFrozen[$routerFilepath] = true;
+                        return $snapshotRouters;
+                    }
                 }
 
                 throw $throwable;
@@ -761,12 +813,110 @@ class Core
                 self::$generatedRouterFileFrozen[$routerFilepath] = true;
                 return $cachedRouters;
             }
+            if ($routers === [] && $persistentRuntime) {
+                if (self::shouldUseGeneratedRouterSnapshotFallback()) {
+                    $snapshotRouters = self::loadGeneratedRouterSnapshot($routerFilepath);
+                    if ($snapshotRouters !== []) {
+                        self::$generatedRouterFileCache[$routerFilepath] = $snapshotRouters;
+                        self::$generatedRouterFileMtimes[$routerFilepath] = $mtime;
+                        self::$generatedRouterFileFrozen[$routerFilepath] = true;
+                        return $snapshotRouters;
+                    }
+                }
+
+                unset(
+                    self::$generatedRouterFileCache[$routerFilepath],
+                    self::$generatedRouterFileMtimes[$routerFilepath],
+                    self::$generatedRouterFileFrozen[$routerFilepath]
+                );
+                return [];
+            }
 
             self::$generatedRouterFileCache[$routerFilepath] = $routers;
             self::$generatedRouterFileMtimes[$routerFilepath] = $mtime;
+            if ($persistentRuntime) {
+                self::$generatedRouterFileFrozen[$routerFilepath] = true;
+                self::writeGeneratedRouterSnapshot($routerFilepath, $routers);
+            }
         }
 
         return self::$generatedRouterFileCache[$routerFilepath];
+    }
+
+    private static function shouldUseGeneratedRouterSnapshotFallback(): bool
+    {
+        $processDir = BP . 'var' . DS . 'process' . DS;
+
+        return is_file($processDir . 'setup_upgrade.lock')
+            || is_file($processDir . 'setup_upgrade_recollect.flag');
+    }
+
+    private static function loadGeneratedRouterSnapshot(string $routerFilepath): array
+    {
+        $snapshotFile = self::getGeneratedRouterSnapshotFile($routerFilepath);
+        if (!is_file($snapshotFile)) {
+            return [];
+        }
+
+        try {
+            $routers = include $snapshotFile;
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return is_array($routers) ? $routers : [];
+    }
+
+    private static function writeGeneratedRouterSnapshot(string $routerFilepath, array $routers): void
+    {
+        if ($routers === []) {
+            self::deleteGeneratedRouterSnapshot($routerFilepath);
+            return;
+        }
+
+        $snapshotFile = self::getGeneratedRouterSnapshotFile($routerFilepath);
+        $snapshotDir = dirname($snapshotFile);
+        if (!is_dir($snapshotDir) && !@mkdir($snapshotDir, 0755, true) && !is_dir($snapshotDir)) {
+            return;
+        }
+
+        $tmpFile = $snapshotFile . '.' . getmypid() . '.tmp';
+        $fh = @fopen($tmpFile, 'wb');
+        if ($fh === false) {
+            return;
+        }
+
+        fwrite($fh, "<?php return [\n");
+        $first = true;
+        foreach ($routers as $key => $value) {
+            if (!$first) {
+                fwrite($fh, ",\n");
+            }
+            $first = false;
+            fwrite($fh, var_export($key, true) . ' => ' . var_export($value, true));
+        }
+        fwrite($fh, "\n];\n");
+        fclose($fh);
+
+        @unlink($snapshotFile);
+        @rename($tmpFile, $snapshotFile);
+        if (is_file($tmpFile)) {
+            @unlink($tmpFile);
+        }
+    }
+
+    private static function deleteGeneratedRouterSnapshot(string $routerFilepath): void
+    {
+        $snapshotFile = self::getGeneratedRouterSnapshotFile($routerFilepath);
+        if (is_file($snapshotFile)) {
+            @unlink($snapshotFile);
+        }
+    }
+
+    private static function getGeneratedRouterSnapshotFile(string $routerFilepath): string
+    {
+        return BP . 'var' . DS . 'cache' . DS . self::GENERATED_ROUTER_SNAPSHOT_DIR
+            . DS . sha1($routerFilepath) . '-' . basename($routerFilepath);
     }
 
     /**
