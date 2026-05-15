@@ -13,6 +13,26 @@ use WeShop\Catalog\Model\Category;
  */
 class CategoryService
 {
+    private const CATEGORY_TREE_CACHE_TTL_SECONDS = 60.0;
+
+    /**
+     * Header hooks read category navigation on every frontend page. Cache only
+     * data, never rendered HTML, so request-specific header content stays safe.
+     *
+     * @var array<string, array{expires_at: float, data: array}>
+     */
+    private static array $categoryTreeCache = [];
+
+    /**
+     * @var array<string, array{expires_at: float, data: array}>
+     */
+    private static array $headerSearchOptionsCache = [];
+
+    /**
+     * @var array<string, array{expires_at: float, data: array}>
+     */
+    private static array $headerNavigationCache = [];
+
     /**
      * 获取分类
      * 
@@ -30,6 +50,240 @@ class CategoryService
         }
         
         return null;
+    }
+
+    private function buildCategoryTree(int $parentId = 0, bool $includeRightMenuOnly = false): array
+    {
+        $childrenByParent = [];
+        foreach ($this->getAllActiveCategoriesForTree() as $category) {
+            $categoryId = (int)($category[Category::schema_fields_ID] ?? 0);
+            if ($categoryId <= 0) {
+                continue;
+            }
+
+            $category[Category::schema_fields_ID] = $categoryId;
+            $category[Category::schema_fields_PARENT_ID] = (int)($category[Category::schema_fields_PARENT_ID] ?? 0);
+            $this->attachTreeAttributes($category);
+            $childrenByParent[$category[Category::schema_fields_PARENT_ID]][] = $category;
+        }
+
+        return $this->buildTreeFromGroupedChildren($childrenByParent, $parentId, $includeRightMenuOnly);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getAllActiveCategoriesForTree(): array
+    {
+        /** @var Category $category */
+        $category = ObjectManager::getInstance(Category::class);
+
+        return $category->clear()
+            ->where(Category::schema_fields_IS_ACTIVE, 1)
+            ->order(Category::schema_fields_PARENT_ID, 'ASC')
+            ->order(Category::schema_fields_SORT_ORDER, 'ASC')
+            ->select()
+            ->fetchArray();
+    }
+
+    private function attachTreeAttributes(array &$category): void
+    {
+        $attributeValues = $category['attribute_value'] ?? [];
+        $category['is_right_menu'] = (int)($category['is_right_menu'] ?? $attributeValues['is_right_menu'] ?? 0);
+        $category['icon'] = (string)($category['icon'] ?? $attributeValues['icon'] ?? '');
+        $category['show_icon'] = (bool)($category['show_icon'] ?? $attributeValues['show_icon'] ?? true);
+    }
+
+    /**
+     * @param array<int, array<int, array<string, mixed>>> $childrenByParent
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildTreeFromGroupedChildren(array $childrenByParent, int $parentId, bool $includeRightMenuOnly): array
+    {
+        $tree = [];
+        foreach ($childrenByParent[$parentId] ?? [] as $category) {
+            if ($includeRightMenuOnly && (int)($category['is_right_menu'] ?? 0) !== 1) {
+                continue;
+            }
+
+            $category['children'] = $this->buildTreeFromGroupedChildren(
+                $childrenByParent,
+                (int)$category[Category::schema_fields_ID],
+                $includeRightMenuOnly
+            );
+            $tree[] = $category;
+        }
+
+        return $tree;
+    }
+
+    public static function clearTreeCache(): void
+    {
+        self::$categoryTreeCache = [];
+        self::$headerSearchOptionsCache = [];
+        self::$headerNavigationCache = [];
+    }
+
+    private function filterRightMenuTree(array $categories): array
+    {
+        $filtered = [];
+        foreach ($categories as $category) {
+            if ((int)($category['is_right_menu'] ?? 0) !== 1) {
+                continue;
+            }
+
+            if (!empty($category['children']) && is_array($category['children'])) {
+                $category['children'] = $this->filterRightMenuTree($category['children']);
+            }
+            $filtered[] = $category;
+        }
+
+        return $filtered;
+    }
+
+    public function getHeaderSearchCategoryOptions(int $parentId = 0): array
+    {
+        $cacheKey = (string)$parentId;
+        $now = microtime(true);
+        $cached = self::$headerSearchOptionsCache[$cacheKey] ?? null;
+        if ($cached && $cached['expires_at'] > $now) {
+            return $cached['data'];
+        }
+
+        $options = [];
+        foreach ($this->getCategoryTree($parentId) as $category) {
+            $this->appendHeaderSearchOption($options, $category);
+        }
+
+        self::$headerSearchOptionsCache[$cacheKey] = [
+            'expires_at' => $now + self::CATEGORY_TREE_CACHE_TTL_SECONDS,
+            'data' => $options,
+        ];
+
+        return $options;
+    }
+
+    private function appendHeaderSearchOption(array &$options, array $category, int $level = 0, string $parentPath = ''): void
+    {
+        if (empty($category['is_active']) || (int)$category['is_active'] !== 1) {
+            return;
+        }
+
+        $handle = trim((string)($category['handle'] ?? ''), '/');
+        $categoryId = (string)($category['category_id'] ?? '');
+        $pathSegment = $handle !== '' ? $handle : $categoryId;
+        $fullPath = $parentPath !== '' ? $parentPath . '/' . $pathSegment : $pathSegment;
+        $label = (string)($category['name'] ?? '');
+        if ($level > 0) {
+            $indent = str_repeat('&nbsp;&nbsp;&nbsp;', $level);
+            $separator = $level > 1 ? ' - ' : ' > ';
+            $label = $indent . $separator . $label;
+        }
+
+        $options[] = [
+            'value' => $fullPath,
+            'label' => $label,
+            'display_label' => (string)($category['name'] ?? ''),
+            'level' => $level,
+            'full_path' => $fullPath,
+        ];
+
+        foreach (($category['children'] ?? []) as $child) {
+            if (is_array($child)) {
+                $this->appendHeaderSearchOption($options, $child, $level + 1, $fullPath);
+            }
+        }
+    }
+
+    public function getHeaderNavigationData(string $categoryBaseUrl, int $parentId = 0): array
+    {
+        $categoryBaseUrl = rtrim($categoryBaseUrl, '/') . '/';
+        $cacheKey = $parentId . '|' . md5($categoryBaseUrl);
+        $now = microtime(true);
+        $cached = self::$headerNavigationCache[$cacheKey] ?? null;
+        if ($cached && $cached['expires_at'] > $now) {
+            return $cached['data'];
+        }
+
+        $navItems = [];
+        foreach ($this->getCategoryTree($parentId) as $category) {
+            $menuItem = $this->buildHeaderMenuItem($category, $categoryBaseUrl);
+            if ($menuItem !== null) {
+                $navItems[] = $menuItem;
+            }
+        }
+
+        $sidebarShortcuts = [];
+        foreach ($this->getRightMenuCategoryTree($parentId) as $category) {
+            $shortcut = $this->buildHeaderSidebarShortcut($category, $categoryBaseUrl);
+            if ($shortcut !== null) {
+                $sidebarShortcuts[] = $shortcut;
+            }
+        }
+
+        $data = [
+            'navItems' => $navItems,
+            'sidebarShortcuts' => $sidebarShortcuts,
+        ];
+        self::$headerNavigationCache[$cacheKey] = [
+            'expires_at' => $now + self::CATEGORY_TREE_CACHE_TTL_SECONDS,
+            'data' => $data,
+        ];
+
+        return $data;
+    }
+
+    private function buildHeaderMenuItem(array $category, string $categoryBaseUrl, string $parentPath = ''): ?array
+    {
+        if (empty($category['is_active']) || (int)$category['is_active'] !== 1) {
+            return null;
+        }
+
+        $rawSlug = trim((string)($category['handle'] ?? ''), '/');
+        if ($rawSlug === '') {
+            return null;
+        }
+
+        $encodedSlug = rawurlencode($rawSlug);
+        $fullHandle = $parentPath === '' ? $encodedSlug : $parentPath . '/' . $encodedSlug;
+        $menuItem = [
+            'text' => (string)($category['name'] ?? ''),
+            'url' => $categoryBaseUrl . $fullHandle,
+        ];
+
+        $children = [];
+        foreach (($category['children'] ?? []) as $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+            $childMenuItem = $this->buildHeaderMenuItem($child, $categoryBaseUrl, $fullHandle);
+            if ($childMenuItem !== null) {
+                $children[] = $childMenuItem;
+            }
+        }
+        if ($children) {
+            $menuItem['children'] = $children;
+        }
+
+        return $menuItem;
+    }
+
+    private function buildHeaderSidebarShortcut(array $category, string $categoryBaseUrl): ?array
+    {
+        if (empty($category['is_active']) || (int)$category['is_active'] !== 1) {
+            return null;
+        }
+
+        $categoryHandle = trim((string)($category['handle'] ?? ''), '/');
+        if ($categoryHandle === '') {
+            return null;
+        }
+
+        return [
+            'text' => (string)($category['name'] ?? ''),
+            'url' => $categoryBaseUrl . rawurlencode($categoryHandle),
+            'icon' => (string)($category['icon'] ?? 'fas fa-circle'),
+        ];
     }
     
     /**
@@ -120,50 +374,23 @@ class CategoryService
      */
     public function getCategoryTree(int $parentId = 0, bool $includeRightMenuOnly = false): array
     {
-        $categories = $this->getChildCategories($parentId);
-        
-        foreach ($categories as &$category) {
-            // 加载 EAV 属性
-            $categoryModel = ObjectManager::getInstance(Category::class);
-            $categoryModel->load($category['category_id']);
-            
-            // 获取 is_right_menu 属性值
-            try {
-                $isRightMenuValue = $categoryModel->getAttributeValue('is_right_menu');
-                $category['is_right_menu'] = $isRightMenuValue ? (int)$isRightMenuValue : 0;
-            } catch (\Exception $e) {
-                $category['is_right_menu'] = 0;
-            }
-            
-            // 获取图标属性值（用于子分类筛选器显示）
-            try {
-                $iconValue = $categoryModel->getAttributeValue('icon');
-                $category['icon'] = $iconValue ?: '';
-            } catch (\Exception $e) {
-                $category['icon'] = '';
-            }
-            
-            // 获取 show_icon 属性值（控制是否显示图标，默认为 true）
-            try {
-                $showIconValue = $categoryModel->getAttributeValue('show_icon');
-                $category['show_icon'] = $showIconValue !== null ? (bool)$showIconValue : true;
-            } catch (\Exception $e) {
-                $category['show_icon'] = true; // 默认显示图标
-            }
-            
-            // 如果只需要右侧菜单分类，且当前分类不是右侧菜单分类，则跳过
-            if ($includeRightMenuOnly && $category['is_right_menu'] != 1) {
-                continue;
-            }
-            
-            $category['children'] = $this->getCategoryTree($category['category_id'], $includeRightMenuOnly);
+        if ($includeRightMenuOnly) {
+            return $this->filterRightMenuTree($this->getCategoryTree($parentId, false));
         }
-        
-        // 过滤掉被跳过的分类
-        $categories = array_values(array_filter($categories, function($cat) use ($includeRightMenuOnly) {
-            return !$includeRightMenuOnly || $cat['is_right_menu'] == 1;
-        }));
-        
+
+        $cacheKey = $parentId . '|' . ($includeRightMenuOnly ? 'right' : 'all');
+        $now = microtime(true);
+        $cached = self::$categoryTreeCache[$cacheKey] ?? null;
+        if ($cached && $cached['expires_at'] > $now) {
+            return $cached['data'];
+        }
+
+        $categories = $this->buildCategoryTree($parentId, $includeRightMenuOnly);
+        self::$categoryTreeCache[$cacheKey] = [
+            'expires_at' => $now + self::CATEGORY_TREE_CACHE_TTL_SECONDS,
+            'data' => $categories,
+        ];
+
         return $categories;
     }
     
@@ -283,6 +510,7 @@ class CategoryService
         }
         
         $category->save();
+        self::clearTreeCache();
         
         return $category;
     }
