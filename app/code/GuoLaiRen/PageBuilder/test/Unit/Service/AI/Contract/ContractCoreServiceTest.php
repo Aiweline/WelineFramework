@@ -11,6 +11,8 @@ use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceContractHelper;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceTruthContractBuilder;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceTruthContractValidator;
 use PHPUnit\Framework\TestCase;
 
 final class ContractCoreServiceTest extends TestCase
@@ -77,6 +79,26 @@ final class ContractCoreServiceTest extends TestCase
         self::assertContains('Read-only field changed: site_brief.*', $result['errors']);
     }
 
+    public function testPermissionMatrixPatchRulesRejectNonPatchableMutation(): void
+    {
+        $previous = [
+            'pages' => [['page_id' => 'home']],
+            'content_manifest' => ['items' => ['home.title' => 'Before']],
+            'qa_gates' => ['schema_valid' => ['status' => 'pending']],
+        ];
+        $next = $previous;
+        $next['pages'][0]['page_id'] = 'changed-home';
+
+        $result = (new ContractPatchValidator())->validate($previous, $next, [
+            'patch' => ['content_manifest.items.*', 'qa_gates.*'],
+            'forbidden' => ['pages', 'blocks', 'tasks'],
+        ]);
+
+        self::assertFalse($result['valid']);
+        self::assertContains('Forbidden field changed: pages.0.page_id', $result['errors']);
+        self::assertContains('Path is not patchable by permission_matrix: pages.0.page_id', $result['errors']);
+    }
+
     public function testSourceContractsAndQaGatesAreStructured(): void
     {
         $sourceHelper = new SourceContractHelper();
@@ -94,6 +116,26 @@ final class ContractCoreServiceTest extends TestCase
         $gates = (new QaGateHelper())->pendingSet(['schema', 'frozen_fields']);
         self::assertSame(QaGateHelper::STATUS_PENDING, $gates['schema']['status']);
         self::assertSame('frozen_fields', $gates['frozen_fields']['key']);
+    }
+
+    public function testSourceTruthContractUsesUnifiedShellAndPassesValidation(): void
+    {
+        $contract = (new SourceTruthContractBuilder())->build(
+            ['site_title' => 'Teenipiya', 'brief_description' => 'Explain refund rules clearly for visitors.'],
+            ['site_title' => 'Teenipiya'],
+            [],
+            '',
+            ['refund_policy'],
+            'en_US'
+        );
+
+        $result = (new SourceTruthContractValidator())->validate($contract);
+
+        self::assertTrue($result['valid'], \implode("\n", $result['errors']));
+        self::assertSame(ContractType::TYPE_SOURCE_TRUTH, $contract['contract_meta']['type']);
+        self::assertSame(ContractType::STAGE_STAGE1, $contract['contract_meta']['stage']);
+        self::assertArrayHasKey('schema_shape', $contract['qa_gates']);
+        self::assertSame([], $contract['source_contracts']);
     }
 
     public function testQaReportSeparatesContractViolationsFromContentQuality(): void
