@@ -428,6 +428,10 @@ class WlsRuntime implements RuntimeInterface
             if (!empty($performanceConfig['response_headers_enabled']) && ($timing['total_ms'] >= $slowThreshold || $isDev)) {
                 $this->applyPerformanceHeaders($timing, $request);
             }
+            try {
+                $request->getResponse()->setHeader('X-Weline-Request-Id', RequestLifecycleTrace::ensureRequestId());
+            } catch (\Throwable) {
+            }
 
             return $resultStr;
             
@@ -566,11 +570,17 @@ class WlsRuntime implements RuntimeInterface
             // 在重置前保存 HeaderCollector 的 Cookie/Header（Worker 构建响应时需要）
             // StateManager::reset() 会清空 HeaderCollector，必须在此之前提取
             $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
+            try {
+                $hc->setHeader('X-Weline-Request-Id', RequestLifecycleTrace::ensureRequestId());
+            } catch (\Throwable) {
+            }
             $this->snapshotPendingResponseState($hc);
             if (RequestLifecycleTrace::isEnabled()) {
                 $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
-                $timing['trace_top'] = $this->summarizeTraceSpans($traceSpans);
-                $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', 12);
+                $traceTopLimit = $this->getRequestTraceSummaryLimit('request_trace_top_limit', 40);
+                $traceDbTopLimit = $this->getRequestTraceSummaryLimit('request_trace_db_top_limit', 20);
+                $timing['trace_top'] = $this->summarizeTraceSpans($traceSpans, $traceTopLimit);
+                $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', $traceDbTopLimit);
                 $timing['trace_category_totals'] = $this->summarizeTraceCategoryTotals($traceSpans);
             }
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
@@ -1071,6 +1081,16 @@ class WlsRuntime implements RuntimeInterface
         ], $performanceConfig);
 
         return $this->performanceConfig;
+    }
+
+    private function getRequestTraceSummaryLimit(string $key, int $default): int
+    {
+        $configured = (int) Env::get('wls.debug.' . $key, $default);
+        if ($configured <= 0) {
+            return $default;
+        }
+
+        return \min(200, \max(1, $configured));
     }
 
     private function shouldWriteRequestLog(): bool
