@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Currency\Helper;
 
 use Weline\Currency\Model\Currency;
+use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -30,13 +31,22 @@ class CurrencyFormatter
      */
     public static function format(float $amount, ?string $currencyCode = null): string
     {
-        $currency = self::getCurrency($currencyCode);
-        
-        if (!$currency) {
-            return (string)$amount;
+        $resolvedCurrency = strtoupper(trim((string) ($currencyCode ?? 'CNY')));
+        if ($resolvedCurrency === '') {
+            $resolvedCurrency = 'CNY';
         }
-        
-        return $currency->formatAmount($amount);
+
+        return self::getCurrencyRateService()->format($amount, $resolvedCurrency, $resolvedCurrency);
+    }
+
+    public static function convert(float $amount, ?string $sourceCurrency = null, ?string $targetCurrency = null): float
+    {
+        return self::getCurrencyRateService()->convert($amount, $sourceCurrency, $targetCurrency);
+    }
+
+    public static function formatConverted(float $amount, ?string $sourceCurrency = null, ?string $targetCurrency = null): string
+    {
+        return self::getCurrencyRateService()->format($amount, $sourceCurrency, $targetCurrency);
     }
 
     /**
@@ -68,6 +78,11 @@ class CurrencyFormatter
             ->fetch();
         
         return $currency->getId() ? $currency : null;
+    }
+
+    private static function getCurrencyRateService(): CurrencyRateService
+    {
+        return ObjectManager::getInstance(CurrencyRateService::class);
     }
 }
 
