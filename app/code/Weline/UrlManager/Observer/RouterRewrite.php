@@ -22,9 +22,18 @@ use Weline\UrlManager\Model\UrlRewrite;
 
 class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
 {
+    private const PROCESS_CACHE_TTL = 300;
+    private const PROCESS_CACHE_MAX_ITEMS = 2048;
+
     private ?UrlRewrite $urlRewrite = null;
     
     private ?CachePoolInterface $cache = null;
+
+    /** @var array<string, mixed> */
+    private static array $processCache = [];
+
+    /** @var array<string, int> */
+    private static array $processCacheExpiresAt = [];
 
     public function __construct(
         ?UrlRewrite $urlRewrite = null
@@ -91,7 +100,44 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
      */
     private function getCacheKey(string $uri, int $websiteId): string
     {
-        return 'website_' . $websiteId . '_' . $uri;
+        return 'v3_website_' . $websiteId . '_' . $this->normalizeRewriteCacheUri($uri);
+    }
+
+    private function normalizeRewriteCacheUri(string $uri): string
+    {
+        $path = Url::parse_url($uri, 'path');
+        if (is_string($path) && $path !== '') {
+            return ltrim($path, '/');
+        }
+
+        return ltrim(strtok($uri, '?') ?: $uri, '/');
+    }
+
+    private function hasProcessCache(string $cacheKey): bool
+    {
+        $expiresAt = self::$processCacheExpiresAt[$cacheKey] ?? 0;
+        if ($expiresAt < \time()) {
+            unset(self::$processCache[$cacheKey], self::$processCacheExpiresAt[$cacheKey]);
+            return false;
+        }
+
+        return \array_key_exists($cacheKey, self::$processCache);
+    }
+
+    private function getProcessCache(string $cacheKey): mixed
+    {
+        return $this->hasProcessCache($cacheKey) ? self::$processCache[$cacheKey] : false;
+    }
+
+    private function setProcessCache(string $cacheKey, mixed $value): void
+    {
+        if (\count(self::$processCache) >= self::PROCESS_CACHE_MAX_ITEMS) {
+            \array_shift(self::$processCache);
+            \array_shift(self::$processCacheExpiresAt);
+        }
+
+        self::$processCache[$cacheKey] = $value;
+        self::$processCacheExpiresAt[$cacheKey] = \time() + self::PROCESS_CACHE_TTL;
     }
 
     /**
@@ -102,14 +148,21 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         $uri = ltrim($event->getData(), '/');
         $cache = $this->getCache();
         $websiteId = $this->getCurrentWebsiteId();
-        $cacheKey = $this->getCacheKey($uri, $websiteId);
+        $cacheUri = $this->normalizeRewriteCacheUri($uri);
+        $cacheKey = $this->getCacheKey($cacheUri, $websiteId);
         
         // 尝试从缓存获取（缓存按 website_id 隔离）
         // 返回值说明：
         // - array: 找到缓存，包含path
         // - null: 缓存了"未找到"的结果
         // - false: 缓存未命中，需要查询数据库
-        $rewriteData = $cache->get($cacheKey);
+        $rewriteData = $this->getProcessCache($cacheKey);
+        if ($rewriteData === false) {
+            $rewriteData = $cache->get($cacheKey);
+            if ($rewriteData !== false) {
+                $this->setProcessCache($cacheKey, $rewriteData);
+            }
+        }
         if (is_array($rewriteData) && isset($rewriteData['path'])) {
             $this->applyRewrite(
                 $event,
@@ -125,9 +178,9 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         }
         
         // $rewriteData === false，缓存未命中，查询数据库
-        $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $uri);
+        $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $cacheUri);
         if (!$rewrite->getId()) {
-            $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $uri);
+            $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $cacheUri);
         }
         
         if ($rewrite->getId()) {
@@ -137,6 +190,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 'url_id' => (string)($rewrite->getData(UrlRewrite::schema_fields_URL_ID) ?? ''),
                 'website_id' => (int)($rewrite->getData(UrlRewrite::schema_fields_WEBSITE_ID) ?? 0),
             ];
+            $this->setProcessCache($cacheKey, $rewriteData);
             $cache->set($cacheKey, $rewriteData);
             
             $this->applyRewrite(
@@ -160,6 +214,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                     'url_id' => (string)($rewrite->getData(UrlRewrite::schema_fields_URL_ID) ?? ''),
                     'website_id' => (int)($rewrite->getData(UrlRewrite::schema_fields_WEBSITE_ID) ?? 0),
                 ];
+                $this->setProcessCache($cacheKey, $rewriteData);
                 $cache->set($cacheKey, $rewriteData);
                 
                 $this->applyRewrite(
@@ -170,6 +225,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                     $rewriteData['website_id']
                 );
             } else {
+                $this->setProcessCache($cacheKey, 'not_found');
                 $cache->set($cacheKey, 'not_found');
             }
         }
@@ -197,34 +253,19 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             }
         }
 
-        // PageBuilder 重写优先透传精确 page_id / website_id，避免仅靠 handle 命中旧页面或错误模板
-        if (str_starts_with($origin_path, '/pagebuilder/frontend/page/view')) {
-            $originQuery = Url::parse_url($origin_path, 'query') ?: '';
-            parse_str($originQuery, $originParams);
-            if (!isset($originParams['page_id']) && is_string($urlId) && preg_match('/^pagebuilder_page_(\d+)$/', $urlId, $matches)) {
-                $originParams['page_id'] = (int)$matches[1];
-            }
-            if (!isset($originParams['website_id']) && $websiteId !== null && $websiteId > 0) {
-                $originParams['website_id'] = $websiteId;
-            }
-            $basePath = Url::parse_url($origin_path, 'path') ?: '/pagebuilder/frontend/page/view';
-            $rebuiltQuery = http_build_query($originParams);
-            $origin_path = $basePath . ($rebuiltQuery !== '' ? '?' . $rebuiltQuery : '');
-        }
-
         $event->setData('data', $origin_path);
         $query = Url::parse_url($origin_path, 'query');
         $decodedParams = [];
         parse_str($query, $decodedParams);
         WelineEnv::replaceGet($decodedParams);
-        $this->syncDecodedWlsRequestState($origin_path, $uri, $decodedParams, $websiteId);
+        $this->syncDecodedWlsRequestState($origin_path, $uri, $decodedParams, $websiteId, $urlId);
     }
 
     /**
      * WLS 下 SEO 解码后需要同步当前请求状态，而不是依赖 302 跳转。
      * 否则同一请求后半段仍可能读取到旧 REQUEST_URI / Query / RequestContext / Request 参数包。
      */
-    private function syncDecodedWlsRequestState(string $decodedUri, string $originUri, array $decodedParams, ?int $websiteId = null): void
+    private function syncDecodedWlsRequestState(string $decodedUri, string $originUri, array $decodedParams, ?int $websiteId = null, ?string $urlId = null): void
     {
         $queryString = Url::parse_url($decodedUri, 'query') ?: '';
         $originRequestUri = '/' . ltrim($originUri, '/');
@@ -235,6 +276,10 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
 
         if ($websiteId !== null && $websiteId > 0) {
             WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'RouterRewrite decoded website');
+            WelineEnv::setServer('WELINE_URL_REWRITE_WEBSITE_ID', (string)$websiteId, 'RouterRewrite decoded rewrite website');
+        }
+        if ($urlId !== null && $urlId !== '') {
+            WelineEnv::setServer('WELINE_URL_REWRITE_URL_ID', $urlId, 'RouterRewrite decoded url id');
         }
 
         if (isset($decodedParams['locale']) && \is_string($decodedParams['locale']) && $decodedParams['locale'] !== '') {
@@ -253,6 +298,14 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 ->setServer('REQUEST_URI', $decodedUri)
                 ->setServer('QUERY_STRING', $queryString)
                 ->setServer('WELINE_ORIGIN_REQUEST_URI', $originRequestUri);
+
+            if ($websiteId !== null && $websiteId > 0) {
+                $request->setServer('WELINE_WEBSITE_ID', (string)$websiteId)
+                    ->setServer('WELINE_URL_REWRITE_WEBSITE_ID', (string)$websiteId);
+            }
+            if ($urlId !== null && $urlId !== '') {
+                $request->setServer('WELINE_URL_REWRITE_URL_ID', $urlId);
+            }
 
             foreach ($decodedParams as $key => $value) {
                 if (\is_string($key)) {
