@@ -70,8 +70,34 @@
                 <p class='card-title-desc'><lang>配置货币汇率自动导入的相关设置</lang></p>
                 
                 <form class='needs-validation' novalidate action="@backend-url('currency/backend/config/index')" method="post">
+                    <div class='mb-4'>
+                        <label class='form-label'><lang>汇率模式</lang></label>
+                        <div class='d-flex flex-column gap-2'>
+                            <label class='form-check border rounded p-3 mb-0'>
+                                <input class='form-check-input me-2' type='radio' name='rate_mode' value='manual' <?= ($rate_mode ?? 'manual') === 'manual' ? 'checked' : '' ?>>
+                                <span class='form-check-label'>
+                                    <strong><lang>手动汇率</lang></strong><br>
+                                    <small class='text-muted'><lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang></small>
+                                </span>
+                            </label>
+                            <label class='form-check border rounded p-3 mb-0'>
+                                <input class='form-check-input me-2' type='radio' name='rate_mode' value='auto' <?= ($rate_mode ?? 'manual') === 'auto' ? 'checked' : '' ?>>
+                                <span class='form-check-label'>
+                                    <strong><lang>自动汇率</lang></strong><br>
+                                    <small class='text-muted'><lang>自动模式下，系统会以 CNY 为基准，通过 API / Cron / 手动导入更新汇率。</lang></small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class='alert alert-info mb-3' data-rate-mode-section='manual'>
+                        <lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang>
+                    </div>
+
+                    <div data-rate-mode-section='auto'>
                     <!-- 自动导入开关 -->
-                    <div class='mb-3'>
+                    </div>
+                    <div class='mb-3' data-rate-mode-section='auto'>
                         <label class='form-label'><lang>启用自动导入</lang></label>
                         <div class='form-check form-switch'>
                             <input class='form-check-input' type='checkbox' name='import_enabled' id='import_enabled' 
@@ -83,7 +109,7 @@
                     </div>
 
                     <!-- 导入渠道 -->
-                    <div class='mb-3'>
+                    <div class='mb-3' data-rate-mode-section='auto'>
                         <label class='form-label'><lang>导入渠道</lang></label>
                         <select class='form-select' name='import_provider' id='import_provider' required>
                             <option value='exchangerate-api' <?= ($import_provider ?? 'exchangerate-api') === 'exchangerate-api' ? 'selected' : '' ?>>
@@ -94,7 +120,7 @@
                     </div>
 
                     <!-- API密钥 -->
-                    <div class='mb-3'>
+                    <div class='mb-3' data-rate-mode-section='auto'>
                         <label class='form-label'><lang>API密钥</lang> <span class='text-muted'>(可选)</span></label>
                         <input type='text' class='form-control' name='import_api_key' id='import_api_key' 
                                value='<?= htmlspecialchars($import_api_key ?? '') ?>' 
@@ -106,7 +132,7 @@
                     </div>
 
                     <!-- Cron执行时间 -->
-                    <div class='mb-3'>
+                    <div class='mb-3' data-rate-mode-section='auto'>
                         <label class='form-label'><lang>Cron执行时间</lang></label>
                         
                         <!-- 可视化配置器 -->
@@ -200,6 +226,7 @@
                         <input type='hidden' name='import_cron_time' id='import_cron_time' 
                                value='<?= htmlspecialchars($import_cron_time ?? '0 2 * * *') ?>' required>
                     </div>
+                    </div>
 
                     <!-- 基准货币 -->
                     <div class='mb-3'>
@@ -290,7 +317,7 @@
                         <button type='submit' class='btn btn-primary'>
                             <lang>保存配置</lang>
                         </button>
-                        <button type='button' class='btn btn-success ms-2' onclick='WelineCurrencyConfig.manualImport(event)'>
+                        <button type='button' class='btn btn-success ms-2' data-rate-mode-section='auto' onclick='WelineCurrencyConfig.manualImport(event)'>
                             <lang>手动导入</lang>
                         </button>
                     </div>
@@ -431,6 +458,13 @@
             }
             
             // 监听表单提交
+            self.updateRateModeSections();
+            document.querySelectorAll('input[name="rate_mode"]').forEach(function(input) {
+                input.addEventListener('change', function() {
+                    self.updateRateModeSections();
+                });
+            });
+
             var form = document.querySelector('form.needs-validation');
             var baseCurrencySelect = document.getElementById('base_currency');
             
@@ -512,6 +546,16 @@
             this.parseCronExpression(currentCron);
         },
         
+        updateRateModeSections: function() {
+            var selectedMode = document.querySelector('input[name="rate_mode"]:checked');
+            var mode = selectedMode ? selectedMode.value : 'manual';
+
+            document.querySelectorAll('[data-rate-mode-section]').forEach(function(section) {
+                var sectionMode = section.getAttribute('data-rate-mode-section');
+                section.style.display = sectionMode === mode ? '' : 'none';
+            });
+        },
+
         parseCronExpression: function(cronExpr) {
             if (!cronExpr) cronExpr = '0 2 * * *';
             

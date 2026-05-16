@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Frontend\Controller;
 
 use WeShop\Frontend\Service\StorefrontShellDataService;
+use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
@@ -195,8 +196,8 @@ class BaseController extends FrontendController
 
     protected function formatPrice(float $price, string $currency = ''): string
     {
-        $resolvedCurrency = trim($currency) !== '' ? strtoupper($currency) : $this->getStoreCurrency();
-        return number_format($price, 2) . ' ' . $resolvedCurrency;
+        $targetCurrency = trim($currency) !== '' ? strtoupper($currency) : null;
+        return $this->resolveCurrencyRateService()->format($price, null, $targetCurrency);
     }
 
     protected function getStorefrontLoginRoute(): string
@@ -235,5 +236,10 @@ class BaseController extends FrontendController
     protected function getStorefrontShellDataService(): StorefrontShellDataService
     {
         return ObjectManager::getInstance(StorefrontShellDataService::class);
+    }
+
+    protected function resolveCurrencyRateService(): CurrencyRateService
+    {
+        return ObjectManager::getInstance(CurrencyRateService::class);
     }
 }
