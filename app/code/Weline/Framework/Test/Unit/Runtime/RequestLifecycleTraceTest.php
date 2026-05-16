@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
@@ -14,6 +15,7 @@ class RequestLifecycleTraceTest extends TestCase
 {
     protected function tearDown(): void
     {
+        unset($_SERVER['HTTP_X_WELINE_REQUEST_ID'], $_SERVER['HTTP_X_REQUEST_ID']);
         Context::leave();
         Runtime::resetModeCache();
         RequestLifecycleTrace::reset();
@@ -62,7 +64,70 @@ class RequestLifecycleTraceTest extends TestCase
         self::assertFalse(RequestLifecycleTrace::shouldSkipForCurrentRequest());
     }
 
-    public function testMaxSpanCapClearsBufferedSpansAndDisablesRecordingUntilReset(): void
+    public function testEarlyWlsCheckBeforeRequestContextInitDoesNotPoisonRequestTrace(): void
+    {
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+        Context::enter(new Context([]));
+
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+
+        Context::leave();
+        Context::enter(new Context([
+            'input' => ['uri' => '/USD/catalog/category/books'],
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+
+        RequestLifecycleTrace::recordSpan('router_start', 1.0, 'framework');
+
+        self::assertSame([
+            ['name' => 'router_start', 'duration_ms' => 1.0, 'category' => 'framework'],
+        ], RequestLifecycleTrace::getSpans());
+    }
+
+    public function testRequestIdIsScopedByRequestContextInWlsMode(): void
+    {
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+        $_SERVER['HTTP_X_WELINE_REQUEST_ID'] = 'req-context-one';
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+
+        self::assertSame('req-context-one', RequestLifecycleTrace::ensureRequestId());
+
+        Context::leave();
+        $_SERVER['HTTP_X_WELINE_REQUEST_ID'] = 'req-context-two';
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+
+        self::assertSame('req-context-two', RequestLifecycleTrace::ensureRequestId());
+    }
+
+    public function testRequestIdFallsBackToStableRequestContextIdWhenTraceStorageIsCleared(): void
+    {
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+        Context::enter(new Context([]));
+        RequestContext::setId('ctx-stable-12345678');
+
+        self::assertSame('ctx-stable-12345678', RequestLifecycleTrace::ensureRequestId());
+
+        RequestContext::remove('request_lifecycle_trace.request_id');
+
+        self::assertSame('ctx-stable-12345678', RequestLifecycleTrace::ensureRequestId());
+    }
+
+    public function testRequestIdUsesContextIdBeforeInitializedFlagIsTrue(): void
+    {
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+        $context = new Context([]);
+        Context::enter($context);
+        $context->set('runtime.request_context.request_id', 'ctx-early-12345678');
+        $context->set('runtime.request_context.initialized', false);
+
+        self::assertSame('ctx-early-12345678', RequestLifecycleTrace::ensureRequestId());
+    }
+
+    public function testMaxSpanCapPreservesBufferedSpansAndStopsFurtherRecordingUntilReset(): void
     {
         Context::enter(new Context([
             'runtime' => ['request_context' => ['initialized' => true]],
@@ -74,10 +139,19 @@ class RequestLifecycleTraceTest extends TestCase
         self::assertCount(1, RequestLifecycleTrace::getSpans());
 
         RequestLifecycleTrace::recordSpan('second', 1.0);
-        self::assertSame([], RequestLifecycleTrace::getSpans());
+        self::assertSame([
+            ['name' => 'first', 'duration_ms' => 1.0, 'category' => 'framework'],
+        ], RequestLifecycleTrace::getSpans());
 
         RequestLifecycleTrace::recordSpan('third', 1.0);
-        self::assertSame([], RequestLifecycleTrace::getSpans());
+        self::assertSame([
+            ['name' => 'first', 'duration_ms' => 1.0, 'category' => 'framework'],
+        ], RequestLifecycleTrace::getSpans());
+
+        $payload = RequestLifecycleTrace::exportCompactPayload();
+        self::assertSame(1, $payload['summary']['span_count']);
+        self::assertTrue($payload['summary']['truncated']);
+        self::assertSame(1, $payload['summary']['max_spans']);
 
         RequestLifecycleTrace::reset();
         $this->setStaticProperty('maxSpansCapCache', 1);
