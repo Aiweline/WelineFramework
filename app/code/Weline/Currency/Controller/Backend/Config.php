@@ -45,6 +45,7 @@ class Config extends BackendController
     {
         if ($this->request->isGet()) {
             // 获取当前配置
+            $this->assign('rate_mode', $this->config->getRateMode());
             $this->assign('import_enabled', $this->config->isImportEnabled());
             $this->assign('import_provider', $this->config->getImportProvider());
             $this->assign('import_api_key', $this->config->getImportApiKey());
@@ -70,7 +71,14 @@ class Config extends BackendController
 
         // POST请求：保存配置
         try {
-            $importEnabled = (bool)$this->request->getPost('import_enabled', false);
+            $rateMode = strtolower(trim((string) $this->request->getPost('rate_mode', $this->config->getRateMode())));
+            if (!in_array($rateMode, [CurrencyConfig::RATE_MODE_MANUAL, CurrencyConfig::RATE_MODE_AUTO], true)) {
+                $rateMode = CurrencyConfig::RATE_MODE_MANUAL;
+            }
+
+            $importEnabled = $rateMode === CurrencyConfig::RATE_MODE_AUTO
+                ? (bool)$this->request->getPost('import_enabled', false)
+                : false;
             $importProvider = $this->request->getPost('import_provider', 'exchangerate-api');
             $importApiKey = $this->request->getPost('import_api_key', '');
             $importCronTime = $this->request->getPost('import_cron_time', '0 2 * * *');
@@ -91,6 +99,7 @@ class Config extends BackendController
             $baseCurrencyChanged = ($oldBaseCurrency !== $baseCurrency);
 
             // 保存配置（先保存，因为重新计算需要新的基准货币）
+            $this->config->setRateMode($rateMode);
             $this->config->setImportEnabled($importEnabled);
             $this->config->setImportProvider($importProvider);
             $this->config->setImportApiKey($importApiKey ?: null);
@@ -98,7 +107,7 @@ class Config extends BackendController
             $this->config->setBaseCurrency($baseCurrency);
 
             // 如果基准货币改变了，需要重新计算所有货币的汇率
-            if ($baseCurrencyChanged) {
+            if ($baseCurrencyChanged && $rateMode === CurrencyConfig::RATE_MODE_AUTO) {
                 // 如果是AJAX请求，返回需要更新的标识
                 if ($this->request->isAjax()) {
                     return $this->fetchJson([
@@ -127,6 +136,17 @@ class Config extends BackendController
                         );
                     }
                 }
+            } elseif ($baseCurrencyChanged) {
+                $message = __('配置保存成功！手动汇率模式下，请同步维护各币种相对于 %{1} 的汇率。', $baseCurrency);
+                if ($this->request->isAjax()) {
+                    return $this->fetchJson([
+                        'success' => true,
+                        'base_currency_changed' => false,
+                        'message' => $message,
+                    ]);
+                }
+
+                $this->getMessageManager()->addSuccess($message);
             } else {
                 $this->getMessageManager()->addSuccess(__('配置保存成功！'));
             }
@@ -193,6 +213,13 @@ class Config extends BackendController
     public function import()
     {
         try {
+            if ($this->config->isManualRateMode()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('当前为手动汇率模式，无法执行自动导入。')
+                ]);
+            }
+
             $baseCurrency = $this->config->getBaseCurrency();
             
             if (empty($baseCurrency)) {
@@ -242,6 +269,13 @@ class Config extends BackendController
     public function postUpdateRates()
     {
         try {
+            if ($this->config->isManualRateMode()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('当前为手动汇率模式，无法自动重算汇率。请直接维护各币种相对于 CNY 的汇率。')
+                ]);
+            }
+
             $oldBaseCurrency = $this->request->getPost('old_base_currency', '');
             $newBaseCurrency = $this->request->getPost('new_base_currency', '');
             $current = (int)$this->request->getPost('current', 0);

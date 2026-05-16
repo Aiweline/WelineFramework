@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace WeShop\Price\Service;
 
 use WeShop\Product\Model\Product;
+use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\Event\EventsManager;
 
 class PriceService
 {
     public function __construct(
         private readonly Product $productModel,
-        private readonly EventsManager $eventsManager
+        private readonly EventsManager $eventsManager,
+        private readonly ?CurrencyRateService $currencyRateService = null
     ) {
     }
 
@@ -60,15 +62,8 @@ class PriceService
 
     public function formatPrice(float $price, string $currency = 'CNY'): string
     {
-        $symbols = [
-            'CNY' => 'CNY ',
-            'USD' => '$',
-            'EUR' => 'EUR ',
-        ];
-
-        $symbol = $symbols[$currency] ?? ($currency . ' ');
-
-        return $symbol . number_format($price, 2);
+        $targetCurrency = trim($currency) !== '' ? strtoupper($currency) : null;
+        return $this->getCurrencyRateService()->format($price, null, $targetCurrency);
     }
 
     /**
@@ -364,5 +359,10 @@ class PriceService
         }
 
         return $rows;
+    }
+
+    protected function getCurrencyRateService(): CurrencyRateService
+    {
+        return $this->currencyRateService ?? \Weline\Framework\Manager\ObjectManager::getInstance(CurrencyRateService::class);
     }
 }
