@@ -7,6 +7,7 @@ namespace WeShop\Price\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
+use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\Event\Config\XmlReader;
 use Weline\Framework\Event\EventRegistryInterface;
 use Weline\Framework\Event\EventsManager;
@@ -137,7 +138,23 @@ class PriceServiceTest extends TestCase
         $service->calculatePrice(0);
     }
 
-    private function createService(?EventsManager $eventsManager = null): PriceService
+    public function testFormatPriceUsesCurrencyRateService(): void
+    {
+        $currencyRateService = $this->createMock(CurrencyRateService::class);
+        $currencyRateService->expects($this->once())
+            ->method('format')
+            ->with(99.5, null, 'USD')
+            ->willReturn('$12.44');
+
+        $service = $this->createService(null, $currencyRateService);
+
+        $this->assertSame('$12.44', $service->formatPrice(99.5, 'usd'));
+    }
+
+    private function createService(
+        ?EventsManager $eventsManager = null,
+        ?CurrencyRateService $currencyRateService = null
+    ): PriceService
     {
         $product = $this->createMock(Product::class);
         if ($eventsManager === null) {
@@ -151,6 +168,6 @@ class PriceServiceTest extends TestCase
             );
         }
 
-        return new PriceService($product, $eventsManager);
+        return new PriceService($product, $eventsManager, $currencyRateService);
     }
 }
