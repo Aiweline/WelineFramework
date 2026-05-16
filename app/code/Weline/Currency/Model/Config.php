@@ -25,11 +25,15 @@ class Config
      * 配置键名
      */
     public const KEY_IMPORT_ENABLED = 'import_enabled';
+    public const KEY_RATE_MODE = 'rate_mode';
     public const KEY_IMPORT_PROVIDER = 'import_provider';
     public const KEY_IMPORT_API_KEY = 'import_api_key';
     public const KEY_IMPORT_CRON_TIME = 'import_cron_time';
     public const KEY_BASE_CURRENCY = 'base_currency';
     public const KEY_LAST_IMPORT_TIME = 'last_import_time';
+
+    public const RATE_MODE_MANUAL = 'manual';
+    public const RATE_MODE_AUTO = 'auto';
 
     /**
      * 模块名称
@@ -82,6 +86,39 @@ class Config
     public function isImportEnabled(): bool
     {
         return (bool)$this->get(self::KEY_IMPORT_ENABLED, false);
+    }
+
+    public function getRateMode(): string
+    {
+        $mode = strtolower(trim((string) $this->get(self::KEY_RATE_MODE, '')));
+        if (in_array($mode, [self::RATE_MODE_MANUAL, self::RATE_MODE_AUTO], true)) {
+            return $mode;
+        }
+
+        return $this->isImportEnabled() ? self::RATE_MODE_AUTO : self::RATE_MODE_MANUAL;
+    }
+
+    /**
+     * @throws \Weline\Framework\App\Exception
+     */
+    public function setRateMode(string $mode): bool
+    {
+        $mode = strtolower(trim($mode));
+        if (!in_array($mode, [self::RATE_MODE_MANUAL, self::RATE_MODE_AUTO], true)) {
+            $mode = self::RATE_MODE_MANUAL;
+        }
+
+        return $this->set(self::KEY_RATE_MODE, $mode);
+    }
+
+    public function isManualRateMode(): bool
+    {
+        return $this->getRateMode() === self::RATE_MODE_MANUAL;
+    }
+
+    public function isAutoRateMode(): bool
+    {
+        return $this->getRateMode() === self::RATE_MODE_AUTO;
     }
 
     /**

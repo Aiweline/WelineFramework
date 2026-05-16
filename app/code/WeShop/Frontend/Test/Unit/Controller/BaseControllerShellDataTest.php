@@ -7,6 +7,7 @@ namespace WeShop\Frontend\Test\Unit\Controller;
 use PHPUnit\Framework\TestCase;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Frontend\Service\StorefrontShellDataService;
+use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\App\State;
 
 class BaseControllerShellDataTest extends TestCase
@@ -23,13 +24,27 @@ class BaseControllerShellDataTest extends TestCase
                 'cart_total' => 88.8,
             ]);
 
-        $controller = new class($shellDataService) extends BaseController {
+        $currencyRateService = $this->createMock(CurrencyRateService::class);
+        $currencyRateService->expects($this->exactly(2))
+            ->method('format')
+            ->willReturnCallback(static function (float $price, ?string $sourceCurrency, ?string $targetCurrency): string {
+                if ($targetCurrency === 'GBP') {
+                    return '£' . number_format($price, 2);
+                }
+
+                return '¥' . number_format($price, 2);
+            });
+
+        $controller = new class($shellDataService, $currencyRateService) extends BaseController {
             /**
              * @var array<string, mixed>
              */
             public array $assignedData = [];
 
-            public function __construct(private readonly StorefrontShellDataService $shellDataService)
+            public function __construct(
+                private readonly StorefrontShellDataService $shellDataService,
+                private readonly CurrencyRateService $currencyRateService
+            )
             {
             }
 
@@ -51,6 +66,11 @@ class BaseControllerShellDataTest extends TestCase
             protected function getStorefrontShellDataService(): StorefrontShellDataService
             {
                 return $this->shellDataService;
+            }
+
+            protected function resolveCurrencyRateService(): CurrencyRateService
+            {
+                return $this->currencyRateService;
             }
 
             protected function assign(array|string $tpl_var, mixed $value = null): static
@@ -76,7 +96,7 @@ class BaseControllerShellDataTest extends TestCase
         $this->assertSame(88.8, $controller->assignedData['cart_total']);
         $this->assertSame(State::getLangLocal(), $controller->assignedData['locale']);
         $this->assertSame('Global Hub', $controller->exposeGetStoreName());
-        $this->assertSame('12.30 EUR', $controller->exposeFormatPrice(12.3, ''));
-        $this->assertSame('12.30 GBP', $controller->exposeFormatPrice(12.3, 'gbp'));
+        $this->assertSame('¥12.30', $controller->exposeFormatPrice(12.3, ''));
+        $this->assertSame('£12.30', $controller->exposeFormatPrice(12.3, 'gbp'));
     }
 }
