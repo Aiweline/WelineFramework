@@ -10,14 +10,17 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\State;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
 use Weline\I18n\Model\Locale\Dictionary;
 use Weline\Meta\Helper\MetaData;
 use Weline\Meta\Model\MetaConfig;
+use Weline\Server\Service\MemoryStateFacade;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewThemeScopeService;
 use Weline\Theme\Service\ThemeContextService;
@@ -53,12 +56,19 @@ final class ThemeDataRequestState
  */
 class ThemeData
 {
+    private const RUNTIME_CACHE_TTL = 300;
+    private const SHARED_CACHE_NAMESPACE = 'weline_site_runtime';
+
     private static ?ThemeDataRequestState $mainState = null;
 
     /** @var \WeakMap<\Fiber, ThemeDataRequestState>|null */
     private static ?\WeakMap $fiberStates = null;
     /** @var array<string, ThemeDataRequestState> */
     private static array $scopedStates = [];
+    /** @var array<string, array{expires_at: float, value: mixed}> */
+    private static array $runtimeCache = [];
+    private static ?MemoryStateFacade $sharedRuntimeCache = null;
+    private static bool $sharedRuntimeCacheResolved = false;
 
     private static function currentFiber(): ?\Fiber
     {
@@ -156,6 +166,128 @@ class ThemeData
         } catch (\Throwable) {
             return $scope;
         }
+    }
+
+    /**
+     * @return array{0: bool, 1: mixed}
+     */
+    private static function getRuntimeCache(string $key): array
+    {
+        $entry = self::$runtimeCache[$key] ?? null;
+        if (is_array($entry)) {
+            if (($entry['expires_at'] ?? 0.0) >= microtime(true)) {
+                return [true, $entry['value'] ?? null];
+            }
+            unset(self::$runtimeCache[$key]);
+        }
+
+        $cache = self::sharedRuntimeCache();
+        if ($cache === null) {
+            return [false, null];
+        }
+
+        try {
+            $value = $cache->get(self::SHARED_CACHE_NAMESPACE, 'theme.' . $key);
+            if ($value === null) {
+                return [false, null];
+            }
+            self::$runtimeCache[$key] = [
+                'expires_at' => microtime(true) + self::runtimeCacheTtl(),
+                'value' => $value,
+            ];
+            return [true, $value];
+        } catch (\Throwable) {
+            self::$sharedRuntimeCache = null;
+            self::$sharedRuntimeCacheResolved = true;
+            return [false, null];
+        }
+    }
+
+    private static function setRuntimeCache(string $key, mixed $value): void
+    {
+        self::$runtimeCache[$key] = [
+            'expires_at' => microtime(true) + self::runtimeCacheTtl(),
+            'value' => $value,
+        ];
+
+        $cache = self::sharedRuntimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set(self::SHARED_CACHE_NAMESPACE, 'theme.' . $key, $value, self::runtimeCacheTtl());
+        } catch (\Throwable) {
+            self::$sharedRuntimeCache = null;
+            self::$sharedRuntimeCacheResolved = true;
+        }
+    }
+
+    private static function sharedRuntimeCache(): ?MemoryStateFacade
+    {
+        if (self::$sharedRuntimeCacheResolved) {
+            return self::$sharedRuntimeCache;
+        }
+        self::$sharedRuntimeCacheResolved = true;
+
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            self::$sharedRuntimeCache = new MemoryStateFacade($policy->memoryOptions([
+                'consumer_code' => self::SHARED_CACHE_NAMESPACE,
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$sharedRuntimeCache = null;
+        }
+
+        return self::$sharedRuntimeCache;
+    }
+
+    private static function runtimeCacheTtl(): int
+    {
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            return $policy->ttl('theme.runtime_data_ttl', self::RUNTIME_CACHE_TTL);
+        } catch (\Throwable) {
+            return self::RUNTIME_CACHE_TTL;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $themeConfigs
+     * @return array<string, mixed>
+     */
+    private static function filterThemeConfigsByType(array $themeConfigs, string $type): array
+    {
+        $prefix = $type . '.';
+        $result = [];
+
+        foreach ($themeConfigs as $configKey => $configValue) {
+            $configKey = (string)$configKey;
+            if (!str_starts_with($configKey, $prefix)) {
+                continue;
+            }
+
+            if (is_string($configValue) && $configValue !== ''
+                && ($configValue[0] === '{' || $configValue[0] === '[')) {
+                $decoded = json_decode($configValue, true);
+                if ($decoded !== null && json_last_error() === JSON_ERROR_NONE) {
+                    $configValue = $decoded;
+                }
+            }
+
+            $result[substr($configKey, strlen($prefix))] = $configValue;
+        }
+
+        return $result;
     }
     
     /**
@@ -754,6 +886,14 @@ class ThemeData
             if ($state->performanceKey === $key) {
                 return;
             }
+
+            [$runtimeHit, $runtimeThemeConfigs] = self::getRuntimeCache('performance:' . $key);
+            if ($runtimeHit && is_array($runtimeThemeConfigs)) {
+                MetaData::performanceLoad($key, $namespace, $metaIdentify, $scope, $locale);
+                $state->performanceCache[$key] = $runtimeThemeConfigs;
+                $state->performanceKey = $key;
+                return;
+            }
             // 先调用MetaData的performanceLoad方法加载Meta记录
             MetaData::performanceLoad($key, $namespace, $metaIdentify, $scope, $locale);
             
@@ -785,8 +925,10 @@ class ThemeData
                     }
                     
                     $state->performanceCache[$key] = $themeConfigs;
+                    self::setRuntimeCache('performance:' . $key, $themeConfigs);
                 } catch (\Throwable $e) {
                     $state->performanceCache[$key] = [];
+                    self::setRuntimeCache('performance:' . $key, []);
                 }
             }
             
@@ -806,6 +948,7 @@ class ThemeData
     public static function clearCache(): void
     {
         MetaData::clearCache();
+        self::$runtimeCache = [];
         self::resetCurrentState();
     }
 
@@ -814,7 +957,7 @@ class ThemeData
      */
     public static function resetRequestState(): void
     {
-        self::clearCache();
+        self::resetCurrentState();
         self::state()->performanceLoading = false;
     }
     
@@ -926,6 +1069,12 @@ class ThemeData
         if (isset($state->performanceCache[$cacheKey])) {
             return $state->performanceCache[$cacheKey];
         }
+
+        [$runtimeHit, $runtimeValue] = self::getRuntimeCache($cacheKey);
+        if ($runtimeHit && is_array($runtimeValue)) {
+            $state->performanceCache[$cacheKey] = $runtimeValue;
+            return $runtimeValue;
+        }
         
         try {
             /** @var \Weline\Meta\Model\Meta $metaModel */
@@ -980,6 +1129,7 @@ class ThemeData
             }
             
             $state->performanceCache[$cacheKey] = $result;
+            self::setRuntimeCache($cacheKey, $result);
             return $result;
         } catch (\Exception $e) {
             return [];
@@ -1267,6 +1417,20 @@ class ThemeData
         if (isset($state->performanceCache[$cacheKey])) {
             return $state->performanceCache[$cacheKey];
         }
+
+        [$runtimeHit, $runtimeValue] = self::getRuntimeCache($cacheKey);
+        if ($runtimeHit && is_array($runtimeValue)) {
+            $state->performanceCache[$cacheKey] = $runtimeValue;
+            return $runtimeValue;
+        }
+
+        if ($state->performanceKey && isset($state->performanceCache[$state->performanceKey])
+            && is_array($state->performanceCache[$state->performanceKey])) {
+            $result = self::filterThemeConfigsByType($state->performanceCache[$state->performanceKey], $type);
+            $state->performanceCache[$cacheKey] = $result;
+            self::setRuntimeCache($cacheKey, $result);
+            return $result;
+        }
         
         try {
             /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
@@ -1322,6 +1486,7 @@ class ThemeData
             }
             
             $state->performanceCache[$cacheKey] = $result;
+            self::setRuntimeCache($cacheKey, $result);
             return $result;
         } catch (\Exception $e) {
             return [];

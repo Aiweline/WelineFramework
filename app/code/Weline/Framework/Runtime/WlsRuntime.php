@@ -16,6 +16,7 @@ use Weline\Framework\App;
 use Weline\Framework\App\Env;
 use Weline\Framework\Context;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
@@ -140,6 +141,7 @@ class WlsRuntime implements RuntimeInterface
         $this->eventManager = ObjectManager::getInstance(EventsManager::class);
         $this->router = ObjectManager::getInstance(Router::class);
         Router::preloadGeneratedRouterFiles();
+        HookReader::preloadGeneratedHookRegistry();
         PhraseParser::preloadWorkerDictionaries();
         I18nParser::preloadWorkerDictionaries();
         

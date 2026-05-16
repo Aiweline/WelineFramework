@@ -4,12 +4,24 @@ declare(strict_types=1);
 
 namespace Weline\Currency\Service;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Currency\Model\Config as CurrencyConfig;
 use Weline\Currency\Model\Currency;
 use Weline\Framework\App\State;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 
 class CurrencyRateService
 {
+    private const CACHE_NAMESPACE = 'weline_site_runtime';
+
+    /** @var array<string, array<string, mixed>|null> */
+    private static array $definitionCache = [];
+    private static ?string $baseCurrencyCache = null;
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
+
     /**
      * @var array<string, array<string, float|int|string>>
      */
@@ -79,8 +91,21 @@ class CurrencyRateService
 
     public function getBaseCurrency(): string
     {
+        if (self::$baseCurrencyCache !== null) {
+            return self::$baseCurrencyCache;
+        }
+
+        $cached = $this->runtimeCacheGet('currency.base');
+        if (is_string($cached) && $cached !== '') {
+            return self::$baseCurrencyCache = $cached;
+        }
+
         $baseCurrency = $this->normalizeCurrencyCode($this->config->getBaseCurrency());
-        return $baseCurrency !== '' ? $baseCurrency : 'CNY';
+        $baseCurrency = $baseCurrency !== '' ? $baseCurrency : 'CNY';
+        self::$baseCurrencyCache = $baseCurrency;
+        $this->runtimeCacheSet('currency.base', $baseCurrency);
+
+        return $baseCurrency;
     }
 
     public function getCurrentCurrency(): string
@@ -150,6 +175,15 @@ class CurrencyRateService
         if ($currencyCode === '') {
             return null;
         }
+        if (array_key_exists($currencyCode, self::$definitionCache)) {
+            return self::$definitionCache[$currencyCode];
+        }
+
+        $cacheKey = 'currency.definition.' . $currencyCode;
+        $cached = $this->runtimeCacheGet($cacheKey);
+        if (is_array($cached)) {
+            return self::$definitionCache[$currencyCode] = $cached;
+        }
 
         try {
             $currency = clone $this->currencyModel;
@@ -161,12 +195,22 @@ class CurrencyRateService
 
             if ($currency->getId()) {
                 $data = $currency->getData();
-                return is_array($data) ? $data : null;
+                $definition = is_array($data) ? $data : null;
+                self::$definitionCache[$currencyCode] = $definition;
+                if ($definition !== null) {
+                    $this->runtimeCacheSet($cacheKey, $definition);
+                }
+                return $definition;
             }
         } catch (\Throwable) {
         }
 
-        return self::FALLBACK_DEFINITIONS[$currencyCode] ?? null;
+        $definition = self::FALLBACK_DEFINITIONS[$currencyCode] ?? null;
+        self::$definitionCache[$currencyCode] = $definition;
+        if ($definition !== null) {
+            $this->runtimeCacheSet($cacheKey, $definition);
+        }
+        return $definition;
     }
 
     private function convertToBase(float $amount, string $sourceCurrency, string $baseCurrency): ?float
@@ -241,5 +285,74 @@ class CurrencyRateService
     private function normalizeCurrencyCode(string $currencyCode): string
     {
         return strtoupper(trim($currencyCode));
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get(self::CACHE_NAMESPACE, $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set(self::CACHE_NAMESPACE, $key, $value, $this->cacheTtl());
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            self::$runtimeCache = new MemoryStateFacade($policy->memoryOptions([
+                'consumer_code' => self::CACHE_NAMESPACE,
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function cacheTtl(): int
+    {
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            return $policy->ttl('site.currency_ttl', 300);
+        } catch (\Throwable) {
+            return 300;
+        }
     }
 }

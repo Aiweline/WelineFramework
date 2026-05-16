@@ -4,6 +4,7 @@ namespace Weline\I18n\Model;
 
 use Symfony\Component\Intl\Countries;
 use Symfony\Component\Intl\Locales;
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -16,6 +17,7 @@ use Weline\I18n\Service\TranslationCollector;
 class I18n
 {
     private const MODULE_COLLECTION_FIBER_LIMIT = 6;
+    private const LOCALE_CACHE_TTL = 300;
     private const FALLBACK_LOCALE_NAMES = [
         'en' => 'English',
         'en_US' => 'English (United States)',
@@ -60,6 +62,10 @@ class I18n
     ];
 
     private static array $local_words = [];
+    /** @var array{expires_at: float, value: string[]}|null */
+    private static ?array $availableLocaleCodesCache = null;
+    /** @var array<string, array{expires_at: float, value: string}> */
+    private static array $localByCodeCache = [];
     private Reader $reader;
     public CachePoolInterface $i18nCache;
 
@@ -72,14 +78,19 @@ class I18n
 
     public function getAvailableLocaleCodes(): array
     {
+        if (self::$availableLocaleCodesCache !== null
+            && self::$availableLocaleCodesCache['expires_at'] >= microtime(true)) {
+            return self::$availableLocaleCodesCache['value'];
+        }
+
         if (class_exists(Locales::class)) {
             try {
-                return Locales::getLocales();
+                return $this->rememberAvailableLocaleCodes(Locales::getLocales());
             } catch (\Throwable) {
             }
         }
 
-        return array_keys(self::FALLBACK_LOCALE_NAMES);
+        return $this->rememberAvailableLocaleCodes(array_keys(self::FALLBACK_LOCALE_NAMES));
     }
 
     public function getLocaleNames(string $displayLocale = 'zh_Hans_CN'): array
@@ -145,18 +156,60 @@ class I18n
 
     public function getLocalByCode(string $locale_code): string
     {
+        $cacheKey = strtolower(trim($locale_code));
+        if (isset(self::$localByCodeCache[$cacheKey])
+            && self::$localByCodeCache[$cacheKey]['expires_at'] >= microtime(true)) {
+            return self::$localByCodeCache[$cacheKey]['value'];
+        }
+        unset(self::$localByCodeCache[$cacheKey]);
+
         if ($data = $this->i18nCache->get($locale_code)) {
-            return $data;
+            return $this->rememberLocalByCode($cacheKey, (string)$data);
         }
         $locales = $this->getAvailableLocaleCodes();
         foreach ($locales as $locale) {
             if (strtolower($locale_code) === strtolower($locale)) {
                 $this->i18nCache->set($locale_code, $locale);
-                return $locale;
+                return $this->rememberLocalByCode($cacheKey, $locale);
             }
         }
         $this->i18nCache->set($locale_code, 'zh_Hans_CN');
-        return 'zh_Hans_CN';
+        return $this->rememberLocalByCode($cacheKey, 'zh_Hans_CN');
+    }
+
+    /**
+     * @param string[] $codes
+     * @return string[]
+     */
+    private function rememberAvailableLocaleCodes(array $codes): array
+    {
+        self::$availableLocaleCodesCache = [
+            'expires_at' => microtime(true) + $this->localeCacheTtl(),
+            'value' => $codes,
+        ];
+
+        return $codes;
+    }
+
+    private function rememberLocalByCode(string $cacheKey, string $locale): string
+    {
+        self::$localByCodeCache[$cacheKey] = [
+            'expires_at' => microtime(true) + $this->localeCacheTtl(),
+            'value' => $locale,
+        ];
+
+        return $locale;
+    }
+
+    private function localeCacheTtl(): int
+    {
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            return $policy->ttl('site.i18n_locale_ttl', self::LOCALE_CACHE_TTL);
+        } catch (\Throwable) {
+            return self::LOCALE_CACHE_TTL;
+        }
     }
 
     public function getLocals(string $lang_code = 'zh_Hans_CN'): array
