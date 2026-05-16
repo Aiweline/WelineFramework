@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace WeShop\Search\Service;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
+use WeShop\Filters\Api\FilterProviderInterface;
 use WeShop\Filters\Api\SearchFacetCapableFilterInterface;
 use WeShop\Filters\Model\CategoryFilterConfig;
 use WeShop\Filters\Model\FilterRegistry;
@@ -15,12 +17,24 @@ use WeShop\Search\Api\SearchEngineInterface;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Search\Model\SearchHistory;
 use Weline\Eav\Service\AttributeFilterService;
+use Weline\Framework\App\State;
+use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 
 class SearchService
 {
     private const SEARCH_ROUTE = '/search';
+    private const BROWSE_RESULT_CACHE_TTL = 300;
+
+    /** @var array<string, array{expires_at: float, data: array<string, mixed>}> */
+    private static array $browseResultCache = [];
+    /** @var array<string, array{expires_at: float, data: array<string, mixed>}> */
+    private static array $fallbackFilterPayloadCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
 
     public function searchProducts(string $keyword, array $filters = [], int $page = 1, int $pageSize = 20, string $scope = 'default'): array
     {
@@ -54,20 +68,11 @@ class SearchService
         $pageSize = max(1, $pageSize);
         $categoryIds = array_values(array_unique(array_filter(array_map('intval', $categoryIds))));
         $primaryCategoryId = (int) ($categoryIds[0] ?? 0);
-
-        $providers = $includeFacets ? $this->traceStep(
-            'search::facet_providers',
-            fn () => $this->getFacetProviders($primaryCategoryId),
-            ['category_id' => $primaryCategoryId]
-        ) : [];
-        $facetDefinitions = $includeFacets ? $this->traceStep(
-            'search::facet_definitions',
-            fn () => $this->buildFacetDefinitions($providers, $primaryCategoryId, $filters, $categoryIds, $keyword),
-            [
-                'category_id' => $primaryCategoryId,
-                'provider_count' => count($providers),
-            ]
-        ) : [];
+        $browseCacheKey = $this->buildBrowseResultCacheKey($keyword, $filters, $page, $pageSize, $scope, $categoryIds, $includeFacets);
+        $cachedBrowseResult = $this->getBrowseResultCache($browseCacheKey);
+        if (is_array($cachedBrowseResult)) {
+            return $cachedBrowseResult;
+        }
 
         $request = [
             'keyword' => $keyword,
@@ -77,7 +82,7 @@ class SearchService
             'scope' => $scope,
             'category_ids' => $categoryIds,
             'include_facets' => $includeFacets,
-            'facet_definitions' => $facetDefinitions,
+            'facet_definitions' => [],
         ];
 
         $engine = $this->traceStep(
@@ -85,7 +90,22 @@ class SearchService
             fn () => $this->createBrowseEngine($scope),
             ['scope' => $scope]
         );
+        $providers = [];
         if ($engine instanceof SearchBrowseEngineInterface) {
+            $providers = $includeFacets ? $this->traceStep(
+                'search::facet_providers',
+                fn () => $this->getFacetProviders($primaryCategoryId),
+                ['category_id' => $primaryCategoryId]
+            ) : [];
+            $facetDefinitions = $includeFacets ? $this->traceStep(
+                'search::facet_definitions',
+                fn () => $this->buildFacetDefinitions($providers, $primaryCategoryId, $filters, $categoryIds, $keyword),
+                [
+                    'category_id' => $primaryCategoryId,
+                    'provider_count' => count($providers),
+                ]
+            ) : [];
+            $request['facet_definitions'] = $facetDefinitions;
             $result = $this->traceStep(
                 'search::engine_browse::' . $engine->getEngineType(),
                 fn () => $engine->browseProducts($request),
@@ -96,7 +116,7 @@ class SearchService
                 ]
             );
             if (empty($result['fallback']) || !$includeFacets) {
-                return $this->traceStep(
+                $finalized = $this->traceStep(
                     'search::finalize_engine_result',
                     fn () => $this->finalizeBrowseResult($result, $providers, $filters),
                     [
@@ -104,10 +124,12 @@ class SearchService
                         'filter_count' => count($filters),
                     ]
                 );
+                $this->rememberBrowseResultCache($browseCacheKey, $finalized);
+                return $finalized;
             }
         }
 
-        return $this->traceStep(
+        $fallbackResult = $this->traceStep(
             'search::fallback_browse_products',
             fn () => $this->fallbackBrowseProducts($request, $providers),
             [
@@ -116,6 +138,8 @@ class SearchService
                 'include_facets' => $includeFacets,
             ]
         );
+        $this->rememberBrowseResultCache($browseCacheKey, $fallbackResult);
+        return $fallbackResult;
     }
 
     public function getSearchSuggestions(string $keyword, int $limit = 10, string $scope = 'default'): array
@@ -442,15 +466,20 @@ class SearchService
                 ['category_id_count' => count($categoryIds)]
             );
 
-            $filterResult = $this->traceStep(
+            $filterPayload = $this->traceStep(
                 'search::fallback_filter_result',
-                fn () => ObjectManager::getInstance(FilterService::class)->getFilterResult((int) ($categoryIds[0] ?? 0), $productIds, $request['filters'] ?? [], false),
+                fn () => $this->getFallbackFilterPayload(
+                    (int) ($categoryIds[0] ?? 0),
+                    $productIds,
+                    is_array($request['filters'] ?? null) ? $request['filters'] : [],
+                    $providers
+                ),
                 [
                     'category_id' => (int) ($categoryIds[0] ?? 0),
                     'product_count' => count($productIds),
                 ]
             );
-            $filteredIds = array_values(array_map('intval', $filterResult->getProductIds()));
+            $filteredIds = array_values(array_map('intval', $filterPayload['product_ids'] ?? []));
             $page = (int) ($request['page'] ?? 1);
             $pageSize = (int) ($request['page_size'] ?? 20);
             $slice = array_slice($filteredIds, ($page - 1) * $pageSize, $pageSize);
@@ -475,9 +504,9 @@ class SearchService
                     'to' => count($filteredIds) > 0 ? min($page * $pageSize, count($filteredIds)) : 0,
                 ],
                 'engine' => 'mysql',
-                'facets' => $filterResult->getFilters(),
-                'applied_filters' => $filterResult->getAppliedFilters(),
-                'clear_all_url' => $filterResult->getClearAllUrl(),
+                'facets' => is_array($filterPayload['filters'] ?? null) ? $filterPayload['filters'] : [],
+                'applied_filters' => is_array($filterPayload['applied_filters'] ?? null) ? $filterPayload['applied_filters'] : [],
+                'clear_all_url' => ObjectManager::getInstance(FilterUrlService::class)->getClearAllUrl((int) ($categoryIds[0] ?? 0)),
                 'pagination_html' => '',
             ];
         }
@@ -494,23 +523,331 @@ class SearchService
     }
 
     /**
+     * @param array<int, int> $productIds
+     * @param array<string, mixed> $filters
+     * @param array<int, object> $providers
+     * @return array{product_ids: array<int, int>, filters: array<int, mixed>, applied_filters: array<int, mixed>}
+     */
+    private function getFallbackFilterPayload(int $categoryId, array $productIds, array $filters, array $providers): array
+    {
+        $productIds = array_values(array_unique(array_filter(array_map('intval', $productIds))));
+        $cacheKey = $this->buildFallbackFilterPayloadCacheKey($categoryId, $productIds, $filters);
+        $cached = $this->getFallbackFilterPayloadCache($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        if ($filters === [] && $providers !== []) {
+            $payload = $this->buildProviderFallbackFilterPayload($categoryId, $productIds, $providers);
+        } else {
+            $filterResult = ObjectManager::getInstance(FilterService::class)
+                ->getFilterResult($categoryId, $productIds, $filters, false);
+            $payload = [
+                'product_ids' => array_values(array_map('intval', $filterResult->getProductIds())),
+                'filters' => $filterResult->getFilters(),
+                'applied_filters' => $filterResult->getAppliedFilters(),
+            ];
+        }
+
+        $this->rememberFallbackFilterPayloadCache($cacheKey, $payload);
+
+        return $payload;
+    }
+
+    /**
+     * @param array<int, int> $productIds
+     * @param array<int, object> $providers
+     * @return array{product_ids: array<int, int>, filters: array<int, mixed>, applied_filters: array<int, mixed>}
+     */
+    private function buildProviderFallbackFilterPayload(int $categoryId, array $productIds, array $providers): array
+    {
+        $filtersData = [];
+        foreach ($providers as $provider) {
+            if (!$provider instanceof SearchFacetCapableFilterInterface || !$provider instanceof FilterProviderInterface) {
+                continue;
+            }
+
+            $options = $provider->getOptions($categoryId, $productIds, []);
+            if ($options === []) {
+                continue;
+            }
+
+            $filtersData[] = [
+                'code' => $provider->getCode(),
+                'name' => $provider->getName(),
+                'display_type' => $provider->getDisplayType(),
+                'collapsed' => $provider->isCollapsed(),
+                'icon' => $provider->getIcon(),
+                'options' => $options,
+            ];
+        }
+
+        return [
+            'product_ids' => $productIds,
+            'filters' => $filtersData,
+            'applied_filters' => [],
+        ];
+    }
+
+    /**
+     * @param array<int, int> $productIds
+     * @param array<string, mixed> $filters
+     */
+    private function buildFallbackFilterPayloadCacheKey(int $categoryId, array $productIds, array $filters): string
+    {
+        return sha1((string)json_encode([
+            'v' => 1,
+            'category_id' => $categoryId,
+            'product_ids' => $productIds,
+            'filters' => $this->normalizeCacheValue($filters),
+            'lang' => State::getLang(),
+            'lang_local' => State::getLangLocal(),
+            'currency' => State::getCurrency(),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function getFallbackFilterPayloadCache(string $key): ?array
+    {
+        $now = microtime(true);
+        if (isset(self::$fallbackFilterPayloadCache[$key])) {
+            $cached = self::$fallbackFilterPayloadCache[$key];
+            if (($cached['expires_at'] ?? 0.0) >= $now) {
+                $this->setPerfHeader('X-WLS-Search-Fallback-Filter-Cache', 'local');
+                return is_array($cached['data']) ? $cached['data'] : null;
+            }
+            unset(self::$fallbackFilterPayloadCache[$key]);
+        }
+
+        $runtimeCached = $this->runtimeCacheGet('search.fallback_filter.' . $key);
+        if (is_array($runtimeCached)) {
+            $this->setPerfHeader('X-WLS-Search-Fallback-Filter-Cache', 'shared');
+            $this->rememberFallbackFilterPayloadLocal($key, $runtimeCached);
+            return $runtimeCached;
+        }
+
+        $this->setPerfHeader('X-WLS-Search-Fallback-Filter-Cache', 'miss');
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function rememberFallbackFilterPayloadCache(string $key, array $payload): void
+    {
+        $this->rememberFallbackFilterPayloadLocal($key, $payload);
+        $this->runtimeCacheSet('search.fallback_filter.' . $key, $payload, $this->browseResultCacheTtl());
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function rememberFallbackFilterPayloadLocal(string $key, array $payload): void
+    {
+        if (count(self::$fallbackFilterPayloadCache) > 96) {
+            self::$fallbackFilterPayloadCache = array_slice(self::$fallbackFilterPayloadCache, -48, null, true);
+        }
+        self::$fallbackFilterPayloadCache[$key] = [
+            'expires_at' => microtime(true) + $this->browseResultCacheTtl(),
+            'data' => $payload,
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $meta
      */
     private function traceStep(string $name, callable $callback, array $meta = []): mixed
     {
-        if (!RequestLifecycleTrace::isEnabled()) {
-            return $callback();
-        }
-
         $start = microtime(true);
-        RequestLifecycleTrace::pushCurrentParent($name);
+        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        if ($traceEnabled) {
+            RequestLifecycleTrace::pushCurrentParent($name);
+        }
 
         try {
             return $callback();
         } finally {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, 'search', null, $meta);
+            $durationMs = (microtime(true) - $start) * 1000;
+            $this->setPerfHeader('X-WLS-Search-Step-' . $this->normalizePerfHeaderName($name), sprintf('%.2f', $durationMs));
+            if ($traceEnabled) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan($name, $durationMs, 'search', null, $meta);
+            }
         }
+    }
+
+    private function getBrowseResultCache(string $key): ?array
+    {
+        $now = microtime(true);
+        if (isset(self::$browseResultCache[$key])) {
+            $cached = self::$browseResultCache[$key];
+            if (($cached['expires_at'] ?? 0.0) >= $now) {
+                $this->setPerfHeader('X-WLS-Search-Browse-Cache', 'local');
+                return is_array($cached['data']) ? $cached['data'] : null;
+            }
+            unset(self::$browseResultCache[$key]);
+        }
+
+        $runtimeCached = $this->runtimeCacheGet('search.browse.' . $key);
+        if (is_array($runtimeCached)) {
+            $this->setPerfHeader('X-WLS-Search-Browse-Cache', 'shared');
+            if (count(self::$browseResultCache) > 96) {
+                self::$browseResultCache = array_slice(self::$browseResultCache, -48, null, true);
+            }
+            $ttl = $this->browseResultCacheTtl();
+            self::$browseResultCache[$key] = [
+                'expires_at' => $now + $ttl,
+                'data' => $runtimeCached,
+            ];
+            return $runtimeCached;
+        }
+
+        $this->setPerfHeader('X-WLS-Search-Browse-Cache', 'miss');
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $result
+     */
+    private function rememberBrowseResultCache(string $key, array $result): void
+    {
+        if (count(self::$browseResultCache) > 96) {
+            self::$browseResultCache = array_slice(self::$browseResultCache, -48, null, true);
+        }
+
+        $ttl = $this->browseResultCacheTtl();
+        self::$browseResultCache[$key] = [
+            'expires_at' => microtime(true) + $ttl,
+            'data' => $result,
+        ];
+        $this->runtimeCacheSet('search.browse.' . $key, $result, $ttl);
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @param array<int, int> $categoryIds
+     */
+    private function buildBrowseResultCacheKey(
+        string $keyword,
+        array $filters,
+        int $page,
+        int $pageSize,
+        string $scope,
+        array $categoryIds,
+        bool $includeFacets
+    ): string {
+        $normalizedFilters = $this->normalizeCacheValue($filters);
+        $uri = function_exists('w_env_request_uri') ? (string) w_env_request_uri() : '';
+        $host = function_exists('w_env_http_host') ? (string) w_env_http_host() : '';
+
+        return sha1((string) json_encode([
+            'v' => 1,
+            'keyword' => $keyword,
+            'filters' => $normalizedFilters,
+            'page' => $page,
+            'page_size' => $pageSize,
+            'scope' => $scope,
+            'category_ids' => array_values($categoryIds),
+            'include_facets' => $includeFacets,
+            'lang' => State::getLang(),
+            'lang_local' => State::getLangLocal(),
+            'currency' => State::getCurrency(),
+            'host' => $host,
+            'uri' => $uri,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function normalizeCacheValue(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        $normalized = [];
+        foreach ($value as $key => $item) {
+            $normalized[$key] = $this->normalizeCacheValue($item);
+        }
+        ksort($normalized);
+
+        return $normalized;
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get('weshop_search_runtime', $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set('weshop_search_runtime', $key, $value, max(1, $ttl));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private function setPerfHeader(string $name, string $value): void
+    {
+        try {
+            ObjectManager::getInstance(Response::class)->setHeader($name, $value);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function normalizePerfHeaderName(string $name): string
+    {
+        return substr((string)preg_replace('/[^A-Za-z0-9]+/', '-', $name), 0, 80);
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$runtimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'weshop_search_runtime',
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function browseResultCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('search.browse_result_ttl', self::BROWSE_RESULT_CACHE_TTL);
+    }
+
+    private static function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
     }
 
     /**
