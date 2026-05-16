@@ -26,9 +26,19 @@ class HookReader extends ModuleFileReader
      */
     private static array $staticFileListCache = [];
 
+    /**
+     * @var array|null generated/hooks.php registry cache for the current WLS request.
+     */
+    private static ?array $registryCache = null;
+
     public static function clearStaticCache(): void
     {
         self::$staticFileListCache = [];
+    }
+
+    public static function preloadGeneratedHookRegistry(): void
+    {
+        self::getGeneratedHookRegistry();
     }
 
     public function __construct(Scanner $scanner, string $path = 'view' . DS . 'hooks')
@@ -80,12 +90,7 @@ class HookReader extends ModuleFileReader
     private function getHookFilesFromRegistry(string $hookName): array
     {
         try {
-            $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
-            if (!file_exists($registryFile)) {
-                return [];
-            }
-            
-            $registry = include $registryFile;
+            $registry = $this->getHookRegistry();
             if (!is_array($registry) || !isset($registry['hooks'][$hookName])) {
                 return [];
             }
@@ -105,10 +110,33 @@ class HookReader extends ModuleFileReader
             }
             
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // 如果读取失败，返回空数组
             return [];
         }
+    }
+
+    private function getHookRegistry(): array
+    {
+        return self::getGeneratedHookRegistry();
+    }
+
+    private static function getGeneratedHookRegistry(): array
+    {
+        if (self::$registryCache !== null) {
+            return self::$registryCache;
+        }
+
+        $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+        if (!is_file($registryFile)) {
+            self::$registryCache = [];
+            return self::$registryCache;
+        }
+
+        $registry = include $registryFile;
+        self::$registryCache = is_array($registry) ? $registry : [];
+
+        return self::$registryCache;
     }
     
     /**
