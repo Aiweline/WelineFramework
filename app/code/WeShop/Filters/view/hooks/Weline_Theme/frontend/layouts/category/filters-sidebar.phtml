@@ -12,9 +12,12 @@
 /** @var \Weline\Framework\View\Template $this */
 
 // 将 Filters 模块添加到请求模块链，以便加载翻译
+$hadFiltersModule = method_exists($this->request, 'hasModule') && $this->request->hasModule('WeShop_Filters');
 $this->request->addModule('WeShop_Filters');
 // 强制重新加载翻译词典（因为模块可能在翻译加载后才添加）
-\Weline\Framework\Phrase\Parser::$loaded = false;
+if (!$hadFiltersModule) {
+    \Weline\Framework\Phrase\Parser::$loaded = false;
+}
 
 use WeShop\Filters\Service\FilterService;
 use WeShop\Filters\Service\FilterUrlService;
@@ -31,8 +34,31 @@ if ($categoryId <= 0) {
     return;
 }
 
+$filters = [];
+$appliedFilters = [];
+$clearAllUrl = '';
+/** @var FilterUrlService $urlService */
+$urlService = ObjectManager::getInstance(FilterUrlService::class);
+$requestFilters = $this->request->getData('filters');
+$requestAppliedFilters = $this->request->getData('applied_filters');
+$requestClearAllUrl = $this->request->getData('clear_all_url');
+$requestFilteredProductIds = $this->request->getData('filtered_product_ids');
+$useRequestFilterPayload = false;
+if (is_array($requestFilters) || is_array($requestAppliedFilters)) {
+    $filters = is_array($requestFilters) ? $requestFilters : [];
+    $appliedFilters = is_array($requestAppliedFilters) ? $requestAppliedFilters : [];
+    $clearAllUrl = is_string($requestClearAllUrl) && $requestClearAllUrl !== ''
+        ? $requestClearAllUrl
+        : $urlService->getClearAllUrl($categoryId);
+    if (is_array($requestFilteredProductIds)) {
+        $this->request->setData('filtered_product_ids', array_values(array_map('intval', $requestFilteredProductIds)));
+    }
+    $useRequestFilterPayload = true;
+}
+
 // 获取分类下的产品ID
-try {
+if (!$useRequestFilterPayload) {
+    try {
     $categoryIds = w_query('catalog', 'getAllDescendantCategoryIds', ['category_id' => $categoryId]);
     
     /** @var ProductCategory $productCategory */
@@ -74,13 +100,15 @@ try {
     $filteredProductIds = $filterResult->getProductIds();
     $this->request->setData('filtered_product_ids', $filteredProductIds);
     
-} catch (\Throwable $e) {
+    } catch (\Throwable $e) {
     // 生产环境静默处理错误
     return;
 }
 
 // 只有在没有任何筛选条件且没有可用筛选器时才返回
 // 如果有已应用的筛选（appliedFilters），即使 filters 为空也要显示（允许用户清除筛选）
+    }
+
 if (empty($filters) && empty($appliedFilters)) {
     return;
 }
