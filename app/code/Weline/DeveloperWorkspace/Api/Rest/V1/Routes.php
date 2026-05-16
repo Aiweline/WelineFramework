@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
+use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\Framework\App\Env;
-use Weline\Framework\Controller\AbstractRestController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 
-class Routes extends AbstractRestController
+class Routes extends DevToolRestController
 {
     private const ROUTES_TTL_SECONDS = 300;
 

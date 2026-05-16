@@ -28,14 +28,18 @@ class TelemetryBroadcaster
      */
     public static function broadcast(string $result, ?Request $request = null, bool $forceResultMutation = false): string
     {
-        $allowResultMutation = $forceResultMutation || !(bool)\w_env('response.from_cache', false);
+        $request ??= self::resolveRequest();
+        $allowResultMutation = $forceResultMutation
+            || !(bool)\w_env('response.from_cache', false)
+            || self::allowsDebugResponseDecoration()
+            || self::hasDevToolActivation($request)
+            || self::containsDevToolMarkup($result);
 
         // 遥测事件始终派发：即便未启用 RequestLifecycleTrace，监听者也可以拿到 request/runtime/result 等信息
         $spans = RequestLifecycleTrace::isEnabled()
             ? RequestLifecycleTrace::getSpansWithDbSummary()
             : [];
 
-        $request ??= self::resolveRequest();
         $requestSnapshot = self::buildRequestSnapshot($request);
         $runtimeSnapshot = [
             'mode' => Runtime::getMode(),
@@ -64,6 +68,41 @@ class TelemetryBroadcaster
         }
 
         return (string)($eventData['data']['result'] ?? $result);
+    }
+
+    private static function allowsDebugResponseDecoration(): bool
+    {
+        return (\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG);
+    }
+
+    private static function hasDevToolActivation(?Request $request): bool
+    {
+        try {
+            $devToolKey = (string)\Weline\Framework\App\Env::get('dev_tool.key', 'dev_tool');
+            if ($request instanceof Request && $devToolKey !== '' && !empty($request->getGet($devToolKey))) {
+                return true;
+            }
+
+            if ($devToolKey !== '' && !empty($_GET[$devToolKey])) {
+                return true;
+            }
+
+            $cookieName = (string)\Weline\Framework\App\Env::get('dev_tool.cookie_name', 'w_dev_tool');
+            if ($cookieName === '') {
+                return false;
+            }
+
+            return \Weline\Framework\Http\Cookie::get($cookieName) === '1'
+                || (string)($_COOKIE[$cookieName] ?? '') === '1';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private static function containsDevToolMarkup(string $result): bool
+    {
+        return \stripos($result, 'id="dev-tool-panel"') !== false
+            || \stripos($result, 'window.__WELINE_REQUEST_ID__=') !== false;
     }
 
     private static function resolveRequest(): ?Request
