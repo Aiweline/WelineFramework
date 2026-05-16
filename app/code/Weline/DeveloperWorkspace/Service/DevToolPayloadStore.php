@@ -56,15 +56,53 @@ class DevToolPayloadStore
         $ttl = \max(1, $ttl);
         $storeKey = $this->storeKey($type, $key);
         $memory = $this->memory();
+        $storedInMemory = false;
         if ($memory !== null) {
             try {
-                return $memory->set(self::NAMESPACE, $storeKey, $value, $ttl);
+                $storedInMemory = $memory->set(self::NAMESPACE, $storeKey, $value, $ttl);
             } catch (\Throwable) {
                 $this->memory = null;
             }
         }
 
+        if ($type === 'trace') {
+            $storedOnFile = $this->setToFile($type, $key, $value, $ttl);
+
+            return $storedInMemory || $storedOnFile;
+        }
+
+        if ($storedInMemory) {
+            return true;
+        }
+
         return $this->setToFile($type, $key, $value, $ttl);
+    }
+
+    public function getLatest(string $type, int $withinSeconds = self::DEFAULT_TTL): mixed
+    {
+        $dir = $this->baseDir() . $this->safeType($type);
+        if (!\is_dir($dir)) {
+            return null;
+        }
+
+        $cutoff = \time() - \max(1, $withinSeconds);
+        $latestFile = '';
+        $latestMtime = 0;
+        foreach ((array)\glob($dir . DS . '*' . DS . '*.json') as $file) {
+            if (!\is_file($file)) {
+                continue;
+            }
+
+            $mtime = (int)@\filemtime($file);
+            if ($mtime < $cutoff || $mtime <= $latestMtime) {
+                continue;
+            }
+
+            $latestFile = $file;
+            $latestMtime = $mtime;
+        }
+
+        return $latestFile !== '' ? $this->readPayloadFile($latestFile) : null;
     }
 
     public static function hashQuery(array $query): string
@@ -113,6 +151,11 @@ class DevToolPayloadStore
             return null;
         }
 
+        return $this->readPayloadFile($path);
+    }
+
+    private function readPayloadFile(string $path): mixed
+    {
         $raw = @\file_get_contents($path);
         if (!\is_string($raw) || $raw === '') {
             return null;

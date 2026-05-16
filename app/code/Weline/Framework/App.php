@@ -109,7 +109,39 @@ class App
 
     public function dispatchRunBefore(): void
     {
+        if (!$this->shouldDispatchRunBefore()) {
+            return;
+        }
+
         $this->resolveEventManager()->dispatch('Weline_Framework::App::run_before');
+    }
+
+    private function shouldDispatchRunBefore(): bool
+    {
+        if (PROD) {
+            return true;
+        }
+
+        if (Env::system('maintenance')) {
+            return true;
+        }
+
+        $path = \parse_url($this->getCurrentRequestUri(), \PHP_URL_PATH);
+        $path = \is_string($path) ? $path : '/';
+        $lowerPath = \strtolower($path);
+
+        // DEV run_before only has built-in maintenance/static/FPC observers in this checkout.
+        // Dynamic storefront requests can skip it; static/media paths still need MediaManager.
+        if (\str_starts_with($lowerPath, '/static/')
+            || \str_starts_with($lowerPath, '/pub/static/')
+            || \str_starts_with($lowerPath, '/pub/media/')
+            || \str_starts_with($lowerPath, '/media/image/')
+            || \str_starts_with($lowerPath, '/media/file/')
+        ) {
+            return true;
+        }
+
+        return (bool)\preg_match('#^/[a-z0-9_]+/[a-z0-9_]+/view/(statics|theme)/#i', $path);
     }
 
     public function parseUrl(): ?array
@@ -278,9 +310,9 @@ class App
         return (string)$result;
     }
 
-    public function broadcastTelemetry(string $result, ?Request $request = null): string
+    public function broadcastTelemetry(string $result, ?Request $request = null, bool $forceResultMutation = false): string
     {
-        return TelemetryBroadcaster::broadcast($result, $request);
+        return TelemetryBroadcaster::broadcast($result, $request, $forceResultMutation);
     }
 
     /**

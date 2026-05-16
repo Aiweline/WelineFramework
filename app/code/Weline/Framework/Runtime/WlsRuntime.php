@@ -292,14 +292,15 @@ class WlsRuntime implements RuntimeInterface
             if (Runtime::isPersistent()) {
                 \Weline\Framework\Http\Url::resetParserRequestCaches();
             }
+            $traceEnabled = RequestLifecycleTrace::isEnabled();
             $t1 = \microtime(true);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::pushCurrentParent('run_before');
             }
             $app->dispatchRunBefore();
             $t2 = \microtime(true);
             $timing['run_before_ms'] = \round(($t2 - $t1) * 1000, 2);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::popCurrentParent();
                 RequestLifecycleTrace::recordSpan('run_before', $timing['run_before_ms'], 'framework');
             }
@@ -315,19 +316,28 @@ class WlsRuntime implements RuntimeInterface
             $parse = $app->parseUrl();
             $urlParserEnd = \microtime(true);
             $timing['url_parser_call_ms'] = \round(($urlParserEnd - $urlParserStart) * 1000, 2);
+            if (\is_array($parse) && isset($parse['_perf']) && \is_array($parse['_perf'])) {
+                $timing['url_parser_perf'] = $parse['_perf'];
+            }
+            if ($traceEnabled) {
+                RequestLifecycleTrace::recordSpan('url_parser::parse', $timing['url_parser_call_ms'], 'framework', 'url_parser');
+            }
             
             if (\is_array($parse)) {
                 $processUrlStart = \microtime(true);
                 $app->applyParsedUrl($parse);
                 $processUrlEnd = \microtime(true);
                 $timing['process_url_parse_ms'] = \round(($processUrlEnd - $processUrlStart) * 1000, 2);
+                if ($traceEnabled) {
+                    RequestLifecycleTrace::recordSpan('url_parser::apply', $timing['process_url_parse_ms'], 'framework', 'url_parser');
+                }
             }
             // 关键修复：Url::parser() 修改了 $_SERVER['REQUEST_URI']（去除了区域/货币/语言前缀）
             // 如果在 parser 之前有代码调用了 Request::getUri()（如 run_before 事件观察者），
             // 原始 URI 已被缓存在 Request 对象上，必须清除，否则 Router 会使用旧 URI 导致间歇性 404
             $t3 = \microtime(true);
             $timing['url_parser_ms'] = \round(($t3 - $t2) * 1000, 2);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::recordSpan('url_parser', $timing['url_parser_ms'], 'framework');
             }
             
@@ -339,36 +349,44 @@ class WlsRuntime implements RuntimeInterface
             $router = $app->initializeRouter();
             $routerInitEnd = \microtime(true);
             $timing['router_init_ms'] = \round(($routerInitEnd - $routerInitStart) * 1000, 2);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::recordSpan('router_init', $timing['router_init_ms'], 'framework');
             }
             // 请求早期统一启动 Session（与 App::run 一致）；静态资源不启动，避免 Set-Cookie 与无意义 IO
+            $sessionStart = \microtime(true);
             $app->startSessionIfNeeded();
+            $timing['session_start_ms'] = \round((\microtime(true) - $sessionStart) * 1000, 2);
+            if ($traceEnabled) {
+                RequestLifecycleTrace::recordSpan('router_start::session', $timing['session_start_ms'], 'framework', 'router_start');
+            }
             // 路由处理（含控制器、视图，通常为主要耗时）；push 使控制器链路与事件挂到 router_start 下
             $routerStartStart = \microtime(true);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::pushCurrentParent('router_start');
             }
             $result = $app->runRouter($router);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::popCurrentParent();
             }
             $routerStartEnd = \microtime(true);
             $timing['router_start_call_ms'] = \round(($routerStartEnd - $routerStartStart) * 1000, 2);
+            if ($traceEnabled) {
+                RequestLifecycleTrace::recordSpan('router_start::dispatch', $timing['router_start_call_ms'], 'framework', 'router_start');
+            }
             $t4 = \microtime(true);
             $timing['router_start_ms'] = \round(($t4 - $t3) * 1000, 2);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::recordSpan('router_start', $timing['router_start_ms'], 'framework');
             }
             // 触发 run_after 事件
             $runAfterStart = \microtime(true);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::pushCurrentParent('run_after');
             }
             $result = $app->dispatchRunAfter($result);
             $runAfterEnd = \microtime(true);
             $timing['run_after_ms'] = \round(($runAfterEnd - $runAfterStart) * 1000, 2);
-            if (RequestLifecycleTrace::isEnabled()) {
+            if ($traceEnabled) {
                 RequestLifecycleTrace::popCurrentParent();
                 RequestLifecycleTrace::recordSpan('run_after', $timing['run_after_ms'], 'framework');
             }
@@ -397,8 +415,15 @@ class WlsRuntime implements RuntimeInterface
                             $response->setHeader('X-WLS-Performance-Total', (string)$timing['total_ms']);
                             $response->setHeader('X-WLS-Performance-RunBefore', (string)$timing['run_before_ms']);
                             $response->setHeader('X-WLS-Performance-UrlParser', (string)($timing['url_parser_call_ms'] ?? 0));
+                            $response->setHeader('X-WLS-Performance-UrlParserApply', (string)($timing['process_url_parse_ms'] ?? 0));
                             $response->setHeader('X-WLS-Performance-RouterStart', (string)($timing['router_start_call_ms'] ?? 0));
+                            $response->setHeader('X-WLS-Performance-SessionStart', (string)($timing['session_start_ms'] ?? 0));
                             $response->setHeader('X-WLS-Performance-RunAfter', (string)$timing['run_after_ms']);
+                            foreach (($timing['url_parser_perf'] ?? []) as $name => $value) {
+                                if (\is_scalar($name) && \is_scalar($value)) {
+                                    $response->setHeader('X-WLS-Performance-UrlParser-' . (string)$name, (string)$value);
+                                }
+                            }
                         }
                     }
                 } catch (\Throwable $e) {
@@ -418,7 +443,7 @@ class WlsRuntime implements RuntimeInterface
             $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
             $telemetryStart = \microtime(true);
             // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
-            $resultStr = $app->broadcastTelemetry($resultStr, $request);
+            $resultStr = $app->broadcastTelemetry($resultStr, $request, true);
             $timing['telemetry_ms'] = \round((\microtime(true) - $telemetryStart) * 1000, 2);
             $timing['dev_tool_ms'] = RequestLifecycleTrace::sumDurationsByName('dev_tool_panel');
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
@@ -992,11 +1017,18 @@ class WlsRuntime implements RuntimeInterface
             $response->setHeader('X-WLS-Performance-Total', (string)($timing['total_ms'] ?? 0));
             $response->setHeader('X-WLS-Performance-RunBefore', (string)($timing['run_before_ms'] ?? 0));
             $response->setHeader('X-WLS-Performance-UrlParser', (string)($timing['url_parser_call_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-UrlParserApply', (string)($timing['process_url_parse_ms'] ?? 0));
             $response->setHeader('X-WLS-Performance-RouterStart', (string)($timing['router_start_call_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-SessionStart', (string)($timing['session_start_ms'] ?? 0));
             $response->setHeader('X-WLS-Performance-RunAfter', (string)($timing['run_after_ms'] ?? 0));
             $response->setHeader('X-WLS-Performance-PreTelemetryTotal', (string)($timing['pre_telemetry_total_ms'] ?? 0));
             $response->setHeader('X-WLS-Performance-Telemetry', (string)($timing['telemetry_ms'] ?? 0));
             $response->setHeader('X-WLS-Performance-DevTool', (string)($timing['dev_tool_ms'] ?? 0));
+            foreach (($timing['url_parser_perf'] ?? []) as $name => $value) {
+                if (\is_scalar($name) && \is_scalar($value)) {
+                    $response->setHeader('X-WLS-Performance-UrlParser-' . (string)$name, (string)$value);
+                }
+            }
         } catch (\Throwable) {
             // 蹇界暐鍝嶅簲澶村啓鍏ラ敊璇紝涓嶅奖鍝嶄富娴佺▼銆?
         }
