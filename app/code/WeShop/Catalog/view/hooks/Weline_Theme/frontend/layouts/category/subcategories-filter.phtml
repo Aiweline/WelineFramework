@@ -16,8 +16,6 @@
 
 /** @var \Weline\Framework\View\Template $this */
 
-use Weline\Framework\Manager\ObjectManager;
-use WeShop\Catalog\Service\CategoryService;
 
 // 优先从模板数据中获取分类信息
 $category = $this->getData('category') ?? null;
@@ -36,11 +34,13 @@ if (!is_array($category) || empty($category['category_id'])) {
 }
 
 // 获取子分类树（包含所有层级的子分类）
-$childCategories = $category['children'] ?? [];
+$childCategories = is_array($category['children_tree'] ?? null)
+    ? $category['children_tree']
+    : ($category['children'] ?? []);
 
 // 如果子分类为空，尝试从服务中获取完整的分类树
-if (empty($childCategories)) {
-    try {
+if (false && empty($childCategories)) {
+    if (false) try {
         /** @var CategoryService $categoryService */
         $categoryService = ObjectManager::getInstance(CategoryService::class);
         // 获取分类树（递归获取所有子分类）
@@ -48,7 +48,7 @@ if (empty($childCategories)) {
     } catch (\Exception $e) {
         $childCategories = [];
     }
-} else {
+} elseif (false) {
     // 如果已有子分类数据，但可能没有递归的子分类，尝试补充
     try {
         /** @var CategoryService $categoryService */
@@ -88,7 +88,7 @@ if (!empty($breadcrumbs)) {
         $parentPath = $parentCategory['path'];
         $parentUrl = $this->getUrl('catalog/category/' . $parentPath);
     }
-} elseif (!empty($category['parent_id']) && (int)$category['parent_id'] > 0) {
+} elseif (false && !empty($category['parent_id']) && (int)$category['parent_id'] > 0) {
     // 如果没有 breadcrumbs，但有 parent_id，尝试查询父分类
     try {
         /** @var CategoryService $categoryService */
@@ -173,7 +173,7 @@ if (empty($childCategories) && empty($parentCategory)) {
                         $showIcon = $cat['show_icon'] ?? true;
                         
                         // 如果数据中没有图标信息，尝试从 EAV 属性获取
-                        if (empty($catIcon) || !isset($cat['show_icon'])) {
+                        if (false && (empty($catIcon) || !isset($cat['show_icon']))) {
                             try {
                                 /** @var \WeShop\Catalog\Model\Category $categoryModel */
                                 $categoryModel = ObjectManager::getInstance(\WeShop\Catalog\Model\Category::class);
