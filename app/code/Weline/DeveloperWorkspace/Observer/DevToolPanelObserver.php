@@ -33,6 +33,10 @@ class DevToolPanelObserver implements ObserverInterface
     /** 内联注入页面的 trace JSON 默认上限（字节），防止超大 JSON 撑爆 Worker 内存 */
     private const DEFAULT_MAX_TRACE_JSON_BYTES = 524288;
     private const TRACE_TTL_SECONDS = 60;
+    private const PANEL_HTML_CACHE_TTL = 300.0;
+
+    /** @var array<string, array{expires_at: float, html: string}> */
+    private static array $panelHtmlCache = [];
 
     private Request $request;
     private DevToolPayloadStore $payloadStore;
@@ -45,6 +49,10 @@ class DevToolPanelObserver implements ObserverInterface
 
     public function execute(Event &$event): void
     {
+        if ($event->getName() === 'Weline_Framework::App::run_after' && Runtime::isPersistent()) {
+            return;
+        }
+
         $payload = $this->resolvePayload($event);
         if ($payload === null) {
             return;
@@ -111,6 +119,7 @@ class DevToolPanelObserver implements ObserverInterface
                 return;
             }
 
+            $existingRequestIds = $this->extractRequestIdsFromResult($result);
             $panelAlreadyInjected = stripos($result, 'id="dev-tool-panel"') !== false;
             if (!$panelAlreadyInjected) {
                 $panelTraceStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
@@ -143,6 +152,11 @@ class DevToolPanelObserver implements ObserverInterface
             }
 
             $this->storeTracePayload($requestId);
+            foreach ($existingRequestIds as $existingRequestId) {
+                if ($existingRequestId !== $requestId) {
+                    $this->storeTracePayload($existingRequestId);
+                }
+            }
             $result = $this->injectRequestMetaScript($result, $requestId);
 
             $payload['result'] = $result;
@@ -203,16 +217,18 @@ class DevToolPanelObserver implements ObserverInterface
 
     private function storeTracePayload(string $requestId): void
     {
-        if (!RequestLifecycleTrace::isEnabled()) {
-            return;
-        }
-
         try {
             $payload = RequestLifecycleTrace::exportCompactPayload();
             if ((int)($payload['summary']['span_count'] ?? 0) <= 0) {
                 return;
             }
-            $this->payloadStore->set('trace', 'trace:' . $requestId, $payload, self::TRACE_TTL_SECONDS);
+            $stored = $this->payloadStore->set('trace', 'trace:' . $requestId, $payload, self::TRACE_TTL_SECONDS);
+            if (!$stored) {
+                $this->logToConsole('debug', 'DevToolPanel trace store skipped: unable to persist payload', [
+                    'request_id' => $requestId,
+                    'span_count' => (int)($payload['summary']['span_count'] ?? 0),
+                ]);
+            }
         } catch (\Throwable $e) {
             $this->logToConsole('debug', 'DevToolPanel trace store skipped: ' . $e->getMessage());
         }
@@ -266,6 +282,29 @@ class DevToolPanelObserver implements ObserverInterface
         }
 
         return $result . $script;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function extractRequestIdsFromResult(string $result): array
+    {
+        $requestIds = [];
+        if (preg_match_all('/window\.__WELINE_REQUEST_ID__\s*=\s*["\']([^"\']+)["\']/', $result, $matches)) {
+            foreach ($matches[1] as $requestId) {
+                $requestIds[(string)$requestId] = true;
+            }
+        }
+
+        if (preg_match_all('/"requestId"\s*:\s*"([^"]+)"/', $result, $matches)) {
+            foreach ($matches[1] as $requestId) {
+                $requestIds[(string)$requestId] = true;
+            }
+        }
+
+        return array_values(array_filter(array_keys($requestIds), static function (string $requestId): bool {
+            return $requestId !== '' && preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $requestId) === 1;
+        }));
     }
 
     private function injectTraceScript(string $result, array $traceSpans): string
@@ -433,6 +472,30 @@ class DevToolPanelObserver implements ObserverInterface
             $isBackend = $this->request->isBackend();
             $devToolCookieName = Env::get('dev_tool.cookie_name', 'w_dev_tool');
             $hasCookie = !empty(Cookie::get($devToolCookieName)) && Cookie::get($devToolCookieName) === '1';
+            $cacheKey = sha1(json_encode([
+                'backend' => $isBackend,
+                'cookie' => $hasCookie,
+                'base_url' => (string)$this->request->getBaseUrl(),
+            ], JSON_UNESCAPED_SLASHES) ?: 'dev-tool-panel');
+            $cached = self::$panelHtmlCache[$cacheKey] ?? null;
+            if (is_array($cached)
+                && isset($cached['expires_at'], $cached['html'])
+                && (float)$cached['expires_at'] >= microtime(true)
+                && is_string($cached['html'])) {
+                return $cached['html'];
+            }
+            try {
+                $sharedCached = $this->payloadStore->get('panel', 'html:' . $cacheKey);
+                if (is_string($sharedCached)) {
+                    self::$panelHtmlCache[$cacheKey] = [
+                        'expires_at' => microtime(true) + self::PANEL_HTML_CACHE_TTL,
+                        'html' => $sharedCached,
+                    ];
+                    return $sharedCached;
+                }
+            } catch (\Throwable) {
+                // Panel cache is an optimization only.
+            }
 
             $extraTabsHtml = '';
             $extraSearchAreasHtml = '';
@@ -451,7 +514,23 @@ class DevToolPanelObserver implements ObserverInterface
             include $templatePath;
             $html = ob_get_clean();
 
-            return is_string($html) ? $html : '';
+            $html = is_string($html) ? $html : '';
+            if ($html !== '') {
+                if (count(self::$panelHtmlCache) > 16) {
+                    self::$panelHtmlCache = [];
+                }
+                self::$panelHtmlCache[$cacheKey] = [
+                    'expires_at' => microtime(true) + self::PANEL_HTML_CACHE_TTL,
+                    'html' => $html,
+                ];
+                try {
+                    $this->payloadStore->set('panel', 'html:' . $cacheKey, $html, (int)self::PANEL_HTML_CACHE_TTL);
+                } catch (\Throwable) {
+                    // Panel cache is an optimization only.
+                }
+            }
+
+            return $html;
         } catch (\Exception $e) {
             $this->logToConsole('error', 'DevToolPanel Render Error: ' . $e->getMessage());
             return '';
@@ -461,6 +540,10 @@ class DevToolPanelObserver implements ObserverInterface
     private function isHtmlResponse(string $output): bool
     {
         $trimmed = trim($output);
+        if ($trimmed === '') {
+            return false;
+        }
+
         if (($trimmed[0] ?? '') === '{' || ($trimmed[0] ?? '') === '[') {
             json_decode($trimmed);
             if (json_last_error() === JSON_ERROR_NONE) {
@@ -468,16 +551,14 @@ class DevToolPanelObserver implements ObserverInterface
             }
         }
 
-        if (strlen($trimmed) < 100 &&
-            stripos($trimmed, '<html') === false &&
-            stripos($trimmed, '<!doctype') === false &&
-            stripos($trimmed, '<body') === false) {
+        if (stripos($trimmed, '<?xml') === 0) {
             return false;
         }
 
         return stripos($output, '<html') !== false ||
             stripos($output, '<!doctype') !== false ||
-            stripos($output, '<body') !== false;
+            stripos($output, '<body') !== false ||
+            preg_match('/<(?:div|span|p|a|img|table|form|ul|ol|li|section|article|main|header|footer|nav|h[1-6]|script|style)\b/i', $output) === 1;
     }
 
     private function shouldSkipForResponseSize(string $result): bool

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
+use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\Framework\App\Env;
-use Weline\Framework\Controller\AbstractRestController;
 use Weline\Framework\Http\Cookie;
 
-class Trace extends AbstractRestController
+class Trace extends DevToolRestController
 {
     private const TRACE_TTL_SECONDS = 60;
 
@@ -34,7 +34,10 @@ class Trace extends AbstractRestController
 
         $payload = $this->payloadStore->get('trace', 'trace:' . $requestId);
         if (!\is_array($payload)) {
-            return $this->error('链路已过期，请刷新页面', [
+            $payload = $this->payloadStore->getLatest('trace', self::TRACE_TTL_SECONDS);
+        }
+        if (!\is_array($payload)) {
+            return $this->error('请求链路不存在或已过期，请刷新页面重试', [
                 'request_id' => $requestId,
                 'ttl' => self::TRACE_TTL_SECONDS,
             ], 404);

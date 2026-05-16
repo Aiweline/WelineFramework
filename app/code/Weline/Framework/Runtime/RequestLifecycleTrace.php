@@ -15,6 +15,8 @@ use Weline\Framework\Context;
 
 class RequestLifecycleTrace
 {
+    private const REQUEST_CONTEXT_ID_KEY = 'request_lifecycle_trace.request_id';
+
     private static bool $stateManagerRegistered = false;
 
     /** 极端重试/风暴时防止静态 span 无限增长导致 OOM（可被 wls.debug.request_trace_max_spans 覆盖） */
@@ -34,6 +36,8 @@ class RequestLifecycleTrace
 
     /** @var int|null 缓存 getMetaStringMaxBytes()（0=不截断），reset 时清空 */
     private static ?int $metaStringMaxBytesCache = null;
+
+    private static ?bool $enabledCache = null;
 
     /** @var list<array{name: string, duration_ms: float, category?: string, parent?: string, meta?: array<string, mixed>}> */
     private static array $spans = [];
@@ -79,6 +83,10 @@ class RequestLifecycleTrace
      */
     public static function isEnabled(): bool
     {
+        if (self::$enabledCache !== null) {
+            return self::$enabledCache;
+        }
+
         $enabled = false;
         if (\defined('DEV') && DEV) {
             $enabled = true;
@@ -87,12 +95,10 @@ class RequestLifecycleTrace
         }
 
         if (!$enabled) {
+            self::$enabledCache = false;
             return false;
         }
 
-        if (self::$recordingDisabledUntilReset) {
-            return false;
-        }
 
         // Master / Dispatcher / Session / Memory 等常驻进程不会进入请求级 init/cleanup，
         // 若在这些进程继续启用 trace，spans 会永久累积。
@@ -105,13 +111,16 @@ class RequestLifecycleTrace
             && (!\class_exists(\Weline\Framework\App\Env::class, false)
                 || !(bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', false))
         ) {
+            self::$enabledCache = false;
             return false;
         }
 
         if (self::shouldSkipForCurrentRequest()) {
+            self::$enabledCache = false;
             return false;
         }
 
+        self::$enabledCache = true;
         return true;
     }
 
@@ -175,15 +184,15 @@ class RequestLifecycleTrace
         if (!self::isEnabled()) {
             return;
         }
+        if (self::$recordingDisabledUntilReset) {
+            return;
+        }
         $maxSpans = self::getMaxSpansCap();
         if (\count(self::$spans) >= $maxSpans) {
             if (!self::$maxSpansLogged) {
                 self::$maxSpansLogged = true;
                 \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) $maxSpans . '，已停止记录直至 reset');
             }
-            self::$spans = [];
-            self::$startStack = [];
-            self::$currentParentStack = [];
             self::$recordingDisabledUntilReset = true;
 
             return;
@@ -210,23 +219,76 @@ class RequestLifecycleTrace
 
     public static function ensureRequestId(): string
     {
+        if (self::hasRequestContextScope()) {
+            $contextRequestId = (string) RequestContext::get(self::REQUEST_CONTEXT_ID_KEY, '');
+            if ($contextRequestId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $contextRequestId)) {
+                self::$requestId = $contextRequestId;
+                return $contextRequestId;
+            }
+
+            $requestId = self::resolveContextBackedRequestId();
+            RequestContext::set(self::REQUEST_CONTEXT_ID_KEY, $requestId);
+            self::$requestId = $requestId;
+
+            return $requestId;
+        }
+
         if (self::$requestId !== '') {
             return self::$requestId;
         }
 
-        $incoming = (string)($_SERVER['HTTP_X_WELINE_REQUEST_ID'] ?? $_SERVER['HTTP_X_REQUEST_ID'] ?? '');
-        if ($incoming !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $incoming)) {
-            self::$requestId = $incoming;
+        self::$requestId = self::resolveNewRequestId();
+
+        return self::$requestId;
+    }
+
+    private static function resolveContextBackedRequestId(): string
+    {
+        $incoming = self::resolveIncomingRequestId();
+        if ($incoming !== '') {
+            return $incoming;
+        }
+
+        $contextId = (string)(RequestContext::getRequestId() ?? '');
+        if ($contextId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $contextId)) {
+            return $contextId;
+        }
+
+        if (self::$requestId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', self::$requestId)) {
             return self::$requestId;
         }
 
-        try {
-            self::$requestId = \bin2hex(\random_bytes(8)) . '-' . \dechex((int)(\microtime(true) * 1000000));
-        } catch (\Throwable) {
-            self::$requestId = \str_replace('.', '', \uniqid('req', true));
+        return self::resolveNewRequestId();
+    }
+
+    private static function resolveNewRequestId(): string
+    {
+        $incoming = self::resolveIncomingRequestId();
+        if ($incoming !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $incoming)) {
+            return $incoming;
         }
 
-        return self::$requestId;
+        try {
+            return \bin2hex(\random_bytes(8)) . '-' . \dechex((int)(\microtime(true) * 1000000));
+        } catch (\Throwable) {
+            return \str_replace('.', '', \uniqid('req', true));
+        }
+    }
+
+    private static function resolveIncomingRequestId(): string
+    {
+        $incoming = (string)($_SERVER['HTTP_X_WELINE_REQUEST_ID'] ?? $_SERVER['HTTP_X_REQUEST_ID'] ?? '');
+        if ($incoming !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $incoming)) {
+            return $incoming;
+        }
+
+        return '';
+    }
+
+    private static function hasRequestContextScope(): bool
+    {
+        return \class_exists(RequestContext::class, false)
+            && (RequestContext::isInitialized() || RequestContext::getRequestId() !== null);
     }
 
     /**
@@ -264,6 +326,8 @@ class RequestLifecycleTrace
                 'span_count' => \count($spans),
                 'db_duration_ms' => \round($dbDurationMs, 2),
                 'category_counts' => $categoryCounts,
+                'truncated' => self::$recordingDisabledUntilReset,
+                'max_spans' => self::getMaxSpansCap(),
             ],
         ];
     }
@@ -560,6 +624,7 @@ class RequestLifecycleTrace
         self::$recordingDisabledUntilReset = false;
         self::$maxSpansCapCache = null;
         self::$metaStringMaxBytesCache = null;
+        self::$enabledCache = null;
     }
 
     private static function currentRequestUri(): string

@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
+use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Model\Document as DocumentModel;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\Framework\App\Env;
-use Weline\Framework\Controller\AbstractRestController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 
-class Document extends AbstractRestController
+class Document extends DevToolRestController
 {
     private const DOCS_TTL_SECONDS = 60;
 
