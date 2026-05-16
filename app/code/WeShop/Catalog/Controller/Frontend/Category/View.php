@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Catalog\Controller\Frontend\Category;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use WeShop\Catalog\Service\CategoryService;
 use WeShop\Filters\Service\FilterService;
 use WeShop\Filters\Service\FilterUrlService;
@@ -11,13 +12,25 @@ use WeShop\Frontend\Controller\BaseController;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 
 class View extends BaseController
 {
     protected ?string $layoutType = 'category';
+    private const VIEW_PAYLOAD_CACHE_TTL = 300;
+    private const CONTENT_TEMPLATE = 'WeShop_Catalog::templates/Frontend/Category/content.phtml';
+    private const CONTENT_HTML_OVERRIDE_KEY = 'weshop_category_content_html_override';
+
+    /** @var array<string, array{expires_at: float, data: array<string, mixed>}> */
+    private static array $viewPayloadCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
+    private static string $lastRuntimeCacheGetStatus = 'none';
 
     public function index(): string
     {
@@ -29,6 +42,13 @@ class View extends BaseController
         $categoriesCtx = $this->request->getData('categories') ?? null;
         $handle = $this->request->getParam('handle') ?? $this->request->getGet('handle');
         $categoryId = (int) ($this->request->getParam('id') ?? $this->request->getGet('id') ?? 0);
+        $viewCacheKey = $this->buildViewPayloadCacheKey($handle, $categoryId);
+        $cachedView = $this->getViewPayloadCache($viewCacheKey);
+        if (is_array($cachedView) && isset($cachedView['html'])) {
+            $this->applyCachedViewPayload($cachedView);
+            return $this->renderCategoryLayoutWithContent((string)$cachedView['html']);
+        }
+
         $category = $this->traceControllerStep(
             'category::load_current',
             function () use ($categoryService, $handle, $categoryId) {
@@ -69,6 +89,11 @@ class View extends BaseController
             fn () => $categoryService->getChildCategories($category->getId()),
             ['category_id' => (int) $category->getId()]
         );
+        $categoryData['children_tree'] = $this->traceControllerStep(
+            'category::load_children_tree',
+            fn () => $categoryService->getCategoryTree((int)$category->getId()),
+            ['category_id' => (int) $category->getId()]
+        );
         $categoryData['breadcrumbs'] = $this->traceControllerStep(
             'category::build_breadcrumbs',
             fn () => $this->buildBreadcrumbs($categoryService, $categoryData),
@@ -103,8 +128,8 @@ class View extends BaseController
                 'query_keys' => array_keys($query),
             ]
         );
-        $page = max(1, (int) ($this->request->getParam('page') ?? 1));
-        $pageSize = max(1, (int) ($this->request->getParam('page_size') ?? 24));
+        $page = max(1, (int) $this->request->getParam('page', 1));
+        $pageSize = max(1, (int) $this->request->getParam('page_size', 24));
 
         $browse = $this->traceControllerStep(
             'category::search_browse_products',
@@ -126,6 +151,7 @@ class View extends BaseController
         $browse = is_array($browse) ? $browse : [];
 
         $products = is_array($browse['items'] ?? null) ? $browse['items'] : [];
+        $this->setPerfHeader('X-WLS-Category-Debug-Browse', 'total=' . (string)(int)($browse['total'] ?? 0) . ';items=' . count($products) . ';page_size=' . $pageSize);
         if ($products === []) {
             $products = $this->traceControllerStep(
                 'category::fallback_products_db',
@@ -158,6 +184,8 @@ class View extends BaseController
             static fn (array $item): int => (int) ($item['product_id'] ?? $item['entity_id'] ?? 0),
             array_filter($products, 'is_array')
         )));
+        $paginationData = is_array($browse['pagination'] ?? null) ? $browse['pagination'] : [];
+        $paginationData = $this->withPaginationUrls($paginationData, $categoryData, $query);
 
         $this->assign('category', $categoryData);
         $this->assign('products', $products);
@@ -167,7 +195,7 @@ class View extends BaseController
         $this->assign('category_id', $category->getId());
         $this->assign('filtered_product_ids', $filteredProductIds);
         $this->assign('pagination', (string) ($browse['pagination_html'] ?? ''));
-        $this->assign('pagination_data', is_array($browse['pagination'] ?? null) ? $browse['pagination'] : []);
+        $this->assign('pagination_data', $paginationData);
 
         $this->request->setData('category', $categoryData);
         $this->request->setData('products', $products);
@@ -176,37 +204,84 @@ class View extends BaseController
         $this->request->setData('clear_all_url', $clearAllUrl);
         $this->request->setData('category_id', $category->getId());
         $this->request->setData('filtered_product_ids', $filteredProductIds);
+        $this->request->setData('pagination', (string) ($browse['pagination_html'] ?? ''));
+        $this->request->setData('pagination_data', $paginationData);
+        $this->setPerfHeader('X-WLS-Category-Debug-Request', 'children=' . count($categoryData['children']) . ';products=' . count($products) . ';ids=' . count($categoryIds));
 
-        /** @var EventsManager $eventsManager */
-        $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventData = [
-            'category_id' => $category->getId(),
-            'product_ids' => $filteredProductIds,
-        ];
-        $eventPayload = ['data' => $eventData];
-        $this->traceControllerStep(
-            'category::dispatch_load_after',
-            function () use ($eventsManager, &$eventPayload): void {
-                $eventsManager->dispatch('WeShop_Catalog::category_load_after', $eventPayload);
-            },
-            [
-                'category_id' => (int) $category->getId(),
-                'product_count' => count($filteredProductIds),
-            ]
-        );
+        if ($facetFilters === []) {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventData = [
+                'category_id' => $category->getId(),
+                'product_ids' => $filteredProductIds,
+            ];
+            $eventPayload = ['data' => $eventData];
+            $this->traceControllerStep(
+                'category::dispatch_load_after',
+                function () use ($eventsManager, &$eventPayload): void {
+                    $eventsManager->dispatch('WeShop_Catalog::category_load_after', $eventPayload);
+                },
+                [
+                    'category_id' => (int) $category->getId(),
+                    'product_count' => count($filteredProductIds),
+                ]
+            );
+        }
 
         $this->assign('title', $categoryData['name']);
         $this->assign('meta_title', $category->getData('meta_title') ?? $categoryData['name']);
         $this->assign('meta_description', $category->getData('meta_description') ?? $categoryData['description']);
         $this->assign('meta_keywords', $category->getData('meta_keywords') ?? '');
 
-        return $this->traceControllerStep(
+        $html = $this->traceControllerStep(
             'category::fetch_content',
-            fn (): string => $this->fetch('WeShop_Catalog::templates/Frontend/Category/content.phtml'),
+            fn (): string => $this->template(self::CONTENT_TEMPLATE),
             [
                 'category_id' => (int) $category->getId(),
                 'product_count' => count($products),
                 'filter_count' => count($facetFilters),
+            ]
+        );
+        $this->rememberViewPayloadCache($viewCacheKey, [
+            'html' => $html,
+            'assigns' => [
+                'title' => $categoryData['name'],
+                'meta_title' => $category->getData('meta_title') ?? $categoryData['name'],
+                'meta_description' => $category->getData('meta_description') ?? $categoryData['description'],
+                'meta_keywords' => $category->getData('meta_keywords') ?? '',
+            ],
+            'request' => [
+                'category' => $categoryData,
+                'categories' => $this->request->getData('categories'),
+                'products' => $products,
+                'filters' => $facetFilters,
+                'applied_filters' => $appliedFilters,
+                'clear_all_url' => $clearAllUrl,
+                'category_id' => $category->getId(),
+                'filtered_product_ids' => $filteredProductIds,
+                'pagination' => (string) ($browse['pagination_html'] ?? ''),
+                'pagination_data' => $paginationData,
+            ],
+        ]);
+
+        return $this->renderCategoryLayoutWithContent($html);
+    }
+
+    private function renderCategoryLayoutWithContent(string $contentHtml): string
+    {
+        return (string)$this->traceControllerStep(
+            'category::render_layout',
+            function () use ($contentHtml): string {
+                $this->request->setData(self::CONTENT_HTML_OVERRIDE_KEY, $contentHtml);
+
+                try {
+                    return (string)$this->fetch(self::CONTENT_TEMPLATE);
+                } finally {
+                    $this->request->setData(self::CONTENT_HTML_OVERRIDE_KEY, null);
+                }
+            },
+            [
+                'content_bytes' => strlen($contentHtml),
             ]
         );
     }
@@ -219,25 +294,197 @@ class View extends BaseController
      */
     private function traceControllerStep(string $name, callable $callback, array $meta = []): mixed
     {
-        if (!RequestLifecycleTrace::isEnabled()) {
-            return $callback();
-        }
-
         $start = microtime(true);
-        RequestLifecycleTrace::pushCurrentParent($name);
+        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        if ($traceEnabled) {
+            RequestLifecycleTrace::pushCurrentParent($name);
+        }
 
         try {
             return $callback();
         } finally {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan(
-                $name,
-                (microtime(true) - $start) * 1000,
-                'controller',
-                'controller_chain::action_execute',
-                $meta
-            );
+            $durationMs = (microtime(true) - $start) * 1000;
+            $this->setPerfHeader('X-WLS-Category-Step-' . $this->normalizePerfHeaderName($name), sprintf('%.2f', $durationMs));
+            if ($traceEnabled) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan(
+                    $name,
+                    $durationMs,
+                    'controller',
+                    'controller_chain::action_execute',
+                    $meta
+                );
+            }
         }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function applyCachedViewPayload(array $payload): void
+    {
+        foreach ((array)($payload['request'] ?? []) as $key => $value) {
+            $this->request->setData((string)$key, $value);
+        }
+
+        foreach ((array)($payload['assigns'] ?? []) as $key => $value) {
+            $this->assign((string)$key, $value);
+        }
+    }
+
+    private function getViewPayloadCache(string $key): ?array
+    {
+        $now = microtime(true);
+        if (isset(self::$viewPayloadCache[$key])) {
+            $cached = self::$viewPayloadCache[$key];
+            if (($cached['expires_at'] ?? 0.0) >= $now) {
+                $this->setPerfHeader('X-WLS-Category-View-Cache', 'local');
+                return is_array($cached['data']) ? $cached['data'] : null;
+            }
+            unset(self::$viewPayloadCache[$key]);
+        }
+
+        $runtimeStart = microtime(true);
+        $runtimeCached = $this->runtimeCacheGet('category.view.' . $key);
+        $this->setPerfHeader('X-WLS-Category-View-Cache-Get-Ms', sprintf('%.2f', (microtime(true) - $runtimeStart) * 1000));
+        if (is_array($runtimeCached)) {
+            $this->setPerfHeader('X-WLS-Category-View-Cache', 'shared');
+            if (count(self::$viewPayloadCache) > 96) {
+                self::$viewPayloadCache = array_slice(self::$viewPayloadCache, -48, null, true);
+            }
+            $ttl = $this->viewPayloadCacheTtl();
+            self::$viewPayloadCache[$key] = [
+                'expires_at' => $now + $ttl,
+                'data' => $runtimeCached,
+            ];
+            return $runtimeCached;
+        }
+
+        $this->setPerfHeader('X-WLS-Category-View-Cache', 'miss:' . self::$lastRuntimeCacheGetStatus);
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function rememberViewPayloadCache(string $key, array $payload): void
+    {
+        if (count(self::$viewPayloadCache) > 96) {
+            self::$viewPayloadCache = array_slice(self::$viewPayloadCache, -48, null, true);
+        }
+
+        $ttl = $this->viewPayloadCacheTtl();
+        self::$viewPayloadCache[$key] = [
+            'expires_at' => microtime(true) + $ttl,
+            'data' => $payload,
+        ];
+        $this->runtimeCacheSet('category.view.' . $key, $payload, $ttl);
+    }
+
+    private function buildViewPayloadCacheKey(mixed $handle, int $categoryId): string
+    {
+        $query = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
+            ? $this->request->getQuery()
+            : [];
+        ksort($query);
+        $uri = function_exists('w_env_request_uri') ? (string)w_env_request_uri() : '';
+        $host = function_exists('w_env_http_host') ? (string)w_env_http_host() : '';
+
+        return sha1((string)json_encode([
+            'v' => 10,
+            'handle' => (string)($handle ?? ''),
+            'category_id' => $categoryId,
+            'query' => $query,
+            'lang' => State::getLang(),
+            'lang_local' => State::getLangLocal(),
+            'currency' => State::getCurrency(),
+            'host' => $host,
+            'uri' => $uri,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            $value = $cache->get('weshop_catalog_runtime', $key);
+            self::$lastRuntimeCacheGetStatus = $value === null ? 'empty' : 'value';
+            return $value;
+        } catch (\Throwable $throwable) {
+            self::$lastRuntimeCacheGetStatus = 'error:' . $throwable::class;
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $stored = $cache->set('weshop_catalog_runtime', $key, $value, max(1, $ttl));
+            $this->setPerfHeader('X-WLS-Category-View-Cache-Store', $stored ? 'ok' : 'fail');
+        } catch (\Throwable $throwable) {
+            $this->setPerfHeader('X-WLS-Category-View-Cache-Store', 'error:' . $throwable::class);
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private function setPerfHeader(string $name, string $value): void
+    {
+        try {
+            $this->request->getResponse()->setHeader($name, $value);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function normalizePerfHeaderName(string $name): string
+    {
+        return substr((string)preg_replace('/[^A-Za-z0-9]+/', '-', $name), 0, 80);
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$runtimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'weshop_catalog_runtime',
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function viewPayloadCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('page.category_view_ttl', self::VIEW_PAYLOAD_CACHE_TTL);
+    }
+
+    private static function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
     }
 
     private function buildBreadcrumbs(CategoryService $categoryService, array $categoryData): array
@@ -315,6 +562,82 @@ class View extends BaseController
             'breadcrumbs' => $categoryData['breadcrumbs'],
             'path' => implode('/', $pathSegments),
         ]);
+    }
+
+    /**
+     * Keep pagination URL ownership in the controller/service layer. Templates
+     * should render pagination data, not parse request or rewrite internals.
+     *
+     * @param array<string, mixed> $paginationData
+     * @param array<string, mixed> $categoryData
+     * @param array<string, mixed> $query
+     * @return array<string, mixed>
+     */
+    private function withPaginationUrls(array $paginationData, array $categoryData, array $query): array
+    {
+        $currentPage = max(1, (int)($paginationData['page'] ?? 1));
+        $totalPages = max(1, (int)($paginationData['pages'] ?? 1));
+        if ($totalPages <= 1) {
+            return $paginationData;
+        }
+
+        $path = $this->buildPublicCategoryPath($categoryData);
+        $params = $this->buildPaginationQueryParams($query);
+        if ($path === 'catalog/category/view' && !isset($params['id'])) {
+            $params['id'] = (int)($categoryData['category_id'] ?? 0);
+        }
+
+        $paginationData['prev_url'] = $currentPage > 1
+            ? $this->getUrl($path, array_merge($params, ['page' => $currentPage - 1]))
+            : '';
+        $paginationData['next_url'] = $currentPage < $totalPages
+            ? $this->getUrl($path, array_merge($params, ['page' => $currentPage + 1]))
+            : '';
+
+        return $paginationData;
+    }
+
+    /**
+     * @param array<string, mixed> $categoryData
+     */
+    private function buildPublicCategoryPath(array $categoryData): string
+    {
+        $segments = [];
+        foreach (($categoryData['breadcrumbs'] ?? []) as $breadcrumb) {
+            $handle = trim((string)($breadcrumb['handle'] ?? ''), '/');
+            if ($handle !== '') {
+                $segments[] = $handle;
+            }
+        }
+
+        $handle = trim((string)($categoryData['handle'] ?? ''), '/');
+        if ($handle !== '') {
+            $segments[] = $handle;
+        }
+
+        return $segments !== []
+            ? 'catalog/category/' . implode('/', $segments)
+            : 'catalog/category/view';
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     * @return array<string, mixed>
+     */
+    private function buildPaginationQueryParams(array $query): array
+    {
+        $params = [];
+        foreach ($query as $key => $value) {
+            if (!is_string($key) || in_array($key, ['id', 'handle', 'page', 'page_id', 'website_id'], true)) {
+                continue;
+            }
+            if ($value === null || $value === '' || is_array($value)) {
+                continue;
+            }
+            $params[$key] = $value;
+        }
+
+        return $params;
     }
 
     /**

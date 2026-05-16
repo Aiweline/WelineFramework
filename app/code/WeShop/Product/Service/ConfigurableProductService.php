@@ -64,6 +64,35 @@ class ConfigurableProductService
     }
 
     /**
+     * @param int[] $productIds
+     * @return array<int, bool>
+     */
+    public function getConfigurableMap(array $productIds): array
+    {
+        $productIds = array_values(array_unique(array_filter(array_map('intval', $productIds))));
+        if ($productIds === []) {
+            return [];
+        }
+
+        $map = array_fill_keys($productIds, false);
+        $product = clone $this->product;
+        $children = $product->reset()->clearData()
+            ->where(Product::schema_fields_parent_id, $productIds, 'in')
+            ->where(Product::schema_fields_status, 1)
+            ->select()
+            ->fetchArray();
+
+        foreach ($children as $child) {
+            $parentId = (int)($child[Product::schema_fields_parent_id] ?? 0);
+            if ($parentId > 0) {
+                $map[$parentId] = true;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
      * 获取可配置产品的所有规格选项
      * 
      * @param int $productId 产品ID（父产品ID）

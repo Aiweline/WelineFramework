@@ -15,23 +15,52 @@
 // 获取分类和产品数据（优先从模板数据，其次从 Request）
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Request;
+use WeShop\Catalog\Service\CategoryProductListHtmlCache;
 use WeShop\Product\Service\ConfigurableProductService;
 
 /** @var Request $request */
 $request = ObjectManager::getInstance(Request::class);
+$contentHtmlOverride = $request->getData('weshop_category_content_html_override') ?? null;
+if (is_string($contentHtmlOverride) && $contentHtmlOverride !== '') {
+    echo $contentHtmlOverride;
+    return;
+}
 
 /** @var ConfigurableProductService $configurableService */
 $configurableService = ObjectManager::getInstance(ConfigurableProductService::class);
 
 $category = $request->getData('category') ?? $this->getData('category') ?? [];
 $products = $request->getData('products') ?? $this->getData('products') ?? [];
+$browseProductIdsForDom = array_values(array_filter(array_map(
+    static fn (mixed $p): int => (int) (is_array($p) ? ($p['product_id'] ?? $p['entity_id'] ?? 0) : 0),
+    is_array($products) ? $products : []
+)));
+$__productsHtmlCacheKey = null;
+if (is_array($products)) {
+    $__productsHtmlCacheKey = sha1((string)json_encode([
+        'v' => 1,
+        'ids' => $browseProductIdsForDom,
+        'lang' => \Weline\Framework\App\State::getLangLocal(),
+        'currency' => \Weline\Framework\App\State::getCurrency(),
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    $__cachedProductsHtml = CategoryProductListHtmlCache::get($__productsHtmlCacheKey);
+    if ($__cachedProductsHtml !== null) {
+        echo $__cachedProductsHtml;
+        return;
+    }
+    ob_start();
+}
+try {
+    $request->getResponse()->setHeader(
+        'X-WLS-Category-Debug-Hook-Products',
+        'products=' . (is_array($products) ? count($products) : 0)
+    );
+} catch (\Throwable) {
+}
 
 // 如果有产品数据，显示产品列表
 if (!empty($products)) {
-    $browseProductIdsForDom = array_values(array_filter(array_map(
-        static fn (mixed $p): int => (int) (is_array($p) ? ($p['product_id'] ?? $p['entity_id'] ?? 0) : 0),
-        $products
-    )));
+    $configurableMap = $configurableService->getConfigurableMap($browseProductIdsForDom);
     ?>
     <div class="category-products">
         <h2 class="section-title"><?= htmlspecialchars($category['name'] ?? __('商品列表')) ?></h2>
@@ -54,7 +83,7 @@ if (!empty($products)) {
             $inStock = $product['in_stock'] ?? ((int)($product['stock'] ?? 0) > 0);
             
             // 检查是否为可配置产品（有子产品）
-            $isConfigurable = $productId > 0 ? $configurableService->isConfigurable($productId) : false;
+            $isConfigurable = $productId > 0 && !empty($configurableMap[$productId]);
             
             // 构建产品链接（使用 /product/{handle} 格式）
             $productUrl = !empty($handle) 
@@ -100,7 +129,7 @@ if (!empty($products)) {
                     <?php endif; ?>
                     
                     <div class="product-price-row">
-                        <span class="product-price">¥<?= number_format($price, 2) ?></span>
+                        <span class="product-price"><?= \Weline\Currency\Helper\CurrencyFormatter::formatConverted($price) ?></span>
                     </div>
                     
                     <?php 
@@ -135,6 +164,13 @@ if (!empty($products)) {
     <?php
 }
 
+?>
+<?php
+if ($__productsHtmlCacheKey !== null) {
+    $__productsHtml = (string)ob_get_clean();
+    CategoryProductListHtmlCache::set($__productsHtmlCacheKey, $__productsHtml);
+    echo $__productsHtml;
+}
 ?>
 <style>
 /* ========================================

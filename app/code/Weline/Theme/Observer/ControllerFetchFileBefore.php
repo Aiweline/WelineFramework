@@ -9,6 +9,7 @@
 
 namespace Weline\Theme\Observer;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
@@ -42,10 +43,14 @@ final class ControllerFetchFileBeforeRequestCacheState
  */
 class ControllerFetchFileBefore implements ObserverInterface
 {
+    private const RUNTIME_CACHE_TTL = 300;
+
     private static ?ControllerFetchFileBeforeRequestCacheState $mainRequestCache = null;
     /** @var \WeakMap<\Fiber, ControllerFetchFileBeforeRequestCacheState>|null */
     private static ?\WeakMap $fiberRequestCaches = null;
     private static bool $stateManagerRegistered = false;
+    /** @var array<string, array{expires_at: float, value: mixed}> */
+    private static array $runtimeCache = [];
 
     private WelineTheme $welineTheme;
 
@@ -227,9 +232,13 @@ class ControllerFetchFileBefore implements ObserverInterface
             self::registerStateManager();
             $themeId = $theme->getId() ?: 0;
             $configCacheKey = "{$themeId}_{$area}_{$scope}";
+            $runtimeCacheAllowed = $this->isRuntimeCacheAllowed($request, $isBackendRequest);
             $didPerformanceLoad = false;
             if (isset($requestCache->layoutConfigCache[$configCacheKey])) {
                 $layoutConfig = $requestCache->layoutConfigCache[$configCacheKey];
+            } elseif ($runtimeCacheAllowed && ($runtimeLayoutConfig = self::runtimeCacheGet('layout_config|' . $configCacheKey))[0]) {
+                $layoutConfig = is_array($runtimeLayoutConfig[1]) ? $runtimeLayoutConfig[1] : [];
+                $requestCache->layoutConfigCache[$configCacheKey] = $layoutConfig;
             } else {
                 ThemeData::setCurrentTheme($theme);
                 ThemeData::setCurrentArea($area);
@@ -237,6 +246,9 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $didPerformanceLoad = true;
                 $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
                 $requestCache->layoutConfigCache[$configCacheKey] = $layoutConfig;
+                if ($runtimeCacheAllowed) {
+                    self::runtimeCacheSet('layout_config|' . $configCacheKey, $layoutConfig);
+                }
             }
 
             // 配置来自元数据配置的布局：仅当控制器未显式传入「类型.选项」时才用 theme 的 layoutConfig 同步 option。
@@ -271,9 +283,15 @@ class ControllerFetchFileBefore implements ObserverInterface
 
             if (isset($requestCache->colorsCache[$configCacheKey])) {
                 $colors = $requestCache->colorsCache[$configCacheKey];
+            } elseif ($runtimeCacheAllowed && ($runtimeColors = self::runtimeCacheGet('colors|' . $configCacheKey))[0]) {
+                $colors = is_array($runtimeColors[1]) ? $runtimeColors[1] : [];
+                $requestCache->colorsCache[$configCacheKey] = $colors;
             } else {
                 $colors = self::loadThemeColors($area, $scope, $theme);
                 $requestCache->colorsCache[$configCacheKey] = $colors;
+                if ($runtimeCacheAllowed) {
+                    self::runtimeCacheSet('colors|' . $configCacheKey, $colors);
+                }
             }
             $template->setData('colors', $colors);
 
@@ -281,9 +299,15 @@ class ControllerFetchFileBefore implements ObserverInterface
             $pathCacheKey = "{$layoutPath}|{$themeId}|{$area}";
             if (array_key_exists($pathCacheKey, $requestCache->resolvedLayoutPathCache)) {
                 $resolvedLayoutPath = $requestCache->resolvedLayoutPathCache[$pathCacheKey];
+            } elseif ($runtimeCacheAllowed && ($runtimeResolvedPath = self::runtimeCacheGet('layout_path|' . $pathCacheKey))[0]) {
+                $resolvedLayoutPath = $runtimeResolvedPath[1];
+                $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
             } else {
                 $resolvedLayoutPath = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
                 $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+                if ($runtimeCacheAllowed) {
+                    self::runtimeCacheSet('layout_path|' . $pathCacheKey, $resolvedLayoutPath);
+                }
             }
             if ($resolvedLayoutPath) {
                 $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}";
@@ -291,9 +315,23 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $sourcePath = LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
                 $lang = class_exists(Cookie::class) ? State::getLang() : 'zh_Hans_CN';
                 $compiledPath = LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang);
-                if ($sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
-                    && filemtime($sourcePath) <= filemtime($compiledPath)
-                    && isset($requestCache->layoutParamsRequestCache[$paramsCacheKey])) {
+                $compiledLayoutFresh = $sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
+                    && filemtime($sourcePath) <= filemtime($compiledPath);
+                $runtimeParamsCacheKey = null;
+                $cachedLayoutParams = null;
+                if ($compiledLayoutFresh && isset($requestCache->layoutParamsRequestCache[$paramsCacheKey])) {
+                    $cachedLayoutParams = $requestCache->layoutParamsRequestCache[$paramsCacheKey];
+                } elseif ($compiledLayoutFresh && $runtimeCacheAllowed) {
+                    $runtimeParamsCacheKey = 'layout_params|' . $paramsCacheKey
+                        . '|' . filemtime((string)$sourcePath)
+                        . '|' . filemtime((string)$compiledPath);
+                    $runtimeParams = self::runtimeCacheGet($runtimeParamsCacheKey);
+                    if ($runtimeParams[0] && is_array($runtimeParams[1])) {
+                        $cachedLayoutParams = $runtimeParams[1];
+                        $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $cachedLayoutParams;
+                    }
+                }
+                if (is_array($cachedLayoutParams)) {
                     ThemeData::setCurrentTheme($theme);
                     ThemeData::setCurrentArea($area);
                     $themeData = [
@@ -311,7 +349,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                     }
                     $existingMeta = $this->preserveAssignedTitleInMeta($existingMeta, $template, $request);
                     $template->setData('meta', array_merge(
-                        $requestCache->layoutParamsRequestCache[$paramsCacheKey],
+                        $cachedLayoutParams,
                         $existingMeta
                     ));
                     $eventData->setData('contentTemplate', $fileName);
@@ -322,8 +360,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $template->setData('contentTemplate', $fileName);
                     $template->setData('layoutTemplate', $resolvedLayoutPath);
                     $template->setData('fileName', $fileName);
-                    if ($this->shouldUseMetaTitle($template, $request) && !empty($requestCache->layoutParamsRequestCache[$paramsCacheKey]['title'])) {
-                        $template->assign('title', $requestCache->layoutParamsRequestCache[$paramsCacheKey]['title']);
+                    if ($this->shouldUseMetaTitle($template, $request) && !empty($cachedLayoutParams['title'])) {
+                        $template->assign('title', $cachedLayoutParams['title']);
                     }
                     $this->logThemeLayoutResolved($eventData, (string)$fileName, (string)$resolvedLayoutPath, (string)$fileName, $controller);
                     return;
@@ -419,6 +457,9 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 将 meta 数据设置到模板中（转义处理由模板自行决定）
                 $template->setData('meta', $metaData);
                 $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $metaData;
+                if ($runtimeCacheAllowed && $runtimeParamsCacheKey !== null) {
+                    self::runtimeCacheSet($runtimeParamsCacheKey, $metaData);
+                }
 
                 // 如果控制器没有设置标题，则从 meta 中获取默认标题并设置
                 if ($this->shouldUseMetaTitle($template, $request) && !empty($metaData['title'])) {
@@ -793,6 +834,69 @@ class ControllerFetchFileBefore implements ObserverInterface
             'preview_theme:' . $previewThemeId,
             'preview_token:' . substr($previewToken, 0, 24),
         ]);
+    }
+
+    private function isRuntimeCacheAllowed(?Request $request, bool $isBackendRequest): bool
+    {
+        if ($isBackendRequest || $request === null) {
+            return false;
+        }
+
+        foreach ([
+            'visual_editor',
+            'preview',
+            'preview_theme',
+            'frontend_theme_id',
+            'backend_theme_id',
+            'virtual_theme_id',
+            'weline_preview_token',
+            'scope',
+            'scope_frontend',
+        ] as $param) {
+            $value = $request->getParam($param, null);
+            if ($value !== null && trim((string)$value) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{0: bool, 1: mixed}
+     */
+    private static function runtimeCacheGet(string $key): array
+    {
+        $entry = self::$runtimeCache[$key] ?? null;
+        if (!is_array($entry)) {
+            return [false, null];
+        }
+
+        if (($entry['expires_at'] ?? 0.0) < microtime(true)) {
+            unset(self::$runtimeCache[$key]);
+            return [false, null];
+        }
+
+        return [true, $entry['value'] ?? null];
+    }
+
+    private static function runtimeCacheSet(string $key, mixed $value): void
+    {
+        self::$runtimeCache[$key] = [
+            'expires_at' => microtime(true) + self::runtimeCacheTtl(),
+            'value' => $value,
+        ];
+    }
+
+    private static function runtimeCacheTtl(): int
+    {
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            return $policy->ttl('theme.runtime_data_ttl', self::RUNTIME_CACHE_TTL);
+        } catch (\Throwable) {
+            return self::RUNTIME_CACHE_TTL;
+        }
     }
 
     private static function currentFiber(): ?\Fiber
