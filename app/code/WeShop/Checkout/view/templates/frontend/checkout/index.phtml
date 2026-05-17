@@ -520,7 +520,6 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
 
     <div class="weshop-checkout-layout">
         <form class="weshop-checkout-form" id="weshop-checkout-form" action="<?= $this->getUrl('checkout/place-order') ?>" method="post">
-            <input type="hidden" name="checkout_mode" value="<?= $isGuestCheckout ? 'guest' : 'customer' ?>">
             <?php if ($isRetryPayment && $retryOrderId > 0): ?>
                 <input type="hidden" name="order_id" value="<?= $retryOrderId ?>">
                 <section class="weshop-checkout-card">
@@ -534,10 +533,58 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                 </section>
             <?php endif; ?>
 
+            <section class="weshop-checkout-card" data-weline-checkout-identity>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::identity-before"/>
+                <div class="weshop-checkout-section-title">
+                    <h2><?= __('结账方式') ?></h2>
+                    <span><?= __('由客户选择是否匿名结账') ?></span>
+                </div>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::identity-options-before"/>
+                <div class="weshop-checkout-identity-options">
+                    <label class="weshop-checkout-choice weshop-checkout-identity-option">
+                        <input
+                            type="radio"
+                            name="checkout_mode"
+                            value="customer"
+                            <?= !$isGuestCheckout && $customerCheckoutAllowed ? 'checked' : '' ?>
+                            <?= $customerCheckoutAllowed ? '' : 'disabled' ?>
+                            data-weshop-checkout-mode-input
+                        >
+                        <span>
+                            <span class="weshop-checkout-choice-title"><?= __('使用账户结账') ?></span>
+                            <span class="weshop-checkout-choice-meta">
+                                <?= $customerCheckoutAllowed
+                                    ? __('订单、收货地址和售后会关联到当前账户。')
+                                    : __('登录后可选择账户结账并使用账户地址。') ?>
+                            </span>
+                        </span>
+                    </label>
+                    <label class="weshop-checkout-choice weshop-checkout-identity-option">
+                        <input
+                            type="radio"
+                            name="checkout_mode"
+                            value="guest"
+                            <?= $isGuestCheckout || !$customerCheckoutAllowed ? 'checked' : '' ?>
+                            <?= $guestCheckoutAllowed ? '' : 'disabled' ?>
+                            data-weshop-checkout-mode-input
+                        >
+                        <span>
+                            <span class="weshop-checkout-choice-title"><?= __('匿名结账') ?></span>
+                            <span class="weshop-checkout-choice-meta"><?= __('不强制登录；本次订单使用邮箱接收通知，支付、配送模块可按匿名上下文处理。') ?></span>
+                        </span>
+                    </label>
+                </div>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::identity-options-after"/>
+                <div class="weshop-checkout-identity-note">
+                    <?= __('全局结账只负责输出身份选择和上下文，支付、配送、风控等特殊逻辑由各自模块通过 hook 或 event 处理。') ?>
+                </div>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::identity-after"/>
+            </section>
+
             <section class="weshop-checkout-card">
                 <div class="weshop-checkout-section-title">
                     <h2><?= __('联系信息') ?></h2>
-                    <span><?= $isGuestCheckout ? __('无需账户') : __('账户邮箱') ?></span>
+                    <span data-weshop-contact-mode-label><?= $isGuestCheckout ? __('无需账户') : __('账户邮箱') ?></span>
                 </div>
                 <div class="weshop-checkout-alert" data-weshop-checkout-alert role="alert"></div>
                 <div class="weshop-checkout-fields">
@@ -546,7 +593,12 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                         <input id="checkout-contact-email" name="guest_email" type="email" value="<?= $escape($customerEmail) ?>" autocomplete="email" required>
                     </div>
                 </div>
-                <div class="weshop-checkout-help">
+                <div
+                    class="weshop-checkout-help"
+                    data-weshop-contact-help
+                    data-guest-help="<?= $escape(__('只填写邮箱即可匿名结账，支付和订单状态会绑定到本次结账会话。')) ?>"
+                    data-customer-help="<?= $escape(__('我们会将订单和支付更新发送到此邮箱。')) ?>"
+                >
                     <?= $isGuestCheckout
                         ? __('只填写邮箱即可匿名结账，支付和订单状态会绑定到本次结账会话。')
                         : __('我们会将订单和支付更新发送到此邮箱。') ?>
@@ -560,7 +612,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                 </div>
 
                 <?php if ($savedAddresses): ?>
-                    <div class="weshop-checkout-choice-list weshop-checkout-address-list">
+                    <div class="weshop-checkout-choice-list weshop-checkout-address-list" data-weshop-saved-address-list>
                         <?php foreach ($savedAddresses as $index => $address): ?>
                             <?php
                             $addressId = (int) ($address['address_id'] ?? 0);
@@ -669,7 +721,13 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                     </span>
                 </label>
                 <w:hook name="Weline_Checkout::frontend::layouts::checkout::place-order-button-before"/>
-                <button class="weshop-checkout-submit weline-pixel::begin_checkout" type="submit" data-weshop-place-order>
+                <button
+                    class="weshop-checkout-submit weline-pixel::begin_checkout"
+                    type="submit"
+                    data-weshop-place-order
+                    data-guest-label="<?= $escape(__('匿名支付')) ?>"
+                    data-customer-label="<?= $escape(__('提交订单')) ?>"
+                >
                     <?= $isGuestCheckout ? __('匿名支付') : __('提交订单') ?>
                 </button>
                 <w:hook name="Weline_Checkout::frontend::layouts::checkout::place-order-button-after"/>
@@ -751,6 +809,11 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             discountRow: document.querySelector('[data-weshop-summary-discount-row]'),
             grandTotal: document.querySelector('[data-weshop-summary-grand-total]')
         };
+        var checkoutShell = document.querySelector('[data-weshop-checkout-mode]');
+        var checkoutModeInputs = Array.prototype.slice.call(form.querySelectorAll('input[name="checkout_mode"]'));
+        var contactModeLabel = document.querySelector('[data-weshop-contact-mode-label]');
+        var contactHelp = document.querySelector('[data-weshop-contact-help]');
+        var savedAddressList = document.querySelector('[data-weshop-saved-address-list]');
         var addressFields = Array.prototype.slice.call(form.querySelectorAll('[data-new-address-field]'));
         var requiredAddressFields = Array.prototype.slice.call(form.querySelectorAll('[data-guest-address-required]'));
         var refreshTimer = null;
