@@ -23,6 +23,9 @@ use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
 use GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
+use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
+use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 
 /**
  * AI内容生成控制器
@@ -285,7 +288,10 @@ class AiGenerate extends BackendController
                 null, // 自动选择模型
                 'pagebuilder_component_generation',
                 $locale,
-                [],
+                [
+                    'component_config_generation' => true,
+                    'response_format' => ['type' => 'json_object'],
+                ],
                 null, // userId
                 true  // isBackend
             );
@@ -564,6 +570,170 @@ class AiGenerate extends BackendController
     }
 
     /**
+     * Stream text config generation for AI-site virtual-theme components.
+     *
+     * POST /pagebuilder/backend/ai-generate/component-config-stream
+     */
+    public function componentConfigStream(): void
+    {
+        @set_time_limit(240);
+        @ignore_user_abort(true);
+
+        $sse = new \Weline\Framework\Http\Sse\SseWriter();
+        $sse->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', ['message' => 'Only POST requests are supported.']);
+                $sse->close();
+                return;
+            }
+
+            $publicId = \trim((string)$this->request->getPost('public_id', ''));
+            $pageType = \trim((string)$this->request->getPost('page_type', ''));
+            $componentCode = \trim((string)$this->request->getPost('component_code', ''));
+            $region = \trim((string)$this->request->getPost('region', 'content')) ?: 'content';
+            $aiPrompt = \trim((string)$this->request->getPost('ai_prompt', ''));
+            $postedConfig = $this->decodePostedComponentConfig((string)$this->request->getPost('current_config', ''));
+            $adminId = (int)$this->getLoginUserId();
+
+            if ($adminId <= 0 || $publicId === '' || $componentCode === '') {
+                $sse->sendEvent('error', ['message' => 'Missing session or component context.']);
+                $sse->close();
+                return;
+            }
+
+            /** @var AiSiteAgentSessionService $sessionService */
+            $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+            $session = $sessionService->loadByPublicId($publicId, $adminId);
+            if (!$session instanceof AiSiteAgentSession) {
+                $sse->sendEvent('error', ['message' => 'AI site session not found or not accessible.']);
+                $sse->close();
+                return;
+            }
+
+            $scope = $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+            $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+            if ($virtualThemeId <= 0) {
+                $sse->sendEvent('error', ['message' => 'Virtual theme is not ready for field generation.']);
+                $sse->close();
+                return;
+            }
+
+            /** @var VirtualThemeComponent $componentModel */
+            $componentModel = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+            $component = $componentModel->clearData()->clearQuery()
+                ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+                ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
+                ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
+                ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+
+            if (!$component instanceof VirtualThemeComponent || !$component->getId()) {
+                if ($postedConfig === []) {
+                    $sse->sendEvent('error', ['message' => 'Virtual theme component not found: ' . $componentCode]);
+                    $sse->close();
+                    return;
+                }
+                $componentName = $componentCode;
+                $currentConfig = $postedConfig;
+            } else {
+                $componentName = $component->getName();
+                $currentConfig = $component->getDefaultConfig();
+                if ($postedConfig !== []) {
+                    $currentConfig = \array_replace($currentConfig, $postedConfig);
+                }
+            }
+
+            if ($currentConfig === []) {
+                $sse->sendEvent('error', ['message' => 'Virtual theme component not found: ' . $componentCode]);
+                $sse->close();
+                return;
+            }
+
+            $textConfigs = $this->buildTextConfigsFromDefaultConfig($currentConfig);
+            if ($textConfigs === []) {
+                $sse->sendEvent('error', ['message' => 'This component has no text fields available for AI generation.']);
+                $sse->close();
+                return;
+            }
+
+            $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+            $targetLocale = $this->resolveAiSiteContentLocale($scope, $websiteProfile, $currentConfig, $pageType);
+            $targetLanguage = $this->getLanguageNameFromLocale($targetLocale);
+
+            $prompt = $this->buildVirtualComponentConfigStreamPrompt(
+                $componentCode,
+                $componentName,
+                $region,
+                $pageType,
+                $scope,
+                $textConfigs,
+                $currentConfig,
+                $targetLocale,
+                $targetLanguage,
+                $aiPrompt
+            );
+
+            $sse->sendEvent('start', [
+                'message' => 'Connected. Generating component field values.',
+                'component_code' => $componentCode,
+                'page_type' => $pageType,
+            ]);
+            $sse->sendEvent('context', [
+                'display_text' => 'Component: ' . $componentCode . "\nLanguage: " . $targetLanguage . ' (' . $targetLocale . ')',
+            ]);
+
+            /** @var AiService $aiService */
+            $aiService = ObjectManager::getInstance(AiService::class);
+            $sse->sendEvent('progress', ['message' => 'Generating component field values with configured AI adapter.']);
+            $fullContent = $aiService->generate(
+                $prompt,
+                null,
+                'pagebuilder_component_generation',
+                $targetLocale,
+                [
+                    'temperature' => 0.15,
+                    'max_tokens' => 1600,
+                    'timeout' => 180,
+                    'component_config_generation' => true,
+                    'response_format' => ['type' => 'json_object'],
+                ],
+                null,
+                true
+            );
+
+            if (\trim($fullContent) === '') {
+                $sse->sendEvent('error', ['message' => 'AI stream returned no content.']);
+                $sse->close();
+                return;
+            }
+
+            $data = $this->parseJsonResponse($fullContent);
+            $data = $this->filterGeneratedConfigByAllowedTextFields($data, $textConfigs);
+            if ($data === []) {
+                $sse->sendEvent('error', ['message' => 'AI did not return any valid component text fields.']);
+                $sse->close();
+                return;
+            }
+
+            $displayJson = (string)\json_encode($data, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            $sse->sendEvent('chunk', [
+                'content' => $displayJson,
+                'total_length' => \strlen($displayJson),
+                'chunk_count' => 1,
+            ]);
+            $sse->sendEvent('done', ['data' => $data]);
+            $sse->complete(['message' => 'Component field generation complete.']);
+        } catch (\Throwable $e) {
+            $message = $this->sanitizeErrorMessage((string)$e->getMessage());
+            $sse->sendEvent('error', ['message' => $message !== '' ? $message : 'Component field generation failed.']);
+            $sse->close();
+        }
+    }
+
+    /**
      * 需要排除的字段名关键词（图片、地址等非文字内容）
      */
     private const EXCLUDED_FIELD_KEYWORDS = [
@@ -583,6 +753,203 @@ class AiGenerate extends BackendController
      * 只获取文字类型（text/textarea）的配置项
      * 并排除图片、地址、文件等非文字内容的字段
      */
+    /**
+     * @param array<string,mixed> $config
+     * @return list<array{key:string,label:string,type:string,default:string,group:string}>
+     */
+    private function buildTextConfigsFromDefaultConfig(array $config): array
+    {
+        $fields = [];
+        foreach ($config as $key => $value) {
+            $key = (string)$key;
+            if ($key === '' || !\is_scalar($value) || $this->shouldExcludeGeneratedFieldKey($key)) {
+                continue;
+            }
+            $fields[] = [
+                'key' => $key,
+                'label' => \str_replace(['.', '_'], ' ', $key),
+                'type' => \str_contains($key, 'items') || \str_contains($key, 'description') ? 'textarea' : 'text',
+                'default' => (string)$value,
+                'group' => \str_contains($key, '.') ? (string)\strstr($key, '.', true) : '',
+            ];
+        }
+
+        return $fields;
+    }
+
+    private function shouldExcludeGeneratedFieldKey(string $key): bool
+    {
+        $lower = \strtolower($key);
+        foreach (['style.', 'layout.', 'animation.', 'responsive.', 'spacing.', 'border.', 'shadow.'] as $prefix) {
+            if (\str_starts_with($lower, $prefix)) {
+                return true;
+            }
+        }
+        if (\str_ends_with($lower, '_enabled') || \str_ends_with($lower, '_count') || \str_ends_with($lower, '_size')) {
+            return true;
+        }
+        foreach (['logo', 'asset', 'image', 'src', 'color', 'bg_', 'background'] as $needle) {
+            if (\str_contains($lower, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function decodePostedComponentConfig(string $raw): array
+    {
+        $raw = \trim($raw);
+        if ($raw === '') {
+            return [];
+        }
+
+        try {
+            $decoded = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $websiteProfile
+     */
+    private function resolveAiSiteContentLocale(array $scope, array $websiteProfile, array $componentConfig = [], string $pageType = ''): string
+    {
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planI18n = \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [];
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+        $virtualPagesByType = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $pagebuilderPagesByType = \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [];
+        $virtualPage = $pageType !== '' && \is_array($virtualPagesByType[$pageType] ?? null) ? $virtualPagesByType[$pageType] : [];
+        $pagebuilderPage = $pageType !== '' && \is_array($pagebuilderPagesByType[$pageType] ?? null) ? $pagebuilderPagesByType[$pageType] : [];
+
+        foreach ([
+            $componentConfig['runtime.content_locale'] ?? null,
+            $componentConfig['_content_locale'] ?? null,
+            $componentConfig['content_locale'] ?? null,
+            $virtualPage['content_locale'] ?? null,
+            $virtualPage['default_locale'] ?? null,
+            $virtualPage['locale'] ?? null,
+            $pagebuilderPage['content_locale'] ?? null,
+            $pagebuilderPage['default_locale'] ?? null,
+            $pagebuilderPage['locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $websiteProfile['content_locale'] ?? null,
+            $executionBlueprint['content_locale'] ?? null,
+            $planJson['content_locale'] ?? null,
+            $planI18n['content_locale'] ?? null,
+            $planI18n['primary_locale'] ?? null,
+            $siteStrategy['content_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            State::getLang() ?: null,
+        ] as $candidate) {
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return 'zh_Hans_CN';
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param list<array{key:string,label:string,type:string,default:string,group:string}> $textConfigs
+     * @param array<string,mixed> $currentConfig
+     */
+    private function buildVirtualComponentConfigStreamPrompt(
+        string $componentCode,
+        string $componentName,
+        string $region,
+        string $pageType,
+        array $scope,
+        array $textConfigs,
+        array $currentConfig,
+        string $targetLocale,
+        string $targetLanguage,
+        string $userPrompt
+    ): string {
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $siteName = (string)($websiteProfile['site_name'] ?? $scope['site_name'] ?? '');
+        $targetDomain = (string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? '');
+        $siteBrief = (string)($websiteProfile['description'] ?? $scope['site_description'] ?? $scope['original_brief'] ?? '');
+
+        $prompt = "You generate editable text configuration for one PageBuilder virtual-theme component.\n";
+        $prompt .= "Return exactly one JSON object. No markdown. No explanations.\n";
+        $prompt .= "Every JSON key and every string value must be double-quoted. Escape line breaks as \\n. Never output unquoted natural-language values.\n";
+        $prompt .= "The response must start with { and end with }. Do not include PHP, HTML, CSS, comments, or reasoning.\n";
+        $prompt .= "Visible website copy must be written in {$targetLanguage} ({$targetLocale}). Brand names, domains, URLs, APK, SEO, and acronyms may keep their original spelling.\n";
+        $prompt .= "Existing field values may be stale or in the wrong language; use them only as semantic hints and rewrite visitor-visible copy into {$targetLanguage}.\n";
+        $prompt .= "For non-English target languages, do not keep English boilerplate labels such as Featured Pages, Policy Info, All Pages, A curated destination, or All rights reserved; translate/rewrite them into {$targetLanguage}.\n";
+        $prompt .= "Do not turn internal tasks into copy. Phrases that mean show, highlight, strengthen trust, explain, or present are instructions; rewrite them into finished visitor-facing headings and benefits.\n";
+        $prompt .= "Do not output placeholders, prompt text, field instructions, internal keys, or planning labels as visible content.\n\n";
+        $prompt .= "Site context:\n";
+        $prompt .= "- site_name: {$siteName}\n";
+        $prompt .= "- target_domain: {$targetDomain}\n";
+        $prompt .= "- brief: " . \mb_substr(\strip_tags($siteBrief), 0, 600) . "\n";
+        $prompt .= "- page_type: {$pageType}\n";
+        $prompt .= "- component_code: {$componentCode}\n";
+        $prompt .= "- component_name: {$componentName}\n";
+        $prompt .= "- region: {$region}\n";
+        if ($userPrompt !== '') {
+            $prompt .= "- user_adjustment: {$userPrompt}\n";
+        }
+
+        $prompt .= "\nCurrent field values:\n";
+        foreach ($textConfigs as $config) {
+            $key = $config['key'];
+            $value = (string)($currentConfig[$key] ?? $config['default'] ?? '');
+            $prompt .= "- {$key}: " . \mb_substr($value, 0, 500) . "\n";
+        }
+
+        $prompt .= "\nRequired JSON keys:\n{\n";
+        foreach ($textConfigs as $config) {
+            $prompt .= '  "' . $config['key'] . '": "visitor-ready field value",' . "\n";
+        }
+        $prompt = \rtrim($prompt, ",\n") . "\n}\n\n";
+        $prompt .= "Field rules:\n";
+        $prompt .= "- Preserve link-list syntax when an existing value uses Label=>/path lines.\n";
+        $prompt .= "- Keep generated values concise enough for component fields.\n";
+        $prompt .= "- Footer/header navigation labels must be visitor-facing labels, not page_type or task identifiers.\n";
+        $prompt .= "- Do not add image URLs, CSS, HTML, or fields not listed in Required JSON keys.\n";
+
+        return $prompt;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @param list<array{key:string,label:string,type:string,default:string,group:string}> $textConfigs
+     * @return array<string,string>
+     */
+    private function filterGeneratedConfigByAllowedTextFields(array $data, array $textConfigs): array
+    {
+        $allowed = [];
+        foreach ($textConfigs as $field) {
+            $allowed[$field['key']] = true;
+        }
+
+        $result = [];
+        foreach ($data as $key => $value) {
+            $key = (string)$key;
+            if (!isset($allowed[$key]) || \is_array($value) || \is_object($value)) {
+                continue;
+            }
+            $result[$key] = \trim((string)$value);
+        }
+
+        return $result;
+    }
+
     private function getComponentTextConfigs(array $metadata): array
     {
         $textConfigs = [];
@@ -1061,6 +1428,13 @@ class AiGenerate extends BackendController
      */
     private function parseJsonResponse(string $response): array
     {
+        /** @var AiResponseJsonParser $parser */
+        $parser = ObjectManager::getInstance(AiResponseJsonParser::class);
+        $parsed = $parser->extractAndDecode($response);
+        if (\is_array($parsed)) {
+            return $parsed;
+        }
+
         // 尝试提取JSON（可能包含markdown代码块）
         $json = $response;
 

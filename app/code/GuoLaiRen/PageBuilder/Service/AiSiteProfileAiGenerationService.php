@@ -78,6 +78,7 @@ Required JSON shape:
 
 Rules:
 - Keep locked fields exactly if they are provided.
+- If the customer brief clearly names a brand/site title, site_title MUST be exactly that compact brand name. Do not append a sentence, product description, locale rule, or SEO phrase to site_title.
 - Create customer-facing content, not internal placeholders.
 - Site title should feel like a real brand or website name.
 - Site tagline should be concise and marketable.
@@ -85,6 +86,7 @@ Rules:
 - meta_title should be concise, meta_description should stay within roughly 160 characters.
 - logo_svg must be a clean inline SVG with width 160 height 48 and viewBox "0 0 160 48".
 - icon_svg must be a clean inline SVG with width 64 height 64 and viewBox "0 0 64 64".
+- Visible SVG text may contain the compact site_title or a short brand mark only. Do not place long descriptions, prompt/contract words, JSON field names, or truncated requirement sentences inside SVG text.
 - SVG must not contain script, foreignObject, animation, external URLs, or embedded raster images.
 - Prefer simple geometric shapes, gradients, paths, circles, rectangles, and optional text.{$localeRule}
 PROMPT;

@@ -6,6 +6,7 @@ namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
 use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -82,7 +83,7 @@ class Routes extends DevToolRestController
 
         $key = 'routes:' . $type . ':' . (string)@\filemtime($routerFile) . ':' . (string)@\filesize($routerFile);
 
-        return (array)$this->payloadStore()->remember('routes', $key, self::ROUTES_TTL_SECONDS, function () use ($routerFile): array {
+        return (array)$this->payloadStore()->remember('routes', $key, $this->routesTtl(), function () use ($routerFile): array {
             $routers = include $routerFile;
             if (!\is_array($routers)) {
                 return [];
@@ -130,6 +131,11 @@ class Routes extends DevToolRestController
         }
 
         return $this->payloadStore;
+    }
+
+    private function routesTtl(): int
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.routes_ttl', self::ROUTES_TTL_SECONDS);
     }
 
     private function isAllowed(): bool

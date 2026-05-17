@@ -18,8 +18,8 @@ use Weline\UrlManager\Model\UrlRewrite;
  * - 产品删除时：清理相关的 URL 重写规则
  * - 处理 Handle 冲突检测和自动后缀
  * 
- * 注意：URL 重写规则使用 url_identify 字段的前缀来标识产品类型
- * 格式：catalog/product/{handle}
+ * 注意：UrlManager 的实际读取方向是 rewrite(外部 URL) -> path(内部路由)。
+ * 产品规则需要把外部商品链接写入 rewrite，把内部控制器路径写入 path。
  */
 class ProductUrlRewriteService
 {
@@ -29,12 +29,13 @@ class ProductUrlRewriteService
     /**
      * URL 重写的目标路径模板
      */
-    private const TARGET_PATH_TEMPLATE = '/weshop/product/view?id={product_id}';
+    private const TARGET_PATH_TEMPLATE = '/product/view?id={product_id}';
+    private const LEGACY_TARGET_PATH_TEMPLATE = '/weshop/product/view?id={product_id}';
     
     /**
      * 产品 URL 前缀
      */
-    private const URL_PREFIX = 'catalog/product/';
+    private const URL_PREFIX = 'product/';
 
     public function __construct(
         UrlRewrite $urlRewrite,
@@ -115,30 +116,33 @@ class ProductUrlRewriteService
      */
     public function upsertUrlRewrite(int $productId, int $websiteId, string $handle): ?array
     {
-        $urlPath = self::URL_PREFIX . $handle;
+        $publicPath = self::URL_PREFIX . $handle;
         $targetPath = str_replace('{product_id}', (string)$productId, self::TARGET_PATH_TEMPLATE);
+        $urlId = sprintf('product_%d_%d', $websiteId, $productId);
 
         try {
-            // 查找是否已存在相同的重写规则（通过目标路径匹配）
+            // 查找是否已存在相同的重写规则（通过内部目标路径匹配）
             $existing = $this->findExistingRewrite($productId, $websiteId);
 
             if ($existing) {
                 // 更新现有规则
                 $this->urlRewrite->reset()->load($existing[UrlRewrite::schema_fields_ID] ?? 0);
                 
-                // 检查 URL 是否发生变化
-                if (($existing[UrlRewrite::schema_fields_URL_IDENTIFY] ?? '') !== $urlPath) {
+                // 检查外部 URL 是否发生变化
+                if (($existing[UrlRewrite::schema_fields_REWRITE] ?? '') !== $publicPath) {
                     // Handle 变化了，需要检查新 handle 是否可用
                     if (!$this->isHandleAvailable($websiteId, $handle, $productId)) {
                         // Handle 冲突，使用自动后缀
                         $handle = $this->generateUniqueHandle($websiteId, $handle, $productId);
-                        $urlPath = self::URL_PREFIX . $handle;
+                        $publicPath = self::URL_PREFIX . $handle;
                     }
                 }
 
                 $this->urlRewrite
-                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlPath)
-                    ->setData(UrlRewrite::schema_fields_REWRITE, $targetPath)
+                    ->setData(UrlRewrite::schema_fields_URL_ID, $urlId)
+                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlId)
+                    ->setData(UrlRewrite::schema_fields_PATH, ltrim($targetPath, '/'))
+                    ->setData(UrlRewrite::schema_fields_REWRITE, $publicPath)
                     ->save();
             } else {
                 // 新建规则
@@ -146,19 +150,21 @@ class ProductUrlRewriteService
                 if (!$this->isHandleAvailable($websiteId, $handle, $productId)) {
                     // Handle 冲突，使用自动后缀
                     $handle = $this->generateUniqueHandle($websiteId, $handle, $productId);
-                    $urlPath = self::URL_PREFIX . $handle;
+                    $publicPath = self::URL_PREFIX . $handle;
                 }
 
                 $this->urlRewrite->reset()
+                    ->setData(UrlRewrite::schema_fields_URL_ID, $urlId)
                     ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlPath)
-                    ->setData(UrlRewrite::schema_fields_REWRITE, $targetPath)
+                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlId)
+                    ->setData(UrlRewrite::schema_fields_PATH, ltrim($targetPath, '/'))
+                    ->setData(UrlRewrite::schema_fields_REWRITE, $publicPath)
                     ->save();
             }
 
             return [
                 'website_id' => $websiteId,
-                'url_path' => $urlPath,
+                'url_path' => $publicPath,
                 'target_path' => $targetPath,
                 'handle' => $handle,
             ];
@@ -180,9 +186,9 @@ class ProductUrlRewriteService
             $deletedCount = 0;
             $targetPath = str_replace('{product_id}', (string)$productId, self::TARGET_PATH_TEMPLATE);
 
-            // 查找所有相关的重写规则（通过目标路径匹配）
+            // 查找所有相关的重写规则（通过内部目标路径匹配）
             $rewrites = $this->urlRewrite->reset()
-                ->where(UrlRewrite::schema_fields_REWRITE, $targetPath)
+                ->where(UrlRewrite::schema_fields_PATH, ltrim($targetPath, '/'))
                 ->select()
                 ->fetch();
 
@@ -243,14 +249,17 @@ class ProductUrlRewriteService
         try {
             $targetPath = str_replace('{product_id}', (string)$productId, self::TARGET_PATH_TEMPLATE);
             
-            $this->urlRewrite->reset()
-                ->where(UrlRewrite::schema_fields_REWRITE, $targetPath)
-                ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                ->find()
-                ->fetch();
+            foreach ([self::TARGET_PATH_TEMPLATE, self::LEGACY_TARGET_PATH_TEMPLATE] as $template) {
+                $targetPath = str_replace('{product_id}', (string)$productId, $template);
+                $this->urlRewrite->reset()
+                    ->where(UrlRewrite::schema_fields_PATH, ltrim($targetPath, '/'))
+                    ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                    ->find()
+                    ->fetch();
 
-            if ($this->urlRewrite->getId()) {
-                return $this->urlRewrite->getData();
+                if ($this->urlRewrite->getId()) {
+                    return $this->urlRewrite->getData();
+                }
             }
 
             return null;
@@ -269,17 +278,16 @@ class ProductUrlRewriteService
      */
     public function isHandleAvailable(int $websiteId, string $handle, ?int $excludeProductId = null): bool
     {
-        $urlPath = self::URL_PREFIX . $handle;
+        $publicPath = self::URL_PREFIX . $handle;
 
         try {
             $this->urlRewrite->reset()
                 ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlPath);
+                ->where(UrlRewrite::schema_fields_REWRITE, $publicPath);
 
             if ($excludeProductId) {
-                // 排除自身（通过排除目标路径）
                 $excludeTargetPath = str_replace('{product_id}', (string)$excludeProductId, self::TARGET_PATH_TEMPLATE);
-                $this->urlRewrite->where(UrlRewrite::schema_fields_REWRITE, ['<>', $excludeTargetPath]);
+                $this->urlRewrite->where(UrlRewrite::schema_fields_PATH, ['<>', ltrim($excludeTargetPath, '/')]);
             }
 
             $this->urlRewrite->find()->fetch();

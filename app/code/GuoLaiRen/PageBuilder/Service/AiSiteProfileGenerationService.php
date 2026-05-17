@@ -8,7 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteProfileGenerationService
 {
-    private const PROFILE_VERSION = 4;
+    private const PROFILE_VERSION = 5;
 
     public function __construct(
         private readonly ?AiSiteProfileAiGenerationService $aiProfileGenerator = null,
@@ -39,13 +39,14 @@ class AiSiteProfileGenerationService
         $taglineLocked = $this->hasManualOverride($scope, 'site_tagline', $manualFlags);
         $briefLocked = $this->hasManualOverride($scope, 'brief_description', $manualFlags);
 
+        $scopeTitle = $this->normalizeMeaningfulTitle($scope['site_title'] ?? null);
         $lockedTitle = $titleLocked
-            ? $this->readScopeString($scope, 'site_title')
-            : $this->resolveLegacyLockedTitle($existing, $hasManualMap);
+            ? $this->normalizeMeaningfulTitle($scope['site_title'] ?? null)
+            : ($scopeTitle !== '' ? $scopeTitle : $this->resolveLegacyLockedTitle($existing, $hasManualMap));
         $lockedTagline = $taglineLocked
-            ? $this->readScopeString($scope, 'site_tagline')
+            ? $this->normalizeProfileTagline($this->readScopeString($scope, 'site_tagline'), $lockedTitle)
             : $this->resolveLegacyLockedTagline($existing, $hasManualMap);
-        $lockedBrief = $briefLocked ? $this->readScopeString($scope, 'brief_description') : '';
+        $lockedBrief = $briefLocked ? $this->normalizeProfileBriefDescription($this->readScopeString($scope, 'brief_description')) : '';
 
         $lockedLogo = $this->resolveLockedAsset($scope, $existing, 'logo', $hasManualMap);
         $lockedIcon = $this->resolveLockedIcon($scope, $existing, $hasManualMap);
@@ -90,12 +91,15 @@ class AiSiteProfileGenerationService
                 $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain)
             );
 
+        $siteTitle = $this->normalizeMeaningfulTitle($siteTitle) ?: $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain);
+
         $siteTagline = ($taglineLocked || $lockedTagline !== '')
             ? $lockedTagline
             : $this->pickString(
                 $generated['site_tagline'] ?? null,
                 $this->deriveSiteTaglineFromBrief($sourceBrief, $siteTitle)
             );
+        $siteTagline = $this->normalizeProfileTagline($siteTagline, $siteTitle);
 
         $briefDescription = $briefLocked
             ? $lockedBrief
@@ -103,6 +107,7 @@ class AiSiteProfileGenerationService
                 $generated['brief_description'] ?? null,
                 $sourceBrief
             );
+        $briefDescription = $this->normalizeProfileBriefDescription($briefDescription);
 
         $logo = $logoLocked
             ? $lockedLogo
@@ -135,6 +140,10 @@ class AiSiteProfileGenerationService
                 $siteTagline !== '' && $siteTitle !== '' ? ($siteTitle . ' | ' . $siteTagline) : $siteTitle
             );
         }
+        $metaTitle = $this->normalizeWhitespace($this->stripProfileFieldLabelPrefix($metaTitle, \array_merge(
+            $this->profileTitleLabelPatterns(),
+            $this->profileTaglineLabelPatterns()
+        )));
 
         $metaDescription = \trim((string)($seoInput['meta_description'] ?? ''));
         if ($metaDescription === '') {
@@ -143,6 +152,7 @@ class AiSiteProfileGenerationService
                 $this->clipText($briefDescription !== '' ? $briefDescription : ($siteTagline !== '' ? $siteTagline : $siteTitle), 160)
             );
         }
+        $metaDescription = $this->clipText($this->normalizeProfileBriefDescription($metaDescription), 160);
 
         $metaKeywords = \trim((string)($seoInput['meta_keywords'] ?? ''));
         if ($metaKeywords === '') {
@@ -190,17 +200,18 @@ class AiSiteProfileGenerationService
     private function resolveSourceBrief(array $scope, array $existing, array $manualFlags): string
     {
         if ($this->hasManualOverride($scope, 'brief_description', $manualFlags)) {
-            return $this->readScopeString($scope, 'brief_description');
+            return $this->normalizeProfileBriefDescription($this->readScopeString($scope, 'brief_description'));
         }
 
         $existingMeta = \is_array($existing['_ai_profile'] ?? null) ? $existing['_ai_profile'] : [];
 
-        return $this->pickString(
+        return $this->normalizeProfileBriefDescription($this->pickString(
+            $this->resolveBuildPlanSourceBrief($scope),
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
             $existingMeta['source_brief'] ?? null,
             $existing['brief_description'] ?? null
-        );
+        ));
     }
 
     /**
@@ -214,7 +225,43 @@ class AiSiteProfileGenerationService
             return \strtolower($this->readScopeString($scope, 'target_domain'));
         }
 
-        return \strtolower($this->pickString($scope['target_domain'] ?? null, $existing['target_domain'] ?? null));
+        $localHost = $this->resolveLocalPreviewHost($scope);
+        if ($localHost !== '') {
+            return $localHost;
+        }
+
+        $explicit = $this->pickString($scope['target_domain'] ?? null, $scope['selected_domain'] ?? null);
+        if ($explicit !== '') {
+            return \strtolower($explicit);
+        }
+
+        return \strtolower($this->pickString($existing['target_domain'] ?? null));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveLocalPreviewHost(array $scope): string
+    {
+        foreach (['preview_full_url', 'visual_preview_url', 'visual_edit_url', 'preview_url'] as $key) {
+            $url = \trim((string)($scope[$key] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $host = \parse_url($url, \PHP_URL_HOST);
+            $host = \is_string($host) ? \strtolower(\trim($host)) : '';
+            if ($this->isLocalPreviewHost($host)) {
+                return $host;
+            }
+        }
+
+        return '';
+    }
+
+    private function isLocalPreviewHost(string $host): bool
+    {
+        return $host !== ''
+            && (\str_ends_with($host, '.weline.test') || \str_ends_with($host, '.local.test'));
     }
 
     /**
@@ -253,7 +300,7 @@ class AiSiteProfileGenerationService
             return '';
         }
 
-        return $this->pickString($existing['site_tagline'] ?? null);
+        return $this->normalizeProfileTagline($this->pickString($existing['site_tagline'] ?? null), $this->pickString($existing['site_title'] ?? null));
     }
 
     /**
@@ -446,6 +493,9 @@ class AiSiteProfileGenerationService
         if (\is_array($scope['seo'] ?? null)) {
             return $scope['seo'];
         }
+        if ($this->hasManagedProfileMeta($existing)) {
+            return [];
+        }
 
         return \is_array($existing['seo'] ?? null) ? $existing['seo'] : [];
     }
@@ -476,7 +526,9 @@ class AiSiteProfileGenerationService
      */
     private function hasManualOverride(array $scope, string $key, array $manualFlags): bool
     {
-        return !empty($manualFlags[$key]) && \array_key_exists($key, $scope);
+        return !empty($manualFlags[$key])
+            && \array_key_exists($key, $scope)
+            && (!\is_scalar($scope[$key]) || \trim((string)$scope[$key]) !== '');
     }
 
     /**
@@ -491,6 +543,134 @@ class AiSiteProfileGenerationService
         return \trim((string)$scope[$key]);
     }
 
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveBuildPlanSourceBrief(array $scope): string
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
+        $siteBrief = \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+
+        return $this->pickString(
+            $requirements['expanded_brief'] ?? null,
+            $requirements['planning_summary'] ?? null,
+            $requirements['site_goal'] ?? null,
+            $requirements['content_direction'] ?? null,
+            $siteBrief['summary'] ?? null,
+            $requirementExpansion['expanded_brief'] ?? null,
+            $requirementExpansion['planning_summary'] ?? null,
+            $requirementExpansion['site_goal'] ?? null,
+            $siteStrategy['core_goal'] ?? null,
+            $siteStrategy['content_strategy'] ?? null
+        );
+    }
+
+    private function normalizeProfileTagline(string $value, string $siteTitle): string
+    {
+        $value = $this->normalizeWhitespace($value);
+        if ($value === '') {
+            return '';
+        }
+        $extracted = $this->extractLabeledProfileSegment($value, $this->profileTaglineLabelPatterns());
+        if ($extracted !== '') {
+            $value = $extracted;
+        } else {
+            $value = $this->stripProfileFieldLabelPrefix($value, $this->profileTaglineLabelPatterns());
+        }
+        $value = $this->stripRepeatedTitlePrefix($value, $siteTitle);
+
+        return $this->clipText($value, 96);
+    }
+
+    private function normalizeProfileBriefDescription(string $value): string
+    {
+        $value = $this->normalizeWhitespace($value);
+        if ($value === '') {
+            return '';
+        }
+        $value = (string)\preg_replace(
+            '/(?:^|[\s\x{3002};\x{FF1B}])(?:\x{9875}\x{9762}\x{4EE3}\x{7801}|page\s*type\s*codes?)\s*[:\x{FF1A}][^\x{3002};\x{FF1B}]+/iu',
+            ' ',
+            $value
+        );
+        $value = (string)\preg_replace(
+            '/(?:\x{7AD9}\x{70B9}\x{540D}\x{79F0}|\x{7F51}\x{7AD9}\x{540D}\x{79F0}|\x{54C1}\x{724C}\x{540D}|site\s*(?:title|name)|brand\s*name|\x{4E00}\x{53E5}\x{8BDD}\x{5B9A}\x{4F4D}|positioning|\x{89C6}\x{89C9}\x{5951}\x{7EA6}|visual\s*contract|\x{8F6C}\x{5316}\x{76EE}\x{6807}|conversion\s*goal|\x{5185}\x{5BB9}\x{8BED}\x{8A00}|content\s*language)\s*[:\x{FF1A}]\s*/iu',
+            '',
+            $value
+        );
+
+        return $this->normalizeWhitespace($value);
+    }
+
+    /**
+     * @param list<string> $labelPatterns
+     */
+    private function extractLabeledProfileSegment(string $value, array $labelPatterns): string
+    {
+        $value = $this->normalizeWhitespace($value);
+        if ($value === '') {
+            return '';
+        }
+        $label = '(?:' . \implode('|', $labelPatterns) . ')';
+        $pattern = '/(?:^|[\s,;|\x{3002}\x{FF1B}\x{FF0C}])' . $label . '\s*[:\x{FF1A}]\s*([^,.;|\x{3002}\x{FF1B}\x{FF0C}\n\r]{1,120})/iu';
+        if (\preg_match($pattern, $value, $matches) !== 1) {
+            return '';
+        }
+
+        return $this->normalizeWhitespace(\trim((string)($matches[1] ?? ''), " \t\n\r\0\x0B-_:|"));
+    }
+
+    /**
+     * @param list<string> $labelPatterns
+     */
+    private function stripProfileFieldLabelPrefix(string $value, array $labelPatterns): string
+    {
+        $value = $this->normalizeWhitespace($value);
+        if ($value === '') {
+            return '';
+        }
+        $label = '(?:' . \implode('|', $labelPatterns) . ')';
+        $value = (string)\preg_replace('/^\s*' . $label . '\s*[:\x{FF1A}]\s*/iu', '', $value);
+
+        return $this->normalizeWhitespace($value);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function profileTitleLabelPatterns(): array
+    {
+        return [
+            '\x{7AD9}\x{70B9}\x{540D}\x{79F0}',
+            '\x{7F51}\x{7AD9}\x{540D}\x{79F0}',
+            '\x{7AD9}\x{70B9}\x{6807}\x{9898}',
+            '\x{7F51}\x{7AD9}\x{6807}\x{9898}',
+            '\x{54C1}\x{724C}\x{540D}',
+            'site\s*(?:title|name)',
+            'brand\s*name',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function profileTaglineLabelPatterns(): array
+    {
+        return [
+            '\x{4E00}\x{53E5}\x{8BDD}\x{5B9A}\x{4F4D}',
+            '\x{7AD9}\x{70B9}\x{5B9A}\x{4F4D}',
+            '\x{54C1}\x{724C}\x{5B9A}\x{4F4D}',
+            'positioning',
+            'tagline',
+            'slogan',
+        ];
+    }
+
     private function normalizeMeaningfulTitle(mixed $value): string
     {
         if (!\is_scalar($value)) {
@@ -498,6 +678,12 @@ class AiSiteProfileGenerationService
         }
 
         $title = $this->normalizeWhitespace((string)$value);
+        $extracted = $this->extractLabeledProfileSegment($title, $this->profileTitleLabelPatterns());
+        if ($extracted !== '') {
+            $title = $extracted;
+        } else {
+            $title = $this->stripProfileFieldLabelPrefix($title, $this->profileTitleLabelPatterns());
+        }
         if ($title === '' || $this->isPlaceholderSiteTitle($title)) {
             return '';
         }
@@ -507,6 +693,11 @@ class AiSiteProfileGenerationService
 
     private function deriveSiteTitleFromBrief(string $briefDescription, string $targetDomain): string
     {
+        $explicitTitle = $this->extractExplicitSiteTitleFromBrief($briefDescription);
+        if ($explicitTitle !== '' && !$this->isPlaceholderSiteTitle($explicitTitle)) {
+            return $this->clipSiteTitle($explicitTitle);
+        }
+
         $candidates = $this->buildDescriptionSegments($briefDescription);
         foreach ($candidates as $candidate) {
             $candidate = $this->stripTitleLeadIn($candidate);
@@ -520,8 +711,51 @@ class AiSiteProfileGenerationService
         return $this->deriveTitleFromDomain($targetDomain);
     }
 
+    private function extractExplicitSiteTitleFromBrief(string $briefDescription): string
+    {
+        $briefDescription = $this->normalizeWhitespace($briefDescription);
+        if ($briefDescription === '') {
+            return '';
+        }
+        $explicit = $this->extractLabeledProfileSegment($briefDescription, $this->profileTitleLabelPatterns());
+        if ($explicit !== '' && !$this->looksLikeSentenceTitle($explicit)) {
+            return $explicit;
+        }
+
+        $patterns = [
+            '/(?:网站标题|站点标题|品牌名|站点名|网站名|标题)\s*(?:是|为|叫|[:：])\s*([A-Za-z][A-Za-z0-9 .&\'-]{1,42})/u',
+            '/^\s*([A-Za-z][A-Za-z0-9 .&\'-]{1,42})\s*(?:是|为|面向|，|,|\|)/u',
+        ];
+        foreach ($patterns as $pattern) {
+            if (\preg_match($pattern, $briefDescription, $matches) !== 1) {
+                continue;
+            }
+            $title = \trim((string)($matches[1] ?? ''), " \t\n\r\0\x0B-_:：|,，.");
+            if ($title !== '' && !$this->looksLikeSentenceTitle($title)) {
+                return $title;
+            }
+        }
+
+        return '';
+    }
+
+    private function looksLikeSentenceTitle(string $title): bool
+    {
+        if ($this->containsCjk($title)) {
+            return true;
+        }
+
+        $words = \preg_split('/\s+/u', \trim($title), -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+        return \count($words) > 4;
+    }
+
     private function deriveSiteTaglineFromBrief(string $briefDescription, string $siteTitle): string
     {
+        $explicit = $this->extractLabeledProfileSegment($briefDescription, $this->profileTaglineLabelPatterns());
+        if ($explicit !== '') {
+            return $this->normalizeProfileTagline($explicit, $siteTitle);
+        }
+
         $segments = $this->buildDescriptionSegments($briefDescription);
         foreach ($segments as $segment) {
             $candidate = $this->stripRepeatedTitlePrefix($segment, $siteTitle);
@@ -912,6 +1146,17 @@ SVG;
      */
     private function deriveBrandPalette(string $siteTitle, string $briefDescription): array
     {
+        $themeText = \strtolower($siteTitle . ' ' . $briefDescription);
+        if (\preg_match('/gold|golden|luxury|royal|palace|jewel|casino|card|poker|rummy|金色|黄金|奢华|高端|宫殿|宝石|棋牌|扑克|拉米|印度|香料/u', $themeText) === 1) {
+            return ['#8f3d00', '#f59e0b', '#facc15'];
+        }
+        if (\preg_match('/eco|green|organic|nature|garden|环保|绿色|自然|花园|植物/u', $themeText) === 1) {
+            return ['#166534', '#22c55e', '#facc15'];
+        }
+        if (\preg_match('/tech|software|data|ai|cloud|security|科技|软件|数据|智能|云|安全/u', $themeText) === 1) {
+            return ['#1d4ed8', '#38bdf8', '#f97316'];
+        }
+
         $hash = \md5(\strtolower($siteTitle . '|' . $briefDescription));
         $palettes = [
             ['#0f766e', '#14b8a6', '#f59e0b'],

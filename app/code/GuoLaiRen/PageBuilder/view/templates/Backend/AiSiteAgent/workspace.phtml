@@ -152,9 +152,9 @@ $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
 $selectedPageTypes = \array_values(\array_filter(\array_map(static fn($type): string => \trim((string)$type), $pageTypes), static fn(string $type): bool => $type !== ''));
 if ($selectedPageTypes === []) {
-    $selectedPageTypes = ['home_page'];
+    $selectedPageTypes = ['home_page', 'about_page'];
 }
-$selectedPageTypesSafe = \is_array($selectedPageTypes ?? null) ? $selectedPageTypes : ['home_page'];
+$selectedPageTypesSafe = \is_array($selectedPageTypes ?? null) ? $selectedPageTypes : ['home_page', 'about_page'];
 $pageTypesUserCustomizedRaw = $scope['page_types_user_customized'] ?? null;
 if (\is_bool($pageTypesUserCustomizedRaw)) {
     $pageTypesUserCustomized = $pageTypesUserCustomizedRaw;
@@ -256,7 +256,7 @@ $buildTaskSummary = \is_array($state['build_task_summary'] ?? null) ? $state['bu
 $buildTaskGroups = \is_array($buildTaskSummary['groups'] ?? null) ? $buildTaskSummary['groups'] : [];
 
 /** 常用页面类型（快速模式默认勾选） */
-$defaultCheckedPageTypes = ['home_page'];
+$defaultCheckedPageTypes = ['home_page', 'about_page'];
 $commonPageTypes = [];
 $extraPageTypes = [];
 foreach ($pageTypeLabels as $pt => $label) {
@@ -314,6 +314,16 @@ $guidedScopeDefaults = [
     'extra_page_types_panel_open' => (int)($scope['extra_page_types_panel_open'] ?? 0) === 1 ? 1 : 0,
     'site_profile_manual' => \is_array($scope['site_profile_manual'] ?? null) ? $scope['site_profile_manual'] : [],
     'fake_mode' => $pbAiGuidedFakeMode ? 1 : 0,
+];
+$guidedSessionSummary = [
+    'site_title' => (string)($guidedScopeDefaults['site_title'] ?? ''),
+    'site_tagline' => (string)($guidedScopeDefaults['site_tagline'] ?? ''),
+    'target_domain' => (string)($guidedScopeDefaults['target_domain'] ?? ''),
+    'brief_description' => (string)($guidedScopeDefaults['brief_description'] ?? ''),
+    'default_locale' => (string)($guidedScopeDefaults['default_locale'] ?? ''),
+    'plan_locale' => (string)($guidedScopeDefaults['plan_locale'] ?? ''),
+    'page_types' => $selectedPageTypesSafe,
+    'plan_confirmed_at' => (string)($state['plan_confirmed_at'] ?? ''),
 ];
 $domainStatus = (string)($domainPurchaseState['status'] ?? 'idle');
 $domainStatusBadgeClass = match ($domainStatus) {

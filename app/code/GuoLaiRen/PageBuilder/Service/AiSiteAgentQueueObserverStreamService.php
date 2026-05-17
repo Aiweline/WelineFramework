@@ -90,6 +90,19 @@ class AiSiteAgentQueueObserverStreamService
      *
      * @return array<string, mixed>
      */
+    /**
+     * @param array<string, mixed> $activeOperation
+     * @return array<string, mixed>
+     */
+    private function applySchedulerWaitingState(array $activeOperation, bool $waitingForScheduler): array
+    {
+        $activeOperation['queue_waiting_for_scheduler'] = $waitingForScheduler;
+        $activeOperation['can_close_stream'] = $waitingForScheduler;
+        $activeOperation['continue_other_operations'] = $waitingForScheduler;
+
+        return $activeOperation;
+    }
+
     public function reconcileActiveOperationWithQueueInfo(
         array $activeOperation,
         ?array $queueInfo,
@@ -120,14 +133,8 @@ class AiSiteAgentQueueObserverStreamService
             $waitingForScheduler = $this->isQueueWaitingForSystemScheduler($queueStatus, $queuePid);
             if ($waitingForScheduler) {
                 $activeOperation['message'] = $this->buildSystemSchedulerWaitMessage($queueId);
-                $activeOperation['queue_waiting_for_scheduler'] = true;
-                $activeOperation['can_close_stream'] = true;
-                $activeOperation['continue_other_operations'] = true;
-            } else {
-                $activeOperation['queue_waiting_for_scheduler'] = false;
-                $activeOperation['can_close_stream'] = false;
-                $activeOperation['continue_other_operations'] = false;
             }
+            $activeOperation = $this->applySchedulerWaitingState($activeOperation, $waitingForScheduler);
             if (!$waitingForScheduler && $queueProcess !== '') {
                 $activeOperation['message'] = $queueProcess;
             } elseif (!$waitingForScheduler && ($activeStatus === 'error' || $currentMessage === '')) {
@@ -150,15 +157,11 @@ class AiSiteAgentQueueObserverStreamService
             $queueMessage = \trim($this->queueObserverHelperService()->resolveMessage($queueRowForMessage, false));
             $activeOperation['status'] = 'error';
             $activeOperation['message'] = $queueMessage !== '' ? $queueMessage : (string)__('队列执行失败，请重试。');
-            $activeOperation['queue_waiting_for_scheduler'] = false;
-            $activeOperation['can_close_stream'] = false;
-            $activeOperation['continue_other_operations'] = false;
+            $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
             $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
         } elseif (\in_array($queueStatus, ['done', 'stop', 'stopped', 'cancelled', 'canceled'], true)) {
             $activeOperation['status'] = $queueStatus === 'done' ? 'done' : 'cancelled';
-            $activeOperation['queue_waiting_for_scheduler'] = false;
-            $activeOperation['can_close_stream'] = false;
-            $activeOperation['continue_other_operations'] = false;
+            $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
             if ($queueStatus === 'done') {
                 $currentMessage = \trim((string)($activeOperation['message'] ?? ''));
                 if ($currentMessage !== '' && $activeStatus !== 'error') {

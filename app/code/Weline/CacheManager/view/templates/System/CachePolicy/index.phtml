@@ -103,6 +103,8 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
             <p><?= __('控制 header/footer/head、插槽布局和可缓存组件输出。') ?></p>
             <div class="cache-policy-grid">
                 <?php $field('theme.partial_output_ttl', 'Partial 输出缓存', '秒', 'head、header、footer、breadcrumb 输出缓存。'); ?>
+                <?php $field('theme.hook_output_ttl', 'Hook 输出缓存', '秒', '可缓存 Hook 文件 HTML 输出缓存。'); ?>
+                <?php $field('theme.hook_aggregate_ttl', 'Hook 聚合缓存', '秒', 'header、语言货币切换、body-end 等 Hook 聚合输出缓存。'); ?>
                 <?php $field('theme.slot_layout_ttl', '布局数据缓存', '秒', '已发布主题布局数据缓存。'); ?>
                 <?php $field('theme.widget_output_ttl', '组件输出缓存', '秒', '可缓存组件 HTML 输出缓存。'); ?>
             </div>
@@ -115,6 +117,17 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
                 <?php $field('dev.trace_ttl', '请求链路缓存', '秒', '请求链路旁路 payload 保留时间。'); ?>
                 <?php $field('dev.routes_ttl', '路由数据缓存', '秒', 'Dev Panel 路由分组数据缓存。'); ?>
                 <?php $field('dev.docs_ttl', '文档数据缓存', '秒', 'Dev Panel 文档模块、搜索和详情缓存。'); ?>
+            </div>
+        </section>
+
+        <section class="cache-policy-card">
+            <h3><?= __('站点数据缓存') ?></h3>
+            <p><?= __('控制店铺、货币、语言和分类树等全站通用数据的内存缓存时间。') ?></p>
+            <div class="cache-policy-grid">
+                <?php $field('site.currency_ttl', '货币数据缓存', '秒', '货币定义和汇率缓存。'); ?>
+                <?php $field('site.i18n_locale_ttl', '语言区域缓存', '秒', '语言和区域公共数据缓存。'); ?>
+                <?php $field('site.store_ttl', '店铺数据缓存', '秒', '当前网站店铺匹配结果缓存。'); ?>
+                <?php $field('site.category_tree_ttl', '分类树缓存', '秒', '前台分类树、搜索分类和导航分类缓存。'); ?>
             </div>
         </section>
 

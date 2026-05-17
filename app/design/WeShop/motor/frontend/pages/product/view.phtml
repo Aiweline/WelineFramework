@@ -148,12 +148,12 @@ $breadcrumbs = $this->getData('breadcrumbs') ?? [];
 
                     <!-- Add to Cart -->
                     <div class="flex flex-col sm:flex-row gap-3">
-                        <button type="submit" class="flex-1 motor-btn-primary inline-flex items-center justify-center py-4 text-base font-bold uppercase tracking-wide gap-2">
-                            <span class="material-symbols-outlined">shopping_cart</span>
+                        <button type="submit" class="flex-1 motor-btn-primary inline-flex items-center justify-center py-4 text-base font-bold uppercase tracking-wide gap-2 weline-pixel::add_to_cart">
+                            <span class="material-symbols-outlined weline-pixel::add_to_cart">shopping_cart</span>
                             <?= __('Add to Cart') ?>
                         </button>
-                        <button type="button" class="w-full sm:w-auto px-6 py-4 border-2 border-gray-300 dark:border-gray-700 text-text-primary-light dark:text-text-primary-dark rounded inline-flex items-center justify-center text-base font-bold uppercase tracking-wide gap-2 hover:border-primary hover:text-primary transition-colors" data-product-id="<?= $product['product_id'] ?? 0 ?>">
-                            <span class="material-symbols-outlined">favorite_border</span>
+                        <button type="button" class="w-full sm:w-auto px-6 py-4 border-2 border-gray-300 dark:border-gray-700 text-text-primary-light dark:text-text-primary-dark rounded inline-flex items-center justify-center text-base font-bold uppercase tracking-wide gap-2 hover:border-primary hover:text-primary transition-colors weline-pixel::add_to_wishlist" data-product-id="<?= $product['product_id'] ?? 0 ?>">
+                            <span class="material-symbols-outlined weline-pixel::add_to_wishlist">favorite_border</span>
                         </button>
                     </div>
                     <w:hook name="WeShop_Product::detail::after_add_to_cart"/>

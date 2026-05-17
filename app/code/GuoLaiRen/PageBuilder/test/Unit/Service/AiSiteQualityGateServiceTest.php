@@ -140,27 +140,48 @@ final class AiSiteQualityGateServiceTest extends TestCase
         self::assertStringContainsString('Introduce brand story and mission', $badMatches);
     }
 
-    /**
-     * 设计决策对齐：language_consistency 在门禁层固定通过，外语片段由生成阶段的 prompt 合同
-     * （AiSitePageComponentGenerationService::buildVisibleCopyGovernancePromptAddon +
-     * buildStage3LocaleExecutionPromptAddon）以硬约束阻断，不再用 NLP 启发式做发布期检测。
-     * 测试明确钉死这一行为，防止后续误把启发式检测加回来导致中文站合法英文（品牌/APK/SDK 等）被误报。
-     */
-    public function testInspectScopeLanguageConsistencyAlwaysPassesByDesign(): void
+    public function testInspectScopeRejectsLargeWrongLanguageBlockOutsideSiteTitle(): void
     {
         $service = $this->createService();
         $scope = $this->buildScope();
         $scope['content_locale'] = 'zh_Hans_CN';
+        $scope['website_profile']['site_title'] = 'Royal Indian Games';
 
         $report = $service->inspectScope($scope, [
-            'home_page' => $this->responsiveStyle() . '<header>皇家棋牌游戏</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>Best of three cards classic Indian poker. Play with friends or join tables.</p><a>Download & Play</a></section></main><footer>页脚导航</footer>',
+            'home_page' => $this->responsiveStyle() . '<header>Royal Indian Games</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>Best of three cards classic Indian poker. Play with friends or join tables.</p><a>Download & Play</a></section></main><footer>页脚导航</footer>',
         ]);
 
-        self::assertTrue(
-            (bool)($this->findItem($report['items'], 'language_consistency')['ok'] ?? false),
-            'language_consistency must pass at the gate layer; locale is enforced by the prompt contract instead.'
-        );
-        self::assertSame([], $report['page_reports']['home_page']['language_violations'] ?? ['unexpected']);
+        self::assertFalse((bool)($this->findItem($report['items'], 'language_consistency')['ok'] ?? true));
+        self::assertNotSame([], $report['page_reports']['home_page']['language_violations'] ?? []);
+    }
+
+    public function testInspectScopeRejectsVisibleContractFieldLeak(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>皇家棋牌游戏</header><main><section class="pb-test-section" style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>content_contract: page_goal and block_goal describe why_this_block exists.</p></section></main><footer>页脚导航</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+        $badMatches = \implode("\n", $report['page_reports']['home_page']['bad_matches'] ?? []);
+        self::assertStringContainsString('content_contract', $badMatches);
+    }
+
+    public function testInspectScopeRejectsFailedBuildTaskEvenWhenNoTaskIsPending(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['build_tasks']['page:home_page:hero_banner']['status'] = 'failed';
+        $scope['build_tasks']['page:home_page:hero_banner']['message'] = 'AI validation rejected this block.';
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>皇家棋牌游戏</header><main><section class="pb-test-section" style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>专为印度玩家打造的棋牌娱乐殿堂</h1><p>体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区</p></section></main><footer>页脚导航</footer>',
+        ]);
+
+        self::assertFalse($report['passed']);
+        self::assertFalse((bool)($this->findItem($report['items'], 'build_tasks_done')['ok'] ?? true));
     }
 
     public function testInspectScopeIgnoresHeadTitleForLanguageConsistency(): void

@@ -37,13 +37,30 @@ class AiSiteAutoAssetGenerationService
         if ($placeholderUrls !== []) {
             $scope = $this->clearPlaceholderIdentityAssetsFromScope($scope, $placeholderUrls);
         }
+        $foreignAssetUrls = [];
+        $manifest = $this->discardForeignDomainGeneratedAssets($manifest, $scope, $session, $foreignAssetUrls);
+        if ($foreignAssetUrls !== []) {
+            $scope = $this->clearIdentityAssetUrlsFromScope($scope, $foreignAssetUrls);
+        }
+        $scope = $this->manifestService->rememberGeneratedSlotsInScope($scope, $manifest);
         $scope['asset_manifest'] = $manifest;
         $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
-        $this->assertContentGatePassedBeforeImageGeneration($scope);
+        if ($limit <= 0) {
+            return [
+                'scope' => $scope,
+                'generated_slots' => [],
+                'failed_slots' => [],
+            ];
+        }
+        $prioritizeIdentityAssets = (int)($scope['auto_generate_identity_assets_first'] ?? 0) === 1;
+        $identityOnly = (int)($scope['auto_asset_prebuild_identity_only'] ?? 0) === 1;
+        if (!$identityOnly) {
+            $this->assertContentGatePassedBeforeImageGeneration($scope);
+        }
 
         $generatedSlots = [];
         $failedSlots = [];
-        foreach ($this->pickPendingSlots($manifest, $limit) as $slot) {
+        foreach ($this->pickPendingSlots($manifest, $limit, $prioritizeIdentityAssets, $identityOnly) as $slot) {
             $slotId = (string)($slot['slot_id'] ?? '');
             if ($slotId === '') {
                 continue;
@@ -91,6 +108,7 @@ class AiSiteAutoAssetGenerationService
                     'revised_prompt' => (string)($image['revised_prompt'] ?? ''),
                 ];
                 $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
+                $scope = $this->manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
                 $scope['asset_manifest'] = $manifest;
                 $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
                 $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
@@ -149,6 +167,7 @@ class AiSiteAutoAssetGenerationService
         if ($placeholderUrls !== []) {
             $scope = $this->clearPlaceholderIdentityAssetsFromScope($scope, $placeholderUrls);
         }
+        $scope = $this->manifestService->rememberGeneratedSlotsInScope($scope, $manifest);
 
         $slot = $this->manifestService->getSlot($manifest, $slotId);
         if ($slot === []) {
@@ -165,9 +184,23 @@ class AiSiteAutoAssetGenerationService
         }
 
         $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+        if (
+            $finalUrl !== ''
+            && !$this->isFinalUrlUnderCurrentDomainAssetPath($finalUrl, $scope, $session)
+            && !$this->manifestService->isReusableSessionBlockAsset($scope, $slot, $finalUrl)
+        ) {
+            $slot['final_url'] = '';
+            $slot['url'] = '';
+            $slot['variants'] = [];
+            $slot['status'] = 'pending';
+            $manifest = $this->manifestService->upsert($manifest, $slot);
+            $finalUrl = '';
+        }
         if ($finalUrl !== '') {
+            $scope = $this->manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
             $scope['asset_manifest'] = $manifest;
             $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+            $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
             return [
                 'scope' => $scope,
                 'slot_id' => $slotId,
@@ -184,6 +217,18 @@ class AiSiteAutoAssetGenerationService
                 'slot_id' => $slotId,
                 'final_url' => '',
                 'generated' => false,
+            ];
+        }
+        $reusableFailure = $this->buildReusableFailedSlotResult($slot);
+        if ($reusableFailure !== []) {
+            $scope = $this->recordAssetImageGenerationFailures($scope, [$reusableFailure]);
+
+            return [
+                'scope' => $scope,
+                'slot_id' => $slotId,
+                'final_url' => '',
+                'generated' => false,
+                'failed_slot' => $reusableFailure,
             ];
         }
 
@@ -239,6 +284,7 @@ class AiSiteAutoAssetGenerationService
                 'revised_prompt' => (string)($image['revised_prompt'] ?? ''),
             ];
             $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
+            $scope = $this->manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
             $scope['asset_manifest'] = $manifest;
             $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
             $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
@@ -321,12 +367,9 @@ class AiSiteAutoAssetGenerationService
             return false;
         }
 
-        $summary = [];
-        if (\is_array($scope['build_summary']['task_summary'] ?? null)) {
-            $summary = $scope['build_summary']['task_summary'];
-        } elseif (\is_array($scope['build_task_summary'] ?? null)) {
-            $summary = $scope['build_task_summary'];
-        }
+        $summary = \is_array($scope['build_task_summary'] ?? null)
+            ? $scope['build_task_summary']
+            : [];
 
         if ($summary === [] || (int)($summary['total'] ?? 0) <= 0) {
             return false;
@@ -362,6 +405,61 @@ class AiSiteAutoAssetGenerationService
     }
 
     /**
+     * @param array<string,mixed> $slot
+     * @return array{slot_id:string,message:string}|array{}
+     */
+    private function buildReusableFailedSlotResult(array $slot): array
+    {
+        $slotId = \trim((string)($slot['slot_id'] ?? ''));
+        $status = \strtolower(\trim((string)($slot['status'] ?? '')));
+        $message = \trim((string)($slot['error_message'] ?? ''));
+        $signature = \trim((string)($slot['planning_signature'] ?? ''));
+        if (
+            $slotId === ''
+            || $status !== 'error'
+            || $message === ''
+            || $signature === ''
+            || \trim((string)($slot['final_url'] ?? '')) !== ''
+            || (int)($slot['locked_by_user'] ?? 0) === 1
+            || !$this->isHardImageProviderFailure($message)
+        ) {
+            return [];
+        }
+
+        return [
+            'slot_id' => $slotId,
+            'message' => $message . ' (same planning signature; provider call skipped)',
+        ];
+    }
+
+    private function isHardImageProviderFailure(string $message): bool
+    {
+        $lower = \strtolower($message);
+        foreach ([
+            'quota',
+            '403',
+            'forbidden',
+            'unauthorized',
+            'permission',
+            'billing',
+            'balance',
+            'credit',
+            'insufficient',
+            'pre-consumed',
+            'rate limit',
+            'too many requests',
+            'api key',
+            'provider account',
+        ] as $needle) {
+            if (\str_contains($lower, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return array<string,mixed>
      */
     private function generateImage(string $prompt, int $adminId, string $slotId): array
@@ -389,8 +487,8 @@ class AiSiteAutoAssetGenerationService
                     'size' => $imageSize,
                     'target_size' => $isHeroImage ? '1920x750' : $imageSize,
                     'aspect_ratio' => $isHeroImage ? '1920:750' : '1:1',
-                    'timeout' => 180,
-                    'connect_timeout' => 30,
+                    'timeout' => 60,
+                    'connect_timeout' => 10,
                 ],
             ]);
         }
@@ -525,7 +623,24 @@ class AiSiteAutoAssetGenerationService
      */
     private function clearPlaceholderIdentityAssetsFromScope(array $scope, array $placeholderUrls): array
     {
-        $urlMap = \array_fill_keys($placeholderUrls, true);
+        return $this->clearIdentityAssetUrlsFromScope($scope, $placeholderUrls);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param list<string> $urls
+     * @return array<string,mixed>
+     */
+    private function clearIdentityAssetUrlsFromScope(array $scope, array $urls): array
+    {
+        $urlMap = \array_fill_keys(\array_values(\array_filter(\array_map(
+            static fn(string $url): string => \trim($url),
+            $urls
+        ))), true);
+        if ($urlMap === []) {
+            return $scope;
+        }
+
         foreach (['logo', 'icon', 'favicon'] as $key) {
             $value = \trim((string)($scope[$key] ?? ''));
             if ($value !== '' && isset($urlMap[$value])) {
@@ -546,6 +661,58 @@ class AiSiteAutoAssetGenerationService
         }
 
         return $scope;
+    }
+
+    /**
+     * Local preview sessions must not keep AI-generated files under a stale
+     * production-domain handle. Reset those slots so normal image generation
+     * writes them under the current preview host.
+     *
+     * @param array<string,mixed> $manifest
+     * @param array<string,mixed> $scope
+     * @param list<string> $discardedUrls
+     * @return array<string,mixed>
+     */
+    private function discardForeignDomainGeneratedAssets(
+        array $manifest,
+        array $scope,
+        AiSiteAgentSession $session,
+        array &$discardedUrls
+    ): array {
+        $discardedUrls = [];
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        foreach ($slots as $slot) {
+            if (!\is_array($slot) || (int)($slot['locked_by_user'] ?? 0) === 1) {
+                continue;
+            }
+            $slotId = \trim((string)($slot['slot_id'] ?? ''));
+            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($slotId === '' || $finalUrl === '' || !$this->isGeneratedPageBuildAssetUrl($finalUrl)) {
+                continue;
+            }
+            if ($this->isFinalUrlUnderCurrentDomainAssetPath($finalUrl, $scope, $session)) {
+                continue;
+            }
+            if ($this->manifestService->isReusableSessionBlockAsset($scope, $slot, $finalUrl)) {
+                continue;
+            }
+
+            $discardedUrls[] = $finalUrl;
+            $slot['final_url'] = '';
+            $slot['url'] = '';
+            $slot['variants'] = [];
+            $slot['source'] = 'planned';
+            $slot['status'] = 'pending';
+            $slot['error_message'] = '';
+            $slot['last_error'] = '';
+            $slot['error'] = '';
+            $slot['updated_at'] = \date('Y-m-d H:i:s');
+            $manifest['slots'][$slotId] = $slot;
+            $manifest['updated_at'] = \date('Y-m-d H:i:s');
+        }
+
+        $discardedUrls = \array_values(\array_unique($discardedUrls));
+        return $manifest;
     }
 
     /**
@@ -571,8 +738,110 @@ class AiSiteAutoAssetGenerationService
             $websiteProfile['favicon'] = $finalUrl;
         }
         $scope['website_profile'] = $websiteProfile;
+        $scope = $this->applyIdentityAssetToRenderPayloads($scope, $role, $finalUrl);
 
         return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function applyIdentityAssetToRenderPayloads(array $scope, string $role, string $finalUrl): array
+    {
+        $scope = $this->applyIdentityAssetToRenderPayload($scope, $role, $finalUrl);
+
+        if (\is_array($scope['render_data_contract']['payload'] ?? null)) {
+            $payload = $this->applyIdentityAssetToRenderPayload($scope['render_data_contract']['payload'], $role, $finalUrl);
+            $scope['render_data_contract']['payload'] = $payload;
+        }
+        if (\is_array($scope['build_contracts']['render_data']['payload'] ?? null)) {
+            $payload = $this->applyIdentityAssetToRenderPayload($scope['build_contracts']['render_data']['payload'], $role, $finalUrl);
+            $scope['build_contracts']['render_data']['payload'] = $payload;
+        }
+        if (\is_array($scope['build_workbench']['contracts']['render_data']['payload'] ?? null)) {
+            $payload = $this->applyIdentityAssetToRenderPayload($scope['build_workbench']['contracts']['render_data']['payload'], $role, $finalUrl);
+            $scope['build_workbench']['contracts']['render_data']['payload'] = $payload;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function applyIdentityAssetToRenderPayload(array $payload, string $role, string $finalUrl): array
+    {
+        if ($role === 'logo') {
+            if (\is_array($payload['shared_components']['header']['default_config'] ?? null)) {
+                $payload['shared_components']['header']['default_config']['logo']['url'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['logo']['image'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['logo.url'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['logo.image'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['identity.shared_logo_asset'] = $finalUrl;
+            }
+            if (\is_array($payload['shared_components']['footer']['default_config'] ?? null)) {
+                $payload['shared_components']['footer']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
+                $payload['shared_components']['footer']['default_config']['identity.shared_logo_asset'] = $finalUrl;
+                $payload['shared_components']['footer']['default_config']['brand']['logo'] = $finalUrl;
+                $payload['shared_components']['footer']['default_config']['brand.logo'] = $finalUrl;
+            }
+            foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $pageType => $layout) {
+                if (!\is_string($pageType) || !\is_array($layout)) {
+                    continue;
+                }
+                if (\is_array($layout['header']['config'] ?? null)) {
+                    $layout['header']['config']['logo']['url'] = $finalUrl;
+                    $layout['header']['config']['logo']['image'] = $finalUrl;
+                    $layout['header']['config']['logo.url'] = $finalUrl;
+                    $layout['header']['config']['logo.image'] = $finalUrl;
+                    $layout['header']['config']['identity']['shared_logo_asset'] = $finalUrl;
+                    $layout['header']['config']['identity.shared_logo_asset'] = $finalUrl;
+                }
+                if (\is_array($layout['footer']['config'] ?? null)) {
+                    $layout['footer']['config']['identity']['shared_logo_asset'] = $finalUrl;
+                    $layout['footer']['config']['identity.shared_logo_asset'] = $finalUrl;
+                    $layout['footer']['config']['brand']['logo'] = $finalUrl;
+                    $layout['footer']['config']['brand.logo'] = $finalUrl;
+                }
+                $payload['page_type_layouts'][$pageType] = $layout;
+            }
+            if (\is_array($payload['asset_manifest']['slots']['identity:website-logo'] ?? null)) {
+                $payload['asset_manifest']['slots']['identity:website-logo']['final_url'] = $finalUrl;
+                $payload['asset_manifest']['slots']['identity:website-logo']['url'] = $finalUrl;
+                if (\is_array($payload['asset_manifest']['slots']['identity:website-logo']['variants'][0] ?? null)) {
+                    $payload['asset_manifest']['slots']['identity:website-logo']['variants'][0]['url'] = $finalUrl;
+                    $payload['asset_manifest']['slots']['identity:website-logo']['variants'][0]['path'] = \ltrim($finalUrl, '/');
+                }
+            }
+        } elseif ($role === 'icon') {
+            if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon'] ?? null)) {
+                $payload['asset_manifest']['slots']['identity:site-title-icon']['final_url'] = $finalUrl;
+                $payload['asset_manifest']['slots']['identity:site-title-icon']['url'] = $finalUrl;
+                if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0] ?? null)) {
+                    $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['url'] = $finalUrl;
+                    $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['path'] = \ltrim($finalUrl, '/');
+                }
+            }
+            if (\is_array($payload['shared_components']['header']['default_config'] ?? null)) {
+                $payload['shared_components']['header']['default_config']['identity']['shared_icon_asset'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['identity.shared_icon_asset'] = $finalUrl;
+            }
+            foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $pageType => $layout) {
+                if (!\is_string($pageType) || !\is_array($layout)) {
+                    continue;
+                }
+                if (\is_array($layout['header']['config'] ?? null)) {
+                    $layout['header']['config']['identity']['shared_icon_asset'] = $finalUrl;
+                    $layout['header']['config']['identity.shared_icon_asset'] = $finalUrl;
+                }
+                $payload['page_type_layouts'][$pageType] = $layout;
+            }
+        }
+
+        return $payload;
     }
 
     /**
@@ -667,15 +936,27 @@ class AiSiteAutoAssetGenerationService
      * @param array<string,mixed> $manifest
      * @return list<array<string,mixed>>
      */
-    private function pickPendingSlots(array $manifest, int $limit): array
+    private function pickPendingSlots(
+        array $manifest,
+        int $limit,
+        bool $prioritizeIdentityAssets = false,
+        bool $identityOnly = false
+    ): array
     {
         $slots = \array_values(\array_filter(
             \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [],
-            function ($slot): bool {
+            function ($slot) use ($identityOnly): bool {
                 if (!\is_array($slot)) {
                     return false;
                 }
                 if ((int)($slot['locked_by_user'] ?? 0) === 1) {
+                    return false;
+                }
+                if ($identityOnly && (string)($slot['slot_type'] ?? '') !== 'logo_icon') {
+                    return false;
+                }
+                $status = \strtolower(\trim((string)($slot['status'] ?? 'pending')));
+                if ($status !== '' && !\in_array($status, ['pending', 'planned'], true)) {
                     return false;
                 }
                 $finalUrl = \trim((string)($slot['final_url'] ?? ''));
@@ -686,10 +967,10 @@ class AiSiteAutoAssetGenerationService
             }
         ));
 
-        \usort($slots, function (array $left, array $right): int {
+        \usort($slots, function (array $left, array $right) use ($prioritizeIdentityAssets): int {
             $priority = [
                 'hero_image' => 10,
-                'logo_icon' => 20,
+                'logo_icon' => $prioritizeIdentityAssets ? 5 : 20,
                 'trust_brand_image' => 30,
                 'section_image' => 40,
             ];
@@ -860,6 +1141,11 @@ class AiSiteAutoAssetGenerationService
      */
     private function resolveTargetHandle(array $scope, AiSiteAgentSession $session): string
     {
+        $localPreviewHost = $this->resolveLocalPreviewHost($scope);
+        if ($localPreviewHost !== '') {
+            return $this->sanitizePathSegment($localPreviewHost);
+        }
+
         foreach ([
             $scope['target_domain'] ?? null,
             $scope['selected_domain'] ?? null,
@@ -887,6 +1173,46 @@ class AiSiteAutoAssetGenerationService
         }
 
         return $this->sanitizePathSegment($session->getPublicId() ?: 'site');
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveLocalPreviewHost(array $scope): string
+    {
+        foreach (['preview_full_url', 'visual_preview_url', 'visual_edit_url', 'preview_url'] as $key) {
+            $url = \trim((string)($scope[$key] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $host = \parse_url($url, \PHP_URL_HOST);
+            $host = \is_string($host) ? \strtolower(\trim($host)) : '';
+            if ($host !== '' && (\str_ends_with($host, '.weline.test') || \str_ends_with($host, '.local.test'))) {
+                return $host;
+            }
+        }
+
+        return '';
+    }
+
+    private function isFinalUrlUnderCurrentDomainAssetPath(string $finalUrl, array $scope, AiSiteAgentSession $session): bool
+    {
+        $path = \parse_url($finalUrl, \PHP_URL_PATH);
+        $path = \is_string($path) && $path !== '' ? $path : $finalUrl;
+        $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+        $handle = $this->resolveTargetHandle($scope, $session);
+        $expectedPrefix = '/pub/media/page-build/ai-generated/' . $handle . '/';
+
+        return \str_starts_with($path, $expectedPrefix);
+    }
+
+    private function isGeneratedPageBuildAssetUrl(string $finalUrl): bool
+    {
+        $path = \parse_url($finalUrl, \PHP_URL_PATH);
+        $path = \is_string($path) && $path !== '' ? $path : $finalUrl;
+        $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+
+        return \str_contains($path, '/pub/media/page-build/ai-generated/');
     }
 
     private function sanitizePathSegment(string $value): string

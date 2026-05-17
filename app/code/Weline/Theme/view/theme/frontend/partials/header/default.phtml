@@ -40,7 +40,13 @@ $colors = $this->getData('colors') ?? [];
 // 注意：navItems 可能在 hook (Weline_Theme::frontend::partials::header::categories-before) 中被设置
 // 如果 hook 设置了 navItems，会覆盖这里的默认值
 // 默认导航数据（统一用于横向菜单和汉堡菜单）
-$defaultNavItems = [
+$defaultNavItemsFactory = static function (): array {
+    static $defaultNavItems = null;
+    if ($defaultNavItems !== null) {
+        return $defaultNavItems;
+    }
+
+    $defaultNavItems = [
     [
         'text' => __('电子产品'), 'url' => '/category/electronics',
         'children' => [
@@ -227,7 +233,10 @@ $defaultNavItems = [
     ['text' => __('运动户外'), 'url' => '/category/sports'],
     ['text' => __('图书音像'), 'url' => '/category/books'],
     ['text' => __('食品饮料'), 'url' => '/category/food'],
-];
+    ];
+
+    return $defaultNavItems;
+};
 
 // 在 hook 执行前，navItems 为 null
 // hook 执行后，会从模板数据中获取 navItems（如果 hook 设置了的话）
@@ -654,7 +663,7 @@ $defaultNavItems = [
                     $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? $navItems ?? [];
                     // 如果 hook 没有设置，使用默认值
                     if (empty($navItems) && !$this->getData('navItems_set_by_hook')) {
-                        $navItems = $defaultNavItems;
+                        $navItems = $defaultNavItemsFactory();
                     }
                     if (!empty($navItems)): ?>
                         <nav class="categories-nav">
@@ -687,6 +696,15 @@ $defaultNavItems = [
                                     $renderMenuItem($item);
                                 endforeach; 
                                 ?>
+                                <li class="categories-overflow-wrapper" id="categories-overflow-wrapper" style="display: none;">
+                                    <button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="更多分类" aria-expanded="false" type="button">
+                                        <span><lang>更多</lang></span>
+                                        <i class="fas fa-chevron-down"></i>
+                                    </button>
+                                    <ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true">
+                                        <!-- 动态添加的分类菜单项 -->
+                                    </ul>
+                                </li>
                             </ul>
                         </nav>
                     <?php endif; ?>
@@ -781,7 +799,7 @@ $defaultNavItems = [
                 $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? $navItems ?? [];
                 // 如果 hook 没有设置，使用默认值
                 if (empty($navItems) && !$this->getData('navItems_set_by_hook')) {
-                    $navItems = $defaultNavItems;
+                    $navItems = $defaultNavItemsFactory();
                 }
                 // 使用相同的渲染函数生成侧边栏菜单（汉堡菜单）
                 if (!empty($navItems)): 
@@ -2071,6 +2089,10 @@ textarea::-webkit-scrollbar-thumb:hover,
     align-items: center;
 }
 
+.categories-list > li.hidden {
+    display: none !important;
+}
+
 .category-link-wrapper {
     display: flex;
     align-items: center;
@@ -2379,6 +2401,107 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .nav-links-list a:hover {
     color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.categories-overflow-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.categories-overflow-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background-color: transparent;
+    border: none;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-radius: 2px;
+}
+
+.categories-overflow-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.categories-overflow-btn i {
+    font-size: 0.625rem;
+    transition: transform 0.2s ease;
+}
+
+.categories-overflow-wrapper.active .categories-overflow-btn i,
+.categories-overflow-wrapper:hover .categories-overflow-btn i {
+    transform: rotate(180deg);
+}
+
+.categories-overflow-dropdown {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    min-width: 240px;
+    max-width: min(420px, calc(100vw - 2rem));
+    max-height: min(70vh, 560px);
+    overflow: auto;
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 8px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1003;
+}
+
+.categories-overflow-wrapper.active .categories-overflow-dropdown,
+.categories-overflow-wrapper:hover .categories-overflow-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.categories-overflow-dropdown > .category-item {
+    display: block;
+    width: 100%;
+}
+
+.categories-overflow-dropdown > .category-item > .category-link-wrapper {
+    width: 100%;
+    justify-content: space-between;
+}
+
+.categories-overflow-dropdown > .category-item > .category-link-wrapper > .category-link {
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0;
+}
+
+.categories-overflow-dropdown > .category-item > .category-link-wrapper > .category-arrow {
+    margin-right: 1rem;
+    border-top-color: <?= htmlspecialchars($colors['textSecondary'] ?? '#666') ?>;
+}
+
+.categories-overflow-dropdown > .category-item:hover > .category-link-wrapper > .category-link {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?> !important;
+}
+
+.categories-overflow-dropdown > .category-item.has-children > .category-submenu {
+    top: 0;
+    left: calc(100% - 0.5rem);
+    right: auto;
+    min-width: 280px;
+    max-width: min(720px, calc(100vw - 3rem));
 }
 
 /* 更多按钮 */
@@ -3062,11 +3185,16 @@ textarea::-webkit-scrollbar-thumb:hover,
         // 搜索分类下拉菜单同步和搜索建议功能由 Weline.Search 模块处理
 
         // 导航链接"更多"按钮功能
+        const categoriesList = document.getElementById('categories-list');
+        const categoriesOverflowWrapper = document.getElementById('categories-overflow-wrapper');
+        const categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
+        const categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');
         const navLinksList = document.getElementById('nav-links-list');
         const navMoreWrapper = document.getElementById('nav-more-wrapper');
         const navMoreBtn = document.getElementById('nav-more-btn');
         const navMoreDropdown = document.getElementById('nav-more-dropdown');
         const headerNavFill = document.getElementById('header-nav-fill');
+        const headerMainNav = document.querySelector('.header-main-nav');
         
         if (navLinksList && navMoreWrapper && navMoreBtn && navMoreDropdown && headerNavFill) {
             let resizeTimeout;
@@ -3088,7 +3216,7 @@ textarea::-webkit-scrollbar-thumb:hover,
                     const headerNavFillRect = headerNavFill.getBoundingClientRect();
                     
                     // 计算可用宽度（从nav-links-list左边缘到header-nav-fill右边缘）
-                    const availableWidth = headerNavFillRect.right - navLinksListRect.left;
+                    const availableWidth = Math.max(0, headerNavFill.clientWidth - 12);
                     
                     // 临时显示"更多"按钮以获取其宽度
                     navMoreWrapper.style.display = 'flex';
@@ -3140,12 +3268,78 @@ textarea::-webkit-scrollbar-thumb:hover,
             }
             
             // 初始调整
+            function adjustCategoriesOverflow() {
+                if (!categoriesList || !categoriesOverflowWrapper || !categoriesOverflowBtn || !categoriesOverflowDropdown || !headerMainNav) {
+                    return;
+                }
+
+                const categoryItems = Array.from(categoriesList.children).filter(function(item) {
+                    return item !== categoriesOverflowWrapper;
+                });
+
+                categoryItems.forEach(function(item) {
+                    item.classList.remove('hidden');
+                });
+                categoriesOverflowDropdown.innerHTML = '';
+                categoriesOverflowWrapper.style.display = 'none';
+                categoriesOverflowWrapper.classList.remove('active');
+                categoriesOverflowBtn.setAttribute('aria-expanded', 'false');
+                categoriesOverflowDropdown.setAttribute('aria-hidden', 'true');
+
+                requestAnimationFrame(function() {
+                    const categoriesListRect = categoriesList.getBoundingClientRect();
+                    const headerNavFillRect = headerNavFill.getBoundingClientRect();
+                    const mainNavRect = headerMainNav.getBoundingClientRect();
+                    const availableWidth = Math.max(
+                        0,
+                        Math.min(headerNavFillRect.left - categoriesListRect.left - 16, mainNavRect.width - 32)
+                    );
+
+                    categoriesOverflowWrapper.style.display = 'flex';
+                    const overflowBtnWidth = categoriesOverflowWrapper.getBoundingClientRect().width + 8;
+                    categoriesOverflowWrapper.style.display = 'none';
+
+                    const computedStyle = window.getComputedStyle(categoriesList);
+                    const gap = parseFloat(computedStyle.gap) || 8;
+                    let totalWidth = 0;
+                    let itemsToHide = [];
+
+                    for (let i = 0; i < categoryItems.length; i++) {
+                        const item = categoryItems[i];
+                        const itemWidth = item.getBoundingClientRect().width;
+                        const itemGap = i > 0 ? gap : 0;
+
+                        if (totalWidth + itemWidth + itemGap + overflowBtnWidth > availableWidth) {
+                            itemsToHide = categoryItems.slice(i);
+                            break;
+                        }
+                        totalWidth += itemWidth + itemGap;
+                    }
+
+                    if (itemsToHide.length > 0) {
+                        categoriesOverflowWrapper.style.display = 'flex';
+                        itemsToHide.forEach(function(item) {
+                            item.classList.add('hidden');
+                            const clone = item.cloneNode(true);
+                            clone.classList.remove('hidden');
+                            categoriesOverflowDropdown.appendChild(clone);
+                        });
+                    } else {
+                        categoriesOverflowWrapper.style.display = 'none';
+                    }
+                });
+            }
+
             adjustNavLinks();
+            adjustCategoriesOverflow();
             
             // 窗口大小变化时重新调整
             window.addEventListener('resize', function() {
                 clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(adjustNavLinks, 100);
+                resizeTimeout = setTimeout(function() {
+                    adjustNavLinks();
+                    adjustCategoriesOverflow();
+                }, 100);
             });
             
             let isClickActivated = false; // 标记是否通过点击激活
@@ -3199,6 +3393,55 @@ textarea::-webkit-scrollbar-thumb:hover,
                     isClickActivated = false;
                 }
             });
+
+            if (categoriesOverflowWrapper && categoriesOverflowBtn && categoriesOverflowDropdown) {
+                let categoriesOverflowClickActivated = false;
+                let categoriesOverflowHoverTimeout;
+
+                categoriesOverflowBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const isActive = categoriesOverflowWrapper.classList.contains('active');
+
+                    categoriesOverflowClickActivated = !isActive;
+
+                    if (isActive) {
+                        categoriesOverflowWrapper.classList.remove('active');
+                        categoriesOverflowBtn.setAttribute('aria-expanded', 'false');
+                        categoriesOverflowDropdown.setAttribute('aria-hidden', 'true');
+                    } else {
+                        categoriesOverflowWrapper.classList.add('active');
+                        categoriesOverflowBtn.setAttribute('aria-expanded', 'true');
+                        categoriesOverflowDropdown.setAttribute('aria-hidden', 'false');
+                    }
+                });
+
+                categoriesOverflowWrapper.addEventListener('mouseenter', function() {
+                    categoriesOverflowBtn.setAttribute('aria-expanded', 'true');
+                    categoriesOverflowDropdown.setAttribute('aria-hidden', 'false');
+                });
+
+                categoriesOverflowWrapper.addEventListener('mouseleave', function() {
+                    if (!categoriesOverflowClickActivated) {
+                        categoriesOverflowHoverTimeout = setTimeout(function() {
+                            if (!categoriesOverflowWrapper.matches(':hover')) {
+                                categoriesOverflowWrapper.classList.remove('active');
+                                categoriesOverflowBtn.setAttribute('aria-expanded', 'false');
+                                categoriesOverflowDropdown.setAttribute('aria-hidden', 'true');
+                            }
+                        }, 200);
+                    }
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!categoriesOverflowWrapper.contains(e.target) && categoriesOverflowClickActivated) {
+                        categoriesOverflowWrapper.classList.remove('active');
+                        categoriesOverflowBtn.setAttribute('aria-expanded', 'false');
+                        categoriesOverflowDropdown.setAttribute('aria-hidden', 'true');
+                        categoriesOverflowClickActivated = false;
+                    }
+                });
+            }
         }
         
         // 汉堡菜单切换 - 侧边栏菜单

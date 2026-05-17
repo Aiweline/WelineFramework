@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Cart\Controller\Frontend\Cart;
 
 use Weline\Framework\App\Controller\FrontendController;
-use WeShop\Customer\Session\CustomerSession;
+use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Cart\Service\CartService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -20,9 +20,8 @@ class Remove extends FrontendController
     public function index(): string
     {
         try {
-            /** @var CustomerSession $customerSession */
-            $customerSession = ObjectManager::getInstance(CustomerSession::class);
-            $customer = $customerSession->getCustomer();
+            /** @var CartIdentityService $cartIdentityService */
+            $cartIdentityService = ObjectManager::getInstance(CartIdentityService::class);
             
             $cartId = (int)($this->request->getParam('cart_id') ?? 0);
             
@@ -32,7 +31,7 @@ class Remove extends FrontendController
             
             /** @var CartService $cartService */
             $cartService = ObjectManager::getInstance(CartService::class);
-            $cartService->removeFromCart($cartId, $customer ? $customer->getId() : 0);
+            $cartService->removeFromCart($cartId, $cartIdentityService->getCartCustomerId());
             
             return $this->fetchJson(['success' => true, 'message' => __('已从购物车移除')]);
         } catch (\Exception $e) {

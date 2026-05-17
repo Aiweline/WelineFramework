@@ -75,6 +75,7 @@ Success,Success
 "Inject content after the account-center recommendation section.","Inject content after the account-center recommendation section."
 "Compare Products",对比商品
 "My Orders",我的订单
+"Returns & Exchanges","Returns & Exchanges"
 "Recently Viewed",最近浏览
 "My Wishlist",我的心愿单
 "Manage Addresses",管理地址
@@ -93,9 +94,9 @@ Success,Success
 "Unable to locate the auth user for this customer profile.","Unable to locate the auth user for this customer profile."
 金额：,金额：
 继续支付,继续支付
+用户,用户
 我的账户,我的账户
 "您好, %1","您好, %1"
-用户,用户
 我的订单,我的订单
 我的收藏,我的收藏
 退出登录,退出登录

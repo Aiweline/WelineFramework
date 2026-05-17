@@ -10,6 +10,8 @@ $items = (array) ($this->getData('items') ?? []);
 $statusOptions = (array) ($this->getData('statusOptions') ?? []);
 $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? '');
 $updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? '');
+$createShipmentUrl = (string) ($this->getData('createShipmentUrl') ?? '');
+$markDeliveredUrl = (string) ($this->getData('markDeliveredUrl') ?? '');
 
 $orderId = (int) ($order['order_id'] ?? 0);
 $incrementId = htmlspecialchars((string) ($order['increment_id'] ?? ''));
@@ -21,6 +23,15 @@ $createdAt = htmlspecialchars((string) ($order['created_at'] ?? ''));
 $updatedAt = htmlspecialchars((string) ($order['updated_at'] ?? ''));
 $customerId = (int) ($order['customer_id'] ?? 0);
 $paymentStatus = htmlspecialchars((string) ($order['payment_status'] ?? 'pending'));
+$fulfillmentStatus = (string) ($order['fulfillment_status'] ?? 'pending');
+$shippingMethod = htmlspecialchars((string) ($order['shipping_method'] ?? ''));
+$paymentMethod = htmlspecialchars((string) ($order['payment_method'] ?? ''));
+$shippingAddress = (array) ($order['shipping_address'] ?? []);
+$carrier = htmlspecialchars((string) ($order['fulfillment_carrier'] ?? ''));
+$trackingNumber = htmlspecialchars((string) ($order['fulfillment_tracking_number'] ?? ''));
+$shippedAt = htmlspecialchars((string) ($order['shipped_at'] ?? ''));
+$deliveredAt = htmlspecialchars((string) ($order['delivered_at'] ?? ''));
+$safeBackUrl = htmlspecialchars((string) ($_SERVER['REQUEST_URI'] ?? ''));
 ?>
 <style>
     .weshop-order-detail-header {
@@ -250,6 +261,13 @@ $paymentStatus = htmlspecialchars((string) ($order['payment_status'] ?? 'pending
                                     <?= ucfirst($paymentStatus) ?>
                                 </span>
                             </div>
+                            <div class='vr' style='height: 50px; opacity: 0.3;'></div>
+                            <div>
+                                <div class='text-white-50 small'><lang>发货状态</lang></div>
+                                <span class='order-status-badge order-status-<?= htmlspecialchars($fulfillmentStatus) ?>'>
+                                    <?= htmlspecialchars(ucfirst($fulfillmentStatus)) ?>
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div class='col-md-4 text-md-end mt-3 mt-md-0'>
@@ -354,6 +372,52 @@ $paymentStatus = htmlspecialchars((string) ($order['payment_status'] ?? 'pending
                     <span class='order-info-label'><lang>更新时间</lang></span>
                     <span class='order-info-value'><?= $updatedAt ?: '-' ?></span>
                 </div>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>配送方式</lang></span>
+                    <span class='order-info-value'><?= $shippingMethod ?: '-' ?></span>
+                </div>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>支付方式</lang></span>
+                    <span class='order-info-value'><?= $paymentMethod ?: '-' ?></span>
+                </div>
+            </div>
+        </div>
+
+        <div class='card mb-4 weshop-order-detail-card'>
+            <div class='card-header'>
+                <i class='mdi mdi-truck-delivery-outline me-2'></i>
+                <lang>发货信息</lang>
+            </div>
+            <div class='card-body'>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>承运商</lang></span>
+                    <span class='order-info-value'><?= $carrier ?: '-' ?></span>
+                </div>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>物流单号</lang></span>
+                    <span class='order-info-value'><?= $trackingNumber ?: '-' ?></span>
+                </div>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>发货时间</lang></span>
+                    <span class='order-info-value'><?= $shippedAt ?: '-' ?></span>
+                </div>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>送达时间</lang></span>
+                    <span class='order-info-value'><?= $deliveredAt ?: '-' ?></span>
+                </div>
+                <?php if ($shippingAddress): ?>
+                    <div class='mt-3 small text-muted'>
+                        <div class='fw-semibold mb-1'><lang>收货地址</lang></div>
+                        <div>
+                            <?= htmlspecialchars(trim((string) ($shippingAddress['firstname'] ?? '') . ' ' . (string) ($shippingAddress['lastname'] ?? ''))) ?><br>
+                            <?= htmlspecialchars((string) ($shippingAddress['street'] ?? '')) ?><br>
+                            <?= htmlspecialchars((string) ($shippingAddress['city'] ?? '')) ?>,
+                            <?= htmlspecialchars((string) ($shippingAddress['region'] ?? '')) ?>
+                            <?= htmlspecialchars((string) ($shippingAddress['postcode'] ?? '')) ?><br>
+                            <?= htmlspecialchars((string) ($shippingAddress['country_id'] ?? '')) ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -421,6 +485,36 @@ $paymentStatus = htmlspecialchars((string) ($order['payment_status'] ?? 'pending
                                direction='right'
                                class-names='weshop-order-offcanvas-wide'
                                off-canvas-body-style=''/>
+                    <?php endif; ?>
+
+                    <?php if ($status === OrderService::STATUS_PAID && $fulfillmentStatus !== OrderService::FULFILLMENT_STATUS_SHIPPED): ?>
+                        <form method='post' action='<?= $createShipmentUrl ?>' class='border rounded p-3 bg-light-subtle'>
+                            <input type='hidden' name='id' value='<?= $orderId ?>'>
+                            <input type='hidden' name='back_url' value='<?= $safeBackUrl ?>'>
+                            <div class='mb-2'>
+                                <label class='form-label'><lang>承运商</lang></label>
+                                <input class='form-control' name='carrier' placeholder='DHL / FedEx / UPS'>
+                            </div>
+                            <div class='mb-2'>
+                                <label class='form-label'><lang>物流单号</lang></label>
+                                <input class='form-control' name='tracking_number' placeholder='Tracking number'>
+                            </div>
+                            <button type='submit' class='btn btn-success w-100'>
+                                <i class='mdi mdi-truck-fast me-1'></i>
+                                <lang>确认发货</lang>
+                            </button>
+                        </form>
+                    <?php endif; ?>
+
+                    <?php if ($fulfillmentStatus === OrderService::FULFILLMENT_STATUS_SHIPPED): ?>
+                        <form method='post' action='<?= $markDeliveredUrl ?>'>
+                            <input type='hidden' name='id' value='<?= $orderId ?>'>
+                            <input type='hidden' name='back_url' value='<?= $safeBackUrl ?>'>
+                            <button type='submit' class='btn btn-outline-success w-100'>
+                                <i class='mdi mdi-package-variant-closed-check me-1'></i>
+                                <lang>标记已送达</lang>
+                            </button>
+                        </form>
                     <?php endif; ?>
 
                     <!-- Cancel Button -->

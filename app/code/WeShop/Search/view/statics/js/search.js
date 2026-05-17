@@ -396,6 +396,7 @@
         },
         manager: searchManager
     };
+    window.WelineSearchModule = window.Weline.Search;
 
     searchManager.init();
 })(window, document);

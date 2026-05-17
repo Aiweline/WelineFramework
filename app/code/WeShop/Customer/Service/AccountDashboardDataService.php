@@ -10,9 +10,12 @@ use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
 use WeShop\Product\Service\ProductRecommendationService;
 use WeShop\RecentlyViewed\Service\RecentlyViewedService;
+use WeShop\RMA\Model\Rma;
+use WeShop\RMA\Service\RmaService;
 use WeShop\Subscription\Service\SubscriptionService;
 use WeShop\Wishlist\Service\WishlistService;
 use Weline\Customer\Model\Customer as AuthCustomer;
+use Weline\Framework\Manager\ObjectManager;
 
 class AccountDashboardDataService
 {
@@ -22,7 +25,8 @@ class AccountDashboardDataService
         private readonly WishlistService $wishlistService,
         private readonly RecentlyViewedService $recentlyViewedService,
         private readonly ProductRecommendationService $productRecommendationService,
-        private readonly SubscriptionService $subscriptionService
+        private readonly SubscriptionService $subscriptionService,
+        private ?RmaService $rmaService = null
     ) {
     }
 
@@ -40,6 +44,7 @@ class AccountDashboardDataService
         $compareItems = $this->compareService->getCompareList($customerId);
         $recentlyViewedItems = $this->recentlyViewedService->getRecentlyViewed($customerId, 4);
         $subscriptionSummary = $this->subscriptionService->getCustomerSubscriptions($customerId, 1, 1);
+        $rmaList = $this->mapRmas($this->getRmaService()->getCustomerRmas($customerId), 5);
         $comparePreview = $this->mapProductPreviewItems($compareItems, 4);
         $wishlistPreview = $this->mapProductPreviewItems($wishlistItems, 4);
         $recentlyViewed = $this->mapProductPreviewItems($recentlyViewedItems, 4);
@@ -62,6 +67,8 @@ class AccountDashboardDataService
             'recently_viewed_count' => count($recentlyViewedItems),
             'recently_viewed' => $recentlyViewed,
             'subscription_count' => max(0, (int) ($subscriptionSummary['total'] ?? 0)),
+            'rma_count' => count($rmaList),
+            'rma_list' => $rmaList,
             'recommendations' => $this->productRecommendationService->getRecommendations($recommendationSeeds, 4),
         ];
     }
@@ -151,6 +158,39 @@ class AccountDashboardDataService
     }
 
     /**
+     * @param array<int, mixed> $rmas
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mapRmas(array $rmas, int $limit): array
+    {
+        $mapped = [];
+        foreach ($rmas as $rma) {
+            if (!is_array($rma)) {
+                continue;
+            }
+
+            $mapped[] = [
+                'rma_id' => (int) ($rma['rma_id'] ?? $rma[Rma::schema_fields_ID] ?? 0),
+                'order_id' => (int) ($rma['order_id'] ?? $rma[Rma::schema_fields_ORDER_ID] ?? 0),
+                'reason' => (string) ($rma['reason'] ?? $rma[Rma::schema_fields_REASON] ?? ''),
+                'status' => (string) ($rma['status'] ?? $rma[Rma::schema_fields_STATUS] ?? RmaService::STATUS_PENDING),
+                'created_at' => (string) ($rma['created_at'] ?? $rma[Rma::schema_fields_CREATED_AT] ?? ''),
+            ];
+
+            if (count($mapped) >= $limit) {
+                break;
+            }
+        }
+
+        return $mapped;
+    }
+
+    protected function getRmaService(): RmaService
+    {
+        return $this->rmaService ??= ObjectManager::getInstance(RmaService::class);
+    }
+
+    /**
      * @return array<int, array<string, string>>
      */
     protected function buildQuickLinks(): array
@@ -165,6 +205,11 @@ class AccountDashboardDataService
                 'title' => (string) __('My Orders'),
                 'url' => 'weshop/order/list',
                 'icon' => 'receipt_long',
+            ],
+            [
+                'title' => (string) __('Returns & Exchanges'),
+                'url' => 'rma',
+                'icon' => 'assignment_return',
             ],
             [
                 'title' => (string) __('Recently Viewed'),

@@ -174,6 +174,8 @@ class AiSitePlanQueue implements QueueInterface
 
             $this->invokePrivate($controller, 'runPlanOperation', [$sse, $session, $adminId]);
             $this->queueTrace($sse, 'runPlanOperation 已返回。');
+            $this->assertPlanQueueCompletionGate($sessionService, $scopeService, $publicId, $adminId);
+            $this->queueTrace($sse, '第一阶段完成门禁已通过。');
             $this->queueTrace($sse, '队列执行成功：第一阶段方案生成完成。');
             $this->markQueueDone($queue, '第一阶段方案生成完成。');
             $sse->complete();
@@ -587,7 +589,13 @@ class AiSitePlanQueue implements QueueInterface
             $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
         );
 
-        if (!$forceRebuild && !$allowExistingPlan && $scopeService->hasPersistedStageOnePlan($scope)) {
+        if (
+            !$forceRebuild
+            && !$allowExistingPlan
+            && $scopeService->hasPersistedStageOnePlan($scope)
+            && !$this->hasPlanCompletionGateFailures($scope)
+            && $this->hasPlanCompletionValidationReport($scope)
+        ) {
             $message = (string)__('第一阶段方案已存在；队列已跳过重复生成。若需重新生成，请使用强制重建。');
             $this->persistPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message, true);
             return ['ok' => false, 'message' => $message, 'terminal_status' => Queue::status_done];
@@ -602,6 +610,19 @@ class AiSitePlanQueue implements QueueInterface
         }
 
         return ['ok' => true];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function hasPlanCompletionValidationReport(array $scope): bool
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $validationReport = \is_array($scope['stage1_validation_report'] ?? null)
+            ? $scope['stage1_validation_report']
+            : (\is_array($planJson['stage1_validation_report'] ?? null) ? $planJson['stage1_validation_report'] : []);
+
+        return $validationReport !== [] && !empty($validationReport['passed']);
     }
 
     /**
@@ -645,6 +666,124 @@ class AiSitePlanQueue implements QueueInterface
         $sessionService->replaceScope($sessionId, $adminId, $scope);
     }
 
+    private function assertPlanQueueCompletionGate(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        string $publicId,
+        int $adminId
+    ): void {
+        $session = $sessionService->loadByPublicId($publicId, $adminId);
+        if (!$session instanceof AiSiteAgentSession) {
+            throw new \RuntimeException('Stage-one plan completion gate failed: session reload failed.');
+        }
+
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
+        if ($this->hasPlanCompletionGateFailures($scope)) {
+            $messages = $this->extractPlanRetryableFailureMessages($scope);
+            $detail = $messages !== []
+                ? \implode('; ', \array_slice($messages, 0, 5))
+                : 'partial_retry_required=1 without retryable failure details';
+            throw new \RuntimeException('Stage-one plan completion gate failed: ' . $detail);
+        }
+        if (!\is_array($scope['plan_json'] ?? null) || ($scope['plan_json'] ?? []) === []) {
+            throw new \RuntimeException('Stage-one plan completion gate failed: plan_json is empty.');
+        }
+        if (\trim((string)($scope['plan_markdown'] ?? '')) === '') {
+            throw new \RuntimeException('Stage-one plan completion gate failed: plan_markdown is empty.');
+        }
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $validationReport = \is_array($scope['stage1_validation_report'] ?? null)
+            ? $scope['stage1_validation_report']
+            : (\is_array($planJson['stage1_validation_report'] ?? null) ? $planJson['stage1_validation_report'] : []);
+        if ($validationReport === []) {
+            throw new \RuntimeException('Stage-one plan completion gate failed: stage1_validation_report is missing.');
+        }
+        if (empty($validationReport['passed'])) {
+            throw new \RuntimeException('Stage-one plan completion gate failed: validation_report failed: ' . $this->summarizeStageOneValidationReport($validationReport));
+        }
+        $stageOneContract = \is_array($scope['stage1_contract'] ?? null)
+            ? $scope['stage1_contract']
+            : (\is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : []);
+        $contractHash = \trim((string)($stageOneContract['contract_hash'] ?? ''));
+        $reportContractHash = \trim((string)($validationReport['contract_hash'] ?? ''));
+        if ($contractHash === '' || $reportContractHash === '' || !\hash_equals($contractHash, $reportContractHash)) {
+            throw new \RuntimeException('Stage-one plan completion gate failed: validation contract hash mismatch.');
+        }
+        $hasAiGeneratedEvidence = (int)($scope['plan_ai_generated'] ?? 0) === 1
+            || (
+                \trim((string)($scope['plan_generated_at'] ?? '')) !== ''
+                && \is_array($planJson['stage1_contract'] ?? null)
+                && ($planJson['stage1_contract'] ?? []) !== []
+            );
+        if ((int)($scope['fake_mode'] ?? 0) !== 1 && !$hasAiGeneratedEvidence) {
+            throw new \RuntimeException('Stage-one plan completion gate failed: plan was not AI generated.');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $report
+     */
+    private function summarizeStageOneValidationReport(array $report): string
+    {
+        $issues = \is_array($report['issues'] ?? null) ? $report['issues'] : [];
+        if ($issues === []) {
+            return 'unknown validation issue';
+        }
+        $parts = [];
+        foreach (\array_slice($issues, 0, 5) as $issue) {
+            if (!\is_array($issue)) {
+                continue;
+            }
+            $path = \trim((string)($issue['path'] ?? $issue['field_path'] ?? 'stage1'));
+            $code = \trim((string)($issue['code'] ?? $issue['reason_code'] ?? 'invalid'));
+            $parts[] = ($path !== '' ? $path : 'stage1') . '=' . ($code !== '' ? $code : 'invalid');
+        }
+
+        return $parts !== [] ? \implode('; ', $parts) : 'unknown validation issue';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function hasPlanCompletionGateFailures(array $scope): bool
+    {
+        if ((int)($scope['partial_retry_required'] ?? 0) === 1) {
+            return true;
+        }
+
+        return $this->extractPlanRetryableFailureMessages($scope) !== [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<string>
+     */
+    private function extractPlanRetryableFailureMessages(array $scope): array
+    {
+        $items = \is_array($scope[AiSiteBuildTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY]['plan']['items'] ?? null)
+            ? $scope[AiSiteBuildTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY]['plan']['items']
+            : [];
+        $messages = [];
+        foreach ($items as $fallbackKey => $failure) {
+            if (!\is_array($failure)) {
+                continue;
+            }
+            $itemKey = \trim((string)($failure['item_key'] ?? $failure['page_type'] ?? $fallbackKey));
+            $message = \trim((string)($failure['message'] ?? 'retryable AI failure'));
+            $line = $itemKey !== '' ? ($itemKey . ': ' . $message) : $message;
+            if (\mb_strlen($line) > 500) {
+                $line = \mb_substr($line, 0, 500) . '...';
+            }
+            if ($line !== '' && !\in_array($line, $messages, true)) {
+                $messages[] = $line;
+            }
+        }
+
+        return \array_values($messages);
+    }
+
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $active
@@ -655,19 +794,22 @@ class AiSitePlanQueue implements QueueInterface
         try {
             /** @var AiSiteBuildTaskService $buildTaskService */
             $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
-            return $buildTaskService->replaceRetryableAiFailures($scope, 'plan', [
-                'stage1_plan' => [
-                    'operation' => 'plan',
-                    'item_key' => 'stage1_plan',
-                    'item_type' => 'stage_one_plan',
-                    'retry_scope' => 'plan',
-                    'message' => $message,
-                    'queue_id' => (int)($active['queue_id'] ?? 0),
-                    'execution_token' => (string)($active['execution_token'] ?? ''),
-                    'attempt_no' => $attemptNo,
-                    'failed_at' => \date('Y-m-d H:i:s'),
-                ],
-            ]);
+            $planFailures = \is_array($scope[AiSiteBuildTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY]['plan']['items'] ?? null)
+                ? $scope[AiSiteBuildTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY]['plan']['items']
+                : [];
+            $planFailures['stage1_plan'] = [
+                'operation' => 'plan',
+                'item_key' => 'stage1_plan',
+                'item_type' => 'stage_one_plan',
+                'retry_scope' => 'plan',
+                'message' => $message,
+                'queue_id' => (int)($active['queue_id'] ?? 0),
+                'execution_token' => (string)($active['execution_token'] ?? ''),
+                'attempt_no' => $attemptNo,
+                'failed_at' => \date('Y-m-d H:i:s'),
+            ];
+
+            return $buildTaskService->replaceRetryableAiFailures($scope, 'plan', $planFailures);
         } catch (\Throwable) {
             return $scope;
         }

@@ -414,6 +414,7 @@ class ProductQueryProvider implements QueryProviderInterface
             fn (array $item): array => $this->priceService->resolveProductData($item),
             $product->select()->fetchArray()
         );
+        $items = $this->filterResolvedProductsByKeyword($items, $keyword);
         $items = $this->filterResolvedProductsByPrice($items, $filters);
 
         $orderBy = (string)($filters['order_by'] ?? Product::schema_fields_ID);
@@ -462,23 +463,6 @@ class ProductQueryProvider implements QueryProviderInterface
 
     private function applyProductSearchBaseFilters(Product $product, string $keyword, array $filters): void
     {
-        if ($keyword !== '') {
-            $escapedKeyword = $this->escapeLikeValue($keyword);
-            $product->where(
-                sprintf(
-                    "(%s LIKE '%s' OR %s LIKE '%s' OR %s LIKE '%s' OR %s LIKE '%s')",
-                    Product::schema_fields_name,
-                    $escapedKeyword,
-                    Product::schema_fields_sku,
-                    $escapedKeyword,
-                    Product::schema_fields_short_description,
-                    $escapedKeyword,
-                    Product::schema_fields_description,
-                    $escapedKeyword
-                )
-            );
-        }
-
         $categoryProductIds = $this->getProductIdsByCategoryId([
             'category_id' => $filters['category_id'] ?? null,
             'category_ids' => $filters['category_ids'] ?? [],
@@ -545,6 +529,51 @@ class ProductQueryProvider implements QueryProviderInterface
             $items,
             fn (array $item): bool => $this->priceMatchesRange($this->extractComparablePrice($item), $minPrice, $maxPrice)
         ));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterResolvedProductsByKeyword(array $items, string $keyword): array
+    {
+        $terms = $this->expandSearchKeywords($keyword);
+        if ($terms === []) {
+            return $items;
+        }
+
+        return array_values(array_filter(
+            $items,
+            fn (array $item): bool => $this->productMatchesSearchTerms($item, $terms)
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @param array<int, string> $terms
+     */
+    private function productMatchesSearchTerms(array $item, array $terms): bool
+    {
+        $haystack = mb_strtolower(implode(' ', array_map(
+            static fn (mixed $value): string => is_scalar($value) ? (string) $value : '',
+            [
+                $item[Product::schema_fields_name] ?? '',
+                $item[Product::schema_fields_sku] ?? '',
+                $item[Product::schema_fields_short_description] ?? '',
+                $item[Product::schema_fields_description] ?? '',
+                $item[Product::schema_fields_meta_keywords] ?? '',
+                $item['meta_name'] ?? '',
+                $item['meta_description'] ?? '',
+            ]
+        )), 'UTF-8');
+
+        foreach ($terms as $term) {
+            if ($term !== '' && str_contains($haystack, mb_strtolower($term, 'UTF-8'))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -625,9 +654,38 @@ class ProductQueryProvider implements QueryProviderInterface
         return $maxPrice === null || $price <= $maxPrice;
     }
 
-    private function escapeLikeValue(string $keyword): string
+    /**
+     * @return array<int, string>
+     */
+    private function expandSearchKeywords(string $keyword): array
     {
-        return str_replace(["\\", "'"], ["\\\\", "''"], '%' . $keyword . '%');
+        $normalized = mb_strtolower(trim($keyword), 'UTF-8');
+        $terms = [$keyword];
+        $dictionary = [
+            '手机' => ['phone', 'smartphone', 'iphone', 'galaxy', 'android'],
+            '智能手机' => ['phone', 'smartphone', 'iphone', 'galaxy', 'android'],
+            '电话' => ['phone', 'smartphone'],
+            '耳机' => ['earbuds', 'headphones', 'noise'],
+            '平板' => ['tablet', 'ipad'],
+            '电脑' => ['laptop', 'computer', 'keyboard', 'monitor'],
+            '显示器' => ['monitor', 'display'],
+            '相机' => ['camera'],
+            '手表' => ['watch', 'smartwatch'],
+            '路由器' => ['router', 'mesh', 'wi-fi'],
+            '充电宝' => ['power bank', 'charger', 'battery'],
+            '音箱' => ['speaker', 'bluetooth'],
+        ];
+
+        foreach ($dictionary as $source => $expandedTerms) {
+            if (str_contains($normalized, $source)) {
+                array_push($terms, ...$expandedTerms);
+            }
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn (string $term): string => trim($term),
+            $terms
+        ))));
     }
 
     public function getDescriptor(): array

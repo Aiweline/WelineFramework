@@ -25,6 +25,10 @@ class OrderService
     public const PAYMENT_STATUS_PARTIAL = 'partial';
     public const PAYMENT_STATUS_REFUNDED = 'refunded';
 
+    public const FULFILLMENT_STATUS_PENDING = 'pending';
+    public const FULFILLMENT_STATUS_SHIPPED = 'shipped';
+    public const FULFILLMENT_STATUS_DELIVERED = 'delivered';
+
     public function __construct(
         private readonly ?Order $orderModel = null,
         private readonly ?OrderItem $orderItemModel = null
@@ -63,9 +67,74 @@ class OrderService
             ->setData(Order::schema_fields_discount_amount, (float) ($orderData['discount_amount'] ?? 0))
             ->setData(Order::schema_fields_tax_amount, (float) ($orderData['tax_amount'] ?? 0))
             ->setData(Order::schema_fields_total, (float) ($orderData['total'] ?? 0))
+            ->setData(Order::schema_fields_payment_status, (string) ($orderData['payment_status'] ?? self::PAYMENT_STATUS_PENDING))
+            ->setData(Order::schema_fields_fulfillment_status, (string) ($orderData['fulfillment_status'] ?? self::FULFILLMENT_STATUS_PENDING))
+            ->setData(Order::schema_fields_shipping_method, (string) ($orderData['shipping_method'] ?? ''))
+            ->setData(Order::schema_fields_payment_method, (string) ($orderData['payment_method'] ?? ''))
+            ->setData(Order::schema_fields_shipping_address, $this->encodeAddress($orderData['shipping_address'] ?? []))
             ->setData(Order::schema_fields_created_at, date('Y-m-d H:i:s'))
             ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
+
+        return $order;
+    }
+
+    public function createShipment(int $orderId, string $carrier, string $trackingNumber): Order
+    {
+        $order = $this->requireOrder($orderId);
+        $status = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
+        $paymentStatus = $order->hasField(Order::schema_fields_payment_status)
+            ? (string) $order->getData(Order::schema_fields_payment_status)
+            : self::PAYMENT_STATUS_PENDING;
+
+        if ($status === self::STATUS_CANCELLED || $status === self::STATUS_REFUNDED) {
+            throw new \InvalidArgumentException((string) __('Cancelled or refunded orders cannot be shipped.'));
+        }
+
+        if ($paymentStatus !== self::PAYMENT_STATUS_PAID && $status !== self::STATUS_PAID) {
+            throw new \InvalidArgumentException((string) __('Only paid orders can be shipped.'));
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $order->setData(Order::schema_fields_status, self::STATUS_FULFILLED)
+            ->setData(Order::schema_fields_fulfillment_status, self::FULFILLMENT_STATUS_SHIPPED)
+            ->setData(Order::schema_fields_fulfillment_carrier, trim($carrier))
+            ->setData(Order::schema_fields_fulfillment_tracking_number, trim($trackingNumber))
+            ->setData(Order::schema_fields_shipped_at, $now)
+            ->setData(Order::schema_fields_updated_at, $now)
+            ->save();
+
+        $eventData = [
+            'order' => $order,
+            'order_id' => $orderId,
+            'carrier' => trim($carrier),
+            'tracking_number' => trim($trackingNumber),
+        ];
+        ObjectManager::getInstance(EventsManager::class)->dispatch('WeShop_Order::order_shipped', $eventData);
+
+        return $order;
+    }
+
+    public function markDelivered(int $orderId): Order
+    {
+        $order = $this->requireOrder($orderId);
+        $fulfillmentStatus = (string) ($order->getData(Order::schema_fields_fulfillment_status) ?? self::FULFILLMENT_STATUS_PENDING);
+        if ($fulfillmentStatus !== self::FULFILLMENT_STATUS_SHIPPED) {
+            throw new \InvalidArgumentException((string) __('Only shipped orders can be marked as delivered.'));
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $order->setData(Order::schema_fields_status, self::STATUS_COMPLETED)
+            ->setData(Order::schema_fields_fulfillment_status, self::FULFILLMENT_STATUS_DELIVERED)
+            ->setData(Order::schema_fields_delivered_at, $now)
+            ->setData(Order::schema_fields_updated_at, $now)
+            ->save();
+
+        $eventData = [
+            'order' => $order,
+            'order_id' => $orderId,
+        ];
+        ObjectManager::getInstance(EventsManager::class)->dispatch('WeShop_Order::order_completed', $eventData);
 
         return $order;
     }
@@ -485,6 +554,17 @@ class OrderService
                 : null,
             default => null,
         };
+    }
+
+    protected function encodeAddress(mixed $address): string
+    {
+        if (!is_array($address) || $address === []) {
+            return '';
+        }
+
+        $encoded = json_encode($address, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return is_string($encoded) ? $encoded : '';
     }
 
     /**

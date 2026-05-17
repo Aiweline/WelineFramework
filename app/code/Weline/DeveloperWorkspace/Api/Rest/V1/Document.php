@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
 use Weline\DeveloperWorkspace\Api\DevToolRestController;
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Model\Document as DocumentModel;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
@@ -35,7 +36,7 @@ class Document extends DevToolRestController
             if (!$this->isAllowed()) {
                 return $this->error('dev tool document is not allowed', [], 403);
             }
-            $data = $this->payloadStore()->remember('docs', 'docs:modules:v1', self::DOCS_TTL_SECONDS, function (): array {
+            $data = $this->payloadStore()->remember('docs', 'docs:modules:v1', $this->docsTtl(), function (): array {
                 return $this->buildModules();
             });
 
@@ -65,7 +66,7 @@ class Document extends DevToolRestController
                 'size' => $pageSize,
             ]);
 
-            $data = $this->payloadStore()->remember('docs', $key, self::DOCS_TTL_SECONDS, function () use ($keyword, $module, $page, $pageSize): array {
+            $data = $this->payloadStore()->remember('docs', $key, $this->docsTtl(), function () use ($keyword, $module, $page, $pageSize): array {
                 return $this->buildSearch($keyword, $module, $page, $pageSize);
             });
 
@@ -86,7 +87,7 @@ class Document extends DevToolRestController
                 return $this->error('文档ID不能为空', [], 400);
             }
 
-            $data = $this->payloadStore()->remember('docs', 'docs:detail:' . $id, self::DOCS_TTL_SECONDS, function () use ($id): array {
+            $data = $this->payloadStore()->remember('docs', 'docs:detail:' . $id, $this->docsTtl(), function () use ($id): array {
                 return $this->buildDetail($id);
             });
 
@@ -106,7 +107,7 @@ class Document extends DevToolRestController
             if (!$this->isAllowed()) {
                 return $this->error('dev tool document is not allowed', [], 403);
             }
-            $data = $this->payloadStore()->remember('docs', 'docs:catalogs:v1', self::DOCS_TTL_SECONDS, function (): array {
+            $data = $this->payloadStore()->remember('docs', 'docs:catalogs:v1', $this->docsTtl(), function (): array {
                 $catalogs = $this->catalogModel->clear()
                     ->where(Catalog::schema_fields_is_active, 1)
                     ->order(Catalog::schema_fields_position, 'ASC')
@@ -271,6 +272,11 @@ class Document extends DevToolRestController
         }
 
         return $this->payloadStore;
+    }
+
+    private function docsTtl(): int
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.docs_ttl', self::DOCS_TTL_SECONDS);
     }
 
     private function isAllowed(): bool

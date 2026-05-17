@@ -5,43 +5,219 @@ $rmaCount = (int) ($this->getData('rma_count') ?? count($rmaList));
 $requestTypes = (array) ($this->getData('request_types') ?? []);
 $reasonOptions = (array) ($this->getData('reason_options') ?? []);
 ?>
-<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
-    <section class="overflow-hidden rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+<style>
+    .weshop-rma-page {
+        width: min(100% - 2rem, var(--layout-max-width, 1280px));
+        margin: 0 auto;
+        padding: 2rem 0 3rem;
+        display: grid;
+        gap: 2rem;
+    }
+
+    .weshop-rma-page * {
+        box-sizing: border-box;
+    }
+
+    .weshop-rma-hero,
+    .weshop-rma-card,
+    .weshop-rma-stat {
+        background: var(--color-surface, #fff);
+        border: 1px solid var(--color-border, #e5e7eb);
+        border-radius: 1.5rem;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+    }
+
+    .weshop-rma-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+        gap: 2rem;
+        padding: 2rem;
+    }
+
+    .weshop-rma-eyebrow {
+        margin: 0;
+        color: var(--color-primary, #d97706);
+        font-size: 0.8rem;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+    }
+
+    .weshop-rma-page h1,
+    .weshop-rma-page h2 {
+        margin: 0.6rem 0;
+        color: var(--color-text-primary, #111827);
+        line-height: 1.15;
+    }
+
+    .weshop-rma-page p {
+        color: var(--color-text-secondary, #64748b);
+    }
+
+    .weshop-rma-actions,
+    .weshop-rma-stats,
+    .weshop-rma-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .weshop-rma-actions {
+        grid-template-columns: repeat(2, minmax(0, max-content));
+        margin-top: 1.5rem;
+    }
+
+    .weshop-rma-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.75rem;
+        border-radius: 0.9rem;
+        padding: 0 1.15rem;
+        background: var(--color-primary, #111827);
+        color: var(--color-primary-contrast, #fff);
+        font-weight: 800;
+        text-decoration: none;
+    }
+
+    .weshop-rma-button--secondary {
+        background: #fff;
+        color: var(--color-text-primary, #111827);
+        border: 1px solid var(--color-border, #d1d5db);
+    }
+
+    .weshop-rma-stat {
+        padding: 1.25rem;
+    }
+
+    .weshop-rma-stat strong {
+        display: block;
+        color: var(--color-text-primary, #111827);
+        font-size: 2rem;
+    }
+
+    .weshop-rma-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .weshop-rma-card {
+        padding: 1.5rem;
+    }
+
+    .weshop-rma-form {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1.25rem;
+    }
+
+    .weshop-rma-form label {
+        display: grid;
+        gap: 0.4rem;
+        color: var(--color-text-secondary, #64748b);
+        font-size: 0.92rem;
+        font-weight: 700;
+    }
+
+    .weshop-rma-form input,
+    .weshop-rma-form select,
+    .weshop-rma-form textarea {
+        width: 100%;
+        border: 1px solid var(--color-border, #d1d5db);
+        border-radius: 0.8rem;
+        padding: 0.8rem 0.9rem;
+        background: #fff;
+        color: var(--color-text-primary, #111827);
+    }
+
+    .weshop-rma-submit {
+        width: 100%;
+        min-height: 3rem;
+        border: 0;
+        border-radius: 0.9rem;
+        background: var(--color-primary, #111827);
+        color: var(--color-primary-contrast, #fff);
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .weshop-rma-records {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1.25rem;
+    }
+
+    .weshop-rma-record {
+        border: 1px solid var(--color-border, #e5e7eb);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: #f8fafc;
+    }
+
+    .weshop-rma-record-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .weshop-rma-status {
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--color-primary, #111827) 12%, transparent);
+        color: var(--color-primary, #111827);
+        padding: 0.35rem 0.7rem;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .weshop-rma-page .material-symbols-outlined {
+        display: none;
+    }
+
+    @media (max-width: 900px) {
+        .weshop-rma-hero,
+        .weshop-rma-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<section class="weshop-rma-page">
+    <section class="weshop-rma-hero">
         <div class="grid gap-6 p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
             <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Returns Center') ?></p>
+                <p class="weshop-rma-eyebrow"><?= __('Returns Center') ?></p>
                 <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('Returns & Exchanges') ?></h1>
                 <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
                     <?= __('Submit return requests quickly, track approval status, and keep order support moving from one place.') ?>
                 </p>
                 <div class="mt-8 flex flex-wrap gap-3 text-sm">
-                    <a href="<?= $this->getUrl('weshop/order/list') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
+                    <a href="<?= $this->getUrl('weshop/order/list') ?>" class="weshop-rma-button">
                         <?= __('Back To Orders') ?>
                     </a>
-                    <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                    <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="weshop-rma-button weshop-rma-button--secondary">
                         <?= __('Account Center') ?>
                     </a>
                 </div>
             </div>
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                <article class="weshop-rma-stat">
                     <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Total Requests') ?></p>
-                    <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $rmaCount ?></p>
+                    <strong><?= $rmaCount ?></strong>
                     <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('All return or exchange requests in your account history.') ?></p>
                 </article>
-                <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                <article class="weshop-rma-stat">
                     <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Selected Order') ?></p>
-                    <p class="mt-2 text-2xl font-black text-text-primary-light dark:text-text-primary-dark">
+                    <strong>
                         <?= htmlspecialchars((string) ($order['increment_id'] ?? __('None selected')), ENT_QUOTES) ?>
-                    </p>
+                    </strong>
                     <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Choose an order from your order list to start a request instantly.') ?></p>
                 </article>
             </div>
         </div>
     </section>
 
-    <section class="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+    <section class="weshop-rma-grid">
+        <article class="weshop-rma-card">
             <div class="flex items-center justify-between gap-4">
                 <div>
                     <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('New Request') ?></p>
@@ -50,7 +226,7 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
                 <span class="material-symbols-outlined text-4xl text-primary">assignment_return</span>
             </div>
 
-            <form id="rma-request-form" class="mt-6 space-y-4" method="post" action="<?= htmlspecialchars($this->getUrl('rma/create'), ENT_QUOTES) ?>">
+            <form id="rma-request-form" class="weshop-rma-form" method="post" action="<?= htmlspecialchars($this->getUrl('rma/create'), ENT_QUOTES) ?>">
                 <?= $this->getFormKey($this->getUrl('rma/create')) ?>
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
                     <?= __('Order ID') ?>
@@ -90,14 +266,14 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
                         placeholder="<?= __('Tell us more details about your request') ?>"
                     ></textarea>
                 </label>
-                <button type="button" id="rma-submit" class="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                <button type="button" id="rma-submit" class="weshop-rma-submit">
                     <?= __('Submit Request') ?>
                 </button>
                 <p id="rma-feedback" class="text-sm text-text-secondary-light dark:text-text-secondary-dark"></p>
             </form>
         </article>
 
-        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <article class="weshop-rma-card">
             <div class="flex items-center justify-between gap-4">
                 <div>
                     <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Request Timeline') ?></p>
@@ -107,18 +283,18 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
             </div>
 
             <?php if ($rmaList): ?>
-                <div class="mt-6 space-y-4">
+                <div class="weshop-rma-records">
                     <?php foreach ($rmaList as $record): ?>
-                        <article class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
-                            <div class="flex items-center justify-between gap-3">
-                                <p class="text-base font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Order #%1', (string) ($record['order_id'] ?? '')) ?></p>
-                                <span class="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary"><?= htmlspecialchars((string) ($record['status'] ?? ''), ENT_QUOTES) ?></span>
+                        <article class="weshop-rma-record">
+                            <div class="weshop-rma-record-head">
+                                <p class="text-base font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Order') ?> #<?= (int) ($record['order_id'] ?? 0) ?></p>
+                                <span class="weshop-rma-status"><?= htmlspecialchars((string) ($record['status'] ?? ''), ENT_QUOTES) ?></span>
                             </div>
                             <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($record['reason'] ?? ''), ENT_QUOTES) ?></p>
                             <?php if (!empty($record['description'])): ?>
                                 <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($record['description'] ?? ''), ENT_QUOTES) ?></p>
                             <?php endif; ?>
-                            <p class="mt-3 text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= __('Submitted at: %1', (string) ($record['created_at'] ?? '')) ?></p>
+                            <p class="mt-3 text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= __('Submitted at') ?>: <?= htmlspecialchars((string) ($record['created_at'] ?? ''), ENT_QUOTES) ?></p>
                         </article>
                     <?php endforeach; ?>
                 </div>
@@ -133,7 +309,7 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
             <?php endif; ?>
         </article>
     </section>
-</main>
+</section>
 
 <script>
     (function () {
