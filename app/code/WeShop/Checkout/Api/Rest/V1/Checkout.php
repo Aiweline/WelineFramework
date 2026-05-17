@@ -7,6 +7,7 @@ namespace WeShop\Checkout\Api\Rest\V1;
 use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Checkout\Service\CheckoutPageDataService;
 use WeShop\Customer\Api\CustomerContextInterface;
+use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -15,7 +16,8 @@ class Checkout extends FrontendRestController
     public function __construct(
         private readonly CustomerContextInterface $customerContext,
         private readonly CheckoutPageDataService $checkoutPageDataService,
-        private readonly ?CartIdentityService $cartIdentityService = null
+        private readonly ?CartIdentityService $cartIdentityService = null,
+        private readonly ?CheckoutIdentityService $checkoutIdentityService = null
     ) {
     }
 
@@ -26,20 +28,31 @@ class Checkout extends FrontendRestController
 
     public function postMethods(): string
     {
-        $customerId = (int) ($this->customerContext->getUserId() ?? 0);
-        $isGuestCheckout = $customerId <= 0;
-        if ($customerId <= 0) {
-            $customerId = $this->getCartIdentityService()->getCartCustomerId();
-        }
+        $authenticatedCustomerId = (int) ($this->customerContext->getUserId() ?? 0);
+        $cartCustomerId = $this->getCartIdentityService()->getCartCustomerId();
+        $checkoutIdentity = $this->getCheckoutIdentityService()->resolve([
+            'checkout_mode' => (string) ($this->readRequestValue('checkout_mode') ?? ''),
+            'customer_id' => $cartCustomerId,
+            'cart_customer_id' => $cartCustomerId,
+            'authenticated_customer_id' => $authenticatedCustomerId,
+            'guest_email' => (string) ($this->readRequestValue('guest_email') ?? $this->readRequestValue('email') ?? ''),
+            'guest_allowed' => true,
+            'customer_allowed' => $authenticatedCustomerId > 0,
+        ]);
+        $isGuestCheckout = !empty($checkoutIdentity['is_guest_checkout']);
 
         try {
-            $data = $this->checkoutPageDataService->buildDynamicMethodData($customerId, [
-                'shipping_address_id' => (int) ($this->readRequestValue('shipping_address_id') ?? 0),
+            $data = $this->checkoutPageDataService->buildDynamicMethodData($cartCustomerId, [
+                'shipping_address_id' => $isGuestCheckout ? 0 : (int) ($this->readRequestValue('shipping_address_id') ?? 0),
                 'shipping_address' => $this->readShippingAddress(),
                 'shipping_method' => (string) ($this->readRequestValue('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->readRequestValue('payment_method') ?? ''),
                 'order_id' => (int) (($this->readRequestValue('order_id') ?? $this->readRequestValue('retry_order_id')) ?? 0),
+                'checkout_mode' => (string) ($checkoutIdentity['checkout_mode'] ?? CheckoutIdentityService::MODE_GUEST),
                 'is_guest_checkout' => $isGuestCheckout,
+                'guest_email' => (string) ($checkoutIdentity['guest_email'] ?? ''),
+                'cart_customer_id' => $cartCustomerId,
+                'authenticated_customer_id' => $authenticatedCustomerId,
             ]);
 
             return $this->fetchJson([
@@ -98,6 +111,11 @@ class Checkout extends FrontendRestController
     private function getCartIdentityService(): CartIdentityService
     {
         return $this->cartIdentityService ?? ObjectManager::getInstance(CartIdentityService::class);
+    }
+
+    private function getCheckoutIdentityService(): CheckoutIdentityService
+    {
+        return $this->checkoutIdentityService ?? ObjectManager::getInstance(CheckoutIdentityService::class);
     }
 
     /**
