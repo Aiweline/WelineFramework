@@ -102,16 +102,8 @@ if ($customer) {
             applyBtn.textContent = '<?= __('Applying...') ?>';
             
             try {
-                const response = await fetch('/coupon/apply', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: JSON.stringify({ code }),
-                });
-                
-                const result = await response.json();
+                const CouponApi = await Weline.Api.resource('coupon');
+                const result = await CouponApi.apply({ code });
                 
                 if (result.success) {
                     // 刷新页面以显示折扣
@@ -134,10 +126,8 @@ if ($customer) {
     if (removeBtn) {
         removeBtn.addEventListener('click', async () => {
             try {
-                await fetch('/coupon/remove', {
-                    method: 'POST',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                });
+                const CouponApi = await Weline.Api.resource('coupon');
+                await CouponApi.remove({});
                 location.reload();
             } catch (error) {
                 console.error('Failed to remove coupon:', error);

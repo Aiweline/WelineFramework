@@ -88,6 +88,9 @@ class AiSiteAgent extends BaseController
     private const OBSERVER_QUEUE_SETTLE_DELAY_MS = 3000;
     private const BUILD_TASK_MAX_GENERATION_ATTEMPTS = 3;
     private const PAGE_SECTION_BUILD_DISPATCH_WINDOW = 3;
+    private const AI_SITE_QUEUE_CONTENT_LIGHT_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key';
+    private const AI_SITE_QUEUE_CONTENT_PAYLOAD_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key,content,process,result';
+    private const AI_SITE_QUEUE_MAX_CONTENT_JSON_DECODE_BYTES = 262144;
 
     private readonly AiSiteAgentSessionService $sessionService;
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
@@ -2381,7 +2384,7 @@ class AiSiteAgent extends BaseController
     private function createOrReuseAiSiteAssetQueue(string $bizKey, string $queueName, array $content): array
     {
         $queueClass = \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class;
-        $existing = $this->findAiSiteQueueRowByBizKey($bizKey);
+        $existing = $this->findAiSiteQueueRowByBizKey($bizKey, true);
         if (\is_array($existing) && $existing !== []) {
             $queueId = (int)($existing['queue_id'] ?? $existing['id'] ?? 0);
             if ($queueId > 0) {
@@ -3138,7 +3141,7 @@ class AiSiteAgent extends BaseController
         int $queueId
     ): array {
         try {
-            $queueRow = w_query('queue', 'get', ['queue_id' => $queueId]);
+            $queueRow = $this->findAiSiteQueueRowById($queueId);
         } catch (\Throwable) {
             return [];
         }
@@ -7588,6 +7591,58 @@ class AiSiteAgent extends BaseController
                 }
                 $result['normalized'] = $normalized;
             }
+            $incompleteBuildTasks = $this->countIncompleteBuildTasks($taskSummary);
+            if ($incompleteBuildTasks > 0 && \in_array($queueStatus, ['done', 'error', 'stop'], true)) {
+                $now = \date('Y-m-d H:i:s');
+                $failure = [
+                    'blocked' => true,
+                    'reason' => 'failed_build_tasks',
+                    'queue_id' => $queueId,
+                    'queue_status' => $queueStatus,
+                    'message' => 'Build queue reached terminal state while build tasks are still incomplete.',
+                    'task_summary' => $taskSummary,
+                ];
+                $failedOperation = \array_replace(
+                    \is_array($freshScope['active_operation'] ?? null) ? $freshScope['active_operation'] : $activeOperation,
+                    [
+                        'operation' => 'build',
+                        'status' => 'error',
+                        'message' => (string)__(
+                            'Build queue cannot continue: terminal queue state %{1} with %{2} incomplete build tasks.',
+                            [$queueStatus !== '' ? $queueStatus : 'unknown', $incompleteBuildTasks]
+                        ),
+                        'progress_percent' => 100,
+                        'queue_waiting_for_scheduler' => false,
+                        'can_close_stream' => true,
+                        'continue_other_operations' => false,
+                        'failure_mode' => 'build_failed',
+                        'retry_allowed' => 0,
+                        'updated_at' => $now,
+                    ]
+                );
+                $freshScope = $this->writeActiveOperationStateToScope($freshScope, $failedOperation);
+                $freshScope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+                $freshScope['build_task_summary'] = $taskSummary;
+                $freshScope['latest_build_failed'] = 1;
+                $freshScope['latest_build_failure'] = $failure;
+                $freshScope['publish_blocked_by_latest_ai_failure'] = 1;
+                $freshScope['publish_blocked_reason'] = $this->formatPublishBlockedByAiFailureMessage($failure);
+                if (\is_array($freshScope['build_summary'] ?? null)) {
+                    $freshScope['build_summary'] = \array_replace($freshScope['build_summary'], [
+                        'active_operation' => 'build',
+                        'can_publish' => false,
+                        'last_failed_at' => $now,
+                    ]);
+                    unset($freshScope['build_summary']['task_summary']);
+                }
+                $this->sessionService->replaceScope($fresh->getId(), $adminId, $freshScope);
+
+                $normalized = $freshScope;
+                $result['normalized'] = $normalized;
+                $result['active_operation'] = $failedOperation;
+                $result['task_summary'] = $taskSummary;
+                return $result;
+            }
             if (!$this->isBuildPlanReadyForBuild($normalized) || $this->countIncompleteBuildTasks($taskSummary) <= 0) {
                 if ($this->isBuildPlanReadyForBuild($normalized) && $this->countIncompleteBuildTasks($taskSummary) <= 0) {
                     $now = \date('Y-m-d H:i:s');
@@ -7763,18 +7818,13 @@ class AiSiteAgent extends BaseController
      */
     private function resolveQueueExecutionToken(?array $queueRow, array $activeOperation): string
     {
-        $content = $queueRow['content'] ?? null;
-        if (\is_string($content)) {
-            $decoded = \json_decode($content, true);
-            $content = \is_array($decoded) ? $decoded : [];
-        }
-        if (!\is_array($content)) {
-            $content = [];
-        }
+        $content = $this->decodeAiSiteQueueRowContent($queueRow);
         foreach ([
             $activeOperation['execution_token'] ?? '',
             $content['execution_token'] ?? '',
             $content['token'] ?? '',
+            $this->extractAiSiteQueueContentString($queueRow, 'execution_token'),
+            $this->extractAiSiteQueueContentString($queueRow, 'token'),
         ] as $candidate) {
             $token = \trim((string)$candidate);
             if ($token !== '') {
@@ -8146,10 +8196,76 @@ class AiSiteAgent extends BaseController
         if (!\is_string($content) || \trim($content) === '') {
             return [];
         }
+        if (\strlen($content) > self::AI_SITE_QUEUE_MAX_CONTENT_JSON_DECODE_BYTES) {
+            return $this->extractAiSiteQueueContentEnvelope($content);
+        }
 
         $decoded = \json_decode($content, true);
 
         return \is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function extractAiSiteQueueContentEnvelope(string $content): array
+    {
+        $summary = [];
+        foreach (['public_id', 'job_key', 'job_type', 'status', 'token', 'execution_token', 'operation'] as $key) {
+            $value = $this->extractJsonStringValue($content, $key);
+            if ($value !== '') {
+                $summary[$key] = $value;
+            }
+        }
+        foreach (['admin_id', 'session_id'] as $key) {
+            $value = $this->extractJsonIntegerValue($content, $key);
+            if ($value !== null) {
+                $summary[$key] = $value;
+            }
+        }
+
+        return $summary;
+    }
+
+    private function extractAiSiteQueueContentString(?array $queueRow, string $key): string
+    {
+        if (!\is_array($queueRow)) {
+            return '';
+        }
+        $content = $queueRow['content'] ?? null;
+        if (\is_array($content)) {
+            return \trim((string)($content[$key] ?? ''));
+        }
+        if (!\is_string($content) || \trim($content) === '') {
+            return '';
+        }
+        if (\strlen($content) <= self::AI_SITE_QUEUE_MAX_CONTENT_JSON_DECODE_BYTES) {
+            $decoded = \json_decode($content, true);
+            if (\is_array($decoded)) {
+                return \trim((string)($decoded[$key] ?? ''));
+            }
+        }
+
+        return $this->extractJsonStringValue($content, $key);
+    }
+
+    private function extractJsonStringValue(string $json, string $key): string
+    {
+        if (\preg_match('/"' . \preg_quote($key, '/') . '"\s*:\s*"((?:\\\\.|[^"\\\\])*)"/', $json, $match) !== 1) {
+            return '';
+        }
+        $decoded = \json_decode('"' . $match[1] . '"');
+
+        return \is_string($decoded) ? \trim($decoded) : '';
+    }
+
+    private function extractJsonIntegerValue(string $json, string $key): ?int
+    {
+        if (\preg_match('/"' . \preg_quote($key, '/') . '"\s*:\s*(\d+)/', $json, $match) !== 1) {
+            return null;
+        }
+
+        return (int)$match[1];
     }
 
     /**
@@ -9827,11 +9943,13 @@ class AiSiteAgent extends BaseController
     {
         $snapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
         return \strtolower(\trim((string)(
-            $snapshot['job_status']
+            $queueInfo['status']
+            ?? $queueInfo['queue_status']
+            ?? $queueInfo['state']
+            ?? $queueInfo['job_status']
+            ?? $snapshot['job_status']
             ?? $snapshot['status']
             ?? $snapshot['queue_status']
-            ?? $queueInfo['queue_status']
-            ?? $queueInfo['status']
             ?? ''
         )));
     }
@@ -11321,7 +11439,7 @@ class AiSiteAgent extends BaseController
         $queueId = (int)($operationState['queue_id'] ?? 0);
         if ($queueId > 0) {
             try {
-                $queueRow = w_query('queue', 'get', ['queue_id' => $queueId]);
+                $queueRow = $this->findAiSiteQueueRowById($queueId);
             } catch (\Throwable) {
                 $queueRow = null;
             }
@@ -11531,7 +11649,7 @@ class AiSiteAgent extends BaseController
         }
 
         try {
-            $queueRow = w_query('queue', 'get', ['queue_id' => $queueId]);
+            $queueRow = $this->findAiSiteQueueRowById($queueId);
         } catch (\Throwable) {
             return [];
         }
@@ -12098,7 +12216,7 @@ class AiSiteAgent extends BaseController
         int $queueId = 0
     ): ?array {
         if ($queueId > 0) {
-            $row = w_query('queue', 'get', ['queue_id' => $queueId]);
+            $row = $this->findAiSiteQueueRowById($queueId);
             if (\is_array($row) && $row !== [] && $this->isAiSiteQueueRowForOperation($row, $operation)) {
                 return $row;
             }
@@ -12144,10 +12262,16 @@ class AiSiteAgent extends BaseController
             return false;
         }
 
+        $bizKeyMatch = $this->resolveAiSiteQueueRowBizKeyOperationMatch($row, $operation);
+        if ($bizKeyMatch !== null) {
+            return $bizKeyMatch;
+        }
+
         $content = $row['content'] ?? null;
         if (\is_string($content)) {
-            $decoded = \json_decode($content, true);
-            $content = \is_array($decoded) ? $decoded : null;
+            $content = \strlen($content) > self::AI_SITE_QUEUE_MAX_CONTENT_JSON_DECODE_BYTES
+                ? $this->extractAiSiteQueueContentEnvelope($content)
+                : (\is_array($decoded = \json_decode($content, true)) ? $decoded : null);
         }
 
         if (\is_array($content)) {
@@ -12161,11 +12285,6 @@ class AiSiteAgent extends BaseController
                 $expectedJobType = $this->resolveAiSiteQueueJobType($operation);
                 return $expectedJobType !== '' && $contentJobType === $expectedJobType;
             }
-        }
-
-        $bizKeyMatch = $this->resolveAiSiteQueueRowBizKeyOperationMatch($row, $operation);
-        if ($bizKeyMatch !== null) {
-            return $bizKeyMatch;
         }
 
         return false;
@@ -12200,14 +12319,41 @@ class AiSiteAgent extends BaseController
     /**
      * @return array<string, mixed>|null
      */
-    private function findAiSiteQueueRowByBizKey(string $bizKey): ?array
+    private function findAiSiteQueueRowById(int $queueId, bool $includePayload = false): ?array
+    {
+        if ($queueId <= 0) {
+            return null;
+        }
+
+        try {
+            /** @var \Weline\Queue\Model\Queue $queue */
+            $queue = clone ObjectManager::getInstance(\Weline\Queue\Model\Queue::class);
+            $rows = $queue->clearData()
+                ->reset()
+                ->fields($includePayload ? self::AI_SITE_QUEUE_CONTENT_PAYLOAD_FIELDS : self::AI_SITE_QUEUE_CONTENT_LIGHT_FIELDS)
+                ->where(\Weline\Queue\Model\Queue::schema_fields_ID, $queueId)
+                ->limit(1)
+                ->select()
+                ->fetchArray();
+            $row = \is_array($rows[0] ?? null) ? $rows[0] : [];
+
+            return $row !== [] ? $row : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findAiSiteQueueRowByBizKey(string $bizKey, bool $includePayload = false): ?array
     {
         $bizKey = \trim($bizKey);
         if ($bizKey === '') {
             return null;
         }
 
-        $rows = $this->findAiSiteQueueRowsByBizKey($bizKey);
+        $rows = $this->findAiSiteQueueRowsByBizKey($bizKey, $includePayload);
 
         return $rows[0] ?? null;
     }
@@ -12215,7 +12361,7 @@ class AiSiteAgent extends BaseController
     /**
      * @return list<array<string, mixed>>
      */
-    private function findAiSiteQueueRowsByBizKey(string $bizKey): array
+    private function findAiSiteQueueRowsByBizKey(string $bizKey, bool $includePayload = false): array
     {
         $bizKey = \trim($bizKey);
         if ($bizKey === '') {
@@ -12225,13 +12371,14 @@ class AiSiteAgent extends BaseController
         try {
             /** @var \Weline\Queue\Model\Queue $queue */
             $queue = clone ObjectManager::getInstance(\Weline\Queue\Model\Queue::class);
-            $queue->clearData()
+            $items = $queue->clearData()
                 ->reset()
+                ->fields($includePayload ? self::AI_SITE_QUEUE_CONTENT_PAYLOAD_FIELDS : self::AI_SITE_QUEUE_CONTENT_LIGHT_FIELDS)
                 ->where(\Weline\Queue\Model\Queue::schema_fields_BIZ_KEY, $bizKey)
                 ->order(\Weline\Queue\Model\Queue::schema_fields_ID, 'DESC')
+                ->limit(20)
                 ->select()
-                ->fetch();
-            $items = $queue->getItems();
+                ->fetchArray();
             if (!\is_array($items) || $items === []) {
                 return [];
             }

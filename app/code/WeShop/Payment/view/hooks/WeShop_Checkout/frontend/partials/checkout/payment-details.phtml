@@ -70,7 +70,7 @@ foreach ($paymentMethods as $paymentMethod) {
         >
             <div class="weshop-checkout-payment-detail-title"><?= htmlspecialchars($title, ENT_QUOTES) ?></div>
             <?php if ($flowLabel !== ''): ?>
-                <div class="weshop-checkout-payment-detail-meta"><?= __('Payment flow: %{1}', $flowLabel) ?></div>
+                <div class="weshop-checkout-payment-detail-meta"><?= __('支付流程：%{1}', $flowLabel) ?></div>
             <?php endif; ?>
             <?php if ($checkoutNote !== ''): ?>
                 <div class="weshop-checkout-payment-detail-meta"><?= htmlspecialchars($checkoutNote, ENT_QUOTES) ?></div>

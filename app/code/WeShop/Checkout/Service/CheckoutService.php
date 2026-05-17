@@ -10,6 +10,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
+use Weline\Checkout\Service\CheckoutIdentityService;
 
 class CheckoutService
 {
@@ -22,18 +23,23 @@ class CheckoutService
 
     public function createOrderFromCart(int $customerId, array $checkoutData): Order
     {
+        $cartCustomerId = max(0, (int) ($checkoutData['cart_customer_id'] ?? $customerId));
+        if ($cartCustomerId <= 0) {
+            $cartCustomerId = $customerId;
+        }
+
         $cartItems = $this->query('cart', 'getCartItems', [
-            'customer_id' => $customerId,
+            'customer_id' => $cartCustomerId,
         ]);
         $cartItems = \is_array($cartItems) ? $cartItems : [];
 
         $totals = $this->query('cart', 'calculateTotals', [
-            'customer_id' => $customerId,
+            'customer_id' => $cartCustomerId,
         ]);
         $totals = \is_array($totals) ? $totals : [];
 
         if ($cartItems === []) {
-            throw new \Exception((string) __('The cart is empty and cannot be checked out.'));
+            throw new \Exception((string) __('购物车为空，无法结账。'));
         }
 
         $summary = $this->buildCheckoutSummary($cartItems, $totals, $checkoutData);
@@ -53,7 +59,7 @@ class CheckoutService
             ],
         ]);
         if (!\is_array($orderSummary) || (int) ($orderSummary['order_id'] ?? 0) <= 0) {
-            throw new \Exception((string) __('Order creation failed.'));
+            throw new \Exception((string) __('订单创建失败。'));
         }
 
         $orderId = (int) ($orderSummary['order_id'] ?? 0);
@@ -84,12 +90,12 @@ class CheckoutService
         }
 
         $this->query('cart', 'clearCart', [
-            'customer_id' => $customerId,
+            'customer_id' => $cartCustomerId,
         ]);
 
         $order = $this->orderService->getOrder($orderId);
         if (!$order) {
-            throw new \Exception((string) __('Order creation failed.'));
+            throw new \Exception((string) __('订单创建失败。'));
         }
 
         $order->setData('weshop_checkout_summary', $summary);
@@ -97,6 +103,9 @@ class CheckoutService
         $eventData = [
             'order' => $order,
             'customer_id' => $customerId,
+            'cart_customer_id' => $cartCustomerId,
+            'is_guest_checkout' => !empty($checkoutData['is_guest_checkout']),
+            'checkout_mode' => (string) ($checkoutData['checkout_mode'] ?? ''),
         ];
         $this->getEventsManager()->dispatch('WeShop_Checkout::order_created', $eventData);
 
@@ -147,7 +156,7 @@ class CheckoutService
 
         $customerId = (int) ($checkoutData['customer_id'] ?? 0);
         if ($customerId <= 0) {
-            throw new \InvalidArgumentException((string) __('A customer account is required to place an order.'));
+            throw new \InvalidArgumentException((string) __('提交订单需要结账身份。'));
         }
 
         $retryOrderId = (int) ($checkoutData['order_id'] ?? $checkoutData['retry_order_id'] ?? 0);
@@ -203,17 +212,27 @@ class CheckoutService
 
     public function validateCheckoutData(array $checkoutData): bool
     {
+        $this->getCheckoutIdentityService()->validateGuestCheckout([
+            'checkout_mode' => (string) ($checkoutData['checkout_mode'] ?? ''),
+            'is_guest_checkout' => !empty($checkoutData['is_guest_checkout']),
+            'guest_email' => (string) ($checkoutData['guest_email'] ?? $checkoutData['email'] ?? ''),
+            'customer_id' => (int) ($checkoutData['customer_id'] ?? 0),
+            'cart_customer_id' => (int) ($checkoutData['cart_customer_id'] ?? $checkoutData['customer_id'] ?? 0),
+            'authenticated_customer_id' => (int) ($checkoutData['authenticated_customer_id'] ?? 0),
+            'requires_guest_email' => true,
+        ], $checkoutData);
+
         $shippingAddress = $this->normalizeShippingAddress($checkoutData);
         if ($shippingAddress === []) {
-            throw new \InvalidArgumentException((string) __('Shipping address information is required.'));
+            throw new \InvalidArgumentException((string) __('请填写收货地址信息。'));
         }
 
         if (empty($checkoutData['shipping_method'])) {
-            throw new \InvalidArgumentException((string) __('Shipping method is required.'));
+            throw new \InvalidArgumentException((string) __('请选择配送方式。'));
         }
 
         if (empty($checkoutData['payment_method'])) {
-            throw new \InvalidArgumentException((string) __('Payment method is required.'));
+            throw new \InvalidArgumentException((string) __('请选择支付方式。'));
         }
 
         $this->b2bCheckoutValidator?->validate($checkoutData);
@@ -264,6 +283,10 @@ class CheckoutService
         $checkoutData['shipping_method'] = (string) ($checkoutData['shipping_method'] ?? '');
         $checkoutData['payment_method'] = (string) ($checkoutData['payment_method'] ?? '');
         $checkoutData['order_id'] = (int) ($checkoutData['order_id'] ?? $checkoutData['retry_order_id'] ?? 0);
+        $checkoutData['cart_customer_id'] = max(0, (int) ($checkoutData['cart_customer_id'] ?? $checkoutData['customer_id'] ?? 0));
+        $checkoutData['checkout_mode'] = (string) ($checkoutData['checkout_mode'] ?? (!empty($checkoutData['is_guest_checkout']) ? CheckoutIdentityService::MODE_GUEST : CheckoutIdentityService::MODE_CUSTOMER));
+        $checkoutData['is_guest_checkout'] = $this->getCheckoutIdentityService()->normalizeMode($checkoutData['checkout_mode']) === CheckoutIdentityService::MODE_GUEST
+            || !empty($checkoutData['is_guest_checkout']);
 
         return $checkoutData;
     }
@@ -381,6 +404,11 @@ class CheckoutService
     protected function normalizeShippingAddress(array $checkoutData): array
     {
         $address = is_array($checkoutData['shipping_address'] ?? null) ? $checkoutData['shipping_address'] : [];
+        $guestEmail = trim((string) ($checkoutData['guest_email'] ?? $checkoutData['email'] ?? ''));
+        if ($guestEmail !== '' && empty($address['email'])) {
+            $address['email'] = $guestEmail;
+        }
+
         $addressId = (int) ($checkoutData['shipping_address_id'] ?? 0);
         if ($addressId <= 0) {
             return $address;
@@ -480,6 +508,11 @@ class CheckoutService
         return ObjectManager::getInstance(EventsManager::class);
     }
 
+    protected function getCheckoutIdentityService(): CheckoutIdentityService
+    {
+        return ObjectManager::getInstance(CheckoutIdentityService::class);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -498,7 +531,7 @@ class CheckoutService
     {
         $context = $this->orderService->getRetryPaymentContext($orderId, $customerId);
         if (!\is_array($context) || !($context['order'] ?? null) instanceof Order) {
-            throw new \InvalidArgumentException((string) __('This order can no longer be retried.'));
+            throw new \InvalidArgumentException((string) __('该订单已无法重新支付。'));
         }
 
         /** @var Order $order */

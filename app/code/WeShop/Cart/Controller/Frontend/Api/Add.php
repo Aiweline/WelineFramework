@@ -21,6 +21,9 @@ class Add extends FrontendController
 
     public function index(): void
     {
+        $this->deprecatedBrowserDirectResponse("Weline.Api.resource('cart').add()");
+        return;
+
         header('Content-Type: application/json');
 
         try {
@@ -137,6 +140,9 @@ class Add extends FrontendController
 
     public function getOptions(): void
     {
+        $this->deprecatedBrowserDirectResponse("Weline.Api.resource('cart').options()");
+        return;
+
         header('Content-Type: application/json');
 
         try {
@@ -197,5 +203,21 @@ class Add extends FrontendController
             'message' => $message,
             'code' => $code,
         ], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function deprecatedBrowserDirectResponse(string $replacement): void
+    {
+        http_response_code(410);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo json_encode([
+            'code' => 410,
+            'msg' => (string)__('Direct browser cart API is deprecated. Use the frontend worker API.'),
+            'data' => [
+                'deprecated' => true,
+                'browser_direct' => false,
+                'replacement' => $replacement,
+            ],
+        ], JSON_UNESCAPED_UNICODE) ?: '{}';
     }
 }
