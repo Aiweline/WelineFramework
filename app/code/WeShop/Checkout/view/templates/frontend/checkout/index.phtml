@@ -842,7 +842,54 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             alertBox.classList.toggle('is-error', type === 'error');
         }
 
+        function selectedCheckoutMode() {
+            var checked = form.querySelector('input[name="checkout_mode"]:checked');
+            return checked ? checked.value : 'guest';
+        }
+
+        function isGuestCheckoutMode() {
+            return selectedCheckoutMode() === 'guest';
+        }
+
+        function syncCheckoutModeState(shouldRefresh) {
+            var guestMode = isGuestCheckoutMode();
+            if (checkoutShell) {
+                checkoutShell.setAttribute('data-weshop-checkout-mode', guestMode ? 'guest' : 'customer');
+            }
+            if (contactModeLabel) {
+                contactModeLabel.textContent = guestMode ? '<?= __('无需账户') ?>' : '<?= __('账户邮箱') ?>';
+            }
+            if (contactHelp) {
+                contactHelp.textContent = guestMode
+                    ? (contactHelp.getAttribute('data-guest-help') || '')
+                    : (contactHelp.getAttribute('data-customer-help') || '');
+            }
+            if (submitButton) {
+                submitButton.textContent = guestMode
+                    ? (submitButton.getAttribute('data-guest-label') || submitButton.textContent)
+                    : (submitButton.getAttribute('data-customer-label') || submitButton.textContent);
+            }
+            if (savedAddressList) {
+                savedAddressList.hidden = guestMode;
+            }
+            if (guestMode) {
+                var newAddressOption = form.querySelector('input[name="shipping_address_id"][value="0"]');
+                if (newAddressOption) {
+                    newAddressOption.checked = true;
+                }
+            }
+
+            syncAddressRequiredState();
+            if (shouldRefresh !== false) {
+                scheduleCheckoutMethodRefresh();
+            }
+        }
+
         function selectedSavedAddressId() {
+            if (isGuestCheckoutMode()) {
+                return 0;
+            }
+
             var checked = form.querySelector('input[name="shipping_address_id"]:checked');
             if (checked) {
                 return parseInt(checked.value || '0', 10) || 0;
@@ -1002,7 +1049,18 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                 return;
             }
 
+            if (target.name === 'checkout_mode') {
+                syncCheckoutModeState(true);
+                return;
+            }
+
             if (target.name === 'shipping_address_id') {
+                if (isGuestCheckoutMode()) {
+                    var newAddressOption = form.querySelector('input[name="shipping_address_id"][value="0"]');
+                    if (newAddressOption) {
+                        newAddressOption.checked = true;
+                    }
+                }
                 syncAddressRequiredState();
                 scheduleCheckoutMethodRefresh();
                 return;
