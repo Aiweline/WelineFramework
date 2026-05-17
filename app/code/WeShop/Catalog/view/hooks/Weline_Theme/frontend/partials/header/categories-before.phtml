@@ -78,6 +78,13 @@ if (empty($navItems)) {
                 }
             endforeach;
             ?>
+            <li class="categories-overflow-wrapper" id="categories-overflow-wrapper" style="display: none;">
+                <button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="更多分类" aria-expanded="false" type="button">
+                    <span>更多</span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true"></ul>
+            </li>
         </ul>
     </nav>
 </div>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Cart\Controller\Frontend\Cart;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Cart\Service\CartService;
@@ -73,6 +74,8 @@ class Add extends FrontendController
             }
 
             $this->redirectBack();
+        } catch (ResponseTerminateException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError(__('Add to cart failed: %{1}', $e->getMessage()));
             $this->redirectBack();

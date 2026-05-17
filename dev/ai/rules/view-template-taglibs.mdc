@@ -5,7 +5,7 @@ alwaysApply: true
 
 # 视图模板：优先标签语法（全局）
 
-与 `dev/ai/global-constraints.md`「必做」中的视图条目一致。
+与 `dev/ai/global-constraints.md` 第 7 节「必做」及第 8 节「布局文件（layout）约定」一致。layout 与 Hook/widget 模板分工不同，见 `layout-files-convention.mdc`。
 
 ## 要求
 

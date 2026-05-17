@@ -24,6 +24,8 @@ namespace GuoLaiRen\PageBuilder\Service;
  */
 class AiSiteAgentQueueObserverHelperService
 {
+    private const MAX_CONTENT_JSON_DECODE_BYTES = 262144;
+
     /**
      * 对 plan 这类"自带 SSE 事件流"的 operation，抑制 queue process 镜像转发；
      * 其它 operation 走默认 process 镜像。保持与原 AiSiteAgent 私有方法语义一致。
@@ -125,6 +127,10 @@ class AiSiteAgentQueueObserverHelperService
     public function buildPanelPayload(array $queueRow, array $snapshot): array
     {
         $process = \trim((string)($queueRow['process'] ?? ''));
+        $processMax = 4000;
+        if (\strlen($process) > $processMax) {
+            $process = '...(showing last ' . $processMax . ' chars)' . "\n" . \substr($process, -$processMax);
+        }
         $result = $this->sanitizePlanningQueueResultLog($queueRow);
         $max = 24000;
         if (\strlen($result) > $max) {
@@ -133,6 +139,9 @@ class AiSiteAgentQueueObserverHelperService
 
         return [
             'queue_id' => (int)($snapshot['queue_id'] ?? 0),
+            'status' => (string)($snapshot['status'] ?? ''),
+            'queue_status' => (string)($snapshot['status'] ?? ''),
+            'job_status' => (string)($snapshot['job_status'] ?? ''),
             'snapshot' => $snapshot,
             'process' => $process,
             'result_log' => $result,
@@ -431,8 +440,18 @@ class AiSiteAgentQueueObserverHelperService
      */
     private function resolveQueueRowOperation(array $queueRow): string
     {
+        $operationFromBizKey = $this->resolveQueueRowOperationFromBizKey($queueRow);
+        if ($operationFromBizKey !== '') {
+            return $operationFromBizKey;
+        }
         $content = $queueRow['content'] ?? null;
         if (\is_string($content) && \trim($content) !== '') {
+            if (\strlen($content) > self::MAX_CONTENT_JSON_DECODE_BYTES) {
+                return $this->normalizeQueueOperationHint(
+                    $this->extractJsonStringValue($content, 'operation')
+                    ?: $this->extractJsonStringValue($content, 'job_type')
+                );
+            }
             $decoded = \json_decode($content, true);
             if (\is_array($decoded)) {
                 return $this->normalizeQueueOperationHint(\trim((string)($decoded['operation'] ?? $decoded['job_type'] ?? '')));
@@ -443,6 +462,33 @@ class AiSiteAgentQueueObserverHelperService
         }
 
         return '';
+    }
+
+    private function resolveQueueRowOperationFromBizKey(array $queueRow): string
+    {
+        $bizKey = \trim((string)($queueRow['biz_key'] ?? ''));
+        if ($bizKey === '') {
+            return '';
+        }
+        if (\preg_match('/(?:^|:)queue_slot:([^:]+)/', $bizKey, $slotMatch) === 1) {
+            $slot = \trim((string)($slotMatch[1] ?? ''));
+            return $slot === 'planning' ? 'plan' : $slot;
+        }
+        if (\preg_match('/(?:^|:)operation:([^:]+)/', $bizKey, $operationMatch) === 1) {
+            return \trim((string)($operationMatch[1] ?? ''));
+        }
+
+        return '';
+    }
+
+    private function extractJsonStringValue(string $json, string $key): string
+    {
+        if (\preg_match('/"' . \preg_quote($key, '/') . '"\s*:\s*"((?:\\\\.|[^"\\\\])*)"/', $json, $match) !== 1) {
+            return '';
+        }
+        $decoded = \json_decode('"' . $match[1] . '"');
+
+        return \is_string($decoded) ? \trim($decoded) : '';
     }
 
     private function normalizeQueueOperationHint(string $value): string

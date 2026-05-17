@@ -183,6 +183,13 @@ class PublicApiAuthRouteMatcher
             return false;
         }
 
+        if (
+            $controllerClass === \Weline\Framework\Controller\Api\QueryBin::class
+            || is_subclass_of($controllerClass, \Weline\Framework\Controller\Api\QueryBin::class)
+        ) {
+            return false;
+        }
+
         if (!is_subclass_of($controllerClass, \Weline\Framework\App\Controller\FrontendRestController::class)) {
             return false;
         }

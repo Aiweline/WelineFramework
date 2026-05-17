@@ -72,8 +72,8 @@ class SearchPageDataService
         if ($total <= 0) {
             return [
                 'label' => $keyword === ''
-                    ? (string) __('Search for products, brands, and categories.')
-                    : (string) __('No results found yet.'),
+                    ? (string) __('搜索商品、品牌或分类。')
+                    : (string) __('暂未找到匹配结果。'),
                 'from' => 0,
                 'to' => 0,
             ];
@@ -83,7 +83,7 @@ class SearchPageDataService
         $to = min($page * $pageSize, $total);
 
         return [
-            'label' => (string) __('Showing %{1}-%{2} of %{3} results', [$from, $to, $total]),
+            'label' => (string) __('显示第 %{1}-%{2} 个，共 %{3} 个结果', [$from, $to, $total]),
             'from' => $from,
             'to' => $to,
         ];
@@ -113,7 +113,7 @@ class SearchPageDataService
         $orderBy = trim((string) ($requestFilters['order_by'] ?? ''));
         if ($orderBy !== '') {
             $activeFilters[] = [
-                'label' => (string) __('Sort'),
+                'label' => (string) __('排序'),
                 'value' => trim($orderBy . ' ' . strtoupper((string) ($requestFilters['order_dir'] ?? 'desc'))),
                 'remove_url' => '',
             ];

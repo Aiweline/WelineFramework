@@ -49,6 +49,7 @@ This skill owns theme-level template work, source-template editing, layout-aware
 - Use i18n for user-facing text.
 - Do not use JavaScript `alert`, `confirm`, or `prompt`.
 - Do not add direct frontend requests with `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or equivalent helpers in theme templates or module scripts; declare/register JS behavior and call the built-in `weline-api` through `theme.js` so requests run through the worker path.
+- For station-internal business APIs, use `Weline.Api.resource('provider')`, `Weline.Api.graph()`, or `Weline.Api.stream()`; do not handwrite `/api/framework/query-bin` or REST business URLs in templates.
 
 # Inputs Required
 

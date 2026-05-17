@@ -12,7 +12,7 @@
  *   Weline.declare('account', true); // 声明并立即加载
  *   Weline.declare('search', true, 'path', null, { loadOrder: 'last' }); // 声明并延迟立即加载（DOMContentLoaded后）
  *   Weline.load('api'); // 立即加载模块
- *   Weline.Api.request(url, options); // 使用模块（自动按需加载）
+ *   const CartApi = await Weline.Api.resource('cart'); // 通过 worker 调用站内前端 API
  *   Weline.Theme.switch('dark'); // 主题切换
  * 
  * 延迟立即加载：
@@ -1514,6 +1514,22 @@
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.request(url, options);
             },
+            call: async (provider, operation, params = {}, options = {}) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.call(provider, operation, params, options);
+            },
+            graph: async (graph, options = {}) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.graph(graph, options);
+            },
+            stream: async (channel, params = {}, options = {}) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.stream(channel, params, options);
+            },
+            resource: async (provider, optionalMap) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.resource(provider, optionalMap);
+            },
             markCartActive: async () => {
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.markCartActive();
@@ -1538,26 +1554,10 @@
 
         Query: {
             request: async (provider, operation, params = {}, options = {}) => {
-                const area = options.area || 'frontend';
-                const queryConfig = runtimeConfig.query || {};
-                const frontendUrl = queryConfig.frontendUrl || '/api/framework/query';
-                const backendUrl = queryConfig.backendUrl || '/api_admin/framework/query';
-                const endpoint = area === 'backend' ? backendUrl : frontendUrl;
-                const response = await Weline.Api.request(endpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        provider: provider,
-                        operation: operation,
-                        params: params
-                    })
-                });
-                if (!response || response.code !== 200) {
-                    throw new Error((response && response.msg) ? response.msg : __('查询失败'));
+                if ((options.area || 'frontend') !== 'frontend') {
+                    throw new Error('[Weline.Query] browser backend query is disabled; use backend code or External API.');
                 }
-                return response.data;
+                return Weline.Api.call(provider, operation, params, options);
             }
         },
 

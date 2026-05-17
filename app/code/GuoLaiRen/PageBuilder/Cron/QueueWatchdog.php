@@ -115,6 +115,9 @@ class QueueWatchdog implements CronTaskInterface
             $scope = $finalizedScope;
         }
         $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+        if (!$this->isLatestQueueForBizKey($queue)) {
+            return;
+        }
         if (!empty($completionGate['passed'])) {
             $this->markGatePassedQueueComplete($queue, $content, $session, $adminId, $scope, $completionGate);
             return;
@@ -131,6 +134,9 @@ class QueueWatchdog implements CronTaskInterface
 
         $nextRetryCount = $retryCount + 1;
         $message = $this->buildRetryMessage($completionGate);
+        if (!$this->isLatestQueueForBizKey($queue)) {
+            return;
+        }
 
         $repairedScope = $this->buildTaskService->resetUnfinishedTasksForQueueRetry($scope, $message);
         $repairedScope = $this->patchBuildActiveOperationForRetry($repairedScope, (int)$queue->getId(), $nextRetryCount, $message);
@@ -194,6 +200,11 @@ class QueueWatchdog implements CronTaskInterface
     private function shouldRetryBuildQueue(array $completionGate): bool
     {
         $total = (int)($completionGate['total'] ?? 0);
+        $failed = (int)($completionGate['failed'] ?? 0);
+        $reason = \trim((string)($completionGate['reason'] ?? ''));
+        if ($failed > 0 || $reason === 'failed_build_tasks') {
+            return false;
+        }
 
         return $total > 0 && empty($completionGate['passed']);
     }
@@ -211,6 +222,9 @@ class QueueWatchdog implements CronTaskInterface
         array $scope,
         array $completionGate
     ): void {
+        if (!$this->isLatestQueueForBizKey($queue)) {
+            return;
+        }
         if ((string)$queue->getStatus() === Queue::status_stop) {
             return;
         }
@@ -322,6 +336,9 @@ class QueueWatchdog implements CronTaskInterface
      */
     private function resetQueueToPending(Queue $queue, array $content, string $message): void
     {
+        if (!$this->isLatestQueueForBizKey($queue)) {
+            return;
+        }
         $existingResult = \trim((string)$queue->getResult());
         $existingProcess = \trim((string)$queue->getProcess());
         $queue->setStatus(Queue::status_pending)
@@ -346,6 +363,9 @@ class QueueWatchdog implements CronTaskInterface
         int $adminId,
         array $completionGate
     ): void {
+        if (!$this->isLatestQueueForBizKey($queue)) {
+            return;
+        }
         if ((int)($content[self::WATCHDOG_EXHAUSTED_KEY] ?? 0) === 1) {
             return;
         }

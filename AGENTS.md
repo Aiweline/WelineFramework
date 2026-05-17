@@ -4,7 +4,7 @@ Quick index for AI assistants working in this repository.
 
 Full AI rules are maintained in one place only:
 
-- `dev/ai/global-constraints.md`
+- `dev/ai/global-constraints.md`（layout 约定见第 8 节；Cursor 同步 `.cursor/rules/layout-files-convention.mdc`）
 
 The Codex global rules are merged into that file as part of the unified repository-wide constraints, including Browser-first frontend validation, no premature test solidification, and the explicit ban on fallback/patch-style code.
 

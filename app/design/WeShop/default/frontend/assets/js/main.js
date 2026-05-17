@@ -170,6 +170,9 @@
     // ============================================
     WeShop.initAddToCart = function() {
         document.querySelectorAll('.add-to-cart, .btn-add-to-cart').forEach(function(btn) {
+            if (btn.closest('form.product-add-to-cart-form')) {
+                return;
+            }
             if (btn.dataset.weshopAddToCartBound === '1') {
                 return;
             }

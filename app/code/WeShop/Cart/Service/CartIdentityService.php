@@ -48,7 +48,7 @@ class CartIdentityService
         return $customer instanceof AuthenticableInterface ? $customer : null;
     }
 
-    private function getAuthenticatedCustomerId(): int
+    public function getAuthenticatedCustomerId(): int
     {
         $customer = $this->customerSession->getCustomer();
         if (!$customer) {
@@ -69,7 +69,7 @@ class CartIdentityService
         return 0;
     }
 
-    private function getGuestCartCustomerId(): int
+    public function getGuestCartCustomerId(): int
     {
         $guestId = (int) ($this->customerSession->get(self::GUEST_CART_CUSTOMER_ID_KEY) ?? 0);
         if ($guestId >= self::GUEST_CART_MIN_ID && $guestId <= self::GUEST_CART_MAX_ID) {
@@ -78,6 +78,7 @@ class CartIdentityService
 
         $guestId = random_int(self::GUEST_CART_MIN_ID, self::GUEST_CART_MAX_ID);
         $this->customerSession->set(self::GUEST_CART_CUSTOMER_ID_KEY, $guestId);
+        $this->customerSession->getSession()->save();
 
         return $guestId;
     }

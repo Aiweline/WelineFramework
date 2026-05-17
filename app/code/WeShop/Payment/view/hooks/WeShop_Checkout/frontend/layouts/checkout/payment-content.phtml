@@ -80,13 +80,13 @@ foreach ($paymentMethods as $paymentMethod) {
 </style>
 <div class="weshop-checkout-section">
     <div class="weshop-checkout-section-header">
-        <h3 class="weshop-checkout-section-title"><?= __('2. Payment Method') ?></h3>
+        <h3 class="weshop-checkout-section-title"><?= __('2. 支付方式') ?></h3>
     </div>
     <div class="weshop-checkout-section-content">
         <?php if ($paymentMethods === []): ?>
             <div class="weshop-checkout-section-info">
                 <span class="material-symbols-outlined" style="font-size: var(--weshop-font-size-base);">payments</span>
-                <p><?= __('No payment methods are available for the current checkout context.') ?></p>
+                <p><?= __('当前结账上下文没有可用支付方式。') ?></p>
             </div>
         <?php else: ?>
             <div class="weshop-checkout-layout-payment-list" data-weshop-layout-payment-list>
@@ -125,7 +125,7 @@ foreach ($paymentMethods as $paymentMethod) {
                                     <div class="weshop-checkout-layout-payment-text"><?= htmlspecialchars($checkoutNote, ENT_QUOTES) ?></div>
                                 <?php endif; ?>
                                 <?php if ($flowLabel !== ''): ?>
-                                    <div class="weshop-checkout-layout-payment-text"><?= __('Payment flow: %{1}', $flowLabel) ?></div>
+                                    <div class="weshop-checkout-layout-payment-text"><?= __('支付流程：%{1}', $flowLabel) ?></div>
                                 <?php endif; ?>
                             </span>
                         </div>
@@ -149,7 +149,7 @@ foreach ($paymentMethods as $paymentMethod) {
                     >
                         <strong><?= htmlspecialchars($title, ENT_QUOTES) ?></strong>
                         <div class="weshop-checkout-layout-payment-text">
-                            <?= htmlspecialchars($checkoutNote !== '' ? $checkoutNote : (string) __('Complete this payment flow after confirming the order.'), ENT_QUOTES) ?>
+                            <?= htmlspecialchars($checkoutNote !== '' ? $checkoutNote : (string) __('确认订单后完成该支付流程。'), ENT_QUOTES) ?>
                         </div>
                     </div>
                 <?php endforeach; ?>

@@ -23,6 +23,8 @@ class Cart extends FrontendRestController
 
     public function postAdd(): string
     {
+        return $this->deprecatedBrowserDirectResponse("Weline.Api.resource('cart').add()");
+
         $payload = $this->cartApiPayloadService->buildAddResponse($this->getCustomerId(), [
             'product_id' => (int) ($this->readRequestValue('product_id') ?? 0),
             'qty' => (int) ($this->readRequestValue('qty') ?? 1),
@@ -38,6 +40,8 @@ class Cart extends FrontendRestController
 
     public function getOptions(): string
     {
+        return $this->deprecatedBrowserDirectResponse("Weline.Api.resource('cart').options()");
+
         return $this->fetchJson(
             $this->cartApiPayloadService->buildOptionsResponse(
                 (int) ($this->readRequestValue('product_id') ?? 0)
@@ -47,6 +51,8 @@ class Cart extends FrontendRestController
 
     public function postUpdate(): string
     {
+        return $this->deprecatedBrowserDirectResponse("Weline.Api.resource('cart').update()");
+
         $payload = $this->cartApiPayloadService->buildUpdateResponse(
             $this->getCustomerId(),
             (int) (($this->readRequestValue('item_id') ?? $this->readRequestValue('cart_id')) ?? 0),
@@ -62,6 +68,8 @@ class Cart extends FrontendRestController
 
     public function postRemove(): string
     {
+        return $this->deprecatedBrowserDirectResponse("Weline.Api.resource('cart').remove()");
+
         $payload = $this->cartApiPayloadService->buildRemoveResponse(
             $this->getCustomerId(),
             (int) (($this->readRequestValue('item_id') ?? $this->readRequestValue('cart_id')) ?? 0)
@@ -76,6 +84,8 @@ class Cart extends FrontendRestController
 
     public function getMiniItems(): string
     {
+        return $this->deprecatedBrowserDirectResponse("Weline.Api.resource('cart').miniItems()");
+
         $payload = $this->cartApiPayloadService->buildMiniItemsResponse($this->getCustomerId());
         if (\is_array($payload['data'] ?? null)) {
             $payload['data']['html'] = $this->renderMiniItemsHtml($payload['data']);
@@ -156,8 +166,8 @@ class Cart extends FrontendRestController
         return '<div class="mini-cart-empty" id="mini-cart-empty">'
             . '<div class="empty-state">'
             . '<span class="material-symbols-outlined empty-icon">shopping_cart</span>'
-            . '<p class="empty-message">' . __('Your cart is empty') . '</p>'
-            . '<a href="' . $this->getUrlService()->getUrl('/') . '" class="start-shopping-link" data-action="close-mini-cart">' . __('Start Shopping') . '</a>'
+            . '<p class="empty-message">' . __('购物车是空的') . '</p>'
+            . '<a href="' . $this->getUrlService()->getUrl('/') . '" class="start-shopping-link" data-action="close-mini-cart">' . __('开始购物') . '</a>'
             . '</div>'
             . '</div>';
     }
@@ -172,6 +182,26 @@ class Cart extends FrontendRestController
         $response->setHeader('Content-Type', 'application/json; charset=utf-8');
 
         $json = \json_encode($data, JSON_UNESCAPED_UNICODE);
+
+        return $json === false ? '{}' : $json;
+    }
+
+    private function deprecatedBrowserDirectResponse(string $replacement): string
+    {
+        $response = $this->request->getResponse();
+        $response->setHttpResponseCode(410);
+        $response->setHeader('Content-Type', 'application/json; charset=utf-8');
+        $response->setHeader('Cache-Control', 'no-store');
+
+        $json = \json_encode([
+            'code' => 410,
+            'msg' => (string) __('Direct browser cart REST API is deprecated. Use the frontend worker API.'),
+            'data' => [
+                'deprecated' => true,
+                'browser_direct' => false,
+                'replacement' => $replacement,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
 
         return $json === false ? '{}' : $json;
     }

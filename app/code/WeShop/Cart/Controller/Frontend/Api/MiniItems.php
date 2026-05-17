@@ -24,6 +24,8 @@ class MiniItems extends BaseController
      */
     public function index(): string
     {
+        return $this->deprecatedBrowserDirectResponse("Weline.Api.resource('cart').miniItems()");
+
         try {
             /** @var CustomerSession $session */
             $session = ObjectManager::getInstance(CustomerSession::class);
@@ -125,13 +127,33 @@ class MiniItems extends BaseController
     /**
      * 渲染空购物车 HTML
      */
+    private function deprecatedBrowserDirectResponse(string $replacement): string
+    {
+        $response = $this->request->getResponse();
+        $response->setHttpResponseCode(410);
+        $response->setHeader('Content-Type', 'application/json; charset=utf-8');
+        $response->setHeader('Cache-Control', 'no-store');
+
+        $json = \json_encode([
+            'code' => 410,
+            'msg' => (string)__('Direct browser cart API is deprecated. Use the frontend worker API.'),
+            'data' => [
+                'deprecated' => true,
+                'browser_direct' => false,
+                'replacement' => $replacement,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+
+        return $json === false ? '{}' : $json;
+    }
+
     private function renderEmptyCart(): string
     {
         return '<div class="mini-cart-empty" id="mini-cart-empty">
             <div class="empty-state">
                 <span class="material-symbols-outlined empty-icon">shopping_cart</span>
-                <p class="empty-message">' . __('Your cart is empty') . '</p>
-                <a href="' . $this->getUrl('/') . '" class="start-shopping-link" data-action="close-mini-cart">' . __('Start Shopping') . '</a>
+                <p class="empty-message">' . __('购物车是空的') . '</p>
+                <a href="' . $this->getUrl('/') . '" class="start-shopping-link" data-action="close-mini-cart">' . __('开始购物') . '</a>
             </div>
         </div>';
     }

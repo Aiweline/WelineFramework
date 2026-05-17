@@ -9,7 +9,7 @@
 $shippingMethods = $this->getData('shipping_methods') ?? [];
 if (!is_array($shippingMethods) || $shippingMethods === []) {
     ?>
-    <div class="weshop-checkout-empty"><?= __('No shipping methods are available for the current checkout context.') ?></div>
+    <div class="weshop-checkout-empty"><?= __('当前结账上下文没有可用配送方式。') ?></div>
     <?php
     return;
 }

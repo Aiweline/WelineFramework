@@ -13,6 +13,7 @@
 "无效的配置 ID","Invalid configuration ID"
 配置不存在,"Configuration does not exist"
 配置删除成功,"Configuration deleted successfully"
+"Search Results","Search Results"
 搜索前,"Search before"
 执行搜索前触发，可用于记录搜索日志、修改搜索参数等。,"Triggered before executing a search, can be used to log search queries, modify search parameters, etc."
 搜索后,"Search after"
@@ -31,10 +32,10 @@
 "Inject storefront content above the default-theme search results page.","Inject storefront content above the default-theme search results page."
 "Search results after content","Search results after content"
 "Inject storefront content after the default-theme search result grid and empty state.","Inject storefront content after the default-theme search result grid and empty state."
-"Search for products, brands, and categories.","Search for products, brands, and categories."
-"No results found yet.","No results found yet."
-"Showing %{1}-%{2} of %{3} results","Showing %{1}-%{2} of %{3} results"
-Sort,Sort
+搜索商品、品牌或分类。,搜索商品、品牌或分类。
+暂未找到匹配结果。,暂未找到匹配结果。
+"显示第 %{1}-%{2} 个，共 %{3} 个结果","显示第 %{1}-%{2} 个，共 %{3} 个结果"
+排序,排序
 基础信息,"Basic Info"
 搜索引擎类型,"Search Engine Type"
 请选择,"Please select"
@@ -107,19 +108,20 @@ Sort,Sort
 删除失败：,"Deletion failed:"
 删除请求失败,"Delete request failed"
 删除请求失败：,"Delete request failed:"
-Search,Search
-"Results for ""%{1}""","Results for ""%{1}"""
-"Find what shoppers are looking for","Find what shoppers are looking for"
-"Search keyword","Search keyword"
-"Search for products, brands, and more...","Search for products, brands, and more..."
-"Clear all","Clear all"
-"Trending Searches","Trending Searches"
-Filters,Filters
-View,View
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
-"No matching products yet","No matching products yet"
-"Try another keyword, browse a trending term, or remove filters to widen the catalog results.","Try another keyword, browse a trending term, or remove filters to widen the catalog results."
-"Start with a product, brand, or category","Start with a product, brand, or category"
-"Use the search bar above to explore your catalog. Popular shopper queries are ready as one-click shortcuts.","Use the search bar above to explore your catalog. Popular shopper queries are ready as one-click shortcuts."
+商品搜索,商品搜索
+“%{1}”的搜索结果,“%{1}”的搜索结果
+搜索商品目录,搜索商品目录
+搜索关键词,搜索关键词
+搜索商品、品牌、分类...,搜索商品、品牌、分类...
+搜索,搜索
+热门搜索,热门搜索
+清除全部,清除全部
+筛选,筛选
+查看详情,查看详情
+上一页,上一页
+"第 %{1} / %{2} 页","第 %{1} / %{2} 页"
+下一页,下一页
+暂未找到匹配商品,暂未找到匹配商品
+换一个关键词、点击热门搜索，或移除筛选条件后再试。,换一个关键词、点击热门搜索，或移除筛选条件后再试。
+输入商品、品牌或分类开始搜索,输入商品、品牌或分类开始搜索
+使用上方搜索框浏览商品目录，也可以直接点击热门搜索词。,使用上方搜索框浏览商品目录，也可以直接点击热门搜索词。

@@ -50,6 +50,7 @@ This skill builds or modifies business modules in WelineFramework. It handles mo
 - Use i18n for user-facing text.
 - Keep module boundaries intact.
 - Frontend module scripts must not use direct `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or equivalent helpers; request interactions must go through Theme `theme.js` and the built-in `weline-api` worker chain.
+- Browser business APIs should be written as `const Api = await Weline.Api.resource('provider')` and then `await Api.operation(params)`; only pass a resource map when aliases or a method subset are needed.
 - Update module README after fixing bugs.
 - When data is written successfully but the page still looks unchanged, check the module's template source and page/controller cache path before assuming the provider or database write failed.
 

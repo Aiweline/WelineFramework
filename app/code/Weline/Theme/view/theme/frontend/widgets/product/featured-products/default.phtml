@@ -643,6 +643,9 @@ $widgetId = 'featured-products-' . uniqid();
     }
 
     widget.querySelectorAll('.btn-add-to-cart').forEach(function(btn) {
+        if (btn.closest('form.product-add-to-cart-form')) {
+            return;
+        }
         if (btn.dataset.weshopFeaturedAddBound === '1') {
             return;
         }

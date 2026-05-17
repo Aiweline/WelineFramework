@@ -33,7 +33,7 @@ try {
 <button type="button" 
         class="action-link cart-link header-cart-trigger" 
         data-action="open-mini-cart"
-        aria-label="<?= __('Open Cart') ?>"
+        aria-label="<?= __('打开购物车') ?>"
         aria-haspopup="dialog"
         aria-expanded="false">
     <span class="cart-icon" aria-hidden="true">
@@ -48,7 +48,7 @@ try {
           <?= $cartCount === 0 ? 'style="display:none;"' : '' ?>>
         <?= $cartCount > 99 ? '99+' : $cartCount ?>
     </span>
-    <span class="action-line-2"><lang>Cart</lang></span>
+    <span class="action-line-2"><lang>购物车</lang></span>
 </button>
 
 <!-- MiniCart Widget -->

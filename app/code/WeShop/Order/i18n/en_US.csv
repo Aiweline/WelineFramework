@@ -31,6 +31,8 @@ Success,Success
 "Inject content after the storefront order list page body.","Inject content after the storefront order list page body."
 "Order detail content before","Order detail content before"
 "Inject content before the storefront order detail page body.","Inject content before the storefront order detail page body."
+"Order detail items content","Order detail items content"
+"Inject content inside the storefront order detail items section.","Inject content inside the storefront order detail items section."
 "Order detail content after","Order detail content after"
 "Inject content after the storefront order detail page body.","Inject content after the storefront order detail page body."
 Pending,Pending
