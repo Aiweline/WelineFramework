@@ -28,6 +28,7 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 # Responsibilities
 
 - Move user-facing text into the correct i18n mechanism for PHP, templates, JavaScript, admin UI, and module output.
+- Use Simplified Chinese as the default source/key for all visible text, such as `__('加入购物车')`; English belongs in `en_US`, not in the default source string.
 - Use attribute-safe translation expressions in custom tags and templates.
 - Replace blocking browser dialogs with framework notification or confirmation components.
 - Keep visible error messages actionable and understandable.
@@ -49,6 +50,7 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 - **PHP controller flash messages** (success/warning/error): use **`MessageManager::warning(__('…'))` / `MessageManager::error(...)` / `MessageManager::success(...)`** (`Weline\Framework\Manager\MessageManager`). Do **not** use `$this->getMessageManager()->addWarning()` (or addError/addSuccess) unless a documented framework exception applies.
 - Do not hardcode user-facing text.
 - Use i18n for user-facing text.
+- The default source/key for `__()`, `<lang>`, hook contracts, templates, and JavaScript visible text must be Simplified Chinese; keep `zh_Hans_CN` as Chinese-to-Chinese and `en_US` as Chinese-to-English for the same source/key.
 - Use `@lang` forms in custom-tag attributes instead of embedded PHP.
 - Do not use JavaScript `alert`, `confirm`, or `prompt`.
 - Keep placeholders in `%{1}` or `%{name}` style where interpolation is required.
@@ -71,6 +73,7 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 # Validation
 
 - Confirm new or changed visible text is translated through the correct mechanism.
+- Confirm new or changed translation entries share the same Simplified Chinese source/key across `zh_Hans_CN` and `en_US`.
 - Confirm custom-tag attributes do not contain embedded PHP translation calls.
 - Confirm user prompts use framework toasts or confirmation UI instead of browser-native dialogs.
 - Confirm interpolation placeholders follow repository conventions.

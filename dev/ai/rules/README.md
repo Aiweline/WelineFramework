@@ -10,4 +10,4 @@
 
 `dev/ai/skills/_index.md` 只作为技能路由索引，不维护总则正文。
 
-仍保留于本目录的 **Cursor `alwaysApply` 规则**：见各 `.mdc`（例如 `view-template-taglibs.mdc` 视图标签约定、`message-manager-static.mdc` 控制器 Flash 须用 `MessageManager::warning|error|success(__('…'))`、`i18n-default-source-zh.mdc` 用户可见文案默认须为简体中文）。
+仍保留于本目录的 **Cursor `alwaysApply` 规则**：见各 `.mdc`（例如 `layout-files-convention.mdc` 布局文件仅骨架/占位/挂载点、禁止交互与业务逻辑；`view-template-taglibs.mdc` 视图标签约定；`message-manager-static.mdc` 控制器 Flash 须用 `MessageManager::warning|error|success(__('…'))`；`i18n-default-source-zh.mdc` 用户可见文案默认须为简体中文）。总则正文以 `dev/ai/global-constraints.md` 第 8 节为准。

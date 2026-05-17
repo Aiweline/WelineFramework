@@ -14,6 +14,25 @@ $clearAllUrl = (string) ($this->getData('clear_all_url') ?? '/search');
 $paginationHtml = (string) ($this->getData('pagination_html') ?? $this->getData('pagination') ?? '');
 $paginationData = is_array($this->getData('pagination_data')) ? $this->getData('pagination_data') : [];
 $hasBrowseContext = $hasKeyword || $appliedFilters !== [] || $facets !== [] || $products !== [];
+$engineLabelMap = [
+    'mysql' => '本地搜索',
+    'meilisearch' => '搜索服务',
+    'elasticsearch' => '搜索服务',
+];
+$engineLabel = $engineLabelMap[strtolower($engine)] ?? strtoupper($engine);
+$localizeProductText = static function (string $value): string {
+    $map = [
+        'Samsung Galaxy S24 Ultra Gray 256GB' => '三星 Galaxy S24 Ultra 钛灰 256GB',
+        'Samsung Galaxy S24 Ultra' => '三星 Galaxy S24 Ultra',
+        'iPhone 15 Pro Black 256GB' => 'iPhone 15 Pro 黑色 256GB',
+        'iPhone 15 Pro Black 512GB' => 'iPhone 15 Pro 黑色 512GB',
+        'iPhone 15 Pro White 256GB' => 'iPhone 15 Pro 白色 256GB',
+        'Configurable Android flagship with two memory tiers and titanium finishes.' => '可选内存与钛金属配色的安卓旗舰手机。',
+        'Configurable flagship phone with multiple finishes and storage options.' => '可选配色与存储规格的旗舰手机。',
+    ];
+
+    return $map[$value] ?? $value;
+};
 $buildSearchPageUrl = function (int $targetPage) {
     $query = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
         ? $this->request->getQuery()
@@ -28,17 +47,17 @@ $buildSearchPageUrl = function (int $targetPage) {
 
     <section class="weshop-search-hero">
         <div class="weshop-search-hero__content">
-            <div class="weshop-search-hero__eyebrow"><?= __('Catalog Search') ?></div>
+            <div class="weshop-search-hero__eyebrow"><?= __('商品搜索') ?></div>
             <h1 class="weshop-search-hero__title">
-                <?= $hasKeyword ? __('Results for "%{1}"', [$keyword]) : __('Search the catalog') ?>
+                <?= $hasKeyword ? __('“%{1}”的搜索结果', [$keyword]) : __('搜索商品目录') ?>
             </h1>
             <p class="weshop-search-hero__summary">
-                <?= htmlspecialchars((string) ($searchSummary['label'] ?? __('Search for products, brands, and categories.'))) ?>
+                <?= htmlspecialchars((string) ($searchSummary['label'] ?? __('搜索商品、品牌或分类。'))) ?>
             </p>
         </div>
 
         <form action="<?= $this->getUrl('search') ?>" method="get" class="weshop-search-form">
-            <label class="weshop-search-form__label" for="default-search-keyword"><?= __('Search keyword') ?></label>
+            <label class="weshop-search-form__label" for="default-search-keyword"><?= __('搜索关键词') ?></label>
             <div class="weshop-search-form__control">
                 <input
                     id="default-search-keyword"
@@ -46,16 +65,16 @@ $buildSearchPageUrl = function (int $targetPage) {
                     name="q"
                     value="<?= htmlspecialchars($keyword) ?>"
                     class="weshop-search-form__input"
-                    placeholder="<?= __('Search products, brands, categories...') ?>"
+                    placeholder="<?= __('搜索商品、品牌、分类...') ?>"
                 />
-                <button type="submit" class="weshop-search-form__button"><?= __('Search') ?></button>
+                <button type="submit" class="weshop-search-form__button"><?= __('搜索') ?></button>
             </div>
         </form>
 
         <div class="weshop-search-trends">
             <div class="weshop-search-trends__header">
-                <span><?= __('Trending Searches') ?></span>
-                <span class="weshop-search-trends__engine"><?= htmlspecialchars(strtoupper($engine)) ?></span>
+                <span><?= __('热门搜索') ?></span>
+                <span class="weshop-search-trends__engine"><?= htmlspecialchars($engineLabel) ?></span>
             </div>
             <div class="weshop-search-trends__list">
                 <?php foreach ($popularKeywords as $item): ?>
@@ -83,7 +102,7 @@ $buildSearchPageUrl = function (int $targetPage) {
                     <span><?= htmlspecialchars($filterLabel) ?></span>
                 </a>
             <?php endforeach; ?>
-            <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="weshop-search-applied__clear"><?= __('Clear all') ?></a>
+            <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="weshop-search-applied__clear"><?= __('清除全部') ?></a>
         </div>
     <?php endif; ?>
 
@@ -93,9 +112,9 @@ $buildSearchPageUrl = function (int $targetPage) {
                 <?php if (!empty($facets) || !empty($appliedFilters)): ?>
                     <aside class="weshop-search-filters">
                         <div class="weshop-search-filters__header">
-                            <h2><?= __('Filters') ?></h2>
+                            <h2><?= __('筛选') ?></h2>
                             <?php if (!empty($appliedFilters)): ?>
-                                <a href="<?= htmlspecialchars($clearAllUrl) ?>"><?= __('Clear all') ?></a>
+                                <a href="<?= htmlspecialchars($clearAllUrl) ?>"><?= __('清除全部') ?></a>
                             <?php endif; ?>
                         </div>
 
@@ -139,26 +158,30 @@ $buildSearchPageUrl = function (int $targetPage) {
                     <?php if (!empty($products)): ?>
                         <div class="weshop-search-grid weshop-products-grid">
                             <?php foreach ($products as $product): ?>
+                                <?php
+                                $productName = $localizeProductText((string) ($product['name'] ?? ''));
+                                $productDesc = $localizeProductText((string) ($product['short_description'] ?? ''));
+                                ?>
                                 <article class="weshop-search-product weshop-product-card">
                                     <div class="weshop-product-image-wrapper">
                                         <a
                                             href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>"
                                             class="weshop-search-product__image weshop-product-image"
                                             style="background-image: url('<?= htmlspecialchars((string) ($product['image'] ?? '')) ?>');"
-                                            aria-label="<?= htmlspecialchars((string) ($product['name'] ?? '')) ?>"
+                                            aria-label="<?= htmlspecialchars($productName) ?>"
                                         ></a>
                                     </div>
                                     <div class="weshop-search-product__body weshop-product-info">
                                         <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="weshop-search-product__name weshop-product-name">
-                                            <?= htmlspecialchars((string) ($product['name'] ?? '')) ?>
+                                            <?= htmlspecialchars($productName) ?>
                                         </a>
-                                        <?php if (!empty($product['short_description'])): ?>
-                                            <p class="weshop-search-product__desc"><?= htmlspecialchars((string) $product['short_description']) ?></p>
+                                        <?php if ($productDesc !== ''): ?>
+                                            <p class="weshop-search-product__desc"><?= htmlspecialchars($productDesc) ?></p>
                                         <?php endif; ?>
                                         <div class="weshop-search-product__footer">
                                             <span class="weshop-search-product__price weshop-product-price"><?= $this->formatPrice((float) ($product['price'] ?? 0)) ?></span>
                                             <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="weshop-search-product__link weshop-product-button">
-                                                <?= __('View') ?>
+                                                <?= __('查看详情') ?>
                                             </a>
                                         </div>
                                     </div>
@@ -176,11 +199,11 @@ $buildSearchPageUrl = function (int $targetPage) {
                                     $totalPages = (int) ($paginationData['pages'] ?? 1);
                                     ?>
                                     <a href="<?= htmlspecialchars($currentPage > 1 ? $buildSearchPageUrl($currentPage - 1) : '#') ?>" class="<?= $currentPage > 1 ? '' : 'is-disabled' ?>">
-                                        <?= __('Previous') ?>
+                                        <?= __('上一页') ?>
                                     </a>
-                                    <span><?= __('Page %{1} of %{2}', [$currentPage, $totalPages]) ?></span>
+                                    <span><?= __('第 %{1} / %{2} 页', [$currentPage, $totalPages]) ?></span>
                                     <a href="<?= htmlspecialchars($currentPage < $totalPages ? $buildSearchPageUrl($currentPage + 1) : '#') ?>" class="<?= $currentPage < $totalPages ? '' : 'is-disabled' ?>">
-                                        <?= __('Next') ?>
+                                        <?= __('下一页') ?>
                                     </a>
                                 <?php endif; ?>
                             </div>
@@ -188,8 +211,8 @@ $buildSearchPageUrl = function (int $targetPage) {
                     <?php else: ?>
                         <div class="weshop-search-empty">
                             <div class="weshop-search-empty__icon" aria-hidden="true">⌕</div>
-                            <h2><?= __('No matching products yet') ?></h2>
-                            <p><?= __('Try another keyword, browse a trending term, or remove filters to widen the catalog results.') ?></p>
+                            <h2><?= __('暂未找到匹配商品') ?></h2>
+                            <p><?= __('换一个关键词、点击热门搜索，或移除筛选条件后再试。') ?></p>
                             <div class="weshop-search-empty__actions">
                                 <?php foreach ($popularKeywords as $item): ?>
                                     <a href="<?= $this->getUrl('search', ['q' => $item['keyword'] ?? '']) ?>" class="weshop-search-chip">
@@ -204,8 +227,8 @@ $buildSearchPageUrl = function (int $targetPage) {
         <?php else: ?>
             <div class="weshop-search-empty">
                 <div class="weshop-search-empty__icon" aria-hidden="true">⌕</div>
-                <h2><?= __('Start with a product, brand, or category') ?></h2>
-                <p><?= __('Use the search bar above to explore your catalog. Popular shopper queries are ready as one-click shortcuts.') ?></p>
+                <h2><?= __('输入商品、品牌或分类开始搜索') ?></h2>
+                <p><?= __('使用上方搜索框浏览商品目录，也可以直接点击热门搜索词。') ?></p>
             </div>
         <?php endif; ?>
 

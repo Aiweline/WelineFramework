@@ -15,6 +15,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
+use Weline\Framework\Service\Query\QueryProviderRegistry;
 
 /**
  * API文档生成服务
@@ -25,11 +26,13 @@ class ApiDocService
 {
     private CachePoolInterface $cache;
     private Handle $moduleHandle;
+    private QueryProviderRegistry $queryProviderRegistry;
     
     public function __construct()
     {
         $this->cache = w_cache('api_doc');
         $this->moduleHandle = ObjectManager::getInstance(Handle::class);
+        $this->queryProviderRegistry = ObjectManager::getInstance(QueryProviderRegistry::class);
     }
     
     /**
@@ -58,6 +61,11 @@ class ApiDocService
             if (!empty($moduleApis)) {
                 $apis[$moduleName] = $moduleApis;
             }
+        }
+
+        $frontendWorkerApis = $this->generateFrontendWorkerApis();
+        if (!empty($frontendWorkerApis)) {
+            $apis['Frontend Worker API'] = $frontendWorkerApis;
         }
         
         // 缓存结果（开发环境1小时，生产环境24小时）
@@ -712,6 +720,126 @@ class ApiDocService
         }
         
         return !empty($acl) ? $acl : null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function generateFrontendWorkerApis(): array
+    {
+        $apis = [];
+        foreach ($this->queryProviderRegistry->getAllDescriptors() as $providerDescriptor) {
+            $provider = (string)($providerDescriptor['provider'] ?? '');
+            if ($provider === '') {
+                continue;
+            }
+
+            foreach (($providerDescriptor['operations'] ?? []) as $operationDescriptor) {
+                if (!\is_array($operationDescriptor) || ($operationDescriptor['frontend'] ?? false) !== true) {
+                    continue;
+                }
+
+                $operation = (string)($operationDescriptor['name'] ?? '');
+                if ($operation === '') {
+                    continue;
+                }
+
+                $apis[] = [
+                    'module' => (string)($providerDescriptor['module'] ?? 'Frontend Worker API'),
+                    'version' => 'worker-v1',
+                    'class' => 'FrontendWorker\\' . $provider,
+                    'method' => $provider . '.' . $operation,
+                    'route' => [
+                        'method' => 'WORKER',
+                        'path' => 'Weline.Api.resource("' . $provider . '").' . $operation . '(params)',
+                        'is_backend' => false,
+                        'browser_direct' => false,
+                        'implementation' => '/api/framework/query-bin',
+                    ],
+                    'document' => [
+                        'summary' => (string)($operationDescriptor['summary'] ?? $operationDescriptor['description'] ?? ($provider . '.' . $operation)),
+                        'description' => (string)($operationDescriptor['description'] ?? ''),
+                        'tags' => ['Frontend Worker API', $provider],
+                        'category' => 'Frontend Worker API',
+                        'deprecated' => false,
+                    ],
+                    'parameters' => $this->normalizeFrontendWorkerParameters($operationDescriptor['params'] ?? []),
+                    'responses' => [
+                        '200' => [
+                            'description' => 'Worker returns a Weline binary response decoded by Weline.Api.',
+                            'type' => (string)($operationDescriptor['returns']['type'] ?? 'mixed'),
+                        ],
+                    ],
+                    'example' => [
+                        'frontend_worker' => true,
+                        'provider' => $provider,
+                        'operation' => $operation,
+                        'mode' => (string)($operationDescriptor['mode'] ?? ''),
+                        'graph' => (bool)($operationDescriptor['graph'] ?? false),
+                        'cost' => (int)($operationDescriptor['cost'] ?? 1),
+                        'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
+                        'code' => "const Api = await Weline.Api.resource('{$provider}');\nawait Api.{$operation}({});",
+                    ],
+                    'frontend_worker' => true,
+                    'worker' => [
+                        'provider' => $provider,
+                        'operation' => $operation,
+                        'mode' => (string)($operationDescriptor['mode'] ?? ''),
+                        'graph' => (bool)($operationDescriptor['graph'] ?? false),
+                        'cost' => (int)($operationDescriptor['cost'] ?? 1),
+                        'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
+                    ],
+                ];
+            }
+        }
+
+        return $apis;
+    }
+
+    /**
+     * @param mixed $paramsDescriptor
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeFrontendWorkerParameters(mixed $paramsDescriptor): array
+    {
+        if (!\is_array($paramsDescriptor)) {
+            return [];
+        }
+
+        $params = [];
+        foreach ($paramsDescriptor as $key => $rule) {
+            if (!\is_array($rule)) {
+                continue;
+            }
+            $name = \is_string($key) ? $key : (string)($rule['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+
+            $descriptionParts = [];
+            if (isset($rule['min'])) {
+                $descriptionParts[] = 'min=' . (string)$rule['min'];
+            }
+            if (isset($rule['max'])) {
+                $descriptionParts[] = 'max=' . (string)$rule['max'];
+            }
+            if (isset($rule['max_items'])) {
+                $descriptionParts[] = 'max_items=' . (string)$rule['max_items'];
+            }
+            if (isset($rule['max_length'])) {
+                $descriptionParts[] = 'max_length=' . (string)$rule['max_length'];
+            }
+
+            $params[] = [
+                'name' => $name,
+                'type' => (string)($rule['type'] ?? 'mixed'),
+                'required' => (bool)($rule['required'] ?? false),
+                'description' => (string)($rule['description'] ?? \implode(', ', $descriptionParts)),
+                'source' => 'worker_params',
+            ];
+        }
+
+        return $params;
     }
 }
 

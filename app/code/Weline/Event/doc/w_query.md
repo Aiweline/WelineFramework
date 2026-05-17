@@ -1,128 +1,93 @@
 # w_query 统一查询使用说明
 
-`w_query` 用于统一调用 Query API，内部路由到 `QueryProviderRegistry` 中已注册的查询器执行。
+`w_query()` 用于 PHP 服务端模块间 QueryProvider 调用，内部路由到 `QueryProviderRegistry` 中已注册的 provider。
 
-**前后端 API 一致**：前端 `window.w_query()`，后端 `w_query()` 全局函数。
-
----
+浏览器站内业务请求不再直接使用 JSON `/api/framework/query`。前端业务 JS 必须使用 `Weline.Api.resource()/graph()/stream()`，由 `theme.js -> weline-api -> worker -> /api/framework/query-bin -> FrontendQueryGateway` 转发；PHP 服务端继续使用 `w_query()`。
 
 ## 后端 PHP 示例
 
 ```php
-// CRUD 查询
-$result = w_query('crud', 'list', [
-    'model'     => 'WeShop\\Product\\Model\\Product',
-    'page'      => 1,
-    'page_size' => 20,
-]);
-
-// 短 model 名（配合 module 参数）
-$result = w_query('crud', 'list', [
-    'module'    => 'WeShop_Product',
-    'model'     => 'product',
-    'page'      => 1,
-    'page_size' => 20,
-]);
-
 // Widget 查询
 $widgets = w_query('widget', 'getAvailableList', [
-    'page_type' => 'frontend',
-], 'backend');
+    'page_type' => 'homepage',
+]);
 
-// 查询所有 provider（自省）
+// 服务端内部 CRUD 查询
+$products = w_query('crud', 'list', [
+    'model' => 'WeShop\\Product\\Model\\Product',
+    'page' => 1,
+    'page_size' => 20,
+]);
+
+// 服务端 introspect
 $providers = w_query('framework', 'introspect', ['what' => 'providers']);
-
-// 查询某 provider 的 operations
 $ops = w_query('framework', 'introspect', ['what' => 'operations', 'provider' => 'widget']);
 ```
 
-**函数签名**：
+函数签名：
+
 ```php
 function w_query(string $provider, string $operation, array $params = [], string $area = 'backend'): mixed
 ```
 
----
-
 ## 前端 JS 示例
 
 ```js
-// CRUD 查询
-const result = await window.w_query('crud', 'list', {
-  model: 'WeShop\\Product\\Model\\Product',
-  page: 1,
-  page_size: 20
-});
+const CartApi = await Weline.Api.resource('cart');
 
-// 短 model 名（配合 module 参数）
-const result = await window.w_query('crud', 'list', {
-  module: 'WeShop_Product',
-  model: 'product',
-  page: 1,
-  page_size: 20
-});
-
-// Widget 查询
-const result = await window.w_query('widget', 'getAvailableList', {
-  page_type: 'frontend'
-}, { area: 'backend' });
+await CartApi.add({ product_id, qty });
+await CartApi.options({ product_id });
+await CartApi.miniItems({ limit: 10 });
 ```
 
----
+只有需要别名或限制子集时才传 optional map：
 
-## 使用说明查询（introspect）
-
-**后端 PHP**：
-```php
-// 列出所有 provider
-$providers = w_query('framework', 'introspect', ['what' => 'providers']);
-
-// 列出某 provider 的 operations
-$ops = w_query('framework', 'introspect', ['what' => 'operations', 'provider' => 'widget']);
-
-// 查看某 operation 的详细参数
-$detail = w_query('framework', 'introspect', ['what' => 'operation', 'provider' => 'widget', 'operation' => 'getAvailableList']);
-```
-
-**前端 JS**：
 ```js
-// 列出所有 provider
-const providers = await window.w_query('framework', 'introspect', { what: 'providers' });
+const CartApi = await Weline.Api.resource('cart', {
+  addItem: 'add',
+  getOptions: 'options',
+});
 
-// 列出某 provider 的 operations
-const ops = await window.w_query('framework', 'introspect', { what: 'operations', provider: 'widget' });
-
-// 查看某 operation 的详细参数
-const detail = await window.w_query('framework', 'introspect', { what: 'operation', provider: 'widget', operation: 'getAvailableList' });
+await CartApi.addItem({ product_id, qty });
 ```
 
----
+`crud.*` 和 `framework.introspect` 默认不暴露给浏览器 frontend worker。需要前端能力时，QueryProvider descriptor 必须显式声明 `frontend=true`、`mode`、`graph`、`params`、`returns`。
+
+## Frontend Worker API
+
+前端能力清单来自 API 文档的 `Frontend Worker API` 目录。浏览器业务代码不要手写 `/api/framework/query-bin`，也不要直接 `fetch()` 站内业务 REST URL。
+
+```js
+const items = await Weline.Api.graph({
+  cart: {
+    miniItems: { limit: 10 },
+    count: {},
+  },
+});
+```
+
+Graph 只允许 `mode=read && graph=true` 的 operation；write operation 必须单独调用 resource method。
 
 ## 入参
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| `provider` | string | 提供者标识（如 `crud`、`widget`、`websites`、`saas`、`framework`） |
+|---|---|---|
+| `provider` | string | QueryProvider 标识，例如 `cart`、`widget`、`websites`、`framework` |
 | `operation` | string | 操作名 |
 | `params` | array/object | 操作参数 |
-| `area` | string | `frontend` 或 `backend`（PHP 默认 `backend`，JS 通过 options 传递） |
+| `area` | string | PHP 侧 `frontend` 或 `backend`，默认 `backend` |
 
-## 短 model 名约定（crud provider）
+## 注册查询器
 
-当传 `module` 时，`model` 可简写，框架自动解析：
+模块通过 `extends/module/Weline_Framework/Query/` 注册实现 `QueryProviderInterface` 的类。
 
-- `model: 'product'` -> `WeShop\Product\Model\Product`
-- `model: 'product_category'` -> `WeShop\Product\Model\ProductCategory`（snake_case 转 PascalCase）
+接口要求：
 
-## 如何注册查询器
+- `getProviderName(): string`
+- `execute(string $operation, array $params = []): mixed`
+- `getDescriptor(): array`
 
-各模块通过 extends 注册：在模块目录下 `extends/module/Weline_Framework/Query/` 放置实现 `QueryProviderInterface` 的类。
+## 框架事件
 
-接口要求实现：
-- `getProviderName(): string` — 返回提供者标识
-- `execute(string $operation, array $params = []): mixed` — 执行查询
-- `getDescriptor(): array` — 返回使用说明描述
-
-## 框架级事件
-
-- `Weline_Framework_Query::before_execute` — 查询执行前（鉴权、拦截）
-- `Weline_Framework_Query::after_execute` — 查询执行后（审计、结果过滤）
+- `Weline_Framework_Query::before_execute`
+- `Weline_Framework_Query::after_execute`

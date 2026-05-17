@@ -7,10 +7,6 @@ $cartItems = $this->getData('cart_items') ?? [];
 $cartSummary = $this->getData('cart_summary') ?? [];
 $relatedProducts = $this->getData('related_products') ?? [];
 ?>
-<script>
-    window.WeShop = window.WeShop || {};
-    window.WeShop.cartAddUrl = '<?= $this->getUrl('cart/frontend/api/add') ?>';
-</script>
 <script src="/WeShop/Cart/view/statics/js/cart.js"></script>
 <style>
     .weshop-cart-page {
@@ -543,74 +539,74 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function updateCartItem(itemId, qty) {
-    fetch('<?= $this->getUrl('cart/frontend/api/update') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-        body: JSON.stringify({item_id: itemId, quantity: qty})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
+let cartApiPromise = null;
+
+function getCartApi() {
+    if (!cartApiPromise) {
+        if (!window.Weline?.Api?.resource) {
+            return Promise.reject(new Error('Weline.Api.resource is not available'));
+        }
+        cartApiPromise = Promise.resolve(window.Weline.Api.resource('cart'));
+    }
+    return cartApiPromise;
+}
+
+function normalizeCartApiPayload(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return payload || {};
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(payload, 'code') || typeof payload.data !== 'object' || !payload.data) {
+        return payload;
+    }
+
+    var code = Number(payload.code || 0);
+    return Object.assign({
+        code: code,
+        message: payload.msg || payload.data.message || '',
+        success: code >= 200 && code < 300 && payload.data.success !== false,
+    }, payload.data);
+}
+
+async function updateCartItem(itemId, qty) {
+    try {
+        var CartApi = await getCartApi();
+        var data = normalizeCartApiPayload(await CartApi.update({
+            item_id: parseInt(itemId, 10),
+            quantity: qty,
+        }));
+        if (data.success !== false) {
             window.location.reload();
         } else {
             showCartMessage(data.message || '<?= __('Error updating cart') ?>', 'error');
         }
-    }).catch(function () {
-        showCartMessage('<?= __('Error updating cart') ?>', 'error');
-    });
+    } catch (error) {
+        showCartMessage(error.message || '<?= __('Error updating cart') ?>', 'error');
+    }
 }
 
-function deleteCartItem(itemId) {
-    fetch('<?= $this->getUrl('cart/frontend/api/remove') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-        body: JSON.stringify({item_id: itemId})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
+async function deleteCartItem(itemId) {
+    try {
+        var CartApi = await getCartApi();
+        var data = normalizeCartApiPayload(await CartApi.remove({
+            item_id: parseInt(itemId, 10),
+        }));
+        if (data.success !== false) {
             window.location.reload();
         } else {
             showCartMessage(data.message || '<?= __('Error removing item') ?>', 'error');
         }
-    }).catch(function () {
-        showCartMessage('<?= __('Error removing item') ?>', 'error');
-    });
+    } catch (error) {
+        showCartMessage(error.message || '<?= __('Error removing item') ?>', 'error');
+    }
 }
 
 function saveForLater(itemId) {
-    fetch('<?= $this->getUrl('wishlist/add-from-cart') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({item_id: itemId})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.reload();
-        }
-    }).catch(function () {
-        showCartMessage('<?= __('Unable to save this item for later right now.') ?>', 'error');
-    });
+    showCartMessage('<?= __('Save for later is not available through the frontend worker API yet.') ?>', 'warning');
 }
 
 function applyPromoCode(code) {
-    fetch('<?= $this->getUrl('cart/apply-coupon') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({code: code})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.reload();
-        } else {
-            showCartMessage(data.message || '<?= __('Invalid promo code') ?>', 'warning');
-        }
-    }).catch(function () {
-        showCartMessage('<?= __('Invalid promo code') ?>', 'warning');
-    });
+    showCartMessage('<?= __('Promo code is not available through the frontend worker API yet.') ?>', 'warning');
 }
 
 function showCartMessage(message, type) {

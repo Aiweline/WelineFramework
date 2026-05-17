@@ -1,0 +1,32 @@
+---
+description: 布局文件（layout）仅承载默认骨架、占位与扩展挂载点，禁止交互与业务逻辑
+alwaysApply: true
+---
+
+# 布局文件（layout）约定
+
+与 `dev/ai/global-constraints.md` 第 8 节一致。
+
+## 定位
+
+- **layout** = 默认布局蓝图 + 空态占位 + Hook/插槽/Block 挂载点。
+- 典型路径：`view/theme/frontend/layouts/**/default.phtml`。
+- **大多数 layout 只应包含**：**基础信息**（页眉/页脚/区域骨架、`@param` 布局开关）+ **未使用时的占位**（Hook `<else/>`、空插槽说明、无内容时的提示）。
+- **目的**：无人定制主题、Hook/部件尚未接入时，仍能展示完整主题网页；业务接入后由 Hook/Widget/控制器**替换**占位，不在 layout 里堆逻辑。
+
+## 允许
+
+- 区域划分 HTML、呈现用 CSS（含响应式）。
+- `<w:slot>`、`<w:hook>`、`<w:block>`、`<w:widget>` 及 Hook 未使用时的 `<else/>` **占位说明**（建议 `<lang>`）。
+- `@param` / `@meta` 布局级默认值；结构级 `<if condition="meta.xxx">`（数据仅来自 meta，不查库）。
+
+## 禁止
+
+- 交互逻辑、内联业务 `<script>`、事件处理、API 请求。
+- 业务 PHP：ORM、服务调用、权限/价格/库存等业务数据准备。
+
+## 分工
+
+- **layout**：骨架 + 占位 + 挂载点。
+- **Hook / widget / partial**：可替换内容。
+- **控制器 / 服务 / JS**：数据与交互。

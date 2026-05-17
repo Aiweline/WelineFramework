@@ -188,6 +188,7 @@ SQL调试输出,"SQL debug output"
 "只编译 weline.modules.js","Compile weline.modules.js Only"
 "只编译 less","Compile Less Only"
 使用别名,"Using alias"
+"Frontend JSON query is deprecated. Use the Weline frontend worker API.","Frontend JSON query is deprecated. Use the Weline frontend worker API."
 查询成功,"Query succeeded"
 查询失败：%{1},"Query failed: %{1}"
 未知,Unknown

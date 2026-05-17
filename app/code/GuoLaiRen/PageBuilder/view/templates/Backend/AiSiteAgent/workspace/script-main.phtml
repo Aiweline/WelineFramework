@@ -1076,15 +1076,15 @@
             return normalizeQueueStatusForPrompt(info);
         }
         var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
-        return normalizeQueueStatusForPrompt(
-            snapshot.status
-            || snapshot.job_status
-            || snapshot.queue_status
-            || info.status
-            || info.queue_status
-            || info.state
-            || ''
-        );
+        var directStatus = normalizeQueueStatusForPrompt(info.status || info.queue_status || info.state || '');
+        var snapshotStatus = normalizeQueueStatusForPrompt(snapshot.status || snapshot.job_status || snapshot.queue_status || '');
+        if (isQueueStatusTerminalForUi(directStatus) || isQueueStatusRunningForUi(directStatus)) {
+            return directStatus;
+        }
+        if (isQueueStatusTerminalForUi(snapshotStatus) || isQueueStatusRunningForUi(snapshotStatus)) {
+            return snapshotStatus;
+        }
+        return directStatus || snapshotStatus;
     }
 
     function hasRunningQueueForUi(workspaceState, operationFilter) {
@@ -11044,9 +11044,11 @@
         var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
             ? queueInfo.snapshot
             : null;
-        var queueStatus = snapshot
-            ? String(snapshot.job_status || snapshot.status || snapshot.queue_status || '').trim().toLowerCase()
-            : '';
+        var queueStatus = String(
+            (queueInfo ? (queueInfo.status || queueInfo.queue_status || queueInfo.state || '') : '')
+            || (snapshot ? (snapshot.job_status || snapshot.status || snapshot.queue_status || '') : '')
+            || ''
+        ).trim().toLowerCase();
         if (queueStatus !== '' && runningStatuses.indexOf(queueStatus) !== -1) {
             return true;
         }
@@ -13348,12 +13350,13 @@
         var info = queueInfo && typeof queueInfo === 'object' ? queueInfo : {};
         var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
         return String(
-            snapshot.job_status
+            info.status
+            || info.queue_status
+            || info.state
+            || info.job_status
+            || snapshot.job_status
             || snapshot.status
             || snapshot.queue_status
-            || info.job_status
-            || info.status
-            || info.queue_status
             || ''
         ).trim().toLowerCase();
     }
@@ -14468,12 +14471,13 @@
         var queueInfo = state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : {};
         var snapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
         return isQueueStatusErrorForResumePrompt(
-            snapshot.job_status
+            queueInfo.status
+            || queueInfo.queue_status
+            || queueInfo.state
+            || queueInfo.job_status
+            || snapshot.job_status
             || snapshot.status
             || snapshot.queue_status
-            || queueInfo.job_status
-            || queueInfo.status
-            || queueInfo.queue_status
             || ''
         );
     }

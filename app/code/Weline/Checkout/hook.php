@@ -54,6 +54,30 @@ return [
         'description' => __('在渲染结账表单之后触发，允许其他模块在表单结束处注入内容（如支付方式选择、额外信息等）。'),
         'doc' => 'frontend/layouts/checkout/form-after.md',
     ],
+
+    'Weline_Checkout::frontend::layouts::checkout::identity-before' => [
+        'name' => __('结账身份选择之前'),
+        'description' => __('在默认一页式结账的账户/匿名身份选择区块之前触发，允许模块注入登录、会员权益或风控提示。'),
+        'doc' => 'frontend/layouts/checkout/identity-before.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::identity-options-before' => [
+        'name' => __('结账身份选项之前'),
+        'description' => __('在账户结账与匿名结账选项列表之前触发，允许模块增加说明或调整选择体验。'),
+        'doc' => 'frontend/layouts/checkout/identity-options-before.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::identity-options-after' => [
+        'name' => __('结账身份选项之后'),
+        'description' => __('在账户结账与匿名结账选项列表之后触发，允许模块补充匿名结账说明、协议或风险提示。'),
+        'doc' => 'frontend/layouts/checkout/identity-options-after.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::identity-after' => [
+        'name' => __('结账身份选择之后'),
+        'description' => __('在默认一页式结账的账户/匿名身份选择区块之后触发，允许模块注入后续上下文或客户端扩展。'),
+        'doc' => 'frontend/layouts/checkout/identity-after.md',
+    ],
     
     // 支付方式选择区域之前
     'Weline_Checkout::frontend::layouts::checkout::payment-methods-before' => [

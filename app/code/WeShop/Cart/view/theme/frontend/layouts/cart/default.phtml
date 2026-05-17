@@ -340,12 +340,6 @@ $tax = $this->getData('tax') ?? 0;
     <!-- 购物车页面配置 -->
     <script>
     window.__WelineCartConfig = <?= json_encode([
-        'api' => [
-            'updateItem' => '/api123/api/rest/v1/weshop/cart',
-            'removeItem' => '/api123/api/rest/v1/weshop/cart/remove',
-            'applyCoupon' => $this->getUrl('cart/coupon/apply'),
-            'miniCartItems' => '/api123/api/rest/v1/weshop/cart/mini-items',
-        ],
         'cart' => [
             'count' => $cartCount,
             'total' => $cartTotal,

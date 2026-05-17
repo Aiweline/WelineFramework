@@ -4,7 +4,7 @@ Quick index for Claude and Claude-like AI assistants.
 
 Full AI rules are maintained in one place only:
 
-- `dev/ai/global-constraints.md`
+- `dev/ai/global-constraints.md`（第 8 节：layout 仅默认骨架、占位与 Hook/插槽挂载，禁止交互与业务逻辑）
 
 Start with `AI-ENTRY.md`, then read `dev/ai/global-constraints.md` before any implementation or verification work.
 

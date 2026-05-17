@@ -9,7 +9,7 @@
 $paymentMethods = $this->getData('payment_methods') ?? [];
 if (!is_array($paymentMethods) || $paymentMethods === []) {
     ?>
-    <div class="weshop-checkout-empty"><?= __('No payment methods are available for the current checkout context.') ?></div>
+    <div class="weshop-checkout-empty"><?= __('当前结账上下文没有可用支付方式。') ?></div>
     <?php
     return;
 }
