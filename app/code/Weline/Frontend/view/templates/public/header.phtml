@@ -1,4 +1,7 @@
 
+<?php
+$frontendUrl = rtrim((string) $this->getUrl(''), '/') . '/';
+?>
 <?php if ($this->getData('layoutType') && class_exists(\Weline\Theme\Block\Partials::class)): ?>
     <?php
     $headerPartials = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);

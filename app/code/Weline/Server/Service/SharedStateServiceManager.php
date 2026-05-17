@@ -550,13 +550,21 @@ class SharedStateServiceManager
         }
 
         $role = $this->normalizeRoleName($role);
-        $runtime = $this->readRuntimeFile($role);
+        $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $this->readRuntimeFile($role));
         $definition = $this->buildStatusProbeDefinition($role, $config, $envConfig, $runtime);
         $healthy = $this->probeRunningSharedService($definition, (string) $definition['token_file_name']);
+        $pid = (int) ($runtime['pid'] ?? 0);
+        if ($healthy && $pid <= 0) {
+            $occupant = Processer::inspectPortOccupantWithHistory((int) $definition['port']);
+            $pid = (int) ($occupant['pid'] ?? 0);
+            if ($pid <= 0) {
+                $pid = Processer::getProcessIdByPort((int) $definition['port']);
+            }
+        }
         $runtime = \array_merge(
             $this->buildRuntimeMetadata(
                 $definition,
-                (int) ($runtime['pid'] ?? 0),
+                $pid,
                 \is_string($runtime['started_at'] ?? null) ? (string) $runtime['started_at'] : null,
                 $healthy ? \date('c') : (\is_string($runtime['healthy_at'] ?? null) ? (string) $runtime['healthy_at'] : null)
             ),
@@ -1530,6 +1538,29 @@ class SharedStateServiceManager
         $registry ??= $this->createRegistry();
         $record = $registry->getRecord($role);
         $consumers = $registry->getConsumers($role);
+
+        foreach ([
+            'role',
+            'host',
+            'port',
+            'token_file_name',
+            'pid',
+            'started_at',
+            'healthy_at',
+            'process_name',
+            'instance_name',
+            'service_instance_name',
+            'shared_service',
+        ] as $key) {
+            if (!\array_key_exists($key, $record)) {
+                continue;
+            }
+            $current = $runtime[$key] ?? null;
+            $missing = $current === null || $current === '' || ($key === 'pid' && (int) $current <= 0);
+            if ($missing) {
+                $runtime[$key] = $record[$key];
+            }
+        }
 
         $runtime['registered'] = $record !== [];
         $runtime['consumer_count'] = \count($consumers);

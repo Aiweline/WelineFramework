@@ -87,6 +87,14 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
      */
     public function adaptPrompt(string $prompt, array $params = []): string
     {
+        if (!empty($params['component_config_generation'])) {
+            return $prompt;
+        }
+
+        if ($this->isJsonComponentPayloadRequest($prompt)) {
+            return $prompt . $this->getJsonComponentPayloadContract();
+        }
+
         // 检查是否是微调模式
         $isRefineMode = !empty($params['refine_mode']) && !empty($params['existing_code']);
         
@@ -144,6 +152,36 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
         }
 
         return $prompt . $componentRequirement;
+    }
+
+    private function isJsonComponentPayloadRequest(string $prompt): bool
+    {
+        if (stripos($prompt, 'CRITICAL OUTPUT CONTRACT FOR PAGEBUILDER COMPONENT JSON') === false) {
+            return false;
+        }
+
+        return stripos($prompt, 'JSON object') !== false
+            && stripos($prompt, 'css_extra') !== false
+            && stripos($prompt, 'js_content') !== false
+            && (
+                stripos($prompt, 'html_content') !== false
+                || stripos($prompt, 'html_extra') !== false
+                || stripos($prompt, 'footer_extra_text') !== false
+            );
+    }
+
+    private function getJsonComponentPayloadContract(): string
+    {
+        return "\n\n[PageBuilder JSON component adapter contract]\n"
+            . "This scenario is JSON-field generation, not full PHTML component generation.\n"
+            . "Return one JSON object only. Do not output @component_start, @fields_start, full PHTML templates, markdown fences, or explanatory prose.\n"
+            . "Use only the JSON keys required by the current prompt. For content blocks those keys are extra_fields, php_variables, css_extra, css_responsive, html_content, and js_content.\n"
+            . "Keep extra_fields, php_variables, and js_content as empty strings unless the current prompt explicitly requires otherwise.\n"
+            . "html_content is the visitor HTML fragment for the current block only. Do not switch to framework wrapper code, do not create id='componentId', and do not output neighboring blocks.\n"
+            . "css_extra/css_responsive contain scoped CSS only, using #componentId descendant selectors and the exact component class prefix supplied by the current prompt. For content blocks in this workflow the supplied prefix is `pb-c`, so generated content classes must be shaped like `pb-c-root` and never `.pb` or `pb` by itself.\n"
+            . "Prefer the current prompt's fixed safe skeleton. Do not invent complex nested HTML or CSS functions when the prompt supplies a simpler skeleton.\n"
+            . "If the current prompt provides a verified image template/final_url, copy it into html_content with the same src, data-pb-ai-image-role, and data-pb-ai-asset-slot values.\n"
+            . "The current prompt's strong contract, locale, image-slot rule, and component prefix override any generic adapter guidance.\n";
     }
     
     /**

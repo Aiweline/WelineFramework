@@ -35,6 +35,11 @@ class Router implements RouterInterface
         if (!empty($rule['module']) && !$isRootPath) {
             return;
         }
+
+        if (self::isInternalPageViewPath($path)) {
+            self::enrichPageViewParamsFromRewriteMeta();
+            return;
+        }
         
         // 2. 跳过系统路由和媒体文件
         if (self::isSystemPath($path)) {
@@ -147,7 +152,17 @@ class Router implements RouterInterface
             '/setup',
         ];
         
-        $lowerPath = strtolower($path);
+        $lowerPath = '/' . ltrim(strtolower($path), '/');
+
+        if (preg_match('#^/api\d*(?:/|$)#', $lowerPath)) {
+            return true;
+        }
+
+        foreach (['/product', '/catalog/category', '/blog'] as $reservedPrefix) {
+            if ($lowerPath === $reservedPrefix || str_starts_with($lowerPath, $reservedPrefix . '/')) {
+                return true;
+            }
+        }
         
         foreach ($systemPaths as $systemPath) {
             if (str_starts_with($lowerPath, $systemPath)) {
@@ -161,6 +176,50 @@ class Router implements RouterInterface
         }
         
         return false;
+    }
+
+    private static function isInternalPageViewPath(string $path): bool
+    {
+        $pathOnly = strtok($path, '?');
+        if ($pathOnly === false) {
+            $pathOnly = $path;
+        }
+
+        return trim(strtolower($pathOnly), '/') === 'pagebuilder/frontend/page/view';
+    }
+
+    private static function enrichPageViewParamsFromRewriteMeta(): void
+    {
+        if ((int)WelineEnv::getGet('page_id', 0) <= 0) {
+            $urlId = (string)WelineEnv::server('WELINE_URL_REWRITE_URL_ID', '');
+            if (preg_match('/^pagebuilder_page_(\d+)$/', $urlId, $matches)) {
+                self::setRequestGet('page_id', (int)$matches[1]);
+            }
+        }
+
+        if ((int)WelineEnv::getGet('website_id', 0) <= 0) {
+            $websiteId = (int)WelineEnv::server('WELINE_URL_REWRITE_WEBSITE_ID', 0);
+            if ($websiteId <= 0) {
+                $websiteId = (int)WelineEnv::server('WELINE_WEBSITE_ID', 0);
+            }
+            if ($websiteId > 0) {
+                self::setRequestGet('website_id', $websiteId);
+                WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'PageBuilder rewrite website');
+            }
+        }
+    }
+
+    private static function setRequestGet(string $key, mixed $value): void
+    {
+        WelineEnv::setGet($key, $value);
+
+        try {
+            /** @var \Weline\Framework\Http\Request $request */
+            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            $request->setGet($key, $value);
+        } catch (\Throwable) {
+            // Request may not be initialized when the router runs under CLI tests.
+        }
     }
     
     /**
@@ -367,7 +426,12 @@ class Router implements RouterInterface
         try {
             $domainModel = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteDomain::class);
             $domain = clone $domainModel;
-            $domain->clearData()->clearQuery()->loadByDomain($hostNoPort);
+            $domain->clearData()->clearQuery()
+                ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN, $hostNoPort)
+                ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_STATUS, \Weline\Websites\Model\WebsiteDomain::STATUS_ACTIVE)
+                ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_SUB_PATH, '')
+                ->find()
+                ->fetch();
             if ((int)$domain->getData(\Weline\Websites\Model\WebsiteDomain::schema_fields_ID) > 0
                 && (string)$domain->getData(\Weline\Websites\Model\WebsiteDomain::schema_fields_STATUS) === \Weline\Websites\Model\WebsiteDomain::STATUS_ACTIVE) {
                 $websiteId = (int)$domain->getData(\Weline\Websites\Model\WebsiteDomain::schema_fields_WEBSITE_ID);

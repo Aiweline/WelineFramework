@@ -1,7 +1,7 @@
 ---
 name: 框架核心工程师-路由事件与扩展
 description: Framework core engineer skill for routing, events, hooks, extends, and extension-point contract design.
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Role
@@ -28,6 +28,7 @@ This skill owns route definition patterns, event contracts, hook naming, and ext
 - Define event, hook, and extends contracts with stable naming and documentation.
 - Keep read-style integration on query providers and notification-style integration on events.
 - Ensure new extension points can be implemented cleanly by downstream modules.
+- Keep account-center extensibility inside the shared hook-shell contract when the page already exposes one, instead of leaking module features into standalone route jumps.
 
 # Workflow
 
@@ -36,8 +37,10 @@ This skill owns route definition patterns, event contracts, hook naming, and ext
 3. For routes, update the owning controller and module env configuration.
 4. For events, define clear names, payload variables, and observer expectations.
 5. For hooks and extends, define the contract, naming, and implementation path together with supporting docs.
-6. Run route or framework registration commands when required.
-7. Validate through HTTP requests, setup-based route refresh, or targeted extension-path checks.
+6. When the target is an account-center section, inspect the host shell first: reuse existing hook pairs such as `account.sidebar` and `account.sidebar.content`, plus the corresponding `data-account-nav-link` and `data-section` contract, before inventing a new route-first entry.
+7. If the requested behavior should match existing address-style account sections, keep links anchored to the shared account page and render module content through hook bridges instead of sending users to standalone module routes.
+8. Run route or framework registration commands when required.
+9. Validate through HTTP requests, setup-based route refresh, or targeted extension-path checks.
 
 # Weline Rules
 
@@ -46,6 +49,8 @@ This skill owns route definition patterns, event contracts, hook naming, and ext
 - Run `php bin/w setup:upgrade --route` after adding or changing controllers that require route refresh.
 - Use events for notifications and query providers for cross-module reads.
 - Keep extension-point docs updated when design changes.
+- If account-center modules such as orders, RMA, invoices, or subscriptions should behave like existing in-page sections, keep them inside the account shell through hooks instead of linking the sidebar directly to standalone module pages.
+- Treat `account.sidebar` as the nav host and `account.sidebar.content` as the matching content host; downstream modules should bridge into those surfaces rather than re-own the account layout.
 
 # Inputs Required
 
@@ -66,6 +71,7 @@ This skill owns route definition patterns, event contracts, hook naming, and ext
 - Run `php bin/w http:request ...` or equivalent checks for route behavior.
 - Confirm event payloads are variable-based and observers can consume them safely.
 - Confirm hook and extends naming matches framework conventions.
+- For account-center integrations, confirm the nav item and content section stay in the same page shell instead of only proving that a module route exists.
 
 # Constraints
 
@@ -73,6 +79,7 @@ This skill owns route definition patterns, event contracts, hook naming, and ext
 - Do not create data-query events instead of proper query providers.
 - Do not define undocumented extension points for public reuse.
 - Do not hardcode URLs where framework URL helpers are required.
+- Do not break an existing hook-driven account shell by replacing an in-page section with a cross-page jump unless the requirement explicitly calls for a separate page.
 
 # Shared Collaboration Contract
 

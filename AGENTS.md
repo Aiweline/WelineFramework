@@ -6,6 +6,8 @@ Full AI rules are maintained in one place only:
 
 - `dev/ai/global-constraints.md`
 
+The Codex global rules are merged into that file as part of the unified repository-wide constraints, including Browser-first frontend validation, no premature test solidification, and the explicit ban on fallback/patch-style code.
+
 For other AIs (GPT/Gemini/Cursor): start with `AI-README.md` -> `AI-ENTRY.md` -> `dev/ai/global-constraints.md`.
 
 ## Quick Commands

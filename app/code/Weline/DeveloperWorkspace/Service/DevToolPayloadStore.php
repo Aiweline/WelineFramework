@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Service;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Server\Service\MemoryStateFacade;
 
@@ -128,20 +130,22 @@ class DevToolPayloadStore
         }
 
         try {
-            $this->memory = new MemoryStateFacade([
+            $this->memory = new MemoryStateFacade($this->cachePolicy()->memoryOptions([
                 'consumer_code' => self::NAMESPACE,
                 'prefer_direct_connect' => true,
-                'connect_timeout' => 0.05,
-                'timeout' => 0.1,
-                'acquire_timeout' => 0.05,
                 'pool_size' => 1,
                 'auto_start' => false,
-            ]);
+            ]));
         } catch (\Throwable) {
             $this->memory = null;
         }
 
         return $this->memory;
+    }
+
+    private function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
     }
 
     private function getFromFile(string $type, string $key): mixed

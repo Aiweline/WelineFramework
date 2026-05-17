@@ -17,15 +17,11 @@ final class FiberOutputBuffer
 
     private static int $installedLevel = 0;
 
-    /** @var \WeakMap<\Fiber, string>|null */
-    private static ?\WeakMap $fiberBuffers = null;
+    /** @var \WeakMap<\Fiber, list<string>>|null */
+    private static ?\WeakMap $fiberBufferStacks = null;
 
-    /** @var \WeakMap<\Fiber, int>|null */
-    private static ?\WeakMap $fiberDepths = null;
-
-    private static string $mainBuffer = '';
-
-    private static int $mainDepth = 0;
+    /** @var list<string> */
+    private static array $mainBufferStack = [];
 
     public static function install(): void
     {
@@ -95,20 +91,14 @@ final class FiberOutputBuffer
         self::ensureInstalled('begin_capture');
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            if (self::$mainDepth === 0) {
-                self::$mainBuffer = '';
-            }
-            self::$mainDepth++;
+            self::$mainBufferStack[] = '';
             return;
         }
 
-        self::$fiberBuffers ??= new \WeakMap();
-        self::$fiberDepths ??= new \WeakMap();
-        if (!isset(self::$fiberDepths[$fiber]) || self::$fiberDepths[$fiber] === 0) {
-            self::$fiberBuffers[$fiber] = '';
-            self::$fiberDepths[$fiber] = 0;
-        }
-        self::$fiberDepths[$fiber] = (int)self::$fiberDepths[$fiber] + 1;
+        self::$fiberBufferStacks ??= new \WeakMap();
+        $stack = self::$fiberBufferStacks[$fiber] ?? [];
+        $stack[] = '';
+        self::$fiberBufferStacks[$fiber] = $stack;
     }
 
     public static function endCapture(): string
@@ -119,27 +109,28 @@ final class FiberOutputBuffer
 
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            $result = self::$mainBuffer;
-            if (self::$mainDepth > 0) {
-                self::$mainDepth--;
+            if (self::$mainBufferStack === []) {
+                return '';
             }
-            if (self::$mainDepth <= 0) {
-                self::$mainDepth = 0;
-                self::$mainBuffer = '';
-            }
-            return $result;
+
+            return (string)\array_pop(self::$mainBufferStack);
         }
 
-        if (self::$fiberDepths === null || !isset(self::$fiberDepths[$fiber])) {
+        if (self::$fiberBufferStacks === null || !isset(self::$fiberBufferStacks[$fiber])) {
             return '';
         }
 
-        $result = (string)(self::$fiberBuffers[$fiber] ?? '');
-        self::$fiberDepths[$fiber] = (int)self::$fiberDepths[$fiber] - 1;
-        if (self::$fiberDepths[$fiber] <= 0) {
-            unset(self::$fiberDepths[$fiber], self::$fiberBuffers[$fiber]);
+        $stack = self::$fiberBufferStacks[$fiber];
+        if ($stack === []) {
+            unset(self::$fiberBufferStacks[$fiber]);
+            return '';
+        }
+
+        $result = (string)\array_pop($stack);
+        if ($stack === []) {
+            unset(self::$fiberBufferStacks[$fiber]);
         } else {
-            self::$fiberBuffers[$fiber] = '';
+            self::$fiberBufferStacks[$fiber] = $stack;
         }
 
         return $result;
@@ -156,16 +147,24 @@ final class FiberOutputBuffer
 
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            self::$mainDepth = 0;
-            self::$mainBuffer = '';
+            if (self::$mainBufferStack !== []) {
+                \array_pop(self::$mainBufferStack);
+            }
             return;
         }
 
-        if (self::$fiberDepths !== null && isset(self::$fiberDepths[$fiber])) {
-            unset(self::$fiberDepths[$fiber]);
+        if (self::$fiberBufferStacks === null || !isset(self::$fiberBufferStacks[$fiber])) {
+            return;
         }
-        if (self::$fiberBuffers !== null && isset(self::$fiberBuffers[$fiber])) {
-            unset(self::$fiberBuffers[$fiber]);
+
+        $stack = self::$fiberBufferStacks[$fiber];
+        if ($stack !== []) {
+            \array_pop($stack);
+        }
+        if ($stack === []) {
+            unset(self::$fiberBufferStacks[$fiber]);
+        } else {
+            self::$fiberBufferStacks[$fiber] = $stack;
         }
     }
 
@@ -175,7 +174,15 @@ final class FiberOutputBuffer
             return;
         }
 
-        self::discardCapture();
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            self::$mainBufferStack = [];
+            return;
+        }
+
+        if (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+            unset(self::$fiberBufferStacks[$fiber]);
+        }
     }
 
     private static function handleChunk(string $chunk): string
@@ -186,16 +193,20 @@ final class FiberOutputBuffer
 
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            if (self::$mainDepth > 0) {
-                self::$mainBuffer .= $chunk;
+            if (self::$mainBufferStack !== []) {
+                $last = \array_key_last(self::$mainBufferStack);
+                self::$mainBufferStack[$last] .= $chunk;
             }
             return '';
         }
 
-        if (self::$fiberDepths !== null && isset(self::$fiberDepths[$fiber]) && self::$fiberDepths[$fiber] > 0) {
-            self::$fiberBuffers ??= new \WeakMap();
-            $current = self::$fiberBuffers[$fiber] ?? '';
-            self::$fiberBuffers[$fiber] = $current . $chunk;
+        if (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+            $stack = self::$fiberBufferStacks[$fiber];
+            if ($stack !== []) {
+                $last = \array_key_last($stack);
+                $stack[$last] .= $chunk;
+                self::$fiberBufferStacks[$fiber] = $stack;
+            }
         }
 
         return '';
@@ -224,10 +235,8 @@ final class FiberOutputBuffer
     {
         self::$installed = false;
         self::$installedLevel = 0;
-        self::$fiberBuffers = null;
-        self::$fiberDepths = null;
-        self::$mainBuffer = '';
-        self::$mainDepth = 0;
+        self::$fiberBufferStacks = null;
+        self::$mainBufferStack = [];
     }
 
     private static function handlerName(): string

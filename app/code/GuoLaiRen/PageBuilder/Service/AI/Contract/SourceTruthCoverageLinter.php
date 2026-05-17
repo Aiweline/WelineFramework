@@ -20,8 +20,9 @@ final class SourceTruthCoverageLinter
 
         $allCopy = $this->extractAllCopy($pagePlan, $blockPlans);
 
-        $missedFacts = $this->findMissingFacts($sourceTruth, $allCopy);
-        $totalFacts = \count(\is_array($sourceTruth['must_include_facts'] ?? null) ? $sourceTruth['must_include_facts'] : []);
+        $facts = $this->filterVisibleMustIncludeFacts($sourceTruth);
+        $missedFacts = $this->findMissingFacts($facts, $allCopy);
+        $totalFacts = \count($facts);
         $coveredFacts = $totalFacts - \count($missedFacts);
         $coverage = $totalFacts > 0 ? ($coveredFacts / $totalFacts) : 1.0;
 
@@ -96,8 +97,9 @@ final class SourceTruthCoverageLinter
         }
 
         $allCopy = $this->extractAllCopy($aggregated, ['blocks' => $allBlocks]);
-        $missedFacts = $this->findMissingFacts($sourceTruth, $allCopy);
-        $totalFacts = \count(\is_array($sourceTruth['must_include_facts'] ?? null) ? $sourceTruth['must_include_facts'] : []);
+        $facts = $this->filterVisibleMustIncludeFacts($sourceTruth);
+        $missedFacts = $this->findMissingFacts($facts, $allCopy);
+        $totalFacts = \count($facts);
         $coveredFacts = $totalFacts - \count($missedFacts);
         $coverage = $totalFacts > 0 ? ($coveredFacts / $totalFacts) : 1.0;
 
@@ -154,6 +156,50 @@ final class SourceTruthCoverageLinter
     }
 
     /**
+     * @param array<string, mixed> $sourceTruth
+     * @param array<string, mixed> $contract
+     * @return array{coverage:float, missing_facts:array<string,string>, missing_blocks:list<string>, findings:list<array<string,mixed>>, fallback_used:bool}
+     */
+    public function lintBuildPlanContract(array $sourceTruth, array $contract): array
+    {
+        $contentItems = \is_array($contract['content_manifest']['items'] ?? null) ? $contract['content_manifest']['items'] : [];
+        $pagePlan = [
+            'page_goal' => $this->collectScalarCopy([
+                $contract['site_brief'] ?? [],
+                $contract['source_of_truth']['user_requirements'] ?? [],
+                $contentItems,
+            ]),
+            'theme_alignment_summary' => $this->collectScalarCopy([
+                $contract['design_manifest'] ?? [],
+                $contract['policy_projection'] ?? [],
+            ]),
+        ];
+
+        $blocks = [];
+        foreach (\is_array($contract['blocks'] ?? null) ? $contract['blocks'] : [] as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockId = \trim((string)($block['block_id'] ?? ''));
+            $blockKey = $blockId !== '' ? \basename(\str_replace('.', '/', $blockId)) : \trim((string)($block['block_key'] ?? ''));
+            $blockCopy = [];
+            foreach (\is_array($block['content_keys'] ?? null) ? $block['content_keys'] : [] as $contentKey) {
+                $contentKey = \trim((string)$contentKey);
+                if ($contentKey !== '' && \array_key_exists($contentKey, $contentItems)) {
+                    $blockCopy[] = $this->scalarToText($contentItems[$contentKey]);
+                }
+            }
+            $blocks[] = [
+                'block_key' => $blockKey,
+                'content' => \implode(' ', \array_filter($blockCopy, static fn(string $text): bool => $text !== '')),
+                'goal' => \trim((string)($block['goal'] ?? $block['block_type'] ?? '')),
+            ];
+        }
+
+        return $this->lint($sourceTruth, $pagePlan, ['blocks' => $blocks]);
+    }
+
+    /**
      * @param array<string, mixed> $pagePlan
      * @param array<string, mixed> $blockPlans
      */
@@ -197,12 +243,49 @@ final class SourceTruthCoverageLinter
     }
 
     /**
+     * @param list<mixed> $values
+     */
+    private function collectScalarCopy(array $values): string
+    {
+        $parts = [];
+        foreach ($values as $value) {
+            $text = $this->scalarToText($value);
+            if ($text !== '') {
+                $parts[] = $text;
+            }
+        }
+
+        return \implode(' ', $parts);
+    }
+
+    private function scalarToText(mixed $value): string
+    {
+        if (\is_scalar($value)) {
+            return \trim((string)$value);
+        }
+        if (!\is_array($value)) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($value as $item) {
+            $text = $this->scalarToText($item);
+            if ($text !== '') {
+                $parts[] = $text;
+            }
+        }
+
+        return \implode(' ', $parts);
+    }
+
+    /**
+     * @param list<array<string,mixed>> $facts
      * @return array<string, string>
      */
-    private function findMissingFacts(array $sourceTruth, string $allCopy): array
+    private function findMissingFacts(array $facts, string $allCopy): array
     {
         $missing = [];
-        foreach (\is_array($sourceTruth['must_include_facts'] ?? null) ? $sourceTruth['must_include_facts'] : [] as $fact) {
+        foreach ($facts as $fact) {
             if (!\is_array($fact)) {
                 continue;
             }
@@ -220,14 +303,34 @@ final class SourceTruthCoverageLinter
 
     private function textContainsFact(string $haystack, string $needle): bool
     {
+        $haystackLower = \mb_strtolower($haystack);
         if (\mb_strpos(\mb_strtolower($haystack), \mb_strtolower($needle)) !== false) {
             return true;
+        }
+        foreach ($this->factMatchCandidates($needle) as $candidate) {
+            if (\mb_strlen($candidate) < 4) {
+                continue;
+            }
+            if (\mb_strpos($haystackLower, \mb_strtolower($candidate)) !== false) {
+                return true;
+            }
+        }
+        $factTokens = $this->factSignalTokens($needle);
+        if ($factTokens !== []) {
+            $matchedTokens = 0;
+            foreach ($factTokens as $token) {
+                if (\mb_strpos($haystackLower, \mb_strtolower($token)) !== false) {
+                    ++$matchedTokens;
+                }
+            }
+            if ($matchedTokens >= \max(2, (int)\ceil(\count($factTokens) * 0.6))) {
+                return true;
+            }
         }
         $nouns = \array_filter(
             \explode(' ', (string)(\preg_replace('/[^\w\s]/u', '', $needle) ?? '')),
             static fn(string $w): bool => \mb_strlen($w) > 2
         );
-        $haystackLower = \mb_strtolower($haystack);
         $matched = 0;
         foreach ($nouns as $noun) {
             if (\mb_strpos($haystackLower, \mb_strtolower($noun)) !== false) {
@@ -251,6 +354,109 @@ final class SourceTruthCoverageLinter
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string,mixed> $sourceTruth
+     * @return list<array<string,mixed>>
+     */
+    private function filterVisibleMustIncludeFacts(array $sourceTruth): array
+    {
+        $facts = [];
+        foreach (\is_array($sourceTruth['must_include_facts'] ?? null) ? $sourceTruth['must_include_facts'] : [] as $fact) {
+            if (!\is_array($fact)) {
+                continue;
+            }
+            $text = \trim((string)($fact['text'] ?? ''));
+            if ($text === '' || $this->isInternalPlanningFact($text)) {
+                continue;
+            }
+            $facts[] = $fact;
+        }
+
+        return \array_values($facts);
+    }
+
+    private function isInternalPlanningFact(string $text): bool
+    {
+        $normalized = \mb_strtolower(\trim($text));
+        if ($normalized === '') {
+            return true;
+        }
+        if (\preg_match('/^(?:home_page|about_page|contact_page|custom_page|blog_page|blog_list|blog_category)$/iu', $normalized) === 1) {
+            return true;
+        }
+        if (\preg_match('/(?:页面代码|page\s*(?:type|code)|品牌名保留原文|preserve\s+brand\s+name|用户请求的页面意图|requested\s+page\s+intent)/iu', $text) === 1) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function factMatchCandidates(string $fact): array
+    {
+        $fact = \trim($fact);
+        if ($fact === '') {
+            return [];
+        }
+
+        $candidates = [];
+        $afterColon = (string)(\preg_replace('/^[^:：]{1,24}[:：]\s*/u', '', $fact) ?? $fact);
+        foreach ([$fact, $afterColon] as $candidate) {
+            $candidate = \trim($candidate);
+            if ($candidate !== '' && !$this->isLowSignalFactToken($candidate)) {
+                $candidates[] = $candidate;
+            }
+        }
+
+        return \array_values(\array_unique($candidates));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function factSignalTokens(string $fact): array
+    {
+        $fact = \trim($fact);
+        if ($fact === '') {
+            return [];
+        }
+        $fact = (string)(\preg_replace('/^[^:：]{1,24}[:：]\s*/u', '', $fact) ?? $fact);
+        $split = \preg_split('/[\s,，、;；。.!！?？:：]+|(?:和|与|及|或)/u', $fact) ?: [];
+        $tokens = [];
+        foreach ($split as $token) {
+            $token = \trim((string)$token);
+            $token = (string)(\preg_replace('/(?:必须|需要|应当|应该|引导|通过|用户|页面|关键区块|首屏|目标)$/u', '', $token) ?? $token);
+            $token = \trim($token);
+            if ($token !== '' && \mb_strlen($token) >= 2 && !$this->isLowSignalFactToken($token)) {
+                $tokens[] = $token;
+            }
+        }
+
+        return \array_values(\array_unique($tokens));
+    }
+
+    private function isLowSignalFactToken(string $token): bool
+    {
+        $token = \mb_strtolower(\trim($token));
+        if ($token === '') {
+            return true;
+        }
+
+        return \in_array($token, [
+            '一句话定位',
+            '转化目标',
+            '页面代码',
+            '品牌名保留原文',
+            '用户请求的页面意图',
+            'page',
+            'page type',
+            'page code',
+            'conversion goal',
+        ], true);
     }
 
     /**
@@ -301,7 +507,7 @@ final class SourceTruthCoverageLinter
             'game_showcase_or_features', 'game_showcase' => ['game_showcase_or_features', 'game_showcase', 'featured_games', 'highlights'],
             'trust_security' => ['trust_security', 'trust'],
             'seo_faq' => ['seo_faq', 'faq'],
-            'final_download_cta', 'final_cta' => ['final_download_cta', 'final_cta', 'cta'],
+            'final_download_cta', 'final_cta' => ['final_download_cta', 'final_cta', 'download_cta', 'conversion_cta', 'download', 'cta', 'reward_promotion', 'promotion', 'newsletter_cta'],
             default => [$key],
         };
 

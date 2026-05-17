@@ -148,14 +148,13 @@ class CodeFixer
         }
         
         // 修复css_extra
-        if (isset($data['css_extra'])) {
-            $data['css_extra'] = $this->fixCss($data['css_extra']);
+        foreach (['css_extra', 'css_responsive', 'css_content'] as $cssField) {
+            if (isset($data[$cssField]) && is_string($data[$cssField])) {
+                $data[$cssField] = $this->fixCss($data[$cssField]);
+            }
         }
         
         // 修复css_responsive
-        if (isset($data['css_responsive'])) {
-            $data['css_responsive'] = $this->fixCss($data['css_responsive']);
-        }
         
         // 修复js_content
         if (isset($data['js_content'])) {
@@ -191,6 +190,58 @@ class CodeFixer
         $html = str_replace('`', "'", $html);
         if ($html !== $original) {
             $this->addFix($context, '替换了反引号为单引号');
+        }
+        $original = $html;
+        $html = preg_replace('/<([a-z][a-z0-9:-]*)\s+([\'"])([a-z_:][a-z0-9_:.:-]*\s*=)/i', '<$1 $3', $html) ?? $html;
+        $html = preg_replace('/<([a-z][a-z0-9:-]*)\s*=\s*([\'"])/i', '<$1 class=$2', $html) ?? $html;
+        if ($html !== $original) {
+            $this->addFix($context, 'Normalized missing HTML attribute names');
+        }
+        $original = $html;
+        $html = preg_replace('/([\'"])(?=(?:class|id|style|href|src|alt|title|role|aria-[a-z0-9_-]+|data-[a-z0-9_-]+)\s*=)/i', '$1 ', $html) ?? $html;
+        $html = preg_replace('/<\s+((?:class|id|style|role|aria-[a-z0-9_-]+|data-[a-z0-9_-]+)\s*=)/i', '<div $1', $html) ?? $html;
+        $html = preg_replace_callback(
+            '/<\s*[a-z][a-z0-9:-]*\b[^<>]*>/i',
+            static function (array $matches): string {
+                $tag = (string)($matches[0] ?? '');
+                foreach (['"', "'"] as $quote) {
+                    if ((substr_count($tag, $quote) % 2) === 1) {
+                        $tag = preg_replace('/\s*>$/', $quote . '>', $tag) ?? $tag;
+                    }
+                }
+                return $tag;
+            },
+            $html
+        ) ?? $html;
+        if ($html !== $original) {
+            $this->addFix($context, 'Repaired malformed HTML opening tags');
+        }
+        $original = $html;
+        $html = preg_replace_callback(
+            '/<(a|button)\b([^>]*)>(.*?)<\/\1>/is',
+            static function (array $matches): string {
+                $tag = (string)($matches[1] ?? '');
+                $attrs = (string)($matches[2] ?? '');
+                $inner = (string)($matches[3] ?? '');
+                $plain = trim((string)preg_replace('/\s+/u', ' ', strip_tags($inner)));
+                if ($plain !== '' && preg_match('/[\p{L}\p{N}]/u', $plain) === 1) {
+                    return (string)($matches[0] ?? '');
+                }
+                $label = '';
+                if (preg_match('/\b(?:aria-label|title)\s*=\s*(["\'])(.*?)\1/iu', $attrs, $attrMatch) === 1) {
+                    $label = trim((string)($attrMatch[2] ?? ''));
+                }
+                if ($label === '') {
+                    return (string)($matches[0] ?? '');
+                }
+                $visibleLabel = '<span>' . \htmlspecialchars($label, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span>';
+
+                return '<' . $tag . $attrs . '>' . $inner . $visibleLabel . '</' . $tag . '>';
+            },
+            $html
+        ) ?? $html;
+        if ($html !== $original) {
+            $this->addFix($context, 'Materialized visible labels for empty navigation controls');
         }
         $html = $this->normalizePhpEchoTags($html, $context);
         $html = $this->fixEmbeddedPhpBlocks($html, $context);
@@ -379,6 +430,18 @@ class CodeFixer
         
         // 修复大括号匹配
         $css = $this->normalizePhpEchoTags($css, 'css');
+        $original = $css;
+        $propertyNames = '(?:position|display|width|height|z-index|background(?:-image)?|color|font(?:-size|weight|family)?|padding|margin|grid-template-columns|flex-direction)';
+        for ($i = 0; $i < 4; $i++) {
+            $fixed = preg_replace('/(:\s*[^;{}]*?)\s+(' . $propertyNames . '\s*:)/i', '$1; $2', $css);
+            if (!is_string($fixed) || $fixed === $css) {
+                break;
+            }
+            $css = $fixed;
+        }
+        if ($css !== $original) {
+            $this->addFix('css', 'Inserted missing semicolons between CSS declarations');
+        }
 
         $openCount = substr_count($css, '{');
         $closeCount = substr_count($css, '}');

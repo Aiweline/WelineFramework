@@ -29,5 +29,13 @@
                   shared="true"
                   sort="100"/>
     </event>
+
+    <event name="Weline_Framework_Runtime::worker_bootstrap_after">
+        <observer name="WeShop_Store::worker_bootstrap_warmup"
+                  instance="WeShop\Store\Observer\WorkerBootstrapWarmup"
+                  disabled="false"
+                  shared="true"
+                  sort="180"/>
+    </event>
 </config>
 

@@ -34,7 +34,7 @@ $unpaidCount = (int) ($dashboard['unpaid_count'] ?? 0);
             <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Order Snapshot') ?></p>
             <h3 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Recent Orders') ?></h3>
         </div>
-        <a href="/customer/account/index#orders" class="text-sm font-semibold text-primary hover:underline" data-account-nav-link="true" data-section="orders"><?= __('View All') ?></a>
+        <a href="<?= $this->getUrl('weshop/order/list') ?>" class="text-sm font-semibold text-primary hover:underline" data-account-nav-link="true" data-section="orders"><?= __('View All') ?></a>
     </div>
 
     <div class="mt-5 grid grid-cols-2 gap-3">

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceTruthCoverageLinter;
 use Weline\Framework\Manager\ObjectManager;
 
 final class AiSiteQualityGateService
@@ -62,7 +63,12 @@ final class AiSiteQualityGateService
         $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         $pageReports = [];
 
-        $allTasksDone = !$this->buildTaskService->hasPendingTasks($scope);
+        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+        $taskSummary = \is_array($completionGate['summary'] ?? null)
+            ? $completionGate['summary']
+            : $this->buildTaskService->summarize($scope);
+        $taskSummary['completion_gate'] = \array_diff_key($completionGate, ['summary' => true]);
+        $allTasksDone = !empty($completionGate['passed']);
         $requiredPagesReady = $pageTypes !== [];
         $allContentClean = true;
         $allStageOneContentVisible = true;
@@ -161,7 +167,7 @@ final class AiSiteQualityGateService
         $qaReportFindings = $this->collectQaReportFindings($scope);
 
         $items = $this->normalizeQualityItems([
-            $this->buildItem('build_tasks_done', '构建任务全部完成', $allTasksDone, $this->buildTaskService->summarize($scope)),
+            $this->buildItem('build_tasks_done', '构建任务全部完成', $allTasksDone, $taskSummary),
             $this->buildItem('task_coverage', '已确认方案的所有区块已拆成构建任务', $taskCoverageReport['ok'], $taskCoverageReport),
             $this->buildItem('required_pages_render', '关键页面可渲染', $requiredPagesReady, \array_keys($pageReports)),
             $this->buildItem('shared_blocks_ready', '共享 Header/Footer 已就绪', $sharedBlocksReady, $this->extractPageValues($pageReports, 'shared_blocks')),
@@ -241,6 +247,23 @@ final class AiSiteQualityGateService
             'page_reports' => \is_array($qualityGate['page_reports'] ?? null) ? $qualityGate['page_reports'] : [],
             'quality_gate' => $qualityGate,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     */
+    private function buildTaskSummaryIsFullyComplete(array $summary): bool
+    {
+        $total = (int)($summary['total'] ?? 0);
+        if ($total <= 0) {
+            return false;
+        }
+
+        return (int)($summary['done'] ?? 0) >= $total
+            && (int)($summary['pending'] ?? 0) === 0
+            && (int)($summary['running'] ?? 0) === 0
+            && (int)($summary['failed'] ?? 0) === 0
+            && (int)($summary['cancelled'] ?? 0) === 0;
     }
 
     /**
@@ -343,11 +366,11 @@ final class AiSiteQualityGateService
         }
 
         $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
-        if ($layout === [] && \is_array($scope['page_type_layouts'][$pageType] ?? null)) {
-            $layout = $this->scopeCompatibilityService->normalizeLayoutConfig(
-                $scope['page_type_layouts'][$pageType],
-                $pageType
-            );
+        $scopeLayout = \is_array($scope['page_type_layouts'][$pageType] ?? null)
+            ? $this->scopeCompatibilityService->normalizeLayoutConfig($scope['page_type_layouts'][$pageType], $pageType)
+            : [];
+        if ($this->shouldUseScopeLayoutForInspection($layout, $scopeLayout)) {
+            $layout = $scopeLayout;
         }
 
         $styleCode = \trim((string)($virtualPage['style_code'] ?? 'default'));
@@ -483,7 +506,12 @@ final class AiSiteQualityGateService
             '/AI content placeholder|ai-empty|placeholder content|placeholder/iu',
             '/demo|example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
             '/Generated visual|inline SVG|Visual preview generated/iu',
+            '/(?:<|&lt;)\s*\/?\s*[a-z0-9][^>\n]{0,120}(?:>|&gt;)|\bclass\s*=\s*(["\']).{1,120}\1/iu',
             '/Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|content_fill_rule|field_content_requirements|task_script|stage3_directive/iu',
+            '/\b(?:planning_reason|why_this_block|why_add_this_block|block_reason|page_goal|block_goal|content_contract|design_contract|interaction_contract|implementation_contract|data_contract|render_contract|visual_contract|stage1_contract|stage2_context|plan_context|theme_context|contract_context|requirement_expansion|design_manifest|content_manifest|selected_skill_codes|skill_snapshots|qa_report_contract|build_blueprint|build_tasks)\b/iu',
+            '/\b(?:page\s+contract|block\s+plan|block\s+contract|contract\s+description|implementation\s+notes?|design\s+notes?|plan\s+context|task\s+context|base\s+prompt|system\s+prompt)\b/iu',
+            '/(?:为什么|为何).{0,40}(?:添加|加入|使用|设计|放置|这个|该|区块|模块)/u',
+            '/(?:本区块|该区块|区块目标|模块目标|页面目标|设计意图|内容策略|执行蓝图|强契约|合同字段|契约字段)/u',
             '/欢迎访问|默认页面模板|Default Page Template|This is the default page/iu',
             '/访客看到|用户看到|让访客看到|从而产生|信任感增强|知道如何|Visitors?\s+(?:see|can review|can verify|understand how|ready to)|before publishing|reviewable page content/iu',
         ];
@@ -564,27 +592,134 @@ final class AiSiteQualityGateService
     }
 
     /**
-     * 语言一致性策略（设计决策，不是 TODO）：
-     *
-     * 目标语言在 prompt 端通过 `AiSitePageComponentGenerationService::buildVisibleCopyGovernancePromptAddon`
-     * + `buildStage3LocaleExecutionPromptAddon` 做硬性约束，覆盖：visitor 可见文案、alt/title/aria 属性、
-     * 品牌名/SEO/CTA 翻译要求、CJK 边界、内部 identifier 禁止外泄等。
-     *
-     * 此处发布期门禁不做 NLP 检测的原因：
-     *  - 品牌名、APK/Android/iOS、URL、域名、型号、专有名词在非英语站点合法；
-     *  - 基于脚本比例/连续外文词的启发式很容易误判（如中文站合法引用英文 SDK 名）；
-     *  - 真实质量回路依赖 prompt 端硬约束 + RenderDataQualityLinter 的 generic copy 检测。
-     *
-     * 因此 `matchLanguageViolations` 始终返回空：language_consistency 在门禁层一律放行，
-     * 责任全部交给 prompt 合同。如果未来需要落地脚本级检测，请同时移除此说明。
+     * Heuristic language gate. It intentionally only blocks large wrong-script
+     * prose blocks, while allowing brand names, URLs, acronyms, product names,
+     * and the site title to stay in their original spelling.
      *
      * @return list<string>
      */
     private function matchLanguageViolations(string $html, string $expectedLocale, array $scope = []): array
     {
-        unset($html, $expectedLocale, $scope);
+        $expectedLocale = \strtolower(\str_replace('_', '-', \trim($expectedLocale)));
+        if ($expectedLocale === '') {
+            return [];
+        }
+
+        $text = $this->extractVisibleTextOnly($html);
+        if ($text === '') {
+            return [];
+        }
+
+        foreach ($this->buildLanguageAllowedVisibleSnippets($scope) as $snippet) {
+            $text = \str_replace($snippet, ' ', $text);
+        }
+        $text = \preg_replace('/https?:\/\/\S+|www\.\S+|[a-z0-9.-]+\.[a-z]{2,}\S*/iu', ' ', $text) ?? $text;
+        $text = \preg_replace('/\b(?:AI|API|APK|APP|CTA|FAQ|HTML|CSS|JS|SEO|URL|SSL|KYC|VIP|Android|iOS|SDK|SaaS|CRM|ERP)\b/u', ' ', $text) ?? $text;
+        $text = \trim(\preg_replace('/\s+/u', ' ', $text) ?? $text);
+        if ($text === '') {
+            return [];
+        }
+
+        if ($this->isCjkLocale($expectedLocale)) {
+            return $this->matchLargeLatinProseBlocks($text);
+        }
+
+        if ($this->isLatinScriptLocale($expectedLocale)) {
+            return $this->matchLargeCjkProseBlocks($text);
+        }
 
         return [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<string>
+     */
+    private function buildLanguageAllowedVisibleSnippets(array $scope): array
+    {
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $snippets = [];
+        foreach ([
+            $scope['site_title'] ?? null,
+            $scope['brand_name'] ?? null,
+            $scope['target_domain'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+            $websiteProfile['brand_name'] ?? null,
+            $websiteProfile['target_domain'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $value = \trim((string)$candidate);
+            if ($value !== '') {
+                $snippets[] = $value;
+            }
+        }
+
+        return \array_values(\array_unique($snippets));
+    }
+
+    private function isCjkLocale(string $locale): bool
+    {
+        return \preg_match('/^(zh|ja|ko)(?:-|$)/i', $locale) === 1;
+    }
+
+    private function isLatinScriptLocale(string $locale): bool
+    {
+        return \preg_match('/^(en|fr|de|es|pt|it|nl|id|ms|vi|tr|pl|ro|cs|sk|sl|hr|da|sv|no|fi)(?:-|$)/i', $locale) === 1;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function matchLargeLatinProseBlocks(string $text): array
+    {
+        if (\preg_match_all('/\b[A-Za-z][A-Za-z\'-]+(?:(?:[\s,.;:!?&-]+)[A-Za-z][A-Za-z\'-]+){9,}\b/u', $text, $found) < 1) {
+            return [];
+        }
+
+        $violations = [];
+        foreach ($found[0] ?? [] as $match) {
+            $match = \trim((string)$match);
+            $letters = \preg_replace('/[^A-Za-z]+/u', '', $match) ?? '';
+            $wordCount = \count(\preg_split('/\s+/u', $match, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+            $hasSentenceWords = \preg_match('/\b(?:the|and|with|for|from|that|this|your|our|into|before|after|because|visitors?|customers?|users?|website|section|content|support|service|trust|download|access)\b/iu', $match) === 1;
+            if (($wordCount >= 10 || \strlen($letters) >= 80) && $hasSentenceWords) {
+                $violations[] = 'large_foreign_language_block: ' . $this->excerptQualityGateText($match, 140);
+            }
+        }
+
+        return \array_slice(\array_values(\array_unique($violations)), 0, 8);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function matchLargeCjkProseBlocks(string $text): array
+    {
+        if (\preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}][\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}\s，。！？、；：“”‘’（）《》]{19,}/u', $text, $found) < 1) {
+            return [];
+        }
+
+        $violations = [];
+        foreach ($found[0] ?? [] as $match) {
+            $match = \trim((string)$match);
+            if ($match !== '') {
+                $violations[] = 'large_foreign_language_block: ' . $this->excerptQualityGateText($match, 140);
+            }
+        }
+
+        return \array_slice(\array_values(\array_unique($violations)), 0, 8);
+    }
+
+    private function excerptQualityGateText(string $value, int $limit): string
+    {
+        $value = \trim(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        if (\mb_strlen($value, 'UTF-8') <= $limit) {
+            return $value;
+        }
+
+        return \mb_substr($value, 0, \max(0, $limit - 3), 'UTF-8') . '...';
     }
 
     private function extractVisibleTextOnly(string $html): string
@@ -707,7 +842,7 @@ final class AiSiteQualityGateService
                 continue;
             }
             $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
-            if (!$this->isRequiredRealImageSlotType($slotType)) {
+            if ($slotType === '') {
                 continue;
             }
             $url = \trim((string)($slot['final_url'] ?? ''));
@@ -735,7 +870,7 @@ final class AiSiteQualityGateService
                 continue;
             }
             $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
-            if (!$this->isRequiredRealImageSlotType($slotType)) {
+            if (!$this->slotRequiresRealImageAsset($slot)) {
                 continue;
             }
             $slotId = \trim((string)($slot['slot_id'] ?? ''));
@@ -913,7 +1048,7 @@ final class AiSiteQualityGateService
             if (!\is_array($slot)) {
                 continue;
             }
-            if ($this->isRequiredRealImageSlotType(\strtolower(\trim((string)($slot['slot_type'] ?? ''))))) {
+            if ($this->slotRequiresRealImageAsset($slot)) {
                 return true;
             }
         }
@@ -921,9 +1056,12 @@ final class AiSiteQualityGateService
         return false;
     }
 
-    private function isRequiredRealImageSlotType(string $slotType): bool
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function slotRequiresRealImageAsset(array $slot): bool
     {
-        return \in_array($slotType, ['hero_image', 'section_image', 'trust_brand_image', 'logo_icon'], true);
+        return (int)($slot['required'] ?? $slot['real_image_required'] ?? 0) === 1;
     }
 
     private function isRealImageAssetUrl(string $url): bool
@@ -1804,21 +1942,6 @@ final class AiSiteQualityGateService
         if (\is_array($blueprint['tasks'] ?? null)) {
             $tasks = \array_merge($tasks, $blueprint['tasks']);
         }
-        // 兼容老路径：build_summary.task_summary.groups[*].tasks。
-        $groups = \is_array($scope['build_summary']['task_summary']['groups'] ?? null)
-            ? $scope['build_summary']['task_summary']['groups']
-            : [];
-        foreach ($groups as $group) {
-            if (!\is_array($group)) {
-                continue;
-            }
-            foreach (\is_array($group['tasks'] ?? null) ? $group['tasks'] : [] as $task) {
-                if (\is_array($task)) {
-                    $tasks[] = $task;
-                }
-            }
-        }
-
         $scheduled = [
             '__shared_header__' => false,
             '__shared_footer__' => false,
@@ -1931,6 +2054,7 @@ final class AiSiteQualityGateService
             }
             $renderDataBucket[] = $finding;
         }
+        $sourceTruthBucket = $this->filterStaleSourceTruthRequiredBlockFindings($scope, $sourceTruthBucket);
 
         $sourceTruth = $this->summarizeFindingsBucket($sourceTruthBucket, $evaluated);
         $renderData = $this->summarizeFindingsBucket($renderDataBucket, $evaluated);
@@ -1941,6 +2065,108 @@ final class AiSiteQualityGateService
             'source_truth_ok' => $sourceTruth['ok'],
             'render_data_ok' => $renderData['ok'],
         ];
+    }
+
+    /**
+     * The saved virtual layout can lag the latest scope after a concurrent batch
+     * or repair run. Inspection should render the latest generated draft, while
+     * the build completion gate separately requires persisted layout parity.
+     *
+     * @param array<string,mixed> $resolvedLayout
+     * @param array<string,mixed> $scopeLayout
+     */
+    private function shouldUseScopeLayoutForInspection(array $resolvedLayout, array $scopeLayout): bool
+    {
+        $scopeContent = \is_array($scopeLayout['content'] ?? null) ? $scopeLayout['content'] : [];
+        if ($scopeContent === []) {
+            return false;
+        }
+        $resolvedContent = \is_array($resolvedLayout['content'] ?? null) ? $resolvedLayout['content'] : [];
+        if (\count($resolvedContent) < \count($scopeContent)) {
+            return true;
+        }
+
+        $resolvedCodes = [];
+        foreach ($resolvedContent as $row) {
+            if (\is_array($row)) {
+                $code = \trim((string)($row['code'] ?? $row['component'] ?? ''));
+                if ($code !== '') {
+                    $resolvedCodes[$code] = true;
+                }
+            }
+        }
+        foreach ($scopeContent as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $code = \trim((string)($row['code'] ?? $row['component'] ?? ''));
+            if ($code !== '' && !isset($resolvedCodes[$code])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Required-block coverage is cheap and deterministic from the current
+     * build_blueprint task tree. Do not let an older qa_report snapshot keep a
+     * missing-block error after the canonical task tree has moved on.
+     *
+     * @param list<array<string, mixed>> $findings
+     * @return list<array<string, mixed>>
+     */
+    private function filterStaleSourceTruthRequiredBlockFindings(array $scope, array $findings): array
+    {
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        $required = \is_array($sourceTruth['required_home_blocks'] ?? null) ? $sourceTruth['required_home_blocks'] : [];
+        if ($required === [] || $findings === []) {
+            return $findings;
+        }
+
+        $blocks = [];
+        $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        foreach (\is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [] as $task) {
+            if (!\is_array($task) || \trim((string)($task['page_type'] ?? '')) !== Page::TYPE_HOME) {
+                continue;
+            }
+            $blockKey = \trim((string)($task['block_key'] ?? ''));
+            if ($blockKey === '') {
+                $sectionCode = \trim((string)($task['section_code'] ?? ''));
+                $blockKey = $sectionCode !== ''
+                    ? \basename(\str_replace('.', '/', $sectionCode))
+                    : \trim((string)($task['task_key'] ?? ''));
+            }
+            if ($blockKey === '') {
+                continue;
+            }
+            $blocks[] = [
+                'block_key' => $blockKey,
+                'content' => (string)($task['label'] ?? ''),
+                'goal' => (string)($task['task_key'] ?? ''),
+            ];
+        }
+        if ($blocks === []) {
+            return $findings;
+        }
+
+        $lintSource = [
+            'required_home_blocks' => $required,
+            'must_include_facts' => [],
+            'must_not_do' => [],
+        ];
+        $lint = (new SourceTruthCoverageLinter())->lint($lintSource, [], ['blocks' => $blocks]);
+        if (\is_array($lint['missing_blocks'] ?? null) && $lint['missing_blocks'] !== []) {
+            return $findings;
+        }
+
+        return \array_values(\array_filter(
+            $findings,
+            static function (array $finding): bool {
+                $path = \trim((string)($finding['path'] ?? $finding['target_path'] ?? ''));
+                return !\str_starts_with($path, 'content_quality.missing_required_block');
+            }
+        ));
     }
 
     /**

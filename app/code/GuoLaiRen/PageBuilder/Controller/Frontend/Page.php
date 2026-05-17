@@ -18,12 +18,21 @@ use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
 
 class Page extends FrontendController
 {
+    private const VIEW_HTML_CACHE_TTL = 120;
+
+    /** @var array<string, array{expires_at: float, html: string}> */
+    private static array $viewHtmlCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
+
     private PageModel $pageModel;
     private PageHelper $pageHelper;
     private Style $styleModel;
@@ -49,6 +58,18 @@ class Page extends FrontendController
     {
         // 直接调用 view 方法，handle 为空时会自动加载首页
         return $this->view();
+    }
+
+    private function disableFrontendBrowserCache(mixed $response): void
+    {
+        if (!\is_object($response) || !\method_exists($response, 'setHeader')) {
+            return;
+        }
+
+        $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0');
+        $response->setHeader('Pragma', 'no-cache');
+        $response->setHeader('Expires', '0');
+        $response->setHeader('X-Accel-Expires', '0');
     }
 
     /**
@@ -152,6 +173,7 @@ class Page extends FrontendController
         // 获取当前网站ID；预览模式优先从 URL 的 website_id 配合 handle 解码，避免跨站预览时 getCurrentWebsiteId 不匹配
         $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
         $response = $this->request->getResponse();
+        $this->disableFrontendBrowserCache($response);
         if ($isPreview) {
             $websiteIdParam = $this->request->getGet('website_id');
             if ($websiteIdParam !== null && $websiteIdParam !== '') {
@@ -287,6 +309,16 @@ class Page extends FrontendController
         // 获取SEO数据
         $seoData = $this->pageHelper->getSeoData($page);
 
+        $viewHtmlCacheKey = '';
+        if (!$isPreview) {
+            $viewHtmlCacheKey = $this->buildViewHtmlCacheKey($page, $currentLocale, $websiteId, (string)($page->getData(PageModel::schema_fields_STYLE) ?? ''));
+            $cachedHtml = $this->getViewHtmlCache($viewHtmlCacheKey);
+            if (is_string($cachedHtml)) {
+                echo $cachedHtml;
+                return;
+            }
+        }
+
         // 传递数据到视图
         $this->assign('page', $page);
         $this->assign('content', $localizedContent);
@@ -339,6 +371,9 @@ class Page extends FrontendController
                     $currentLocale,
                     $tempStyleCode
                 );
+                if (!$isPreview && $viewHtmlCacheKey !== '') {
+                    $this->rememberViewHtmlCache($viewHtmlCacheKey, $html);
+                }
                 
                 echo $html;
                 
@@ -356,6 +391,125 @@ class Page extends FrontendController
         
         // 使用默认模板
         return $this->fetch();
+    }
+
+    private function getViewHtmlCache(string $key): ?string
+    {
+        $now = \microtime(true);
+        if (isset(self::$viewHtmlCache[$key])) {
+            $cached = self::$viewHtmlCache[$key];
+            if (($cached['expires_at'] ?? 0.0) >= $now) {
+                return (string)($cached['html'] ?? '');
+            }
+            unset(self::$viewHtmlCache[$key]);
+        }
+
+        $runtimeCached = $this->runtimeCacheGet('pagebuilder.view.' . $key);
+        if (\is_string($runtimeCached) && $runtimeCached !== '') {
+            if (\count(self::$viewHtmlCache) > 96) {
+                self::$viewHtmlCache = \array_slice(self::$viewHtmlCache, -48, null, true);
+            }
+            self::$viewHtmlCache[$key] = [
+                'expires_at' => $now + self::VIEW_HTML_CACHE_TTL,
+                'html' => $runtimeCached,
+            ];
+            return $runtimeCached;
+        }
+
+        return null;
+    }
+
+    private function rememberViewHtmlCache(string $key, string $html): void
+    {
+        if ($html === '') {
+            return;
+        }
+        if (\count(self::$viewHtmlCache) > 96) {
+            self::$viewHtmlCache = \array_slice(self::$viewHtmlCache, -48, null, true);
+        }
+
+        self::$viewHtmlCache[$key] = [
+            'expires_at' => \microtime(true) + self::VIEW_HTML_CACHE_TTL,
+            'html' => $html,
+        ];
+        $this->runtimeCacheSet('pagebuilder.view.' . $key, $html, self::VIEW_HTML_CACHE_TTL);
+    }
+
+    private function buildViewHtmlCacheKey(PageModel $page, string $locale, int $websiteId, string $styleCode): string
+    {
+        $uri = \function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : '';
+        $host = \function_exists('w_env_http_host') ? (string)\w_env_http_host() : '';
+
+        return \sha1((string)\json_encode([
+            'v' => 1,
+            'page_id' => (int)$page->getId(),
+            'website_id' => $websiteId,
+            'style' => $styleCode,
+            'locale' => $locale,
+            'updated_at' => (string)($page->getData('updated_at') ?? ''),
+            'render_mode' => (string)($page->getData(PageModel::schema_fields_RENDER_MODE) ?? ''),
+            'host' => $host,
+            'uri' => $uri,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get('pagebuilder_frontend_runtime', $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set('pagebuilder_frontend_runtime', $key, $value, \max(1, $ttl));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$runtimeCache = new MemoryStateFacade([
+                'consumer_code' => 'pagebuilder_frontend_runtime',
+                'prefer_direct_connect' => true,
+                'connect_timeout' => 0.02,
+                'timeout' => 0.05,
+                'acquire_timeout' => 0.02,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
     }
     
     /**
@@ -468,7 +622,12 @@ class Page extends FrontendController
             /** @var WebsiteDomain $domainModel */
             $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
             $domain = clone $domainModel;
-            $domain->clearData()->clearQuery()->loadByDomain($hostNoPort);
+            $domain->clearData()->clearQuery()
+                ->where(WebsiteDomain::schema_fields_DOMAIN, $hostNoPort)
+                ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+                ->where(WebsiteDomain::schema_fields_SUB_PATH, '')
+                ->find()
+                ->fetch();
             if ((int)$domain->getData(WebsiteDomain::schema_fields_ID) > 0
                 && (string)$domain->getData(WebsiteDomain::schema_fields_STATUS) === WebsiteDomain::STATUS_ACTIVE
             ) {

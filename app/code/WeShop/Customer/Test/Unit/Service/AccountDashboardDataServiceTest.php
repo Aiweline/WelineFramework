@@ -11,6 +11,7 @@ use WeShop\Customer\Service\AccountDashboardDataService;
 use WeShop\Order\Service\OrderService;
 use WeShop\Product\Service\ProductRecommendationService;
 use WeShop\RecentlyViewed\Service\RecentlyViewedService;
+use WeShop\RMA\Service\RmaService;
 use WeShop\Subscription\Service\SubscriptionService;
 use WeShop\Wishlist\Service\WishlistService;
 use Weline\Customer\Model\Customer as AuthCustomer;
@@ -126,6 +127,20 @@ class AccountDashboardDataServiceTest extends TestCase
                 'total' => 3,
             ]);
 
+        $rmaService = $this->createMock(RmaService::class);
+        $rmaService->expects($this->once())
+            ->method('getCustomerRmas')
+            ->with(42)
+            ->willReturn([
+                [
+                    'rma_id' => 31,
+                    'order_id' => 88,
+                    'reason' => 'Wrong size',
+                    'status' => 'pending',
+                    'created_at' => '2026-03-24 09:00:00',
+                ],
+            ]);
+
         $recommendationService = $this->createMock(ProductRecommendationService::class);
         $recommendationService->expects($this->once())
             ->method('getRecommendations')
@@ -140,7 +155,8 @@ class AccountDashboardDataServiceTest extends TestCase
             $wishlistService,
             $recentlyViewedService,
             $recommendationService,
-            $subscriptionService
+            $subscriptionService,
+            $rmaService
         );
         $result = $service->build($authUser, $profile);
 
@@ -152,6 +168,8 @@ class AccountDashboardDataServiceTest extends TestCase
         $this->assertSame(2, $result['wishlist_count']);
         $this->assertSame(1, $result['recently_viewed_count']);
         $this->assertSame(3, $result['subscription_count']);
+        $this->assertSame(1, $result['rma_count']);
+        $this->assertSame(31, $result['rma_list'][0]['rma_id']);
         $this->assertSame('Carry-On Spinner', $result['compare_preview'][0]['name']);
         $this->assertSame('Travel Backpack', $result['wishlist_preview'][0]['name']);
         $this->assertSame('Passport Holder', $result['recently_viewed'][0]['name']);

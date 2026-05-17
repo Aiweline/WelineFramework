@@ -148,7 +148,8 @@ class CartService
 
         if ($existing && $existing->getId()) {
             $newQuantity = (int) $existing->getData(Cart::schema_fields_QUANTITY) + $quantity;
-            $existing->setData(Cart::schema_fields_QUANTITY, $newQuantity);
+            $existing->setData(Cart::schema_fields_QUANTITY, $newQuantity)
+                ->setData(Cart::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
             $existing->save();
             $cart = $existing;
         } else {
@@ -164,6 +165,8 @@ class CartService
                 ->setData(Cart::schema_fields_PRODUCT_ID, $productId)
                 ->setData(Cart::schema_fields_QUANTITY, $quantity)
                 ->setData(Cart::schema_fields_PRICE, $price)
+                ->setData(Cart::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
+                ->setData(Cart::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                 ->save();
 
             if (!$cart->getId() && \is_numeric($saveResult) && (int) $saveResult > 0) {

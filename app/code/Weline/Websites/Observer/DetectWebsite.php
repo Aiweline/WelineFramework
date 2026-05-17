@@ -447,35 +447,62 @@ class DetectWebsite implements ObserverInterface
         $baseDomainModel = w_obj(WebsiteDomain::class);
         foreach (\array_values(\array_unique($candidateHosts)) as $candidateHost) {
             /** @var WebsiteDomain $domainModel */
-            $domainModel = clone $baseDomainModel;
-            $domainModel->clearData()->clearQuery()->loadByDomain($candidateHost);
-            if ($domainModel->getDomainId() <= 0 || $domainModel->getStatus() !== WebsiteDomain::STATUS_ACTIVE) {
+            $domainQuery = clone $baseDomainModel;
+            $domainQuery->clearData()->clearQuery()
+                ->where(WebsiteDomain::schema_fields_DOMAIN, $candidateHost)
+                ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+                ->select()
+                ->fetch();
+            $domainItems = [];
+            foreach ($domainQuery->getItems() ?: [] as $item) {
+                if ($item instanceof WebsiteDomain) {
+                    $domainItems[] = $item;
+                }
+            }
+            if ($domainItems === []) {
                 continue;
             }
+            \usort($domainItems, static function (WebsiteDomain $left, WebsiteDomain $right): int {
+                $leftPath = \trim((string)$left->getSubPath());
+                $rightPath = \trim((string)$right->getSubPath());
+                if ($leftPath === '/') {
+                    $leftPath = '';
+                }
+                if ($rightPath === '/') {
+                    $rightPath = '';
+                }
+                $lengthCompare = \strlen($rightPath) <=> \strlen($leftPath);
+                if ($lengthCompare !== 0) {
+                    return $lengthCompare;
+                }
+                return ((int)$right->isPrimary()) <=> ((int)$left->isPrimary());
+            });
 
-            $subPath = \trim($domainModel->getSubPath());
-            if ($subPath !== '' && !\str_starts_with($subPath, '/')) {
-                $subPath = '/' . $subPath;
-            }
-            if ($subPath !== '' && $subPath !== '/' && !\str_starts_with($path, $subPath) && $path !== $subPath) {
-                continue;
-            }
+            foreach ($domainItems as $domainModel) {
+                $subPath = \trim($domainModel->getSubPath());
+                if ($subPath !== '' && !\str_starts_with($subPath, '/')) {
+                    $subPath = '/' . $subPath;
+                }
+                if ($subPath !== '' && $subPath !== '/' && !\str_starts_with($path, $subPath) && $path !== $subPath) {
+                    continue;
+                }
 
-            /** @var Website $website */
-            $website = clone $websiteModel;
-            $website->clearData()->clearQuery()->load($domainModel->getWebsiteId());
-            if ($website->getWebsiteId() <= 0) {
-                continue;
-            }
+                /** @var Website $website */
+                $website = clone $websiteModel;
+                $website->clearData()->clearQuery()->load($domainModel->getWebsiteId());
+                if ($website->getWebsiteId() <= 0) {
+                    continue;
+                }
 
-            $matchedBaseUrl = $requestScheme . '://' . $hostNorm . $requestPort;
-            if ($subPath !== '' && $subPath !== '/') {
-                $matchedBaseUrl .= $subPath;
-            }
+                $matchedBaseUrl = $requestScheme . '://' . $hostNorm . $requestPort;
+                if ($subPath !== '' && $subPath !== '/') {
+                    $matchedBaseUrl .= $subPath;
+                }
 
-            $data = $website->getData();
-            $data['url'] = $matchedBaseUrl;
-            return $data;
+                $data = $website->getData();
+                $data['url'] = $matchedBaseUrl;
+                return $data;
+            }
         }
 
         return null;

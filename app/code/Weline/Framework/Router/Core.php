@@ -470,19 +470,46 @@ class Core
             }
         }
         // 后台：路径可能为 currency/language/admin/...，需去掉前两段再与路由表匹配
-        if ($this->is_backend && $url !== '') {
-            $segments = explode('/', $url);
-            $first = $segments[0] ?? '';
-            $second = $segments[1] ?? '';
-            $isCurrency = strlen($first) === 3 && ctype_upper($first);
-            $isLanguage = strlen($second) > 3 && strlen($second) <= 10
-                && ctype_lower(substr($second, 0, 2))
-                && isset($second[2]) && $second[2] === '_';
-            if ($isCurrency && $isLanguage && count($segments) > 2) {
-                $url = implode('/', array_slice($segments, 2));
-            }
+        return $this->stripLeadingLocaleCurrencySegments($url);
+    }
+
+    private function stripLeadingLocaleCurrencySegments(string $url): string
+    {
+        $url = trim(str_replace('//', '/', $url), '/');
+        if ($url === '') {
+            return '';
         }
-        return $url;
+
+        $segments = explode('/', $url);
+        $stripCount = 0;
+        foreach (array_slice($segments, 0, 2) as $segment) {
+            if ($this->isCurrencySegment($segment) || $this->isLocaleSegment($segment)) {
+                $stripCount++;
+                continue;
+            }
+            break;
+        }
+
+        if ($stripCount === 0 || count($segments) <= $stripCount) {
+            return $url;
+        }
+
+        return implode('/', array_slice($segments, $stripCount));
+    }
+
+    private function isCurrencySegment(string $segment): bool
+    {
+        return strlen($segment) === 3 && ctype_upper($segment);
+    }
+
+    private function isLocaleSegment(string $segment): bool
+    {
+        $length = strlen($segment);
+        return $length > 3
+            && $length <= 16
+            && ctype_lower(substr($segment, 0, 2))
+            && isset($segment[2])
+            && ($segment[2] === '_' || $segment[2] === '-');
     }
     
     /**

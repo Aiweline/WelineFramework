@@ -93,8 +93,8 @@ $widgetId = 'new-arrivals-' . uniqid();
                             <?php endif; ?>
                             
                             <div class="product-actions">
-                                <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
-                                    <i class="ri-heart-line"></i>
+                                <button class="action-btn btn-wishlist weline-pixel::add_to_wishlist" title="<?= __('加入收藏') ?>">
+                                    <i class="ri-heart-line weline-pixel::add_to_wishlist"></i>
                                 </button>
                                 <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
                                     <i class="ri-eye-line"></i>
@@ -132,9 +132,9 @@ $widgetId = 'new-arrivals-' . uniqid();
                                 <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
                             </div>
                             
-                            <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
-                                <i class="ri-shopping-cart-line"></i>
-                                <span><?= __('加入购物车') ?></span>
+                            <button class="btn-add-to-cart weline-pixel::add_to_cart" data-product-id="<?= $product['id'] ?>">
+                                <i class="ri-shopping-cart-line weline-pixel::add_to_cart"></i>
+                                <span class="weline-pixel::add_to_cart"><?= __('加入购物车') ?></span>
                             </button>
                         </div>
                     </div>

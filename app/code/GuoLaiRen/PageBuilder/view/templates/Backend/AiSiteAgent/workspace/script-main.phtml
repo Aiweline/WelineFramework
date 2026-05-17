@@ -303,12 +303,9 @@
                 : ((planBlock.plan_projection && typeof planBlock.plan_projection === 'object')
                     ? planBlock.plan_projection
                     : ((planBlock.projection && typeof planBlock.projection === 'object') ? planBlock.projection : {})));
-        var buildSummary = state.build_summary && typeof state.build_summary === 'object'
-            ? state.build_summary
-            : ((scope.build_summary && typeof scope.build_summary === 'object') ? scope.build_summary : {});
         var taskSummary = state.build_task_summary && typeof state.build_task_summary === 'object'
             ? state.build_task_summary
-            : ((buildSummary.task_summary && typeof buildSummary.task_summary === 'object') ? buildSummary.task_summary : {});
+            : {};
         var hasBuildTaskEvidence = Number(taskSummary.total || taskSummary.pending || taskSummary.done || 0) > 0;
         var meta = buildPlan.contract_meta && typeof buildPlan.contract_meta === 'object' ? buildPlan.contract_meta : {};
         var executionBlueprint = pickFirstNonEmptyPlanObject(
@@ -3039,13 +3036,28 @@
             var parsed = new URL(raw, currentUrl.origin);
             var redirectHost = String(parsed.hostname || '').toLowerCase();
             var currentHost = String(currentUrl.hostname || '').toLowerCase();
-            var localHosts = {
-                '127.0.0.1': true,
-                'localhost': true,
-                '::1': true,
-                '[::1]': true,
+            var isLocalAliasHost = function (host) {
+                var normalized = String(host || '').toLowerCase();
+                return normalized === '127.0.0.1'
+                    || normalized === 'localhost'
+                    || normalized === '::1'
+                    || normalized === '[::1]'
+                    || normalized.endsWith('.weline.test')
+                    || normalized.endsWith('.local.test');
             };
-            if (localHosts[redirectHost] && currentUrl.host && parsed.host !== currentUrl.host) {
+            var isSessionBoundBackendPath = function (pathname) {
+                var path = String(pathname || '');
+                return path.indexOf('/pagebuilder/backend/') >= 0
+                    || path.indexOf('/websites/backend/') >= 0
+                    || path.indexOf('/admin/') >= 0;
+            };
+            if (
+                currentUrl.host
+                && parsed.host !== currentUrl.host
+                && isLocalAliasHost(redirectHost)
+                && isLocalAliasHost(currentHost)
+                && isSessionBoundBackendPath(parsed.pathname)
+            ) {
                 parsed.protocol = currentUrl.protocol;
                 parsed.host = currentUrl.host;
             }
@@ -10676,7 +10688,7 @@
 
     function persistStageOneInlineEdits(forcePersist) {
         var force = forcePersist === true;
-        if (!force && !stageOneInlineEditDirty) {
+        if (!stageOneInlineEditDirty) {
             return Promise.resolve(true);
         }
         if (!mergeScopeUrl || !String(publicId || '').trim()) {
@@ -14982,6 +14994,18 @@
             });
         }
 
+        var publishStartBtn = document.getElementById('pb-ai-start-publish');
+        if (publishStartBtn && publishStartBtn.dataset.pbMainPublishBound !== '1') {
+            publishStartBtn.dataset.pbMainPublishBound = '1';
+            publishStartBtn.addEventListener('click', function () {
+                if (typeof window.__pbStartPublishFromButton === 'function') {
+                    window.__pbStartPublishFromButton(publishStartBtn);
+                    return;
+                }
+                toast('error', messages.publishStartUnavailable || messages.networkError);
+            });
+        }
+
         bindPublishRepairButton();
 
         var refreshBtn = document.getElementById('pb-ai-publish-checklist-refresh');
@@ -15013,7 +15037,9 @@
                     toast('info', messages.publishCheckConfirmStarting || '');
                     closePublishChecklistModal();
                     var startBtn = document.getElementById('pb-ai-start-publish');
-                    if (startBtn) {
+                    if (startBtn && typeof window.__pbStartPublishFromButton === 'function') {
+                        window.__pbStartPublishFromButton(startBtn);
+                    } else if (startBtn) {
                         startBtn.click();
                     } else {
                         toast('error', messages.publishStartUnavailable || messages.networkError);

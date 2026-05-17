@@ -452,7 +452,7 @@ class QueueQueryProvider implements QueryProviderInterface
     private function normalizeContentParam(mixed $content): string
     {
         if (\is_array($content)) {
-            return (string)\json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
+            return (string)\json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
         }
 
         return (string)$content;
@@ -461,7 +461,7 @@ class QueueQueryProvider implements QueryProviderInterface
     private function normalizeContentValue(mixed $value): string
     {
         if (\is_array($value)) {
-            return (string)\json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
+            return (string)\json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
         }
 
         return (string)$value;

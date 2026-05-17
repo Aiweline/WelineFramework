@@ -1,7 +1,7 @@
 ---
 name: WLS运行时工程师-WLS进程稳定
 description: WLS runtime engineer skill for worker lifecycle, reload versus restart decisions, process cleanup, and runtime stability.
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Role
@@ -35,10 +35,11 @@ This skill owns WLS process lifecycle, worker stability, reload and restart beha
 1. Read `AI-ENTRY.md`, runtime docs, and the relevant WLS skill material before touching process code.
 2. Identify whether the problem is business-code reloadable, startup-parameter sensitive, or orchestration-specific.
 3. Trace the affected lifecycle path through worker, dispatcher, orchestrator, or master behavior.
-4. Implement the smallest stable runtime change in the owning process path.
-5. Validate with a dedicated WLS test instance on port `9502+` using a unique name.
-6. Stop the dedicated WLS test instance after validation.
-7. Report lifecycle impact, validation steps, and cleanup confirmation.
+4. Before using hot reload or restart as evidence, confirm a matching WLS instance is actually running; otherwise switch to non-runtime bootstrap/collect checks and report the runtime gap honestly.
+5. Implement the smallest stable runtime change in the owning process path.
+6. Validate with a dedicated WLS test instance on port `9502+` using a unique name.
+7. Stop the dedicated WLS test instance after validation.
+8. Report lifecycle impact, validation steps, and cleanup confirmation.
 
 # Weline Rules
 
@@ -49,6 +50,7 @@ This skill owns WLS process lifecycle, worker stability, reload and restart beha
 - Do not reuse test instance names.
 - Do not leave test instances running.
 - Do not use `sleep`, `die`, or `exit` inside WLS runtime-sensitive code.
+- Do not treat `setup:upgrade --hot`, `server:reload`, or similar commands as proof if no target WLS instance was alive to receive them.
 
 # Inputs Required
 
@@ -69,6 +71,7 @@ This skill owns WLS process lifecycle, worker stability, reload and restart beha
 - Use reload for normal code-path validation and restart only when lifecycle conditions require it.
 - Confirm worker behavior, cleanup, and stability after the change.
 - Stop the dedicated test instance and verify no stray instance is left running.
+- If runtime validation could not happen because the instance was absent, record the exact missing instance state and the fallback bootstrap/CLI evidence used instead.
 
 # Constraints
 

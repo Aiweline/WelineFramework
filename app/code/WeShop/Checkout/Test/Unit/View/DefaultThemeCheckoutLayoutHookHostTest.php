@@ -65,10 +65,10 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
     {
         $template = file_get_contents(__DIR__ . '/../../../../../../design/WeShop/default/frontend/pages/checkout/index.phtml');
         $this->assertIsString($template);
-        $this->assertStringContainsString('WeShop_Shipping::frontend::layouts::checkout::methods', $template);
-        $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::shipping-methods', $template);
-        $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::payment-methods', $template);
-        $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::payment-details', $template);
+        $this->assertStringContainsString('Weline_Checkout::frontend::layouts::checkout::shipping-methods-before', $template);
+        $this->assertStringContainsString('Weline_Checkout::frontend::partials::checkout::shipping-methods', $template);
+        $this->assertStringContainsString('Weline_Checkout::frontend::partials::checkout::payment-methods', $template);
+        $this->assertStringContainsString('Weline_Checkout::frontend::partials::checkout::payment-details', $template);
         $this->assertStringContainsString('weshop-checkout-form', $template);
         $this->assertStringContainsString('checkout/success', $template);
         $this->assertStringContainsString('checkout/methods', $template);
@@ -86,10 +86,10 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
         $this->assertStringContainsString('data-weshop-summary-grand-total', $template);
         $this->assertStringContainsString('data.cart_summary', $template);
         $this->assertStringContainsString('Retry Payment', $template);
-        $this->assertStringContainsString('WeShop_Checkout::summary::rows_before', $template);
-        $this->assertStringContainsString('WeShop_Checkout::summary::shipping_before', $template);
-        $this->assertStringContainsString('WeShop_Checkout::summary::tax_after', $template);
-        $this->assertStringContainsString('WeShop_Checkout::summary::grand_total_after', $template);
+        $this->assertStringContainsString('Weline_Checkout::frontend::layouts::checkout::summary-rows-before', $template);
+        $this->assertStringContainsString('Weline_Checkout::frontend::layouts::checkout::summary-shipping-before', $template);
+        $this->assertStringContainsString('Weline_Checkout::frontend::layouts::checkout::summary-tax-after', $template);
+        $this->assertStringContainsString('Weline_Checkout::frontend::layouts::checkout::summary-grand-total-after', $template);
         $this->assertStringContainsString('Qty: %{1}', $template);
         $this->assertStringContainsString('Payment flow: %{1}', $template);
         $this->assertStringNotContainsString('Qty: %1', $template);

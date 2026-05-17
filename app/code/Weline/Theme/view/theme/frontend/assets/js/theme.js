@@ -550,6 +550,14 @@
             throw new Error('[Weline.ModuleLoader] modulesBaseUrl 未配置，请在 Frontend 模块的 head 模板中配置 modulesBaseUrl');
         }
 
+        getScriptUrl(url) {
+            if (!isDev) {
+                return url;
+            }
+            const separator = url.indexOf('?') === -1 ? '?' : '&';
+            return `${url}${separator}_weline_dev=${Date.now()}`;
+        }
+
         loadScript(url) {
             return new Promise((resolve, reject) => {
                 const existingScript = document.querySelector(`script[src="${url}"]`);
@@ -558,8 +566,9 @@
                     return;
                 }
 
+                const scriptUrl = this.getScriptUrl(url);
                 const script = document.createElement('script');
-                script.src = url;
+                script.src = scriptUrl;
                 script.async = true;
                 script.crossOrigin = 'anonymous';
 
@@ -638,8 +647,12 @@
                     }
 
                     // 检查是否已加载
-                    if (globalVarName && window[globalVarName] && window[globalVarName].__full !== false) {
-                        const module = window[globalVarName];
+                    const existingModule = globalVarName ? window[globalVarName] : null;
+                    const isLoaderProxy = globalVarName
+                        && typeof moduleDeclarer !== 'undefined'
+                        && moduleDeclarer.isProxyGlobal(globalVarName, existingModule);
+                    if (globalVarName && existingModule && !isLoaderProxy && existingModule.__full !== false) {
+                        const module = existingModule;
                         this.loadedModules.set(moduleName, module);
                         this.loadingModules.delete(moduleName);
                         return module;
@@ -721,6 +734,7 @@
         constructor() {
             this.declaredModules = new Map();
             this.proxies = new Map();
+            this.proxyGlobals = new Map();
         }
 
         /**
@@ -781,11 +795,15 @@
 
             let loadingPromise = null;
             let loaded = false;
+            const getRealGlobal = () => {
+                const value = window[globalVarName];
+                return value === proxy ? null : value;
+            };
 
             const proxy = new Proxy({}, {
                 get: (target, prop) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'object' && window[globalVarName] !== null) {
-                        const realObj = window[globalVarName];
+                    const realObj = getRealGlobal();
+                    if (realObj && typeof realObj === 'object') {
                         if (realObj && typeof realObj[prop] !== 'undefined') {
                             return realObj[prop];
                         }
@@ -793,7 +811,7 @@
 
                     if (loadingPromise) {
                         return loadingPromise.then(() => {
-                            const realObj = window[globalVarName];
+                            const realObj = getRealGlobal();
                             return realObj ? realObj[prop] : undefined;
                         });
                     }
@@ -804,7 +822,7 @@
 
                     loadingPromise = this.loadOnDemand(moduleName).then(() => {
                         loaded = true;
-                        const realObj = window[globalVarName];
+                        const realObj = getRealGlobal();
                         if (realObj) {
                             Object.assign(target, realObj);
                             return realObj[prop];
@@ -821,43 +839,50 @@
                     return loadingPromise;
                 },
                 set: (target, prop, value) => {
-                    if (window[globalVarName]) {
-                        window[globalVarName][prop] = value;
+                    const realObj = getRealGlobal();
+                    if (realObj) {
+                        realObj[prop] = value;
                         return true;
                     }
                     target[prop] = value;
                     return true;
                 },
                 has: (target, prop) => {
-                    if (window[globalVarName]) {
-                        return prop in window[globalVarName];
+                    const realObj = getRealGlobal();
+                    if (realObj) {
+                        return prop in realObj;
                     }
                     return prop in target;
                 },
                 ownKeys: (target) => {
-                    if (window[globalVarName]) {
-                        return Object.keys(window[globalVarName]);
+                    const realObj = getRealGlobal();
+                    if (realObj) {
+                        return Object.keys(realObj);
                     }
                     return Object.keys(target);
                 },
                 construct: (target, args) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                        return new window[globalVarName](...args);
+                    const realObj = getRealGlobal();
+                    if (realObj && typeof realObj === 'function') {
+                        return new realObj(...args);
                     }
                     return this.loadOnDemand(moduleName).then(() => {
-                        if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                            return new window[globalVarName](...args);
+                        const loadedGlobal = getRealGlobal();
+                        if (loadedGlobal && typeof loadedGlobal === 'function') {
+                            return new loadedGlobal(...args);
                         }
                         throw new Error(`[Weline] ${globalVarName} 不是一个构造函数`);
                     });
                 },
                 apply: (target, thisArg, args) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                        return window[globalVarName].apply(thisArg, args);
+                    const realObj = getRealGlobal();
+                    if (realObj && typeof realObj === 'function') {
+                        return realObj.apply(thisArg, args);
                     }
                     return this.loadOnDemand(moduleName).then(() => {
-                        if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                            return window[globalVarName].apply(thisArg, args);
+                        const loadedGlobal = getRealGlobal();
+                        if (loadedGlobal && typeof loadedGlobal === 'function') {
+                            return loadedGlobal.apply(thisArg, args);
                         }
                         throw new Error(`[Weline] ${globalVarName} 不是一个函数`);
                     });
@@ -865,7 +890,12 @@
             });
 
             this.proxies.set(globalVarName, proxy);
+            this.proxyGlobals.set(globalVarName, proxy);
             return proxy;
+        }
+
+        isProxyGlobal(globalVarName, value) {
+            return this.proxyGlobals.get(globalVarName) === value;
         }
 
         async setupProxies() {

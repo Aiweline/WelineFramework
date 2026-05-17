@@ -17,6 +17,10 @@ class DefaultThemeProductHookHostTest extends TestCase
         $this->assertStringContainsString('WeShop_Product::frontend::product::add-to-cart::options-popup', $template);
         $this->assertStringContainsString('WeShop_Product::frontend::layouts::product::tabs-content', $template);
         $this->assertStringContainsString('WeShop_Product::detail::after_add_to_cart', $template);
+        $this->assertStringContainsString('cart/frontend/api/add', $template);
+        $this->assertStringContainsString('window.WeShop.cartAddUrl', $template);
+        $this->assertStringContainsString('class="add-to-cart', $template);
+        $this->assertStringContainsString('You Might Also Like', $template);
     }
 
     public function testCanonicalTabsHookHostsReviewAndQaSlots(): void

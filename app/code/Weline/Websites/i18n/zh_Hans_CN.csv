@@ -1225,8 +1225,6 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "Starting plan generation","Starting plan generation"
 "Plan generation completed","Plan generation completed"
 "AI plan generation failed, fallback will be used: %{message}","AI plan generation failed, fallback will be used: %{message}"
-"No external references were provided; the plan is based on the written requirement.","No external references were provided; the plan is based on the written requirement."
-"The provided references should guide the visual tone, palette, and conversion direction: %{refs}","The provided references should guide the visual tone, palette, and conversion direction: %{refs}"
 已接入,已接入
 查看此流程,查看此流程
 "已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。","已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。"

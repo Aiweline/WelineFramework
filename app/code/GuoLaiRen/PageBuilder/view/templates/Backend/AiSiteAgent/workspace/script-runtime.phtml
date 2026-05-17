@@ -1700,14 +1700,6 @@
         if (source.build_task_summary && typeof source.build_task_summary === 'object') {
             return source.build_task_summary;
         }
-        if (
-            source.build_summary
-            && typeof source.build_summary === 'object'
-            && source.build_summary.task_summary
-            && typeof source.build_summary.task_summary === 'object'
-        ) {
-            return source.build_summary.task_summary;
-        }
         if (source.state && typeof source.state === 'object') {
             return readBuildTaskSummaryCandidate(source.state);
         }
@@ -3534,10 +3526,15 @@
         });
     }
 
+    window.__pbStartPublishFromButton = function (triggerButton) {
+        checkBeforePublishAndStart(triggerButton || document.getElementById('pb-ai-start-publish'));
+    };
+
     var publishBtn = document.getElementById('pb-ai-start-publish');
-    if (publishBtn) {
+    if (publishBtn && publishBtn.dataset.pbMainPublishBound !== '1') {
+        publishBtn.dataset.pbRuntimePublishBound = '1';
         publishBtn.addEventListener('click', function () {
-            checkBeforePublishAndStart(publishBtn);
+            window.__pbStartPublishFromButton(publishBtn);
         });
     }
 

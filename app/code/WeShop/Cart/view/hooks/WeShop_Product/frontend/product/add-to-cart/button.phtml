@@ -32,12 +32,12 @@ if ($productId <= 0) {
 ?>
 
 <button type="button" 
-        class="<?= htmlspecialchars($buttonClass) ?>" 
+        class="<?= htmlspecialchars(trim($buttonClass . ' weline-pixel::add_to_cart')) ?>" 
         data-product-id="<?= $productId ?>"
         data-is-configurable="<?= $isConfigurable ? '1' : '0' ?>"
         data-action="add-to-cart"
         <?= !$inStock ? 'disabled' : '' ?>>
-    <span class="btn-text"><?= $buttonText ?></span>
+    <span class="btn-text weline-pixel::add_to_cart"><?= $buttonText ?></span>
     <span class="btn-loading" style="display: none;">
         <svg class="spinner" width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="60" stroke-dashoffset="20">

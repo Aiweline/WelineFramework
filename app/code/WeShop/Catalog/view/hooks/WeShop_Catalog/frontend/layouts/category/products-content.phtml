@@ -456,6 +456,70 @@ if ($__productsHtmlCacheKey !== null) {
 
 <script>
 (function() {
+    function updateCartCount(count) {
+        document.querySelectorAll('.cart-count, [data-cart-count]').forEach(function(el) {
+            el.textContent = count;
+            el.style.display = count > 0 ? '' : 'none';
+        });
+    }
+
+    function addToCart(productId, qty, btn) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/cart/frontend/api/add', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.onload = function() {
+            var payload = {};
+            try {
+                payload = JSON.parse(xhr.responseText || '{}');
+            } catch (e) {
+                payload = {};
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300 && payload.success) {
+                updateCartCount(parseInt(payload.cart_count || 0, 10));
+                btn.classList.add('added');
+                var text = btn.querySelector('.btn-text') || btn.querySelector('span');
+                if (text) {
+                    var originalText = text.textContent;
+                    text.textContent = '已加入';
+                    setTimeout(function() { text.textContent = originalText; }, 1600);
+                }
+                document.dispatchEvent(new CustomEvent('weshop:cart:added', { detail: payload }));
+            } else {
+                document.dispatchEvent(new CustomEvent('weshop:cart:error', { detail: payload }));
+            }
+        };
+        xhr.onloadend = function() {
+            btn.disabled = false;
+            btn.classList.remove('loading');
+        };
+        xhr.onerror = function() {
+            btn.disabled = false;
+            btn.classList.remove('loading');
+        };
+        xhr.send('product_id=' + encodeURIComponent(productId) + '&qty=' + encodeURIComponent(qty || 1));
+    }
+
+    document.querySelectorAll('.btn-add-to-cart').forEach(function(btn) {
+        if (btn.dataset.weshopCatalogAddBound === '1') {
+            return;
+        }
+        btn.dataset.weshopCatalogAddBound = '1';
+        btn.dataset.action = btn.dataset.action || 'add-to-cart';
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var productId = this.dataset.productId;
+            if (!productId || this.disabled) {
+                return;
+            }
+            this.disabled = true;
+            this.classList.add('loading');
+            addToCart(productId, 1, this);
+        });
+    });
+
     // 加入购物车由 cart.js 模块通过事件委托处理
     // 按钮使用 data-action="add-to-cart" 属性
     

@@ -115,6 +115,105 @@ return [
         'doc' => 'frontend/partials/cart/empty.md',
     ],
     
+    // ==================== Cart Page Content Hooks ====================
+    'WeShop_Cart::frontend::layouts::cart::page-before' => [
+        'name' => __('购物车页面内容前'),
+        'description' => __('在购物车页面主体内容开始前渲染内容。'),
+        'doc' => 'frontend/page/before.md',
+    ],
+    'WeShop_Cart::frontend::layouts::cart::page-after' => [
+        'name' => __('购物车页面内容后'),
+        'description' => __('在购物车页面主体内容结束后渲染内容。'),
+        'doc' => 'frontend/page/after.md',
+    ],
+    'WeShop_Cart::frontend::layouts::cart::items-after' => [
+        'name' => __('购物车商品区域后'),
+        'description' => __('在购物车商品列表区域之后、摘要区域之前渲染内容。'),
+        'doc' => 'frontend/page/items-after.md',
+    ],
+    'WeShop_Cart::frontend::layouts::cart::related-before' => [
+        'name' => __('购物车推荐商品前'),
+        'description' => __('在购物车推荐商品区域之前渲染内容。'),
+        'doc' => 'frontend/page/related-before.md',
+    ],
+    'WeShop_Cart::frontend::layouts::cart::related-after' => [
+        'name' => __('购物车推荐商品后'),
+        'description' => __('在购物车推荐商品区域之后渲染内容。'),
+        'doc' => 'frontend/page/related-after.md',
+    ],
+
+    // ==================== Cart Summary Hooks ====================
+    'WeShop_Cart::frontend::partials::cart-summary::before' => [
+        'name' => __('购物车摘要前'),
+        'description' => __('在购物车订单摘要卡片内容前渲染内容。'),
+        'doc' => 'frontend/summary/before.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::after' => [
+        'name' => __('购物车摘要后'),
+        'description' => __('在购物车订单摘要卡片内容后渲染内容。'),
+        'doc' => 'frontend/summary/after.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::rows-before' => [
+        'name' => __('购物车摘要行前'),
+        'description' => __('在购物车摘要金额行之前渲染内容。'),
+        'doc' => 'frontend/summary/rows-before.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::rows-after' => [
+        'name' => __('购物车摘要行后'),
+        'description' => __('在购物车摘要金额行之后渲染内容。'),
+        'doc' => 'frontend/summary/rows-after.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::subtotal-before' => [
+        'name' => __('购物车小计前'),
+        'description' => __('在购物车小计行之前渲染内容。'),
+        'doc' => 'frontend/summary/subtotal-before.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::subtotal-after' => [
+        'name' => __('购物车小计后'),
+        'description' => __('在购物车小计行之后渲染内容。'),
+        'doc' => 'frontend/summary/subtotal-after.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::shipping-before' => [
+        'name' => __('购物车配送前'),
+        'description' => __('在购物车配送金额行之前渲染内容。'),
+        'doc' => 'frontend/summary/shipping-before.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::shipping-after' => [
+        'name' => __('购物车配送后'),
+        'description' => __('在购物车配送金额行之后渲染内容。'),
+        'doc' => 'frontend/summary/shipping-after.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::discount-before' => [
+        'name' => __('购物车折扣前'),
+        'description' => __('在购物车折扣金额行之前渲染内容。'),
+        'doc' => 'frontend/summary/discount-before.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::discount-after' => [
+        'name' => __('购物车折扣后'),
+        'description' => __('在购物车折扣金额行之后渲染内容。'),
+        'doc' => 'frontend/summary/discount-after.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::tax-before' => [
+        'name' => __('购物车税费前'),
+        'description' => __('在购物车税费金额行之前渲染内容。'),
+        'doc' => 'frontend/summary/tax-before.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::tax-after' => [
+        'name' => __('购物车税费后'),
+        'description' => __('在购物车税费金额行之后渲染内容。'),
+        'doc' => 'frontend/summary/tax-after.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::grand-total-before' => [
+        'name' => __('购物车总计前'),
+        'description' => __('在购物车总计金额行之前渲染内容。'),
+        'doc' => 'frontend/summary/grand-total-before.md',
+    ],
+    'WeShop_Cart::frontend::partials::cart-summary::grand-total-after' => [
+        'name' => __('购物车总计后'),
+        'description' => __('在购物车总计金额行之后渲染内容。'),
+        'doc' => 'frontend/summary/grand-total-after.md',
+    ],
+
     // ==================== Mini Cart Partials Hooks ====================
     'WeShop_Cart::frontend::partials::mini-cart::header-before' => [
         'name' => __('迷你购物车头部之前'),
@@ -131,6 +230,11 @@ return [
         'description' => __('在迷你购物车商品列表前渲染内容，如免邮提示。'),
         'doc' => 'frontend/partials/mini-cart/items-before.md',
     ],
+    'WeShop_Cart::frontend::partials::mini-cart::shipping-progress' => [
+        'name' => __('迷你购物车免邮进度'),
+        'description' => __('在迷你购物车商品列表前渲染免邮或促销进度内容。'),
+        'doc' => 'frontend/partials/mini-cart/shipping-progress.md',
+    ],
     'WeShop_Cart::frontend::partials::mini-cart::items-after' => [
         'name' => __('迷你购物车商品列表后'),
         'description' => __('在迷你购物车商品列表后渲染内容，如推荐商品。'),
@@ -145,6 +249,11 @@ return [
         'name' => __('迷你购物车底部之后'),
         'description' => __('在迷你购物车底部之后插入内容。'),
         'doc' => 'frontend/partials/mini-cart/footer-after.md',
+    ],
+    'WeShop_Cart::frontend::partials::mini-cart::express-checkout' => [
+        'name' => __('迷你购物车快捷支付'),
+        'description' => __('在迷你购物车底部操作后渲染快捷支付或外部支付入口。'),
+        'doc' => 'frontend/partials/mini-cart/express-checkout.md',
     ],
     'WeShop_Cart::frontend::partials::mini-cart::empty' => [
         'name' => __('迷你购物车空状态'),

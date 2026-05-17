@@ -325,15 +325,22 @@ class AiSiteAgent extends BaseController
 
         /** @var SystemConfig $systemConfig */
         $systemConfig = ObjectManager::getInstance(SystemConfig::class);
-        $rawTitle = $systemConfig->getConfig('ai_site_agent_debug_site_title', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $effectiveDebugTitle = $rawTitle === null
-            ? AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE
-            : \trim((string)$rawTitle);
-        $rawBrief = $systemConfig->getConfig('ai_site_agent_debug_brief_description', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $effectiveDebugBrief = $rawBrief === null
-            ? AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION
-            : \trim((string)$rawBrief);
-        $rawLocale = $systemConfig->getConfig('ai_site_agent_debug_default_locale', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $debugDefaultsEnabled = (int)($scope['fake_mode'] ?? 0) === 1;
+        $rawTitle = $debugDefaultsEnabled
+            ? $systemConfig->getConfig('ai_site_agent_debug_site_title', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND)
+            : null;
+        $effectiveDebugTitle = $debugDefaultsEnabled
+            ? ($rawTitle === null ? AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE : \trim((string)$rawTitle))
+            : '';
+        $rawBrief = $debugDefaultsEnabled
+            ? $systemConfig->getConfig('ai_site_agent_debug_brief_description', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND)
+            : null;
+        $effectiveDebugBrief = $debugDefaultsEnabled
+            ? ($rawBrief === null ? AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION : \trim((string)$rawBrief))
+            : '';
+        $rawLocale = $debugDefaultsEnabled
+            ? $systemConfig->getConfig('ai_site_agent_debug_default_locale', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND)
+            : null;
         $effectiveDebugLocale = $rawLocale === null
             ? AiSiteAgentWorkspaceDebugDefaults::DEFAULT_LOCALE
             : AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale(\trim((string)$rawLocale));
@@ -448,6 +455,7 @@ class AiSiteAgent extends BaseController
         $locale = \trim((string)($this->request->getGet('locale') ?: ($virtualPage['locale'] ?? State::getLang())));
         $locale = $locale !== '' ? $locale : State::getLang();
         $layout = $virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
+        $layout = $this->mergeAiSitePreviewLayoutFromScope($layout, $scope, $pageType);
         $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
         $materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);
         $materializedBlocks = \is_array($materializedPreview['blocks'] ?? null) ? $materializedPreview['blocks'] : [];
@@ -501,6 +509,29 @@ class AiSiteAgent extends BaseController
             'virtual_theme_id' => $virtualThemeId,
             'virtual_pages' => $virtualPages,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $layout
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function mergeAiSitePreviewLayoutFromScope(array $layout, array $scope, string $pageType): array
+    {
+        $pageTypeLayouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $scopeLayout = \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [];
+        foreach (['header', 'footer'] as $region) {
+            $regionLayout = \is_array($scopeLayout[$region] ?? null) ? $scopeLayout[$region] : [];
+            if ($regionLayout === []) {
+                continue;
+            }
+            $layout[$region] = \array_replace_recursive(
+                \is_array($layout[$region] ?? null) ? $layout[$region] : [],
+                $regionLayout
+            );
+        }
+
+        return $layout;
     }
 
     /**
@@ -1160,6 +1191,12 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN),
             $scopePatch
         ));
+        $scopeBeforeBriefPageTypeExpansion = $scope;
+        $scope = $this->scopeCompatibilityService->augmentLegacyDefaultPageTypesFromBrief($scope);
+        if (($scope['page_types'] ?? []) !== ($scopeBeforeBriefPageTypeExpansion['page_types'] ?? [])) {
+            $scopePatch['page_types'] = $scope['page_types'];
+            $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
+        }
         if (\trim((string)($scope['target_domain'] ?? '')) === '') {
             return $this->jsonError(
                 'TARGET_DOMAIN_REQUIRED',
@@ -1191,6 +1228,7 @@ class AiSiteAgent extends BaseController
         $planStartDecision = $this->resolvePlanStartDecision($currentScope);
         $planIsEmpty = $this->isPlanContentEmpty($currentScope);
         $hasPlanDraft = !$planIsEmpty;
+        $hasRetryablePlanFailures = $this->buildTaskService->hasRetryableAiFailures($currentScope, 'plan');
         if (
             $hasPlanDraft
             && \in_array((string)($planStartDecision['action'] ?? ''), ['rebuild', 'translate'], true)
@@ -1245,7 +1283,7 @@ class AiSiteAgent extends BaseController
             );
             $planStartDecision = $this->resolvePlanStartDecision($currentScope);
         }
-        if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft && !\in_array($requestedPromptMode, ['rebuild', 'resume_plan'], true)) {
+        if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft && !$hasRetryablePlanFailures && !\in_array($requestedPromptMode, ['rebuild', 'resume_plan'], true)) {
             return $this->fetchJson([
                 'success' => true,
                 'message' => (string)__('当前方案无需重建，已保留并回显已有方案内容。'),
@@ -1266,8 +1304,10 @@ class AiSiteAgent extends BaseController
                 ),
             ]);
         }
-        $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
-        if (\in_array($requestedPromptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
+        $stage = AiSiteAgentSession::STAGE_PLAN;
+        if ($hasRetryablePlanFailures) {
+            $effectivePlanPromptMode = 'rebuild';
+        } elseif (\in_array($requestedPromptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
             $effectivePlanPromptMode = $requestedPromptMode;
         } elseif ((string)($planStartDecision['action'] ?? '') === 'reuse' && $this->scopeHasPersistedStageOnePlan($currentScope)) {
             $effectivePlanPromptMode = 'resume_plan';
@@ -1277,6 +1317,15 @@ class AiSiteAgent extends BaseController
         $planRebuildResetPatch = $effectivePlanPromptMode === 'rebuild'
             ? $this->buildStageOnePlanRegenerationResetScopePatch()
             : [];
+        if ($effectivePlanPromptMode === 'rebuild') {
+            $planRebuildResetPatch['_force_rebuild'] = 1;
+        }
+        $planOperationDetails = [
+            'prompt_mode' => $effectivePlanPromptMode,
+            'instruction' => $requestedInstruction,
+            'target_scope' => $requestedTargetScope,
+            'round' => $requestedRound,
+        ];
         $result = $this->startOperation($session, $adminId, 'plan', $stage, \array_replace($planRebuildResetPatch, [
             'plan_locale' => (string)$scope['plan_locale'],
             'plan_confirmed' => 0,
@@ -1288,7 +1337,7 @@ class AiSiteAgent extends BaseController
                 'plan_locale' => (string)$scope['plan_locale'],
                 AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
             ],
-        ]));
+        ]), '', AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING, $planOperationDetails);
         if (empty($result['success'])) {
             if ((string)($result['operation'] ?? '') === 'plan') {
                 $resumeExecutionToken = \trim((string)($result['execution_token'] ?? ''));
@@ -1332,7 +1381,7 @@ class AiSiteAgent extends BaseController
                         'plan_locale' => (string)$scope['plan_locale'],
                         AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
                     ],
-                ]));
+                ]), '', AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING, $planOperationDetails);
                 if (empty($result['success'])) {
                     return $this->fetchJson([
                         'success' => false,
@@ -1470,7 +1519,20 @@ class AiSiteAgent extends BaseController
         if (isset($executionBlueprintDraft['workspace_track'])) {
             $scopePatch['workspace_track'] = (string)$executionBlueprintDraft['workspace_track'];
         }
-        $buildPlanPatch = $this->buildPlanV2ConfirmationScopePatch(\array_replace($scope, $scopePatch));
+        $buildPlanSourceScope = \array_replace($scope, $scopePatch);
+        foreach ([
+            'build_plan_v2',
+            'plan_projection',
+            'content_manifest',
+            'build_plan_v2_validation',
+            'build_plan_confirmed',
+            'build_plan_confirmed_at',
+            'has_build_plan_v2',
+        ] as $derivedBuildPlanKey) {
+            unset($buildPlanSourceScope[$derivedBuildPlanKey]);
+        }
+        $buildPlanPatch = $this->buildPlanV2ConfirmationScopePatch($buildPlanSourceScope);
+        unset($buildPlanSourceScope);
         if ((int)($buildPlanPatch['build_plan_confirmed'] ?? 0) !== 1) {
             return $this->jsonError(
                 'BUILD_PLAN_V2_INVALID',
@@ -1487,14 +1549,15 @@ class AiSiteAgent extends BaseController
             \is_array($confirmedScope['website_profile'] ?? null) ? $confirmedScope['website_profile'] : [],
             (string)($confirmedScope['workspace_track'] ?? '')
         );
+        $scopePatch = \array_replace($scopePatch, $this->buildTaskService->extractBuildPlanDerivedScopePatch($confirmedScope));
         if (\is_array($confirmedScope['build_blueprint'] ?? null) && $confirmedScope['build_blueprint'] !== []) {
             $scopePatch['build_blueprint'] = $confirmedScope['build_blueprint'];
         }
         if (\is_array($confirmedScope['build_tasks'] ?? null) && $confirmedScope['build_tasks'] !== []) {
             $scopePatch['build_tasks'] = $confirmedScope['build_tasks'];
         }
+        $scopePatch['build_task_summary'] = $this->buildTaskService->summarize($confirmedScope);
         $scopePatch['build_summary'] = [
-            'task_summary' => $this->buildTaskService->summarize($confirmedScope),
             'confirmed_execution_blueprint_signature' => (string)($executionBlueprintDraft['signature'] ?? ''),
             'build_plan_contract_id' => (string)($scopePatch['build_plan_v2']['contract_meta']['id'] ?? ''),
         ];
@@ -1518,14 +1581,22 @@ class AiSiteAgent extends BaseController
             ]
         );
 
-        return $this->fetchJson([
-            'success' => true,
-            'message' => (string)__('建站方案已确认，已创建执行蓝图，正在进入后台构建。'),
-            'data' => $this->buildWorkspaceConfirmPayload(
-                $this->buildWorkspaceState($fresh, $adminId, 80, true),
-                'plan'
-            ),
-        ]);
+        $buildStartResult = $this->startOperation(
+            $fresh,
+            $adminId,
+            'build',
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            [],
+            '',
+            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
+            ['fresh_repair_failed_tasks' => 1]
+        );
+        if (!empty($buildStartResult['success'])) {
+            $buildStartResult['start_sse'] = true;
+            $buildStartResult['message'] = (string)__('建站方案已确认，后台构建队列已创建。');
+        }
+
+        return $this->fetchJson($buildStartResult);
     }
 
     private function handlePlanSse(): void
@@ -1691,6 +1762,11 @@ class AiSiteAgent extends BaseController
                 'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
                 'plan_locale' => $this->resolvePlanLocale($scope),
                 'plan_ai_generated' => (int)($artifacts['ai_generated'] ?? 0),
+                'stage1_contract' => \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : [],
+                'stage1_validation_report' => \is_array($planJson['stage1_validation_report'] ?? null) ? $planJson['stage1_validation_report'] : [],
+                'stage1_first_pass' => (int)($planJson['stage1_first_pass'] ?? 0),
+                'stage1_generation_attempts' => \is_array($planJson['stage1_generation_attempts'] ?? null) ? $planJson['stage1_generation_attempts'] : [],
+                'partial_retry_required' => (int)($artifacts['partial_retry_required'] ?? 0),
                 'plan_generated_at' => \date('Y-m-d H:i:s'),
                 // 微调在已有确认状态下默认保持已确认，避免仅做文案/区块增补后打断后续阶段。
                 'plan_confirmed' => $effectivePromptMode === 'rebuild' ? 0 : (int)($scope['plan_confirmed'] ?? 0),
@@ -1847,6 +1923,7 @@ class AiSiteAgent extends BaseController
     private function buildStageOnePlanRegenerationResetScopePatch(): array
     {
         return [
+            '_artifact_refs' => [],
             'execution_blueprint' => [],
             'execution_blueprint_confirmed_at' => '',
             'execution_blueprint_confirmed_signature' => '',
@@ -1872,13 +1949,34 @@ class AiSiteAgent extends BaseController
             'plan_markdown' => '',
             'plan_structured' => [],
             'plan_workbench' => [],
+            'stage1_contract' => [],
+            'stage1_validation_report' => [],
+            'stage1_first_pass' => 0,
+            'stage1_generation_attempts' => [],
+            'stage1_visual_qa_report' => [],
+            'shared_components' => [],
+            'theme_context_snapshot' => [],
+            'shared_prompt_context' => [],
             'plan_rebuild_summary' => [],
             'plan_change_scope_report' => [],
+            'plan_generation_progress' => [],
+            '_plan_generation_checkpoint' => [],
+            'retryable_ai_failures' => [],
+            'retryable_ai_failure_count' => 0,
+            'next_stage_blocked_by_ai_failures' => 0,
+            'partial_retry_required' => 0,
+            'publish_blocked_by_latest_ai_failure' => 0,
             'build_summary' => [],
             'build_task_summary' => [],
             '_plan_sse_request' => [],
             'build_blueprint' => [],
+            'build_workbench' => [],
+            'build_contracts' => [],
+            'render_data_contract' => [],
             'build_tasks' => [],
+            'task_results' => [],
+            'qa_report_v2' => [],
+            'repair_patch' => [],
         ];
     }
 
@@ -1967,9 +2065,14 @@ class AiSiteAgent extends BaseController
         if (isset($scopePatch['page_types']) && !\array_key_exists(AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY, $scopePatch)) {
             $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
+        $scopePatch = $this->dropEmptyProfileIdentityPatchValues($scopePatch);
         $siteProfileManual = \is_array($scopePatch['site_profile_manual'] ?? null) ? $scopePatch['site_profile_manual'] : [];
         foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale', 'plan_locale'] as $manualField) {
-            if (\array_key_exists($manualField, $scopePatch) && !\array_key_exists($manualField, $siteProfileManual)) {
+            if (
+                \array_key_exists($manualField, $scopePatch)
+                && $this->isMeaningfulProfileManualValue($scopePatch[$manualField])
+                && !\array_key_exists($manualField, $siteProfileManual)
+            ) {
                 $siteProfileManual[$manualField] = true;
             }
         }
@@ -1984,24 +2087,28 @@ class AiSiteAgent extends BaseController
         $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentScope, $scopePatch));
         $mergedScope = $this->buildTaskService->restoreBuildPlanContract($mergedScope, $currentScope);
         $mergedScope = $this->normalizeBuildPlanConfirmationForBuild($mergedScope);
+        $websiteProfile = $this->profileGenerationService->generate($mergedScope, false);
+        if (\is_array($websiteProfile) && $websiteProfile !== []) {
+            $mergedScope['website_profile'] = $websiteProfile;
+            $scopePatch['website_profile'] = $websiteProfile;
+        }
         if ($this->isBuildPlanReadyForBuild($mergedScope)) {
             $mergedScope = $this->buildTaskService->ensureTaskScope(
                 $mergedScope,
                 \is_array($mergedScope['website_profile'] ?? null) ? $mergedScope['website_profile'] : [],
                 (string)($mergedScope['workspace_track'] ?? '')
             );
+            $scopePatch = \array_replace($scopePatch, $this->buildTaskService->extractBuildPlanDerivedScopePatch($mergedScope));
             if (\is_array($mergedScope['build_blueprint'] ?? null) && $mergedScope['build_blueprint'] !== []) {
                 $scopePatch['build_blueprint'] = $mergedScope['build_blueprint'];
             }
             if (\is_array($mergedScope['build_tasks'] ?? null) && $mergedScope['build_tasks'] !== []) {
                 $scopePatch['build_tasks'] = $mergedScope['build_tasks'];
             }
-            $buildSummary = \is_array($scopePatch['build_summary'] ?? null)
-                ? $scopePatch['build_summary']
-                : (\is_array($mergedScope['build_summary'] ?? null) ? $mergedScope['build_summary'] : []);
-            $scopePatch['build_summary'] = \array_replace($buildSummary, [
-                'task_summary' => $this->buildTaskService->summarize($mergedScope),
-            ]);
+            $scopePatch['build_task_summary'] = $this->buildTaskService->summarize($mergedScope);
+            if (\is_array($scopePatch['build_summary'] ?? null)) {
+                unset($scopePatch['build_summary']['task_summary']);
+            }
         }
         if ($this->buildTaskService->hasRetryableAiFailures($mergedScope, 'plan')) {
             $summary = $this->buildTaskService->summarizeRetryableAiFailures($mergedScope, 'plan');
@@ -2059,6 +2166,41 @@ class AiSiteAgent extends BaseController
             $startResult['start_sse'] = true;
         }
         return $this->fetchJson($startResult);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function dropEmptyProfileIdentityPatchValues(array $payload): array
+    {
+        $identityFields = ['site_title', 'site_tagline', 'target_domain', 'brief_description', 'user_description', 'default_locale', 'plan_locale'];
+        foreach ($identityFields as $field) {
+            if (\array_key_exists($field, $payload) && !$this->isMeaningfulProfileManualValue($payload[$field])) {
+                unset($payload[$field]);
+            }
+        }
+        if (\is_array($payload['site_profile_manual'] ?? null)) {
+            foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale', 'plan_locale'] as $field) {
+                if (!\array_key_exists($field, $payload) || !$this->isMeaningfulProfileManualValue($payload[$field])) {
+                    unset($payload['site_profile_manual'][$field]);
+                }
+            }
+            if ($payload['site_profile_manual'] === []) {
+                unset($payload['site_profile_manual']);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function isMeaningfulProfileManualValue(mixed $value): bool
+    {
+        if (\is_scalar($value) || (\is_object($value) && \method_exists($value, '__toString'))) {
+            return \trim((string)$value) !== '';
+        }
+
+        return $value !== null && $value !== [];
     }
 
     private function handleStartAssetGeneration(): string
@@ -2156,6 +2298,7 @@ class AiSiteAgent extends BaseController
             'operation' => 'image_asset',
             'slot_id' => $normalizedSlotId,
             'mode' => $mode,
+            'planning_signature' => (string)($slot['planning_signature'] ?? ''),
             'execution_token' => $executionToken,
             'target_path' => $this->buildAiSiteAssetTargetPath($scope, $session, $normalizedSlotId, $executionToken),
             'current_url' => $currentUrl,
@@ -2249,12 +2392,18 @@ class AiSiteAgent extends BaseController
                         $decoded = \json_decode($existingContent, true);
                         $existingContent = \is_array($decoded) ? $decoded : [];
                     }
-                    return [
-                        'queue_id' => $queueId,
-                        'execution_token' => (string)(\is_array($existingContent) ? ($existingContent['execution_token'] ?? $content['execution_token'] ?? '') : ($content['execution_token'] ?? '')),
-                        'queue_status' => $status,
-                        'reused' => true,
-                    ];
+                    $existingSignature = \is_array($existingContent)
+                        ? \trim((string)($existingContent['planning_signature'] ?? ''))
+                        : '';
+                    $nextSignature = \trim((string)($content['planning_signature'] ?? ''));
+                    if ($nextSignature === '' || $existingSignature === '' || \hash_equals($existingSignature, $nextSignature)) {
+                        return [
+                            'queue_id' => $queueId,
+                            'execution_token' => (string)(\is_array($existingContent) ? ($existingContent['execution_token'] ?? $content['execution_token'] ?? '') : ($content['execution_token'] ?? '')),
+                            'queue_status' => $status,
+                            'reused' => true,
+                        ];
+                    }
                 }
                 $updated = w_query('queue', 'update', [
                     'queue_id' => $queueId,
@@ -2464,6 +2613,11 @@ class AiSiteAgent extends BaseController
      */
     private function resolveAiSiteAssetTargetHandle(array $scope, AiSiteAgentSession $session): string
     {
+        $localPreviewHost = $this->resolveAiSiteLocalPreviewHost($scope);
+        if ($localPreviewHost !== '') {
+            return $this->sanitizeAiSiteAssetPathSegment($localPreviewHost);
+        }
+
         foreach ([
             $scope['target_domain'] ?? null,
             $scope['selected_domain'] ?? null,
@@ -2478,6 +2632,26 @@ class AiSiteAgent extends BaseController
         }
 
         return 'site';
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveAiSiteLocalPreviewHost(array $scope): string
+    {
+        foreach (['preview_full_url', 'visual_preview_url', 'visual_edit_url', 'preview_url'] as $key) {
+            $url = \trim((string)($scope[$key] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $host = \parse_url($url, \PHP_URL_HOST);
+            $host = \is_string($host) ? \strtolower(\trim($host)) : '';
+            if ($host !== '' && (\str_ends_with($host, '.weline.test') || \str_ends_with($host, '.local.test'))) {
+                return $host;
+            }
+        }
+
+        return '';
     }
 
     private function sanitizeAiSiteAssetPathSegment(string $value): string
@@ -3514,10 +3688,10 @@ class AiSiteAgent extends BaseController
                 $scope
             );
 
-            $scope['build_summary'] = \array_replace(
-                \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-                ['task_summary' => $this->buildTaskService->summarize($scope)]
-            );
+            $scope['build_task_summary'] = $this->buildTaskService->summarize($scope);
+            if (\is_array($scope['build_summary'] ?? null)) {
+                unset($scope['build_summary']['task_summary']);
+            }
             $doneMessage = $instruction !== '' ? (string)__('区块微调完成（DEMO）') : (string)__('区块重建完成（DEMO）');
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
@@ -3853,10 +4027,10 @@ class AiSiteAgent extends BaseController
             }
         }
 
-        $scope['build_summary'] = \array_replace(
-            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-            ['task_summary' => $this->buildTaskService->summarize($scope)]
-        );
+        $scope['build_task_summary'] = $this->buildTaskService->summarize($scope);
+        if (\is_array($scope['build_summary'] ?? null)) {
+            unset($scope['build_summary']['task_summary']);
+        }
         $doneMessage = $instruction !== '' ? (string)__('区块微调完成') : (string)__('区块重建完成');
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
@@ -3943,9 +4117,11 @@ class AiSiteAgent extends BaseController
             'virtual_pages_by_type' => \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [],
             'page_type_layouts' => \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [],
             'preview_page_type' => (string)($scope['preview_page_type'] ?? $pageType),
-            'build_summary' => [
-                'task_summary' => $this->buildTaskService->summarize($scope),
-            ],
+            'build_task_summary' => $this->buildTaskService->summarize($scope),
+            'build_summary' => \array_diff_key(
+                \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
+                ['task_summary' => true]
+            ),
             'workspace_status' => (string)($scope['workspace_status'] ?? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH),
         ];
         $sse->sendEvent('page_generated', [
@@ -4007,8 +4183,27 @@ class AiSiteAgent extends BaseController
             }
             return $this->fetchJson(['success' => false, 'code' => 'WORKSPACE_NOT_READY', 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
         }
+        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        $stageTwoReadiness = $this->buildStageTwoPublishReadinessReport($scope);
+        if (empty($stageTwoReadiness['passed'])) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH',
+                'message' => __('阶段二构建任务与真实生成区块不一致，请先重试失败任务或重建第二阶段。'),
+                'data' => \array_replace(['code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH'], $stageTwoReadiness),
+            ]);
+        }
+        $refreshedScope = $this->refreshScopeQualityContractsForPublishGate($scope);
+        if ($refreshedScope !== $scope) {
+            $this->sessionService->replaceScope($session->getId(), $adminId, $refreshedScope);
+            $state['scope'] = $refreshedScope;
+            $scope = $refreshedScope;
+        }
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
-        $qualityReport = $qualityGate->inspectScope(\is_array($state['scope'] ?? null) ? $state['scope'] : []);
+        $qualityReport = $this->normalizePublishQualityReport(
+            $qualityGate->inspectScope($scope),
+            $stageTwoReadiness
+        );
         if (empty($qualityReport['passed'])) {
             return $this->fetchJson([
                 'success' => false,
@@ -4022,7 +4217,7 @@ class AiSiteAgent extends BaseController
             ['1', 'true', 'yes', 'on'],
             true
         );
-        if (!$confirmVisualTheme && (int)($state['scope']['virtual_theme_effect_confirmed'] ?? 0) !== 1) {
+        if (!$confirmVisualTheme && (int)($scope['virtual_theme_effect_confirmed'] ?? 0) !== 1) {
             return $this->fetchJson([
                 'success' => false,
                 'code' => 'VISUAL_THEME_CONFIRM_REQUIRED',
@@ -4125,10 +4320,10 @@ class AiSiteAgent extends BaseController
         );
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope = $this->syncUpdatedVirtualBlockToThemeLayout($scope, $pageTypes, $pageType, $updatedBlock);
-        $scope['build_summary'] = \array_replace(
-            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-            ['task_summary' => $this->buildTaskService->summarize($scope)]
-        );
+        $scope['build_task_summary'] = $this->buildTaskService->summarize($scope);
+        if (\is_array($scope['build_summary'] ?? null)) {
+            unset($scope['build_summary']['task_summary']);
+        }
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $this->appendWorkspaceEvent(
@@ -4631,11 +4826,23 @@ class AiSiteAgent extends BaseController
         $prePublishVisualUrls = $previewPageType !== ''
             ? $this->visualUrlService->resolveVirtualUrls($session->getPublicId(), $previewPageType, $virtualThemeId)
             : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
+        $prePublishVisualUrls = $this->normalizeAiSiteVisualUrlsToLocalBase($prePublishVisualUrls, [
+            'scope' => $scope,
+            'virtual_pages_by_type' => $virtualPagesByType,
+            'preview_page_type' => $previewPageType,
+        ]);
         $resolvedUrls = $this->shouldUseWorkspacePreviewUrls($session, $workspaceTrack, $previewPageType, $previewPageId)
             ? $prePublishVisualUrls
             : (
                 $previewPageId > 0
-                    ? $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId)
+                    ? $this->normalizeAiSiteVisualUrlsToLocalBase(
+                        $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId),
+                        [
+                            'scope' => $scope,
+                            'virtual_pages_by_type' => $virtualPagesByType,
+                            'preview_page_type' => $previewPageType,
+                        ]
+                    )
                     : $prePublishVisualUrls
             );
 
@@ -4662,6 +4869,83 @@ class AiSiteAgent extends BaseController
 
         return $workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
             && $session->getPublishStatus() !== AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED;
+    }
+
+    /**
+     * Queue/CLI execution may not have the browser Host header. When URL
+     * generation returns a pseudo host, preserve its path/query and restore the
+     * known local preview origin from the current workspace state.
+     *
+     * @param array<string,mixed> $urls
+     * @param array<string,mixed> $context
+     * @return array<string,mixed>
+     */
+    private function normalizeAiSiteVisualUrlsToLocalBase(array $urls, array $context): array
+    {
+        return $this->visualUrlService->normalizeUrlsToLocalBase($urls, $context);
+    }
+
+    private function resolveAiSiteLocalPreviewOriginFromMixed(mixed $value, int $depth = 0): string
+    {
+        if ($depth > 8) {
+            return '';
+        }
+        if (\is_string($value)) {
+            return $this->isAiSiteLocalPreviewUrl($value) ? $this->extractAiSiteUrlOrigin($value) : '';
+        }
+        if (!\is_array($value)) {
+            return '';
+        }
+
+        foreach (['preview_full_url', 'visual_preview_url', 'visual_edit_url', 'virtual_preview_url', 'virtual_edit_url', 'preview_url'] as $key) {
+            if (!\array_key_exists($key, $value)) {
+                continue;
+            }
+            $origin = $this->resolveAiSiteLocalPreviewOriginFromMixed($value[$key], $depth + 1);
+            if ($origin !== '') {
+                return $origin;
+            }
+        }
+        foreach ($value as $item) {
+            $origin = $this->resolveAiSiteLocalPreviewOriginFromMixed($item, $depth + 1);
+            if ($origin !== '') {
+                return $origin;
+            }
+        }
+
+        return '';
+    }
+
+    private function isAiSiteLocalPreviewUrl(string $url): bool
+    {
+        $host = \parse_url($url, \PHP_URL_HOST);
+        $host = \is_string($host) ? \strtolower(\trim($host)) : '';
+        return $host !== ''
+            && (\str_ends_with($host, '.weline.test') || \str_ends_with($host, '.local.test'));
+    }
+
+    private function extractAiSiteUrlOrigin(string $url): string
+    {
+        $scheme = \parse_url($url, \PHP_URL_SCHEME);
+        $host = \parse_url($url, \PHP_URL_HOST);
+        if (!\is_string($scheme) || !\is_string($host) || \trim($host) === '') {
+            return '';
+        }
+        $port = \parse_url($url, \PHP_URL_PORT);
+        return \strtolower($scheme) . '://' . \strtolower($host) . (\is_int($port) && $port > 0 ? ':' . $port : '');
+    }
+
+    private function rewriteAiSiteUrlToOrigin(string $url, string $origin): string
+    {
+        $origin = \rtrim($origin, '/');
+        if ($origin === '') {
+            return '';
+        }
+
+        $path = \parse_url($url, \PHP_URL_PATH);
+        $path = \is_string($path) && \trim($path) !== '' ? $path : '/' . \ltrim($url, '/');
+        $query = \parse_url($url, \PHP_URL_QUERY);
+        return $origin . '/' . \ltrim($path, '/') . (\is_string($query) && $query !== '' ? '?' . $query : '');
     }
 
     /**
@@ -4755,9 +5039,21 @@ class AiSiteAgent extends BaseController
         if ($publishBlockedItem !== null) {
             \array_unshift($checkItems, $publishBlockedItem);
         }
+        $stageTwoReadiness = $this->buildStageTwoPublishReadinessReport($scope);
+        $checkItems[] = [
+            'key' => 'stage2_task_block_integrity',
+            'code' => 'STAGE2_TASK_BLOCK_INTEGRITY',
+            'label' => __('阶段二任务与生成区块数量一致'),
+            'ok' => !empty($stageTwoReadiness['passed']),
+            'value' => $stageTwoReadiness,
+            'detail' => $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness),
+        ];
         $scope = $this->refreshScopeQualityContractsForPublishGate($scope);
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
-        $qualityReport = $qualityGate->inspectScope($scope);
+        $qualityReport = $this->normalizePublishQualityReport(
+            $qualityGate->inspectScope($scope),
+            $stageTwoReadiness
+        );
         foreach (\is_array($qualityReport['items'] ?? null) ? $qualityReport['items'] : [] as $qualityItem) {
             if (\is_array($qualityItem)) {
                 $checkItems[] = $qualityItem;
@@ -5460,12 +5756,17 @@ class AiSiteAgent extends BaseController
                                 if ($checkpoint === [] || !\is_array($checkpoint['plan_json'] ?? null)) {
                                     return;
                                 }
+                                $checkpointPlanJson = \is_array($checkpoint['plan_json'] ?? null) ? $checkpoint['plan_json'] : [];
+                                $stageOneContract = \is_array($checkpointPlanJson['stage1_contract'] ?? null) ? $checkpointPlanJson['stage1_contract'] : [];
                                 $scope['_plan_generation_checkpoint'] = $checkpoint;
+                                if ($stageOneContract !== []) {
+                                    $scope['stage1_contract'] = $stageOneContract;
+                                }
                                 $retryableFailures = \is_array($checkpoint['retryable_ai_failures'] ?? null)
                                     ? \array_values(\array_filter($checkpoint['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
                                     : [];
                                 $scope = $this->buildTaskService->replaceRetryableAiFailures($scope, 'plan', $retryableFailures);
-                                $this->sessionService->mergeScope($fresh->getId(), $adminId, [
+                                $checkpointScopePatch = [
                                     '_plan_generation_checkpoint' => $checkpoint,
                                     'retryable_ai_failures' => \is_array($scope['retryable_ai_failures'] ?? null) ? $scope['retryable_ai_failures'] : [],
                                     'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
@@ -5476,7 +5777,11 @@ class AiSiteAgent extends BaseController
                                         'failed_count' => \count($retryableFailures),
                                         'updated_at' => (string)($checkpoint['updated_at'] ?? \date('Y-m-d H:i:s')),
                                     ],
-                                ]);
+                                ];
+                                if ($stageOneContract !== []) {
+                                    $checkpointScopePatch['stage1_contract'] = $stageOneContract;
+                                }
+                                $this->sessionService->mergeScope($fresh->getId(), $adminId, $checkpointScopePatch);
                             };
                             $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream(
                                 $scope,
@@ -5518,6 +5823,14 @@ class AiSiteAgent extends BaseController
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
                 'execution_blueprint_draft' => $executionBlueprint,
                 'plan_json' => $planJson,
+                'stage1_contract' => \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : [],
+                'stage1_validation_report' => \is_array($planJson['stage1_validation_report'] ?? null) ? $planJson['stage1_validation_report'] : [],
+                'stage1_first_pass' => (int)($planJson['stage1_first_pass'] ?? 0),
+                'stage1_generation_attempts' => \is_array($planJson['stage1_generation_attempts'] ?? null) ? $planJson['stage1_generation_attempts'] : [],
+                'partial_retry_required' => (int)($artifacts['partial_retry_required'] ?? 0),
+                'theme_context_snapshot' => \is_array($planJson['theme_context_snapshot'] ?? null) ? $planJson['theme_context_snapshot'] : [],
+                'shared_components' => \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [],
+                'shared_prompt_context' => \is_array($planJson['shared_prompt_context'] ?? null) ? $planJson['shared_prompt_context'] : [],
                 'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
                 'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : $planJson,
                 'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
@@ -7105,15 +7418,29 @@ class AiSiteAgent extends BaseController
      */
     private function prepareBuildImageAssets(AiSiteAgentSession $session, int $adminId, array $scope): array
     {
-        $scope['build_summary'] = \array_replace(
-            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-            ['task_summary' => $this->buildTaskService->summarize($scope)]
-        );
+        $scope['build_task_summary'] = $this->buildTaskService->summarize($scope);
+        if (\is_array($scope['build_summary'] ?? null)) {
+            unset($scope['build_summary']['task_summary']);
+        }
+        $scope['auto_generate_identity_assets_first'] = 1;
+
+        /** @var AiSiteAutoAssetGenerationService $assetGenerationService */
+        $assetGenerationService = ObjectManager::getInstance(AiSiteAutoAssetGenerationService::class);
+        $result = $assetGenerationService->prepareBuildAssets($session, $adminId, $scope, 3);
+        $resultScope = \is_array($result['scope'] ?? null) ? $result['scope'] : $scope;
+        unset($resultScope['auto_asset_prebuild_identity_only']);
+        $resultScope['build_task_summary'] = $this->buildTaskService->summarize($resultScope);
+        if (\is_array($resultScope['build_summary'] ?? null)) {
+            unset($resultScope['build_summary']['task_summary']);
+        }
 
         return [
-            'scope' => $scope,
-            'generated_slots' => [],
-            'failed_slots' => [],
+            'scope' => $resultScope,
+            'generated_slots' => \array_values(\array_map('strval', \is_array($result['generated_slots'] ?? null) ? $result['generated_slots'] : [])),
+            'failed_slots' => \array_values(\array_filter(
+                \is_array($result['failed_slots'] ?? null) ? $result['failed_slots'] : [],
+                static fn($row): bool => \is_array($row)
+            )),
         ];
     }
 
@@ -7133,7 +7460,9 @@ class AiSiteAgent extends BaseController
             $messages[] = ($slotId !== '' ? $slotId : 'unknown_slot') . ($message !== '' ? ': ' . $message : '');
         }
 
-        throw new \RuntimeException('AI image asset generation failed before page build: ' . \implode('; ', \array_slice($messages, 0, 5)));
+        // Pre-build asset generation is opportunistic. A failed image slot must be
+        // visible and retryable, but it must not prevent all block tasks from running.
+        \w_log_warning('[AI Site Asset Prebuild] non-fatal failures before page build: ' . \implode('; ', \array_slice($messages, 0, 5)));
     }
 
     /**
@@ -7284,9 +7613,10 @@ class AiSiteAgent extends BaseController
                             'active_operation' => 'build',
                             'can_publish' => true,
                             'last_generated_at' => $now,
-                            'task_summary' => $taskSummary,
                         ]
                     );
+                    $freshScope['build_task_summary'] = $taskSummary;
+                    unset($freshScope['build_summary']['task_summary']);
                     $this->sessionService->replaceScope($fresh->getId(), $adminId, $freshScope);
                     $normalized = $freshScope;
                     $result['normalized'] = $normalized;
@@ -8389,6 +8719,11 @@ class AiSiteAgent extends BaseController
         $prePublishVisualUrls = $previewPageType !== ''
             ? $this->visualUrlService->resolveVirtualUrls($session->getPublicId(), $previewPageType, $virtualThemeId)
             : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
+        $prePublishVisualUrls = $this->normalizeAiSiteVisualUrlsToLocalBase($prePublishVisualUrls, [
+            'scope' => $normalized,
+            'virtual_pages_by_type' => $virtualPagesByType,
+            'preview_page_type' => $previewPageType,
+        ]);
         $normalized['pre_publish_visual_urls'] = $prePublishVisualUrls;
 
         // Draft virtual-theme workspaces render from session scope; materialized Page URLs are only authoritative
@@ -8396,9 +8731,17 @@ class AiSiteAgent extends BaseController
         if ($this->shouldUseWorkspacePreviewUrls($session, $workspaceTrack, $previewPageType, (int)$normalized['preview_page_id'])) {
             $normalized = \array_replace($normalized, $prePublishVisualUrls);
         } elseif ((int)$normalized['preview_page_id'] > 0) {
+            $pageUrls = $this->normalizeAiSiteVisualUrlsToLocalBase(
+                $this->visualUrlService->resolveUrls((int)$normalized['preview_page_id'], $virtualThemeId),
+                [
+                    'scope' => $normalized,
+                    'virtual_pages_by_type' => $virtualPagesByType,
+                    'preview_page_type' => $previewPageType,
+                ]
+            );
             $normalized = \array_replace(
                 $normalized,
-                $this->visualUrlService->resolveUrls((int)$normalized['preview_page_id'], $virtualThemeId)
+                $pageUrls
             );
         } else {
             $normalized = \array_replace($normalized, $prePublishVisualUrls);
@@ -8626,6 +8969,11 @@ class AiSiteAgent extends BaseController
             'plan_markdown' => (string)($normalized['plan_markdown'] ?? ''),
             'plan_structured' => \is_array($normalized['plan_structured'] ?? null) ? $normalized['plan_structured'] : (\is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : []),
             'plan_workbench' => \is_array($normalized['plan_workbench'] ?? null) ? $normalized['plan_workbench'] : [],
+            'stage1_contract' => \is_array($normalized['stage1_contract'] ?? null) ? $normalized['stage1_contract'] : [],
+            'stage1_validation_report' => \is_array($normalized['stage1_validation_report'] ?? null) ? $normalized['stage1_validation_report'] : [],
+            'stage1_first_pass' => (int)($normalized['stage1_first_pass'] ?? 0),
+            'stage1_generation_attempts' => \is_array($normalized['stage1_generation_attempts'] ?? null) ? $normalized['stage1_generation_attempts'] : [],
+            'stage1_visual_qa_report' => \is_array($normalized['stage1_visual_qa_report'] ?? null) ? $normalized['stage1_visual_qa_report'] : [],
             'plan_confirmed' => (int)($normalized['plan_confirmed'] ?? 0),
             'has_stage_one_plan' => $hasStageOnePlan,
             'has_execution_blueprint' => \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== [],
@@ -8656,7 +9004,7 @@ class AiSiteAgent extends BaseController
             'plan_queue_info' => $planQueueInfo,
             'build_queue_info' => $buildQueueInfo,
             'workspace_entry_notice' => $workspaceEntryQueueNotice,
-            'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
+            'build_summary' => $this->buildSummaryWithoutTaskSummary($normalized),
             'asset_manifest' => \is_array($normalized['asset_manifest'] ?? null) ? $normalized['asset_manifest'] : ['version' => 1, 'slots' => []],
             'asset_image_generation_failures' => \is_array($normalized['asset_image_generation_failures'] ?? null)
                 ? $normalized['asset_image_generation_failures']
@@ -8882,7 +9230,7 @@ class AiSiteAgent extends BaseController
             'draft_website_id' => (int)($state['draft_website_id'] ?? 0),
             'active_operation' => \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [],
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
-            'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
+            'build_summary' => $this->buildSummaryWithoutTaskSummary($state),
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
             'build_plan_confirmed' => (int)($state['build_plan_confirmed'] ?? 0),
             'build_plan_confirmed_at' => (string)($state['build_plan_confirmed_at'] ?? ''),
@@ -8954,7 +9302,7 @@ class AiSiteAgent extends BaseController
             'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
             'build_queue_info' => \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null,
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
-            'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
+            'build_summary' => $this->buildSummaryWithoutTaskSummary($state),
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
             'build_plan_confirmed' => (int)($state['build_plan_confirmed'] ?? 0),
             'build_plan_confirmed_at' => (string)($state['build_plan_confirmed_at'] ?? ''),
@@ -9056,7 +9404,7 @@ class AiSiteAgent extends BaseController
             'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
             'build_queue_info' => \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null,
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
-            'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
+            'build_summary' => $this->buildSummaryWithoutTaskSummary($state),
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
         ], $this->buildWorkspaceStatusEnvelope($state, 'queue'));
 
@@ -9091,6 +9439,34 @@ class AiSiteAgent extends BaseController
 
         if ($resolvedPageTypes !== []) {
             $payload['virtual_pages_by_type'] = $this->selectWorkspaceVirtualPagesForSse($state, $resolvedPageTypes);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function buildSummaryWithoutTaskSummary(array $state): array
+    {
+        return \array_diff_key(
+            \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
+            ['task_summary' => true]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function stripLegacyBuildSummaryTaskSummary(array $payload): array
+    {
+        if (\is_array($payload['build_summary'] ?? null)) {
+            unset($payload['build_summary']['task_summary']);
+        }
+        if (\is_array($payload['scope_patch'] ?? null)) {
+            $payload['scope_patch'] = $this->stripLegacyBuildSummaryTaskSummary($payload['scope_patch']);
         }
 
         return $payload;
@@ -9723,7 +10099,368 @@ class AiSiteAgent extends BaseController
 
         return (int)($taskSummary['pending'] ?? 0) === 0
             && (int)($taskSummary['running'] ?? 0) === 0
-            && (int)($taskSummary['failed'] ?? 0) === 0;
+            && (int)($taskSummary['failed'] ?? 0) === 0
+            && (int)($taskSummary['cancelled'] ?? 0) === 0
+            && (int)($taskSummary['done'] ?? 0) >= (int)($taskSummary['total'] ?? 0);
+    }
+
+    /**
+     * Stage-2 publish gate: the scheduler may mark every task terminal, but publish
+     * must still prove the generated assets that become real PageBuilder blocks are
+     * present and count-aligned with the task tree.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoPublishReadinessReport(array $scope): array
+    {
+        $scope = $this->scopeCompatibilityService->normalizeScope($scope);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        $taskSummary = $this->buildTaskService->summarize($scope);
+        $expected = $this->countExpectedStageTwoBlocksFromTaskSummary($taskSummary);
+        $actual = $this->countActualStageTwoGeneratedBlocks($scope, $pageTypes);
+        $failures = [];
+
+        if ((int)($taskSummary['total'] ?? 0) <= 0) {
+            $failures[] = 'stage2 task tree is empty';
+        }
+        if (!$this->taskSummaryIndicatesCompleted($taskSummary)) {
+            $failures[] = \sprintf(
+                'stage2 tasks are not fully complete: total=%d done=%d pending=%d running=%d failed=%d cancelled=%d',
+                (int)($taskSummary['total'] ?? 0),
+                (int)($taskSummary['done'] ?? 0),
+                (int)($taskSummary['pending'] ?? 0),
+                (int)($taskSummary['running'] ?? 0),
+                (int)($taskSummary['failed'] ?? 0),
+                (int)($taskSummary['cancelled'] ?? 0)
+            );
+        }
+
+        $allPageTypes = \array_values(\array_unique(\array_merge(
+            \array_keys($expected['page_blocks']),
+            \array_keys($actual['page_blocks']),
+            $pageTypes
+        )));
+        foreach ($allPageTypes as $pageType) {
+            $pageType = (string)$pageType;
+            $expectedCount = (int)($expected['page_blocks'][$pageType] ?? 0);
+            $actualCount = (int)($actual['page_blocks'][$pageType] ?? 0);
+            if ($expectedCount !== $actualCount) {
+                $failures[] = \sprintf('page %s expected %d generated content blocks, got %d', $pageType, $expectedCount, $actualCount);
+            }
+        }
+
+        foreach (\array_unique(\array_merge(\array_keys($expected['shared_blocks']), \array_keys($actual['shared_blocks']))) as $region) {
+            $region = (string)$region;
+            $expectedCount = (int)($expected['shared_blocks'][$region] ?? 0);
+            $actualCount = (int)($actual['shared_blocks'][$region] ?? 0);
+            if ($expectedCount !== $actualCount) {
+                $failures[] = \sprintf('shared %s expected %d generated blocks, got %d', $region, $expectedCount, $actualCount);
+            }
+        }
+
+        $expectedTotal = (int)$expected['total'];
+        $actualTotal = (int)$actual['total'];
+        if ($expectedTotal !== $actualTotal) {
+            $failures[] = \sprintf('stage2 expected %d generated blocks, got %d', $expectedTotal, $actualTotal);
+        }
+
+        return [
+            'passed' => $failures === [],
+            'task_summary' => $taskSummary,
+            'expected_total' => $expectedTotal,
+            'actual_total' => $actualTotal,
+            'expected_page_blocks' => $expected['page_blocks'],
+            'actual_page_blocks' => $actual['page_blocks'],
+            'expected_shared_blocks' => $expected['shared_blocks'],
+            'actual_shared_blocks' => $actual['shared_blocks'],
+            'failures' => $failures,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $taskSummary
+     * @return array{total:int,page_blocks:array<string,int>,shared_blocks:array<string,int>}
+     */
+    private function countExpectedStageTwoBlocksFromTaskSummary(array $taskSummary): array
+    {
+        $pageBlocks = [];
+        $sharedBlocks = [];
+        foreach (\is_array($taskSummary['groups'] ?? null) ? $taskSummary['groups'] : [] as $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            foreach (\is_array($group['tasks'] ?? null) ? $group['tasks'] : [] as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskType = (string)($task['task_type'] ?? '');
+                if ($taskType === 'page_section') {
+                    $pageType = \trim((string)($task['page_type'] ?? $group['page_type'] ?? ''));
+                    if ($pageType !== '') {
+                        $pageBlocks[$pageType] = (int)($pageBlocks[$pageType] ?? 0) + 1;
+                    }
+                    continue;
+                }
+                if ($taskType === 'shared_component') {
+                    $region = $this->resolveStageTwoSharedTaskRegion($task);
+                    $sharedBlocks[$region] = (int)($sharedBlocks[$region] ?? 0) + 1;
+                }
+            }
+        }
+        \ksort($pageBlocks);
+        \ksort($sharedBlocks);
+
+        return [
+            'total' => \array_sum($pageBlocks) + \array_sum($sharedBlocks),
+            'page_blocks' => $pageBlocks,
+            'shared_blocks' => $sharedBlocks,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     */
+    private function resolveStageTwoSharedTaskRegion(array $task): string
+    {
+        $identity = \strtolower(\trim(\implode(' ', [
+            (string)($task['task_key'] ?? ''),
+            (string)($task['section_code'] ?? ''),
+            (string)($task['component'] ?? ''),
+            (string)($task['label'] ?? ''),
+            (string)($task['group_key'] ?? ''),
+        ])));
+        if (\preg_match('/(?:^|[^a-z])(header)(?:[^a-z]|$)/i', $identity) === 1) {
+            return 'header';
+        }
+        if (\preg_match('/(?:^|[^a-z])(footer)(?:[^a-z]|$)/i', $identity) === 1) {
+            return 'footer';
+        }
+
+        $taskKey = \trim((string)($task['task_key'] ?? 'shared'));
+        return $taskKey !== '' ? $taskKey : 'shared';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param list<string> $pageTypes
+     * @return array{total:int,page_blocks:array<string,int>,shared_blocks:array<string,int>}
+     */
+    private function countActualStageTwoGeneratedBlocks(array $scope, array $pageTypes): array
+    {
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $pageBlocks = [];
+        foreach ($pageTypes as $pageType) {
+            $pageType = (string)$pageType;
+            $pageBlocks[$pageType] = $this->countGeneratedContentBlocksForPage(
+                \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [],
+                \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : []
+            );
+        }
+        $sharedBlocks = $this->countGeneratedSharedBlocks($scope, $pageTypeLayouts);
+        \ksort($pageBlocks);
+        \ksort($sharedBlocks);
+
+        return [
+            'total' => \array_sum($pageBlocks) + \array_sum($sharedBlocks),
+            'page_blocks' => $pageBlocks,
+            'shared_blocks' => $sharedBlocks,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @param array<string, mixed> $virtualPage
+     */
+    private function countGeneratedContentBlocksForPage(array $layout, array $virtualPage): int
+    {
+        $count = 0;
+        foreach (\is_array($layout['content'] ?? null) ? $layout['content'] : [] as $item) {
+            if (!\is_array($item) || !$this->stageTwoGeneratedBlockIsEnabled($item)) {
+                continue;
+            }
+            $component = \trim((string)($item['component'] ?? $item['code'] ?? $item['block_id'] ?? ''));
+            if ($component !== '') {
+                $count++;
+            }
+        }
+        if ($count > 0) {
+            return $count;
+        }
+
+        foreach (\is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [] as $block) {
+            if (!\is_array($block) || !$this->stageTwoGeneratedBlockIsEnabled($block)) {
+                continue;
+            }
+            if (AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block)) {
+                continue;
+            }
+            if (\trim((string)($block['block_id'] ?? $block['component'] ?? $block['code'] ?? '')) !== '') {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, array<string, mixed>> $pageTypeLayouts
+     * @return array<string,int>
+     */
+    private function countGeneratedSharedBlocks(array $scope, array $pageTypeLayouts): array
+    {
+        $shared = [];
+        foreach (\is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [] as $region => $component) {
+            if (!\is_array($component)) {
+                continue;
+            }
+            if (\trim((string)($component['code'] ?? $component['html'] ?? $component['phtml'] ?? '')) !== '') {
+                $region = \trim((string)$region);
+                $shared[$region !== '' ? $region : 'shared'] = 1;
+            }
+        }
+
+        foreach ($pageTypeLayouts as $layout) {
+            if (!\is_array($layout)) {
+                continue;
+            }
+            foreach (['header', 'footer'] as $region) {
+                $component = \is_array($layout[$region] ?? null) ? $layout[$region] : [];
+                if (\trim((string)($component['component'] ?? $component['code'] ?? '')) !== '') {
+                    $shared[$region] = 1;
+                }
+            }
+        }
+
+        \ksort($shared);
+        return $shared;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function stageTwoGeneratedBlockIsEnabled(array $block): bool
+    {
+        if (!\array_key_exists('enabled', $block)) {
+            return true;
+        }
+        return !\in_array($block['enabled'], [false, 0, '0', 'false', 'off', 'no'], true);
+    }
+
+    /**
+     * Publish has its own Stage-2 task/block integrity gate. Keep the strict
+     * build-time quality report for diagnostics, but do not let stale stage-one
+     * blueprint coverage or optional pending image slots override that gate.
+     *
+     * @param array<string, mixed> $qualityReport
+     * @param array<string, mixed> $stageTwoReadiness
+     * @return array<string, mixed>
+     */
+    private function normalizePublishQualityReport(array $qualityReport, array $stageTwoReadiness): array
+    {
+        $items = [];
+        $stageTwoPassed = !empty($stageTwoReadiness['passed']);
+        foreach (\is_array($qualityReport['items'] ?? null) ? $qualityReport['items'] : [] as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $key = (string)($item['key'] ?? '');
+            if ($key === 'task_coverage' && $stageTwoPassed) {
+                $item['ok'] = true;
+                $item['blocking'] = true;
+                $item['level'] = 'pass';
+                $item['detail'] = $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness);
+            } elseif ($key === 'visual_assets_safe' && !$this->publishQualityItemHasBrokenImages($item)) {
+                $item['ok'] = true;
+                $item['blocking'] = false;
+                $item['level'] = 'warning';
+                $item['detail'] = (string)__('图片槽位缺失会保留在资产面板供重试，但只要页面没有破图，不阻断发布。');
+            }
+            $items[] = $item;
+        }
+
+        $passed = true;
+        foreach ($items as $item) {
+            if (!empty($item['blocking']) && empty($item['ok'])) {
+                $passed = false;
+                break;
+            }
+        }
+
+        $qualityReport['items'] = $items;
+        $qualityReport['passed'] = $passed;
+
+        return $qualityReport;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $qualityReport
+     * @param array<string, mixed> $stageTwoReadiness
+     * @return array<string, mixed>
+     */
+    private function buildStageOneVisualQaReport(array $scope, array $qualityReport, array $stageTwoReadiness): array
+    {
+        $items = [];
+        foreach (\is_array($qualityReport['items'] ?? null) ? $qualityReport['items'] : [] as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $key = \trim((string)($item['key'] ?? ''));
+            if (!\in_array($key, ['theme_visible', 'visual_assets_safe', 'visual_depth', 'responsive_support', 'content_quality', 'language_consistency'], true)) {
+                continue;
+            }
+            $items[$key] = [
+                'ok' => !empty($item['ok']),
+                'blocking' => !empty($item['blocking']),
+                'level' => (string)($item['level'] ?? ''),
+                'detail' => $item['detail'] ?? ($item['value'] ?? null),
+            ];
+        }
+
+        return [
+            'version' => 1,
+            'source' => 'publish_quality_gate',
+            'stage1_contract_hash' => (string)($scope['stage1_contract']['contract_hash'] ?? ''),
+            'stage1_validation_hash' => (string)($scope['stage1_validation_report']['artifact_hash'] ?? ''),
+            'passed' => !empty($qualityReport['passed']) && !empty($stageTwoReadiness['passed']),
+            'browser_review_status' => 'pending',
+            'browser_review_required' => true,
+            'items' => $items,
+            'created_at' => \date('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function publishQualityItemHasBrokenImages(array $item): bool
+    {
+        foreach (\is_array($item['value'] ?? null) ? $item['value'] : [] as $visuals) {
+            if (!\is_array($visuals)) {
+                continue;
+            }
+            if (\is_array($visuals['broken_images'] ?? null) && $visuals['broken_images'] !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $report
+     */
+    private function formatStageTwoPublishReadinessDetail(array $report): string
+    {
+        $failures = \array_values(\array_filter(\array_map('strval', \is_array($report['failures'] ?? null) ? $report['failures'] : [])));
+        if ($failures === []) {
+            return (string)__('阶段二任务树、生成区块和共享组件数量一致。');
+        }
+
+        return \implode('; ', \array_slice($failures, 0, 6));
     }
 
     /**
@@ -9769,9 +10506,13 @@ class AiSiteAgent extends BaseController
             if (!\is_string($pageType)) {
                 continue;
             }
+            $resolvedUrls = $this->normalizeAiSiteVisualUrlsToLocalBase(
+                $this->visualUrlService->resolveVirtualUrls($publicId, $pageType, $virtualThemeId),
+                $pageData
+            );
             $virtualPagesByType[$pageType] = \array_replace(
                 $pageData,
-                $this->visualUrlService->resolveVirtualUrls($publicId, $pageType, $virtualThemeId)
+                $resolvedUrls
             );
             $virtualPagesByType[$pageType]['virtual_preview_url'] = (string)($virtualPagesByType[$pageType]['visual_preview_url'] ?? '');
             $virtualPagesByType[$pageType]['virtual_edit_url'] = (string)($virtualPagesByType[$pageType]['visual_edit_url'] ?? '');
@@ -9850,7 +10591,6 @@ class AiSiteAgent extends BaseController
             'last_generated_at' => $generatedAt,
             'active_operation' => \trim((string)($activeOperation['operation'] ?? '')),
             'can_publish' => $canPublish,
-            'task_summary' => $taskSummary,
         ];
     }
 
@@ -10161,6 +10901,26 @@ class AiSiteAgent extends BaseController
             $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $baseScope);
         }
         $scope = \array_replace($scope, $scopePatch);
+        if ($operation === 'plan' && (int)($scopePatch['_force_rebuild'] ?? 0) === 1) {
+            unset($scope['_artifact_refs']);
+            foreach ([
+                'plan_json',
+                'plan_structured',
+                'build_plan_v2',
+                'plan_projection',
+                'content_manifest',
+                'build_blueprint',
+                'build_workbench',
+                'build_contracts',
+                'render_data_contract',
+                'task_results',
+                'qa_report_v2',
+                'repair_patch',
+            ] as $artifactScopeKey) {
+                $scope[$artifactScopeKey] = [];
+            }
+            $scope['plan_markdown'] = '';
+        }
         $scope['page_types'] = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if ($operation === 'build') {
             $scope = $this->buildTaskService->restoreBuildPlanContract($scope, $baseScope);
@@ -10193,10 +10953,10 @@ class AiSiteAgent extends BaseController
             if (\is_array($scope['build_tasks'] ?? null) && $scope['build_tasks'] !== []) {
                 $scopePatch['build_tasks'] = $scope['build_tasks'];
             }
-            $scopePatch['build_summary'] = \array_replace(
-                \is_array($scopePatch['build_summary'] ?? null) ? $scopePatch['build_summary'] : [],
-                ['task_summary' => $this->buildTaskService->summarize($scope)]
-            );
+            $scopePatch['build_task_summary'] = $this->buildTaskService->summarize($scope);
+            if (\is_array($scopePatch['build_summary'] ?? null)) {
+                unset($scopePatch['build_summary']['task_summary']);
+            }
         }
         if ($this->isPublishBlockingAiBuildOperation($operation)) {
             $scope['latest_build_failed'] = 0;
@@ -10866,6 +11626,7 @@ class AiSiteAgent extends BaseController
         array $operationDetails = [],
         bool $preserveRunningQueueRow = false
     ): int {
+        $scopePatch = $this->stripLegacyBuildSummaryTaskSummary($scopePatch);
         $queueClass = $this->resolveAiSiteQueueClass($operation);
         if ($queueClass === '') {
             return 0;
@@ -11564,6 +12325,7 @@ class AiSiteAgent extends BaseController
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
         $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('Generating required image assets'), \min(99, $progressPercent + 1));
         $autoAssetResult = $this->prepareBuildImageAssets($session, $adminId, $scope);
         $scope = $autoAssetResult['scope'];
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
@@ -11951,11 +12713,33 @@ class AiSiteAgent extends BaseController
         $now = \date('Y-m-d H:i:s');
         $htmlTrackReady = $this->scopeCompatibilityService->htmlTrackHasCompleteBlocks($virtualPages, $pageTypes)
             || $this->htmlTrackHasMaterializedAiBlocks($scope, $virtualPages, $pageTypes);
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId > 0) {
+            $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
+            $scope['page_type_layouts'] = $pageTypeLayouts;
+        }
+
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId > 0) {
+            $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
+            $scope['page_type_layouts'] = $pageTypeLayouts;
+        }
+
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId > 0) {
+            $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
+            $scope['page_type_layouts'] = $pageTypeLayouts;
+        }
+
         $scope = $this->buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
         $scope = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
-        $taskSummary = $this->buildTaskService->summarize($scope);
+        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+        $taskSummary = \is_array($completionGate['summary'] ?? null) ? $completionGate['summary'] : [];
         $hasBuildFailures = (int)($taskSummary['failed'] ?? 0) > 0 || $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
-        $hasOutstandingTasks = $this->buildTaskService->hasUnfinishedBlueprintTasks($scope);
+        $hasOutstandingTasks = empty($completionGate['passed']);
         if (!$htmlTrackReady && !$hasBuildFailures) {
             throw new \RuntimeException((string)__('HTML 区块构建未完整产出，请重新调度构建队列'));
         }
@@ -11965,8 +12749,8 @@ class AiSiteAgent extends BaseController
             'last_generated_at' => $now,
             'active_operation' => 'build',
             'can_publish' => $canPublishBuild,
-            'task_summary' => $taskSummary,
         ];
+        $scope['build_task_summary'] = $taskSummary;
         $scope['can_publish'] = $canPublishBuild ? 1 : 0;
         $scope['workspace_status'] = ($hasBuildFailures || $hasOutstandingTasks)
             ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED
@@ -12702,7 +13486,7 @@ class AiSiteAgent extends BaseController
     private function persistInlineImageScopePatch(AiSiteAgentSession $session, int $adminId, array $resultScope): void
     {
         $patch = [];
-        foreach (['asset_manifest', 'verified_assets', 'asset_image_generation_failures'] as $key) {
+        foreach (['asset_manifest', 'asset_block_cache', 'verified_assets', 'asset_image_generation_failures'] as $key) {
             if (\array_key_exists($key, $resultScope)) {
                 $patch[$key] = $resultScope[$key];
             }
@@ -13065,6 +13849,7 @@ class AiSiteAgent extends BaseController
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
         $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('Generating required image assets'), \min(99, $progressPercent + 1));
         $autoAssetResult = $this->prepareBuildImageAssets($session, $adminId, $scope);
         $scope = $autoAssetResult['scope'];
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
@@ -13504,21 +14289,36 @@ class AiSiteAgent extends BaseController
             );
         }
 
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId > 0) {
+            $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
+            $scope['page_type_layouts'] = $pageTypeLayouts;
+        }
+
         $scope = $this->buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
         $scope = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
 
         $now = \date('Y-m-d H:i:s');
-        $taskSummary = $this->buildTaskService->summarize($scope);
+        $buildRegeneration = \is_array($scope['_build_regeneration'] ?? null) ? $scope['_build_regeneration'] : [];
+        if ((int)($buildRegeneration['active'] ?? 0) === 1) {
+            $scope['_build_regeneration'] = \array_replace($buildRegeneration, [
+                'active' => 0,
+                'finished_at' => $now,
+            ]);
+        }
+        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+        $taskSummary = \is_array($completionGate['summary'] ?? null) ? $completionGate['summary'] : [];
         $hasBuildFailures = (int)($taskSummary['failed'] ?? 0) > 0 || $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
-        $hasOutstandingTasks = $this->buildTaskService->hasUnfinishedBlueprintTasks($scope);
+        $hasOutstandingTasks = empty($completionGate['passed']);
         $canPublishBuild = !$hasOutstandingTasks && !$hasBuildFailures;
         $scope['build_summary'] = [
             'page_count' => \count($virtualPages),
             'last_generated_at' => $now,
             'active_operation' => 'build',
             'can_publish' => $canPublishBuild,
-            'task_summary' => $taskSummary,
         ];
+        $scope['build_task_summary'] = $taskSummary;
         $scope['can_publish'] = $canPublishBuild ? 1 : 0;
         $scope['workspace_status'] = ($hasBuildFailures || $hasOutstandingTasks)
             ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED
@@ -13548,6 +14348,36 @@ class AiSiteAgent extends BaseController
         $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)($scope['virtual_theme_id'] ?? 0));
         $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
+
+        $freshForCompletionGate = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $freshScopeForCompletionGate = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($freshForCompletionGate, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+        $freshCompletionGate = $this->buildTaskService->inspectBuildCompletionGate($freshScopeForCompletionGate);
+        if (!empty($freshCompletionGate['passed'])) {
+            $scope = $freshScopeForCompletionGate;
+            $taskSummary = \is_array($freshCompletionGate['summary'] ?? null) ? $freshCompletionGate['summary'] : $taskSummary;
+            $hasOutstandingTasks = false;
+            $hasBuildFailures = $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
+            $canPublishBuild = !$hasBuildFailures;
+            $scope['build_task_summary'] = $taskSummary;
+            $scope['can_publish'] = $canPublishBuild ? 1 : 0;
+            $scope['workspace_status'] = $canPublishBuild
+                ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+                : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+            if ($canPublishBuild) {
+                $scope['active_operation'] = \array_replace(
+                    \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+                    [
+                        'status' => 'done',
+                        'message' => (string)__('Virtual theme generated'),
+                        'updated_at' => \date('Y-m-d H:i:s'),
+                        'queue_waiting_for_scheduler' => false,
+                    ]
+                );
+                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+            }
+        }
 
         $this->sendOperationProgress(
             $sse,
@@ -13644,9 +14474,18 @@ class AiSiteAgent extends BaseController
         if ($websiteId <= 0 || $virtualThemeId <= 0) {
             throw new \RuntimeException((string)__('发布前请先完成主题构建'));
         }
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正在校验阶段二任务与区块数量'), 10);
+        $stageTwoReadiness = $this->buildStageTwoPublishReadinessReport($scope);
+        $scope['stage2_publish_readiness'] = $stageTwoReadiness;
+        if (empty($stageTwoReadiness['passed'])) {
+            throw new \RuntimeException((string)__('阶段二构建任务与真实生成区块不一致，请先重试失败任务或重建第二阶段。') . ' ' . $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness));
+        }
         $scope = $this->refreshScopeQualityContractsForPublishGate($scope);
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
-        $qualityReport = $qualityGate->inspectScope($scope);
+        $qualityReport = $this->normalizePublishQualityReport(
+            $qualityGate->inspectScope($scope),
+            $stageTwoReadiness
+        );
         if (empty($qualityReport['passed'])) {
             throw new \RuntimeException((string)__('发布门禁未通过，请先修复页面内容质量、破图或任务状态问题。'));
         }
@@ -13664,15 +14503,16 @@ class AiSiteAgent extends BaseController
 
         $scope['pagebuilder_pages_by_type'] = $published['pagebuilder_pages_by_type'] ?? [];
         $scope['materialized_pages_by_type'] = $published['materialized_pages_by_type'] ?? [];
+        $scope['stage1_visual_qa_report'] = $this->buildStageOneVisualQaReport($scope, $qualityReport, $stageTwoReadiness);
         $scope['publish_verification'] = \is_array($published['publish_verification'] ?? null)
             ? $published['publish_verification']
             : [];
         $scope['preview_page_id'] = (int)($published['preview_page_id'] ?? 0);
         $scope['preview_page_type'] = (string)($published['preview_page_type'] ?? ($scope['preview_page_type'] ?? ''));
-        $scope['build_summary'] = \array_replace(
-            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-            ['task_summary' => $this->buildTaskService->summarize($scope)]
-        );
+        $scope['build_task_summary'] = $this->buildTaskService->summarize($scope);
+        if (\is_array($scope['build_summary'] ?? null)) {
+            unset($scope['build_summary']['task_summary']);
+        }
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
         $scope = $this->writeActiveOperationStateToScope($scope, \array_replace(
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
@@ -13873,17 +14713,9 @@ class AiSiteAgent extends BaseController
      */
     private function isBuildTaskSummaryTerminal(array $scope): bool
     {
-        $summary = $this->buildTaskService->summarize($scope);
-        $total = (int)($summary['total'] ?? 0);
-        if ($total <= 0 || $this->buildTaskService->hasUnfinishedBlueprintTasks($scope)) {
-            return false;
-        }
+        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
 
-        return (int)($summary['pending'] ?? 0) === 0
-            && (int)($summary['running'] ?? 0) === 0
-            && (int)($summary['failed'] ?? 0) === 0
-            && (int)($summary['cancelled'] ?? 0) === 0
-            && (int)($summary['done'] ?? 0) >= $total;
+        return !empty($completionGate['passed']);
     }
 
     private function touchStreamLeaseState(AiSiteAgentSession $session, int $adminId, string $leaseToken, string $tabToken = ''): int
@@ -14071,9 +14903,14 @@ class AiSiteAgent extends BaseController
         if (isset($payload['page_types']) && !\array_key_exists(AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY, $payload)) {
             $payload[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
+        $payload = $this->dropEmptyProfileIdentityPatchValues($payload);
         $siteProfileManual = \is_array($payload['site_profile_manual'] ?? null) ? $payload['site_profile_manual'] : [];
         foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale', 'plan_locale'] as $manualField) {
-            if (\array_key_exists($manualField, $payload) && !\array_key_exists($manualField, $siteProfileManual)) {
+            if (
+                \array_key_exists($manualField, $payload)
+                && $this->isMeaningfulProfileManualValue($payload[$manualField])
+                && !\array_key_exists($manualField, $siteProfileManual)
+            ) {
                 $siteProfileManual[$manualField] = true;
             }
         }

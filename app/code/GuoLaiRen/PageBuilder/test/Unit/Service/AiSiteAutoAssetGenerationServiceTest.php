@@ -71,6 +71,67 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
+    public function testPrepareBuildAssetsGeneratesLogoAndTitleIconBeforeHeroWhenLimited(): void
+    {
+        $publicId = 'asset-identity-first-' . \bin2hex(\random_bytes(4));
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
+
+        $scope = [
+            'site_title' => 'Royal Indian Games',
+            'auto_generate_identity_assets_first' => 1,
+            'website_profile' => [
+                'site_title' => 'Royal Indian Games',
+                'brief_description' => 'A premium card game website.',
+            ],
+            'asset_manifest' => [
+                'slots' => [
+                    'home:hero' => [
+                        'slot_id' => 'home:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home_page',
+                        'label' => 'Hero visual',
+                        'brief' => 'A premium homepage hero image.',
+                    ],
+                ],
+            ],
+        ];
+
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static fn(): array => [
+                'images' => [[
+                    'b64_json' => \base64_encode('identity-first-image'),
+                    'mime_type' => 'image/png',
+                ]],
+                'model' => 'fake-image-model',
+            ]
+        );
+        $result = $service->prepareBuildAssets($session, 2, $scope, 2);
+        $generatedSlots = $result['generated_slots'];
+        $slots = $result['scope']['asset_manifest']['slots'] ?? [];
+
+        try {
+            self::assertCount(2, $generatedSlots);
+            self::assertNotContains('home:hero', $generatedSlots);
+            foreach ($generatedSlots as $slotId) {
+                self::assertSame('logo_icon', (string)($slots[$slotId]['slot_type'] ?? ''), 'Expected identity slots before hero image.');
+            }
+            self::assertSame('pending', (string)($slots['home:hero']['status'] ?? 'pending'));
+        } finally {
+            foreach ($generatedSlots as $slotId) {
+                $slot = \is_array($slots[$slotId] ?? null) ? $slots[$slotId] : [];
+                $variant = \is_array($slot['variants'][0] ?? null) ? $slot['variants'][0] : [];
+                $relativePath = (string)($variant['path'] ?? '');
+                $absolutePath = $relativePath !== '' ? BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath) : '';
+                if ($absolutePath !== '' && \is_file($absolutePath)) {
+                    \unlink($absolutePath);
+                }
+            }
+        }
+    }
+
     public function testPrepareBuildAssetsStoresGeneratedFilesUnderDomainHandle(): void
     {
         $session = new AiSiteAgentSession();

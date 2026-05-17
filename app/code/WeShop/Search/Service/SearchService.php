@@ -115,7 +115,10 @@ class SearchService
                     'facet_definition_count' => count($facetDefinitions),
                 ]
             );
-            if (empty($result['fallback']) || !$includeFacets) {
+            if (
+                (empty($result['fallback']) || !$includeFacets)
+                && !$this->shouldUseLocalBrowseFallback($result, $keyword)
+            ) {
                 $finalized = $this->traceStep(
                     'search::finalize_engine_result',
                     fn () => $this->finalizeBrowseResult($result, $providers, $filters),
@@ -856,9 +859,21 @@ class SearchService
      */
     private function fallbackEngineBrowseResult(array $request): array
     {
-        $engine = $this->createEngine('default');
-        if ($engine instanceof SearchBrowseEngineInterface) {
-            return $engine->browseProducts(array_merge($request, ['include_facets' => false]));
+        $result = w_query('product', 'searchProducts', [
+            'keyword' => (string) ($request['keyword'] ?? ''),
+            'filters' => is_array($request['filters'] ?? null) ? $request['filters'] : [],
+            'page' => (int) ($request['page'] ?? 1),
+            'page_size' => (int) ($request['page_size'] ?? 20),
+        ]);
+
+        if (is_array($result)) {
+            return array_merge([
+                'items' => [],
+                'total' => 0,
+                'pagination' => [],
+                'engine' => 'mysql',
+                'facets' => [],
+            ], $result, ['engine' => 'mysql']);
         }
 
         return [
@@ -868,6 +883,20 @@ class SearchService
             'engine' => 'mysql',
             'facets' => [],
         ];
+    }
+
+    private function shouldUseLocalBrowseFallback(array $result, string $keyword): bool
+    {
+        if (trim($keyword) === '') {
+            return false;
+        }
+
+        $engine = strtolower((string) ($result['engine'] ?? ''));
+        if ($engine === '' || $engine === 'mysql') {
+            return false;
+        }
+
+        return (int) ($result['total'] ?? 0) === 0 && empty($result['items']);
     }
 
     private function normalizeSuggestions(array $suggestions): array

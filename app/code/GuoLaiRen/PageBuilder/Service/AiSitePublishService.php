@@ -6,7 +6,9 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\VirtualTheme;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Observer\DetectWebsite;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\WebsiteDomain;
 
@@ -96,6 +98,10 @@ class AiSitePublishService
         );
 
         $previewPageId = (int)($materialized['preview_page_id'] ?? 0);
+        $visualUrls = $this->visualUrlService->normalizeUrlsToLocalBase(
+            $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId),
+            ['website_profile' => $websiteProfile]
+        );
 
         return \array_replace(
             $materialized,
@@ -105,7 +111,7 @@ class AiSitePublishService
                 'published_at' => \date('Y-m-d H:i:s'),
                 'published_virtual_theme_id' => $virtualThemeId,
             ],
-            $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId)
+            $visualUrls
         );
     }
 
@@ -192,13 +198,30 @@ class AiSitePublishService
             return;
         }
 
-        $existing = clone $this->websiteDomainModel;
-        $existing->clearData()->clearQuery()->loadByDomain($domain);
-        if ((int)$existing->getDomainId() > 0) {
-            if ((int)$existing->getWebsiteId() === $websiteId
-                && $existing->getStatus() !== WebsiteDomain::STATUS_ACTIVE) {
-                $existing->setStatus(WebsiteDomain::STATUS_ACTIVE)->save(true);
+        $existing = $this->findRootDomainBindingForPublish($domain, $websiteId);
+        if ($existing !== null && (int)$existing->getDomainId() > 0) {
+            $changed = false;
+            if ((int)$existing->getWebsiteId() !== $websiteId) {
+                $existing->setWebsiteId($websiteId);
+                $changed = true;
             }
+            if ($existing->getSubPath() !== '') {
+                $existing->setSubPath('');
+                $changed = true;
+            }
+            if (!$existing->isPrimary()) {
+                $existing->setIsPrimary(true);
+                $changed = true;
+            }
+            if ($existing->getStatus() !== WebsiteDomain::STATUS_ACTIVE) {
+                $existing->setStatus(WebsiteDomain::STATUS_ACTIVE);
+                $changed = true;
+            }
+            if ($changed) {
+                $existing->save(true);
+            }
+            $this->disableDuplicateRootDomainBindings($domain, (int)$existing->getDomainId());
+            $this->refreshWebsiteDetectionCaches();
             return;
         }
 
@@ -207,7 +230,7 @@ class AiSitePublishService
         $record->setWebsiteId($websiteId)
             ->setDomain($domain)
             ->setSubPath('')
-            ->setIsPrimary(false)
+            ->setIsPrimary(true)
             ->setStatus(WebsiteDomain::STATUS_ACTIVE);
 
         $pool = clone $this->domainPoolModel;
@@ -218,6 +241,90 @@ class AiSitePublishService
         }
 
         $record->save(true);
+        $this->disableDuplicateRootDomainBindings($domain, (int)$record->getDomainId());
+        $this->refreshWebsiteDetectionCaches();
+    }
+
+    private function findRootDomainBindingForPublish(string $domain, int $websiteId): ?WebsiteDomain
+    {
+        $query = clone $this->websiteDomainModel;
+        $query->clearData()->clearQuery()
+            ->where(WebsiteDomain::schema_fields_DOMAIN, $domain)
+            ->select()
+            ->fetch();
+
+        $best = null;
+        $bestScore = -1;
+        foreach ($query->getItems() ?: [] as $item) {
+            if (!$item instanceof WebsiteDomain || !$this->isRootDomainSubPath($item->getSubPath())) {
+                continue;
+            }
+
+            $score = 0;
+            if ((string)$item->getSubPath() === '') {
+                $score += 8;
+            }
+            if ((int)$item->getWebsiteId() === $websiteId) {
+                $score += 4;
+            }
+            if ($item->getStatus() === WebsiteDomain::STATUS_ACTIVE) {
+                $score += 2;
+            }
+            if ($item->isPrimary()) {
+                $score += 1;
+            }
+
+            if ($best === null || $score > $bestScore) {
+                $best = $item;
+                $bestScore = $score;
+            }
+        }
+
+        return $best;
+    }
+
+    private function disableDuplicateRootDomainBindings(string $domain, int $keepDomainId): void
+    {
+        if ($keepDomainId <= 0) {
+            return;
+        }
+
+        $query = clone $this->websiteDomainModel;
+        $query->clearData()->clearQuery()
+            ->where(WebsiteDomain::schema_fields_DOMAIN, $domain)
+            ->select()
+            ->fetch();
+
+        foreach ($query->getItems() ?: [] as $item) {
+            if (!$item instanceof WebsiteDomain || (int)$item->getDomainId() === $keepDomainId) {
+                continue;
+            }
+            if (!$this->isRootDomainSubPath($item->getSubPath())) {
+                continue;
+            }
+            if ($item->getStatus() !== WebsiteDomain::STATUS_DISABLED) {
+                $item->setStatus(WebsiteDomain::STATUS_DISABLED)->save(true);
+            }
+        }
+    }
+
+    private function isRootDomainSubPath(mixed $subPath): bool
+    {
+        $normalized = \trim((string)$subPath);
+        return $normalized === '' || $normalized === '/';
+    }
+
+    private function refreshWebsiteDetectionCaches(): void
+    {
+        try {
+            w_cache('website')->clear();
+            w_cache('website_detect')->clear();
+            w_cache('website_detect')->set('websites.url.parser_sites_version.v1', (string)\microtime(true), 86400);
+            DetectWebsite::clearProcessCache();
+            Url::resetWebsiteParserSites();
+        } catch (\Throwable) {
+            // Cache refresh is best-effort; the domain row remains the source of truth.
+        }
     }
 
     /**

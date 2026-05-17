@@ -35,11 +35,12 @@ This skill implements framework-level changes in WelineFramework core areas. It 
 
 1. Read `AI-ENTRY.md`, the diagrams, the module docs, and `CLAUDE.md` before touching source code.
 2. Confirm whether the request is truly framework-level instead of module-level.
-3. Locate the minimal framework entry points that own the behavior.
-4. Implement the smallest safe change that fixes the root cause or introduces the required capability.
-5. Add or update tests and documentation when the change affects shared contracts.
-6. Validate with the most direct command path, such as setup, HTTP, or targeted tests.
-7. Report affected boundaries, migration impact, and residual risk.
+3. Apply framework-level thinking by default for every code change: reject module-specific compatibility patches as the first move and trace the owning shared entry point first.
+4. Locate the minimal framework entry points that own the behavior.
+5. Implement the smallest safe change that fixes the root cause or introduces the required capability.
+6. Add or update tests and documentation when the change affects shared contracts.
+7. Validate with the most direct command path, such as setup, HTTP, or targeted tests.
+8. Report affected boundaries, migration impact, and residual risk.
 
 # Weline Rules
 
@@ -49,6 +50,8 @@ This skill implements framework-level changes in WelineFramework core areas. It 
 - Keep module boundaries intact.
 - Prefer small, isolated, testable changes.
 - Update architecture docs if the design changes.
+- Treat framework-level consideration as a standing Codex rule, even when the user only reports one page, one module, or one error.
+- When a systemic command, importer, or shared controller path fails, start from the framework owner implementation rather than patching one symptom path inside a downstream module.
 
 # Inputs Required
 

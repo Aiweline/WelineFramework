@@ -11,6 +11,11 @@ return [
         'description' => __('应用运行后，你可以在这里做一些后续操作。'),
         'doc' => 'app/应用运行后.md',
     ],
+    'Weline_Framework_Runtime::worker_bootstrap_after' => [
+        'name' => __('WLS worker bootstrap after'),
+        'description' => __('Triggered once after each WLS worker has loaded framework registries. Observers must only warm request-independent runtime caches.'),
+        'doc' => 'runtime/worker_bootstrap_after.md',
+    ],
     'Weline_Framework::telemetry::request_collected' => [
         'name' => __('请求遥测数据已采集'),
         'description' => __('在一次请求生命周期结束时触发。Framework 仅广播通用遥测快照（trace、request、runtime、summary、result），由上层模块（如 DeveloperWorkspace、监控模块）自行监听并处理。'),

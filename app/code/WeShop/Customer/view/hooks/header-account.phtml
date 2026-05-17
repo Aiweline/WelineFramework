@@ -20,15 +20,10 @@ $continuePaymentLabel = (string) __('继续支付');
 
 // 检查是否登录
 $isLoggedIn = $session->isLoggedIn();
-$customer = null;
-
-if ($isLoggedIn) {
-    /** @var \WeShop\Customer\Model\Customer $customer */
-    $customer = $session->getCustomer();
-}
+$username = $isLoggedIn ? (string)($session->getUsername() ?? __('用户')) : '';
 ?>
 
-<?php if ($isLoggedIn && $customer): ?>
+<?php if ($isLoggedIn): ?>
     <!-- 已登录状态：显示用户信息 -->
     <a href="<?= $this->getUrl('customer/account/index') ?>"
        class="action-link header-account-link" 
@@ -36,7 +31,7 @@ if ($isLoggedIn) {
        aria-label="<?= __('我的账户') ?>"
        id="header-account-link">
         <span class="action-line-1">
-            <?= __('您好, %1', $customer->getUsername() ?? __('用户')) ?>
+            <?= __('您好') ?>, <?= htmlspecialchars($username !== '' ? $username : (string) __('用户'), ENT_QUOTES) ?>
             <!-- 未支付订单消息红点（异步加载） -->
             <span class="unpaid-orders-badge" id="unpaid-orders-badge" style="display: none;">
                 <span class="badge-count" id="badge-count">0</span>

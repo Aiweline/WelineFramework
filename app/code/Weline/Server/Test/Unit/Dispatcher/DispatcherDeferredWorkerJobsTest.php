@@ -76,6 +76,46 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
     }
 
+    public function testPumpDeferredWorkerPoolJobsProcessesHomepageWarmupFiber(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['setWarmupCooperativeYield', 'warmupJoinedWorkersViaHomepage'])
+            ->getMock();
+
+        $yieldCallbacks = [];
+        $core->expects(self::exactly(2))
+            ->method('setWarmupCooperativeYield')
+            ->willReturnCallback(function (?callable $yield) use (&$yieldCallbacks): void {
+                $yieldCallbacks[] = $yield;
+            });
+        $core->expects(self::once())
+            ->method('warmupJoinedWorkersViaHomepage')
+            ->with([['port' => 19001, 'ticket' => 7]])
+            ->willReturn(['warmed' => [19001], 'failed' => [], 'skipped' => []]);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', [[
+            'type' => 'homepage_warmup',
+            'claims' => [['port' => 19001, 'ticket' => 7]],
+            'source' => 'ADD_WORKER',
+        ]]);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', null);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiberKind', null);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'pumpDeferredWorkerPoolJobs');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher);
+
+        self::assertCount(2, $yieldCallbacks);
+        self::assertInstanceOf(\Closure::class, $yieldCallbacks[0]);
+        self::assertNull($yieldCallbacks[1]);
+        self::assertNull($this->getProperty($dispatcher, 'deferredWorkerPoolFiber'));
+        self::assertNull($this->getProperty($dispatcher, 'deferredWorkerPoolFiberKind'));
+        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+    }
+
     public function testDeferredHealthAuditRemovesFailedWorkersAndAlertsMaster(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
@@ -325,6 +365,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             ->disableOriginalConstructor()
             ->onlyMethods([
                 'setWorkerPortsFromMasterReady',
+                'claimJoinedWorkerHomepageWarmup',
                 'getWorkerCount',
                 'getWorkerPorts',
                 'getMaintenanceWorkerPorts',
@@ -336,6 +377,10 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             ->method('setWorkerPortsFromMasterReady')
             ->with([19001, 19002])
             ->willReturn(['accepted' => [19001, 19002], 'rejected' => []]);
+        $core->expects(self::once())
+            ->method('claimJoinedWorkerHomepageWarmup')
+            ->with([19001, 19002])
+            ->willReturn([]);
         $core->method('getWorkerCount')->willReturn(2);
         $core->method('getWorkerPorts')->willReturn([19001, 19002]);
         $core->method('getMaintenanceWorkerPorts')->willReturn([]);
@@ -374,6 +419,74 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertSame(19001, $ack['port'] ?? null);
         self::assertTrue((bool)($ack['in_pool'] ?? false));
         self::assertSame('worker#1', $ack['slot_id'] ?? null);
+    }
+
+    public function testBusinessSetWorkerPoolQueuesHomepageWarmupForJoinedWorkers(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([
+                'setWorkerPortsFromMasterReady',
+                'claimJoinedWorkerHomepageWarmup',
+                'getWorkerCount',
+                'getWorkerPorts',
+                'getMaintenanceWorkerPorts',
+                'getWorkerHealthSummary',
+            ])
+            ->getMock();
+
+        $core->expects(self::once())
+            ->method('setWorkerPortsFromMasterReady')
+            ->with([19001, 19002])
+            ->willReturn(['accepted' => [19001, 19002], 'rejected' => []]);
+        $core->expects(self::once())
+            ->method('claimJoinedWorkerHomepageWarmup')
+            ->with([19001, 19002])
+            ->willReturn([
+                ['port' => 19001, 'ticket' => 1],
+                ['port' => 19002, 'ticket' => 2],
+            ]);
+        $core->method('getWorkerCount')->willReturn(2);
+        $core->method('getWorkerPorts')->willReturn([19001, 19002]);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([]);
+        $core->method('getWorkerHealthSummary')->willReturn(['healthy' => 2, 'total' => 2]);
+
+        $sent = [];
+        $client = $this->createMock(ChildControlClientInterface::class);
+        $client->method('isConnected')->willReturn(true);
+        $client->method('send')->willReturnCallback(static function (string $message, bool $disconnectOnWriteOverflow = true) use (&$sent): bool {
+            unset($disconnectOnWriteOverflow);
+            $sent[] = $message;
+            return true;
+        });
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'port', 9443);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, [
+            'type' => ControlMessage::TYPE_SET_WORKER_POOL,
+            'role' => ControlMessage::ROLE_WORKER,
+            'ports' => [19001, 19002],
+            'workers' => [
+                ['slot_id' => 'worker#1', 'lease_id' => 'lease-1', 'generation' => 1, 'port' => 19001, 'state' => 'ready'],
+                ['slot_id' => 'worker#2', 'lease_id' => 'lease-2', 'generation' => 1, 'port' => 19002, 'state' => 'ready'],
+            ],
+        ]);
+
+        self::assertSame([[
+            'type' => 'homepage_warmup',
+            'claims' => [
+                ['port' => 19001, 'ticket' => 1],
+                ['port' => 19002, 'ticket' => 2],
+            ],
+            'source' => 'SET_WORKER_POOL',
+        ]], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+        self::assertCount(2, $sent);
     }
 
     public function testDeferredSetWorkerPoolKeepsMaintenanceFallbackInactiveWhenPreviousPoolIsRetained(): void

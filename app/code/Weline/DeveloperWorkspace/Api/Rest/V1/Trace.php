@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
 
 class Trace extends DevToolRestController
 {
@@ -34,16 +36,21 @@ class Trace extends DevToolRestController
 
         $payload = $this->payloadStore->get('trace', 'trace:' . $requestId);
         if (!\is_array($payload)) {
-            $payload = $this->payloadStore->getLatest('trace', self::TRACE_TTL_SECONDS);
+            $payload = $this->payloadStore->getLatest('trace', $this->traceTtl());
         }
         if (!\is_array($payload)) {
             return $this->error('请求链路不存在或已过期，请刷新页面重试', [
                 'request_id' => $requestId,
-                'ttl' => self::TRACE_TTL_SECONDS,
+                'ttl' => $this->traceTtl(),
             ], 404);
         }
 
         return $this->success('success', $payload);
+    }
+
+    private function traceTtl(): int
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.trace_ttl', self::TRACE_TTL_SECONDS);
     }
 
     private function isAllowed(): bool

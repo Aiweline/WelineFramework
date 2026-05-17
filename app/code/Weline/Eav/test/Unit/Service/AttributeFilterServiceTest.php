@@ -90,7 +90,7 @@ class AttributeFilterServiceTest extends TestCase
                 return $this;
             }
 
-            public function groupBy(string|array $field): static
+            public function group(string $fields): static
             {
                 return $this;
             }

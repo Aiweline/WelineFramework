@@ -26,6 +26,7 @@ class AiSiteAgentSessionService
         '_workspace_stream_lease',
         'active_operation',
         'active_operations',
+        'asset_block_cache',
         'asset_manifest',
         'asset_manifest_hash',
         'block_patch_history',
@@ -105,14 +106,24 @@ class AiSiteAgentSessionService
         'execution_blueprint_draft',
         'plan_confirmed',
         'plan_confirmed_at',
+        'plan_ai_generated',
         'plan_generation_progress',
         'plan_generated_at',
         'plan_generated_locale',
         'plan_generated_page_types',
+        'plan_generated_source_signature',
         'plan_json',
         'plan_markdown',
         'plan_structured',
         'plan_workbench',
+        'stage1_contract',
+        'stage1_validation_report',
+        'stage1_first_pass',
+        'stage1_generation_attempts',
+        'stage1_visual_qa_report',
+        'shared_components',
+        'shared_prompt_context',
+        'theme_context_snapshot',
         '_plan_generation_checkpoint',
         '_plan_sse_request',
     ];
@@ -143,6 +154,7 @@ class AiSiteAgentSessionService
         'shared_component_refinements',
         'shared_components',
         'content_manifest',
+        'asset_block_cache',
         'asset_manifest',
         'asset_image_generation_failures',
         'has_build_plan_v2',
@@ -350,6 +362,7 @@ class AiSiteAgentSessionService
         if ($session === null) {
             return false;
         }
+        $clearArtifactRefs = $this->shouldClearArtifactRefs($patch);
         if (\array_key_exists('target_domain', $patch)) {
             $td = \trim((string)$patch['target_domain']);
             $patch['target_domain'] = $td === '' ? '' : \strtolower($td);
@@ -365,6 +378,9 @@ class AiSiteAgentSessionService
         $this->artifactStorage()->persistArtifacts((int)$session->getId(), $artifacts);
         unset($artifacts);
         $this->writeScopeArrayToExistingSession($session, $scopeForStorage);
+        if ($clearArtifactRefs) {
+            $this->clearScopeArtifactRefs($session);
+        }
         unset($scopeForStorage);
         return true;
     }
@@ -380,6 +396,7 @@ class AiSiteAgentSessionService
         if ($session === null) {
             return false;
         }
+        $clearArtifactRefs = $this->shouldClearArtifactRefs($scope);
         if (\array_key_exists('target_domain', $scope)) {
             $td = \trim((string)$scope['target_domain']);
             $scope['target_domain'] = $td === '' ? '' : \strtolower($td);
@@ -391,6 +408,9 @@ class AiSiteAgentSessionService
         $this->artifactStorage()->persistArtifacts((int)$session->getId(), $artifacts);
         unset($artifacts);
         $this->writeScopeArrayToExistingSession($session, $scopeForStorage);
+        if ($clearArtifactRefs) {
+            $this->clearScopeArtifactRefs($session);
+        }
         unset($scopeForStorage);
         return true;
     }
@@ -552,6 +572,40 @@ class AiSiteAgentSessionService
         }
 
         return ObjectManager::getInstance(AiSiteAgentSessionArtifactService::class);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function shouldClearArtifactRefs(array $scope): bool
+    {
+        return \array_key_exists('_artifact_refs', $scope)
+            && \is_array($scope['_artifact_refs'])
+            && $scope['_artifact_refs'] === [];
+    }
+
+    private function clearScopeArtifactRefs(AiSiteAgentSession $session): void
+    {
+        $this->artifactStorage()->deleteArtifactsForSession((int)$session->getId());
+        $pdo = $this->getPgsqlPdo();
+        if ($pdo === null || (int)$session->getId() <= 0) {
+            return;
+        }
+
+        $table = $this->sessionModel->getTable();
+        $pk = AiSiteAgentSession::schema_fields_ID;
+        $adminField = AiSiteAgentSession::schema_fields_ADMIN_USER_ID;
+        $scopeField = AiSiteAgentSession::schema_fields_SCOPE_JSON;
+        $sql = <<<SQL
+UPDATE {$table}
+SET "{$scopeField}" = ((COALESCE(NULLIF("{$scopeField}", ''), '{}')::jsonb - '_artifact_refs')::text)
+WHERE "{$pk}" = :session_id AND "{$adminField}" = :admin_id
+SQL;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            'session_id' => (int)$session->getId(),
+            'admin_id' => (int)$session->getData(AiSiteAgentSession::schema_fields_ADMIN_USER_ID),
+        ]);
     }
 
     /**

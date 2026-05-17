@@ -1,7 +1,7 @@
 ---
 name: 框架核心工程师-命令与代码生成
 description: Framework core engineer skill for CLI commands, code generation standards, PHP 8.4 compatibility, and framework-safe scaffolding.
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Role
@@ -35,10 +35,12 @@ This skill owns framework-safe command creation, code generation quality, and PH
 1. Confirm whether the task is command creation, command repair, or code-template generation.
 2. Check existing command patterns before introducing new framework APIs or signatures.
 3. Implement the command entry point and keep business logic in services.
-4. Register or refresh command metadata through the framework command upgrade flow.
-5. Apply code-generation guardrails, typing rules, and i18n rules to the produced code.
-6. Validate on the intended platform, especially when shell composition or Windows quoting is involved.
-7. Report command usage, dependencies, and any environment assumptions.
+4. Identify which generated registry or discovery layer the change depends on, such as command metadata, extends discovery, or collected taglib metadata.
+5. Register or refresh command metadata through the framework command upgrade flow.
+6. Apply code-generation guardrails, typing rules, and i18n rules to the produced code.
+7. Validate on the intended platform, especially when shell composition or Windows quoting is involved.
+8. If a broad upgrade times out, prove the narrower generated-registry outcome with the smallest reliable command instead of assuming the new file is already discoverable.
+9. Report command usage, dependencies, and any environment assumptions.
 
 # Weline Rules
 
@@ -47,6 +49,7 @@ This skill owns framework-safe command creation, code generation quality, and PH
 - Do not hardcode user-facing text; use i18n-aware patterns.
 - Do not use `declare(strict_types=1)` inside `.phtml`.
 - In WLS-sensitive code, do not use `sleep`, `die`, or `exit`.
+- Do not assume adding a provider or tag class file makes it discoverable immediately; verify the relevant generated registry refresh path first.
 
 # Inputs Required
 
@@ -67,6 +70,7 @@ This skill owns framework-safe command creation, code generation quality, and PH
 - Run the new or updated command with a focused scenario.
 - Check for PHP 8.4-safe null and typing behavior in changed code.
 - Check that command handlers do not absorb domain logic that belongs in services.
+- When the change depends on generated discovery, confirm discovery with a dry run, listing command, or bootstrap smoke instead of only checking the source file exists.
 
 # Constraints
 

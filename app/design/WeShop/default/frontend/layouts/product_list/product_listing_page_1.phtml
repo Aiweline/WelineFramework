@@ -671,7 +671,19 @@ $area = $themeData['area'] ?? 'frontend';
             <main class="weshop-main-content">
                 <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
                 <w:hook>Weline_Theme::frontend::layouts::product_list::content-before</w:hook>
-                
+                <?php $isSearchLayout = (bool) $this->getData('is_search_layout'); ?>
+                <?php if ($isSearchLayout): ?>
+                    <section class="weshop-search-layout-host">
+                        <?php
+                        $searchContent = (string) ($meta['content'] ?? $this->getData('content') ?? '');
+                        $searchContentTemplate = (string) ($meta['contentTemplate'] ?? $this->getData('contentTemplate') ?? '');
+                        if ($searchContent === '' && $searchContentTemplate !== '') {
+                            $searchContent = (string) $this->fetch($searchContentTemplate);
+                        }
+                        echo $searchContent;
+                        ?>
+                    </section>
+                <?php else: ?>
                 <div class="weshop-content-wrapper">
                     
                     <!-- Sidebar Filters -->
@@ -914,6 +926,7 @@ $area = $themeData['area'] ?? 'frontend';
                     </div>
                     
                 </div>
+                <?php endif; ?>
                 
                 <w:hook>Weline_Theme::frontend::layouts::product_list::content-after</w:hook>
                 <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>

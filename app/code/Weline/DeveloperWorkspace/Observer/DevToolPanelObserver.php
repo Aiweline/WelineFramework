@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Observer;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
@@ -18,6 +19,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Hook\HookInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\View\Template;
@@ -222,7 +224,7 @@ class DevToolPanelObserver implements ObserverInterface
             if ((int)($payload['summary']['span_count'] ?? 0) <= 0) {
                 return;
             }
-            $stored = $this->payloadStore->set('trace', 'trace:' . $requestId, $payload, self::TRACE_TTL_SECONDS);
+            $stored = $this->payloadStore->set('trace', 'trace:' . $requestId, $payload, $this->traceTtl());
             if (!$stored) {
                 $this->logToConsole('debug', 'DevToolPanel trace store skipped: unable to persist payload', [
                     'request_id' => $requestId,
@@ -251,7 +253,7 @@ class DevToolPanelObserver implements ObserverInterface
         $apiBase = ($restBackendPrefix !== '' ? trim($restBackendPrefix, '/') . '/' : '') . 'dev/tool/rest/v1';
         $config = [
             'requestId' => $requestId,
-            'traceTtl' => self::TRACE_TTL_SECONDS,
+            'traceTtl' => $this->traceTtl(),
             'apiBase' => $apiBase,
         ];
         $json = \json_encode($config, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -282,6 +284,11 @@ class DevToolPanelObserver implements ObserverInterface
         }
 
         return $result . $script;
+    }
+
+    private function traceTtl(): int
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.trace_ttl', self::TRACE_TTL_SECONDS);
     }
 
     /**

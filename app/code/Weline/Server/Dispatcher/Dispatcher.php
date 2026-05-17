@@ -899,7 +899,13 @@ class Dispatcher
     }
 
     /**
-     * @param array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers'|'audit_worker_health', ports?: int[], role?: string} $job
+     * @param array{
+     *   type: 'set_pool'|'add_workers'|'homepage_warmup'|'probe_blacklisted_workers'|'audit_worker_health',
+     *   ports?: int[],
+     *   role?: string,
+     *   claims?: array<int, array{port?: int, ticket?: int}>,
+     *   source?: string
+     * } $job
      */
     private function createDeferredWorkerPoolFiber(array $job): \Fiber
     {
@@ -947,6 +953,19 @@ class Dispatcher
                 $this->passthroughCore->setWarmupCooperativeYield($this->createWarmupCooperativeYieldCallback());
                 try {
                     return $this->passthroughCore->auditWorkerApplicationHealth();
+                } finally {
+                    $this->passthroughCore->setWarmupCooperativeYield(null);
+                }
+            });
+        }
+
+        if ($job['type'] === 'homepage_warmup') {
+            $claims = \is_array($job['claims'] ?? null) ? $job['claims'] : [];
+
+            return new \Fiber(function () use ($claims): array {
+                $this->passthroughCore->setWarmupCooperativeYield($this->createWarmupCooperativeYieldCallback());
+                try {
+                    return $this->passthroughCore->warmupJoinedWorkersViaHomepage($claims);
                 } finally {
                     $this->passthroughCore->setWarmupCooperativeYield(null);
                 }
@@ -1171,6 +1190,37 @@ class Dispatcher
         }
         if ($kind === 'audit_worker_health') {
             $this->handleWorkerHealthAuditResult(\is_array($payload) ? $payload : []);
+            return;
+        }
+
+        if ($kind === 'homepage_warmup') {
+            $warmed = \is_array($payload['warmed'] ?? null) ? $payload['warmed'] : [];
+            $failed = \is_array($payload['failed'] ?? null) ? $payload['failed'] : [];
+            $skipped = \is_array($payload['skipped'] ?? null) ? $payload['skipped'] : [];
+            $source = (string)($job['source'] ?? 'homepage_warmup');
+
+            if ($warmed !== []) {
+                $this->log(
+                    $source . ' 宸插畬鎴?Worker 棣栭〉棰勭儹: ' . \implode(',', \array_map('intval', $warmed)),
+                    'INFO'
+                );
+            }
+            if ($failed !== []) {
+                $items = [];
+                foreach ($failed as $port => $reason) {
+                    $items[] = (int)$port . ': ' . (string)$reason;
+                }
+                $this->log(
+                    $source . ' Worker 棣栭〉棰勭儹澶辫触锛堜笉褰卞搷宸插叆姹狅級: ' . \implode('; ', $items),
+                    'WARN'
+                );
+            }
+            if ($skipped !== []) {
+                $this->log(
+                    $source . ' Worker 棣栭〉棰勭儹宸茶烦杩囨棫绁ㄦ嵁/宸查€€姹? ' . \implode(',', \array_map('intval', $skipped)),
+                    'DEBUG'
+                );
+            }
         }
     }
 
@@ -1312,6 +1362,7 @@ class Dispatcher
             $source . ' 信任 Master READY 直接入池，跳过启动探活: ' . (\implode(',', $acceptedPorts) ?: '(空)'),
             'INFO'
         );
+        $this->queueJoinedWorkerHomepageWarmup($acceptedPorts, $source);
         $this->sendWorkerPoolAckForPorts($ports, $workers);
     }
 
@@ -1346,7 +1397,25 @@ class Dispatcher
         if ($rejectedParts !== []) {
             $this->log($source . ' 直接入池拒绝: ' . \implode('; ', $rejectedParts), 'WARN');
         }
+        $this->queueJoinedWorkerHomepageWarmup($acceptedPorts, $source);
         $this->sendWorkerPoolAckForPorts($ports, $workers);
+    }
+
+    /**
+     * @param int[] $ports
+     */
+    private function queueJoinedWorkerHomepageWarmup(array $ports, string $source): void
+    {
+        $claims = $this->passthroughCore->claimJoinedWorkerHomepageWarmup($ports);
+        if ($claims === []) {
+            return;
+        }
+
+        $this->deferredWorkerPoolJobs[] = [
+            'type' => 'homepage_warmup',
+            'claims' => $claims,
+            'source' => $source,
+        ];
     }
 
     /**
