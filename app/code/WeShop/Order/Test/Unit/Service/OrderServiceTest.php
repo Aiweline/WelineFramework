@@ -204,6 +204,111 @@ class OrderServiceTest extends TestCase
         $this->assertSame(0, $service->getUnpaidOrderCount(9));
     }
 
+    public function testCreateShipmentRequiresPaidOrder(): void
+    {
+        $order = new class extends Order {
+            public function __construct()
+            {
+            }
+
+            public function load(mixed $id = '', mixed $field = null, bool $force = false): static
+            {
+                $this->setData(self::schema_fields_ID, 10);
+                $this->setData(self::schema_fields_status, OrderService::STATUS_PENDING);
+                $this->setData(self::schema_fields_payment_status, OrderService::PAYMENT_STATUS_PENDING);
+                return $this;
+            }
+
+            public function getId(mixed $default = 0): mixed
+            {
+                return $this->getData(self::schema_fields_ID) ?? $default;
+            }
+
+            public function hasField(string $field): bool
+            {
+                return true;
+            }
+        };
+
+        $service = $this->makeService($order);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $service->createShipment(10, 'DHL', 'TRACK-1');
+    }
+
+    public function testCreateShipmentMarksPaidOrderFulfilled(): void
+    {
+        $order = new class extends Order {
+            public function __construct()
+            {
+            }
+
+            public function load(mixed $id = '', mixed $field = null, bool $force = false): static
+            {
+                $this->setData(self::schema_fields_ID, 10);
+                $this->setData(self::schema_fields_status, OrderService::STATUS_PAID);
+                $this->setData(self::schema_fields_payment_status, OrderService::PAYMENT_STATUS_PAID);
+                return $this;
+            }
+
+            public function getId(mixed $default = 0): mixed
+            {
+                return $this->getData(self::schema_fields_ID) ?? $default;
+            }
+
+            public function hasField(string $field): bool
+            {
+                return true;
+            }
+
+            public function save(\Weline\Framework\Database\AbstractModel|array|string|bool $data = [], array|string $sequence = ''): int|bool
+            {
+                return true;
+            }
+        };
+
+        $service = $this->makeService($order);
+        $shipment = $service->createShipment(10, 'DHL', 'TRACK-1');
+
+        $this->assertSame(OrderService::STATUS_FULFILLED, $shipment->getData(Order::schema_fields_status));
+        $this->assertSame(OrderService::FULFILLMENT_STATUS_SHIPPED, $shipment->getData(Order::schema_fields_fulfillment_status));
+        $this->assertSame('DHL', $shipment->getData(Order::schema_fields_fulfillment_carrier));
+        $this->assertSame('TRACK-1', $shipment->getData(Order::schema_fields_fulfillment_tracking_number));
+    }
+
+    public function testMarkDeliveredCompletesShippedOrder(): void
+    {
+        $order = new class extends Order {
+            public function __construct()
+            {
+            }
+
+            public function load(mixed $id = '', mixed $field = null, bool $force = false): static
+            {
+                $this->setData(self::schema_fields_ID, 10);
+                $this->setData(self::schema_fields_status, OrderService::STATUS_FULFILLED);
+                $this->setData(self::schema_fields_fulfillment_status, OrderService::FULFILLMENT_STATUS_SHIPPED);
+                return $this;
+            }
+
+            public function getId(mixed $default = 0): mixed
+            {
+                return $this->getData(self::schema_fields_ID) ?? $default;
+            }
+
+            public function save(\Weline\Framework\Database\AbstractModel|array|string|bool $data = [], array|string $sequence = ''): int|bool
+            {
+                return true;
+            }
+        };
+
+        $service = $this->makeService($order);
+        $delivered = $service->markDelivered(10);
+
+        $this->assertSame(OrderService::STATUS_COMPLETED, $delivered->getData(Order::schema_fields_status));
+        $this->assertSame(OrderService::FULFILLMENT_STATUS_DELIVERED, $delivered->getData(Order::schema_fields_fulfillment_status));
+    }
+
     /**
      * @param array<int, array<string, mixed>> $items
      */

@@ -1310,6 +1310,10 @@ Close,Close
 筛选条件,"Filter Conditions"
 关闭筛选,"Close filter"
 分类,Classification
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
 结账,Checkout
 订单提交失败,"Order submission failed"
 很抱歉，您的订单提交失败，请稍后重试。,"We're sorry, your order submission failed. Please try again later."

@@ -16,6 +16,11 @@ return [
         'description' => __('Inject content before the storefront order detail page body.'),
         'doc' => 'frontend/order/view-before.md',
     ],
+    'WeShop_Order::frontend::pages::order::view-items' => [
+        'name' => __('Order detail items content'),
+        'description' => __('Inject content inside the storefront order detail items section.'),
+        'doc' => 'frontend/order/view-items.md',
+    ],
     'WeShop_Order::frontend::pages::order::view-after' => [
         'name' => __('Order detail content after'),
         'description' => __('Inject content after the storefront order detail page body.'),

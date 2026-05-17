@@ -104,25 +104,33 @@ class QueueWatchdog implements CronTaskInterface
         $scope = $this->scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
-        $summary = $this->buildTaskService->summarize($scope);
-        if (!$this->shouldRetryBuildQueue($summary)) {
+        $finalizedScope = $this->buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
+        if ($finalizedScope !== $scope) {
+            $this->sessionService->replaceScope((int)$session->getId(), $adminId, $finalizedScope);
+            $session = $this->sessionService->loadByPublicId($publicId, $adminId) ?? $session;
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
+        } else {
+            $scope = $finalizedScope;
+        }
+        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+        if (!empty($completionGate['passed'])) {
+            $this->markGatePassedQueueComplete($queue, $content, $session, $adminId, $scope, $completionGate);
+            return;
+        }
+        if (!$this->shouldRetryBuildQueue($completionGate)) {
             return;
         }
 
         $retryCount = \max(0, (int)($content[self::WATCHDOG_RETRY_KEY] ?? 0));
         if ($retryCount >= self::MAX_RETRY_COUNT) {
-            $this->markRetryExhausted($queue, $content, $session, $adminId, $summary);
+            $this->markRetryExhausted($queue, $content, $session, $adminId, $completionGate);
             return;
         }
 
         $nextRetryCount = $retryCount + 1;
-        $message = (string)__(
-            '队列巡检检测到构建队列已结束，但仍有 %{1}/%{2} 个任务未完成；已回退为 pending，等待系统下一轮调度。',
-            [
-                (string)((int)($summary['total'] ?? 0) - (int)($summary['done'] ?? 0)),
-                (string)(int)($summary['total'] ?? 0),
-            ]
-        );
+        $message = $this->buildRetryMessage($completionGate);
 
         $repairedScope = $this->buildTaskService->resetUnfinishedTasksForQueueRetry($scope, $message);
         $repairedScope = $this->patchBuildActiveOperationForRetry($repairedScope, (int)$queue->getId(), $nextRetryCount, $message);
@@ -142,20 +150,141 @@ class QueueWatchdog implements CronTaskInterface
 
         $content[self::WATCHDOG_RETRY_KEY] = $nextRetryCount;
         $content['watchdog_last_reset_at'] = \date('Y-m-d H:i:s');
-        $content['watchdog_last_reason'] = 'unfinished_build_tasks';
+        $content['watchdog_last_reason'] = (string)($completionGate['reason'] ?? 'completion_gate_failed');
         $content[self::WATCHDOG_EXHAUSTED_KEY] = 0;
         $this->resetQueueToPending($queue, $content, $message);
     }
 
     /**
-     * @param array<string, mixed> $summary
+     * @param array<string, mixed> $completionGate
      */
-    private function shouldRetryBuildQueue(array $summary): bool
+    private function buildRetryMessage(array $completionGate): string
     {
-        $total = (int)($summary['total'] ?? 0);
-        $done = (int)($summary['done'] ?? 0);
+        return (string)__(
+            '队列巡检检测到构建队列已结束，但完成门禁未通过（reason=%{1}，未完成=%{2}/%{3}，无效产物=%{4}）；已回退为 pending，等待系统下一轮调度。',
+            [
+                (string)($completionGate['reason'] ?? 'completion_gate_failed'),
+                (string)(int)($completionGate['unfinished'] ?? 0),
+                (string)(int)($completionGate['total'] ?? 0),
+                (string)(int)($completionGate['invalid_artifacts'] ?? 0),
+            ]
+        );
+    }
 
-        return $total > 0 && $done < $total;
+    /**
+     * @param array<string, mixed> $completionGate
+     */
+    private function buildRetryExhaustedMessage(array $completionGate): string
+    {
+        return (string)__(
+            '队列巡检已达到最大自动重试次数 %{1}；完成门禁仍未通过（reason=%{2}，未完成=%{3}/%{4}，无效产物=%{5}），已停止自动重试。',
+            [
+                (string)self::MAX_RETRY_COUNT,
+                (string)($completionGate['reason'] ?? 'completion_gate_failed'),
+                (string)(int)($completionGate['unfinished'] ?? 0),
+                (string)(int)($completionGate['total'] ?? 0),
+                (string)(int)($completionGate['invalid_artifacts'] ?? 0),
+            ]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $completionGate
+     */
+    private function shouldRetryBuildQueue(array $completionGate): bool
+    {
+        $total = (int)($completionGate['total'] ?? 0);
+
+        return $total > 0 && empty($completionGate['passed']);
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $completionGate
+     */
+    private function markGatePassedQueueComplete(
+        Queue $queue,
+        array $content,
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $scope,
+        array $completionGate
+    ): void {
+        if ((string)$queue->getStatus() === Queue::status_stop) {
+            return;
+        }
+
+        $now = \date('Y-m-d H:i:s');
+        $message = (string)__(
+            '构建完成门禁已通过；队列巡检已按统一门禁修正终态为完成。'
+        );
+        $operationState = [
+            'operation' => 'build',
+            'status' => 'done',
+            'queue_id' => (int)$queue->getId(),
+            'execution_token' => \trim((string)($content['execution_token'] ?? '')),
+            'message' => $message,
+            'updated_at' => $now,
+            'finished_at' => $now,
+            'progress_percent' => 100,
+            'failure_mode' => '',
+            'retry_allowed' => 0,
+            'retryable_ai_failure_count' => 0,
+            'queue_waiting_for_scheduler' => false,
+            'can_close_stream' => true,
+            'continue_other_operations' => false,
+        ];
+
+        $scope['active_operation'] = \array_replace(
+            \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+            $operationState
+        );
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $activeOperations['build'] = \array_replace(
+            \is_array($activeOperations['build'] ?? null) ? $activeOperations['build'] : [],
+            $operationState
+        );
+        $scope['active_operations'] = $activeOperations;
+        $scope = $this->buildTaskService->clearRetryableAiFailures($scope, 'build');
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+        $scope['can_publish'] = 1;
+        $scope['site_ready'] = 1;
+        $scope['latest_build_failed'] = 0;
+        $scope['latest_build_failure'] = [];
+        $scope['publish_blocked_by_latest_ai_failure'] = 0;
+        $scope['publish_blocked_reason'] = '';
+        $scope['next_stage_blocked_by_ai_failures'] = 0;
+        $scope['build_task_summary'] = \is_array($completionGate['summary'] ?? null) ? $completionGate['summary'] : [];
+        $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
+        $buildSummary['can_publish'] = true;
+        $buildSummary['active_operation'] = 'build';
+        $buildSummary['last_generated_at'] = $now;
+        $buildSummary['completion_gate'] = \array_diff_key($completionGate, ['summary' => true]);
+        $scope['build_summary'] = $buildSummary;
+        $this->sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
+
+        $content[self::WATCHDOG_EXHAUSTED_KEY] = 0;
+        $content['watchdog_gate_promoted_at'] = $now;
+        $queue->setStatus(Queue::status_done)
+            ->setFinished(true)
+            ->setPid(0)
+            ->setContent($this->encodeQueueContent($content))
+            ->setResult($this->appendQueueMessage(\trim((string)$queue->getResult()), $message))
+            ->setProcess($message)
+            ->save();
+
+        $this->sessionService->appendEvent(
+            (int)$session->getId(),
+            $adminId,
+            'pagebuilder_queue_watchdog_gate_passed',
+            [
+                'queue_id' => (int)$queue->getId(),
+                'message' => $message,
+                'completion_gate' => \array_diff_key($completionGate, ['summary' => true]),
+            ],
+            AiSiteAgentSession::STAGE_VISUAL_EDIT
+        );
     }
 
     /**
@@ -208,32 +337,25 @@ class QueueWatchdog implements CronTaskInterface
 
     /**
      * @param array<string, mixed> $content
-     * @param array<string, mixed> $summary
+     * @param array<string, mixed> $completionGate
      */
     private function markRetryExhausted(
         Queue $queue,
         array $content,
         AiSiteAgentSession $session,
         int $adminId,
-        array $summary
+        array $completionGate
     ): void {
         if ((int)($content[self::WATCHDOG_EXHAUSTED_KEY] ?? 0) === 1) {
             return;
         }
 
-        $message = (string)__(
-            '队列巡检已达到最大自动重试次数 %{1}；当前仍有 %{2}/%{3} 个构建任务未完成，已停止自动重试。',
-            [
-                (string)self::MAX_RETRY_COUNT,
-                (string)((int)($summary['total'] ?? 0) - (int)($summary['done'] ?? 0)),
-                (string)(int)($summary['total'] ?? 0),
-            ]
-        );
+        $message = $this->buildRetryExhaustedMessage($completionGate);
 
         $scope = $this->scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
-        $scope = $this->patchBuildActiveOperationExhausted($scope, (int)$queue->getId(), $message);
+        $scope = $this->patchBuildActiveOperationExhausted($scope, (int)$queue->getId(), $message, $completionGate);
         $this->sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
         $this->sessionService->appendEvent(
             (int)$session->getId(),
@@ -250,7 +372,10 @@ class QueueWatchdog implements CronTaskInterface
 
         $content[self::WATCHDOG_EXHAUSTED_KEY] = 1;
         $content['watchdog_exhausted_at'] = \date('Y-m-d H:i:s');
-        $queue->setContent($this->encodeQueueContent($content))
+        $queue->setStatus(Queue::status_error)
+            ->setFinished(true)
+            ->setPid(0)
+            ->setContent($this->encodeQueueContent($content))
             ->setResult($this->appendQueueMessage(\trim((string)$queue->getResult()), $message))
             ->setProcess($this->appendQueueMessage(\trim((string)$queue->getProcess()), $message))
             ->save();
@@ -260,7 +385,7 @@ class QueueWatchdog implements CronTaskInterface
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function patchBuildActiveOperationExhausted(array $scope, int $queueId, string $message): array
+    private function patchBuildActiveOperationExhausted(array $scope, int $queueId, string $message, array $completionGate): array
     {
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $operationState = \array_replace($activeOperation, [
@@ -277,6 +402,25 @@ class QueueWatchdog implements CronTaskInterface
         $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
         $activeOperations['build'] = $operationState;
         $scope['active_operations'] = $activeOperations;
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+        $scope['can_publish'] = 0;
+        $scope['site_ready'] = 0;
+        $scope['latest_build_failed'] = 1;
+        $scope['latest_build_failure'] = [
+            'operation' => 'build',
+            'queue_id' => $queueId,
+            'message' => $message,
+            'reason' => (string)($completionGate['reason'] ?? 'completion_gate_failed'),
+            'failed_at' => \date('Y-m-d H:i:s'),
+        ];
+        $scope['publish_blocked_by_latest_ai_failure'] = 1;
+        $scope['publish_blocked_reason'] = $message;
+        $scope['build_task_summary'] = \is_array($completionGate['summary'] ?? null) ? $completionGate['summary'] : [];
+        $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
+        $buildSummary['can_publish'] = false;
+        $buildSummary['active_operation'] = 'build';
+        $buildSummary['completion_gate'] = \array_diff_key($completionGate, ['summary' => true]);
+        $scope['build_summary'] = $buildSummary;
 
         return $scope;
     }

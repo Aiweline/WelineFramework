@@ -14,6 +14,7 @@ final class AiSiteAssetManifestService
     ];
 
     private const MAX_USAGE_DEFAULT = 1;
+    private const BLOCK_CACHE_VERSION = 1;
 
     /**
      * @param array<string, mixed> $manifest
@@ -69,10 +70,21 @@ final class AiSiteAssetManifestService
         $slotId = $next['slot_id'];
         $existing = \is_array($normalized['slots'][$slotId] ?? null) ? $normalized['slots'][$slotId] : [];
         $existingStatus = \trim((string)($existing['status'] ?? ''));
+        $existingSignature = \trim((string)($existing['planning_signature'] ?? ''));
+        if ($existingSignature === '' && $existing !== []) {
+            $existingSignature = $this->buildSlotPlanningSignature($existing);
+        }
+        $nextSignature = \trim((string)($next['planning_signature'] ?? ''));
+        $samePlanning = $existingSignature !== '' && $nextSignature !== '' && \hash_equals($existingSignature, $nextSignature);
         if (
             (int)($existing['locked_by_user'] ?? 0) === 1
-            || \trim((string)($existing['final_url'] ?? '')) !== ''
-            || \in_array($existingStatus, ['queued', 'generating', 'done', 'error', 'locked'], true)
+            || (
+                $samePlanning
+                && (
+                    \trim((string)($existing['final_url'] ?? '')) !== ''
+                    || \in_array($existingStatus, ['queued', 'generating', 'done', 'error', 'locked'], true)
+                )
+            )
         ) {
             $next = \array_replace($next, [
                 'locked_by_user' => (int)($existing['locked_by_user'] ?? 0),
@@ -170,6 +182,104 @@ final class AiSiteAssetManifestService
             'variants' => $variants,
             'error_message' => '',
         ], false);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $manifest
+     * @return array<string, mixed>
+     */
+    public function rememberGeneratedSlotInScope(array $scope, array $manifest, string $slotId): array
+    {
+        $slot = $this->getSlot($manifest, $slotId);
+        if ($slot === [] || (int)($slot['locked_by_user'] ?? 0) === 1) {
+            return $scope;
+        }
+
+        $slotId = \trim((string)($slot['slot_id'] ?? ''));
+        $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+        $signature = \trim((string)($slot['planning_signature'] ?? ''));
+        if ($slotId === '' || $finalUrl === '' || $signature === '' || $this->slotHasPlaceholderGeneratedAsset($slot)) {
+            return $scope;
+        }
+
+        $cache = \is_array($scope['asset_block_cache'] ?? null) ? $scope['asset_block_cache'] : [];
+        $slots = \is_array($cache['slots'] ?? null) ? $cache['slots'] : [];
+        $slots[$slotId] = [
+            'slot_id' => $slotId,
+            'planning_signature' => $signature,
+            'slot_type' => (string)($slot['slot_type'] ?? ''),
+            'kind' => (string)($slot['kind'] ?? ''),
+            'page_type' => (string)($slot['page_type'] ?? ''),
+            'block_key' => (string)($slot['block_key'] ?? ''),
+            'section_code' => (string)($slot['section_code'] ?? ''),
+            'field' => (string)($slot['field'] ?? ''),
+            'label' => (string)($slot['label'] ?? ''),
+            'final_url' => $finalUrl,
+            'source' => \trim((string)($slot['source'] ?? 'generated')) ?: 'generated',
+            'status' => \trim((string)($slot['status'] ?? 'done')) ?: 'done',
+            'variants' => \is_array($slot['variants'] ?? null) ? $slot['variants'] : [],
+            'planning_context_hash' => \trim((string)($slot['planning_context_hash'] ?? '')),
+            'cached_at' => \date('Y-m-d H:i:s'),
+        ];
+
+        $scope['asset_block_cache'] = \array_replace($cache, [
+            'version' => self::BLOCK_CACHE_VERSION,
+            'updated_at' => \date('Y-m-d H:i:s'),
+            'slots' => $slots,
+        ]);
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $manifest
+     * @return array<string, mixed>
+     */
+    public function rememberGeneratedSlotsInScope(array $scope, array $manifest): array
+    {
+        foreach (($this->normalize($manifest)['slots'] ?? []) as $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $slotId = \trim((string)($slot['slot_id'] ?? ''));
+            if ($slotId === '' || \trim((string)($slot['final_url'] ?? '')) === '') {
+                continue;
+            }
+            $scope = $this->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $slot
+     */
+    public function isReusableSessionBlockAsset(array $scope, array $slot, string $finalUrl = ''): bool
+    {
+        $normalized = $this->normalizeSlot($slot, (string)($slot['slot_id'] ?? ''));
+        if ($normalized === [] || $this->slotHasPlaceholderGeneratedAsset($normalized)) {
+            return false;
+        }
+
+        $finalUrl = \trim($finalUrl) !== ''
+            ? \trim($finalUrl)
+            : \trim((string)($normalized['final_url'] ?? ''));
+        if ($finalUrl === '') {
+            return false;
+        }
+
+        $cached = $this->readReusableCachedSlot($scope, $normalized, $finalUrl);
+        if ($cached !== []) {
+            return true;
+        }
+
+        $signature = \trim((string)($normalized['planning_signature'] ?? ''));
+        $slotFinalUrl = \trim((string)($normalized['final_url'] ?? ''));
+
+        return $signature !== '' && $slotFinalUrl !== '' && \hash_equals($slotFinalUrl, $finalUrl);
     }
 
     /**
@@ -386,7 +496,7 @@ final class AiSiteAssetManifestService
     /**
      * 强行契约抽取：基于 brief_description 推导一组"必须出现的图像主体关键词"。
      * 这是修复 logo/banner 与用户业务诉求脱节的关键——AI 看到具体名词
-     * （playing cards / dealer / casino chips / India / APK 等）会优先把它们画进图，
+     * （具体产品、服务、材料、场景等）会优先把它们画进图，
      * 而光看 "Business context: ..." 长句反而会被淹没。
      *
      * 关键词生成规则：
@@ -481,19 +591,104 @@ final class AiSiteAssetManifestService
             $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [])
         );
         foreach ($this->extractSlotsFromScope($scope) as $slot) {
-            $manifest = $this->upsert($manifest, $slot);
+            $slot = $this->attachPlanningContextToSlot($slot, $scope);
+            $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
         }
         foreach ($this->buildRequiredIdentitySlots($scope) as $slot) {
-            $manifest = $this->upsert($manifest, $slot);
+            $slot = $this->attachPlanningContextToSlot($slot, $scope);
+            $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
         }
         foreach ($this->buildRequiredHeroBannerSlots($scope) as $slot) {
-            $manifest = $this->upsert($manifest, $slot);
+            $slot = $this->attachPlanningContextToSlot($slot, $scope);
+            $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
         }
         foreach ($this->buildRequiredContentBlockSlots($scope) as $slot) {
-            $manifest = $this->upsert($manifest, $slot);
+            $slot = $this->attachPlanningContextToSlot($slot, $scope);
+            $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
         }
 
         return $manifest;
+    }
+
+    /**
+     * @param array<string, mixed> $slot
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function attachPlanningContextToSlot(array $slot, array $scope): array
+    {
+        $contractHash = \trim((string)($scope['stage1_contract']['contract_hash'] ?? ''));
+        if ($contractHash === '') {
+            $contractHash = \trim((string)($scope['plan_generated_source_signature'] ?? ''));
+        }
+        if ($contractHash !== '') {
+            $slot['planning_context_hash'] = $contractHash;
+        }
+
+        return $slot;
+    }
+
+    /**
+     * @param array<string, mixed> $slot
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function hydrateSlotFromSessionBlockCache(array $slot, array $scope): array
+    {
+        $normalized = $this->normalizeSlot($slot, (string)($slot['slot_id'] ?? ''));
+        if ($normalized === [] || \trim((string)($normalized['final_url'] ?? '')) !== '') {
+            return $slot;
+        }
+
+        $cached = $this->readReusableCachedSlot($scope, $normalized);
+        if ($cached === []) {
+            return $slot;
+        }
+
+        return \array_replace($normalized, [
+            'final_url' => (string)($cached['final_url'] ?? ''),
+            'source' => \trim((string)($cached['source'] ?? 'generated')) ?: 'generated',
+            'status' => \trim((string)($cached['status'] ?? 'done')) ?: 'done',
+            'variants' => \is_array($cached['variants'] ?? null) ? $cached['variants'] : [],
+            'error_message' => '',
+            'execution_token' => '',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $slot
+     * @return array<string, mixed>
+     */
+    private function readReusableCachedSlot(array $scope, array $slot, string $finalUrl = ''): array
+    {
+        $slotId = \trim((string)($slot['slot_id'] ?? ''));
+        $signature = \trim((string)($slot['planning_signature'] ?? ''));
+        if ($slotId === '' || $signature === '') {
+            return [];
+        }
+
+        $cacheSlots = \is_array($scope['asset_block_cache']['slots'] ?? null)
+            ? $scope['asset_block_cache']['slots']
+            : [];
+        $cached = \is_array($cacheSlots[$slotId] ?? null) ? $cacheSlots[$slotId] : [];
+        if ($cached === []) {
+            return [];
+        }
+
+        $cachedSignature = \trim((string)($cached['planning_signature'] ?? ''));
+        $cachedFinalUrl = \trim((string)($cached['final_url'] ?? ''));
+        if ($cachedSignature === '' || $cachedFinalUrl === '' || !\hash_equals($cachedSignature, $signature)) {
+            return [];
+        }
+        if (\trim($finalUrl) !== '' && !\hash_equals($cachedFinalUrl, \trim($finalUrl))) {
+            return [];
+        }
+        if ($this->slotHasPlaceholderGeneratedAsset(\array_replace($slot, $cached))) {
+            return [];
+        }
+
+        return $cached;
     }
 
     /**
@@ -688,6 +883,8 @@ final class AiSiteAssetManifestService
                 'status' => 'pending',
                 'source' => 'planned',
                 'final_url' => '',
+                'required' => 0,
+                'desired_image' => 1,
                 'locked_by_user' => 0,
             ];
         }
@@ -727,7 +924,7 @@ final class AiSiteAssetManifestService
 
         $logoBriefParts = [];
         if ($subjectAnchor !== '') {
-            $logoBriefParts[] = 'PRIMARY SUBJECT for the logo glyph (the mark MUST visually depict this business — pick concrete iconography from the domain such as suit symbols, chips, dealer cues for card games; map vertical-specific objects/symbols for other industries): '
+            $logoBriefParts[] = 'PRIMARY SUBJECT for the logo glyph (the mark MUST visually depict this exact business; derive concrete iconography only from the approved brief, products, services, materials, culture, and visual plan; never copy example industries or unrelated symbols): '
                 . $subjectAnchor;
         }
         $logoBriefParts[] = 'Output requirements: PNG with transparent alpha background, production-ready horizontal logo or wordmark, simple brand mark, no mockup, no extra scene, no colored rectangle/backdrop, no paragraph text, no watermark, no screenshot frame.';
@@ -744,7 +941,7 @@ final class AiSiteAssetManifestService
 
         $iconBriefParts = [];
         if ($subjectAnchor !== '') {
-            $iconBriefParts[] = 'PRIMARY SUBJECT for the favicon/title icon (one bold recognizable symbol from this business — e.g., a card suit/chip/dealer chip cue for card games; a domain-correct symbol for any other vertical): '
+            $iconBriefParts[] = 'PRIMARY SUBJECT for the favicon/title icon (one bold recognizable symbol from this exact business; choose a domain-correct object, material, service cue, or brand-initial mark from the approved brief only; never copy example industries or unrelated symbols): '
                 . $subjectAnchor;
         }
         $iconBriefParts[] = 'Output requirements: square 1:1 composition, transparent or clean solid background, highly recognizable at 16-64px, one bold symbol or monogram only, no paragraph text, no mockup, no watermark.';
@@ -848,6 +1045,8 @@ final class AiSiteAssetManifestService
                 'status' => 'pending',
                 'source' => 'planned',
                 'final_url' => '',
+                'required' => 1,
+                'desired_image' => 1,
                 'locked_by_user' => 0,
             ];
         }
@@ -918,6 +1117,8 @@ final class AiSiteAssetManifestService
                     'status' => 'pending',
                     'source' => 'planned',
                     'final_url' => '',
+                    'required' => 0,
+                    'desired_image' => 1,
                     'locked_by_user' => 0,
                 ];
             }
@@ -1138,7 +1339,7 @@ final class AiSiteAssetManifestService
             return [];
         }
 
-        return [
+        $normalized = [
             'slot_id' => $slotId,
             'slot_type' => $slotType,
             'kind' => \trim((string)($slot['kind'] ?? $slotType)) ?: $slotType,
@@ -1151,6 +1352,8 @@ final class AiSiteAssetManifestService
             'brief' => \trim((string)($slot['brief'] ?? $slot['prompt_brief'] ?? '')),
             'prompt_brief' => \trim((string)($slot['prompt_brief'] ?? $slot['brief'] ?? '')),
             'final_url' => \trim((string)($slot['final_url'] ?? '')),
+            'required' => (int)($slot['required'] ?? $slot['real_image_required'] ?? 0) === 1 ? 1 : 0,
+            'desired_image' => (int)($slot['desired_image'] ?? $slot['recommended'] ?? 0) === 1 ? 1 : 0,
             'source' => \trim((string)($slot['source'] ?? 'planned')) ?: 'planned',
             'status' => \trim((string)($slot['status'] ?? 'pending')) ?: 'pending',
             'locked_by_user' => (int)($slot['locked_by_user'] ?? 0) === 1 ? 1 : 0,
@@ -1158,11 +1361,74 @@ final class AiSiteAssetManifestService
             'error_message' => \trim((string)($slot['error_message'] ?? '')),
             'execution_token' => \trim((string)($slot['execution_token'] ?? '')),
             'updated_at' => \trim((string)($slot['updated_at'] ?? '')),
+            'target_size' => \trim((string)($slot['target_size'] ?? '')),
+            'aspect_ratio' => \trim((string)($slot['aspect_ratio'] ?? '')),
             'allowed_pages' => \is_array($slot['allowed_pages'] ?? null) ? $slot['allowed_pages'] : ['*'],
             'allowed_blocks' => \is_array($slot['allowed_blocks'] ?? null) ? $slot['allowed_blocks'] : ['*'],
             'max_usage' => (int)($slot['max_usage'] ?? self::MAX_USAGE_DEFAULT),
             'reuse_policy' => \trim((string)($slot['reuse_policy'] ?? 'do_not_repeat_raw_image')),
+            'planning_context_hash' => \trim((string)($slot['planning_context_hash'] ?? '')),
         ];
+        $normalized['planning_signature'] = \trim((string)($slot['planning_signature'] ?? ''));
+        if ($normalized['planning_signature'] === '') {
+            $normalized['planning_signature'] = $this->buildSlotPlanningSignature($normalized);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $slot
+     */
+    private function buildSlotPlanningSignature(array $slot): string
+    {
+        $payload = [
+            'slot_id' => \trim((string)($slot['slot_id'] ?? '')),
+            'slot_type' => \trim((string)($slot['slot_type'] ?? '')),
+            'kind' => \trim((string)($slot['kind'] ?? '')),
+            'page_type' => \trim((string)($slot['page_type'] ?? '')),
+            'block_key' => \trim((string)($slot['block_key'] ?? '')),
+            'field' => \trim((string)($slot['field'] ?? '')),
+            'task_key' => \trim((string)($slot['task_key'] ?? '')),
+            'section_code' => \trim((string)($slot['section_code'] ?? '')),
+            'label' => \trim((string)($slot['label'] ?? '')),
+            'brief' => \trim((string)($slot['brief'] ?? '')),
+            'prompt_brief' => \trim((string)($slot['prompt_brief'] ?? '')),
+            'required' => (int)($slot['required'] ?? 0) === 1 ? 1 : 0,
+            'desired_image' => (int)($slot['desired_image'] ?? 0) === 1 ? 1 : 0,
+            'target_size' => \trim((string)($slot['target_size'] ?? '')),
+            'aspect_ratio' => \trim((string)($slot['aspect_ratio'] ?? '')),
+            'allowed_pages' => $this->normalizeSignatureValue(
+                \is_array($slot['allowed_pages'] ?? null) ? $slot['allowed_pages'] : ['*']
+            ),
+            'allowed_blocks' => $this->normalizeSignatureValue(
+                \is_array($slot['allowed_blocks'] ?? null) ? $slot['allowed_blocks'] : ['*']
+            ),
+            'max_usage' => (int)($slot['max_usage'] ?? self::MAX_USAGE_DEFAULT),
+            'reuse_policy' => \trim((string)($slot['reuse_policy'] ?? 'do_not_repeat_raw_image')),
+            'planning_context_hash' => \trim((string)($slot['planning_context_hash'] ?? '')),
+        ];
+        $json = \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+        return \sha1((string)$json);
+    }
+
+    private function normalizeSignatureValue(mixed $value): mixed
+    {
+        if (!\is_array($value)) {
+            return \is_scalar($value) || $value === null ? $value : (string)$value;
+        }
+
+        $isList = \array_is_list($value);
+        $normalized = [];
+        foreach ($value as $key => $item) {
+            $normalized[$key] = $this->normalizeSignatureValue($item);
+        }
+        if (!$isList) {
+            \ksort($normalized);
+        }
+
+        return $normalized;
     }
 
     /**

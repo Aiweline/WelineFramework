@@ -203,6 +203,7 @@ class AiSitePageComponentGenerationService
      */
     public function buildPageSectionSpecs(string $pageType, array $websiteProfile, array $scope): array
     {
+        $scope = $this->normalizeStageTwoBuildScope($scope, $websiteProfile);
         $blueprint = $this->getPageBlueprintService()->buildPageBlueprint($pageType, $scope, $websiteProfile);
         $blueprint = $this->mergeBuildTaskSectionsIntoBlueprint($pageType, $blueprint, $scope);
         $sections = [];
@@ -237,6 +238,31 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * Stage2 prompt assembly must always read the latest frozen task tree.
+     * Preview/build entrypoints can load an older persisted scope, so normalize
+     * it here before any section prompt resolves build_plan_v2 task context.
+     *
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $websiteProfile
+     * @return array<string,mixed>
+     */
+    private function normalizeStageTwoBuildScope(array $scope, array $websiteProfile): array
+    {
+        $scope = $this->getScopeCompatibilityService()->normalizeScope($scope);
+        if (!\is_array($scope['build_plan_v2'] ?? null)) {
+            return $scope;
+        }
+
+        $workspaceTrack = $this->getScopeCompatibilityService()->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+
+        return $this->getBuildTaskService()->ensureTaskScope(
+            $scope,
+            $websiteProfile,
+            $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+        );
+    }
+
+    /**
      * @param array<string,mixed> $section
      * @param array<string,mixed> $blueprint
      * @param array<string,mixed> $websiteProfile
@@ -250,7 +276,7 @@ class AiSitePageComponentGenerationService
         $sectionTemplate = \strtolower(\trim((string)($section['template'] ?? '')));
         $identity = \strtolower($pageType . ' ' . $sectionCode . ' ' . $sectionKey . ' ' . $sectionTemplate . ' ' . (string)($section['name'] ?? ''));
         $isHero = \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $identity) === 1;
-        $requiresImage = $isHero
+        $wantsImage = $isHero
             || \preg_match('/\b(showcase|feature|product|game|suite|download|cta|conversion|spotlight|trust|security|safe|badge|proof|testimonial|review|story|faq)\b/i', $identity) === 1;
         $slotId = 'page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode !== '' ? $sectionCode : ($sectionKey !== '' ? $sectionKey : 'section'));
         $brief = $this->pickString(
@@ -262,11 +288,16 @@ class AiSitePageComponentGenerationService
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null
         );
-        $usage = $isHero ? 'section_background_cover' : ($requiresImage ? 'section_media_surface' : 'optional_css_visual');
+        $finalUrl = $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        $hasVerifiedImage = $finalUrl !== '';
+        // A required image contract is only enforceable after a verified asset URL exists.
+        // Hero/media blocks without a verified URL must use the explicit CSS-only visual contract
+        // instead of making the whole build depend on optional text-to-image quota.
+        $requiresImage = $hasVerifiedImage;
+        $usage = $isHero ? 'section_background_cover' : ($wantsImage ? 'section_media_surface' : 'optional_css_visual');
         $style = $isHero
             ? 'premium cinematic website banner, realistic/editorial photography or photoreal premium 3D, 1920x750 wide full-bleed cover background, not cartoon or SVG-like'
             : 'premium brand website media, realistic/editorial or high-end commercial art, not clip-art, not cartoon, not placeholder';
-        $finalUrl = $this->resolveSectionAssetUrl($pageType, $section, $scope);
         if ($finalUrl !== '') {
             $resolvedSlotId = $this->resolveSectionAssetSlotId($scope, $finalUrl);
             if ($resolvedSlotId !== '') {
@@ -277,8 +308,9 @@ class AiSitePageComponentGenerationService
         $contract = [
             'version' => 1,
             'required' => $requiresImage ? 1 : 0,
+            'desired_image' => $wantsImage ? 1 : 0,
             'slot_id' => $slotId,
-            'slot_type' => $isHero ? 'hero_banner' : 'section_image',
+            'slot_type' => $isHero ? 'hero_image' : 'section_image',
             'page_type' => $pageType,
             'section_code' => $sectionCode,
             'section_key' => $sectionKey,
@@ -289,11 +321,32 @@ class AiSitePageComponentGenerationService
             'target_size' => $isHero ? '1920x750' : '',
             'subject' => $this->clipText($this->sanitizeVisibleCopy($brief), 220),
             'style' => $style,
-            'html_contract' => $requiresImage
+            'responsive_layout_contract' => [
+                'desktop' => 'Use a centered safe-width inner container. Split layouts are allowed only when every grid/flex child has min-width:0 and no panel exceeds the container.',
+                'tablet' => 'At <=900px, stack media/copy/form panels or switch to two safe rows. Do not keep a side card absolutely offset outside the viewport.',
+                'mobile' => 'At <=420px, one column only. Inputs/buttons/media use width:100%; max-width:100%; box-sizing:border-box; no horizontal scroll.',
+                'required_parts' => [
+                    'root_shell',
+                    'inner_container',
+                    'copy_panel',
+                    $wantsImage ? 'media_panel' : 'css_visual_layer',
+                    'action_or_form_panel',
+                    'decorative_layers',
+                ],
+                'forbidden_layouts' => [
+                    'absolute-positioned form or card pushed outside the root',
+                    'fixed pixel width media/form column that cannot shrink',
+                    'image layer covering text, form fields, or CTAs on tablet/mobile',
+                    'decorative arcs or blobs with z-index above interactive content',
+                ],
+            ],
+            'html_contract' => ($requiresImage && $hasVerifiedImage)
                 ? ($isHero
                     ? 'Render the concrete final_url from this contract as a real editable <img> cover layer inside html_content for the full-width 1920x750-style banner. The same <img> carries data-pb-ai-image-role and the concrete data-pb-ai-asset-slot from this contract.'
                     : 'Render the concrete final_url from this contract as a real editable <img> media surface inside html_content. The same <img> carries data-pb-ai-image-role and the concrete data-pb-ai-asset-slot from this contract.')
-                : 'Use CSS-only motifs if no verified image exists; never use svg or placeholder image URLs.',
+                : ($wantsImage
+                    ? 'This block benefits from visual media. If a verified final_url is supplied, render it as a real editable <img>; otherwise build a polished CSS-only media/motif surface and do not invent external image URLs.'
+                    : 'No verified final_url is available for this visual. Build a polished CSS-only motif/media surface; never use svg, placeholder image URLs, or invented external image URLs.'),
         ];
         if ($finalUrl !== '') {
             $contract['final_url'] = $finalUrl;
@@ -400,7 +453,7 @@ class AiSitePageComponentGenerationService
     {
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-        $replaceBlueprintSections = false;
+        $replaceBlueprintSections = (string)($buildBlueprint['source'] ?? '') === 'build_plan_v2';
         if ($tasks === []) {
             $tasks = $this->buildSectionTasksFromExecutionBlueprint($pageType, $scope);
             $replaceBlueprintSections = $tasks !== [];
@@ -1284,7 +1337,11 @@ class AiSitePageComponentGenerationService
         foreach ($components as $componentKey => $spec) {
             $region = (string)($spec['region'] ?? 'content');
             $componentCode = (string)($spec['componentCode'] ?? '');
-            $attemptPrompt = $this->appendComponentCssScopeInstruction((string)($spec['prompt'] ?? ''), $componentCode);
+            $attemptPrompt = $this->appendComponentCssScopeInstruction(
+                (string)($spec['prompt'] ?? ''),
+                $componentCode,
+                \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : []
+            );
             $guardedPrompt = $this->prependComponentJsonOnlyGuard($attemptPrompt, false);
             $guardedPrompt = $this->getSkillRegistry()->prependPromptGuide($guardedPrompt, 'stage3');
             $fullByKey[$componentKey] = '';
@@ -1325,7 +1382,6 @@ class AiSitePageComponentGenerationService
                     'temperature' => 0.25,
                     'max_tokens' => 8192,
                     'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
-                    'response_format' => ['type' => 'json_object'],
                 ], true),
             ];
         }
@@ -1446,6 +1502,7 @@ class AiSitePageComponentGenerationService
      */
     private function buildSharedComponentGenerationSpecs(array $websiteProfile, array $scope, array $regions = []): array
     {
+        $scope = $this->normalizeStageTwoBuildScope($scope, $websiteProfile);
         $regionMap = $regions === [] ? ['header' => true, 'footer' => true] : \array_fill_keys(\array_values(\array_filter(\array_map('strval', $regions))), true);
         $siteDisplayName = $this->resolveLocaleSafeSiteDisplayName(
             $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope),
@@ -1566,12 +1623,11 @@ class AiSitePageComponentGenerationService
         ];
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
         $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
-        $aiData = $this->sanitizeGeneratedAssetAttributes($aiData);
-        $aiData = $this->repairAiDataImageTagAttributeGrammar($aiData);
-        $aiData = $this->ensureGeneratedAssetImageAttributes($aiData, $renderContext, $defaultConfig);
-        $this->assertGeneratedImageSourcesUseVerifiedAssets($aiData, $renderContext, $defaultConfig);
-        $aiData = $this->ensureRequiredNonHeroImageSlotElement($aiData, $region, $renderContext, $defaultConfig, $componentCode);
+        $aiData = $this->stripOptionalUnverifiedGeneratedImageReferences($aiData, $renderContext, $defaultConfig);
         $aiData = $this->enforceContractHeroImageUrlsInAiPayload($aiData, $region, $defaultConfig);
+        $aiData = $this->enforceConfiguredCtaIntentInAiPayload($aiData, $defaultConfig, $componentCode);
+        $this->assertSharedComponentCopyMatchesSourceIndustry($aiData, $region, $defaultConfig, $renderContext);
+        $this->assertGeneratedImageSourcesUseVerifiedAssets($aiData, $renderContext, $defaultConfig);
         $this->assertRequiredImageAssetsUsed($aiData, $renderContext, $defaultConfig);
         // 寮哄埗濂戠害锛氭湁 verified_assets 鏃?HTML 蹇呴』寮曠敤鑷冲皯涓€涓湡瀹炲浘鐗?URL
         if ($verifiedAssets !== []) {
@@ -1614,7 +1670,9 @@ class AiSitePageComponentGenerationService
 
         $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
         if (empty($syntaxCheck['valid'])) {
-            $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
+            throw new \RuntimeException((string)__('AI generated component failed PHP syntax validation: %{message}', [
+                'message' => (string)($syntaxCheck['error'] ?? 'unknown'),
+            ]));
         }
 
         $html = $this->renderTemplateToHtml($phtml, $persistedConfig, $renderContext);
@@ -1631,207 +1689,6 @@ class AiSitePageComponentGenerationService
             'default_config' => $persistedConfig,
             'ai_data' => $aiData,
         ];
-    }
-
-    /**
-     * AI output sometimes follows the slot contract semantically but drops the
-     * `data` prefix while concatenating attributes. Repair that exact shape
-     * before image-slot validation and before fallback image injection runs.
-     *
-     * @param array<string,mixed> $aiData
-     * @return array<string,mixed>
-     */
-    private function sanitizeGeneratedAssetAttributes(array $aiData): array
-    {
-        foreach (['html_content', 'html_extra'] as $key) {
-            $html = (string)($aiData[$key] ?? '');
-            if ($html === '') {
-                continue;
-            }
-            $html = \str_replace('"-pb-ai-image-role=', '" data-pb-ai-image-role=', $html);
-            $html = \str_replace('\'-pb-ai-image-role=', '\' data-pb-ai-image-role=', $html);
-            $html = \str_replace('"-pb-ai-asset-slot=', '" data-pb-ai-asset-slot=', $html);
-            $html = \str_replace('\'-pb-ai-asset-slot=', '\' data-pb-ai-asset-slot=', $html);
-            $aiData[$key] = $html;
-        }
-
-        return $aiData;
-    }
-
-    /**
-     * If AI used the exact verified image URL but forgot editor metadata, repair
-     * only the structural slot binding. This does not invent copy, layout, CSS, or
-     * images; it preserves the AI-selected media placement and makes the queue
-     * data contract editable.
-     *
-     * @param array<string,mixed> $aiData
-     * @param array<string,mixed> $renderContext
-     * @param array<string,mixed> $defaultConfig
-     * @return array<string,mixed>
-     */
-    private function ensureGeneratedAssetImageAttributes(array $aiData, array $renderContext, array $defaultConfig): array
-    {
-        $assetMap = $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig);
-        if ($assetMap === []) {
-            return $aiData;
-        }
-
-        foreach (['html_content', 'html_extra'] as $key) {
-            $html = (string)($aiData[$key] ?? '');
-            if ($html === '' || \stripos($html, '<img') === false) {
-                continue;
-            }
-
-            $aiData[$key] = \preg_replace_callback(
-                '/<img\b[^>]*>/iu',
-                function (array $matches) use ($assetMap): string {
-                    $tag = (string)($matches[0] ?? '');
-                    $src = $this->extractHtmlAttribute($tag, 'src');
-                    $slot = $this->extractHtmlAttribute($tag, 'data-pb-ai-asset-slot');
-                    if ($slot !== '' && isset($assetMap[$slot])) {
-                        $tag = $this->upsertHtmlAttribute($tag, 'src', (string)$assetMap[$slot]);
-                        $tag = $this->upsertHtmlAttribute($tag, 'data-pb-ai-image-role', 'generated-asset');
-                        return $tag;
-                    }
-                    if ($src === '') {
-                        return $tag;
-                    }
-                    foreach ($assetMap as $slotId => $url) {
-                        if ($src !== $url) {
-                            continue;
-                        }
-
-                        $tag = $this->upsertHtmlAttribute($tag, 'data-pb-ai-image-role', 'generated-asset');
-                        $tag = $this->upsertHtmlAttribute($tag, 'data-pb-ai-asset-slot', (string)$slotId);
-                        return $tag;
-                    }
-
-                    return $tag;
-                },
-                $html
-            ) ?? $html;
-        }
-
-        return $aiData;
-    }
-
-    /**
-     * Slot hydration is data-structure repair, not a visual fallback: when a
-     * non-hero block has a required generated image asset, the block must carry
-     * the editable slot element so later image replacement and publishing can
-     * address it. Hero/banner layout still remains an AI-owned cover contract.
-     *
-     * @param array<string,mixed> $aiData
-     * @param array<string,mixed> $renderContext
-     * @param array<string,mixed> $defaultConfig
-     * @return array<string,mixed>
-     */
-    private function ensureRequiredNonHeroImageSlotElement(
-        array $aiData,
-        string $region,
-        array $renderContext,
-        array $defaultConfig,
-        string $componentCode
-    ): array {
-        if ($region !== 'content' || $this->isHeroOrBannerImageContract($defaultConfig, $renderContext, (string)($aiData['html_content'] ?? ''))) {
-            return $aiData;
-        }
-
-        $assetMap = $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig);
-        if ($assetMap === []) {
-            return $aiData;
-        }
-
-        $html = (string)($aiData['html_content'] ?? '');
-        if (\trim($html) === '') {
-            return $aiData;
-        }
-
-        $prefix = $this->normalizeComponentCssPrefix($componentCode);
-        foreach ($assetMap as $slotId => $url) {
-            $slotId = \trim((string)$slotId);
-            $url = \trim((string)$url);
-            if ($slotId === '' || $url === '' || $this->htmlContainsGeneratedAssetImage($html, $slotId, $url)) {
-                continue;
-            }
-            $alt = $this->resolveGeneratedAssetAltText($slotId, $url, $renderContext, $defaultConfig, $componentCode);
-
-            $img = '<img class="' . $prefix . '-slot-image" src="'
-                . \htmlspecialchars($url, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
-                . '" alt="' . \htmlspecialchars($alt, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
-                . '" data-pb-ai-image-role="generated-asset" data-pb-ai-asset-slot="'
-                . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
-                . '">';
-            $html = $this->insertHtmlAfterFirstOpeningTag($html, $img);
-        }
-
-        $aiData['html_content'] = $html;
-
-        return $aiData;
-    }
-
-    /**
-     * @param array<string,mixed> $renderContext
-     * @param array<string,mixed> $defaultConfig
-     */
-    private function resolveGeneratedAssetAltText(
-        string $slotId,
-        string $url,
-        array $renderContext,
-        array $defaultConfig,
-        string $componentCode
-    ): string {
-        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
-            ? $renderContext['_visual_contract']
-            : $this->decodeRuntimeVisualContract($defaultConfig);
-        foreach ([
-            $defaultConfig['runtime.section_image_alt'] ?? null,
-            $defaultConfig['visual.image_alt'] ?? null,
-            $defaultConfig['image.alt'] ?? null,
-            $defaultConfig['media.image_alt'] ?? null,
-            $visualContract['alt'] ?? null,
-            $visualContract['subject'] ?? null,
-            $defaultConfig['content.title'] ?? null,
-            $defaultConfig['title'] ?? null,
-            $componentCode,
-        ] as $candidate) {
-            $alt = $this->sanitizeGeneratedAssetAltCandidate((string)$candidate);
-            if ($alt !== '') {
-                return $alt;
-            }
-        }
-
-        return $this->sanitizeGeneratedAssetAltCandidate($slotId) ?: $this->sanitizeGeneratedAssetAltCandidate($url);
-    }
-
-    private function sanitizeGeneratedAssetAltCandidate(string $value): string
-    {
-        $value = \trim(\strip_tags($value));
-        if ($value === '') {
-            return '';
-        }
-        $value = (string)(\preg_replace('/[_\/\\\\:-]+/u', ' ', $value) ?? $value);
-        $value = (string)(\preg_replace('/\s+/u', ' ', $value) ?? $value);
-        $value = \trim($value);
-        if ($value === '' || \preg_match('/^(?:page|content|header|footer|slot|image|asset)\b/i', $value) === 1) {
-            return '';
-        }
-
-        return $this->clipText($value, 140);
-    }
-
-    private function insertHtmlAfterFirstOpeningTag(string $html, string $insert): string
-    {
-        if (\preg_match('/^(\s*<\s*[a-z][a-z0-9:-]*\b[^>]*>)/iu', $html, $matches) !== 1) {
-            return $insert . $html;
-        }
-
-        $opening = (string)($matches[1] ?? '');
-        if ($opening === '') {
-            return $insert . $html;
-        }
-
-        return $opening . $insert . \substr($html, \strlen($opening));
     }
 
     /**
@@ -1886,25 +1743,74 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): array {
-        $attemptPrompt = $this->appendComponentCssScopeInstruction($prompt, $componentCode);
-        try {
-            $aiData = $this->runAiGeneration($region, $attemptPrompt, $defaultConfig, $renderContext);
+        $attemptPrompt = $this->appendComponentCssScopeInstruction($prompt, $componentCode, $renderContext);
+        $isHeroComponent = \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $componentCode) === 1;
+        $componentPrefix = $this->normalizeComponentCssPrefix($componentCode);
+        $heroRecoveryHtml = "<section class='{$componentPrefix}-root'><div class='{$componentPrefix}-media'><div class='{$componentPrefix}-media-stage'><div class='{$componentPrefix}-media-subject'></div><div class='{$componentPrefix}-media-detail'></div><div class='{$componentPrefix}-media-label'>Finished visual cue</div></div></div><div class='{$componentPrefix}-motif'></div><div class='{$componentPrefix}-orbit'></div><div class='{$componentPrefix}-overlay'></div><div class='{$componentPrefix}-inner'><div class='{$componentPrefix}-text-panel'><h2 class='{$componentPrefix}-title'>Finished heading</h2><p class='{$componentPrefix}-text'>Finished copy.</p><div class='{$componentPrefix}-cta'>Finished CTA</div></div></div></section>";
+        $lastThrowable = null;
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            $promptForAttempt = $attemptPrompt;
+            if ($attempt > 0) {
+                $promptForAttempt .= "\n\nRECOVERY MODE FOR STRICT CONTRACT FAILURE:\n"
+                    . "- Previous output failed strict JSON/HTML/CSS/class validation. Return the safe skeleton only.\n"
+                    . "- Do not attempt a complex layout, nested cards, accordions, forms, @media blocks, CSS functions, or extra selectors.\n"
+                    . "- Use the exact class prefix and safe CSS selector set from the contract above.\n"
+                    . ($isHeroComponent
+                        ? "- This is a hero/banner component. Do not use SAFE_TEXT_SKELETON. If no verified image is supplied, paste HERO RECOVERY HTML exactly and replace only visible text. HERO RECOVERY HTML: `{$heroRecoveryHtml}`. It is invalid to output an empty <div class='{$componentPrefix}-media'></div>. If REQUIRED_HTML_IMG_TO_COPY_VERBATIM is present above, paste that exact <img> as the {$componentPrefix}-media element and keep its src, data-pb-ai-image-role, and data-pb-ai-asset-slot unchanged.\n"
+                        : "- This is not a hero/banner component. Use SAFE_TEXT_SKELETON unless the prompt supplies a verified image template.\n")
+                    . "- The final answer must be one JSON object only.\n"
+                    . "Previous failure: " . $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown')) . "\n";
+            }
 
-            return $this->buildComponentArtifactFromAiData(
-                $componentCode,
-                $name,
-                $region,
-                $prompt,
-                $defaultConfig,
-                $renderContext,
-                $aiData
-            );
-        } catch (\Throwable $throwable) {
-            $finalReason = $this->summarizeThrowable($throwable);
-            $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
-            throw new \RuntimeException('AI component generation failed: ' . $finalReason, 0, $throwable);
+            try {
+                $aiData = $this->runAiGeneration($region, $promptForAttempt, $defaultConfig, $renderContext, $attempt > 0);
+
+                return $this->buildComponentArtifactFromAiData(
+                    $componentCode,
+                    $name,
+                    $region,
+                    $prompt,
+                    $defaultConfig,
+                    $renderContext,
+                    $aiData
+                );
+            } catch (\Throwable $throwable) {
+                $lastThrowable = $throwable;
+                if ($attempt === 0 && $this->shouldRetryAiComponentGeneration($throwable)) {
+                    $this->emitComponentFallbackNotice($region, $componentCode, 'retrying strict safe skeleton after: ' . $this->summarizeThrowable($throwable));
+                    continue;
+                }
+
+                break;
+            }
         }
 
+        $finalReason = $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown component generation failure'));
+        $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
+        throw new \RuntimeException('AI component generation failed: ' . $finalReason, 0, $lastThrowable);
+    }
+
+    private function shouldRetryAiComponentGeneration(\Throwable $throwable): bool
+    {
+        $message = $this->collectThrowableMessages($throwable);
+        foreach ([
+            'valid component JSON payload',
+            'HTML structure invalid',
+            'HTML class scope contract failed',
+            'CSS structure contract failed',
+            'CSS class scope contract failed',
+            'content hard policy failed',
+            'content quality failed',
+            'visual contract failed',
+            'hero image contract failed',
+            'render-data quality gate',
+        ] as $needle) {
+            if (\stripos($message, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 
@@ -1953,6 +1859,10 @@ class AiSitePageComponentGenerationService
 
     private function attemptSyntaxFix(string $phtml, string $region, array $componentInfo, array $aiData, array $initialCheck): string
     {
+        throw new \RuntimeException((string)__('AI generated component failed PHP syntax validation: %{message}', [
+            'message' => (string)($initialCheck['error'] ?? 'unknown'),
+        ]));
+
         $codeFixer = $this->getCodeFixer();
         $codeValidator = $this->getCodeValidator();
 
@@ -1963,7 +1873,7 @@ class AiSitePageComponentGenerationService
             return $fixed;
         }
 
-        $result = $codeFixer->fixAndValidate($phtml, $codeValidator);
+        $result = ['validation' => ['valid' => false], 'code' => $phtml];
         if (!empty($result['validation']['valid'])) {
             return (string)$result['code'];
         }
@@ -1988,7 +1898,9 @@ class AiSitePageComponentGenerationService
             }
         }
         if ($patched) {
-            $fixedAiData = $codeFixer->fixAiData($fixedAiData);
+            throw new \RuntimeException((string)__('AI generated component failed PHP syntax validation: %{message}', [
+                'message' => (string)($initialCheck['error'] ?? 'unknown'),
+            ]));
             $rebuilt = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $fixedAiData);
             $check = $codeValidator->checkSyntax($rebuilt);
             if (!empty($check['valid'])) {
@@ -2013,8 +1925,7 @@ class AiSitePageComponentGenerationService
     ): array
     {
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
-        $aiData = $this->getCodeFixer()->fixAiData($aiData);
-        $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region, $verifiedAssets);
+        $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region, $componentCode, $verifiedAssets);
         $aiData = $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
         $this->assertNoInvalidComponentRootClassSelectors($aiData);
         $this->assertGeneratedComponentHtmlScopeContract($aiData, $region, $componentCode);
@@ -2027,9 +1938,10 @@ class AiSitePageComponentGenerationService
         }
 
         $errors = \array_values(\array_filter(\array_map('strval', $validation['errors'] ?? [])));
-        throw new \RuntimeException((string)__('AI 缁勪欢 JSON 鏍￠獙澶辫触锛?{message}', [
-            'message' => \implode('; ', \array_slice($errors, 0, 5)),
-        ]));
+        $message = \implode('; ', \array_slice($errors, 0, 5));
+        throw new \RuntimeException(
+            'AI component JSON schema validation failed: ' . ($message !== '' ? $message : 'unknown validation error')
+        );
     }
 
     /**
@@ -2039,11 +1951,17 @@ class AiSitePageComponentGenerationService
     private function applyStrictVirtualThemeComponentPolicy(
         array $aiData,
         string $region,
+        string $componentCode = '',
         array $verifiedAssets = []
     ): array
     {
         $aiData['extra_fields'] = '';
         $aiData['php_variables'] = '';
+        if (\in_array($region, ['header', 'footer'], true)) {
+            $aiData['css_extra'] = '';
+            $aiData['css_responsive'] = '';
+            $aiData['css_content'] = '';
+        }
         $existingJs = (string)($aiData['js_content'] ?? '');
         $aiData['js_content'] = $this->isAllowedComponentInlineJs($existingJs, $aiData) ? $existingJs : '';
 
@@ -2085,14 +2003,17 @@ class AiSitePageComponentGenerationService
         }
 
         if (self::ENFORCE_COMPONENT_QUALITY_VALIDATION && $region === 'content') {
-            $lowQualityInspectionSource = (string)($aiData['html_content'] ?? '')
-                . "\n"
-                . (string)($aiData['css_extra'] ?? '')
-                . "\n"
-                . (string)($aiData['css_responsive'] ?? '')
-                . "\n"
-                . (string)($aiData['css_content'] ?? '');
-            $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason($lowQualityInspectionSource, $componentCode);
+            // Visitor-copy quality rules must inspect visitor HTML only. CSS tokens
+            // such as 100vh or 32px are valid styling and are checked separately.
+            $lowQualityInspectionSource = (string)($aiData['html_content'] ?? '');
+            $lowQualityCssSource = (string)($aiData['css_extra'] ?? '')
+                . "\n" . (string)($aiData['css_responsive'] ?? '')
+                . "\n" . (string)($aiData['css_content'] ?? '');
+            $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason(
+                $lowQualityInspectionSource,
+                $componentCode,
+                $lowQualityCssSource
+            );
             if ($lowQualityReason !== null) {
                 throw new \RuntimeException('AI component content quality failed: ' . $lowQualityReason);
             }
@@ -2112,28 +2033,35 @@ class AiSitePageComponentGenerationService
 
     private function normalizeVirtualThemeCssForValidation(string $css, int $limit): string
     {
-        $css = \trim($this->getCodeFixer()->fixCss($css));
+        $css = \trim($css);
         if ($css === '') {
             return '';
         }
 
-        $css = $this->repairCssDeclarationSyntaxForValidation($css);
-        $css = $this->repairCssParenthesesOutsideStrings($css);
-        $css = $this->normalizeVirtualThemeCssComponentScope($css);
-        $css = $this->clipCssAtRuleBoundary($css, $limit);
-        if ($css === '') {
-            return '';
+        if (!\str_contains($css, '{')) {
+            throw new \RuntimeException('AI CSS structure contract failed: CSS fields must contain complete scoped selector blocks, not loose declarations.');
         }
 
         $css = $this->repairCssDeclarationSyntaxForValidation($css);
         $css = $this->repairCssParenthesesOutsideStrings($css);
-        $css = $this->normalizeVirtualThemeCssComponentScope($css);
+        $css = $this->balanceCssBraces($css);
 
-        return $this->balanceCssBraces(\trim($this->getCodeFixer()->fixCss(
-            $this->repairCssParenthesesOutsideStrings(
-                $this->repairCssDeclarationSyntaxForValidation($css)
-            )
-        )));
+        $structuralReason = $this->detectCssStructuralBalanceReason($css);
+        if ($structuralReason !== null) {
+            throw new \RuntimeException('AI CSS structure contract failed: ' . $structuralReason);
+        }
+
+        $css = $this->normalizeVirtualThemeCssComponentScope($css);
+        if ($css === '') {
+            return '';
+        }
+
+        $length = \function_exists('mb_strlen') ? \mb_strlen($css, 'UTF-8') : \strlen($css);
+        if ($length > $limit) {
+            throw new \RuntimeException('AI CSS structure contract failed: CSS output exceeds the allowed contract size for this field.');
+        }
+
+        return \trim($css);
     }
 
     private function repairCssDeclarationSyntaxForValidation(string $css): string
@@ -2158,10 +2086,11 @@ class AiSitePageComponentGenerationService
 
     private function repairCssMergedDeclarationsForValidation(string $css): string
     {
-        $properties = '(?:position|display|width|height|z-index|background(?:-image)?|color|font(?:-size|weight|family)?|padding|margin|grid-template-columns|flex-direction)';
+        $properties = '(?:position|inset|overflow|display|width|min-width|max-width|height|min-height|max-height|z-index|opacity|background(?:-image)?|color|border(?:-radius|-color)?|box-shadow|font(?:-size|weight|family)?|line-height|padding|margin|flex(?:-direction|-wrap|-grow|-shrink|-basis)?|grid-template-columns|gap|align-items|justify-content|object-fit|object-position|box-sizing|text-decoration|cursor|outline)';
         for ($i = 0; $i < 3; $i++) {
             $next = \preg_replace('/(:\s*[^;{}]*?\s+)(' . $properties . '\s*:)/i', '$1;$2', $css) ?? $css;
-            $next = \preg_replace('/\b(relative|absolute|sticky|fixed|block|flex|grid|none|hidden|visible|cover|contain|center)(z-index|position|display|width|height|background(?:-image)?|color|padding|margin)\s*:/i', '$1;$2:', $next) ?? $next;
+            $next = \preg_replace('/\b(relative|absolute|sticky|fixed|block|inline-flex|flex|grid|none|hidden|visible|cover|contain|center|border-box|wrap|nowrap)(z-index|position|inset|overflow|display|width|min-width|max-width|height|min-height|max-height|background(?:-image)?|color|border(?:-radius|-color)?|box-shadow|font(?:-size|weight|family)?|line-height|padding|margin|flex(?:-direction|-wrap|-grow|-shrink|-basis)?|grid-template-columns|gap|align-items|justify-content|object-fit|object-position|box-sizing|text-decoration|cursor|outline)\s*:/i', '$1;$2:', $next) ?? $next;
+            $next = \preg_replace('/((?:\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw)|0|#[0-9a-f]{3,8})(?:\s+(?:\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw)|0|#[0-9a-f]{3,8}))*)(z-index|position|inset|overflow|display|width|min-width|max-width|height|min-height|max-height|background(?:-image)?|color|border(?:-radius|-color)?|box-shadow|font(?:-size|weight|family)?|line-height|padding|margin|flex(?:-direction|-wrap|-grow|-shrink|-basis)?|grid-template-columns|gap|align-items|justify-content|object-fit|object-position|box-sizing|text-decoration|cursor|outline)\s*:/i', '$1;$2:', $next) ?? $next;
             if ($next === $css) {
                 break;
             }
@@ -2498,13 +2427,22 @@ class AiSitePageComponentGenerationService
         if (\preg_match('/(?:^|[;{])\s*[-_a-z][a-z0-9_-]*\s*:\s*(?=[;}])/i', $scan) === 1) {
             return 'empty CSS declaration value';
         }
+        if (\preg_match('/(?:^|[;{])\s*[-_a-z][a-z0-9_-]*\s*:\s*(?:\.{1,3}|[,+-])\s*(?=[;}])/i', $scan) === 1) {
+            return 'incomplete CSS declaration value';
+        }
+        if ($this->containsCssUnitMergedIntoNextDeclaration($scan)) {
+            return 'merged CSS declarations; missing semicolon before property';
+        }
         if (\preg_match('/(?:^|[;{])\s*-(?!(?:webkit|moz|ms|o)-)[a-z][a-z0-9_-]*\s*:/i', $scan) === 1) {
             return 'malformed CSS property name';
         }
         if (\preg_match('/:\s*%\s*(?:[;}])/i', $scan) === 1) {
             return 'CSS value starts with a bare percent sign';
         }
-        if (\preg_match('/:\s*[^;{}]*(?:\b(?:position|display|width|height|z-index|background(?:-image)?|color|font(?:-size|weight|family)?|padding|margin|grid-template-columns|flex-direction)\s*:)/i', $scan) === 1) {
+        if (\preg_match('/\bbox-sizing\s*:\s*border\s*(?:[;}])/i', $scan) === 1) {
+            return 'invalid box-sizing value; use border-box';
+        }
+        if (\preg_match('/:\s*[^;{}]*(?:\b(?:position|inset|overflow|display|width|min-width|max-width|height|min-height|max-height|z-index|opacity|background(?:-image)?|color|border(?:-radius|-color)?|box-shadow|font(?:-size|weight|family)?|line-height|padding|margin|flex(?:-direction|-wrap|-grow|-shrink|-basis)?|grid-template-columns|gap|align-items|justify-content|object-fit|object-position|box-sizing|text-decoration|cursor|outline)\s*:)/i', $scan) === 1) {
             return 'merged CSS declarations; missing semicolon between properties';
         }
 
@@ -2944,8 +2882,8 @@ class AiSitePageComponentGenerationService
 
         $text = \preg_replace('/\bpb-(content|header|footer)(?=[a-z0-9])/i', 'pb-$1-', $text) ?? $text;
         $text = \str_replace(
-            ['.-content-', '"-content-', '\'-content-', ' -content-', '.-header-', '"-header-', '\'-header-', ' -header-', '.-footer-', '"-footer-', '\'-footer-', ' -footer-'],
-            ['.pb-content-', '"pb-content-', '\'pb-content-', ' pb-content-', '.pb-header-', '"pb-header-', '\'pb-header-', ' pb-header-', '.pb-footer-', '"pb-footer-', '\'pb-footer-', ' pb-footer-'],
+            ['.-content-', '"-content-', '\'-content-', ' -content-', '.-header-', '"-header-', '\'-header-', ' -header-', '.-footer-', '"-footer-', '\'-footer-', ' -footer-', '.-c-', '"-c-', '\'-c-', ' -c-'],
+            ['.pb-content-', '"pb-content-', '\'pb-content-', ' pb-content-', '.pb-header-', '"pb-header-', '\'pb-header-', ' pb-header-', '.pb-footer-', '"pb-footer-', '\'pb-footer-', ' pb-footer-', '.pb-c-', '"pb-c-', '\'pb-c-', ' pb-c-'],
             $text
         );
 
@@ -2959,8 +2897,10 @@ class AiSitePageComponentGenerationService
         $slug = \preg_replace('/[^a-z0-9-]+/', '-', $slug) ?? '';
         $slug = \preg_replace('/-+/', '-', $slug) ?? $slug;
         $slug = \trim($slug, '-');
+        $slug = \preg_replace('/^(?:content|section|block)-+/i', '', $slug) ?? $slug;
+        $slug = \preg_replace('/-page(?=-|$)/i', '', $slug) ?? $slug;
 
-        return $slug !== '' ? 'pb-' . $slug : self::COMPONENT_CSS_CLASS_SCOPE_FALLBACK;
+        return $slug !== '' ? 'pb-c' : self::COMPONENT_CSS_CLASS_SCOPE_FALLBACK;
     }
 
     /**
@@ -3053,55 +2993,197 @@ class AiSitePageComponentGenerationService
         ) ?? $html;
     }
 
-    private function appendComponentCssScopeInstruction(string $prompt, string $componentCode): string
+    /**
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function resolveThemeSafeCssPaletteForPrompt(array $renderContext): array
+    {
+        $scopeIdentity = \is_array($renderContext['_scope_identity'] ?? null) ? $renderContext['_scope_identity'] : [];
+        $sharedContext = \is_array($scopeIdentity['shared_prompt_context'] ?? null) ? $scopeIdentity['shared_prompt_context'] : [];
+        $themeDesign = \is_array($sharedContext['theme_design'] ?? null) ? $sharedContext['theme_design'] : [];
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $componentConfig = \is_array($renderContext['component_config'] ?? null) ? $renderContext['component_config'] : [];
+
+        $surface = $this->firstValidCssHexColor([
+            $colorScheme['background'] ?? null,
+            $colorScheme['surface'] ?? null,
+            $componentConfig['style.background'] ?? null,
+            '#F8F5EF',
+        ]);
+        $text = $this->firstValidCssHexColor([
+            $colorScheme['text'] ?? null,
+            $colorScheme['body'] ?? null,
+            $componentConfig['style.text_color'] ?? null,
+            '#1F2937',
+        ]);
+        $primary = $this->firstValidCssHexColor([
+            $colorScheme['primary'] ?? null,
+            $componentConfig['style.primary_color'] ?? null,
+            '#3F5F46',
+        ]);
+        $secondary = $this->firstValidCssHexColor([
+            $colorScheme['secondary'] ?? null,
+            '#B8995B',
+        ]);
+        $accent = $this->firstValidCssHexColor([
+            $colorScheme['accent'] ?? null,
+            $colorScheme['button'] ?? null,
+            '#D4AF37',
+        ]);
+
+        return [
+            'root_bg' => $primary,
+            'media_bg' => $this->firstValidCssHexColor([$surface, '#F8F5EF']),
+            'surface_bg' => $surface,
+            'card_bg' => $surface,
+            'text' => $text,
+            'inverse_text' => '#FFFFFF',
+            'primary' => $primary,
+            'secondary' => $secondary,
+            'accent' => $accent,
+            'shadow' => $this->firstValidCssHexColor([$text, '#111111']),
+        ];
+    }
+
+    /**
+     * @param list<mixed> $candidates
+     */
+    private function firstValidCssHexColor(array $candidates): string
+    {
+        foreach ($candidates as $candidate) {
+            $color = $this->normalizeCssHexColor((string)$candidate);
+            if ($color !== '') {
+                return $color;
+            }
+        }
+
+        return '#111111';
+    }
+
+    private function normalizeCssHexColor(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+        if (\preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/i', $value) !== 1) {
+            return '';
+        }
+
+        return \strtoupper($value);
+    }
+
+    private function appendComponentCssScopeInstruction(string $prompt, string $componentCode, array $renderContext = []): string
     {
         $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $isHero = \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $componentCode) === 1;
+        $isContactSupportMode = !$isHero
+            && \preg_match('/\b(contact|support|help|form|inquiry|enquiry|faq)\b/i', $componentCode) === 1;
+        $isFeatureSafeMode = !$isHero
+            && !$isContactSupportMode
+            && \preg_match('/\b(showcase|feature|features|game|games|product|suite|service|reward|promotion|trust|security|proof|faq|newsletter|cta)\b/i', $componentCode) === 1;
+        $safePalette = $this->resolveThemeSafeCssPaletteForPrompt($renderContext);
+        $rootBg = $safePalette['root_bg'];
+        $mediaBg = $safePalette['media_bg'];
+        $surfaceBg = $safePalette['surface_bg'];
+        $cardBg = $safePalette['card_bg'];
+        $textColor = $safePalette['text'];
+        $inverseText = $safePalette['inverse_text'];
+        $accentColor = $safePalette['accent'];
+        $primaryColor = $safePalette['primary'];
+        $secondaryColor = $safePalette['secondary'];
+        $shadowColor = $safePalette['shadow'];
+        $featureSafeCss = "#componentId .{$prefix}-root{padding:64px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}";
+        $contactSafeCss = "#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:stretch;}#componentId .{$prefix}-copy{flex:1 1 340px;min-width:0;padding:28px;border:1px solid {$accentColor};border-radius:24px;background:{$cardBg};box-shadow:0 20px 52px {$shadowColor};}#componentId .{$prefix}-title{margin:0 0 14px;font-size:40px;line-height:1.18;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;font-size:16px;line-height:1.75;color:{$textColor};max-width:68ch;}#componentId .{$prefix}-cards{flex:1 1 460px;min-width:0;display:flex;flex-wrap:wrap;gap:16px;}#componentId .{$prefix}-card{flex:1 1 180px;min-width:0;padding:20px;border:1px solid {$secondaryColor};border-radius:20px;background:{$cardBg};color:{$textColor};box-shadow:0 14px 36px {$shadowColor};line-height:1.55;}#componentId .{$prefix}-action{width:100%;display:flex;flex-wrap:wrap;gap:12px;align-items:center;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 22px;background:{$accentColor};color:{$textColor};font-weight:700;}#componentId .{$prefix}-note{display:block;max-width:56ch;color:{$textColor};line-height:1.6;}";
+        $featureSafeModeContract = $isFeatureSafeMode
+            ? "- THIS TASK IS FEATURE_SAFE_MODE. If the prompt provides a verified final_url or REQUIRED_HTML_IMG_TO_COPY_VERBATIM, use MEDIA_SAFE_SKELETON plus MEDIA_SAFE_CSS and paste the real <img>. If no verified image is supplied, use FEATURE_SAFE_CSS. Do not create card grids, carousels, accordions, hover selectors, @media blocks, or extra braces.\n"
+            : '';
+        $contactSupportModeContract = $isContactSupportMode
+            ? "- THIS TASK IS CONTACT_SUPPORT_MODE. Use CONTACT_SAFE_SKELETON plus CONTACT_SAFE_CSS. Split email, phone, office, hours, FAQ, support, or sales details into separate {$prefix}-card items. Never compress multiple contact channels into one long paragraph.\n"
+            : '';
+        $safeCssBraceCountRule = $isFeatureSafeMode
+            ? "For this FEATURE_SAFE_MODE task, css_extra uses exactly four selector blocks: root, inner, title, cta."
+            : ($isContactSupportMode
+                ? "For this CONTACT_SUPPORT_MODE task, css_extra uses exactly ten selector blocks: root, inner, copy, title, text, cards, card, action, cta, note."
+                : "For SAFE_TEXT_CSS use exactly seven selector blocks: root, inner, copy, title, text, action, cta.");
+        $heroContract = $isHero
+            ? "- HERO FIXED SKELETON: use this exact tag order for every hero/banner and replace only visible text: `<section class='{$prefix}-root'><div class='{$prefix}-media'><div class='{$prefix}-media-stage'><div class='{$prefix}-media-subject'></div><div class='{$prefix}-media-detail'></div><div class='{$prefix}-media-label'>Finished visual cue</div></div></div><div class='{$prefix}-motif'></div><div class='{$prefix}-orbit'></div><div class='{$prefix}-overlay'></div><div class='{$prefix}-inner'><div class='{$prefix}-text-panel'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished copy.</p><div class='{$prefix}-cta'>Finished CTA</div></div></div></section>`. If a verified image template exists, replace the media div and its children with that single copied <img> tag and add class='{$prefix}-media'. Do not keep a second empty {$prefix}-media div after the image, because it can cover the real asset.\n"
+                . "- HERO CSS REQUIRED SELECTORS: css_extra must include complete selectors for `#componentId .{$prefix}-root`, `#componentId .{$prefix}-media`, `#componentId .{$prefix}-media-stage`, `#componentId .{$prefix}-media-subject`, `#componentId .{$prefix}-media-detail`, `#componentId .{$prefix}-media-label`, `#componentId .{$prefix}-motif`, `#componentId .{$prefix}-orbit`, `#componentId .{$prefix}-overlay`, `#componentId .{$prefix}-inner`, `#componentId .{$prefix}-text-panel`, and `#componentId .{$prefix}-cta` when no verified image exists. CSS-only hero media must be visibly designed from THEME_SAFE_CSS_PALETTE as a brief-specific editorial/product stage, never a plain dark slab or unrelated stock-art substitute. The media-label text must be a short subject phrase from the approved brief, not a generic decoration label. The overlay selector sets position:absolute; inset:0; z-index:2; background:{$primaryColor}; opacity:.36;. The text-panel selector sets position:relative; z-index:3; max-width, padding, border-radius, readable color, and background:{$surfaceBg}. The CTA selector sets display:inline-flex; align-items:center; justify-content:center; width:auto; max-width:280px; min-height:48px; box-sizing:border-box; background and color with strong contrast; text-decoration:none; and must not set width:100% or flex:1.\n"
+                . "- HERO_SAFE_CSS: when no verified image is supplied, css_extra must use this exact editorial fallback shape and may replace only spacing values: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:112px 24px;background:{$rootBg};color:{$inverseText};box-sizing:border-box;}#componentId .{$prefix}-media{position:absolute;inset:0;z-index:0;background:{$mediaBg};}#componentId .{$prefix}-media-stage{position:absolute;inset:12% 7% auto auto;width:430px;height:350px;z-index:1;border:1px solid {$accentColor};border-radius:44px;background:{$secondaryColor};box-shadow:0 28px 90px {$shadowColor};opacity:.72;}#componentId .{$prefix}-media-subject{position:absolute;inset:34% 16% auto auto;width:260px;height:138px;z-index:2;border:1px solid {$accentColor};border-radius:999px;background:{$primaryColor};box-shadow:0 18px 54px {$secondaryColor};opacity:.88;}#componentId .{$prefix}-media-detail{position:absolute;inset:16% 24% auto auto;width:16px;height:250px;z-index:2;border-radius:999px;background:{$accentColor};box-shadow:0 12px 34px {$secondaryColor};opacity:.76;}#componentId .{$prefix}-media-label{position:absolute;inset:auto 10% 12% auto;z-index:3;display:inline-flex;width:auto;max-width:240px;box-sizing:border-box;padding:10px 16px;border:1px solid {$accentColor};border-radius:999px;background:{$surfaceBg};color:{$textColor};font-size:14px;font-weight:700;line-height:1.2;box-shadow:0 12px 32px {$shadowColor};}#componentId .{$prefix}-motif{position:absolute;inset:8% 6% auto auto;width:500px;height:420px;z-index:1;border:1px solid {$accentColor};border-radius:46px;background:{$secondaryColor};box-shadow:0 26px 90px {$shadowColor};opacity:.28;}#componentId .{$prefix}-orbit{position:absolute;inset:18% 12% auto auto;width:240px;height:320px;z-index:1;border:1px solid {$accentColor};border-radius:28px;background:{$primaryColor};box-shadow:0 18px 54px {$secondaryColor};opacity:.24;}#componentId .{$prefix}-overlay{position:absolute;inset:0;z-index:2;background:{$primaryColor};opacity:.36;}#componentId .{$prefix}-inner{position:relative;z-index:3;max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:center;}#componentId .{$prefix}-text-panel{flex:1 1 480px;min-width:0;max-width:640px;padding:48px 40px;border-radius:20px;background:{$surfaceBg};color:{$textColor};box-shadow:0 18px 56px {$shadowColor};border:1px solid {$accentColor};}#componentId .{$prefix}-title{margin:0 0 16px;font-size:48px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0 0 24px;font-size:18px;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:16px 32px;background:{$accentColor};color:{$textColor};font-size:18px;font-weight:700;cursor:pointer;border:1px solid {$secondaryColor};box-shadow:0 4px 16px {$secondaryColor};}`. This fallback is not a generic circle/blob pattern; media-stage/media-subject/media-detail/media-label must read as a structured subject-matter/editorial stage derived from the approved business brief.\n"
+            : '';
 
         return \rtrim($prompt)
-            . "\n\nCSS class scope rule:\n"
-            . "- Never use generic custom classes such as .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active.\n"
-            . "- Any custom class in CSS and the matching HTML must use this component prefix: `{$prefix}-...`.\n"
-            . "- CSS selectors must be scoped with the safe placeholder `#componentId`; do not output PHP tags in JSON CSS fields.\n"
-            . "- `html_content` is inserted inside the framework root. To style your inner wrapper use `#componentId .{$prefix}-root`, not `#componentId.{$prefix}-root`.\n"
-            . "- Do not create an inner `id='componentId'` wrapper. The framework root already owns that id; use a class-only wrapper like `<section class='{$prefix}-root'>`.\n"
-            . "- Minimal valid HTML skeleton for this component: `<section class='{$prefix}-root'><div class='{$prefix}-wrap'><h2 class='{$prefix}-title'>Visitor-facing title</h2><p class='{$prefix}-copy'>Concrete visitor-facing copy.</p></div></section>`.\n"
-            . "- Minimal valid CSS skeleton for this component: `#componentId .{$prefix}-root { position:relative; overflow:hidden; background:linear-gradient(135deg,#111827,#1f2937); } #componentId .{$prefix}-wrap { position:relative; z-index:1; min-width:0; } @media (max-width:768px){ #componentId .{$prefix}-grid { grid-template-columns:1fr; } }`.\n"
-            . "- Hero/banner generated-image skeleton: when this component is a hero/banner and uses a generated asset, put `class='{$prefix}-hero-image'` on the copied <img> and include this exact cover rule in css_extra: `#componentId .{$prefix}-hero-image { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; }`. The HTML class and CSS selector spelling must match byte-for-byte.\n"
-            . "- Hero/banner readability skeleton: every hero/banner with media must include a named scrim element and a named text-safe panel, for example `<div class='{$prefix}-scrim'></div><div class='{$prefix}-text-panel'><h1 class='{$prefix}-title'>...</h1><p class='{$prefix}-copy'>...</p></div>`. Include matching CSS: `#componentId .{$prefix}-scrim { position:absolute; inset:0; background:linear-gradient(90deg,rgba(0,0,0,.72),rgba(0,0,0,.32)); } #componentId .{$prefix}-text-panel { position:relative; z-index:2; max-width:720px; padding:clamp(24px,4vw,48px); border-radius:24px; background:rgba(0,0,0,.42); backdrop-filter:blur(10px); color:#fff; }`.\n"
-            . "- Valid JSON envelope shape: `{\"extra_fields\":\"\",\"php_variables\":\"\",\"css_extra\":\"#componentId .{$prefix}-root { position:relative; overflow:hidden; }\",\"css_responsive\":\"@media (max-width:768px){ #componentId .{$prefix}-root { padding:24px; } }\",\"html_content\":\"<section class='{$prefix}-root'><div class='{$prefix}-wrap'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-copy'>Finished copy.</p></div></section>\",\"js_content\":\"\"}`. Replace example words and CSS values with finished customer content before returning.\n"
-            . "- Prefix self-check: every custom class must literally start with `{$prefix}-`, including the leading `pb`. A class that starts with `-`, `content-`, or any value missing the leading `pb-` is invalid.\n"
-            . "- Before returning, self-check that every custom class used in CSS exists with the exact same spelling in html_content and starts with `{$prefix}-`.\n"
-            . "- HTML attribute grammar must be exact: write `<span class='{$prefix}-badge'>`; for img tags, put a real space between every quoted attribute such as src, alt, data-pb-ai-image-role, and data-pb-ai-asset-slot. Never output `<span='...'>`, `<img ...'alt='...'>`, or any attribute glued after a closing quote.\n"
-            . "- HTML closing-tag grammar must be exact: never concatenate closing tags. Write `</p></a>`, `</small></div>`, or `</div></section>` as separate tags; outputs like `</pa>`, `</smalldiv>`, `</pdiv>`, or `</divsection>` are invalid.\n"
-            . "- CSS grammar must be exact: no empty declarations like `content:;`, no malformed properties like `-index`, no values like `height:%`, no merged declarations like `position:relativez-index:1`, no unclosed quoted values, and all function parentheses must close.\n"
-            . "- CSS reliability mode: write simple complete declarations as `property: value;`, preferably one declaration per line. Avoid fragile or nested CSS functions and avoid quoted CSS values unless necessary; use plain hex/rgba colors, linear-gradient(), clamp(), and simple box-shadow only when every quote and parenthesis is closed. Do not use color-mix(), mask, clip-path, nested calc(), or filter chains in generated CSS.\n"
-            . "- Invalid output examples to avoid: `<div='...'>`, `<p='...'>`, `<span='...'>`, `<a href='#'class='...'>`, `content:;`, `height:%`, `position:relativez-index:1`, and selector fragments such as `.-content...`.\n"
-            . "- Examples for this component: `#componentId .{$prefix}-card`, `#componentId .{$prefix}-icon`, `#componentId .{$prefix}-title`.\n";
+            . "\n\nComponent-specific strong contract:\n"
+            . "- EXACT_CLASS_PREFIX = `{$prefix}`. Every class you create must begin with this exact prefix followed by one hyphen and an element name.\n"
+            . "- This prefix is intentionally minimal. Copy `{$prefix}` exactly; do not expand it with page names, block names, or task labels.\n"
+            . "- The valid class prefix token is exactly `{$prefix}-`. A class named only `{$prefix}`, `pb`, `pb-`, `.pb`, `-title`, `-text`, `-card`, `-cta`, `pbtitle`, `pbabout...`, `pbhome...`, `-x...`, or `-about...` is invalid. If you are about to write `#componentId .{$prefix}{...}`, `.-title`, or `.-cta`, write `#componentId .{$prefix}-root{...}`, `#componentId .{$prefix}-title{...}`, or `#componentId .{$prefix}-cta{...}` instead.\n"
+            . "- Positive class examples for this component: `{$prefix}-root`, `{$prefix}-inner`, `{$prefix}-copy`, `{$prefix}-title`, `{$prefix}-card`, `{$prefix}-cta`.\n"
+            . "- Positive CSS selector examples for this component: `#componentId .{$prefix}-root{...}` and `#componentId .{$prefix}-inner{...}`.\n"
+            . "- THEME_SAFE_CSS_PALETTE: root_bg={$rootBg}; media_bg={$mediaBg}; surface_bg={$surfaceBg}; card_bg={$cardBg}; text={$textColor}; inverse_text={$inverseText}; primary={$primaryColor}; secondary={$secondaryColor}; accent={$accentColor}; shadow={$shadowColor}. Safe skeleton CSS below is already populated from this palette; do not replace it with generic dark navy, purple, blue, casino, or app-download colors unless the approved stage-1 palette explicitly uses those colors.\n"
+            . $featureSafeModeContract
+            . $contactSupportModeContract
+            . "- SAFE_TEXT_SKELETON: for every non-hero non-form content block without a verified image, use this exact html_content tag order and replace only visible words: `<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-copy'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished copy.</p></div><div class='{$prefix}-action'><div class='{$prefix}-cta'>Finished CTA</div></div></div></section>`.\n"
+            . "- MEDIA_SAFE_SKELETON: for every non-hero content block with a verified image template/final_url, use this exact tag order and replace `PASTE_VERIFIED_IMG_HERE` with the copied <img> tag after adding class='{$prefix}-img': `<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-media'>PASTE_VERIFIED_IMG_HERE</div><div class='{$prefix}-copy'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished copy.</p><div class='{$prefix}-cta'>Finished CTA</div></div></div></section>`.\n"
+            . "- CONTACT_SAFE_SKELETON: for contact/support/help/form blocks, use this exact html_content tag order and replace only visible words: `<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-copy'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished intro.</p></div><div class='{$prefix}-cards'><div class='{$prefix}-card'><strong>Channel</strong><span>Short detail.</span></div><div class='{$prefix}-card'><strong>Channel</strong><span>Short detail.</span></div><div class='{$prefix}-card'><strong>Channel</strong><span>Short detail.</span></div></div><div class='{$prefix}-action'><div class='{$prefix}-cta'>Finished CTA</div><small class='{$prefix}-note'>Short response-time or support note.</small></div></div></section>`.\n"
+            . "- SAFE_TEXT_CSS: use this exact selector set and replace only spacing/text size values: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:64px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:center;}#componentId .{$prefix}-copy{flex:1 1 320px;min-width:0;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-action{display:flex;width:100%;max-width:100%;box-sizing:border-box;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}`.\n"
+            . "- MEDIA_SAFE_CSS: for verified-image non-hero blocks, use this selector set and replace only spacing/text size values: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:32px;align-items:center;}#componentId .{$prefix}-media{flex:1 1 360px;min-width:0;overflow:hidden;border-radius:28px;box-shadow:0 24px 64px {$shadowColor};}#componentId .{$prefix}-img{display:block;width:100%;height:360px;object-fit:cover;object-position:center;}#componentId .{$prefix}-copy{flex:1 1 320px;min-width:0;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}`.\n"
+            . "- CONTACT_SAFE_CSS: for contact/support/help/form blocks, use this selector set and replace only color/spacing/text size values: `{$contactSafeCss}`.\n"
+            . "- CTA FIT BUTTON CONTRACT: CTA-looking divs are compact action buttons. Never set a CTA selector to width:100%, flex:1, flex-grow:1, or display:block. A full-width CTA band is valid only when the approved block plan explicitly asks for a conversion band and the band also includes headline, supporting copy, and a trust/support note.\n"
+            . "- MARKUP STRICT MODE: choose CONTACT_SAFE_SKELETON for CONTACT_SUPPORT_MODE tasks; otherwise choose SAFE_TEXT_SKELETON, MEDIA_SAFE_SKELETON, or HERO FIXED SKELETON only. In no-verified-image hero mode, media-stage/media-subject/media-detail/media-label plus motif/orbit layers are required by HERO FIXED SKELETON; do not leave the media div empty and do not add other optional cards/forms unless the current task explicitly requires a real contact form.\n"
+            . "- CONTACT COPY RHYTHM: contact/support cards use short labels plus short details. A paragraph containing two or more of email, phone, address, business hours, sales, or support is invalid because it reads like raw data instead of a designed contact surface.\n"
+            . "- Showcase/features/trust/reward/FAQ/newsletter/CTA tasks still use SAFE_TEXT_SKELETON. Compress multiple items into one polished paragraph separated by target-locale punctuation; do not create a card grid, list, table, carousel, accordion, or multiple repeated game cards.\n"
+            . "- FEATURE_SAFE_CSS: for showcase/features/game-list style tasks, use this shorter css_extra exactly and replace only color values if needed: `{$featureSafeCss}`. This has exactly four selector blocks and exactly four closing braces.\n"
+            . "- JSON recovery rule: if any requested layout feels too complex for valid JSON, ignore the complex layout idea and output the appropriate safe skeleton plus mode-specific safe CSS only. Use MEDIA_SAFE_SKELETON plus MEDIA_SAFE_CSS when a verified image exists; use FEATURE_SAFE_CSS only when no verified image exists and FEATURE_SAFE_MODE is present. A small valid premium block is better than a broken multi-card block.\n"
+            . "- JSON text safety: visible copy inside html_content must not contain double quote characters, backticks, code fences, raw `<` or `>`, or JSON braces. Rewrite quoted phrases into plain prose before output.\n"
+            . "- Raw HTML leakage ban: never escape malformed tags into visible text. Strings such as `&lt;2 class='pb-c-title'&gt;`, `<2 class=...>`, `</pa>`, `</pdiv>`, or `class='...'` printed as text are hard failures; use a valid `<h2 class='{$prefix}-title'>...</h2>` element instead.\n"
+            . "- Use div/card groups instead of ul/ol/li list markup. Use exactly one h2 for the block title; do not use h3 or closing tags like </h>. Prefer p/small/div for labels. If span or strong is used, keep it plain text with no attributes and close it before any parent closes.\n"
+            . "- Content blocks should not use `<a>` or `<button>` tags. Use `<div class='{$prefix}-cta'>` for CTA-looking controls unless the task explicitly provides a real href/form action. This prevents link/button nesting and merged closing-tag failures.\n"
+            . "- If this component is a hero/banner, html_content must include `{$prefix}-media`, `{$prefix}-motif`, `{$prefix}-orbit`, `{$prefix}-overlay`, and `{$prefix}-text-panel` classes. With verified image, `{$prefix}-media` is the copied img class; without verified image, `{$prefix}-media` is a CSS-only container with `{$prefix}-media-stage`, `{$prefix}-media-subject`, `{$prefix}-media-detail`, and `{$prefix}-media-label` children. css_extra must include matching selectors for every required hero class.\n"
+            . $heroContract
+            . "- Use only complete CSS declarations. Each declaration has one property name, one value, and a semicolon. For non-hero blocks, keep css_extra to the minimal CSS shape above plus at most one card/form selector. If a decorative selector is uncertain, omit it instead of writing broken CSS.\n"
+            . "- CSS declaration separator rule: every declaration must end with `;` before the next property. `padding:16px 32pxbackground:#D4AF37` is invalid; write `padding:16px 32px;background:#D4AF37;`.\n"
+            . "- CSS numeric value rule: opacity and numeric declarations must use complete values such as `.46`, `0.46`, `1`, `240px`, or `100%`; never output truncated values like `opacity:.`, `opacity:`, `width:-`, or `z-index:.`.\n"
+            . "- CSS value precision rule: `box-sizing` must be exactly `border-box`; `box-sizing:border` is invalid CSS and will be rejected.\n"
+            . "- CSS no-function mode: css_extra should not contain `(` or `)` unless copying a verified image URL in an attribute outside CSS. Do not use repeat(), minmax(), clamp(), calc(), rgba(), linear-gradient(), color-mix(), filter(), transform(), clip-path(), nested gradients, or placeholder values such as `...`.\n"
+            . "- CSS brace contract: css_extra starts with `#componentId .{$prefix}-root{` and ends with one `}`. It must not contain `}}`, `{{`, `@media`, comma selectors, nested selectors, comments, raw JSON braces, or a brace inside any CSS value. {$safeCssBraceCountRule}\n"
+            . "- Never leave blank CSS values such as `background:;`, `color:;`, `border-color:;`, or `box-shadow:;`. If a value is uncertain, keep the value from the minimal CSS shape or use a confirmed theme color.\n"
+            . "- CSS property whitelist: use only position, inset, overflow, padding, margin, max-width, width, min-width, height, display, flex, flex-wrap, gap, align-items, background, color, border, border-radius, box-shadow, font-size, line-height, z-index, opacity, object-fit, object-position, box-sizing, text-decoration, cursor, and outline. Do not invent property names or write text fragments inside css_extra.\n"
+            . "- css_responsive must be an empty string for this content block. Put responsive safety into base css_extra using flex-wrap, flex, min-width:0, width:100%, max-width:100%, and box-sizing:border-box. Do not output @media blocks.\n"
+            . "- Return one complete JSON object using the required fields only. Do not output PHP opening or closing tags in html_content.\n";
     }
 
     private function cleanAiHtmlFragment(string $html, array $verifiedAssets = []): string
     {
-        $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
-        $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
-        $html = $this->stripPhpFragmentsFromHtml($html);
-        $html = $this->repairHtmlTagAttributeSpacing($html);
-        $html = $this->repairGeneratedImageTagAttributeGrammar($html);
+        if (\preg_match('/<\s*(?:style|script)\b/i', $html) === 1) {
+            throw new \RuntimeException('AI component content hard policy failed: html_content must not contain style or script tags; use JSON CSS fields only.');
+        }
+        if (\str_contains($html, '<?') || \str_contains($html, '?>')) {
+            throw new \RuntimeException('AI component content hard policy failed: html_content must not contain PHP fragments.');
+        }
         $svgPolicyReason = $this->detectInlineSvgGeneratedSectionViolation($html);
         if ($svgPolicyReason !== null) {
             throw new \RuntimeException('AI component content hard policy failed: ' . $svgPolicyReason);
         }
-        $html = \preg_replace('/@(?:component|fields)_(?:start|end)\b/i', '', $html) ?? $html;
+        if (\preg_match('/@(?:component|fields)_(?:start|end)\b/i', $html) === 1) {
+            throw new \RuntimeException('AI component content hard policy failed: html_content must not contain framework component markers.');
+        }
         $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation($html);
         if ($hardPolicyReason !== null) {
             throw new \RuntimeException('AI component content hard policy failed: ' . $hardPolicyReason);
         }
-        $html = $this->repairHtmlFragmentTagBalance(\trim($html));
+        $html = \trim($html);
+        $html = $this->repairHtmlTagAttributeSpacing($html);
+        $html = $this->repairHtmlFragmentTagBalance($html);
         $this->assertGeneratedHtmlFragmentWellFormed($html);
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
         $html = \trim($html);
-        $html = $this->clipHtmlFragmentPreservingIntegrity($html, 5000);
-        $html = $this->repairHtmlFragmentTagBalance(\trim($html));
+        $html = $this->repairHtmlFragmentTagBalance($html);
+        $length = \function_exists('mb_strlen') ? \mb_strlen($html, 'UTF-8') : \strlen($html);
+        if ($length > 5000) {
+            throw new \RuntimeException('AI component content contract failed: html_content exceeds the allowed contract size.');
+        }
         $this->assertGeneratedHtmlFragmentWellFormed($html);
 
         return \trim($html);
@@ -3112,6 +3194,14 @@ class AiSitePageComponentGenerationService
         if ($html === '') {
             return '';
         }
+
+        $html = \preg_replace_callback(
+            '/<\s*[a-z][a-z0-9:-]*\b[^<>]*(?=<\s*\/?[a-z])/iu',
+            fn(array $matches): string => $this->closeMalformedOpeningTagBeforeNestedMarker((string)($matches[0] ?? '')),
+            $html
+        ) ?? $html;
+        $html = \preg_replace('/<\s*([a-z][a-z0-9:-]*)\s*=\s*(["\'])/iu', '<$1 class=$2', $html) ?? $html;
+        $html = \preg_replace('/<\s*([a-z][a-z0-9:-]*)\s+(["\'])([^"\']+)\2/iu', '<$1 class=$2$3$2', $html) ?? $html;
 
         return \preg_replace_callback(
             '/<\s*\/?\s*[a-z][a-z0-9:-]*\b[^<>]*(?:>|$)/iu',
@@ -3126,6 +3216,34 @@ class AiSitePageComponentGenerationService
             },
             $html
         ) ?? $html;
+    }
+
+    private function closeMalformedOpeningTagBeforeNestedMarker(string $partialTag): string
+    {
+        $partialTag = \rtrim($partialTag);
+        if ($partialTag === '' || \str_ends_with($partialTag, '>')) {
+            return $partialTag;
+        }
+
+        $quote = '';
+        $length = \strlen($partialTag);
+        for ($index = 1; $index < $length; $index++) {
+            $char = $partialTag[$index];
+            if ($quote !== '') {
+                if ($char === $quote && ($index === 0 || $partialTag[$index - 1] !== '\\')) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+            }
+        }
+        if ($quote !== '') {
+            $partialTag .= $quote;
+        }
+
+        return $partialTag . '>';
     }
 
     private function repairHtmlTagAttributeQuoteBeforeNextAttribute(string $tag): string
@@ -3148,6 +3266,17 @@ class AiSitePageComponentGenerationService
                 }
                 $repaired .= $char;
                 if ($char === $quote && ($index === 0 || $tag[$index - 1] !== '\\')) {
+                    $tail = \substr($tag, $index + 1);
+                    $next = $tail !== '' ? $tail[0] : '';
+                    if ($next !== '' && !\preg_match('/[\s>\/]/', $next)) {
+                        if (\preg_match('/^[a-zA-Z_:][a-zA-Z0-9_:.-]*\s*=/u', $tail) === 1) {
+                            $repaired .= ' ';
+                            $quote = '';
+                            continue;
+                        }
+                        $repaired = \substr($repaired, 0, -1) . ($char === "'" ? '&#39;' : '&quot;');
+                        continue;
+                    }
                     $quote = '';
                 }
                 continue;
@@ -3162,74 +3291,6 @@ class AiSitePageComponentGenerationService
         }
 
         return $repaired;
-    }
-
-    private function repairGeneratedImageTagAttributeGrammar(string $html): string
-    {
-        if ($html === '' || \stripos($html, '<img') === false) {
-            return $html;
-        }
-
-        return \preg_replace_callback(
-            '/<img\b[^<>]*(?:>|$)/iu',
-            function (array $matches): string {
-                $tag = (string)($matches[0] ?? '');
-                if ($tag === '') {
-                    return $tag;
-                }
-                $tag = \preg_replace('/(["\'])(?=[a-zA-Z_:][a-zA-Z0-9_:.-]*\s*=)/u', '$1 ', $tag) ?? $tag;
-
-                $quote = '';
-                $repaired = '';
-                $length = \strlen($tag);
-                for ($index = 0; $index < $length; $index++) {
-                    $char = $tag[$index];
-                    if ($quote !== '') {
-                        if (\preg_match('/\s(?:src|alt|title|class|loading|decoding|width|height|data-[a-z0-9_-]+|aria-[a-z0-9_-]+)\s*=/iu', \substr($tag, $index), $attrMatch, \PREG_OFFSET_CAPTURE) === 1
-                            && (int)$attrMatch[0][1] === 0
-                        ) {
-                            $repaired .= $quote;
-                            $quote = '';
-                        }
-                        if ($char === '>' && ($index === 0 || $tag[$index - 1] !== '\\')) {
-                            $repaired .= $quote;
-                            $quote = '';
-                        }
-                        $repaired .= $char;
-                        if ($char === $quote && ($index === 0 || $tag[$index - 1] !== '\\')) {
-                            $quote = '';
-                        }
-                        continue;
-                    }
-                    if ($char === '"' || $char === "'") {
-                        $quote = $char;
-                    }
-                    $repaired .= $char;
-                }
-
-                if ($quote !== '') {
-                    $repaired .= $quote;
-                }
-
-                return $repaired;
-            },
-            $html
-        ) ?? $html;
-    }
-
-    /**
-     * @param array<string,mixed> $aiData
-     * @return array<string,mixed>
-     */
-    private function repairAiDataImageTagAttributeGrammar(array $aiData): array
-    {
-        foreach (['html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'] as $key) {
-            if (\is_string($aiData[$key] ?? null) && \stripos((string)$aiData[$key], '<img') !== false) {
-                $aiData[$key] = $this->repairGeneratedImageTagAttributeGrammar((string)$aiData[$key]);
-            }
-        }
-
-        return $aiData;
     }
 
     /**
@@ -3292,7 +3353,15 @@ class AiSitePageComponentGenerationService
         if ($html === '') {
             return '';
         }
+        $html = \preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
+        $html = \preg_replace('/<head\b[^>]*>.*?<\/head>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<template\b[^>]*>.*?<\/template>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<noscript\b[^>]*>.*?<\/noscript>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<title\b[^>]*>.*?<\/title>/is', '', $html) ?? $html;
         $plain = \strip_tags($html);
+        $plain = \html_entity_decode($plain, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
         $plain = \preg_replace('/\s+/u', ' ', $plain) ?? $plain;
 
         return \trim($plain);
@@ -3314,6 +3383,10 @@ class AiSitePageComponentGenerationService
         }
         if (\preg_match('/<\s+(?:class|id|style|href|src|alt|title|role|aria-[a-z0-9_-]+|data-[a-z0-9_-]+)\s*=/iu', $html) === 1) {
             return 'opening tag is missing an element name';
+        }
+        $invalidTagReason = $this->detectInvalidHtmlTagTokenReason($html);
+        if ($invalidTagReason !== null) {
+            return $invalidTagReason;
         }
 
         $voidTags = \array_fill_keys([
@@ -3354,6 +3427,33 @@ class AiSitePageComponentGenerationService
 
         if ($stack !== []) {
             return 'unclosed tag <' . (string)\end($stack) . '>';
+        }
+
+        return null;
+    }
+
+    private function detectInvalidHtmlTagTokenReason(string $html): ?string
+    {
+        if (\preg_match_all('/<[^>]*(?:>|$)/u', $html, $matches, \PREG_SET_ORDER) < 1) {
+            return null;
+        }
+
+        foreach ($matches as $match) {
+            $token = \trim((string)($match[0] ?? ''));
+            if ($token === '') {
+                continue;
+            }
+            if (\str_starts_with($token, '<!--') && \str_ends_with($token, '-->')) {
+                continue;
+            }
+            if (\preg_match('/^<\s*\/?\s*[a-z][a-z0-9:-]*(?:\s[^<>]*)?\/?\s*>$/iu', $token) === 1) {
+                continue;
+            }
+            if (\preg_match('/^<\s*\/?\s*\d/iu', $token) === 1) {
+                return 'tag name must start with a letter near ' . $this->clipText($token, 80);
+            }
+
+            return 'malformed HTML tag token near ' . $this->clipText($token, 80);
         }
 
         return null;
@@ -3545,6 +3645,9 @@ class AiSitePageComponentGenerationService
 
         // Inspect only visitor-visible text so valid URL and slot attributes do not false-positive.
         $visibleText = $this->extractVisibleHtmlText($trimmed);
+        if ($this->containsVisibleRawHtmlFragment($visibleText)) {
+            return 'raw HTML fragment leaked into visitor content';
+        }
         if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|\$[a-z_][a-z0-9_]*|=>|===/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
         }
@@ -3568,6 +3671,15 @@ class AiSitePageComponentGenerationService
         return null;
     }
 
+    private function containsVisibleRawHtmlFragment(string $visibleText): bool
+    {
+        if (\trim($visibleText) === '') {
+            return false;
+        }
+
+        return \preg_match('/(?:<|&lt;)\s*\/?\s*[a-z0-9][^>\n]{0,120}(?:>|&gt;)|\bclass\s*=\s*(["\']).{1,120}\1/iu', $visibleText) === 1;
+    }
+
     private function detectInlineSvgGeneratedSectionViolation(string $html): ?string
     {
         if (\preg_match('/<svg\b|data:image\/svg\+xml/iu', $html) === 1) {
@@ -3577,7 +3689,7 @@ class AiSitePageComponentGenerationService
         return null;
     }
 
-    private function detectLowQualityGeneratedSectionHtmlReason(string $html, ?string $componentCode = ''): ?string
+    private function detectLowQualityGeneratedSectionHtmlReason(string $html, ?string $componentCode = '', string $styleCss = ''): ?string
     {
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
         $trimmed = \trim($html);
@@ -3588,7 +3700,10 @@ class AiSitePageComponentGenerationService
             return 'plan-derived fallback visual leaked into generated content';
         }
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
-        if ($plain === '' || \mb_strlen($plain) < 18) {
+        $isNavigationComponent = \preg_match('/(?:nav|menu|tabs?|filter|selector|series)/i', $componentCode . ' ' . $trimmed) === 1
+            || \preg_match('/<(?:nav|a|button)\b/iu', $trimmed) === 1;
+        $minimumVisibleTextLength = $isNavigationComponent ? 0 : 18;
+        if (!$isNavigationComponent && ($plain === '' || \mb_strlen($plain) < $minimumVisibleTextLength)) {
             return 'insufficient visitor-facing text';
         }
         $visibleText = $this->extractVisibleHtmlText($trimmed);
@@ -3598,6 +3713,10 @@ class AiSitePageComponentGenerationService
         if ($this->containsEnglishBoilerplateVisibleCopy($visibleText)) {
             return 'English boilerplate copy leaked into visitor content';
         }
+        $genericCtaReason = $this->detectGenericCtaIntentViolation($visibleText, $componentCode);
+        if ($genericCtaReason !== null) {
+            return $genericCtaReason;
+        }
 
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
             return 'internal task identifiers leaked';
@@ -3606,7 +3725,7 @@ class AiSitePageComponentGenerationService
         if ($this->containsPlanningObservationCopy($plain)) {
             return 'planning observation copy leaked into visitor content';
         }
-        if (\preg_match('/\d(?:[.,]\d+)?[\p{Lu}\p{L}]{2,}/u', $visibleText) === 1) {
+        if (\preg_match('/\d(?:[.,]\d+)?(?:Hours?|Steps?|Years?|Days?|Rating|Reviews?|Support|Downloads?|Projects?|Clients?|Products?)\b/u', $visibleText) === 1) {
             return 'missing whitespace between number and visible label';
         }
 
@@ -3618,7 +3737,9 @@ class AiSitePageComponentGenerationService
         ) {
             return 'unstyled browser-default link leaked into visitor content';
         }
-        if (\preg_match('/>\s*(?:[\p{S}\p{P}\s]{3,})\s*</u', $trimmed) === 1) {
+        if (\preg_match('/>\s*(?:[\p{S}\p{P}\s]{3,})\s*</u', $trimmed) === 1
+            && \preg_match('/[\p{L}\p{N}]/u', $visibleText) !== 1
+        ) {
             return 'symbol-only decorative control leaked into visitor content';
         }
 
@@ -3639,16 +3760,175 @@ class AiSitePageComponentGenerationService
         if ($this->looksLikeIsolatedCtaIsland($trimmed, $plain)) {
             return 'CTA is isolated inside a mostly empty section';
         }
+        if ($this->looksLikeStretchedCtaBar($trimmed)) {
+            return 'CTA is rendered as a full-width bar instead of a compact action button';
+        }
         if (\preg_match('/\b(hero|banner|opening|above[-_ ]?fold)\b/i', $componentCode) === 1
-            && \preg_match('/<img\b|background-image|data-pb-ai-image-role=["\']generated-asset["\']/iu', $trimmed) === 1
         ) {
-            $heroReason = $this->detectHeroBannerQualityViolation($trimmed);
+            $heroReason = $this->detectHeroBannerQualityViolation($trimmed . "\n" . $styleCss);
             if ($heroReason !== null) {
                 return $heroReason;
             }
         }
 
         return null;
+    }
+
+    private function detectGenericCtaIntentViolation(string $visibleText, string $componentCode): ?string
+    {
+        if (!$this->isGenericConsultCtaLabel($visibleText)) {
+            return null;
+        }
+
+        $identity = \mb_strtolower($componentCode . ' ' . $visibleText);
+        if ($this->isContactOrSupportIntent($identity)) {
+            return null;
+        }
+        if (\preg_match('/\b(?:home|about|blog|download|apk|app|install|reward|bonus|game|feature|showcase|trust|security|safe|cta|hero)\b|下载|安装|奖励|金币|游戏|棋牌|博客|攻略|信任|安全/iu', $identity) === 1) {
+            return 'generic consult CTA label does not match the block conversion intent';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function enforceConfiguredCtaIntentInAiPayload(array $aiData, array $defaultConfig, string $componentCode): array
+    {
+        $configuredLabel = $this->firstConfigString($defaultConfig, ['cta.text', 'content.cta_text']);
+        if ($configuredLabel === '' || $this->isGenericConsultCtaLabel($configuredLabel) || $this->isGenericCtaContactLabel($configuredLabel)) {
+            return $aiData;
+        }
+
+        $identity = \mb_strtolower($componentCode . ' ' . \implode(' ', \array_map('strval', [
+            $defaultConfig['runtime.section_template'] ?? '',
+            $defaultConfig['runtime.section_name'] ?? '',
+            $defaultConfig['content.title'] ?? '',
+            $defaultConfig['content.description'] ?? '',
+        ])));
+        if ($this->isContactOrSupportIntent($identity)) {
+            return $aiData;
+        }
+
+        foreach (['html_content', 'html_extra'] as $key) {
+            if (!\is_string($aiData[$key] ?? null) || $aiData[$key] === '') {
+                continue;
+            }
+            $aiData[$key] = $this->replaceGenericConsultCtaLabels((string)$aiData[$key], $configuredLabel);
+        }
+
+        return $aiData;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function assertSharedComponentCopyMatchesSourceIndustry(
+        array $aiData,
+        string $region,
+        array $defaultConfig,
+        array $renderContext
+    ): void {
+        $visible = '';
+        foreach (['html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'] as $key) {
+            if (\is_string($aiData[$key] ?? null) && \trim((string)$aiData[$key]) !== '') {
+                $visible .= ' ' . $this->extractVisibleHtmlText((string)$aiData[$key]);
+            }
+        }
+        $visible = \trim($visible);
+        if ($visible === '' || $this->sourceContextAllowsDownloadOrGameCopy($defaultConfig, $renderContext)) {
+            return;
+        }
+
+        if ($this->containsOutOfScopeDownloadOrGameCopy($visible)) {
+            throw new \RuntimeException(
+                'AI component copy quality failed: ' . $region
+                . ' reused app-download/game industry copy outside the approved source brief.'
+            );
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function sourceContextAllowsDownloadOrGameCopy(array $defaultConfig, array $renderContext): bool
+    {
+        $source = \mb_strtolower($this->collectScalarPromptText([
+            'default_config' => $defaultConfig,
+            'website_profile' => $renderContext['_website_profile'] ?? [],
+            'scope_identity' => $renderContext['_scope_identity'] ?? [],
+        ]));
+
+        return \preg_match(
+            '/\b(?:download|apk|app|install|android|ios|game|play|casino|poker|rummy|ludo|bonus|reward)\b|下载|安装|应用|游戏|棋牌|畅玩|奖励|金币|奖金/iu',
+            $source
+        ) === 1;
+    }
+
+    private function containsOutOfScopeDownloadOrGameCopy(string $visibleText): bool
+    {
+        return \preg_match(
+            '/\b(?:safe\s+download|secure\s+download|download\s+now|install\s+now|play\s+now|start\s+playing|claim\s+bonus|apk|android\s+build|game\s+bonus|free\s+coins?)\b|安全下载|安心畅玩|立即下载|下载安装|开始畅玩|领取金币|金币奖励|游戏奖励/iu',
+            $visibleText
+        ) === 1;
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function collectScalarPromptText(mixed $value, int $depth = 0): string
+    {
+        if ($depth > 4) {
+            return '';
+        }
+        if (\is_scalar($value) || (\is_object($value) && \method_exists($value, '__toString'))) {
+            return ' ' . (string)$value;
+        }
+        if (!\is_array($value)) {
+            return '';
+        }
+
+        $text = '';
+        foreach ($value as $item) {
+            $text .= $this->collectScalarPromptText($item, $depth + 1);
+            if (\mb_strlen($text) > 6000) {
+                break;
+            }
+        }
+
+        return $text;
+    }
+
+    private function replaceGenericConsultCtaLabels(string $value, string $replacement): string
+    {
+        $replacement = \trim($replacement);
+        if ($replacement === '') {
+            return $value;
+        }
+
+        return \preg_replace(
+            '/\b(?:consult\s+now|contact\s+us|enquire|inquire|talk\s+to\s+us|get\s+in\s+touch)\b|\x{7acb}\x{5373}\x{54a8}\x{8be2}|\x{9a6c}\x{4e0a}\x{54a8}\x{8be2}|\x{8054}\x{7cfb}\x{6211}\x{4eec}|\x{8054}\x{7cfb}\x{5ba2}\x{670d}|\x{54a8}\x{8be2}/iu',
+            $replacement,
+            $value
+        ) ?? $value;
+    }
+
+    private function isGenericCtaContactLabel(string $label): bool
+    {
+        return \preg_match('/\x{7acb}\x{5373}\x{54a8}\x{8be2}|\x{9a6c}\x{4e0a}\x{54a8}\x{8be2}|\x{8054}\x{7cfb}\x{6211}\x{4eec}|\x{8054}\x{7cfb}\x{5ba2}\x{670d}|\x{54a8}\x{8be2}/iu', $label) === 1;
+    }
+
+    private function containsCssUnitMergedIntoNextDeclaration(string $css): bool
+    {
+        $property = '(?:position|inset|overflow|display|width|min-width|max-width|height|min-height|max-height|z-index|opacity|background(?:-image)?|color|border(?:-radius|-color)?|box-shadow|font(?:-size|weight|family)?|line-height|padding|margin|flex(?:-direction|-wrap|-grow|-shrink|-basis)?|grid-template-columns|gap|align-items|justify-content|object-fit|object-position|box-sizing|text-decoration|cursor|outline)';
+
+        return \preg_match('/(?:\d+(?:\.\d+)?(?:px|rem|em|vh|vw|%)|#[0-9a-f]{3,8})(?=\s*' . $property . '\s*:)/i', $css) === 1;
     }
 
     private function looksLikeSparseOversizedSection(string $html, string $plain): bool
@@ -3686,6 +3966,18 @@ class AiSitePageComponentGenerationService
         return \preg_match('/(?:min-height|height)\s*:\s*(?:[6-9]\d{2}|[1-9]\d{3})px/iu', $html) === 1;
     }
 
+    private function looksLikeStretchedCtaBar(string $html): bool
+    {
+        if (\preg_match('/\b(?:full[-_ ]?width|conversion[-_ ]?band|cta[-_ ]?band|download[-_ ]?band)\b/iu', $html) === 1) {
+            return false;
+        }
+
+        return \preg_match(
+            '/(?:\.[a-z0-9_-]*cta[a-z0-9_-]*|class=["\'][^"\']*cta[^"\']*["\'][^>]*style=["\'][^"\']*)[^{}>]*(?:\{[^}]*\b(?:width\s*:\s*100%|flex\s*:\s*1(?:\s|;)|flex-grow\s*:\s*1)[^}]*\}|(?:width\s*:\s*100%|flex\s*:\s*1(?:\s|;)|flex-grow\s*:\s*1))/iu',
+            $html
+        ) === 1;
+    }
+
     private function normalizeOptionalComponentCode(mixed $componentCode): string
     {
         if (!\is_scalar($componentCode) && !(\is_object($componentCode) && \method_exists($componentCode, '__toString'))) {
@@ -3698,16 +3990,37 @@ class AiSitePageComponentGenerationService
     private function detectHeroBannerQualityViolation(string $html): ?string
     {
         $normalized = \preg_replace('/\s+/u', ' ', $html) ?? $html;
+        $hasCssOnlyMediaSkeleton = \preg_match('/class=["\'][^"\']*media[^"\']*["\']/iu', $normalized) === 1
+            && \preg_match('/class=["\'][^"\']*(?:overlay|scrim|veil|shade|backdrop)[^"\']*["\']/iu', $normalized) === 1
+            && \preg_match('/class=["\'][^"\']*(?:text-panel|copy|content|caption|message|panel|plate|card)[^"\']*["\']/iu', $normalized) === 1;
+        $hasGeneratedAssetHero = \preg_match('/data-pb-ai-image-role=["\']generated-asset["\']/iu', $normalized) === 1;
+        $hasCssOnlyMotifLayers = \preg_match('/class=["\'][^"\']*motif[^"\']*["\']/iu', $normalized) === 1
+            && \preg_match('/class=["\'][^"\']*orbit[^"\']*["\']/iu', $normalized) === 1;
+        $hasVisibleMotifCss = \preg_match('/motif[^{]*\{(?=[^}]*\b(?:width|height)\s*:)(?=[^}]*\b(?:background|border|box-shadow)\s*:)[^}]*\}/iu', $normalized) === 1
+            && \preg_match('/orbit[^{]*\{(?=[^}]*\b(?:width|height)\s*:)(?=[^}]*\b(?:background|border|box-shadow)\s*:)[^}]*\}/iu', $normalized) === 1;
+        $hasCssOnlySubjectStage = \preg_match('/class=["\'][^"\']*(?:media-stage|media-subject|media-detail|media-label|media-card|media-dish|media-stem|product|subject|stage|vessel|bowl|cup|plate)[^"\']*["\']/iu', $normalized) === 1;
         $hasFullBleedBackground = \preg_match('/(?:data-pb-ai-image-role=["\']generated-asset["\'][^>]*(?:width:100%|height:100%|object-fit)|background-image|object-fit\s*:\s*cover|inset\s*:\s*0)/iu', $normalized) === 1;
-        $hasPremiumMediaHero = \preg_match('/(?:data-pb-ai-image-role=["\']generated-asset["\']|class=["\'][^"\']*(?:hero|banner)[^"\']*(?:media|visual|image)[^"\']*["\'])/iu', $normalized) === 1
-            && \preg_match('/(?:border-radius|box-shadow|linear-gradient|radial-gradient|backdrop-filter|object-fit\s*:\s*cover)/iu', $normalized) === 1;
-        $hasOverlayPanel = \preg_match('/backdrop-filter|rgba\([^)]*,\s*\.(?:3|4|5|6|7|8|9)|linear-gradient\([^;]*(?:rgba|transparent)/iu', $normalized) === 1;
+        $hasPremiumMediaHero = \preg_match('/(?:data-pb-ai-image-role=["\']generated-asset["\']|class=["\'][^"\']*(?:media|visual|image)[^"\']*["\'])/iu', $normalized) === 1
+            && \preg_match('/(?:border-radius|box-shadow|object-fit\s*:\s*cover|inset\s*:\s*0)/iu', $normalized) === 1;
+        $hasOverlayPanel = \preg_match('/(?:backdrop-filter|rgba\([^)]*,\s*\.(?:3|4|5|6|7|8|9)|linear-gradient\([^;]*(?:rgba|transparent)|(?:overlay|scrim|veil|shade|backdrop)[^{]*\{[^}]*background\s*:\s*#[0-9a-f]{3,8}[^}]*opacity\s*:\s*\.?[0-9]+)/iu', $normalized) === 1;
         $hasNamedReadabilityLayer = \preg_match('/class=["\'][^"\']*(?:overlay|scrim|veil|shade|backdrop|gradient)[^"\']*["\']/iu', $normalized) === 1;
         $hasNamedTextSafePanel = \preg_match('/class=["\'][^"\']*(?:copy|content|text|caption|message|panel|plate|card)[^"\']*["\']/iu', $normalized) === 1;
-        if (!$hasFullBleedBackground && !$hasPremiumMediaHero) {
+        if ($this->looksLikeStretchedCtaBar($normalized)) {
+            return 'hero/banner CTA is rendered as a full-width bar instead of a compact action button';
+        }
+        if (!$hasCssOnlyMediaSkeleton && !$hasFullBleedBackground && !$hasPremiumMediaHero) {
             return 'hero/banner is not using a full-background image or a premium generated media visual';
         }
-        if (!$hasOverlayPanel) {
+        if (!$hasGeneratedAssetHero && $hasCssOnlyMediaSkeleton && !$hasCssOnlyMotifLayers) {
+            return 'CSS-only hero/banner lacks visible motif and orbit decoration layers';
+        }
+        if (!$hasGeneratedAssetHero && $hasCssOnlyMediaSkeleton && !$hasVisibleMotifCss) {
+            return 'CSS-only hero/banner motif and orbit layers are not visibly positioned';
+        }
+        if (!$hasGeneratedAssetHero && $hasCssOnlyMediaSkeleton && !$hasCssOnlySubjectStage && !$hasVisibleMotifCss) {
+            return 'CSS-only hero/banner lacks a visible subject-matter or editorial media stage';
+        }
+        if (!$hasCssOnlyMediaSkeleton && !$hasOverlayPanel) {
             return 'hero/banner lacks a readable overlay layer for floating content';
         }
         if (!$hasNamedReadabilityLayer || !$hasNamedTextSafePanel) {
@@ -3799,12 +4112,21 @@ class AiSitePageComponentGenerationService
         $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
             ? $renderContext['_visual_contract']
             : $this->decodeRuntimeVisualContract($defaultConfig);
-        if ($requiredAssets === [] && (int)($visualContract['required'] ?? 0) === 1) {
-            $slotId = \trim((string)($visualContract['slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? ''));
-            $url = $this->firstConfigString($defaultConfig, ['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url']);
-        if ($slotId !== '' && $url !== '') {
-            $requiredAssets[$slotId] = $url;
+        $imageRequired = (int)($visualContract['required'] ?? 0) === 1
+            || \trim((string)($defaultConfig['runtime.section_image_required'] ?? '')) === '1';
+        if (!$imageRequired) {
+            return;
         }
+        $expectedSlotId = \trim((string)($visualContract['slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? ''));
+        if ($expectedSlotId !== '' && $requiredAssets !== []) {
+            $requiredAssets = \array_intersect_key($requiredAssets, [$expectedSlotId => true]);
+        }
+        if ($requiredAssets === []) {
+            $slotId = $expectedSlotId;
+            $url = $this->firstConfigString($defaultConfig, ['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url']);
+            if ($slotId !== '' && $url !== '') {
+                $requiredAssets[$slotId] = $url;
+            }
         }
         if ($requiredAssets === []) {
             return;
@@ -3893,6 +4215,79 @@ class AiSitePageComponentGenerationService
         }
     }
 
+    /**
+     * @param array<string,mixed> $aiData
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function stripOptionalUnverifiedGeneratedImageReferences(array $aiData, array $renderContext, array $defaultConfig): array
+    {
+        if ($this->isImageRequiredForGeneratedBlock($renderContext, $defaultConfig)) {
+            return $aiData;
+        }
+
+        $verifiedMap = $this->extractVerifiedAssetMapFromRenderContext($renderContext, $defaultConfig);
+        $verifiedUrls = \array_values(\array_filter(\array_map('strval', \array_merge(
+            \array_values($verifiedMap),
+            $this->extractVerifiedAssetUrlsFromRenderContextManifest($renderContext)
+        ))));
+
+        foreach (['html_content', 'html_extra'] as $key) {
+            if (!\is_string($aiData[$key] ?? null) || $aiData[$key] === '') {
+                continue;
+            }
+            $aiData[$key] = \preg_replace_callback(
+                '/<img\b[^>]*>/iu',
+                function (array $matches) use ($verifiedUrls): string {
+                    $tag = (string)($matches[0] ?? '');
+                    $src = $this->extractHtmlAttribute($tag, 'src');
+                    if ($src !== '' && $this->looksLikeGeneratedAssetSource($src) && !$this->isVerifiedAssetUrl($src, $verifiedUrls)) {
+                        return '';
+                    }
+
+                    return $tag;
+                },
+                (string)$aiData[$key]
+            ) ?? (string)$aiData[$key];
+        }
+
+        foreach (['css_extra', 'css_responsive', 'css_content'] as $key) {
+            if (!\is_string($aiData[$key] ?? null) || $aiData[$key] === '') {
+                continue;
+            }
+            $aiData[$key] = \preg_replace_callback(
+                '/(?:^|[;{])\s*[-_a-z][a-z0-9_-]*\s*:\s*[^;{}]*url\(\s*([\'"]?)(.*?)\1\s*\)[^;{}]*;?/iu',
+                function (array $matches) use ($verifiedUrls): string {
+                    $declaration = (string)($matches[0] ?? '');
+                    $src = \trim((string)($matches[2] ?? ''));
+                    if ($src !== '' && $this->looksLikeGeneratedAssetSource($src) && !$this->isVerifiedAssetUrl($src, $verifiedUrls)) {
+                        return \str_starts_with($declaration, '{') ? '{' : '';
+                    }
+
+                    return $declaration;
+                },
+                (string)$aiData[$key]
+            ) ?? (string)$aiData[$key];
+        }
+
+        return $aiData;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     */
+    private function isImageRequiredForGeneratedBlock(array $renderContext, array $defaultConfig): bool
+    {
+        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
+            ? $renderContext['_visual_contract']
+            : $this->decodeRuntimeVisualContract($defaultConfig);
+
+        return (int)($visualContract['required'] ?? 0) === 1
+            || \trim((string)($defaultConfig['runtime.section_image_required'] ?? '')) === '1';
+    }
+
     private function looksLikeGeneratedAssetSource(string $src): bool
     {
         $normalized = $this->normalizeVerifiedAssetUrl($src);
@@ -3949,8 +4344,10 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * Validate hero/banner image slot usage. The renderer must not inject the missing
-     * image, class, overlay, or CSS; invalid AI output is retried or failed.
+     * Validate hero/banner image slot usage and normalize the required contract tag.
+     *
+     * This is intentionally generic: the only injected values come from the runtime
+     * verified image contract, not from page-specific generated output.
      *
      * @param array<string, mixed> $aiData
      * @param array<string, mixed> $defaultConfig
@@ -3981,11 +4378,15 @@ class AiSitePageComponentGenerationService
             return $aiData;
         }
         $slotId = \trim((string)($defaultConfig['runtime.section_image_slot_id'] ?? $defaultConfig['visual.image_slot_id'] ?? ''));
-        if ($slotId !== '' && !$this->htmlContainsGeneratedAssetImage($html, $slotId, $imageUrl)) {
-            if (!\str_contains($html, $imageUrl)) {
-                throw new \RuntimeException('AI hero image contract failed: generated hero must use the provided image URL.');
+        if ($slotId !== '') {
+            if (!$this->htmlContainsGeneratedAssetImage($html, $slotId, $imageUrl)) {
+                $html = $this->normalizeContractHeroImageHtml($html, $imageUrl, $slotId, $defaultConfig);
             }
-            throw new \RuntimeException('AI hero image contract failed: generated hero image must use the provided image URL, generated-asset role, and slot binding on the same img element.');
+            $html = $this->removeDuplicateHeroMediaPlaceholders($html, $imageUrl, $slotId);
+            $aiData['html_content'] = $html;
+            if (!$this->htmlContainsGeneratedAssetImage($html, $slotId, $imageUrl)) {
+                throw new \RuntimeException('AI hero image contract failed: generated hero image must use the provided image URL, generated-asset role, and slot binding on the same img element.');
+            }
         }
         if ($slotId === '' && !\str_contains($html, $imageUrl)) {
             throw new \RuntimeException('AI hero image contract failed: generated hero must use the provided image URL.');
@@ -3995,6 +4396,180 @@ class AiSitePageComponentGenerationService
         }
 
         return $aiData;
+    }
+
+    private function removeDuplicateHeroMediaPlaceholders(string $html, string $imageUrl, string $slotId): string
+    {
+        if (!$this->htmlContainsGeneratedAssetImage($html, $slotId, $imageUrl)) {
+            return $html;
+        }
+
+        $emptyMediaPattern = '/<(div|figure)\b(?=[^>]*\bclass\s*=\s*(["\'])[^"\']*(?:media|visual|image|art|photo)[^"\']*\2)[^>]*>\s*<\/\1>/iu';
+        $cleaned = \preg_replace($emptyMediaPattern, '', $html);
+
+        return \is_string($cleaned) ? $cleaned : $html;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     */
+    private function normalizeContractHeroImageHtml(string $html, string $imageUrl, string $slotId, array $defaultConfig): string
+    {
+        $tagReplacement = function (string $existingTag = '') use ($html, $imageUrl, $slotId, $defaultConfig): string {
+            return $this->buildContractHeroImageTag($imageUrl, $slotId, $defaultConfig, $existingTag, $html);
+        };
+
+        $candidate = $this->findContractHeroImageCandidateTag($html, $imageUrl, $slotId);
+        if ($candidate !== '') {
+            return $this->replaceFirstString($html, $candidate, $tagReplacement($candidate));
+        }
+
+        $imageTag = $tagReplacement('');
+        $emptyMediaPattern = '/<(div|figure)\b(?=[^>]*\bclass\s*=\s*(["\'])[^"\']*(?:media|visual|image|art|photo)[^"\']*\2)[^>]*>\s*<\/\1>/iu';
+        $withReplacedEmptyMedia = \preg_replace_callback($emptyMediaPattern, static fn(): string => $imageTag, $html, 1, $replaceCount);
+        if ($replaceCount > 0 && \is_string($withReplacedEmptyMedia)) {
+            return $withReplacedEmptyMedia;
+        }
+
+        $mediaOpenPattern = '/<(div|figure)\b(?=[^>]*\bclass\s*=\s*(["\'])[^"\']*(?:media|visual|image|art|photo)[^"\']*\2)[^>]*>/iu';
+        $withInsertedIntoMedia = \preg_replace_callback($mediaOpenPattern, static fn(array $matches): string => (string)($matches[0] ?? '') . $imageTag, $html, 1, $insertCount);
+        if ($insertCount > 0 && \is_string($withInsertedIntoMedia)) {
+            return $withInsertedIntoMedia;
+        }
+
+        $rootOpenPattern = '/<(section|div)\b[^>]*>/iu';
+        $withInsertedIntoRoot = \preg_replace_callback($rootOpenPattern, static fn(array $matches): string => (string)($matches[0] ?? '') . $imageTag, $html, 1, $rootInsertCount);
+        if ($rootInsertCount > 0 && \is_string($withInsertedIntoRoot)) {
+            return $withInsertedIntoRoot;
+        }
+
+        return $imageTag . $html;
+    }
+
+    private function findContractHeroImageCandidateTag(string $html, string $imageUrl, string $slotId): string
+    {
+        if (\preg_match_all('/<img\b[^>]*>/iu', $html, $matches) <= 0) {
+            return '';
+        }
+
+        $fallback = '';
+        foreach ($matches[0] as $rawTag) {
+            $tag = (string)$rawTag;
+            $src = $this->extractHtmlAttribute($tag, 'src');
+            $role = $this->extractHtmlAttribute($tag, 'data-pb-ai-image-role');
+            $slot = $this->extractHtmlAttribute($tag, 'data-pb-ai-asset-slot');
+            $class = \strtolower($this->extractHtmlAttribute($tag, 'class'));
+            if ($src === $imageUrl || $slot === $slotId) {
+                return $tag;
+            }
+            if ($role === 'generated-asset') {
+                $fallback = $tag;
+                continue;
+            }
+            if ($fallback === '' && \preg_match('/\b(?:media|visual|image|hero|banner|cover|art|photo)\b/i', $class) === 1) {
+                $fallback = $tag;
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     */
+    private function buildContractHeroImageTag(
+        string $imageUrl,
+        string $slotId,
+        array $defaultConfig,
+        string $existingTag = '',
+        string $html = ''
+    ): string {
+        $tag = \preg_match('/^<img\b/i', $existingTag) === 1 ? $existingTag : '<img>';
+        $class = $this->extractHtmlAttribute($tag, 'class');
+        if (\trim($class) === '') {
+            $class = $this->resolveContractHeroImageClass($html);
+            if ($class !== '') {
+                $tag = $this->upsertHtmlAttribute($tag, 'class', $class);
+            }
+        }
+
+        $alt = $this->firstConfigString($defaultConfig, [
+            'runtime.section_image_alt',
+            'visual.image_alt',
+            'content.heading',
+            'runtime.section_name',
+        ]);
+        $alt = $this->sanitizeVisibleCopy($alt);
+        if ($alt === '') {
+            $alt = 'Hero image';
+        }
+
+        $tag = $this->upsertHtmlAttribute($tag, 'src', $imageUrl);
+        $tag = $this->upsertHtmlAttribute($tag, 'alt', $this->clipText($alt, 120));
+        $tag = $this->upsertHtmlAttribute($tag, 'data-pb-ai-image-role', 'generated-asset');
+        $tag = $this->upsertHtmlAttribute($tag, 'data-pb-ai-asset-slot', $slotId);
+        $tag = $this->upsertHtmlAttribute($tag, 'style', $this->mergeHeroCoverStyle($this->extractHtmlAttribute($tag, 'style')));
+
+        return $tag;
+    }
+
+    private function resolveContractHeroImageClass(string $html): string
+    {
+        if (\preg_match('/\bclass\s*=\s*(["\'])([^"\']*\b[a-z0-9_-]+-media\b[^"\']*)\1/iu', $html, $matches) === 1) {
+            $tokens = \preg_split('/\s+/', \trim((string)($matches[2] ?? ''))) ?: [];
+            foreach ($tokens as $token) {
+                $token = \trim((string)$token);
+                if (\preg_match('/^[a-z0-9_-]+-media$/i', $token) === 1) {
+                    return $token;
+                }
+            }
+        }
+
+        return 'pb-c-media';
+    }
+
+    private function mergeHeroCoverStyle(string $style): string
+    {
+        $style = \trim($style);
+        $declarations = [];
+        if ($style !== '') {
+            foreach (\preg_split('/;/', $style) ?: [] as $declaration) {
+                $declaration = \trim((string)$declaration);
+                if ($declaration === '' || !\str_contains($declaration, ':')) {
+                    continue;
+                }
+                [$property, $value] = \array_map('trim', \explode(':', $declaration, 2));
+                if ($property !== '' && $value !== '') {
+                    $declarations[\strtolower($property)] = $property . ':' . $value;
+                }
+            }
+        }
+
+        foreach ([
+            'position' => 'position:absolute',
+            'inset' => 'inset:0',
+            'width' => 'width:100%',
+            'height' => 'height:100%',
+            'object-fit' => 'object-fit:cover',
+            'object-position' => 'object-position:center',
+            'display' => 'display:block',
+        ] as $property => $declaration) {
+            if (!isset($declarations[$property])) {
+                $declarations[$property] = $declaration;
+            }
+        }
+
+        return \implode(';', \array_values($declarations)) . ';';
+    }
+
+    private function replaceFirstString(string $subject, string $search, string $replace): string
+    {
+        $position = \strpos($subject, $search);
+        if ($position === false) {
+            return $subject;
+        }
+
+        return \substr($subject, 0, $position) . $replace . \substr($subject, $position + \strlen($search));
     }
 
     /**
@@ -4145,7 +4720,7 @@ class AiSitePageComponentGenerationService
     /**
      * @return array<string,mixed>
      */
-    private function runAiGeneration(string $region, string $prompt, array $defaultConfig = [], array $renderContext = []): array
+    private function runAiGeneration(string $region, string $prompt, array $defaultConfig = [], array $renderContext = [], bool $retry = false): array
     {
         $fullContent = '';
         $sse = RequestContext::get(\Weline\Framework\Runtime\RequestContext::SSE_WRITER_KEY);
@@ -4179,7 +4754,8 @@ class AiSitePageComponentGenerationService
             $lastChunkFlushAt = $now;
         };
 
-        $guardedPrompt = $this->prependComponentJsonOnlyGuard($prompt, false);
+        $guardedPrompt = $this->prependComponentJsonOnlyGuard($prompt, $retry);
+        $maxTokens = \in_array($region, ['header', 'footer'], true) ? 1024 : 6144;
         try {
             $this->callAiOperation('generateStream', [
                 'prompt' => $guardedPrompt,
@@ -4199,9 +4775,8 @@ class AiSitePageComponentGenerationService
                 'params' => $this->buildAiRuntimeParams([
                     'allow_zero_balance_provider' => true,
                     'temperature' => 0.25,
-                    'max_tokens' => 8192,
+                    'max_tokens' => $maxTokens,
                     'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
-                    'response_format' => ['type' => 'json_object'],
                 ], true),
             ]);
         } catch (\Throwable $streamThrowable) {
@@ -4287,12 +4862,17 @@ class AiSitePageComponentGenerationService
             '- Keep exact JSON field names required by this task; do not rename keys.',
             '- Ensure all JSON string values are properly escaped and syntactically valid.',
             '- Backslashes are only legal for JSON escapes like \\", \\\\, \\/, \\n, \\r, \\t, or \\uXXXX. Do not output stray backslashes before HTML text, class names, tag names, or visitor copy.',
+            '- PHP/template code is forbidden in every field for this JSON task: no <?php, <?=, <?, ?>, $variables, foreach, echo, or framework template snippets.',
             '- HTML string fields must be well-formed fragments: balanced tags, closed attribute quotes, no orphan closing tags, and no framework wrapper leakage.',
-            '- HTML close-tag contract is strict: never merge adjacent closing tags, never invent tags such as </h3p>, </h2div>, </pa>, or </divsection>, and never close a parent element while a child heading/span/strong is still open.',
+            '- HTML close-tag contract is strict: never merge adjacent closing tags, never invent tags such as </h>, </h3p>, </h2div>, </pa>, </buttondiv>, or </divsection>, and never close a parent element while a child heading/span/strong is still open.',
+            '- Do not create empty tag names. `< class=...>`, `< >`, `</ >`, and `<span=...>` are invalid; use `<div class=...>` or plain text.',
+            '- CSS fields must contain only complete selector blocks. No empty values like background:;, no invented property names, no raw text, no dangling braces, and no function parentheses unless the current prompt explicitly supplies a verified URL outside CSS.',
+            '- CSS brace contract: no nested CSS, no comma selectors, no @media, no comments, no `}}`, no `{{`, and no braces inside CSS values. Count { and } before final output; counts must match exactly.',
+            '- JSON string safety: do not put double quote characters inside html_content visible copy; rewrite quoted phrases into plain prose so JSON remains valid.',
             '- Use one simple root wrapper and shallow child blocks. Avoid nested inline tags inside headings; put emphasis in sibling spans or paragraphs instead.',
             '- Every `<` inside html_content must begin a valid HTML tag name or be escaped as visitor text; never leave dangling `<`, empty tag names, or comparison symbols in copy.',
             '- Use single quotes for all HTML attributes inside JSON strings. When the prompt provides exact editable image templates, copy their concrete src and data-pb-ai-asset-slot values; never return symbolic URL or slot placeholders.',
-            '- Every custom class in html_content must use the requested component prefix and start with `pb-`; never output generic classes such as card, btn, item, panel, icon, title, active, row, container, or numbered classes like gem1.',
+            '- Every custom class in html_content must use the requested component prefix. For content blocks in this workflow the prefix is `pb-c`, so classes must look like `pb-c-root` or `pb-c-card`; `.pb`, `pb`, `pb-`, `-card`, and generic class names are invalid.',
             '- Never place standalone punctuation/symbol-only decorations in visible HTML text. Build arrows, dividers, stars, suit marks, plus signs, and other ornaments with CSS borders, gradients, pseudo-elements, or background layers instead.',
         ];
         if ($retry) {
@@ -4440,36 +5020,14 @@ class AiSitePageComponentGenerationService
     {
         $parser = $this->getResponseJsonParser();
 
-        $this->emitJsonRepairChunk(
-            $region,
-            'Parsing component JSON locally.'
-        );
         $decoded = $parser->extractAndDecode($content);
-        if (\is_array($decoded)) {
-            $this->emitJsonRepairChunk(
-                $region,
-                'Component JSON parsed successfully.'
-            );
-            return $decoded;
-        }
-
-        $locallyRepairedContent = $this->repairInvalidJsonBackslashEscapes($content);
-        if ($locallyRepairedContent !== $content) {
-            $this->emitJsonRepairChunk(
-                $region,
-                'Component JSON contained invalid backslash escapes; repaired JSON transport escapes locally.'
-            );
-            $decoded = $parser->extractAndDecode($locallyRepairedContent);
-            if (\is_array($decoded)) {
-                $this->emitJsonRepairChunk(
-                    $region,
-                    'Component JSON parsed successfully after local escape repair.'
-                );
-                return $decoded;
+        if (!\is_array($decoded)) {
+            $repaired = $this->repairInvalidJsonBackslashEscapes($content);
+            if ($repaired !== $content) {
+                $decoded = $parser->extractAndDecode($repaired);
             }
         }
-
-        return null;
+        return \is_array($decoded) ? $decoded : null;
     }
 
     private function repairInvalidJsonBackslashEscapes(string $content): string
@@ -4645,7 +5203,7 @@ class AiSitePageComponentGenerationService
         $taskType = \trim((string)($buildPlanTask['task_type'] ?? ''));
         $taskKey = \trim((string)($buildPlanTask['task_key'] ?? ''));
         if ($taskType === 'shared_component' || \str_starts_with($taskKey, 'shared:')) {
-            return [];
+            return $this->extractIdentityVerifiedAssets($scope);
         }
 
         $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
@@ -4658,6 +5216,42 @@ class AiSitePageComponentGenerationService
             $taskKey,
             ''
         );
+    }
+
+    /**
+     * Shared header/footer tasks may legally reuse global identity assets such as
+     * logo and title icon. Include only those verified global slots in the
+     * allowlist so shared prompts stay constrained without blocking brand reuse.
+     *
+     * @param array<string,mixed> $scope
+     * @return array<string,string>
+     */
+    private function extractIdentityVerifiedAssets(array $scope): array
+    {
+        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        $assets = [];
+        foreach ($slots as $fallbackId => $slot) {
+            if (!\is_array($slot) || $this->isPlaceholderAssetSlot($slot)) {
+                continue;
+            }
+            $slotId = \trim((string)($slot['slot_id'] ?? $fallbackId));
+            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            $pageType = \strtolower(\trim((string)($slot['page_type'] ?? '')));
+            $sectionCode = \strtolower(\trim((string)($slot['section_code'] ?? '')));
+            if (
+                $slotId === ''
+                || $finalUrl === ''
+                || !\str_starts_with(\strtolower($slotId), 'identity:')
+                || !\in_array($pageType, ['', 'global'], true)
+                || !\in_array($sectionCode, ['', 'identity', 'global'], true)
+            ) {
+                continue;
+            }
+            $assets[$slotId] = $finalUrl;
+        }
+
+        return $assets;
     }
 
     /**
@@ -4831,7 +5425,7 @@ class AiSitePageComponentGenerationService
             ) {
                 continue;
             }
-            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            $finalUrl = $this->normalizePublishableLogoAssetUrl((string)($slot['final_url'] ?? ''));
             if ($finalUrl !== '' && !$this->looksLikeSectionGeneratedAssetUrl($finalUrl)) {
                 return $finalUrl;
             }
@@ -4951,15 +5545,6 @@ class AiSitePageComponentGenerationService
                 return $matched;
             }
 
-            $matched = $this->findFirstScopedSlot($slots, $preferredTypes, $pageType, true, $verifiedOnly);
-            if ($matched !== '') {
-                return $matched;
-            }
-
-            $matched = $this->findFirstScopedSlot($slots, $preferredTypes, $pageType, false, $verifiedOnly);
-            if ($matched !== '') {
-                return $matched;
-            }
         }
 
         return '';
@@ -4998,7 +5583,7 @@ class AiSitePageComponentGenerationService
                     (string)($slot['block_key'] ?? ''),
                     (string)($slot['task_key'] ?? ''),
                 ]));
-                foreach (\array_keys($candidates) as $needle) {
+                foreach ($this->normalizeKeywordCandidateList($candidates) as $needle) {
                     if ($needle !== '' && \str_contains($haystack, $needle)) {
                         return $finalUrl;
                     }
@@ -5057,7 +5642,7 @@ class AiSitePageComponentGenerationService
                     $haystackParts[] = (string)($slot['brief'] ?? '');
                 }
                 $haystack = \strtolower(\implode(' ', $haystackParts));
-                foreach (\array_keys($candidates) as $needle) {
+                foreach ($this->normalizeKeywordCandidateList($candidates) as $needle) {
                     if ($needle !== '' && \str_contains($haystack, $needle)) {
                         return $finalUrl;
                     }
@@ -5144,6 +5729,28 @@ class AiSitePageComponentGenerationService
             return false;
         }
         return true;
+    }
+
+    /**
+     * @param array<string|int, mixed> $candidates
+     * @return list<string>
+     */
+    private function normalizeKeywordCandidateList(array $candidates): array
+    {
+        $keywords = [];
+        foreach ($candidates as $key => $value) {
+            $keyword = \is_string($key) ? $key : '';
+            if ($keyword === '' && \is_scalar($value)) {
+                $keyword = (string)$value;
+            }
+            $keyword = \strtolower(\trim($keyword));
+            if ($keyword === '') {
+                continue;
+            }
+            $keywords['k:' . $keyword] = $keyword;
+        }
+
+        return \array_values($keywords);
     }
 
     /**
@@ -5503,16 +6110,30 @@ class AiSitePageComponentGenerationService
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'header');
-        $buildPlanPromptAddon = $this->buildBuildPlanTaskPromptAddon(
-            $this->resolveSharedBuildPlanTask($scope, 'header'),
-            'header',
-            $scope
-        );
+        $buildPlanTask = $this->resolveSharedBuildPlanTask($scope, 'header');
+        $buildPlanPromptAddon = $this->buildSharedBuildPlanTaskPromptAddon($buildPlanTask, 'header', $scope);
         $themeContract = $this->buildThemeContractPromptAddon($scope);
-        $visualExcellence = $this->buildVisualExcellencePromptAddon('header');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
         $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3', $scope);
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
+
+        return $langRule
+            . $this->clipText($stage3LocaleContract, 260)
+            . "You are generating one PageBuilder website header component.\n"
+            . "Site name: {$siteDisplayName}\n"
+            . "Visitor-facing brand summary: {$siteSummary}\n"
+            . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . "Selected pages: " . \implode(', ', $pageList) . "\n"
+            . "Current navigation data: " . $this->jsonEncodeForPrompt($headerConfig['nav_items'] ?? [], 360) . "\n"
+            . $this->buildSharedOutputRulesPromptAddon('header')
+            . $this->clipText($visibleCopyRule, 260)
+            . $this->clipText($skillContract, 280)
+            . $this->clipText($claudeDesignSkill, 320)
+            . $this->clipText($themeContract, 420)
+            . $this->buildSharedVisualRulesPromptAddon('header')
+            . $this->clipText($buildPlanPromptAddon, 780)
+            . ($sharedRefinement !== '' ? "Latest user refinement for this header: {$sharedRefinement}\n" : '')
+            . $this->buildSharedComponentJsonSafetyRulesEn('header');
 
         return $langRule
             . $stage3LocaleContract
@@ -5538,7 +6159,8 @@ class AiSitePageComponentGenerationService
             . "6. Style should be inspired by the reference theme, but do not mention the theme name in visible copy.\n"
             . "7. CSS EFFECTS REQUIRED: the header must have visible depth -subtle shadow on the nav bar, hover underline animation on nav links, transition on CTA with shadow lift. Every interactive element (nav-link, CTA, logo, toggle) must have a non-zero hover/focus style.\n"
             . "8. The framework already provides fields/config/nav/CTA. Set extra_fields, php_variables, html_extra, and js_content to empty strings unless explicitly required.\n"
-            . "9. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars.\n"
+            . "9. CSS budget rule (hard requirement): keep css_extra compact and reusable. Use at most 6 selector blocks, prefer grouped selectors, define one shell surface, one nav/link pattern, one CTA pattern, and one mobile state. Do not restyle every child with separate selectors. Keep css_extra under 1400 chars.\n"
+            . "10. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1400 chars.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -5555,16 +6177,34 @@ class AiSitePageComponentGenerationService
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'footer');
-        $buildPlanPromptAddon = $this->buildBuildPlanTaskPromptAddon(
-            $this->resolveSharedBuildPlanTask($scope, 'footer'),
-            'footer',
-            $scope
-        );
+        $buildPlanTask = $this->resolveSharedBuildPlanTask($scope, 'footer');
+        $buildPlanPromptAddon = $this->buildSharedBuildPlanTaskPromptAddon($buildPlanTask, 'footer', $scope);
         $themeContract = $this->buildThemeContractPromptAddon($scope);
-        $visualExcellence = $this->buildVisualExcellencePromptAddon('footer');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
         $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3', $scope);
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
+
+        return $langRule
+            . $this->clipText($stage3LocaleContract, 260)
+            . "You are generating one PageBuilder website footer component.\n"
+            . "Site name: {$siteDisplayName}\n"
+            . "Visitor-facing brand summary: {$siteSummary}\n"
+            . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . "Footer link data: " . $this->jsonEncodeForPrompt([
+                'column1' => $footerConfig['links.column1_items'] ?? '',
+                'column2' => $footerConfig['links.column2_items'] ?? '',
+                'column3' => $footerConfig['links.column3_items'] ?? '',
+            ], 360) . "\n"
+            . $this->buildSharedOutputRulesPromptAddon('footer')
+            . $this->clipText($visibleCopyRule, 1100)
+            . "Footer source lock: footer_extra_text must be derived from this site's approved brief, stage-1 shared context, footer link data, or customer-facing brand summary. If no source-specific footer sentence is available, leave footer_extra_text empty rather than inventing generic support/download/game/app copy.\n"
+            . $this->clipText($skillContract, 280)
+            . $this->clipText($claudeDesignSkill, 320)
+            . $this->clipText($themeContract, 420)
+            . $this->buildSharedVisualRulesPromptAddon('footer')
+            . $this->clipText($buildPlanPromptAddon, 780)
+            . ($sharedRefinement !== '' ? "Latest user refinement for this footer: {$sharedRefinement}\n" : '')
+            . $this->buildSharedComponentJsonSafetyRulesEn('footer');
 
         return $langRule
             . $stage3LocaleContract
@@ -5596,7 +6236,8 @@ class AiSitePageComponentGenerationService
             . "9. Footer language contract: translate/rewrite every group heading, link label, tagline, support/legal sentence, and copyright phrase into source_of_truth_locale. Do not output English boilerplate such as Featured Pages, Policy Info, All Pages, A curated destination, or All rights reserved unless source_of_truth_locale is English.\n"
             . "10. Style should follow the reference theme direction without naming the theme in visible text.\n"
             . "11. The framework already provides brand/link/social/copyright fields. Set extra_fields, php_variables, and js_content to empty strings unless explicitly required.\n"
-            . "12. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars and footer_extra_text as one short visitor-facing sentence.\n"
+            . "12. CSS budget rule (hard requirement): keep css_extra compact and reusable. Use at most 7 selector blocks, prefer grouped selectors, one outer shell, one heading/link column pattern, one support/legal text pattern, one icon/link hover pattern, and one mobile stack rule. Avoid one-selector-per-node CSS. Keep css_extra under 1400 chars.\n"
+            . "13. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1400 chars and footer_extra_text as one short visitor-facing sentence.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -5662,25 +6303,49 @@ class AiSitePageComponentGenerationService
         );
 
         return $langRule
+            . $this->clipText($stage3LocaleContract, 520) . "\n"
+            . "Stage-2 prompt assembly order: base_output_contract -> confirmed_theme -> frozen_task_context -> current_asset_context -> copy_policy -> skill_guidance -> design_quality -> latest_refinement.\n"
+            . "You are generating exactly one PageBuilder content component for the current task.\n"
+            . "Page type: {$pageLabel} ({$pageType})\n"
+            . "Section: {$sectionName}; role={$sectionKey}; structure={$sectionTemplate}\n"
+            . ($sectionTemplate === 'hero' ? "Hero default: real 1920x750-style editable <img> cover layer, scrim, text-safe panel, and no CSS-background-only replacement.\n" : '')
+            . "Visitor-facing brand summary: {$siteSummary}\n"
+            . ($brief !== '' ? "Customer brief: {$brief}\n" : '')
+            . "Page guidance: {$pageInstruction}\n"
+            . "Suggested section config: {$sectionConfig}\n"
+            . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . "CTX_BASE_OUTPUT_CONTRACT:\n" . $this->buildSectionOutputRulesPromptAddon()
+            . "CTX_CONFIRMED_THEME:\n" . $this->clipText($themeContract, 1500) . "\n"
+            . "CTX_FROZEN_TASK:\n" . $buildPlanPromptAddon
+            . "CTX_CURRENT_ASSET:\n" . $sectionVisualContractPrompt
+            . "CTX_COPY_POLICY:\n" . $this->clipText($visibleCopyRule, 720) . "\n"
+            . "CTX_SKILL_GUIDANCE:\n" . $this->clipText($skillContract, 520) . "\n" . $this->clipText($claudeDesignSkill, 820) . "\n"
+            . "CTX_DESIGN_QUALITY:\n" . $this->clipText($visualExcellence, 720) . "\n" . $this->clipText($premiumDesignContract, 900) . "\n"
+            . ($refinement !== '' ? "Latest refine instruction for this section: {$refinement}\n" : '')
+            . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
+            . "Final execution rule: follow the current task contract and output schema over all generic guidance. If any optional visual flourish risks invalid HTML/CSS, omit that flourish and return a simpler valid premium block.\n";
+
+        return $langRule
             . $stage3LocaleContract
             . "You are generating a PageBuilder content component.\n"
             . "Page type: " . $pageLabel . " ({$pageType})\n"
             . "Section name: {$sectionName}\n"
             . "Section role: {$sectionKey}\n"
             . ($sectionTemplate === 'hero' ? "BANNER MODULE DEFAULT RULE: this is a hero/banner section. Unless the user's latest block-adjustment instruction or approved design plan explicitly asks for a different hero composition, use a FULL-WIDTH 1920x750-style banner (container_width=full) with a background IMAGE covering the entire section. Set bg_type to 'image' and use the planned hero_image URL when available. Add a dark gradient overlay over the entire image AND put heading/body/CTA copy inside a visible text-safe panel/scrim zone with its own readable foreground color. Content overlay is placed inside a centered max-width content container above the image. Body copy must never be dark text directly on a busy photo. If the user explicitly requests a different hero layout, follow that layout but keep a premium generated image, strong hierarchy, and readable overlay.\n" : '')
+            . ($sectionTemplate === 'hero' ? "HERO IMAGE EXECUTION RULE (hard requirement): if a verified hero image slot/final_url is supplied, html_content must contain exactly one real <img> for that hero visual, and that same <img> must simultaneously carry the exact final_url in src, data-pb-ai-image-role='generated-asset', and the exact data-pb-ai-asset-slot value. Do not move the hero image into CSS background-image, do not create a second decorative img, and do not rewrite the URL string.\n" : '')
             . "Suggested structure: {$sectionTemplate}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . ($brief !== '' ? "Customer brief (HARD CONTRACT -all content must fit this business): {$brief}\n" : '')
             . "Page guidance: {$pageInstruction}\n"
             . "Suggested section config: {$sectionConfig}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $sectionVisualContractPrompt
             . $visibleCopyRule
             . $skillContract
             . $claudeDesignSkill
             . $themeContract
             . $visualExcellence
             . $premiumDesignContract
-            . $sectionVisualContractPrompt
             . $buildPlanPromptAddon
             . ($refinement !== '' ? "Latest refine instruction for this section: {$refinement}\n" : '')
             . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
@@ -5688,46 +6353,167 @@ class AiSitePageComponentGenerationService
             . "1. Output only one content component, never a full page document.\n"
             . "2. Write finished visitor-facing copy. Do not expose internal prompts, briefs, requirement wording, or phrases such as 'page focus' and 'site summary'.\n"
             . "2a. Do not output blueprint meta-copy or instruction-shaped headings such as page-level highlight labels, design-task sentences, or layout instructions about card hierarchy, trust proof, or primary actions. Rewrite them into concrete business copy for this customer and locale.\n"
-            . "2b. Card/list titles must be concrete visitor labels with descriptions. CTA labels belong on actual buttons/links, not as repeated ordinary card headings. Do not repeat the same title/description pair inside one component.\n"
+            . "2b. Card/list titles must be concrete visitor labels with descriptions. CTA labels belong in the CTA div, not as repeated ordinary card headings. Do not repeat the same title/description pair inside one component.\n"
             . "2c. Before returning, compare every heading, card title, badge, CTA label, alt/title/aria text, and paragraph against task labels, component labels, section labels, slot labels, and build-plan labels. Exact copies, title-cased copies, or lightly reworded instruction sentences starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are invalid visible copy; rewrite them into final customer-facing website copy.\n"
             . "2d. Internal identifier ban (hard requirement): never render internal identifiers, queue/build labels, section codes, page_type values, slot ids, asset paths, or planning keys as visible copy. Strings such as home_page, about_page, page:..., shared:..., task_key, section_code, plan_locale, runtime_context, content/... , app/code/... , and var/... may exist only in system metadata/attributes, never in headings, paragraphs, badges, nav labels, CTA text, or alt/title/aria copy.\n"
             . "2e. Spacing proofread gate (hard requirement): visible copy must read like final published prose, not token glue. Never concatenate a number directly with a word or label in headings, metrics, badges, steps, cards, or CTA copy in any language. Write `24 Hours`, `3 Steps`, `10 Years`, `4.9 Rating`, `7 Day Support`, `10 млн`, `4.8 звезды`, and `24 часа`, not `24Hours`, `3Steps`, `10Years`, `4.9Rating`, `7DaySupport`, `10млн`, `4.8звезды`, or `24часа`.\n"
+            . "2f. Contract leak self-check (hard requirement): visible copy must not contain content_contract, design_contract, implementation_contract, data_contract, visual_contract, page_goal, block_goal, why_this_block, planning_reason, selected_skill_codes, skill_snapshots, build_blueprint, build_tasks, qa_report_contract, or any sentence explaining why this block exists.\n"
             . "3. The section must be meaningfully different for its page type and role; home, about, contact, policy, and blog sections should not read the same.\n"
             . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
-            . "5. CSS EFFECTS REQUIRED ON ALL BLOCKS (DO NOT SKIP): every block -title, subtitle, description, card, image, CTA, list, divider, icon -MUST have at least two visible CSS effects from: gradient text on headings, card hover lift with shadow, pill/badge style subtitles, decorative underlines on titles with gradient, border or background transitions, backdrop-filter glass effect, CSS-only decorations/pseudo-elements, or fade-in animation. Flat unstyled blocks are invalid unless the user EXPLICITLY indicated 'no effects', 'minimal', or 'clean' in the refine instruction.\n"
-            . "6. NO SOLID/FLAT BACKGROUNDS: every section must have a subtle gradient, radial light bloom, noise texture, or patterned overlay on its background. A plain hex color (#fff, #f8f9fa, etc.) as the sole background is forbidden. Use at minimum a two-stop gradient or a radial glow behind the content area.\n"
-            . "7. CONTRAST GATE (HARD REQUIREMENT): never pair a light background with light text or a dark background with dark text. Every text/button/link must have WCAG AA minimum contrast against its immediate background. Text over photos/detailed textures requires a real local contrast layer: a scrim, gradient veil, glass panel, or solid translucent text plate behind the text itself. A section-wide overlay alone is not enough when the image is visually busy.\n"
-            . "8. TYPOGRAPHY STANDARDS: set letter-spacing on uppercase text (0.06-0.12em), use clamp() for heading sizes, set generous line-height (1.6-1.85 for body, 1.1-1.3 for headings), and use a max-width on paragraph text (55-70ch) to prevent overly long lines.\n"
+            . "5. CSS EFFECTS REQUIRED ON ALL BLOCKS (DO NOT SKIP): every block title/subtitle/card/media/CTA needs visible polish, but keep it reliable: use simple layered surfaces, card shadow, border, pill subtitle, decorative title underline, hover color/shadow change, and focus outline. Do not use complex animation stacks, nested functions, or ornate CSS that risks syntax failure.\n"
+            . "6. NO SOLID/FLAT BACKGROUNDS: every section must have a subtle surface treatment such as two-tone nested surfaces, inset card field, border texture, or layered panels. For Stage-2 JSON content blocks, prefer hex backgrounds and shadows; do not use gradient functions if they risk invalid CSS.\n"
+            . "7. CONTRAST GATE (HARD REQUIREMENT): never pair a light background with light text or a dark background with dark text. Every text/CTA/form label must have WCAG AA minimum contrast against its immediate background. Text over photos/detailed textures requires a real local contrast layer: a scrim, gradient veil, glass panel, or solid translucent text plate behind the text itself. A section-wide overlay alone is not enough when the image is visually busy.\n"
+            . "8. TYPOGRAPHY STANDARDS: set letter-spacing on uppercase text (0.06-0.12em), use fixed safe heading sizes such as 34px/42px/52px instead of clamp(), set generous line-height (1.6-1.85 for body, 1.1-1.3 for headings), and use a max-width on paragraph text (55-70ch) to prevent overly long lines.\n"
             . "9. NO INFINITE IMAGE SCALING: do not add transform:scale() to any image or media element on hover or in animation. Use box-shadow, translateY, brightness filter, or border transitions for hover effects instead. Scale transforms on images cause cropping/overflow issues.\n"
-            . "10. RESPONSIVE IMAGES REQUIRED: every img tag MUST have max-width:100% and height:auto via inline style or CSS class. Images inside flex/grid containers must not overflow on small screens. Use object-fit:cover + object-position:center for decorative/bg images. Add mobile-specific media query adjustments for image border-radius and shadow at 768px breakpoint.\n"
+            . "10. RESPONSIVE IMAGES REQUIRED: every img tag MUST have max-width:100% and height:auto via inline style or CSS class. Images inside flex/grid containers must not overflow on small screens. Use object-fit:cover + object-position:center for decorative/bg images. Prefer fluid base CSS instead of media queries for content-block JSON.\n"
             . "10b. REQUIRED IMAGE SLOT BINDING: if a required generated image slot/final_url is supplied, copy the concrete editable image template from Block visual contract or verified_assets into html_content. The same <img> must contain the supplied final_url, data-pb-ai-image-role='generated-asset', and the supplied data-pb-ai-asset-slot. Use CSS to make it cover a banner/media panel; do not satisfy a required slot with CSS background-image only. Symbolic URL or slot placeholders are invalid output.\n"
             . "10c. HERO/BANNER COVER-LAYER CONTRACT: for hero/banner generated images, the <img> class and CSS selector must match exactly, and that selector must set position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; with overlay/content above it. Include both a named overlay/scrim/veil layer and a named text/content panel class; the panel CSS must set readable foreground color, background/scrim, padding, border-radius, and max-width. If the image is inside html_content, style it with `#componentId .your-image-class`, never `#componentId.your-image-class`.\n"
             . "10a. MOBILE READABILITY REQUIRED: at 390px width, grids/flex rows must stack to one column, children need min-width:0, long headings must not be constrained to tiny ch-width columns, and image/media panels must not overlap or cover text/CTA content.\n"
+            . "10d. RESPONSIVE CONTAINMENT CONTRACT: every component with media, form, or CTA panels must have separate component-prefixed classes for root shell, inner container, copy panel, media panel, action/form panel, and decorative layers. CSS must style each part. Desktop split layouts must use flex-wrap and flex item sizing, not fixed overflowing widths. Panels, inputs, CTA divs, and media frames must be width:100%; max-width:100%; box-sizing:border-box so they stay inside the component at tablet/mobile widths.\n"
+            . "10e. NO CROPPED SIDE-PANEL FAILURE: never position a form/card/sidebar with right/left offsets, negative margins, translateX, absolute positioning, or fixed width that can push it outside the visible component. Decorative arcs/blobs may be absolute, but must be pointer-events:none, z-index below content, and clipped inside the root without covering text, image, form, or CTA. If a two-column image + form composition cannot fit at tablet/mobile width, stack the form below/above the image instead of shrinking or cropping it.\n"
             . "11. Do not repeat the framework title/description in the body as empty h1/h2/p tags. The body must add useful content such as cards, trust points, game tiles, proof points, or CTA support.\n"
             . "11a. INFORMATION DENSITY GATE: do not create oversized empty cards, giant bordered boxes, or tall sections with only a number, one label, or one CTA. Every large card/panel must contain a concrete title, supporting sentence, and at least one proof/detail/action element. Metric cards need context, source meaning, or a short trust explanation; CTA bands need headline, supporting copy, and at least one secondary trust cue.\n"
-            . "11b. CTA COMPOSITION GATE: a button alone floating in the middle/bottom of a dark or blank section is invalid. Conversion blocks must have visible message hierarchy: headline, benefit copy, CTA, and trust/support note in a compact readable composition.\n"
+            . "11b. CTA COMPOSITION GATE: a CTA alone floating in the middle/bottom of a dark or blank section is invalid. Conversion blocks must have visible message hierarchy: headline, benefit copy, CTA, and trust/support note in a compact readable composition.\n"
             . "11c. SPATIAL RHYTHM GATE: avoid excessive min-height/padding that creates empty voids. Use compact, content-led spacing; if a section is tall because of imagery, the image, overlay, text panel, and CTA must all contribute to the composition.\n"
             . "12. Preserve page-level color layering: this block must have its own surface/contrast role and must not make the whole page feel like one solid theme color.\n"
-            . "13. Implement like a UI/interaction designer handoff: section-specific visual hierarchy, spatial rhythm, motion restraint, hover/focus states, and mobile stacking must be visible in html_content/css_extra.\n"
-            . "14. Accessibility contrast gate: before returning, inspect every visible text/link/button/chip against its immediate background; rewrite CSS if any foreground/background pair is low-contrast.\n"
+            . "13. Implement like a UI/interaction designer handoff, but use a small stable component skeleton: one root section, one inner div, one copy div, optional media div/img, optional cards div with up to 3 cards, and optional CTA/form div. Keep nesting depth <=4 and total non-void HTML tags <=24. Prefer fewer tags with stronger typography/spacing over many tiny wrappers.\n"
+            . "13a. HTML tag discipline: prefer section, div, h2, p, img, form, label, input, textarea, small, strong, span, and br. Avoid h3, links, buttons, tables, custom elements, details/summary, style/script tags, and deeply nested inline wrappers unless the task explicitly needs them.\n"
+            . "14. Accessibility contrast gate: before returning, inspect every visible text/CTA/chip against its immediate background; rewrite CSS if any foreground/background pair is low-contrast.\n"
             . "15. HTML closure gate: html_content must be a balanced fragment with all non-void tags closed; invalid nesting or stray closing tags are build-breaking failures.\n"
             . "15a. JSON/HTML quote gate: use single quotes for HTML attributes in html_content to avoid unescaped JSON quotes. Required generated-image slots must copy the supplied exact editable image template with concrete src and slot values, never a symbolic example.\n"
             . "15b. No symbol-only visitor elements: never output standalone arrows, stars, card-suit marks, plus signs, separators, or icon-only text nodes as visible content. Decorative symbols must be CSS-only pseudo-elements/backgrounds and must not appear as visitor copy.\n"
             . "15c. HTML fragment self-check: every `<` in html_content must begin a real HTML tag with an element name or be escaped as visitor text; every opened quote and non-void tag must close before JSON is returned.\n"
             . "15d. HTML/CSS contract self-check: do not emit `id='componentId'` or `id=\"componentId\"` inside html_content; use one component-prefixed class wrapper. No `<tag='...'>`, no concatenated closing tags such as `</pa>`/`</pdiv>`/`</divsection>`, no attribute glued after a quote, no class token outside this component prefix, no empty CSS declarations, no malformed CSS property names, no single-hyphen CSS properties such as `-index`, no merged declarations caused by missing semicolons, and no unbalanced CSS parentheses.\n"
             . "15e. JSON transport self-check: return a single complete JSON object. If the response is near the token budget, shorten nonessential CSS/HTML detail before output instead of truncating or appending raw CSS after the closing brace.\n"
-            . "15f. Stable FAQ/accordion markup: avoid fragile `<details>`/`<summary>` disclosure tags unless the user explicitly requires native disclosure behavior. Use div/h3/p/a/img groups with scoped CSS for FAQ, testimonial, trust, and support sections; never nest span/strong tags inside headings unless they close before the heading closes.\n"
-            . "15g. Link styling gate: do not output browser-default links. If an <a> is necessary, it must have a component-prefixed class and css_extra/css_responsive must style its normal, hover, and focus states. If a block can work without a link, omit the <a> entirely.\n"
-            . "15h. CSS selector integrity gate: every class used in html_content that needs styling must be matched exactly by css_extra/css_responsive selectors, and every CTA/link selector must match the HTML class byte-for-byte. Before returning, self-check for misspelled CSS properties such as text-decorationone, missing punctuation in rgba(), and mismatched class names; invalid CSS or selector drift is forbidden.\n"
+            . "15f. Stable FAQ/accordion markup: avoid fragile `<details>`/`<summary>` disclosure tags unless the user explicitly requires native disclosure behavior. Use div/h3/p/a/img groups with scoped CSS for FAQ, testimonial, trust, and support sections. If using span/strong inside headings, close the inline tag before closing the heading.\n"
+            . "15g. Content CTA gate: for generated content blocks, do not use `<a>` or `<button>` unless the task supplies a real URL/form action. Use a component-prefixed div such as `<div class='pb-c-cta'>` for CTA-looking controls. Never wrap cards, divs, grids, panels, or block content inside `<a>` or `<button>`.\n"
+            . "15h. CSS selector integrity gate: every class used in html_content that needs styling must be matched exactly by css_extra/css_responsive selectors, and every CTA/link selector must match the HTML class byte-for-byte. Before returning, self-check for misspelled CSS properties, extra braces, CSS parentheses, and mismatched class names; invalid CSS or selector drift is forbidden.\n"
+            . "15i. Required image final check: if Block visual contract or verified_assets provides a copyable <img> template, paste that <img> into html_content before returning. The final html_content must include the exact final_url string and exact data-pb-ai-asset-slot string inside the same <img> tag. If it does not, rewrite the HTML before returning.\n"
+            . "15j. CSS syntax final check: avoid CSS functions that create parenthesis errors: color-mix(), calc(), rgba(), linear-gradient(), radial-gradient(), filter(), transform(), repeat(), and minmax(). Prefer plain hex colors, borders, box-shadow, spacing, and flex. css_extra/css_responsive should contain no parentheses.\n"
+            . "15k. CSS parseability gate: never output a bare percent sign. Percent values must always have a number before %, such as 100%, 50%, or 0%. Invalid examples: width:%; left:%; transform:translateX(%); background-position:% center. Do not output comments, pseudo-elements, markdown fences, or raw declarations outside selector braces.\n"
+            . "15l. Attribute safety gate: HTML attributes are limited to class, href, type, name, placeholder, aria-label, src, alt, loading, data-pb-ai-image-role, and data-pb-ai-asset-slot unless the verified image template provides another required data attribute. Put exactly one space between attributes. Never output `<divclass=...>`, `<div class='x'href='...'>`, `< class=...>`, or `<div >` with malformed spacing.\n"
+            . "15m. Template boundary gate: html_content is visitor markup, not a template file. Do not paste unfinished template fragments, unclosed PHP snippets, framework variable placeholders, or literal planning keys into visible output. If dynamic data is required, express it through the allowed JSON fields and keep the visible HTML valid.\n"
             . "16. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
             . "17. Return valid JSON only. No markdown. No explanation. Keep html_content under 2400 chars and css_extra under 2600 chars.\n"
-            . "18. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
-            . "19. If real blog data variables are provided, prefer them over invented articles or categories.\n"
+            . "18. CSS budget rule (hard requirement): deliver premium visuals with a small selector set. Use one root wrapper, 1-2 layout selectors, 1-2 card/media selectors, and 1-2 CTA/text selectors. Prefer grouped selectors and inherited typography instead of many one-off class rules. Keep css_extra under 1300 chars and css_responsive under 450 chars.\n"
+            . "19. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
+            . "20. If real blog data variables are provided, prefer them over invented articles or categories.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
 
     /**
      * 鑻辨枃纭害鏉燂細闄嶄綆鍚堝苟杩?.phtml 鍚庣殑 PHP 璇硶閿欒锛堝 unexpected "=>"锛?     */
+    private function buildSectionOutputRulesPromptAddon(): string
+    {
+        return "Stage-2 component output contract V2 (this overrides any broader visual advice above):\n"
+            . "1. Single responsibility: generate only the current block. Do not reinterpret the whole website, do not generate neighboring blocks, and do not print planning/contract/schema text.\n"
+            . "2. Return exactly one JSON object. First character `{`, last character `}`. No markdown, no prose, no second object, no raw CSS/HTML outside JSON.\n"
+            . "3. Required string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. Set extra_fields, php_variables, and js_content to empty strings.\n"
+            . "4. html_content structure is fixed. Use only one of the component-specific safe skeletons supplied below. Do not invent a third structure, do not reorder closing tags, and do not add decorative wrapper tags.\n"
+            . "4a. Minimal safe skeleton shape: one root section, one inner div, one copy div, one h2 title, one p text, and one action div with one CTA div. Do not invent a class prefix from this sentence; use only the exact component prefix provided in the component-specific instruction below.\n"
+            . "4c. Feature/showcase/reward/trust/FAQ/newsletter/CTA blocks must not expand into multiple cards or accordions. Keep them in the minimal safe skeleton and express multiple facts inside one finished paragraph.\n"
+            . "4d. If the component-specific instruction says FEATURE_SAFE_MODE, that local instruction overrides broad visual recipes. With a verified image, use MEDIA_SAFE_SKELETON and the supplied image tag. Without a verified image, use the provided four-selector FEATURE_SAFE_CSS only. Do not generate card grids, carousel panels, hover states, or extra selectors for that block.\n"
+            . "4b. Nesting rule: use exactly one h2 for the block title and do not use h3. Card subtitles should be `<div>` or `<p>` text. h2 contains plain text only. p/small contain plain text only. If strong/span is used, it must have no attributes and must close immediately around short text. Prefer sibling div/p labels over nested inline tags. Never put div, section, form, card, image, list, link, button, or another heading inside h2/p.\n"
+            . "5. Allowed HTML shape: section/div/h2/p/span/strong/small/form/label/input/textarea/img/br. Use div groups for cards/steps/CTA instead of ul/ol/li/a/button. Do not use `<a>` or `<button>` in content blocks unless a real URL/form action is explicitly supplied. Every tag name must be present, every attribute must be separated by one space, every quote must close, and every non-void tag must close in reverse order. Never output invented close tags such as </h>, </pa>, </pdiv>, </buttondiv>, or </divsection>.\n"
+            . "6. Attribute rule: use single quotes inside HTML attributes and one real space before each next attribute. Valid shapes: `<div class='pb-c-card'>`, `<div class='pb-c-cta'>Text</div>`. For images, copy the verified img template exactly when one is provided; never create an img example yourself. Invalid shapes: `< class='pb-c-card'>`, `<div class='pb-c-card>`, `<strong class='pb-c-card'>`, `<span class='pb-c-chip'>`, `<button class='pb-c-cta'>`.\n"
+            . "7. Class rule: every custom class starts with the exact component prefix given below plus an element suffix. In this workflow that means `pb-c-root`, `pb-c-inner`, `pb-c-card`, etc. Never use `.pb` or `pb` as a selector/class by itself, never start a class with `-`, `pb` without a suffix, `content-`, or a generic class like card/btn/item/title.\n"
+            . "8. css_extra is short base CSS only: complete selector blocks scoped under `#componentId`, no raw declarations outside braces, no empty values, no comments. Prefer hex colors, padding, border-radius, box-shadow, display:flex, flex-wrap, gap, max-width, width, min-width, and box-sizing. Do not use CSS functions, gradients, transform, or pseudo-elements.\n"
+            . "9. css_responsive must be an empty string for content blocks. Make the base css_extra responsive by using flex-wrap, flex:1 1 280px, min-width:0, width:100%, max-width:100%, and box-sizing:border-box. Do not write @media, repeat(), minmax(), calc(), clamp(), rgba(), or linear-gradient().\n"
+            . "10. CSS syntax rule: every declaration is complete `property:value;`. Use only stable property names such as position, inset, display, flex, flex-wrap, gap, align-items, padding, margin, width, max-width, min-width, height, color, background, border, border-radius, box-shadow, overflow, object-fit, object-position, box-sizing, text-decoration, font-size, line-height, z-index, opacity, cursor, and outline. Keep braces balanced and do not output parentheses in CSS.\n"
+            . "11. Responsive layout rule: use normal grid/flex flow. At narrow width, panels stack; children use min-width:0, max-width:100%, box-sizing:border-box. Never push forms/cards outside the viewport with negative margins, translateX, fixed side offsets, or absolute side panels.\n"
+            . "12. Image slot rule: if a verified image template/final_url is supplied, copy that concrete `<img>` into html_content and keep src, data-pb-ai-image-role, and data-pb-ai-asset-slot exactly. Do not invent image URLs. If no verified image exists, use CSS surfaces only.\n"
+            . "13. Hero/media readability rule: if text sits over media, the html_content skeleton must include a scrim div and a text-panel div using the exact component prefix provided below, and css_extra must include matching scoped scrim/text-panel selectors. If you cannot include those two classes correctly, do not place text over media; use a normal side-by-side layout instead.\n"
+            . "14. Content rule: visible copy must be target-locale visitor copy derived from this block's page_goal/block_goal/content_plan. Do not render why_this_block, page_goal, block_goal, data_contract, visual_contract, runtime_context, selected_skill_codes, or template fragments. Visible copy must not contain double quote characters because they often break JSON strings.\n"
+            . "14a. CSS brace rule: css_extra must contain only flat `#componentId .pb-c-name{property:value;}` blocks. No `}}`, no `{{`, no nested blocks, no comma selectors, no @media, no comments, and no braces inside CSS values. Count opening and closing braces before returning; counts must match exactly.\n"
+            . "15. Size budget: html_content <= 1000 chars, css_extra <= 800 chars, css_responsive <= 240 chars. If close to budget, simplify HTML/CSS; never truncate JSON.\n"
+            . "16. Final self-check before output: JSON parses; HTML tags/quotes are balanced; CSS braces/parentheses are balanced; CSS selectors match HTML classes exactly; no raw text after the JSON object.\n";
+    }
+
+    private function buildSharedOutputRulesPromptAddon(string $region): string
+    {
+        $fields = $region === 'footer'
+            ? 'extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content'
+            : 'extra_fields, php_variables, css_extra, html_extra, js_content';
+        $minimalRule = $region === 'footer'
+            ? "- Footer link columns, logo, and visual shell are already provided by framework config. Return html_extra_column and html_extra as empty strings. Put one short target-locale trust/support sentence in footer_extra_text.\n"
+            : "- Header navigation, logo, CTA, hover/focus states, and mobile behavior are already provided by framework config. Return html_extra and css_extra as empty strings. Do not rebuild navigation, logo, links, images, CSS, or badges.\n";
+        $minimalExample = $region === 'footer'
+            ? '{"extra_fields":"","php_variables":"","css_extra":"","html_extra_column":"","html_extra":"","footer_extra_text":"","js_content":""}'
+            : '{"extra_fields":"","php_variables":"","css_extra":"","html_extra":"","js_content":""}';
+
+        return "Shared {$region} output contract V3:\n"
+            . "1. Return exactly one {$region} JSON object only. No markdown, no prose, no code fence, no full page document, no raw CSS/HTML after JSON.\n"
+            . "2. Required string keys only: {$fields}. Every value must be a JSON string. Set extra_fields, php_variables, css_extra, and js_content to empty strings.\n"
+            . "3. Visible copy must be final customer-facing text in the target locale. Never print prompts, task labels, contract keys, page_type, section_code, runtime_context, or why-this-block explanations.\n"
+            . $minimalRule
+            . "4. Do not output image tags in shared components. Logo/image rendering is handled by framework config.\n"
+            . "5. css_extra must be an empty string for shared components unless the user explicitly asks to restyle only the shared header/footer. No raw CSS, no braces, no @media, no @keyframes.\n"
+            . "6. HTML fragments only: no PHP, no style/script tags, no framework wrappers, no malformed attributes, no orphan closing tags. Footer html_extra_column/html_extra must stay empty.\n"
+            . "7. Keep the shared output tiny. Shared components must not block page section generation with long CSS or duplicated navigation/link markup.\n"
+            . "8. Schema-only JSON shape: {$minimalExample}\n"
+            . "9. Do not copy example text or old examples from memory. For footer only, fill footer_extra_text with one source-derived target-locale sentence when the source context supports it; otherwise keep it empty. Never invent app-download, game, casino, reward, APK, install, or generic support-site text for unrelated briefs.\n";
+    }
+
+    private function buildSharedVisualRulesPromptAddon(string $region): string
+    {
+        return "Shared {$region} visual rules:\n"
+            . "- Keep the shared component premium but simple: one shell surface, one grouped content pattern, one interaction pattern, and one mobile-safe spacing rule.\n"
+            . "- Use the confirmed palette/theme for colors, contrast, shadows, and subtle gradients. Do not create page-section layouts, cards grids, or image-heavy compositions here.\n"
+            . "- CSS reliability wins: no @keyframes, no nested @media, no color-mix(), no clip-path/mask/filter chains, no complex nested gradients, and no long selector lists.\n";
+    }
+
+    private function buildSharedComponentJsonSafetyRulesEn(string $region): string
+    {
+        $fields = $region === 'footer'
+            ? 'extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content'
+            : 'extra_fields, php_variables, css_extra, html_extra, js_content';
+
+        return "Shared component JSON safety:\n"
+            . "- Output exactly one JSON object using only these string keys: {$fields}.\n"
+            . "- Do not use html_content or css_responsive for shared header/footer components.\n"
+            . "- extra_fields, php_variables, and js_content must be empty strings.\n"
+            . "- css_extra is CSS only, scoped under #componentId, with balanced braces and semicolon-terminated declarations.\n"
+            . "- For shared header/footer, css_extra must contain only simple selector blocks shaped exactly like `#componentId .pb-name{property:value;property:value;}`. Do not use @media, nested blocks, comments, or raw declarations outside braces.\n"
+            . "- CSS self-check before output: count `{` and `}` in css_extra; they must be equal, every `{` must have one later `}`, and the final CSS character must be `}` when css_extra is not empty.\n"
+            . "- Keep css_extra short: header max 3 selector blocks, footer max 3 selector blocks. Put mobile safety into base flex-wrap/max-width rules instead of @media.\n"
+            . "- html_extra/html_extra_column are static HTML fragments only: no PHP, no <style>, no <script>, no full page document, no framework wrapper ids.\n"
+            . "- Use single quotes for HTML attributes inside JSON strings. Escape only JSON double quotes and line breaks.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function buildSharedBuildPlanTaskPromptAddon(array $buildPlanTask, string $contextLabel, array $scope = []): string
+    {
+        if ($buildPlanTask === []) {
+            throw new \RuntimeException('Build prompt contract failed: missing stage-2 build-plan task context for ' . $contextLabel . '; scope-level prompt fallback is forbidden.');
+        }
+        $runtimeContext = \is_array($buildPlanTask['runtime_context'] ?? null) ? $buildPlanTask['runtime_context'] : [];
+        $themeContext = \is_array($runtimeContext['theme_context_snapshot'] ?? null) ? $runtimeContext['theme_context_snapshot'] : [];
+        $sharedPromptContext = \is_array($runtimeContext['shared_prompt_context'] ?? null) ? $runtimeContext['shared_prompt_context'] : [];
+        if ($themeContext === [] || $sharedPromptContext === []) {
+            throw new \RuntimeException('Build prompt contract failed: task runtime_context missing stage-2 theme/shared context for ' . $contextLabel . '.');
+        }
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $taskScript = \is_array($buildPlanTask['task_script'] ?? null) ? $buildPlanTask['task_script'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $siteContext = \is_array($runtimeContext['site_context'] ?? null) ? $runtimeContext['site_context'] : [];
+        $assetContext = \is_array($runtimeContext['asset_context'] ?? null) ? $runtimeContext['asset_context'] : [];
+        $contentLocale = \trim((string)($runtimeContext['content_locale'] ?? $this->resolveScopePrimaryLocale($scope)));
+
+        return "Shared build-plan task context for {$contextLabel}:\n"
+            . "- task_key: " . (string)($buildPlanTask['task_key'] ?? '') . "\n"
+            . "- block_goal: " . (string)($planContext['block_goal'] ?? $blockTask['task_goal'] ?? '') . "\n"
+            . "- story_goal: " . (string)($taskScript['story_goal'] ?? '') . "\n"
+            . "- content_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . "\n"
+            . "- site_context: " . $this->jsonEncodeForPrompt($siteContext, 1200) . "\n"
+            . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 1200) . "\n"
+            . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 1000) . "\n"
+            . "- asset_context_snapshot: " . $this->jsonEncodeForPrompt($assetContext, 900) . "\n"
+            . "- shared execution rule: use this context only to create final shared header/footer visitor copy and styling. Do not print contract keys or planning sentences.\n";
+    }
+
     private function buildComponentJsonPhpSafetyRulesEn(): string
     {
         return "PHP / HTML / CSS / JSON safety (critical -invalid output breaks the site build):\n"
@@ -5747,14 +6533,14 @@ class AiSitePageComponentGenerationService
             . "- HTML scope discipline: html_content is already nested inside the framework root. Never output `id='componentId'`, `id=\"componentId\"`, or any inner wrapper id that pretends to be the framework root. Use class-only wrappers with the component prefix.\n"
             . "- HTML attribute discipline: never output malformed attributes such as `<span='...'>`, `<div='...'>`, `<a ... class='x'href='...'>`, or `<span='class-name'>`. Every attribute needs a name, equals sign, quoted value, and whitespace before the next attribute.\n"
             . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. These fields own the component's visual quality and responsive behavior; the renderer will not inject compatibility CSS/JS or beautify weak output after generation.\n"
-            . "- Responsive CSS is mandatory for every non-trivial component: include scoped @media rules for 768px and/or 420px, stack grids/flex rows, set min-width:0 on children, keep media max-width:100%, and prevent overlap between images, copy, and CTAs.\n"
-            . "- Use scoped CSS for visual polish: layered backgrounds, textures, shape motifs, hover/focus states, responsive rhythm, and type scale. Every rule and @media block must have balanced { } braces and be short enough to fit completely.\n"
-            . "- CSS grammar discipline: no empty declarations (`content:;`), no malformed properties (`-index`), no bare percent values (`height:%`), no merged declarations (`position:relativez-index:1`), and no unbalanced function parentheses in gradients, color-mix(), rgba(), url(), or clamp().\n"
-            . "- CSS reliability mode: output simple complete CSS. Every declaration must be `property: value;`; put a semicolon before the next property. Avoid color-mix(), mask, clip-path, nested calc(), filter chains, and ornate function stacks. If a visual effect risks invalid CSS, choose simpler gradients, borders, shadows, spacing, and pseudo-elements.\n"
-            . "- Color contrast: never pair dark foreground text with dark backgrounds or light foreground text with light backgrounds; define readable text/link/button/focus states in CSS before returning.\n"
-            . "- Links: never leave a bare `<a>` without class. Every link must use a component-prefixed class and have explicit normal/hover/focus CSS. For FAQ/support copy, prefer plain text unless a real CTA is required.\n"
+            . "- Responsive CSS should be achieved in base css_extra with flex-wrap, flex item sizing, min-width:0, max-width:100%, and box-sizing:border-box. Prefer an empty css_responsive string over fragile @media braces. Do not write @media unless absolutely necessary; if used, keep it one complete block.\n"
+            . "- Use scoped CSS for visual polish: simple layered backgrounds, shape motifs, hover/focus states, responsive rhythm, and type scale. Every selector rule and @media block must have balanced { } braces and be short enough to fit completely.\n"
+            . "- CSS grammar discipline: no empty declarations (`content:;`), no malformed properties (`-index`), no bare percent values (`height:%`), no merged declarations (`position:relativez-index:1`), no extra `}`, and no function parentheses in generated CSS.\n"
+            . "- CSS reliability mode: output simple complete CSS. Every declaration must be `property: value;`; put a semicolon before the next property. Use the safe selector set from the component-specific contract. Avoid color-mix(), rgba(), linear-gradient(), mask, clip-path, calc(), filter chains, transform(), ornate function stacks, comments, pseudo-elements, @media, and background functions. If a visual effect risks invalid CSS, choose hex colors, borders, shadows, and spacing.\n"
+            . "- Color contrast: never pair dark foreground text with dark backgrounds or light foreground text with light backgrounds; define readable text/CTA/focus states in CSS before returning.\n"
+            . "- Content links: generated content blocks should not use `<a>` or `<button>` unless a real URL/form action is supplied. Use a component-prefixed div such as `<div class='pb-c-cta'>` for CTA-looking controls. Never wrap a card/div/grid/panel/section inside an `<a>` or `<button>`.\n"
             . "- Page hierarchy: do not make the section one flat theme-color slab. Use palette roles, surface elevation, dividers, texture, cards, or spacing to distinguish this block from adjacent blocks.\n"
-            . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use component-specific classes shaped like pb-{component-code}-{element}, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync. The html_content fragment is nested inside #componentId, so CSS must use descendant selectors such as `#componentId .pb-...`; do not write `#componentId.pb-...` unless the framework root itself has that class, which it will not.\n"
+            . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use only the exact component prefix supplied later, shaped like pb-c-element, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync. The html_content fragment is nested inside #componentId, so CSS must use descendant selectors such as `#componentId .pb-c-root`; do not write `#componentId.pb-c-root` unless the framework root itself has that class, which it will not.\n"
             . "- Images: never output broken image placeholders. If no verified asset URL is provided, create visual rhythm with CSS-only shapes/pseudo-elements inside html_content; do not use <svg>, data:image/svg+xml, empty src, example.com, placeholder services, stock-photo services, external CDN/stock URLs, or unverified .jpg/.png/.webp URLs.\n"
             . "- Decorations: never put standalone symbols such as arrows, suit marks, stars, bullets, plus signs, or divider glyphs in visitor-visible HTML. Render decoration with CSS borders, gradients, pseudo-elements, background layers, or box-shadow instead.\n"
             . "- External image ban: never use Unsplash, Pexels, Pixabay, Freepik, Shutterstock, Adobe Stock, source.unsplash.com, images.unsplash.com, picsum.photos, loremflickr.com, scheme-less URLs like ://... or //..., or any image URL that is not supplied as a verified final_url in this prompt.\n"
@@ -5820,6 +6606,7 @@ class AiSitePageComponentGenerationService
     {
         return "Weline/PageBuilder skill contract / frontend skill contract for this virtual-theme component:\n"
             . "- pagebuilder-style-templates: output must map to PageBuilder component fields/config, keep @fields/default_config alignment, scope all CSS under the component root id, and use data-glr-ref/GlrDownloadRegistry-compatible download or CTA links when applicable.\n"
+            . "- CTA intent contract: cta.text/content.cta_text are authoritative business-action hints. Do not replace a download/install/reward/play action with generic consult/contact labels. A visible CTA label such as Consult now, Contact us, or 立即咨询 is valid only for contact/support/lead-capture blocks.\n"
             . "- theme-development: use confirmed theme palette tokens and CSS variables/inline scoped styles; no CDN, no global selectors, no unrelated hardcoded brand colors, no duplicate pixel/tracking snippets.\n"
             . "- frontend-components: generate one reusable component/block with editable fields and visitor-facing copy; do not emit full-page HTML, static placeholder sections, internal prompt text, generic substitute content, or page-type labels as visible eyebrow text.\n"
             . "- frontend ownership: all aesthetics, layout rhythm, responsive rules, and any tiny allowed interaction belong in the AI JSON fields. Do not rely on PageRenderService or a global compatibility stylesheet to make the result attractive or mobile-safe.\n"
@@ -5834,7 +6621,14 @@ class AiSitePageComponentGenerationService
 
     private function buildClaudeDesignSkillPromptAddon(string $stage, array $scope = []): string
     {
-        return \implode("\n", $this->getSkillRegistry()->buildPromptGuideLinesForScope($stage, $scope)) . "\n";
+        $guide = \trim(\implode("\n", $this->getSkillRegistry()->buildPromptGuideLinesForScope($stage, $scope)));
+        if ($guide === '') {
+            return '';
+        }
+
+        return "Selected frontend skill guide (compressed; current task contract wins):\n"
+            . $this->clipText($guide, 2800) . "\n"
+            . "- Skill guidance is style/process support only. The current block contract, required image slot, output schema, locale, and CSS safety rules override any generic skill example.\n";
     }
 
     /**
@@ -5849,6 +6643,17 @@ class AiSitePageComponentGenerationService
 
         return "Visible copy governance:\n"
             . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
+            . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is internal only; never use it as visitor-facing copy language unless it equals content_locale.\n"
+            . "- Visitor-visible copy includes headings, paragraphs, cards, nav, CTA labels, form labels, placeholders, alt/title/aria, footer text, badges, metrics, and link text. All must be rewritten into content_locale/default_locale.\n"
+            . "- Build-plan/task/slot/schema labels are metadata, not copy. Never render page_type, section_code, task_key, runtime_context, shared:, page:, content/, app/code/, var/, content_contract, design_contract, data_contract, visual_contract, page_goal, block_goal, why_this_block, selected_skill_codes, build_blueprint, or build_tasks.\n"
+            . "- Instruction-shaped phrases such as Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, Close, Visitors see, or Visitors can review must be rewritten into finished customer-facing website copy.\n"
+            . "- Do not output raw target_domain as brand text unless it is the intended visible domain. Use the locked site title/brand and localized business copy.\n"
+            . "- Industry-scope gate: do not reuse old app-download, game, casino, reward, APK, install, or generic support-site copy unless the approved brief explicitly asks for that industry. Phrases like safe download, play now, bonus, secure install, 安全下载, 安心畅玩, 立即下载, 开始畅玩, 奖励, or 金币 are invalid for non-app/non-game sites.\n"
+            . "- Number spacing must read naturally: do not glue numbers to words in metrics, badges, steps, or CTAs.\n"
+            . "- Renderer will not repair copy after generation; return final customer-specific copy only.\n";
+
+        return "Visible copy governance:\n"
+            . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
             . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is only an internal planning language hint, never a visitor-facing language source.\n"
             . "- Visitor-visible copy must use content_locale/default_locale. Do not use plan_locale unless it is the same locale.\n"
             . "- Visitor-facing attributes are copy too: alt, title, aria-label, placeholder, value, button labels, nav labels, footer labels, and form labels must be rewritten into content_locale/default_locale before output.\n"
@@ -5859,6 +6664,7 @@ class AiSitePageComponentGenerationService
             . "- Instruction-shaped English copy is forbidden as visible copy. Sentences or alt text starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are task instructions; rewrite them into concrete customer-facing copy before output.\n"
             . "- Rewrite planning/observation sentences into direct marketing copy before rendering. Do not visibly output phrases like \"Visitors see...\", \"Visitors can review...\", \"访客看到...\", or \"访客可以...\".\n"
             . "- Never output blueprint meta-copy: page/current-section highlight headings, planning observations, design instructions, task scripts, or sentences that tell the AI to display hierarchy, trust proof, primary actions, flow, risks, or content grouping. Those are instructions, not website copy.\n"
+            . "- Contract-field leak ban: never render content_contract, design_contract, implementation_contract, data_contract, visual_contract, page_goal, block_goal, why_this_block, planning_reason, selected_skill_codes, skill_snapshots, build_blueprint, build_tasks, or qa_report_contract as visible copy. These are build-time context only.\n"
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
             . "- Renderer will not repair visitor copy after generation; the JSON you return must already contain final customer-specific visible copy.\n"
             . "- Never output internal list labels shaped like schema role + number, for example card/category/badge/step placeholders. Each card/list item needs a customer-specific title and description from the brief, build plan, or verified content data.\n"
@@ -5900,17 +6706,7 @@ class AiSitePageComponentGenerationService
         $locale = $this->resolveScopePrimaryLocale($scope);
         $palette = \is_array($contract['palette'] ?? null) ? $contract['palette'] : [];
         if ($palette === []) {
-            // Minimum viable visual contract fallback: never let the AI generate without any
-            // style direction. The fallback palette from resolveThemeContract covers this case,
-            // but as a safety net this injects the style reference as an explicit contract.
-            $styleCode = $this->resolvePromptStyleCode($scope, 'home');
-            $styleDirection = $this->describeStyleDirection($styleCode);
-            return "Visual contract (style reference -full palette not available, use this as design mandate):\n"
-                . "- style_reference: {$styleCode}\n"
-                . "- style_direction: {$styleDirection}\n"
-                . "- IMPORTANT: Build a coherent CSS palette from this style direction. Do not invent unrelated colors.\n"
-                . "- Maintain readable contrast between text and background at all times.\n"
-                . "- Do not make every block the same full-bleed primary/accent color. Vary surfaces, cards, and spacing.\n";
+            throw new \RuntimeException('Build prompt contract failed: confirmed stage-1 theme palette is missing; style-code visual fallback is forbidden.');
         }
         $themeContext = \is_array($contract['raw_context'] ?? null) ? $contract['raw_context'] : [];
         $artDirection = \is_array($contract['art_direction'] ?? null) ? $contract['art_direction'] : [];
@@ -5928,9 +6724,9 @@ class AiSitePageComponentGenerationService
             . "- visual_tone: " . (string)($contract['visual_tone'] ?? '') . "\n"
             . "- font_family: " . (string)($contract['font_family'] ?? '') . "\n"
             . "- style_signature: " . (string)($contract['style_signature'] ?? '') . "\n"
-            . "- art_direction: " . $this->jsonEncodeForPrompt($artDirection, 2000) . "\n"
-            . "- palette: " . \json_encode($palette, \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- full_theme_context: " . $this->jsonEncodeForPrompt($themeContext, 9000) . "\n"
+            . "- art_direction: " . $this->jsonEncodeForPrompt($artDirection, 1200) . "\n"
+            . "- palette: " . $this->jsonEncodeForPrompt($palette, 1800) . "\n"
+            . "- theme_context_summary: " . $this->jsonEncodeForPrompt($themeContext, 1600) . "\n"
             . "- Use these exact palette tokens for generated CSS and extra fields. Do not invent unrelated accent colors.\n"
             . "- Palette usage is role-based: map tokens to page base, elevated surface, text, muted text, CTA, accent, divider, and focus state before writing CSS.\n"
             . "- Contrast is non-negotiable: if a background/surface token is dark, choose light text/link/chip colors; if it is light, choose dark text. Never place dark text on a dark background or light text on a light background.\n"
@@ -5946,36 +6742,25 @@ class AiSitePageComponentGenerationService
         };
 
         return "Visual excellence system prompt for {$componentScope}:\n"
-            . "- Default-vs-user-override contract: follow the common base prompt and the section recipe by default. If the user's latest refinement instruction or the approved design plan explicitly conflicts with a base-prompt layout detail, the explicit user/design instruction wins. This override never allows low-quality output: no placeholders, no broken images, no repeated generic card grid, no unreadable contrast, no cartoon/SVG-like substitute for required premium imagery.\n"
-            . "- The generated component must look polished enough for a paying customer preview, not like a default template or placeholder block.\n"
-            . "- Design from the customer brief plus theme style_signature/art_direction when present; the style reference is scaffolding, not permission to reuse a fixed look.\n"
-            . "- Avoid one-size-fits-all layouts: no plain centered hero plus three generic cards, no flat one-color strip, no default Inter/Roboto/Arial/system-font look, no purple-on-white AI template unless explicitly requested.\n"
-            . "- Presentation ownership rule: the renderer will output the component as returned. It will not add universal mobile CSS, layout correction CSS, hover polish, or aesthetic JS. Therefore css_extra/css_responsive must fully carry the visual design and mobile behavior.\n"
-            . "- Spend CSS budget on visible quality: scoped CSS variables, clamp typography, layered gradients, texture/noise via CSS, asymmetric composition, decorative borders, CSS-only motifs/pseudo-elements, tactile CTA hover/focus states, and mobile-specific rhythm.\n"
-            . "- Mobile compatibility is part of quality, not a post-render repair: include @media rules that stack grids/flex rows, set min-width:0 on columns/cards, keep headings readable at 390px, and prevent image panels from overlapping body copy or CTAs.\n"
-            . "- Over-image readability contract: any text placed over a photo, video, detailed gradient, or busy texture must sit on a real local contrast layer such as a scrim, gradient overlay, glass panel, or dark/light text plate. Use explicit overlay/scrim/veil and text-panel/content-panel classes so the contract is visible in HTML/CSS. Body copy must never be placed directly on a busy image, and CTA/buttons must remain visually separated from paragraphs.\n"
-            . "- Hero/banner mobile contract: immersive image-backed hero/banner layouts must use clamp() typography, max-width text columns, safe line-height, and breakpoint-specific overlay strength. At phone width, headings must not exceed the viewport, paragraphs must remain readable, and media/text/CTA layers must not overlap.\n"
-            . "- Responsive audit contract: validate the component mentally at 1440px, 1024px, 768px, and 390px before returning. If any breakpoint would produce horizontal overflow, cropped text, unreadable text-on-image contrast, or absolute-position overlap, rewrite css_extra/css_responsive in the AI output.\n"
-            . "- Card readability contract: card icons, bullets, badges, titles, body copy, and CTAs must have explicit spacing and cannot collide or visually sit on top of each other. Do not shrink cards into tiny unreadable strips; keep body text at a readable size and use normal wrapping/line-height.\n"
-            . "- Information density contract: large cards and panels must not be empty frames. If a card is taller than a simple text row, it must include a meaningful heading, supporting copy, and a detail/proof/action. Metric cards must explain why the number matters; CTA sections must not be a single button in a large blank area.\n"
-            . "- Layout economy contract: avoid giant vertical voids, excessive min-height, and over-padded sections unless a real image composition fills the space. Dense, readable, content-led layouts are preferred over decorative empty surfaces.\n"
-            . "- Typography restraint contract: decorative letter-spacing is allowed only for short eyebrow labels, not full headings or CTA headlines. Main headings must read naturally on desktop and mobile without huge word gaps, clipped letters, or awkward forced line breaks.\n"
-            . "- Block-specific baseline: use the role-specific base pattern unless explicitly overridden: hero/banner defaults to an immersive image-backed banner; trust defaults to badge/proof/credential rhythm; game/product defaults to media-led showcase or feature tiles; FAQ defaults to accordion/help rhythm; story defaults to timeline/editorial narrative; CTA defaults to a cinematic conversion band. Do not render every block as the same centered title + three small cards + image.\n"
-            . "- Shadow/depth effects required: use box-shadow, drop-shadow, or CSS filters to create visual depth on cards, images, and interactive elements. At minimum, implement a subtle card shadow with a hover lift (transition: box-shadow 0.3s ease, transform 0.3s ease). Do not leave interactive surfaces flat.\n"
-            . "- Richer text colors: do not rely on just one heading color and one body color. Use accent-colored spans, gradient text (via background-clip), highlighted/inline marks, and color-mix() to create typographic hierarchy and visual rhythm in headings and key phrases.\n"
-            . "- Customer-intent lock: the final HTML/CSS must visibly match the user's actual business/game/service scenario through motifs, labels, CTA affordances, proof details, and interaction behavior; do not generate a category-neutral section.\n"
-            . "- Editable-field completeness: if default_config contains content.title/content.subtitle/content.description or alias fields such as title, heading, headline, description, body, section_title, or eyebrow, keep them populated with coherent visitor copy. Do not overwrite framework-provided copy fields with empty strings; empty editable fields make the preview fall back to generic labels and are invalid.\n"
-            . "- No post-render cleanup dependency: invalid copy or layout fails validation and stops the task. Do not rely on the renderer to rename labels, rewrite copy, retry generation, or restyle a weak composition after JSON return.\n"
-            . "- Interaction/effects requirement: implement at least one friendly visible hover/focus/reveal/ambient effect with CSS transition/transform/animation plus a reduced-motion-safe fallback when motion is used; do not describe effects without CSS.\n"
-            . "- Color quality requirement: define explicit readable background/text/CTA/focus pairings; dark surfaces require light foregrounds, and neighboring blocks must differ by surface depth, divider, texture, or layout rhythm.\n"
-            . "- HTML structure contract: every HTML field must be a valid fragment with a component-owned root wrapper, closed attribute quotes, and balanced tags. Never emit framework wrappers like `.pb-ai-html-block`, never close a `div/section/article` that was not opened inside the same field, and never concatenate neighboring blocks into one field.\n"
-            . "- Layout safety contract: keep content in normal document flow. Do not use negative margins, fixed heights, or absolute positioning to pull sections over each other; decorative absolute elements must stay inside a relative root and cannot affect block boundaries.\n"
-            . "- Image/media integration: when placing images inside the section, wrap them in a container with rounded corners, subtle box-shadow, and a gradient overlay mask at top/bottom edges so the image blends naturally into the page background instead of feeling cut off. Add hover lift where appropriate.\n"
-            . "- Do not leave css_extra empty when visual polish depends on it; the page preview should show the styling without a designer adding anything later.\n"
+            . "- Produce a polished customer preview, not a placeholder template. Use the approved brief/theme; do not leak plan/schema/task text.\n"
+            . "- Specificity gate: every visible block must carry at least three brief-derived anchors through visitor copy, media subject, motifs, proof chips, CTA wording, or layout affordances. A block that would fit another business after changing the logo is invalid.\n"
+            . "- First-impression gate: the page should read as a finished premium website at screenshot distance, with deliberate scale, focal hierarchy, non-flat surfaces, and a clear conversion path. Do not output wireframe-like panels, loose content dumps, or generic decorative backgrounds.\n"
+            . "- Avoid generic sameness: each block needs a role-specific composition, not the same centered title plus three cards.\n"
+            . "- Repetition repair rule: if the natural draft uses the same card grid, metric row, gradient orb, icon list, or CTA treatment as another likely section, change the composition before returning JSON.\n"
+            . "- Own the final rendering in the returned JSON: scoped html_content/css_extra must carry aesthetics, mobile behavior, contrast, and hover/focus polish; css_responsive can stay empty when base CSS is fluid.\n"
+            . "- CTA shape contract: CTA-looking controls are compact buttons with display:inline-flex, width:auto, and a capped max-width. A CTA rendered as a full-width horizontal bar is invalid unless the approved block plan explicitly asks for a full conversion band with headline, body copy, and trust cue.\n"
+            . "- CTA label contract: CTA copy must match the page/block job. Download/app/APK/reward/game blocks use download/play/reward language; blog/learning blocks use reading/explore language; only contact/support blocks use consult/contact language.\n"
+            . "- Empty-surface contract: a large flat dark/light rectangle with only a logo, one sentence, or one CTA is not premium. Use content density, surface elevation, borders, shadows, media, and proof/support copy so every large panel earns its space.\n"
+            . "- Brief-specific motif contract: convert the current business brief into visible art direction through safe palette choices, shaped surfaces, copy labels, badges, media treatment, and spacing rhythm. Generic casino/gaming/business panels are invalid when the brief provides richer nouns or audience context.\n"
+            . "- Responsive structure is mandatory: root shell, inner container, copy panel, media/CSS visual panel, action/form panel, and decorative layers with component-prefixed classes.\n"
+            . "- At <=900px stack split layouts; at <=420px use one column, width:100%, max-width:100%, box-sizing:border-box, min-width:0, and no horizontal overflow.\n"
+            . "- If image plus form/card appears, keep both in normal grid/flex flow. Do not absolutely push cards outside the root or overlap inputs/text with media/decorations.\n"
+            . "- Text over photos or busy textures needs a real scrim/panel/veil layer. Never put body copy directly on a busy image.\n"
+            . "- Use readable palette pairings, surface depth, shadows, texture, dividers, and accessible focus states. Do not use fragile CSS tricks when simple scoped CSS works.\n"
+            . "- HTML fields must be valid fragments with one component-owned root, balanced tags/quotes, no framework wrappers, no neighboring block HTML, and no PHP.\n"
+            . "- Before returning, mentally check 1440/1024/768/390px. Rewrite any layout that would overflow, crop text, lose contrast, or overlap content.\n"
             . $scopeRule
-            . "- Before returning, silently self-audit: if the preview would still read as pale background + ordinary cards + small default buttons, rewrite the composition and CSS.\n"
-            . "- If no real asset is available, create the visual language with CSS-only shapes/pseudo-elements that match the brief; never leave a blank media slot and never use <svg>.\n"
-            . "- Keep the result maintainable: component-scoped class names only, accessible contrast/focus, and reduced-motion-friendly transitions.\n";
+            . "- If no real asset is available, create CSS-only visual language that matches the brief; never leave blank media and never use <svg>.\n";
     }
 
     private function buildPremiumSectionDesignContractPromptAddon(string $pageType, string $sectionKey, string $sectionTemplate): string
@@ -5986,7 +6771,7 @@ class AiSitePageComponentGenerationService
         if (\preg_match('/trust|security|safe|license|proof|review|testimonial/i', $identity) === 1) {
             $recipe = 'Trust/security/social-proof recipe: use a badge wall, credential seal, quote rail, metric strip, or verification timeline. Do not use a generic three-card row plus one image.';
         } elseif (\preg_match('/game|feature|showcase|product|suite|service/i', $identity) === 1) {
-            $recipe = 'Game/showcase recipe: use large feature tiles, a spotlight carousel, media-led product cards, or a stepped discovery layout. Avoid repeating the previous section structure.';
+            $recipe = 'Game/showcase recipe: use the approved minimal safe skeleton when the component contract supplies FEATURE_SAFE_MODE; express game variety and benefits through polished paragraph copy instead of cards, carousels, image tiles, or repeated game panels.';
         } elseif (\preg_match('/faq|accordion|question|support|help/i', $identity) === 1) {
             $recipe = 'FAQ/support recipe: use accordion/list rhythm with an asymmetric help panel or support badge cluster. It must not look like testimonials, trust badges, or a feature grid.';
         } elseif (\preg_match('/cta|download|conversion|final|action/i', $identity) === 1) {
@@ -5996,7 +6781,7 @@ class AiSitePageComponentGenerationService
         }
 
         $heroRule = $isHero
-            ? "- HERO/BANNER DEFAULT BASELINE: unless the user's latest block-adjustment instruction or approved design plan explicitly conflicts, render a real premium 1920x750-style banner. When a verified generated image exists, it must be a real editable <img> cover layer with object-fit:cover and the required slot attributes; content sits inside a floating text-safe panel on top of an image-wide scrim/gradient veil. The text panel must have its own readable background/scrim, padding, max-width, and foreground colors so paragraphs remain readable on busy photos. Do NOT create a small side image, isolated centered card, narrow media frame, CSS background-image-only hero, huge empty side gutters, or dark body text directly over a detailed photo as the default. If the user explicitly asks for another hero composition, follow it while preserving premium generated imagery, strong hierarchy, and readable overlay treatment.\n"
+            ? "- HERO/BANNER DEFAULT BASELINE: unless the user's latest block-adjustment instruction or approved design plan explicitly conflicts, render a real premium 1920x750-style banner. When a verified generated image exists, it must be a real editable <img> cover layer with object-fit:cover and the required slot attributes; content sits inside a floating text-safe panel on top of an image-wide scrim/gradient veil. The text panel must have its own readable background/scrim, padding, max-width, and foreground colors so paragraphs remain readable on busy photos. If no verified image is available, the CSS-only media layer must still read as deliberate art direction through palette, shadow, border, overlay, and text-panel composition; it must express a subject-matter stage or editorial surface from the approved brief, not generic overlapping circles, blobs, a blank slab, or a centered card on empty background. The primary CTA must be a compact button, not a full-width bar. Do NOT create a small side image, isolated centered card, narrow media frame, CSS background-image-only hero, huge empty side gutters, or dark body text directly over a detailed photo as the default. If the user explicitly asks for another hero composition, follow it while preserving premium generated imagery, strong hierarchy, and readable overlay treatment.\n"
             : "- NON-HERO HARD RULE: this block needs its own layout purpose and visual rhythm. Do not copy the hero structure or the previous block's card/media arrangement.\n";
 
         return "Premium site design contract for this section:\n"
@@ -6004,7 +6789,7 @@ class AiSitePageComponentGenerationService
             . $heroRule
             . "- Section recipe: {$recipe}\n"
             . "- Anti-monotony rule: adjacent blocks must not share the same three-card row, same image position, same copy labels, or same pale background/card treatment. Change composition, scale, motif, and spacing per section role.\n"
-            . "- Rejected output patterns: centered title plus three small cards plus the same image; tiny cartoon/SVG-looking media used as a substitute for a real generated image; repeated generic CTA/category labels across blocks; hero built as a boxed card next to a small image.\n"
+            . "- Rejected output patterns: centered title plus three small cards plus the same image; tiny cartoon/SVG-looking media used as a substitute for a real generated image; repeated generic CTA/category labels across blocks; hero built as a boxed card next to a small image; CTA stretched into a page-width bar; large empty dark panel with only a logo or one button; CSS-only hero made only from overlapping circles/blobs with no subject-matter stage.\n"
             . "- If a verified generated image exists, use it prominently and naturally as a real editable <img>. For hero, the <img> is a cover layer behind the overlay copy; for non-hero it is a purposeful media surface, not a thumbnail afterthought.\n";
     }
 
@@ -6041,9 +6826,11 @@ class AiSitePageComponentGenerationService
             . ($required
                 ? "- Required image slot {$slotId}: use the exact generated asset for this block. Usage={$usage}; placement={$placement}; subject={$subject}; style={$style}.\n"
                     . ($finalUrl !== '' ? "- Required final_url for this slot: {$finalUrl}\n" : '')
-                    . ($requiredImgTemplate !== '' ? "- Copyable required img template: {$requiredImgTemplate}\n" : '')
+                    . ($requiredImgTemplate !== '' ? "- REQUIRED_HTML_IMG_TO_COPY_VERBATIM: {$requiredImgTemplate}\n" : '')
                     . $requiredAssetContract
-                    . "- Required slot HTML rule: copy the concrete img template above into html_content as a direct child of the component root or inside the first media wrapper, and keep its src, data-pb-ai-image-role, and data-pb-ai-asset-slot values on the same <img>. Any other src for this slot is invalid, including external stock URLs, placeholder URLs, malformed scheme-less URLs, or URLs that differ by one character. Do not use CSS background-image alone for required slots; editor slot binding is HTML-attribute based.\n"
+                    . "- Required slot HTML rule: the exact REQUIRED_HTML_IMG_TO_COPY_VERBATIM tag must appear in html_content. You may only change alt text. Do not change src, data-pb-ai-image-role, or data-pb-ai-asset-slot. The validator checks html_content, not css_extra, so CSS background-image alone will fail.\n"
+                    . "- Required slot placement rule: place that copied <img> before overlay/text layers inside this component's root wrapper or first media wrapper. If the block is hero/background_cover, make that same <img> the full-cover media layer with CSS position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center.\n"
+                    . "- Required slot self-check: before returning JSON, search html_content for the exact final_url and exact slot_id. If either is absent from an <img> tag with data-pb-ai-image-role='generated-asset', rewrite the output. Do not rely on section config, CSS url(...), comments, alt text, or prose to satisfy the image contract.\n"
                     . "- If the slot is hero/background_cover and the user's latest block-adjustment instruction does not explicitly request another composition, build the block as a real 1920x750-style banner: full-cover image layer, gradient overlay, floating content container. A side thumbnail or cartoon-like illustration panel is invalid as the default baseline.\n"
                 : "- Optional image slot: do not invent image URLs. If no verified generated image is supplied, design with CSS-only motif/pseudo-elements; no <svg> and no placeholder service.\n");
     }
@@ -6134,22 +6921,6 @@ class AiSitePageComponentGenerationService
             if (\is_array($contract['palette'] ?? null) && $contract['palette'] !== []) {
                 return $contract;
             }
-        }
-
-        // Hard fallback: derive minimum palette from style_code when all cascade sources fail.
-        // Without this, the AI generates with zero visual direction, causing wild style drift.
-        $styleCode = $this->resolvePromptStyleCode($scope, 'home');
-        $fallbackPalette = $this->deriveFallbackPaletteFromStyleCode($styleCode);
-        if ($fallbackPalette !== []) {
-            return [
-                'name' => $styleCode,
-                'visual_tone' => $this->describeStyleDirection($styleCode),
-                'font_family' => 'system-ui, -apple-system, sans-serif',
-                'palette' => $fallbackPalette,
-                'style_signature' => $styleCode,
-                'art_direction' => [],
-                'raw_context' => [],
-            ];
         }
 
         return [];
@@ -6430,6 +7201,9 @@ class AiSitePageComponentGenerationService
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'header'));
 
         $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $this->resolveSharedBuildPlanTask($scope, 'header'), $locale);
+        $defaultConfig['logo.image'] = $effectiveLogo;
+        $defaultConfig['logo.url'] = $effectiveLogo;
+        $defaultConfig['identity.shared_logo_asset'] = $effectiveLogo;
         $defaultConfig['runtime.shared_region'] = 'header';
         $defaultConfig['runtime.content_locale'] = $locale;
 
@@ -6531,6 +7305,8 @@ class AiSitePageComponentGenerationService
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'footer'));
 
         $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $this->resolveSharedBuildPlanTask($scope, 'footer'), $locale);
+        $defaultConfig['brand.logo'] = $effectiveLogo;
+        $defaultConfig['identity.shared_logo_asset'] = $effectiveLogo;
         $defaultConfig['runtime.shared_region'] = 'footer';
         $defaultConfig['runtime.content_locale'] = $locale;
 
@@ -6604,6 +7380,10 @@ class AiSitePageComponentGenerationService
             'style.title_color' => ($sectionTpl === 'cta') ? '#ffffff' : '#0f172a',
             'style.accent_color' => '#2563eb',
         ];
+        $defaultConfig = \array_replace(
+            $defaultConfig,
+            $this->resolveSectionCtaDefaultConfig($scope, $pageType, $section, $locale)
+        );
         $stageOneSamples = $this->collectStageOneVisibleSamplesForPage($scope, $pageType);
         if ($stageOneSamples !== []) {
             $defaultConfig['contract.stage1_samples'] = \json_encode(
@@ -6657,6 +7437,7 @@ class AiSitePageComponentGenerationService
         );
 
         $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $buildPlanTask, $locale);
+        $defaultConfig = $this->enforceSectionCtaIntentDefaults($defaultConfig, $scope, $pageType, $section, $locale);
         $resolvedTitle = \trim((string)($defaultConfig['content.title'] ?? $defaultConfig['title'] ?? ''));
         $resolvedSubtitle = \trim((string)($defaultConfig['content.subtitle'] ?? $defaultConfig['subtitle'] ?? ''));
         $resolvedDescription = \trim((string)($defaultConfig['content.description'] ?? $defaultConfig['description'] ?? ''));
@@ -7073,54 +7854,7 @@ class AiSitePageComponentGenerationService
     private function buildBuildPlanTaskPromptAddon(array $buildPlanTask, string $contextLabel, array $scope = []): string
     {
         if ($buildPlanTask === []) {
-            // Fallback: inject scope-level content context when no build-plan task exists.
-            // Without this, the AI prompt has zero content direction and generates generic
-            // or irrelevant content (e.g., stock-photo white students for an Indian gaming site).
-            $brief = $this->pickString(
-                $scope['website_profile']['brief_description'] ?? null,
-                $scope['brief_description'] ?? null,
-                $scope['user_description'] ?? null
-            );
-            $themeContext = \is_array($scope['execution_blueprint']['theme_context_snapshot'] ?? null)
-                ? $scope['execution_blueprint']['theme_context_snapshot']
-                : (\is_array($scope['plan_workbench']['confirmed']['theme_context_snapshot'] ?? null)
-                    ? $scope['plan_workbench']['confirmed']['theme_context_snapshot']
-                    : []);
-            $sharedPromptContext = \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null)
-                ? $scope['execution_blueprint']['shared_prompt_context']
-                : (\is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null)
-                    ? $scope['plan_workbench']['confirmed']['shared_prompt_context']
-                    : []);
-            if ($sharedPromptContext === []) {
-                $sharedPromptContext = $this->resolveSharedPromptContext($scope);
-            }
-            $contentLocale = \trim((string)(
-                $themeContext['content_locale']
-                ?? $sharedPromptContext['content_locale']
-                ?? $this->resolveScopePrimaryLocale($scope)
-            ));
-            if ($contentLocale !== '') {
-                $filteredThemeContext = $this->filterPromptArrayForLocale($themeContext, $contentLocale);
-                $filteredSharedPromptContext = $this->filterPromptArrayForLocale($sharedPromptContext, $contentLocale);
-                $themeContext = \is_array($filteredThemeContext) ? $filteredThemeContext : $themeContext;
-                $sharedPromptContext = \is_array($filteredSharedPromptContext) ? $filteredSharedPromptContext : $sharedPromptContext;
-            }
-            $verifiedAssets = $this->extractVerifiedAssetsForBuildPlanTask($scope, $buildPlanTask);
-            $verifiedAssetRule = $verifiedAssets !== []
-                ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 3000) . "\n"
-                    . "- HARD CONTRACT: every verified_asset final_url for this section MUST be used as a real editable <img> in html_content by copying the concrete template below. Do not skip any. If a slot_id matches this section, the corresponding image must appear as an editable image. This is NOT optional; unused generated images waste API tokens.\n"
-                    . "- Slot placement contract: place the editable <img> for the matching slot inside this component's root wrapper before decorative-only layers. For non-hero sections, use it as a media card, portrait/avatar rail, proof image, or editorial visual; never omit it because the section is text-heavy.\n"
-                    . "- The same <img> must keep the concrete src, data-pb-ai-asset-slot, and data-pb-ai-image-role='generated-asset' values from the copied template.\n"
-                    . "- Use CSS to make required images cover banners/media panels; do not replace the editable <img> with CSS background-image only.\n"
-                    . $this->buildVerifiedAssetPromptContract($verifiedAssets)
-                : "- verified_assets: []\n";
-            return "Build-plan task context for this {$contextLabel} (fallback from scope - follow the customer brief strictly):\n"
-                . "- customer_brief: {$brief}\n"
-                . "- IMPORTANT: All generated content MUST serve this customer brief exactly. Do NOT invent unrelated generic content.\n"
-                . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
-                . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 5000) . "\n"
-                . $verifiedAssetRule
-            . "- anti-copy rule: never paste stage-1 observation/planning sentences directly into html_content. Rewrite observation-shaped phrases in any planning language into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n";
+            throw new \RuntimeException('Build prompt contract failed: missing stage-2 build-plan task context for ' . $contextLabel . '; scope-level prompt fallback is forbidden.');
         }
 
         $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
@@ -7136,15 +7870,19 @@ class AiSitePageComponentGenerationService
         if ($sharedPromptContext === [] && \is_array($buildPlanTask['shared_prompt_context'] ?? null)) {
             $sharedPromptContext = $buildPlanTask['shared_prompt_context'];
         }
-        if ($themeContext === [] && \is_array($scope['execution_blueprint']['theme_context_snapshot'] ?? null)) {
-            $themeContext = $scope['execution_blueprint']['theme_context_snapshot'];
+        if ($themeContext === [] || $sharedPromptContext === []) {
+            throw new \RuntimeException(
+                'Build prompt contract failed: task runtime_context missing stage-2 theme/shared context for '
+                . $contextLabel
+                . '.'
+            );
         }
-        if ($sharedPromptContext === [] && \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null)) {
-            $sharedPromptContext = $scope['execution_blueprint']['shared_prompt_context'];
-        }
-        if ($sharedPromptContext === [] && \is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null)) {
-            $sharedPromptContext = $scope['plan_workbench']['confirmed']['shared_prompt_context'];
-        }
+        $contextRefs = \is_array($runtimeContext['context_refs'] ?? null) ? $runtimeContext['context_refs'] : [];
+        $siteContext = \is_array($runtimeContext['site_context'] ?? null) ? $runtimeContext['site_context'] : [];
+        $policyContext = \is_array($runtimeContext['policy_context'] ?? null) ? $runtimeContext['policy_context'] : [];
+        $skillContext = \is_array($runtimeContext['skill_context'] ?? null) ? $runtimeContext['skill_context'] : [];
+        $referenceContext = \is_array($runtimeContext['reference_context'] ?? null) ? $runtimeContext['reference_context'] : [];
+        $assetContext = \is_array($runtimeContext['asset_context'] ?? null) ? $runtimeContext['asset_context'] : [];
         $taskScriptDataContract = \is_array($taskScript['data_contract'] ?? null) ? $taskScript['data_contract'] : [];
         $implementationDataContract = \is_array($implementationContract['data_contract'] ?? null) ? $implementationContract['data_contract'] : [];
         $fieldRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
@@ -7165,6 +7903,11 @@ class AiSitePageComponentGenerationService
                 'contentPlan' => $contentPlan,
                 'stylePlan' => $stylePlan,
                 'pageDesignPlan' => $pageDesignPlan,
+                'siteContext' => $siteContext,
+                'policyContext' => $policyContext,
+                'skillContext' => $skillContext,
+                'referenceContext' => $referenceContext,
+                'assetContext' => $assetContext,
             ] as $name => $payload) {
                 $filtered = $this->filterPromptArrayForLocale($payload, $contentLocale);
                 if (\is_array($filtered)) {
@@ -7184,51 +7927,72 @@ class AiSitePageComponentGenerationService
             );
         }
         $verifiedAssetRule = $verifiedAssets !== []
-            ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 3000) . "\n"
+            ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 1800) . "\n"
                 . "- HARD CONTRACT: every verified_asset final_url for this section MUST appear as a real editable <img> in html_content by copying the concrete template below. Do not skip any. Unused generated images waste API tokens.\n"
                 . "- Rules: use the supplied final_url value without changing it; match the asset by slot_id context. If no asset matches this section, render CSS-only decorative structure; never use <svg>.\n"
                 . "- Slot placement contract: place the editable <img> for the matching slot inside this component's root wrapper before decorative-only layers. For non-hero sections, use it as a media card, portrait/avatar rail, proof image, or editorial visual; never omit it because the section is text-heavy.\n"
-                . "- The same <img> must keep the concrete src, data-pb-ai-asset-slot, and data-pb-ai-image-role='generated-asset' values from the copied template.\n"
-                . "- Required slot shape: for hero/background designs, make that <img> a cover layer with CSS object-fit/absolute/inset/width/height, then place overlay text above it; do not replace the editable <img> with CSS background-image only. Add a component-prefixed hero image class to the <img> and style the exact same selector with position:absolute; inset:0; width:100%; height:100%; object-fit:cover.\n"
+                . "- Exact tag contract: html_content must contain a real <img> tag copied from copyable_verified_asset_img_template. That same <img> must keep the concrete src, data-pb-ai-asset-slot, and data-pb-ai-image-role='generated-asset' values from the copied template. You may change only alt text and add a component-prefixed class.\n"
+                . "- Required slot shape: for hero/background designs, make that same copied <img> a cover layer with CSS object-fit/absolute/inset/width/height, then place overlay text above it; do not replace the editable <img> with CSS background-image only. Add a component-prefixed hero image class to the <img> and style the exact same selector with position:absolute; inset:0; width:100%; height:100%; object-fit:cover.\n"
+                . "- Image contract self-check: before returning JSON, verify that html_content includes every final_url and every matching slot_id inside an <img> tag. If a final_url appears only in CSS, config, comments, or text, the output is invalid.\n"
                 . $this->buildVerifiedAssetPromptContract($verifiedAssets)
-            : "- verified_assets: []\n- verified asset rule: no verified real image URL is available, so render visual media as CSS-only shapes/pseudo-elements and do not invent image URLs or use <svg>.\n";
+            : "- verified_assets: []\n"
+                . "- NO_VERIFIED_IMAGE_MODE: no verified real image URL is available for this task. html_content must not contain <img>, src=, data-pb-ai-image-role, data-pb-ai-asset-slot, CSS url(...), `/pub/media/`, stock-photo URLs, or guessed file paths.\n"
+                . "- CSS-only hero/media rule: if this is a hero/banner/media block, copy the HERO FIXED SKELETON from the component-specific contract. The `.pb-c-media` element must contain `.pb-c-media-stage`, `.pb-c-media-subject`, `.pb-c-media-detail`, and `.pb-c-media-label` children; never leave `.pb-c-media` empty. Style `.pb-c-media` with position:absolute; inset:0; and a hex background; style `.pb-c-media-stage`, `.pb-c-media-subject`, `.pb-c-media-detail`, `.pb-c-media-label`, `.pb-c-motif`, and `.pb-c-orbit` as structured editorial/product surfaces, not generic circles/blobs; the label text must name a concrete subject from the approved brief; style `.pb-c-overlay` with background:#111827; opacity:.72; and style `.pb-c-text-panel` with a readable hex panel background.\n"
+                . "- verified asset rule: render visual media as CSS-only shapes/pseudo-elements and do not invent image URLs or use <svg>.\n";
 
-        return "Build-plan task context for this {$contextLabel}:\n"
-            . "- task_key: " . (string)($buildPlanTask['task_key'] ?? '') . "\n"
-            . "- page_goal: " . (string)($planContext['page_goal'] ?? '') . "\n"
-            . "- page_design_plan: " . $this->jsonEncodeForPrompt($pageDesignPlan, 3000) . "\n"
-            . "- page_flow_role: " . (string)($planContext['page_flow_role'] ?? $stylePlan['page_flow_role'] ?? '') . "\n"
-            . "- block_goal: " . (string)($planContext['block_goal'] ?? '') . "\n"
-            . "- stage1_theme_summary: " . (string)($planContext['stage1_theme_summary'] ?? '') . "\n"
-            . "- stage1_block_content: " . (string)($planContext['stage1_block_content'] ?? '') . "\n"
-            . "- stage1_style_direction: " . (string)($planContext['stage1_style_direction'] ?? '') . "\n"
-            . "- story_goal: " . (string)($taskScript['story_goal'] ?? '') . "\n"
-            . "- content_fill_rule: " . (string)($taskScript['content_fill_rule'] ?? '') . "\n"
-            . "- stage3_directive: " . (string)($taskScript['stage3_directive'] ?? '') . "\n"
-            . "- data_contract: " . $this->jsonEncodeForPrompt(\array_replace_recursive($implementationDataContract, $taskScriptDataContract), 4000) . "\n"
-            . "- field_content_requirements: " . \json_encode($fieldRequirements, \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
-            . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 5000) . "\n"
-            . "- build_plan.task_script: " . $this->jsonEncodeForPrompt($taskScript, 7000) . "\n"
-            . "- build_plan.block_task: " . $this->jsonEncodeForPrompt($blockTask, 7000) . "\n"
-            . "- block_task.content_plan: " . \json_encode($contentPlan, \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- block_task.style_plan: " . \json_encode($stylePlan, \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- block_task.implementation_detail: " . (string)($blockTask['implementation_detail'] ?? '') . "\n"
-            . "- block_task.design_tags: " . \json_encode(\is_array($blockTask['design_tags'] ?? null) ? $blockTask['design_tags'] : [], \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- block_task.realtime_content: " . \json_encode(\is_array($blockTask['realtime_content'] ?? null) ? $blockTask['realtime_content'] : [], \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- design execution rule: apply page_design_plan.color_layering and section_flow before local block styling; this block must contrast with adjacent blocks through surfaces/cards/gradients/dividers/illustration while staying inside the confirmed palette.\n"
-            . "- contrast execution rule: convert palette tokens into readable role pairs; dark surfaces must use light foregrounds, light surfaces must use dark foregrounds, and CTA/focus states must remain legible.\n"
-            . "- hierarchy execution rule: do not reuse the same full-bleed primary/accent background for every block; vary surface elevation, background texture, dividers, spacing rhythm, or visual motif per block.\n"
-            . "- html fragment rule: output only this block's inner visitor content in html_content/html_extra. Use one component-owned root wrapper, close every quote/tag, and do not include `pb-ai-html-block`, neighboring `<section>` wrappers, or orphan closing tags from previous/next blocks.\n"
-            . "- no-overlap structure rule: do not rely on negative margins, fixed container heights, or absolute-positioned content for the main flow. Cards, proof strips, grids, and CTA rows must consume normal layout space with padding/gap/margin inside the block.\n"
-            . "- mobile execution rule: write css_responsive or scoped @media rules for 390px previews. Stack multi-column layouts, reset narrow title max-widths to 100%, keep media below/behind text only when it cannot cover copy, and set min-width:0 on all grid/flex children.\n"
-            . "- build-plan language rule: treat build-plan text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
-            . "- anti-copy rule: never paste build-plan observation/planning sentences directly into html_content. Rewrite phrases like \"Visitors see...\" or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
+        return "Frozen Stage-2 task context for this {$contextLabel} (use these fields only; do not read conversation history or broad scope fallbacks):\n"
+            . "1 task_identity: " . $this->jsonEncodeForPrompt([
+                'task_key' => (string)($buildPlanTask['task_key'] ?? ''),
+                'page_type' => (string)($buildPlanTask['page_type'] ?? $planContext['page_type'] ?? ''),
+                'block_key' => (string)($buildPlanTask['block_key'] ?? $planContext['block_key'] ?? ''),
+                'section_code' => (string)($buildPlanTask['section_code'] ?? $planContext['section_code'] ?? ''),
+                'context_refs' => $contextRefs,
+            ], 900) . "\n"
+            . "2 site_context: " . $this->jsonEncodeForPrompt([
+                'site' => $siteContext,
+                'shared_prompt_context' => $sharedPromptContext,
+                'policy_context' => $policyContext,
+            ], 1600) . "\n"
+            . "3 theme_context: " . $this->jsonEncodeForPrompt([
+                'theme_context_snapshot' => $themeContext,
+                'stage1_theme_summary' => (string)($planContext['stage1_theme_summary'] ?? ''),
+                'stage1_style_direction' => (string)($planContext['stage1_style_direction'] ?? ''),
+            ], 1400) . "\n"
+            . "4 page_context: " . $this->jsonEncodeForPrompt([
+                'page_goal' => (string)($planContext['page_goal'] ?? ''),
+                'page_flow_role' => (string)($planContext['page_flow_role'] ?? $stylePlan['page_flow_role'] ?? ''),
+                'page_design_plan' => $pageDesignPlan,
+            ], 1600) . "\n"
+            . "5 current_block_context: " . $this->jsonEncodeForPrompt([
+                'block_goal' => (string)($planContext['block_goal'] ?? ''),
+                'stage1_block_content' => (string)($planContext['stage1_block_content'] ?? ''),
+                'story_goal' => (string)($taskScript['story_goal'] ?? ''),
+                'stage3_directive' => (string)($taskScript['stage3_directive'] ?? ''),
+                'content_plan' => $contentPlan,
+                'style_plan' => $stylePlan,
+                'implementation_detail' => (string)($blockTask['implementation_detail'] ?? ''),
+                'field_content_requirements' => $fieldRequirements,
+                'data_contract' => \array_replace_recursive($implementationDataContract, $taskScriptDataContract),
+                'acceptance' => $acceptance,
+            ], 2600) . "\n"
+            . "6 skill_and_reference_context: " . $this->jsonEncodeForPrompt([
+                'skill_context' => $skillContext,
+                'reference_context' => $referenceContext,
+                'design_tags' => \is_array($blockTask['design_tags'] ?? null) ? $blockTask['design_tags'] : [],
+                'realtime_content' => \is_array($blockTask['realtime_content'] ?? null) ? $blockTask['realtime_content'] : [],
+            ], 1300) . "\n"
+            . "7 asset_context: " . $this->jsonEncodeForPrompt([
+                'verified_assets' => $verifiedAssets,
+                'asset_contract' => $verifiedAssets === []
+                    ? 'no verified assets for this task; pending/unresolved asset slots are not legal image URLs'
+                    : 'use only the verified_assets listed here',
+            ], 1400) . "\n"
+            . "- design execution rule: apply page_design_plan and theme_context first, then current_block_context. Generate only this task's block, not why the block exists.\n"
+            . "- CSS execution rule: write fewer complete selectors instead of many fragile selectors. If a decoration is hard to express safely, omit the decoration and keep the layout valid.\n"
+            . "- responsive execution rule: normal grid/flex flow only; stack at <=900px and use one column at <=420px with min-width:0 and max-width:100%.\n"
+            . "- build-plan language rule: build-plan text is intent only. Rewrite it into final visitor copy in source_of_truth_locale before placing it in HTML.\n"
             . $stage3LocaleRule
-            . $verifiedAssetRule
-            . "- theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
-            . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- runtime_context: " . \json_encode($runtimeContext, \JSON_UNESCAPED_UNICODE) . "\n";
+            . $verifiedAssetRule;
     }
 
     /**
@@ -7777,22 +8541,30 @@ class AiSitePageComponentGenerationService
 
     private function isVisualTextConfigKey(string $key): bool
     {
-        if (\str_contains($key, 'style.') || \str_contains($key, 'color') || \str_contains($key, '.url')) {
+        $normalized = \strtolower(\trim($key));
+        if (
+            \str_contains($normalized, 'style.')
+            || \str_contains($normalized, 'color')
+            || \str_contains($normalized, '.url')
+            || \str_contains($normalized, 'image')
+            || \in_array($normalized, ['brand.logo', 'logo', 'identity.shared_logo_asset'], true)
+        ) {
             return false;
         }
 
-        return \str_contains($key, 'content.')
-            || \str_contains($key, 'title')
-            || \str_contains($key, 'subtitle')
-            || \str_contains($key, 'description')
-            || \str_contains($key, 'logo.text')
-            || \str_contains($key, 'brand.')
-            || \str_contains($key, 'cta.text');
+        return \str_contains($normalized, 'content.')
+            || \str_contains($normalized, 'title')
+            || \str_contains($normalized, 'subtitle')
+            || \str_contains($normalized, 'description')
+            || \str_contains($normalized, 'logo.text')
+            || \str_contains($normalized, 'brand.')
+            || \str_contains($normalized, 'cta.text');
     }
 
     private function sanitizeVisibleCopy(string $value): string
     {
         $value = \trim(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        $value = \preg_replace('/([\p{Han}]{2,6})\1/u', '$1', $value) ?? $value;
         if ($value === '') {
             return '';
         }
@@ -7847,6 +8619,16 @@ class AiSitePageComponentGenerationService
             '第一阶段确认',
             '输出必须',
             '访客可见内容',
+            '先讲清',
+            '为什么值得继续浏览',
+            '页面需要围绕',
+            '围绕页面目标',
+            '组织完整内容',
+            '页面意图',
+            '文案语气延续',
+            '整体表达延续',
+            '整体表达强调',
+            '保持面向访客',
         ] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
                 return '';
@@ -8032,6 +8814,9 @@ class AiSitePageComponentGenerationService
             '/(?:避免|不要|防止|avoid|do\s+not|don\'t).{0,36}(?:内容|视觉|区块|模块|blocks?|sections?|content).{0,48}(?:挤成|同一种视觉|相同视觉|same\s+visual|same\s+layout|feel\s+like\s+one)/iu',
             '/(?:访客|用户|visitors?|users?).{0,28}(?:看到|可以看到|see|can\s+review|can\s+verify|understand|ready\s+to).{0,100}(?:信任|下载|发布|证明|reviewable|before\s+publishing|proof|cta|action)/iu',
             '/(?:rewrite|render|use|provide|present|include|output)\s+(?:concrete|visitor-facing|download|category|trust|proof|cta|feature).{0,90}(?:copy|language|labels?|path|cards?)/iu',
+            '/(?:首页|页面|区块|模块).{0,18}(?:讲清|说明|呈现|组织|承接).{0,80}(?:核心价值|主要亮点|下一步动作|页面目标|栏目方向|文章重点|继续阅读路径)/iu',
+            '/(?:让|帮助).{0,16}(?:访客|用户).{0,80}(?:为什么|理解栏目方向|快速建立信任|继续深入浏览|发起联系前的犹豫)/iu',
+            '/(?:文案语气|表达).{0,40}(?:延续|保持).{0,40}(?:品牌口吻|面向访客)/iu',
         ];
         foreach ($patterns as $pattern) {
             if (\preg_match($pattern, $value, $found) === 1) {
@@ -8181,27 +8966,196 @@ class AiSitePageComponentGenerationService
     /**
      * @param array<string,mixed> $scope
      */
+    private function resolveSectionCtaDefaultConfig(array $scope, string $pageType, array $section, string $locale = ''): array
+    {
+        $label = $this->resolveSectionCtaText($scope, $pageType, $section, $locale);
+        $url = $this->resolvePrimaryCtaUrl($scope);
+        if ($label === '') {
+            return [];
+        }
+
+        return [
+            'cta.text' => $label,
+            'content.cta_text' => $label,
+            'cta.url' => $url,
+            'content.cta_url' => $url,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $section
+     * @return array<string,mixed>
+     */
+    private function enforceSectionCtaIntentDefaults(array $defaultConfig, array $scope, string $pageType, array $section, string $locale = ''): array
+    {
+        $label = $this->resolveSectionCtaText($scope, $pageType, $section, $locale);
+        if ($label === '') {
+            return $defaultConfig;
+        }
+
+        $identity = $this->buildSectionCtaIntentNeedle($scope, $pageType, $section);
+        $contactIntent = $this->isContactOrSupportIntent($identity);
+        $current = \trim((string)($defaultConfig['cta.text'] ?? $defaultConfig['content.cta_text'] ?? ''));
+        if ($current === '' || (!$contactIntent && ($this->isGenericConsultCtaLabel($current) || $this->isGenericCtaContactLabel($current)))) {
+            $defaultConfig['cta.text'] = $label;
+            $defaultConfig['content.cta_text'] = $label;
+        }
+
+        $url = $this->resolvePrimaryCtaUrl($scope);
+        if ($url !== '') {
+            foreach (['cta.url', 'content.cta_url'] as $key) {
+                if (\trim((string)($defaultConfig[$key] ?? '')) === '') {
+                    $defaultConfig[$key] = $url;
+                }
+            }
+        }
+
+        return $defaultConfig;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $section
+     */
+    private function resolveSectionCtaText(array $scope, string $pageType, array $section, string $locale = ''): string
+    {
+        $locale = $locale !== '' ? $locale : $this->resolveScopePrimaryLocale($scope);
+        $sectionNeedle = $this->buildSectionLocalCtaIntentNeedle($pageType, $section);
+        $needle = $sectionNeedle;
+        if ($this->isContactOrSupportIntent($sectionNeedle)) {
+            return $this->localizeBuildText('contact_us', $locale);
+        }
+        if (\in_array($pageType, [Page::TYPE_BLOG_LIST, Page::TYPE_BLOG_CATEGORY, Page::TYPE_BLOG], true)
+            && \preg_match('/\b(?:download|apk|app|install|newsletter|cta)\b/iu', $sectionNeedle) !== 1
+        ) {
+            return $this->localizeBuildText('explore_more', $locale);
+        }
+        if (\preg_match('/\b(?:reward|bonus|coin|coupon|promotion|offer|gift|prize|cashback)\b|奖励|金币|礼包|福利|优惠|活动/iu', $needle) === 1) {
+            return $this->localizeBuildText('claim_bonus', $locale);
+        }
+        if (\preg_match('/\b(?:download|apk|app|install)\b|下载|安装/iu', $needle) === 1) {
+            return $this->localizeBuildText('download_now', $locale);
+        }
+        if (\in_array($pageType, [Page::TYPE_BLOG_LIST, Page::TYPE_BLOG_CATEGORY, Page::TYPE_BLOG], true)
+            || \preg_match('/\b(?:blog|article|guide|learn|resource|news|reading)\b|博客|攻略|学习|文章|资讯/iu', $needle) === 1
+        ) {
+            return $this->localizeBuildText('explore_more', $locale);
+        }
+        if (\preg_match('/\b(?:game|play|table|poker|rummy|blackjack|ludo|casino)\b|游戏|棋牌|玩法|畅玩/iu', $needle) === 1) {
+            return $this->localizeBuildText('start_playing', $locale);
+        }
+
+        return $this->resolvePrimaryCtaText($scope, $locale);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $section
+     */
+    private function buildSectionLocalCtaIntentNeedle(string $pageType, array $section): string
+    {
+        $sectionConfig = \is_array($section['config'] ?? null) ? $section['config'] : [];
+        $parts = [
+            $pageType,
+            (string)($section['code'] ?? ''),
+            (string)($section['key'] ?? ''),
+            (string)($section['template'] ?? ''),
+            (string)($section['name'] ?? ''),
+            (string)($section['description'] ?? ''),
+            (string)($sectionConfig['section_title'] ?? ''),
+            (string)($sectionConfig['headline'] ?? ''),
+            (string)($sectionConfig['description'] ?? ''),
+        ];
+
+        return \mb_strtolower(\implode(' ', \array_filter($parts, static fn(string $part): bool => \trim($part) !== '')));
+    }
+
+    private function buildSectionCtaIntentNeedle(array $scope, string $pageType, array $section): string
+    {
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $siteBrief = \is_array($scope['site_brief'] ?? null) ? $scope['site_brief'] : [];
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        $parts = [
+            $pageType,
+            (string)($section['code'] ?? ''),
+            (string)($section['key'] ?? ''),
+            (string)($section['template'] ?? ''),
+            (string)($section['name'] ?? ''),
+            (string)($section['description'] ?? ''),
+            (string)($websiteProfile['brief_description'] ?? ''),
+            (string)($websiteProfile['site_tagline'] ?? ''),
+            (string)($siteBrief['primary_goal'] ?? ''),
+        ];
+        foreach (\is_array($sourceTruth['conversion_goals'] ?? null) ? $sourceTruth['conversion_goals'] : [] as $goal) {
+            if (\is_scalar($goal)) {
+                $parts[] = (string)$goal;
+            }
+        }
+
+        return \mb_strtolower(\implode(' ', \array_filter($parts, static fn(string $part): bool => \trim($part) !== '')));
+    }
+
+    private function isContactOrSupportIntent(string $needle): bool
+    {
+        return \preg_match('/\b(?:contact|support|help|service|form|mail|phone|whatsapp|lead|inquiry|enquiry)\b|联系|客服|咨询|表单|电话|邮箱|帮助|支持/iu', $needle) === 1;
+    }
+
+    private function isGenericConsultCtaLabel(string $label): bool
+    {
+        return \preg_match('/\b(?:consult|contact us|enquire|inquire|talk to us|get in touch)\b|立即咨询|马上咨询|联系我们|联系客服|咨询/iu', $label) === 1;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
     private function resolvePrimaryCtaText(array $scope, string $locale = ''): string
     {
         $locale = $locale !== '' ? $locale : $this->resolveScopePrimaryLocale($scope);
         $sharedPromptContext = $this->resolveSharedPromptContext($scope);
+        $requirementExpansion = \is_array($sharedPromptContext['requirement_expansion'] ?? null) ? $sharedPromptContext['requirement_expansion'] : [];
+        $siteStrategy = \is_array($sharedPromptContext['site_strategy'] ?? null) ? $sharedPromptContext['site_strategy'] : [];
         $sharedAction = $this->filterVisibleCopyForLocale(
-            \trim((string)($sharedPromptContext['shared_cta_strategy']['primary_action'] ?? '')),
+            \trim($this->pickString(
+                $requirementExpansion['primary_cta'] ?? null,
+                $siteStrategy['primary_cta'] ?? null,
+                $sharedPromptContext['shared_cta_strategy']['primary_action'] ?? null,
+                $sharedPromptContext['shared_cta_strategy']['primary_cta'] ?? null,
+                $sharedPromptContext['primary_cta'] ?? null
+            )),
             $locale
         );
-        if ($sharedAction !== '') {
-            return $sharedAction;
+        if ($sharedAction !== '' && !$this->isGenericConsultCtaLabel($sharedAction)) {
+            return $this->selectPrimaryCtaLabel($sharedAction);
         }
 
         $pageTypes = $this->resolveScopedPageTypes($scope);
-        if (\in_array(Page::TYPE_CONTACT, $pageTypes, true)) {
+        $primaryNeedle = $this->buildSectionCtaIntentNeedle($scope, \implode(' ', $pageTypes), []);
+        if (\preg_match('/\b(?:download|apk|app|install)\b|下载|安装/iu', $primaryNeedle) === 1) {
+            return $this->localizeBuildText('download_now', $locale);
+        }
+        if (\count($pageTypes) === 1 && \in_array(Page::TYPE_CONTACT, $pageTypes, true)) {
             return $this->localizeBuildText('contact_us', $locale);
         }
-        if (\in_array(Page::TYPE_BLOG_LIST, $pageTypes, true)) {
+        if (\count($pageTypes) === 1 && \in_array(Page::TYPE_BLOG_LIST, $pageTypes, true)) {
             return $this->localizeBuildText('explore_more', $locale);
         }
 
         return $this->localizeBuildText('get_started', $locale);
+    }
+
+    private function selectPrimaryCtaLabel(string $label): string
+    {
+        $parts = \preg_split('/\s*(?:\/|\||,|\x{FF0C}|\x{3001})\s*/u', $label, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($parts as $part) {
+            $part = \trim((string)$part);
+            if ($part !== '') {
+                return $part;
+            }
+        }
+
+        return $label;
     }
 
     /**
@@ -8349,6 +9303,16 @@ class AiSitePageComponentGenerationService
     private function getAiService(): AiService
     {
         return $this->aiService ?? ObjectManager::getInstance(AiService::class);
+    }
+
+    private function getBuildTaskService(): AiSiteBuildTaskService
+    {
+        return ObjectManager::getInstance(AiSiteBuildTaskService::class);
+    }
+
+    private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
+    {
+        return $this->scopeCompatibilityService ?? ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
     }
 
     /**
@@ -8945,6 +9909,9 @@ class AiSitePageComponentGenerationService
                 'contact_us' => 'Связаться с нами',
                 'explore_more' => 'Подробнее',
                 'get_started' => 'Начать',
+                'download_now' => 'Скачать сейчас',
+                'claim_bonus' => 'Получить бонус',
+                'start_playing' => 'Начать игру',
                 default => $key,
             };
         }
@@ -8958,6 +9925,9 @@ class AiSitePageComponentGenerationService
                 'contact_us' => '联系我们',
                 'explore_more' => '查看更多',
                 'get_started' => '立即开始',
+                'download_now' => "\u{7ACB}\u{5373}\u{4E0B}\u{8F7D}",
+                'claim_bonus' => "\u{9886}\u{53D6}\u{91D1}\u{5E01}",
+                'start_playing' => "\u{5F00}\u{59CB}\u{7545}\u{73A9}",
                 default => $key,
             };
         }
@@ -8971,6 +9941,9 @@ class AiSitePageComponentGenerationService
             'contact_us' => 'Contact Us',
             'explore_more' => 'Explore More',
             'get_started' => 'Get Started',
+            'download_now' => 'Download Now',
+            'claim_bonus' => 'Claim Bonus',
+            'start_playing' => 'Start Playing',
             default => $key,
         };
     }
@@ -9296,9 +10269,12 @@ class AiSitePageComponentGenerationService
 
         foreach ($sources as $source) {
             if (\preg_match_all('/\b(?:[A-Z][A-Za-z0-9\'-]{1,}|[A-Z0-9]{2,})\b/u', $source, $matches) < 1) {
+                foreach ($this->latinIdentityVariants($source) as $variant) {
+                    $allowed[$variant] = true;
+                }
                 continue;
             }
-            foreach ($matches[0] ?? [] as $word) {
+            foreach (\array_merge($matches[0] ?? [], $this->latinIdentityVariants($source)) as $word) {
                 $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
                 if (\strlen($normalized) >= 2) {
                     $allowed[$normalized] = true;
@@ -9356,10 +10332,116 @@ class AiSitePageComponentGenerationService
             return;
         }
 
-        // Language selection is enforced through the generation contract.
-        // Do not reject output just because it contains Latin letters: Chinese and
-        // other non-English sites may legitimately contain brands, acronyms, URLs,
-        // model names, APK/SEO terms, or user-provided proper nouns.
+        $visibleText = $this->stripAllowedVisibleIdentitySnippets(
+            $this->extractVisibleHtmlText($html),
+            $renderContext
+        );
+        if ($visibleText === '') {
+            return;
+        }
+
+        if ($this->isCjkLocale($locale) && $this->hasDominantLatinProseForCjkLocale($visibleText)) {
+            throw new \RuntimeException(
+                'Generated component website content locale contract failed: '
+                . $this->summarizeNonTargetLatinCopyForLocaleError($visibleText, $this->collectAllowedLatinTermsFromRenderContext($renderContext))
+            );
+        }
+
+        if ($this->isNonCjkLocale($locale) && $this->hasLargeCjkVisibleCopyForNonCjkLocale($visibleText)) {
+            throw new \RuntimeException('Generated component website content locale contract failed: unexpected large CJK visible copy for locale ' . $locale);
+        }
+
+        $allowedTerms = $this->collectAllowedLatinTermsFromRenderContext($renderContext);
+        if ($this->hasDominantLatinProseForNonEnglishLocale($visibleText, $locale, $allowedTerms)) {
+            throw new \RuntimeException(
+                'Generated component website content locale contract failed: '
+                . $this->summarizeNonTargetLatinCopyForLocaleError($visibleText, $allowedTerms)
+            );
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function stripAllowedVisibleIdentitySnippets(string $text, array $renderContext): string
+    {
+        if ($text === '') {
+            return '';
+        }
+
+        $sources = [];
+        $this->collectAllowedLatinTermSources($renderContext['_website_profile'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['_scope_identity'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['page'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['component_config'] ?? [], $sources);
+        foreach (\array_values(\array_unique($sources)) as $source) {
+            $source = \trim((string)$source);
+            if ($source === '' || \strlen($source) < 3) {
+                continue;
+            }
+            foreach (\array_merge([$source], $this->latinIdentityVariants($source)) as $identitySnippet) {
+                $identitySnippet = \trim((string)$identitySnippet);
+                if ($identitySnippet !== '' && \strlen($identitySnippet) >= 3) {
+                    $text = \str_ireplace($identitySnippet, ' ', $text);
+                }
+            }
+        }
+
+        return \trim((string)\preg_replace('/\s+/u', ' ', $text));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function latinIdentityVariants(string $source): array
+    {
+        $source = \trim($source);
+        if ($source === '') {
+            return [];
+        }
+        if (\preg_match_all('/[A-Za-z0-9]+/u', $source, $matches) < 1) {
+            return [];
+        }
+
+        $words = [];
+        foreach ($matches[0] ?? [] as $word) {
+            $normalized = \strtolower(\trim((string)$word));
+            if (\strlen($normalized) >= 2) {
+                $words[] = $normalized;
+            }
+        }
+        $words = \array_values(\array_unique($words));
+        if ($words === []) {
+            return [];
+        }
+
+        $variants = $words;
+        if (\count($words) > 1) {
+            $variants[] = \implode('-', $words);
+            $variants[] = \implode('', $words);
+            $variants[] = \implode(' ', $words);
+        }
+
+        return \array_values(\array_unique($variants));
+    }
+
+    private function hasLargeCjkVisibleCopyForNonCjkLocale(string $text): bool
+    {
+        $matches = [];
+        if (\preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+/u', $text, $matches) <= 0) {
+            return false;
+        }
+
+        $total = 0;
+        foreach ($matches[0] as $segment) {
+            $length = \function_exists('mb_strlen') ? \mb_strlen((string)$segment) : \strlen((string)$segment);
+            if ($length >= 12) {
+                return true;
+            }
+            $total += $length;
+        }
+
+        return $total >= 18;
     }
 
     /**
@@ -9391,6 +10473,10 @@ class AiSitePageComponentGenerationService
             return;
         }
         // 鏍囩闂悎鏍￠獙锛氭娴嬮潪鑷棴鍚堟爣绛炬槸鍚︾己灏戦棴鏍囩
+        $malformedReason = $this->detectMalformedGeneratedHtmlReason($html);
+        if ($malformedReason !== null) {
+            throw new \RuntimeException('Generated HTML structure invalid: ' . $malformedReason);
+        }
         $unclosedTags = $this->detectUnclosedHtmlTags($html);
         if ($unclosedTags !== []) {
             throw new \RuntimeException(
@@ -9429,9 +10515,47 @@ class AiSitePageComponentGenerationService
 
     private function detectComponentVisualContractViolation(string $componentCode, string $html): ?string
     {
-        $identity = \strtolower($componentCode . ' ' . $html);
+        $classIdentity = '';
+        if (\preg_match_all('/\bclass\s*=\s*(["\'])(.*?)\1/is', $html, $matches) > 0) {
+            $classIdentity = \implode(' ', \array_map('strval', $matches[2] ?? []));
+        }
+        $identity = \strtolower($componentCode . ' ' . $classIdentity);
         if (\preg_match('/\b(hero|banner|opening|above[-_ ]?fold)\b/i', $identity) === 1) {
             return $this->detectHeroBannerQualityViolation($html);
+        }
+        if (\preg_match('/\b(contact|support|help|form|inquiry|enquiry|faq)\b/i', $identity) === 1) {
+            return $this->detectContactSupportQualityViolation($html);
+        }
+
+        return null;
+    }
+
+    private function detectContactSupportQualityViolation(string $html): ?string
+    {
+        $structuredCount = \preg_match_all(
+            '/\bclass\s*=\s*(["\'])(?:(?!\1).)*(?:card|cards|channel|method|form|field|input|note)(?:(?!\1).)*\1/is',
+            $html
+        );
+        if ($structuredCount !== false && $structuredCount >= 2) {
+            return null;
+        }
+
+        $paragraphCount = \preg_match_all('/<p\b[^>]*>(.*?)<\/p>/is', $html, $matches);
+        if ($paragraphCount === false || $paragraphCount === 0) {
+            return null;
+        }
+        foreach ($matches[1] ?? [] as $rawParagraph) {
+            $text = \trim(\html_entity_decode(\strip_tags((string)$rawParagraph), \ENT_QUOTES | \ENT_HTML5, 'UTF-8'));
+            if ($text === '' || \mb_strlen($text) < 120) {
+                continue;
+            }
+            $signals = 0;
+            $signals += \preg_match_all('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu', $text) ?: 0;
+            $signals += \preg_match_all('/\+?\d[\d\s().-]{6,}\d/u', $text) ?: 0;
+            $signals += \preg_match_all('/\b(?:address|office|hours|support|sales|phone|email|whatsapp|faq)\b|客服|邮箱|电话|热线|地址|办公|营业|常见问题|孟买/iu', $text) ?: 0;
+            if ($signals >= 2) {
+                return 'contact/support details are compressed into a long paragraph; split channels into cards or form rows';
+            }
         }
 
         return null;

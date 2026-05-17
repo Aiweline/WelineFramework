@@ -90,6 +90,20 @@ $cls = $componentId;
 
 // 品牌配置
 $brandLogo = $getConfig('brand.logo', '');
+$fallbackBrandLogo = $getConfig('identity.shared_logo_asset', '');
+$normalizeBrandLogo = function($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '';
+    }
+    $path = parse_url($value, PHP_URL_PATH);
+    $path = is_string($path) ? trim($path) : $value;
+    if ($path === '' || str_ends_with($path, '/')) {
+        return '';
+    }
+    return preg_match('/\.(?:png|jpe?g|webp|gif|avif|svg)(?:$|\?)/i', $path) === 1 ? $value : '';
+};
+$brandLogo = $normalizeBrandLogo($brandLogo) ?: $normalizeBrandLogo($fallbackBrandLogo);
 $brandName = $getConfig('brand.name', 'Brand Name');
 $brandDesc = $getConfig('brand.description', 'A curated destination with clear information, trusted support, and simple next steps.');
 

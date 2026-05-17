@@ -2273,7 +2273,7 @@ $apiId = $this->request->getParam('api_id');
         // API数据
         const apiData = <?= json_encode($apis ?? [], JSON_UNESCAPED_UNICODE) ?>;
         const moduleDisplayNames = <?= json_encode($this->getData('moduleDisplayNames') ?? [], JSON_UNESCAPED_UNICODE) ?>;
-        const selectedApiId = '<?= htmlspecialchars($apiId ?? '') ?>';
+        const selectedApiId = <?= json_encode($apiId ?? '', JSON_UNESCAPED_UNICODE) ?>;
         const selectedApi = <?= json_encode($selectedApi ?? null, JSON_UNESCAPED_UNICODE) ?>;
         
         // 获取可用的货币和语言列表（从后端传递）
@@ -2374,8 +2374,82 @@ $apiId = $this->request->getParam('api_id');
         // 初始化语言和货币
         let currentLocale = getCurrentLocale();
         let currentCurrency = getCurrentCurrency();
-        let currentApiType = localStorage.getItem(API_TYPE_KEY) || 'frontend';
+        const selectedApiType = selectedApi?.route ? (selectedApi.route.is_backend ? 'backend' : 'frontend') : null;
+        let currentApiType = selectedApiType || localStorage.getItem(API_TYPE_KEY) || 'frontend';
         let currentI18nMode = localStorage.getItem(I18N_MODE_KEY) || 'path';
+        
+        if (selectedApiType) {
+            localStorage.setItem(API_TYPE_KEY, currentApiType);
+        }
+        
+        function getCurrentSelectedApiId() {
+            const apiId = new URLSearchParams(window.location.search).get('api_id');
+            return apiId || window.selectedApi?.id || selectedApiId || '';
+        }
+        
+        function getApiFromTreeNode(node) {
+            return node ? (node.api || (node.original && (node.original.api || (node.original.original && node.original.original.api)))) : null;
+        }
+        
+        function updateCurrentApiUrl(apiId, replace = false) {
+            const url = new URL(window.location.href);
+            if (apiId) {
+                url.searchParams.set('api_id', apiId);
+            } else {
+                url.searchParams.delete('api_id');
+            }
+            const historyMethod = replace ? 'replaceState' : 'pushState';
+            window.history[historyMethod]({}, '', url.toString());
+        }
+        
+        function renderApiTreeAnchors() {
+            $('#api-tree').find('.jstree-anchor').each(function() {
+                const $anchor = $(this);
+                const $node = $anchor.closest('.jstree-node');
+                const nodeId = $node.attr('id');
+                if (!nodeId) {
+                    return;
+                }
+                const node = $('#api-tree').jstree('get_node', nodeId);
+                if (node && node.text && node.text.indexOf('<') !== -1) {
+                    $anchor.html(node.text);
+                }
+            });
+        }
+        
+        function clearCurrentApiSelection(removeApiId = false) {
+            window.selectedApi = null;
+            if (removeApiId) {
+                updateCurrentApiUrl('', true);
+            }
+            document.getElementById('api-detail-panel').innerHTML = '<div class="empty-state"><h3><?=__('请选择API接口')?></h3><p><?=__('从左侧列表中选择一个API接口查看详细信息')?></p></div>';
+            document.getElementById('api-test-panel').innerHTML = '<div class="test-empty-state"><div class="test-empty-state-icon">🚀</div><h3><?=__('等待选择API')?></h3><p><?=__('请从左侧选择一个API接口开始测试')?></p></div>';
+        }
+        
+        function restoreCurrentApiSelection() {
+            const currentSelectedApiId = getCurrentSelectedApiId();
+            if (!currentSelectedApiId) {
+                return false;
+            }
+            const tree = $('#api-tree').jstree(true);
+            if (!tree) {
+                return false;
+            }
+            const node = tree.get_node(currentSelectedApiId);
+            const api = getApiFromTreeNode(node);
+            if (!api) {
+                return false;
+            }
+            const parents = tree.get_path(currentSelectedApiId, true) || [];
+            parents.forEach(function(parentId) {
+                tree.open_node(parentId);
+            });
+            tree.deselect_all(true);
+            tree.select_node(currentSelectedApiId, true);
+            loadApiDetail(api);
+            updateCurrentApiUrl(currentSelectedApiId, true);
+            return true;
+        }
         
         // 设置语言和货币选择器的值
         document.addEventListener('DOMContentLoaded', function() {
@@ -2389,7 +2463,9 @@ $apiId = $this->request->getParam('api_id');
             }
             
             // 设置API类型Tab
-            switchApiType(currentApiType);
+            document.getElementById('api-type-frontend').classList.toggle('active', currentApiType === 'frontend');
+            document.getElementById('api-type-backend').classList.toggle('active', currentApiType === 'backend');
+            updateLoginStatus();
         });
         
         // 初始化正式环境模式开关
@@ -2478,7 +2554,7 @@ $apiId = $this->request->getParam('api_id');
                 const node = data.node;
                 // 检查是否是API节点（有api属性）
                 // jstree会将数据存储在node.original中，但我们的api是直接存储的
-                const api = node.api || (node.original && (node.original.api || (node.original.original && node.original.original.api)));
+                const api = getApiFromTreeNode(node);
                 if (api) {
                     // 直接更新右侧内容，不跳转页面
                     console.log('Loading API detail:', api);
@@ -2487,9 +2563,7 @@ $apiId = $this->request->getParam('api_id');
                     // 更新URL（不刷新页面）
                     const apiId = api.id || node.id || (node.a_attr && node.a_attr['data-api-id']);
                     if (apiId) {
-                        const url = new URL(window.location);
-                        url.searchParams.set('api_id', apiId);
-                        window.history.pushState({}, '', url);
+                        updateCurrentApiUrl(apiId);
                     }
                 } else {
                     console.log('Node does not have API data:', node, 'original:', node.original);
@@ -2497,7 +2571,7 @@ $apiId = $this->request->getParam('api_id');
             });
             
             // 绑定ready事件
-            $('#api-tree').on('ready.jstree', function() {
+            $('#api-tree').one('ready.jstree', function() {
                 // 渲染HTML内容到jstree节点
                 $('#api-tree').find('.jstree-anchor').each(function() {
                     const $anchor = $(this);
@@ -4289,14 +4363,12 @@ $apiId = $this->request->getParam('api_id');
             // 绑定事件（在jstree初始化后）
             $('#api-tree').on('select_node.jstree', function(e, data) {
                 const node = data.node;
-                const api = node.api || (node.original && (node.original.api || (node.original.original && node.original.original.api)));
+                const api = getApiFromTreeNode(node);
                 if (api) {
                     loadApiDetail(api);
                     const apiId = api.id || node.id || (node.a_attr && node.a_attr['data-api-id']);
                     if (apiId) {
-                        const url = new URL(window.location);
-                        url.searchParams.set('api_id', apiId);
-                        window.history.pushState({}, '', url);
+                        updateCurrentApiUrl(apiId);
                     }
                 }
             });

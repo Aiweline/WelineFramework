@@ -632,6 +632,8 @@ Duration,Duration
 应用运行前，你可以在这里做一些初始化操作。,应用运行前，你可以在这里做一些初始化操作。
 应用运行后,应用运行后
 应用运行后，你可以在这里做一些后续操作。,应用运行后，你可以在这里做一些后续操作。
+"WLS worker bootstrap after","WLS worker bootstrap after"
+"Triggered once after each WLS worker has loaded framework registries. Observers must only warm request-independent runtime caches.","Triggered once after each WLS worker has loaded framework registries. Observers must only warm request-independent runtime caches."
 请求遥测数据已采集,请求遥测数据已采集
 "在一次请求生命周期结束时触发。Framework 仅广播通用遥测快照（trace、request、runtime、summary、result），由上层模块（如 DeveloperWorkspace、监控模块）自行监听并处理。","在一次请求生命周期结束时触发。Framework 仅广播通用遥测快照（trace、request、runtime、summary、result），由上层模块（如 DeveloperWorkspace、监控模块）自行监听并处理。"
 URL解析后,URL解析后

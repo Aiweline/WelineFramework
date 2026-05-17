@@ -253,7 +253,6 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             'build_plan_confirmed_at' => '2026-05-11 00:00:00',
             'fake_mode' => 1,
             'website_profile' => ['business_name' => 'Patch Test'],
-            'build_summary' => ['task_summary' => ['total' => 2, 'done' => 2]],
             'build_plan_v2' => [
                 'contract_meta' => [
                     'status' => 'confirmed',
@@ -301,6 +300,34 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                         'section_code' => 'content/features',
                         'runtime_context' => ['block_key' => 'features'],
                     ],
+                ],
+            ],
+            'build_tasks' => [
+                'page:home_page:hero' => [
+                    'task_key' => 'page:home_page:hero',
+                    'status' => 'done',
+                    'attempt_no' => 1,
+                    'message' => '',
+                    'result_ref' => [
+                        'page_type' => Page::TYPE_HOME,
+                        'section_code' => 'content/hero',
+                    ],
+                    'updated_at' => '2026-05-11 00:00:00',
+                    'started_at' => '2026-05-11 00:00:00',
+                    'finished_at' => '2026-05-11 00:00:00',
+                ],
+                'page:home_page:features' => [
+                    'task_key' => 'page:home_page:features',
+                    'status' => 'done',
+                    'attempt_no' => 1,
+                    'message' => '',
+                    'result_ref' => [
+                        'page_type' => Page::TYPE_HOME,
+                        'section_code' => 'content/features',
+                    ],
+                    'updated_at' => '2026-05-11 00:00:00',
+                    'started_at' => '2026-05-11 00:00:00',
+                    'finished_at' => '2026-05-11 00:00:00',
                 ],
             ],
             'virtual_pages_by_type' => [

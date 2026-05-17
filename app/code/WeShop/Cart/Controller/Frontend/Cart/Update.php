@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Cart\Controller\Frontend\Cart;
 
 use Weline\Framework\App\Controller\FrontendController;
-use WeShop\Customer\Session\CustomerSession;
+use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Cart\Service\CartService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -20,9 +20,8 @@ class Update extends FrontendController
     public function index(): string
     {
         try {
-            /** @var CustomerSession $customerSession */
-            $customerSession = ObjectManager::getInstance(CustomerSession::class);
-            $customer = $customerSession->getCustomer();
+            /** @var CartIdentityService $cartIdentityService */
+            $cartIdentityService = ObjectManager::getInstance(CartIdentityService::class);
             
             $cartId = (int)($this->request->getParam('cart_id') ?? 0);
             $quantity = (int)($this->request->getParam('quantity') ?? 1);
@@ -37,7 +36,7 @@ class Update extends FrontendController
             
             /** @var CartService $cartService */
             $cartService = ObjectManager::getInstance(CartService::class);
-            $cartService->updateCart($cartId, $quantity, $customer ? $customer->getId() : 0);
+            $cartService->updateCart($cartId, $quantity, $cartIdentityService->getCartCustomerId());
             
             return $this->fetchJson(['success' => true, 'message' => __('购物车更新成功')]);
         } catch (\Exception $e) {

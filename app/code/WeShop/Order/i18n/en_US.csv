@@ -1,7 +1,11 @@
 ﻿"Please log in first","Please log in first"
 Success,Success
-"Order Management","Order Management"
 "Order ID is required.","Order ID is required."
+"Shipment created. The order is now fulfilled.","Shipment created. The order is now fulfilled."
+"Shipment creation failed.","Shipment creation failed."
+"Order Management","Order Management"
+"Order marked as delivered.","Order marked as delivered."
+"Delivery update failed.","Delivery update failed."
 "Invalid order status.","Invalid order status."
 "Order status updated.","Order status updated."
 "Order status update failed.","Order status update failed."
@@ -36,6 +40,9 @@ Fulfilled,Fulfilled
 Completed,Completed
 Cancelled,Cancelled
 Refunded,Refunded
+"Cancelled or refunded orders cannot be shipped.","Cancelled or refunded orders cannot be shipped."
+"Only paid orders can be shipped.","Only paid orders can be shipped."
+"Only shipped orders can be marked as delivered.","Only shipped orders can be marked as delivered."
 "Unsupported order status.","Unsupported order status."
 "Order status transition %{1} -> %{2} is not allowed.","Order status transition %{1} -> %{2} is not allowed."
 "Unsupported payment status.","Unsupported payment status."
@@ -123,6 +130,7 @@ ID,ID
 清除筛选,"Clear filter"
 更新状态,"Update status"
 订单详情,"Order Details"
+发货状态,发货状态
 订单商品,"Order items"
 暂无商品信息,"No product information"
 商品图片,"Product Image"
@@ -133,12 +141,22 @@ ID,ID
 订单信息,"Order information"
 订单ID,"Order ID"
 更新时间,"Update time"
+配送方式,配送方式
+支付方式,支付方式
+发货信息,发货信息
+承运商,承运商
+物流单号,物流单号
+发货时间,发货时间
+送达时间,送达时间
+收货地址,收货地址
 金额汇总,"Amount Summary"
 商品小计,"Product Subtotal"
 运费,"Shipping cost"
 税费,"Taxes and Fees"
 折扣,Discount
 订单操作,"Order actions"
+确认发货,确认发货
+标记已送达,标记已送达
 打印订单,"Print order"
 返回订单列表,"Return to Order List"
 确定要取消此订单吗？此操作不可恢复。,"Are you sure you want to cancel this order? This action cannot be undone."

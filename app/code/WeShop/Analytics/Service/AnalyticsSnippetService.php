@@ -9,18 +9,28 @@ use WeShop\Analytics\Provider\BingAds;
 use WeShop\Analytics\Provider\FacebookPixel;
 use WeShop\Analytics\Provider\GoogleAnalytics;
 use WeShop\Analytics\Provider\TikTokPixel;
+use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 
 class AnalyticsSnippetService
 {
     public const SLOT_HEAD = 'head';
     public const SLOT_BODY = 'body';
     public const SLOT_FOOTER = 'footer';
+    private const FRONTEND_SNIPPET_CACHE_TTL = 60;
 
     protected ?PixelProviderInterface $googleAnalytics = null;
     protected ?PixelProviderInterface $facebookPixel = null;
     protected ?PixelProviderInterface $tiktokPixel = null;
     protected ?PixelProviderInterface $bingAds = null;
+    /** @var array<string, array{expires_at: float, data: array<int, array{provider:string,snippet:string}>}> */
+    private static array $frontendSlotSnippetCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
 
     public function __construct(
         ?GoogleAnalytics $googleAnalytics = null,
@@ -70,6 +80,23 @@ class AnalyticsSnippetService
             return [];
         }
 
+        $cacheKey = $this->buildFrontendSlotSnippetCacheKey($slot);
+        if ($cacheKey !== null) {
+            $cached = self::$frontendSlotSnippetCache[$cacheKey] ?? null;
+            if (\is_array($cached)
+                && isset($cached['expires_at'], $cached['data'])
+                && (float)$cached['expires_at'] >= \microtime(true)
+                && \is_array($cached['data'])) {
+                return $cached['data'];
+            }
+
+            $runtimeCached = $this->runtimeCacheGet($cacheKey);
+            if (\is_array($runtimeCached)) {
+                $this->rememberFrontendSlotSnippetCache($cacheKey, $runtimeCached);
+                return $runtimeCached;
+            }
+        }
+
         $traceEnabled = RequestLifecycleTrace::isEnabled();
         $traceName = 'analytics::AnalyticsSnippetService::getFrontendPixelSnippetsBySlot::' . $slot;
         $traceStart = $this->tracePush($traceEnabled, $traceName);
@@ -117,10 +144,16 @@ class AnalyticsSnippetService
                 }
             }
 
-            return $snippets;
         } finally {
             $this->tracePop($traceEnabled, $traceName, $traceStart);
         }
+
+        if ($cacheKey !== null) {
+            $this->rememberFrontendSlotSnippetCache($cacheKey, $snippets);
+            $this->runtimeCacheSet($cacheKey, $snippets, $this->frontendSnippetCacheTtl());
+        }
+
+        return $snippets;
     }
 
     /**
@@ -194,6 +227,104 @@ class AnalyticsSnippetService
             self::SLOT_FOOTER => $slot,
             default => null,
         };
+    }
+
+    private function buildFrontendSlotSnippetCacheKey(string $slot): ?string
+    {
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
+            return null;
+        }
+
+        $envFile = BP . 'app' . DS . 'etc' . DS . 'env.php';
+        $envMtime = (int)@filemtime($envFile);
+        $envSize = (int)@filesize($envFile);
+
+        return 'analytics.frontend_slot_snippets.' . \sha1(\implode('|', [
+            $slot,
+            (string)$envMtime,
+            (string)$envSize,
+            (string)Env::get('theme.id', ''),
+            (string)Env::get('server.host', ''),
+        ]));
+    }
+
+    /**
+     * @param array<int, array{provider:string,snippet:string}> $snippets
+     */
+    private function rememberFrontendSlotSnippetCache(string $cacheKey, array $snippets): void
+    {
+        if (\count(self::$frontendSlotSnippetCache) > 16) {
+            self::$frontendSlotSnippetCache = [];
+        }
+
+        self::$frontendSlotSnippetCache[$cacheKey] = [
+            'expires_at' => \microtime(true) + $this->frontendSnippetCacheTtl(),
+            'data' => $snippets,
+        ];
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get('theme_runtime', $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set('theme_runtime', $key, $value, \max(1, $ttl));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$runtimeCache = new MemoryStateFacade(ObjectManager::getInstance(RuntimeCachePolicy::class)->memoryOptions([
+                'consumer_code' => 'analytics_frontend_snippets',
+                'prefer_direct_connect' => true,
+                'pool_size' => 1,
+                'auto_start' => false,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function frontendSnippetCacheTtl(): int
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl(
+            'theme.hook_output_ttl',
+            self::FRONTEND_SNIPPET_CACHE_TTL
+        );
     }
 
     private function tracePush(bool $traceEnabled, string $name): float

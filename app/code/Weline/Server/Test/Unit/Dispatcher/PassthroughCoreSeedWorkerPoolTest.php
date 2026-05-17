@@ -483,11 +483,17 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertStringContainsString("X-WLS-Internal-Request: homepage-warmup\r\n", $request);
     }
 
-    public function testTrustingMasterReadyWarmupSkipsHomepageWarmupByDefault(): void
+    public function testTrustingMasterReadyWarmupCanDisableHomepageWarmup(): void
     {
-        $core = $this->createTrustingMasterReadyWarmupCore([
-            19982 => ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01],
-        ]);
+        $core = $this->createTrustingMasterReadyWarmupCore(
+            [
+                19982 => ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01],
+            ],
+            [],
+            [
+                'homepage_warmup_enabled' => false,
+            ]
+        );
 
         $result = $core->runTrustingMasterReadyWarmup(19982);
 
@@ -511,7 +517,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame(1.0, $core->healthCalls[0]['response_timeout']);
     }
 
-    public function testTrustingMasterReadyWarmupCanOptIntoHomepageWarmup(): void
+    public function testTrustingMasterReadyWarmupRunsHomepageWarmupByDefault(): void
     {
         $core = $this->createTrustingMasterReadyWarmupCore(
             [
@@ -519,9 +525,6 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
             ],
             [
                 19982 => 'homepage warmup timed out',
-            ],
-            [
-                'homepage_warmup_enabled' => true,
             ]
         );
 
@@ -533,16 +536,85 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertCount(1, $core->homepageCalls);
     }
 
+    public function testClaimJoinedWorkerHomepageWarmupOnlyOncePerMembership(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], []);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+
+        $first = $core->claimJoinedWorkerHomepageWarmup([19982, 19982]);
+        $second = $core->claimJoinedWorkerHomepageWarmup([19982]);
+
+        self::assertCount(1, $first);
+        self::assertSame(19982, $first[0]['port']);
+        self::assertGreaterThan(0, $first[0]['ticket']);
+        self::assertSame([], $second);
+    }
+
+    public function testClaimJoinedWorkerHomepageWarmupCanBeDisabled(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], [], [
+            'homepage_warmup_enabled' => false,
+        ]);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+
+        self::assertSame([], $core->claimJoinedWorkerHomepageWarmup([19982]));
+    }
+
+    public function testRemovingWorkerClearsHomepageWarmupClaimForNextJoin(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], [], [
+            'homepage_warmup_enabled' => true,
+        ]);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+        $first = $core->claimJoinedWorkerHomepageWarmup([19982]);
+        $core->removeWorkerPort(19982);
+        $core->setWorkerPortsFromMasterReady([19982]);
+        $second = $core->claimJoinedWorkerHomepageWarmup([19982]);
+
+        self::assertCount(1, $first);
+        self::assertCount(1, $second);
+        self::assertNotSame($first[0]['ticket'], $second[0]['ticket']);
+    }
+
+    public function testWarmupJoinedWorkersViaHomepageSkipsStaleClaimAfterWorkerLeavesPool(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], [
+            19982 => true,
+        ], [
+            'homepage_warmup_enabled' => true,
+        ]);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+        $claims = $core->claimJoinedWorkerHomepageWarmup([19982]);
+        $core->removeWorkerPort(19982);
+
+        $result = $core->warmupJoinedWorkersViaHomepage($claims);
+
+        self::assertSame([], $core->homepageCalls);
+        self::assertSame([], $result['warmed']);
+        self::assertSame([], $result['failed']);
+        self::assertSame([19982], $result['skipped']);
+    }
+
     public function testTrustingMasterReadyWarmupExtendsRetriesForTransientEarlyCloses(): void
     {
-        $core = $this->createTrustingMasterReadyWarmupCore([
-            19982 => [
-                'health connection closed before response after 0.05s',
-                'health connection closed before response after 0.05s',
-                'health connection closed before response after 0.05s',
-                ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.08],
+        $core = $this->createTrustingMasterReadyWarmupCore(
+            [
+                19982 => [
+                    'health connection closed before response after 0.05s',
+                    'health connection closed before response after 0.05s',
+                    'health connection closed before response after 0.05s',
+                    ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.08],
+                ],
             ],
-        ]);
+            [],
+            [
+                'homepage_warmup_enabled' => false,
+            ]
+        );
 
         $result = $core->runTrustingMasterReadyWarmup(19982);
 

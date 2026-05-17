@@ -36,6 +36,8 @@ $showFooter = $meta['showFooter'] ?? $this->getData('showFooter') ?? true;
 $showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
 $filterDrawerTitle = $meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? __('筛选条件');
 $gridColumns = $meta['gridColumns'] ?? $this->getData('gridColumns') ?? 4;
+$pagination = $this->request->getData('pagination') ?? $this->getData('pagination') ?? '';
+$paginationData = $this->request->getData('pagination_data') ?? $this->getData('pagination_data') ?? [];
 
 // 将默认值赋值到 meta 数组，以便模板条件可以正确读取
 $meta['showHeader'] = $showHeader;
@@ -149,6 +151,39 @@ $this->assign('title', $title);
                                 </if>
                             </w:hook>
                         </w:slot>
+                        <?php if ($pagination || ((int)($paginationData['pages'] ?? 0)) > 1): ?>
+                            <div class="category-layout__pagination" data-category-pagination>
+                                <?php if ($pagination): ?>
+                                    <?= $pagination ?>
+                                <?php else: ?>
+                                    <?php
+                                    $currentPage = max(1, (int)($paginationData['page'] ?? 1));
+                                    $totalPages = max(1, (int)($paginationData['pages'] ?? 1));
+                                    $prevUrl = (string)($paginationData['prev_url'] ?? '');
+                                    $nextUrl = (string)($paginationData['next_url'] ?? '');
+                                    ?>
+                                    <nav class="category-pagination" aria-label="<?= htmlspecialchars((string)__('Pagination'), ENT_QUOTES, 'UTF-8') ?>">
+                                        <a
+                                            href="<?= htmlspecialchars($prevUrl !== '' ? $prevUrl : '#', ENT_QUOTES, 'UTF-8') ?>"
+                                            class="category-pagination__link <?= $prevUrl !== '' ? '' : 'is-disabled' ?>"
+                                            aria-disabled="<?= $prevUrl !== '' ? 'false' : 'true' ?>"
+                                        >
+                                            <?= __('Previous') ?>
+                                        </a>
+                                        <span class="category-pagination__status">
+                                            <?= __('Page %{1} of %{2}', [$currentPage, $totalPages]) ?>
+                                        </span>
+                                        <a
+                                            href="<?= htmlspecialchars($nextUrl !== '' ? $nextUrl : '#', ENT_QUOTES, 'UTF-8') ?>"
+                                            class="category-pagination__link <?= $nextUrl !== '' ? '' : 'is-disabled' ?>"
+                                            aria-disabled="<?= $nextUrl !== '' ? 'false' : 'true' ?>"
+                                        >
+                                            <?= __('Next') ?>
+                                        </a>
+                                    </nav>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </section>
                 </div>
 
@@ -320,6 +355,54 @@ $this->assign('title', $title);
     /* ---- 内容区域 ---- */
     .category-layout__content {
         min-width: 0;
+    }
+
+    .category-layout__pagination {
+        display: flex;
+        justify-content: center;
+        margin-top: var(--spacing-6, 2rem);
+    }
+
+    .category-pagination {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-4, 1rem);
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--color-border-light);
+        border-radius: var(--radius-lg, 12px);
+        background: var(--color-bg-primary);
+        box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+    }
+
+    .category-pagination__link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 5rem;
+        padding: 0.5rem 0.9rem;
+        border: 1px solid var(--color-border-light);
+        border-radius: 999px;
+        color: var(--color-text-primary);
+        font-size: var(--font-size-sm, 0.875rem);
+        font-weight: var(--font-weight-semibold, 600);
+        text-decoration: none;
+        transition: border-color 0.2s ease, color 0.2s ease;
+    }
+
+    .category-pagination__link:hover {
+        border-color: var(--color-primary, #2563eb);
+        color: var(--color-primary, #2563eb);
+    }
+
+    .category-pagination__link.is-disabled {
+        pointer-events: none;
+        opacity: 0.45;
+    }
+
+    .category-pagination__status {
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm, 0.875rem);
+        white-space: nowrap;
     }
 
     .category-layout__products {

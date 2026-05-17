@@ -5,11 +5,26 @@ declare(strict_types=1);
 namespace WeShop\Store\Service;
 
 use WeShop\Store\Model\Store;
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\State;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 use Weline\Websites\Data\WebsiteData;
 
 class StoreContextService
 {
+    private const CACHE_NAMESPACE = 'weline_site_runtime';
+    private const STORE_CACHE_TTL = 300;
+
+    /** @var array<string, array{expires_at: float, data: array<string, mixed>}> */
+    private static array $storeCache = [];
+
+    /** @var array<string, array{expires_at: float, data: array<int, array<string, mixed>>}> */
+    private static array $storeListCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
+
     public function __construct(
         private readonly Store $storeModel
     ) {
@@ -26,16 +41,26 @@ class StoreContextService
         $websiteId ??= $this->resolveWebsiteId();
         $locale = $this->normalizeLocale($locale ?? $this->resolveLocale());
         $currency = $this->normalizeCurrency($currency ?? $this->resolveCurrency());
-
-        $stores = $websiteId > 0
-            ? $this->storeModel->getStoresByWebsiteId($websiteId)
-            : $this->storeModel->getEnabledStores();
-
-        if ((!is_array($stores) || $stores === []) && $websiteId > 0) {
-            $stores = $this->storeModel->getEnabledStores();
+        $cacheKey = $this->buildCurrentStoreCacheKey($websiteId, $locale, $currency);
+        $cachedStore = $this->storeCacheGet($cacheKey);
+        if (is_array($cachedStore)) {
+            return $cachedStore;
         }
 
-        return $this->pickBestStore(is_array($stores) ? $stores : [], $websiteId, $locale, $currency);
+        $stores = $websiteId > 0
+            ? $this->getStoresByWebsiteIdCached($websiteId)
+            : $this->getEnabledStoresCached();
+
+        if ((!is_array($stores) || $stores === []) && $websiteId > 0) {
+            $stores = $this->getEnabledStoresCached();
+        }
+
+        $store = $this->pickBestStore(is_array($stores) ? $stores : [], $websiteId, $locale, $currency);
+        if (is_array($store)) {
+            $this->storeCacheSet($cacheKey, $store);
+        }
+
+        return $store;
     }
 
     protected function resolveWebsiteId(): int
@@ -144,5 +169,194 @@ class StoreContextService
         }
 
         return explode('_', $locale)[0] ?? '';
+    }
+
+    private function buildCurrentStoreCacheKey(int $websiteId, string $locale, string $currency): string
+    {
+        return 'store.current.' . sha1($websiteId . '|' . $locale . '|' . $currency);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getStoresByWebsiteIdCached(int $websiteId): array
+    {
+        return $this->storeListCacheRemember(
+            'store.list.website.' . $websiteId,
+            fn (): array => $this->normalizeStoreRows($this->storeModel->getStoresByWebsiteId($websiteId))
+        );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getEnabledStoresCached(): array
+    {
+        return $this->storeListCacheRemember(
+            'store.list.enabled',
+            fn (): array => $this->normalizeStoreRows($this->storeModel->getEnabledStores())
+        );
+    }
+
+    /**
+     * @param callable(): array<int, array<string, mixed>> $loader
+     * @return array<int, array<string, mixed>>
+     */
+    private function storeListCacheRemember(string $key, callable $loader): array
+    {
+        $now = microtime(true);
+        $cached = self::$storeListCache[$key] ?? null;
+        if (is_array($cached) && ($cached['expires_at'] ?? 0.0) >= $now && is_array($cached['data'] ?? null)) {
+            return $cached['data'];
+        }
+
+        $runtimeCached = $this->runtimeCacheGet($key);
+        if (is_array($runtimeCached)) {
+            $rows = $this->normalizeStoreRows($runtimeCached);
+            self::$storeListCache[$key] = [
+                'expires_at' => $now + $this->cacheTtl(),
+                'data' => $rows,
+            ];
+            return $rows;
+        }
+
+        $rows = $loader();
+        $ttl = $this->cacheTtl();
+        self::$storeListCache[$key] = [
+            'expires_at' => $now + $ttl,
+            'data' => $rows,
+        ];
+        $this->runtimeCacheSet($key, $rows, $ttl);
+
+        return $rows;
+    }
+
+    /**
+     * @param mixed $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeStoreRows(mixed $rows): array
+    {
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $normalized[] = $row;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function storeCacheGet(string $key): ?array
+    {
+        $now = microtime(true);
+        $cached = self::$storeCache[$key] ?? null;
+        if (is_array($cached) && ($cached['expires_at'] ?? 0.0) >= $now && is_array($cached['data'] ?? null)) {
+            return $cached['data'];
+        }
+
+        $runtimeCached = $this->runtimeCacheGet($key);
+        if (is_array($runtimeCached)) {
+            self::$storeCache[$key] = [
+                'expires_at' => $now + $this->cacheTtl(),
+                'data' => $runtimeCached,
+            ];
+            return $runtimeCached;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $store
+     */
+    private function storeCacheSet(string $key, array $store): void
+    {
+        if (count(self::$storeCache) > 64) {
+            self::$storeCache = array_slice(self::$storeCache, -32, null, true);
+        }
+
+        $ttl = $this->cacheTtl();
+        self::$storeCache[$key] = [
+            'expires_at' => microtime(true) + $ttl,
+            'data' => $store,
+        ];
+        $this->runtimeCacheSet($key, $store, $ttl);
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get(self::CACHE_NAMESPACE, $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set(self::CACHE_NAMESPACE, $key, $value, max(1, $ttl));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            self::$runtimeCache = new MemoryStateFacade($policy->memoryOptions([
+                'consumer_code' => self::CACHE_NAMESPACE,
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function cacheTtl(): int
+    {
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            return $policy->ttl('site.store_ttl', self::STORE_CACHE_TTL);
+        } catch (\Throwable) {
+            return self::STORE_CACHE_TTL;
+        }
     }
 }

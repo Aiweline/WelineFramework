@@ -283,12 +283,12 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(Page::TYPE_ABOUT, $scope['preview_page_type']);
     }
 
-    public function testNormalizePageTypesDefaultsToAllSupportedPageTypes(): void
+    public function testNormalizePageTypesDefaultsToHomeAndAbout(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
 
-        $this->assertSame(\array_keys(Page::getPageTypes()), $service->normalizePageTypes([]));
-        $this->assertSame(\array_keys(Page::getPageTypes()), $service->normalizePageTypes(''));
+        $this->assertSame([Page::TYPE_HOME, Page::TYPE_ABOUT], $service->normalizePageTypes([]));
+        $this->assertSame([Page::TYPE_HOME, Page::TYPE_ABOUT], $service->normalizePageTypes(''));
     }
 
     public function testNormalizeScopeKeepsSelectedSkillCodes(): void
@@ -345,7 +345,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertStringContainsString("'selected_skill_codes'", $source);
     }
 
-    public function testNormalizeScopeExpandsLegacyDefaultPageTypesWhenSelectionWasNotCustomized(): void
+    public function testNormalizeScopeMapsLegacyDefaultPageTypesToCurrentDefaultSelectionWhenSelectionWasNotCustomized(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
 
@@ -353,7 +353,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
             'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT],
         ]);
 
-        $this->assertSame(\array_keys(Page::getPageTypes()), $scope['page_types']);
+        $this->assertSame([Page::TYPE_HOME, Page::TYPE_ABOUT], $scope['page_types']);
         $this->assertSame(0, $scope[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY]);
     }
 
@@ -666,7 +666,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertArrayHasKey(Page::TYPE_HOME, $virtualPages);
         self::assertSame([], $virtualPages[Page::TYPE_HOME]['blocks']);
-        self::assertSame('Legacy Demo', $virtualPages[Page::TYPE_HOME]['title']);
+        self::assertSame('首页', $virtualPages[Page::TYPE_HOME]['title']);
     }
 
     /**

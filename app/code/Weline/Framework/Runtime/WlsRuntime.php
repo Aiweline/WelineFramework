@@ -112,6 +112,7 @@ class WlsRuntime implements RuntimeInterface
         if (!\defined('WLS_MODE')) {
             \define('WLS_MODE', true);
         }
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
         
         // 定义框架核心常量（原本在 bootstrap.php 中定义）
         if (!\defined('VENDOR_PATH')) {
@@ -144,12 +145,33 @@ class WlsRuntime implements RuntimeInterface
         HookReader::preloadGeneratedHookRegistry();
         PhraseParser::preloadWorkerDictionaries();
         I18nParser::preloadWorkerDictionaries();
+        $this->dispatchWorkerBootstrapWarmup();
         
         // Router 在 WLS 模式下是进程级单例。
         // 请求级状态由 Router::__init() 在每个请求开始时重置，
         // 无需在此注册额外回调（__init 通过 RequestContext ID 检测新请求）。
         
         $this->bootstrapped = true;
+    }
+
+    private function dispatchWorkerBootstrapWarmup(): void
+    {
+        if ($this->eventManager === null) {
+            return;
+        }
+
+        try {
+            $data = [
+                'runtime' => $this,
+                'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
+                'mode' => RuntimeInterface::MODE_WLS,
+            ];
+            $this->eventManager->dispatch('Weline_Framework_Runtime::worker_bootstrap_after', $data);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[WlsRuntime] worker bootstrap warmup failed: ' . $e->getMessage());
+            }
+        }
     }
     
     /**

@@ -33,23 +33,29 @@ class Success extends BaseController
             return '';
         }
 
-        $customer = $this->getCustomerSession()->getCustomer();
-        if (!$customer || !$customer->getId()) {
-            $this->getMessageManager()->addError(__('Please log in to continue.'));
-            $this->redirect($this->getStorefrontLoginRoute());
-            return '';
-        }
-
         $order = $this->getOrderService()->getOrder($orderId);
-        if (!$order || (int) ($order->getData(Order::schema_fields_customer_id) ?? 0) !== (int) $customer->getId()) {
-            $this->getMessageManager()->addError(__('The requested order could not be found.'));
-            $this->redirect('weshop/cart');
-            return '';
-        }
-
         $lastOrderContext = $this->getCustomerSession()->get('weshop_checkout_last_order_context');
         if (!\is_array($lastOrderContext) || (int) ($lastOrderContext['order_id'] ?? 0) !== $orderId) {
             $lastOrderContext = [];
+        }
+
+        $customer = $this->getCustomerSession()->getCustomer();
+        $orderCustomerId = $order ? (int) ($order->getData(Order::schema_fields_customer_id) ?? 0) : 0;
+        $sessionCustomerId = 0;
+        if ($customer && method_exists($customer, 'getAuthIdentifier')) {
+            $sessionCustomerId = (int) $customer->getAuthIdentifier();
+        }
+        if ($sessionCustomerId <= 0 && $customer && method_exists($customer, 'getId')) {
+            $sessionCustomerId = (int) $customer->getId();
+        }
+        if ($sessionCustomerId <= 0) {
+            $sessionCustomerId = (int) ($lastOrderContext['customer_id'] ?? 0);
+        }
+
+        if (!$order || $orderCustomerId !== $sessionCustomerId || $sessionCustomerId <= 0) {
+            $this->getMessageManager()->addError(__('The requested order could not be found.'));
+            $this->redirect('weshop/cart');
+            return '';
         }
 
         foreach ($this->getOrderSuccessPageDataService()->build($order, $lastOrderContext) as $key => $value) {

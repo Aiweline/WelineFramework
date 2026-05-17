@@ -34,21 +34,24 @@ $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/t
 // 示例产品数据
 $products = [];
 for ($i = 1; $i <= $limit; $i++) {
+    $price = 49 + ($i * 37);
+    $originalPrice = round($price * (1.1 + (($i % 3) * 0.05)), 2);
     $products[] = [
         'id' => $i,
         'name' => __('热销产品 %d', $i),
         'url' => '/product/best-' . $i,
         'image' => $placeholder,
-        'price' => rand(30, 400),
-        'original_price' => rand(30, 400) * 1.15,
-        'rating' => rand(42, 50) / 10,
-        'review_count' => rand(50, 1000),
-        'sales_count' => rand(100, 5000),
+        'price' => $price,
+        'original_price' => $originalPrice,
+        'rating' => min(5.0, 4.1 + (($i % 5) * 0.1)),
+        'review_count' => 80 + ($i * 37),
+        'sales_count' => 240 + ($i * 173),
         'rank' => $i,
     ];
 }
 
-$widgetId = 'bestsellers-' . uniqid();
+$widgetKey = (string)($this->getData('_widget_instance_key') ?? ($title . '|' . $limit . '|' . $period . '|' . $columns . '|' . $layout));
+$widgetId = 'bestsellers-' . substr(sha1($widgetKey), 0, 12);
 ?>
 
 <div class="widget-bestsellers widget-products" id="<?= $widgetId ?>">
@@ -102,8 +105,8 @@ $widgetId = 'bestsellers-' . uniqid();
                             </div>
                             
                             <div class="product-actions">
-                                <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
-                                    <i class="ri-heart-line"></i>
+                                <button class="action-btn btn-wishlist weline-pixel::add_to_wishlist" title="<?= __('加入收藏') ?>">
+                                    <i class="ri-heart-line weline-pixel::add_to_wishlist"></i>
                                 </button>
                                 <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
                                     <i class="ri-eye-line"></i>
@@ -141,9 +144,9 @@ $widgetId = 'bestsellers-' . uniqid();
                                 <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
                             </div>
                             
-                            <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
-                                <i class="ri-shopping-cart-line"></i>
-                                <span><?= __('加入购物车') ?></span>
+                            <button class="btn-add-to-cart weline-pixel::add_to_cart" data-product-id="<?= $product['id'] ?>">
+                                <i class="ri-shopping-cart-line weline-pixel::add_to_cart"></i>
+                                <span class="weline-pixel::add_to_cart"><?= __('加入购物车') ?></span>
                             </button>
                         </div>
                     </div>

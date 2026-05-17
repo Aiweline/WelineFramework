@@ -1391,6 +1391,20 @@ class AiSiteHtmlBlocksBuildService
 
     private function localizePageTypeLabel(string $pageType, string $locale): string
     {
+        if ($this->isRussianLocale($locale)) {
+            return match ($pageType) {
+                Page::TYPE_HOME => 'Главная',
+                Page::TYPE_ABOUT => 'О нас',
+                Page::TYPE_CONTACT => 'Контакты',
+                Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => 'Блог',
+                Page::TYPE_PRIVACY_POLICY => 'Политика конфиденциальности',
+                Page::TYPE_TERMS_OF_SERVICE => 'Условия использования',
+                Page::TYPE_REFUND_POLICY => 'Политика возврата',
+                Page::TYPE_SHIPPING_POLICY => 'Доставка',
+                Page::TYPE_COOKIE_POLICY => 'Политика Cookie',
+                default => '',
+            };
+        }
         $isZh = $this->isChineseLocale($locale);
         $isJa = $this->isJapaneseLocale($locale);
         $isKo = $this->isKoreanLocale($locale);
@@ -1411,6 +1425,16 @@ class AiSiteHtmlBlocksBuildService
 
     private function localizeBuildText(string $key, string $locale): string
     {
+        if ($this->isRussianLocale($locale)) {
+            return match ($key) {
+                'policy_info' => 'Правовая информация',
+                'featured_pages' => 'Основные разделы',
+                'all_pages' => 'Все разделы',
+                'all_rights_reserved' => 'Все права защищены.',
+                'visitor_experience' => 'Мы постоянно улучшаем впечатления посетителей.',
+                default => $key,
+            };
+        }
         $isZh = $this->isChineseLocale($locale);
         $isJa = $this->isJapaneseLocale($locale);
         $isKo = $this->isKoreanLocale($locale);
@@ -1438,6 +1462,11 @@ class AiSiteHtmlBlocksBuildService
         return \preg_match('/^ko(?:[_-]|$)/i', $locale) === 1;
     }
 
+    private function isRussianLocale(string $locale): bool
+    {
+        return \preg_match('/^ru(?:[_-]|$)/i', \trim($locale)) === 1;
+    }
+
     private function isNonCjkLocale(string $locale): bool
     {
         return $locale !== '' && !$this->isChineseLocale($locale) && !$this->isJapaneseLocale($locale) && !$this->isKoreanLocale($locale);
@@ -1462,6 +1491,8 @@ class AiSiteHtmlBlocksBuildService
     private function normalizeBlockConfig(string $template, array $config, array $websiteProfile = [], array $scope = []): array
     {
         $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
+        $locale = $this->resolveContentLocale($scope);
+        $footerGroups = $template === 'site_footer' ? $this->buildFooterLinkGroups($scope) : [];
 
         return match ($template) {
             'site_header' => [
@@ -1472,15 +1503,19 @@ class AiSiteHtmlBlocksBuildService
             ],
             'site_footer' => [
                 'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
-                'brief_description' => (string)($config['brief_description'] ?? $pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope)),
+                'brief_description' => $this->normalizeFooterLocaleText(
+                    (string)($config['brief_description'] ?? $pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope)),
+                    'brief_description',
+                    $locale
+                ),
                 'domain' => (string)($config['domain'] ?? $websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
-                'links.column1_title' => (string)($config['links.column1_title'] ?? 'Featured Pages'),
-                'links.column1_items' => $this->normalizeNavItems($config['links.column1_items'] ?? []),
-                'links.column2_title' => (string)($config['links.column2_title'] ?? 'Policy Info'),
-                'links.column2_items' => $this->normalizeNavItems($config['links.column2_items'] ?? []),
-                'links.column3_title' => (string)($config['links.column3_title'] ?? 'All Pages'),
-                'links.column3_items' => $this->normalizeNavItems($config['links.column3_items'] ?? $this->buildFooterNavItems($scope)),
-                'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildFooterNavItems($scope)),
+                'links.column1_title' => $this->normalizeFooterLocaleText((string)($config['links.column1_title'] ?? ($footerGroups['column1_title'] ?? 'Featured Pages')), 'featured_pages', $locale),
+                'links.column1_items' => $this->normalizeFooterNavItems($config['links.column1_items'] ?? ($footerGroups['column1_items'] ?? []), $scope),
+                'links.column2_title' => $this->normalizeFooterLocaleText((string)($config['links.column2_title'] ?? ($footerGroups['column2_title'] ?? 'Policy Info')), 'policy_info', $locale),
+                'links.column2_items' => $this->normalizeFooterNavItems($config['links.column2_items'] ?? ($footerGroups['column2_items'] ?? []), $scope),
+                'links.column3_title' => $this->normalizeFooterLocaleText((string)($config['links.column3_title'] ?? ($footerGroups['column3_title'] ?? 'All Pages')), 'all_pages', $locale),
+                'links.column3_items' => $this->normalizeFooterNavItems($config['links.column3_items'] ?? ($footerGroups['column3_items'] ?? $this->buildFooterNavItems($scope)), $scope),
+                'nav_items' => $this->normalizeFooterNavItems($config['nav_items'] ?? $this->buildFooterNavItems($scope), $scope),
             ],
             'cards' => [
                 'section_title' => (string)($config['section_title'] ?? ''),
@@ -1536,6 +1571,70 @@ class AiSiteHtmlBlocksBuildService
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param mixed $items
+     * @return list<array{label:string,href:string,active:bool}>
+     */
+    private function normalizeFooterNavItems(mixed $items, array $scope): array
+    {
+        $normalized = $this->normalizeNavItems($items);
+        if ($normalized !== []) {
+            return $this->localizeKnownNavLabels($normalized, $this->resolveContentLocale($scope));
+        }
+
+        return $this->localizeKnownNavLabels($this->buildFooterNavItems($scope), $this->resolveContentLocale($scope));
+    }
+
+    /**
+     * @param list<array{label:string,href:string,active:bool}> $items
+     * @return list<array{label:string,href:string,active:bool}>
+     */
+    private function localizeKnownNavLabels(array $items, string $locale): array
+    {
+        if (!$this->isRussianLocale($locale)) {
+            return $items;
+        }
+
+        foreach ($items as &$item) {
+            $label = \trim((string)($item['label'] ?? ''));
+            $item['label'] = match (\strtolower($label)) {
+                'home' => 'Главная',
+                'about' => 'О нас',
+                'contact' => 'Контакты',
+                'privacy policy' => 'Политика конфиденциальности',
+                'terms of service' => 'Условия использования',
+                'refund policy' => 'Политика возврата',
+                'shipping policy' => 'Доставка',
+                'cookie policy' => 'Политика Cookie',
+                default => $label,
+            };
+        }
+        unset($item);
+
+        return $items;
+    }
+
+    private function normalizeFooterLocaleText(string $value, string $fallbackKey, string $locale): string
+    {
+        $normalized = \preg_replace('/\s+/u', ' ', \trim($value)) ?? \trim($value);
+        if ($this->isRussianLocale($locale)) {
+            $englishBoilerplate = [
+                'A curated destination with clear information, trusted support, and simple next steps.',
+                'Featured Pages',
+                'Policy Info',
+                'All Pages',
+                'All rights reserved.',
+            ];
+            foreach ($englishBoilerplate as $phrase) {
+                if (\strcasecmp($normalized, $phrase) === 0) {
+                    return $this->localizeBuildText($fallbackKey, $locale);
+                }
+            }
+        }
+
+        return $value;
     }
 
     /**

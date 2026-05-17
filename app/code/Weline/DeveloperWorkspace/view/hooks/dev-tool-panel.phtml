@@ -1479,6 +1479,7 @@ const DevToolPanel = (function() {
         traceDbLayout: 'normal',
         traceLoaded: false,
         traceSpans: null,
+        traceSummary: null,
     };
 
     // ========== LocalStorage 管理 ==========
@@ -3004,13 +3005,14 @@ const DevToolPanel = (function() {
         if (!content) return;
 
         if (Array.isArray(state.traceSpans)) {
-            renderRequestTraceFromSpans(state.traceSpans);
+            renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
             return;
         }
 
         if (typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined' && Array.isArray(window.__WELINE_REQUEST_TRACE__)) {
             state.traceSpans = window.__WELINE_REQUEST_TRACE__;
-            renderRequestTraceFromSpans(state.traceSpans);
+            state.traceSummary = null;
+            renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
             return;
         }
 
@@ -3031,7 +3033,7 @@ const DevToolPanel = (function() {
         fetch(url)
             .then(function(response) {
                 if (!response.ok) {
-                    throw new Error(response.status === 404 ? '链路已过期，请刷新页面' : ('HTTP ' + response.status));
+                    throw new Error(response.status === 404 ? '请求链路不存在或已过期，请刷新页面重试' : ('HTTP ' + response.status));
                 }
                 return response.json();
             })
@@ -3039,11 +3041,13 @@ const DevToolPanel = (function() {
                 if (!data || Number(data.code) !== 200) {
                     throw new Error((data && (data.msg || data.message)) || 'trace load failed');
                 }
-                state.traceSpans = decodeCompactTracePayload(data.data || {});
-                renderRequestTraceFromSpans(state.traceSpans);
+                const payload = data.data || {};
+                state.traceSummary = payload.summary || null;
+                state.traceSpans = decodeCompactTracePayload(payload);
+                renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
             })
             .catch(function(error) {
-                content.innerHTML = '<div class="dev-tool-empty">' + escapeHtml(error.message || '链路已过期，请刷新页面') + '</div>';
+                content.innerHTML = '<div class="dev-tool-empty">' + escapeHtml(error.message || '请求链路不存在或已过期，请刷新页面重试') + '</div>';
             });
     }
 
@@ -3091,13 +3095,19 @@ const DevToolPanel = (function() {
         return spans;
     }
 
-    function renderRequestTraceFromSpans(spans) {
+    function renderRequestTraceFromSpans(spans, summary) {
         const content = document.getElementById('dev-tool-content');
         if (!content) return;
         const codeSpans = spans.filter(function(s) { return (s.category || '') !== 'db'; });
         const dbSpans = spans.filter(function(s) { return (s.category || '') === 'db'; });
 
         let html = '<div class="performance-stats">';
+        if (summary && summary.truncated) {
+            const maxSpans = Number(summary.max_spans || spans.length || 0);
+            html += '<div style="margin-bottom:8px;padding:8px 10px;border:1px solid #f0d98a;border-radius:6px;background:#fff8e1;color:#8a6d3b;font-size:12px;line-height:1.5;">';
+            html += '当前请求链路已达到记录上限，仅展示前 ' + escapeHtml(String(maxSpans)) + ' 条阶段数据。';
+            html += '</div>';
+        }
 
         // 子 Tab：编码 / DB
         html += '<div style="display:flex;border-bottom:1px solid #eee;margin-bottom:6px;">';

@@ -2568,10 +2568,6 @@ class ServiceOrchestrator
         int $instanceId,
         ServiceContext $context
     ): ?ServiceInstance {
-        if ($this->childServicesBootstrapInProgress) {
-            return null;
-        }
-
         $role = $provider->getRole();
         if (!\in_array($role, [ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER], true)) {
             return null;
@@ -3606,6 +3602,21 @@ class ServiceOrchestrator
         if ($port <= 0) {
             return true;
         }
+        if (\in_array($role, [
+            ControlMessage::ROLE_SESSION_SERVER,
+            ControlMessage::ROLE_MEMORY_SERVER,
+        ], true)) {
+            Processer::clearPortCache($port);
+            if (!Processer::isPortInUse($port)) {
+                return true;
+            }
+
+            WlsLogger::warning_(
+                "[Orchestrator] {$role} 共享端口 {$port} 已被占用且未成功接入，跳过本次拉起以避免覆盖共享 token"
+            );
+            return false;
+        }
+
         if (!\in_array($role, [
             ControlMessage::ROLE_WORKER,
             ControlMessage::ROLE_MAINTENANCE,

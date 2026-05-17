@@ -49,6 +49,28 @@ final class FiberOutputBufferTest extends TestCase
         self::assertSame('fiber-a-1fiber-a-2', $fiberA->getReturn());
     }
 
+    public function testNestedCapturesDoNotConsumeParentOutput(): void
+    {
+        $fiber = new \Fiber(static function (): array {
+            FiberOutputBuffer::beginCapture();
+            echo 'outer-before';
+
+            FiberOutputBuffer::beginCapture();
+            echo 'inner';
+            $inner = FiberOutputBuffer::endCapture();
+
+            echo 'outer-after';
+            $outer = FiberOutputBuffer::endCapture();
+
+            return [$inner, $outer];
+        });
+
+        $fiber->start();
+
+        self::assertTrue($fiber->isTerminated());
+        self::assertSame(['inner', 'outer-beforeouter-after'], $fiber->getReturn());
+    }
+
     public function testReinstallsWhenGlobalBufferWasExternallyRemoved(): void
     {
         \ob_end_clean();
