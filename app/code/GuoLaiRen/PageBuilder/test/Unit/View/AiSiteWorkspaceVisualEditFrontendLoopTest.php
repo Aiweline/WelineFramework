@@ -983,6 +983,18 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("'publish_blocked_reason'", $sessionService);
     }
 
+    public function testPublishStageEntryPrefersRunningBuildStateOverRetryableFailureBanner(): void
+    {
+        $script = $this->workspaceScript();
+        $failureBody = $this->extractFunctionBody($script, 'hasPublishBlockingLatestBuildFailureFromWorkspaceState');
+        $entryBody = $this->extractFunctionBody($script, 'syncPublishStageEntryFromWorkspaceState');
+
+        self::assertStringNotContainsString("hasRetryableAiFailures(state, 'build')", $failureBody);
+        self::assertStringContainsString('var blockedByRunning = hasPublishBlockingAiOperationRunningFromWorkspaceState(state);', $entryBody);
+        self::assertStringContainsString("var building = workspaceStatus === 'building'", $entryBody);
+        self::assertStringContainsString('|| blockedByRunning', $entryBody);
+    }
+
     public function testRuntimeFailureDialogShowsDecisionSummaryInsteadOfRawQueueLog(): void
     {
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');

@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\View;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
@@ -26,8 +27,11 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
+use Weline\Server\Service\MemoryStateFacade;
 
 class Template extends DataObject
 {
@@ -76,6 +80,45 @@ class Template extends DataObject
     private static ?\WeakMap $fiberInstances = null;
     /** @var array<string, Template> */
     private static array $scopedInstances = [];
+    /** @var array<string, array{compiled_mtime: int, compiled_size: int, template_mtime: int, template_size: int, force: string, result: bool}> */
+    private static array $compiledTemplateFreshnessCache = [];
+    /** @var array<string, true> */
+    private const REQUEST_CACHEABLE_HOOKS = [
+        'header-account-links' => true,
+    ];
+    private const STATIC_HOOK_OUTPUT_CACHE_TTL = 60.0;
+    private const STATIC_HOOK_AGGREGATE_CACHE_TTL = 30.0;
+    /** @var array<string, true> */
+    private const STATIC_HOOK_AGGREGATE_CACHEABLE_HOOKS = [
+        'header-account' => true,
+        'header-account-links' => true,
+        'header-language-switcher' => true,
+        'header-currency-switcher' => true,
+        'Weline_Theme::frontend::layouts::base::body-end' => true,
+    ];
+    private const STATIC_HOOK_OUTPUT_CACHEABLE_FILES = [
+        'Weline_Customer::hooks/header-account-links.phtml' => true,
+        'WeShop_Order::hooks/header-account-links.phtml' => true,
+        'Weline_Shipping::hooks/header-account-links.phtml' => true,
+        'WeShop_Subscription::hooks/header-account-links.phtml' => true,
+        'Weline_I18n::hooks/header-language-switcher.phtml' => true,
+        'Weline_I18n::hooks/header-currency-switcher.phtml' => true,
+        'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-before.phtml' => true,
+        'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-after.phtml' => true,
+        'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/body-start.phtml' => true,
+        'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/footer-after.phtml' => true,
+        'Weline_CustomerService::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
+        'Weline_Location::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
+        'WeShop_Product::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
+        'Weline_Shipping::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
+        'WeShop_Filters::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
+    ];
+    /** @var array<string, array{expires_at: float, html: string}> */
+    private static array $staticHookOutputCache = [];
+    /** @var array<string, array{expires_at: float, html: string}> */
+    private static array $staticHookAggregateOutputCache = [];
+    private static ?MemoryStateFacade $staticHookRuntimeCache = null;
+    private static bool $staticHookRuntimeCacheResolved = false;
 
     private function __clone()
     {
@@ -577,20 +620,68 @@ class Template extends DataObject
             return true;
         }
 
+        if ($isDev && ($forceRecompileInDev === true || $forceRecompileInDev === 1 || $forceRecompileInDev === '1')) {
+            return true;
+        }
+
+        $templateMtime = (int)@filemtime($templateFile);
+        $templateSize = (int)@filesize($templateFile);
+        $compiledMtime = (int)@filemtime($compiledFile);
+        $compiledSize = (int)@filesize($compiledFile);
+        if ($templateMtime <= 0 || $compiledMtime <= 0 || $templateSize < 0 || $compiledSize < 0) {
+            return true;
+        }
+
+        $forceCacheKey = is_scalar($forceRecompileInDev) ? (string)$forceRecompileInDev : gettype($forceRecompileInDev);
+        $freshnessCacheKey = $compiledFile . '|' . $templateFile . '|' . ($isDev ? '1' : '0') . '|' . $forceCacheKey;
+        $cachedFreshness = self::$compiledTemplateFreshnessCache[$freshnessCacheKey] ?? null;
+        if (is_array($cachedFreshness)
+            && $cachedFreshness['compiled_mtime'] === $compiledMtime
+            && $cachedFreshness['compiled_size'] === $compiledSize
+            && $cachedFreshness['template_mtime'] === $templateMtime
+            && $cachedFreshness['template_size'] === $templateSize
+            && $cachedFreshness['force'] === $forceCacheKey) {
+            return $cachedFreshness['result'];
+        }
+
+        $rememberFreshness = static function (bool $result) use (
+            $freshnessCacheKey,
+            $compiledMtime,
+            $compiledSize,
+            $templateMtime,
+            $templateSize,
+            $forceCacheKey
+        ): bool {
+            if (\count(self::$compiledTemplateFreshnessCache) > 4096) {
+                self::$compiledTemplateFreshnessCache = [];
+            }
+
+            self::$compiledTemplateFreshnessCache[$freshnessCacheKey] = [
+                'compiled_mtime' => $compiledMtime,
+                'compiled_size' => $compiledSize,
+                'template_mtime' => $templateMtime,
+                'template_size' => $templateSize,
+                'force' => $forceCacheKey,
+                'result' => $result,
+            ];
+
+            return $result;
+        };
+
         // Factor 2: Try TemplateCacheManager for content-based validation (fastest path)
         try {
             $cacheManager = TemplateCacheManager::getInstance();
             $cachedFile = $cacheManager->getCachedFile($templateFile, $isDev);
             if ($cachedFile !== null && is_file($cachedFile)) {
                 // Cache hit - no recompile needed
-                return false;
+                return $rememberFreshness(false);
             }
         } catch (\Throwable) {
             // CacheManager unavailable, fall through to mtime check
         }
 
         // Factor 3: Content hash validation (precise, cross-platform)
-        $currentHash = md5_file($templateFile) . '-' . filesize($templateFile);
+        $currentHash = md5_file($templateFile) . '-' . $templateSize;
 
         // Check for embedded hash in compiled file (our new format)
         $compiledContent = @file_get_contents($compiledFile);
@@ -600,39 +691,35 @@ class Template extends DataObject
                 $embeddedHash = $matches[1];
                 if ($embeddedHash === $currentHash) {
                     // Content hash matches - cache is valid
-                    return false;
+                    return $rememberFreshness(false);
                 }
                 // Content changed - needs recompile
-                return true;
+                return $rememberFreshness(true);
             }
         }
 
         // Factor 4: Mtime fallback (for backward compatibility and dev rapid iteration)
         // In dev mode, mtime check allows quick turnaround for file changes
         if (filemtime($compiledFile) < filemtime($templateFile)) {
-            return true;
+            return $rememberFreshness(true);
         }
 
         // Factor 5: Production mode - content hash is authoritative
         if (!$isDev) {
             // Production: mtime passed but content might differ
             // Trust mtime only if we don't have content hash mismatch above
-            return false;
+            return $rememberFreshness(false);
         }
 
         // Factor 6: Explicit force recompile in dev mode
         if ($forceRecompileInDev !== false) {
-            // Can be: true, 1, '1', or specific hash string to match
-            if ($forceRecompileInDev === true || $forceRecompileInDev === 1 || $forceRecompileInDev === '1') {
-                return true;
-            }
             // If it's a hash string, only recompile if hash differs
             if (is_string($forceRecompileInDev) && $forceRecompileInDev !== $currentHash) {
-                return true;
+                return $rememberFreshness(true);
             }
         }
 
-        return false;
+        return $rememberFreshness(false);
     }
 
     /**
@@ -693,6 +780,202 @@ class Template extends DataObject
     {
         $comFileName = $this->fetchTagSource($tag, $fileName);
         return $this->ob_file($comFileName, $dictionary);
+    }
+
+    private function fetchHookHtml(string $hookFile): string
+    {
+        $analyticsRenderFlag = $this->analyticsHookRenderFlag($hookFile);
+        if ($analyticsRenderFlag !== null && !empty($GLOBALS[$analyticsRenderFlag])) {
+            return '';
+        }
+
+        if (!isset(self::STATIC_HOOK_OUTPUT_CACHEABLE_FILES[$hookFile])) {
+            return $this->fetchTagHtml('hooks', $hookFile);
+        }
+
+        $cacheContext = $this->resolveStaticHookOutputCacheContext($hookFile);
+        if ($cacheContext === null) {
+            return $this->fetchTagHtml('hooks', $hookFile);
+        }
+
+        $compiledFile = $this->fetchTagSource('hooks', $hookFile);
+        $stat = @stat($compiledFile);
+        if (!\is_array($stat)) {
+            return $this->ob_file($compiledFile);
+        }
+
+        $baseUrl = '';
+        try {
+            $baseUrl = (string)$this->request->getBaseUrl();
+        } catch (\Throwable) {
+            $baseUrl = '';
+        }
+
+        $ttl = $this->staticHookOutputCacheTtl();
+        $cacheKey = 'hook.output.' . \sha1($hookFile . '|' . $compiledFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . $baseUrl . '|' . $cacheContext);
+        $now = \microtime(true);
+        $cached = self::$staticHookOutputCache[$cacheKey] ?? null;
+        if (\is_array($cached)
+            && isset($cached['expires_at'], $cached['html'])
+            && (float)$cached['expires_at'] >= $now
+            && \is_string($cached['html'])) {
+            if ($analyticsRenderFlag !== null) {
+                $GLOBALS[$analyticsRenderFlag] = true;
+            }
+            return $cached['html'];
+        }
+
+        $runtimeCached = self::runtimeHookCacheGet($cacheKey);
+        if (\is_string($runtimeCached)) {
+            $this->rememberStaticHookOutput($cacheKey, $runtimeCached, $ttl);
+            if ($analyticsRenderFlag !== null) {
+                $GLOBALS[$analyticsRenderFlag] = true;
+            }
+            return $runtimeCached;
+        }
+
+        $html = $this->ob_file($compiledFile);
+        $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
+        self::runtimeHookCacheSet($cacheKey, $html, $ttl);
+
+        return $html;
+    }
+
+    private function rememberStaticHookOutput(string $cacheKey, string $html, int $ttl): void
+    {
+        if (\count(self::$staticHookOutputCache) > 128) {
+            self::$staticHookOutputCache = [];
+        }
+
+        self::$staticHookOutputCache[$cacheKey] = [
+            'expires_at' => \microtime(true) + \max(1, $ttl),
+            'html' => $html,
+        ];
+    }
+
+    private function resolveStaticHookOutputCacheContext(string $hookFile): ?string
+    {
+        return match ($hookFile) {
+            'Weline_Customer::hooks/header-account-links.phtml',
+            'WeShop_Order::hooks/header-account-links.phtml',
+            'Weline_Shipping::hooks/header-account-links.phtml',
+            'WeShop_Subscription::hooks/header-account-links.phtml' => $this->frontendAuthStaticHookCacheContext(),
+            'Weline_I18n::hooks/header-language-switcher.phtml' => $this->i18nStaticHookCacheContext('Weline_I18n::header-language-switcher-data', 'language'),
+            'Weline_I18n::hooks/header-currency-switcher.phtml' => $this->i18nStaticHookCacheContext('Weline_I18n::header-currency-switcher-data', 'currency'),
+            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-before.phtml',
+            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-after.phtml' => $this->analyticsStaticHookCacheContext('head'),
+            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/body-start.phtml' => $this->analyticsStaticHookCacheContext('body'),
+            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/footer-after.phtml' => $this->analyticsStaticHookCacheContext('footer'),
+            'Weline_CustomerService::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => $this->bodyEndStaticHookCacheContext(),
+            default => 'static',
+        };
+    }
+
+    private function analyticsHookRenderFlag(string $hookFile): ?string
+    {
+        return match ($hookFile) {
+            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-before.phtml',
+            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-after.phtml' => '__weshop_analytics_hook_head_rendered',
+            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/body-start.phtml' => '__weshop_analytics_hook_body_rendered',
+            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/footer-after.phtml' => '__weshop_analytics_hook_footer_rendered',
+            default => null,
+        };
+    }
+
+    private function analyticsStaticHookCacheContext(string $slot): ?string
+    {
+        try {
+            $envFile = BP . 'app' . DS . 'etc' . DS . 'env.php';
+            return 'analytics:' . $slot . ':' . \sha1(\implode('|', [
+                (string)@filemtime($envFile),
+                (string)@filesize($envFile),
+                (string)(\function_exists('w_env_http_host') ? \w_env_http_host() : ''),
+            ]));
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function frontendAuthStaticHookCacheContext(): ?string
+    {
+        $requestCacheKey = 'view.static_hook.frontend_auth_context';
+        $cached = RequestContext::get($requestCacheKey);
+        if (\is_string($cached)) {
+            return $cached;
+        }
+
+        try {
+            $session = SessionFactory::getInstance()->createFrontendSession();
+            if (!$session->isLoggedIn()) {
+                RequestContext::set($requestCacheKey, 'frontend-auth:0');
+                return 'frontend-auth:0';
+            }
+
+            $userId = \method_exists($session, 'getUserId') ? (string)($session->getUserId() ?? '') : '';
+            $username = \method_exists($session, 'getUsername') ? (string)($session->getUsername() ?? '') : '';
+
+            $context = 'frontend-auth:1:' . \sha1($userId . '|' . $username);
+            RequestContext::set($requestCacheKey, $context);
+            return $context;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function bodyEndStaticHookCacheContext(): ?string
+    {
+        try {
+            $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+            $isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
+                || (string)$this->request->getGet('preview', '') === '1'
+                || \str_contains($requestPath, 'workspace-preview');
+            if ($isWorkspacePreview) {
+                return null;
+            }
+
+            $authContext = $this->frontendAuthStaticHookCacheContext();
+            if ($authContext === null) {
+                return null;
+            }
+
+            return 'body-end:' . \sha1(\implode('|', [
+                $authContext,
+                $requestPath,
+                (string)State::getLang(),
+                (string)State::getLangLocal(),
+                (string)State::getCurrency(),
+            ]));
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function i18nStaticHookCacheContext(string $eventName, string $type): ?string
+    {
+        if ($this->hasEventObservers($eventName)) {
+            return null;
+        }
+
+        try {
+            $lang = (string)State::getLang();
+            $langLocal = (string)State::getLangLocal();
+            $currency = $type === 'currency' ? (string)State::getCurrency() : '';
+
+            return $type . ':' . \sha1($lang . '|' . $langLocal . '|' . $currency);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function hasEventObservers(string $eventName): bool
+    {
+        try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            return $eventsManager->getEventObservers($eventName) !== [];
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     public function ob_file(string $filename, array $dictionary = []): string
@@ -788,6 +1071,49 @@ class Template extends DataObject
      */
     public function getHook(string $name): string
     {
+        $requestCacheKey = null;
+        $aggregateCacheKey = null;
+        if (isset(self::REQUEST_CACHEABLE_HOOKS[$name])) {
+            $context = Context::current();
+            $requestId = RequestContext::getId();
+            if ($requestId === null || $requestId === '') {
+                $requestId = (string)($context->get('runtime.request_count') ?? \spl_object_id($context));
+            }
+            $requestCacheKey = 'view.hook.output.' . sha1($requestId . ':' . $name);
+            $cachedHookHtml = RequestContext::get($requestCacheKey);
+            if (\is_string($cachedHookHtml)) {
+                return $cachedHookHtml;
+            }
+        }
+
+        if (isset(self::STATIC_HOOK_AGGREGATE_CACHEABLE_HOOKS[$name]) && !$this->shouldDecorateHookOutput()) {
+            $aggregateContext = $this->resolveStaticHookAggregateCacheContext($name);
+            if ($aggregateContext !== null) {
+                $aggregateCacheKey = 'view.hook.aggregate.' . \sha1($name . '|' . $this->baseUrlCacheContext() . '|' . $aggregateContext);
+                $aggregateTtl = $this->staticHookAggregateCacheTtl();
+                $now = \microtime(true);
+                $cachedAggregateHtml = self::$staticHookAggregateOutputCache[$aggregateCacheKey] ?? null;
+                if (\is_array($cachedAggregateHtml)
+                    && isset($cachedAggregateHtml['expires_at'], $cachedAggregateHtml['html'])
+                    && (float)$cachedAggregateHtml['expires_at'] >= $now
+                    && \is_string($cachedAggregateHtml['html'])) {
+                    if ($requestCacheKey !== null) {
+                        RequestContext::set($requestCacheKey, $cachedAggregateHtml['html']);
+                    }
+                    return $cachedAggregateHtml['html'];
+                }
+
+                $runtimeCachedAggregate = self::runtimeHookCacheGet($aggregateCacheKey);
+                if (\is_string($runtimeCachedAggregate)) {
+                    $this->rememberStaticHookAggregate($aggregateCacheKey, $runtimeCachedAggregate, $aggregateTtl);
+                    if ($requestCacheKey !== null) {
+                        RequestContext::set($requestCacheKey, $runtimeCachedAggregate);
+                    }
+                    return $runtimeCachedAggregate;
+                }
+            }
+        }
+
         $traceEnabled = RequestLifecycleTrace::isEnabled();
         $traceName = 'view::hook::' . substr($name, 0, 180);
         $traceStart = 0.0;
@@ -805,10 +1131,23 @@ class Template extends DataObject
             /** @var \Weline\Framework\Hook\Config\HookReader $hookReader */
             $hookReader = ObjectManager::make(\Weline\Framework\Hook\Config\HookReader::class);
             $hookReader->setPath($name);
-            $hookFiles = $hookReader->getFileList(); // 已按顺序排序
-            
-            // 获取完整的hook信息（包含solo等元数据）
             $hookFilesWithMeta = $hookReader->getFileListWithMeta();
+            if ($hookFilesWithMeta !== []) {
+                foreach ($hookFilesWithMeta as $module => $meta) {
+                    $filePath = (string)($meta['file'] ?? $meta['path'] ?? '');
+                    if ($filePath === '') {
+                        continue;
+                    }
+
+                    $hookFiles[$module] = strpos($filePath, '::') !== false
+                        ? $filePath
+                        : $module . '::hooks/' . $filePath;
+                }
+            }
+
+            if ($hookFiles === []) {
+                $hookFiles = $hookReader->getFileList(); // 已按顺序排序
+            }
         } catch (\Throwable $e) {
             // 如果获取失败，尝试使用Hooker（向后兼容）
             /**@var Hooker $hooker */
@@ -838,6 +1177,7 @@ class Template extends DataObject
         }
         
         // 按顺序遍历hook文件（HookReader已按优先级和排序顺序排序）
+        $decorateHookOutput = \defined('DEV') && DEV && $this->shouldDecorateHookOutput();
         foreach ($hookFiles as $module => $hooker_file) {
             // 获取hook文件路径（用于属性备注）
             $hookFilePath = $hookFiles[$module] ?? $hooker_file;
@@ -859,7 +1199,7 @@ class Template extends DataObject
                 RequestLifecycleTrace::pushCurrentParent($fileTraceName);
             }
             try {
-                $hookHtml = $this->fetchTagHtml('hooks', $hooker_file);
+                $hookHtml = $this->fetchHookHtml((string)$hooker_file);
             } finally {
                 if ($traceEnabled) {
                     RequestLifecycleTrace::popCurrentParent();
@@ -875,7 +1215,7 @@ class Template extends DataObject
             $isSolo = ($soloHook === $module);
             $hookMeta = $hookFilesWithMeta[$module] ?? [];
             
-            if (DEV) {
+            if ($decorateHookOutput) {
                 // 开发环境：添加注释和data-hook-source属性
                 // 如果hook内容不是空字符串，用span包裹并添加属性
                 if (trim($hookHtml) !== '') {
@@ -968,7 +1308,165 @@ class Template extends DataObject
             ]);
         }
 
+        if ($requestCacheKey !== null) {
+            RequestContext::set($requestCacheKey, $hooker_content);
+        }
+        if ($aggregateCacheKey !== null) {
+            $aggregateTtl = $this->staticHookAggregateCacheTtl();
+            $this->rememberStaticHookAggregate($aggregateCacheKey, $hooker_content, $aggregateTtl);
+            self::runtimeHookCacheSet($aggregateCacheKey, $hooker_content, $aggregateTtl);
+        }
+
         return $hooker_content;
+    }
+
+    private function rememberStaticHookAggregate(string $cacheKey, string $html, int $ttl): void
+    {
+        if (\count(self::$staticHookAggregateOutputCache) > 64) {
+            self::$staticHookAggregateOutputCache = [];
+        }
+
+        self::$staticHookAggregateOutputCache[$cacheKey] = [
+            'expires_at' => \microtime(true) + \max(1, $ttl),
+            'html' => $html,
+        ];
+    }
+
+    private function resolveStaticHookAggregateCacheContext(string $name): ?string
+    {
+        return match ($name) {
+            'header-account',
+            'header-account-links' => $this->frontendAuthStaticHookCacheContext(),
+            'header-language-switcher' => $this->i18nStaticHookCacheContext('Weline_I18n::header-language-switcher-data', 'language'),
+            'header-currency-switcher' => $this->i18nStaticHookCacheContext('Weline_I18n::header-currency-switcher-data', 'currency'),
+            'Weline_Theme::frontend::layouts::base::body-end' => $this->bodyEndStaticHookCacheContext(),
+            default => null,
+        };
+    }
+
+    private function baseUrlCacheContext(): string
+    {
+        try {
+            return (string)$this->request->getBaseUrl();
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function getHookCacheContext(): string
+    {
+        $parent = RequestLifecycleTrace::getCurrentParent();
+        if (\is_string($parent) && $parent !== '') {
+            return $parent;
+        }
+
+        $frames = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8);
+        $parts = [];
+        foreach ($frames as $frame) {
+            $file = isset($frame['file']) ? (string)$frame['file'] : '';
+            if ($file === __FILE__ || $file === '') {
+                continue;
+            }
+            $parts[] = $file . ':' . (string)($frame['line'] ?? 0);
+            if (\count($parts) >= 3) {
+                break;
+            }
+        }
+
+        return $parts === [] ? 'unknown' : \implode('|', $parts);
+    }
+
+    private function shouldDecorateHookOutput(): bool
+    {
+        $cacheKey = 'view.hook.decorate_output';
+        $cached = RequestContext::get($cacheKey);
+        if (\is_bool($cached)) {
+            return $cached;
+        }
+
+        try {
+            $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+            $enabled = (string)$this->request->getGet('visual_editor', '') === '1'
+                || (string)$this->request->getGet('preview', '') === '1'
+                || (string)$this->request->getGet('debug_hooks', '') === '1'
+                || \str_contains($requestPath, 'workspace-preview');
+        } catch (\Throwable) {
+            $enabled = false;
+        }
+
+        RequestContext::set($cacheKey, $enabled);
+        return $enabled;
+    }
+
+    private function staticHookOutputCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('theme.hook_output_ttl', (int)self::STATIC_HOOK_OUTPUT_CACHE_TTL);
+    }
+
+    private function staticHookAggregateCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('theme.hook_aggregate_ttl', (int)self::STATIC_HOOK_AGGREGATE_CACHE_TTL);
+    }
+
+    private static function runtimeHookCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeHookCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get('theme_runtime', $key);
+        } catch (\Throwable) {
+            self::$staticHookRuntimeCache = null;
+            self::$staticHookRuntimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private static function runtimeHookCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeHookCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set('theme_runtime', $key, $value, \max(1, $ttl));
+        } catch (\Throwable) {
+            self::$staticHookRuntimeCache = null;
+            self::$staticHookRuntimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeHookCache(): ?MemoryStateFacade
+    {
+        if (self::$staticHookRuntimeCacheResolved) {
+            return self::$staticHookRuntimeCache;
+        }
+        self::$staticHookRuntimeCacheResolved = true;
+
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$staticHookRuntimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'theme_runtime_hook',
+                'prefer_direct_connect' => true,
+                'pool_size' => 1,
+                'auto_start' => false,
+            ]));
+        } catch (\Throwable) {
+            self::$staticHookRuntimeCache = null;
+        }
+
+        return self::$staticHookRuntimeCache;
+    }
+
+    private static function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
     }
 
     public function getRequest(): Request

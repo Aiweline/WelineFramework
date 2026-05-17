@@ -1,7 +1,7 @@
 ---
 name: 前端主题工程师-组件与页面构建
 description: Frontend theme engineer skill for blocks, taglibs, widgets, PageBuilder structures, and page assembly patterns.
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Role
@@ -30,6 +30,8 @@ This skill builds frontend components and page assembly units such as blocks, ta
 - Keep component CSS and JS self-contained and scoped.
 - Follow PageBuilder structure for themes, components, colors, and layout assets.
 - Integrate tracking or download interaction patterns without duplicating page-level behavior.
+- Trace visible UI injection through the real hook host or taglib host instead of inferring from visible header/footer chrome alone.
+- Route component request interactions through Theme `theme.js` and the built-in `weline-api` worker chain.
 
 # Workflow
 
@@ -37,9 +39,10 @@ This skill builds frontend components and page assembly units such as blocks, ta
 2. Read the matching source skill material and confirm the expected directory layout.
 3. Implement the component with the correct registration path, template path, and metadata.
 4. Scope CSS and JS to the component root and prefer local project assets or inline extraction-friendly assets.
-5. For PageBuilder, keep theme prefixes, component metadata, color schemes, and shared partials aligned.
-6. For tracking-related UI, use the approved pixel-marking pattern instead of custom duplicate tracking code.
-7. Validate on the rendered page, including interactions if the component is stateful.
+5. For taglibs or hook-driven UI, verify the final contract at the host level: where the hook is rendered, how the JS is triggered, and which attributes define grouping or scope.
+6. For PageBuilder, keep theme prefixes, component metadata, color schemes, and shared partials aligned.
+7. For tracking-related UI, use the approved pixel-marking pattern instead of custom duplicate tracking code.
+8. Validate on the rendered page, including interactions if the component is stateful.
 
 # Weline Rules
 
@@ -48,7 +51,10 @@ This skill builds frontend components and page assembly units such as blocks, ta
 - Use i18n for user-facing text.
 - Do not add `declare(strict_types=1)` inside `.phtml`.
 - Keep component CSS and JS scoped and avoid polluting global state.
+- Do not add direct frontend requests with `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or equivalent helpers; declare/register component JS behavior and call the built-in `weline-api` through `theme.js` so requests run through the worker path.
 - Prefer small, isolated, testable UI changes.
+- Do not edit generated component registries such as collected taglib output; regenerate them from source definitions.
+- When designing reusable cascades, prefer the smallest stable contract. If one grouping key already defines scope, do not keep redundant attributes alive.
 
 # Inputs Required
 
@@ -67,8 +73,10 @@ This skill builds frontend components and page assembly units such as blocks, ta
 
 - Confirm the component can be reached through the real page or page-builder flow.
 - Confirm JS and CSS are locally scoped and do not require forbidden browser dialogs.
+- Confirm interactive requests use the Theme `theme.js` / `weline-api` worker route instead of direct browser-side HTTP calls.
 - Confirm tracking markup or download hooks do not double-report events.
 - Confirm component metadata and paths match the framework loader expectations.
+- If WLS is not running, use collection/bootstrap smoke checks for registry-sensitive components before claiming runtime hot-reload proof.
 
 # Constraints
 

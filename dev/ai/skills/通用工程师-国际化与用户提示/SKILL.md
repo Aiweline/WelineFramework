@@ -1,7 +1,7 @@
 ---
 name: 通用工程师-国际化与用户提示
 description: Shared engineering skill for i18n-compliant user text, translation files, and framework-safe user notification patterns.
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Role
@@ -36,11 +36,13 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 
 1. Identify every new or changed user-facing string in the target backend, frontend, admin, template, JavaScript, or module path.
 2. Choose the right translation form for PHP, plain template markup, JavaScript, or custom-tag attributes.
-3. Update the owning `i18n` files when new text keys are introduced.
-4. Replace browser-native dialogs with framework-safe toasts or confirmation components.
-5. Review message wording for clarity, actionability, and consistency.
-6. Validate the UI path where the text or notification appears.
-7. Report any missing translation coverage or UX copy risks.
+3. Confirm the translation boundary first: when the page is owned by one module, prefer that module's own template and CSV flow instead of inventing cross-module fallback.
+4. Update the owning `i18n` files when new text keys are introduced.
+5. Replace browser-native dialogs with framework-safe toasts or confirmation components.
+6. If template and CSV already look correct but the browser still shows old text, inspect module registration and phrase/template/taglib cache state before re-editing generated outputs.
+7. Review message wording for clarity, actionability, and consistency.
+8. Validate the UI path where the text or notification appears.
+9. Report any missing translation coverage or UX copy risks.
 
 # Weline Rules
 
@@ -50,6 +52,8 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 - Use `@lang` forms in custom-tag attributes instead of embedded PHP.
 - Do not use JavaScript `alert`, `confirm`, or `prompt`.
 - Keep placeholders in `%{1}` or `%{name}` style where interpolation is required.
+- Do not edit generated translation templates or packs directly; fix the source template / source CSV, then collect or reload through the standard flow.
+- When runtime output disagrees with source files, treat request/module registration plus `var/cache/phrase`, `var/cache/template`, and `var/cache/taglib` as first-class suspects.
 
 # Inputs Required
 
@@ -70,6 +74,7 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 - Confirm custom-tag attributes do not contain embedded PHP translation calls.
 - Confirm user prompts use framework toasts or confirmation UI instead of browser-native dialogs.
 - Confirm interpolation placeholders follow repository conventions.
+- Confirm the live page actually switched language in browser output, not only in edited CSV or template source.
 
 # Constraints
 

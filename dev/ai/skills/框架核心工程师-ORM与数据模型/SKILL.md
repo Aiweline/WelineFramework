@@ -45,6 +45,7 @@ This skill owns Weline ORM behavior, schema declaration rules, query execution c
 - Use `#[Col]`, `#[Table]`, and related model annotations for schema changes.
 - Do not perform field CRUD in `Setup/Upgrade.php`.
 - ORM chains must end with `fetch()` or `fetchArray()` when execution is required.
+- When a Model/ORM query is already used for list data, pagination must come from the model pagination API (`pagination(...)`, `getPagination(...)`, or the existing provider pagination payload). Do not rebuild pagination in theme/layout templates by parsing `REQUEST_URI`, rewrite internals, or manual query strings.
 - Use `w_query()` and query providers for cross-module data access.
 - Do not create events just to read data from another module.
 

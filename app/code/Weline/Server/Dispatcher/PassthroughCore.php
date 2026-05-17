@@ -143,7 +143,10 @@ class PassthroughCore
      * 可选：探活/预热过程中协作式让出（仅应在 Dispatcher 的入池 Fiber 内注册为 Fiber::suspend）。
      */
     private ?\Closure $warmupCooperativeYield = null;
-    private bool $homepageWarmupEnabled = false;
+    private bool $homepageWarmupEnabled = true;
+    /** @var array<int, int> port => warmup ticket */
+    private array $workerHomepageWarmupTickets = [];
+    private int $nextWorkerHomepageWarmupTicket = 1;
 
     /**
      * HTTP 重定向端口（用于明文 HTTP 请求转发到 http_redirect_worker）
@@ -1617,7 +1620,7 @@ class PassthroughCore
                 $this->warmupYield();
                 if (!$this->homepageWarmupEnabled) {
                     $this->logWarmup(
-                        "Worker:{$port} IPC 入池健康探活已通过，默认跳过首页预热",
+                        "Worker:{$port} IPC 入池健康探活已通过，配置已关闭首页预热",
                         'INFO'
                     );
                     return ['success' => true, 'error' => ''];
@@ -2289,6 +2292,7 @@ class PassthroughCore
 
         // 清理健康记录
         unset($this->workerHealth[$port]);
+        $this->clearJoinedWorkerHomepageWarmupTicket($port);
         $this->closeIdleSocketsByPort($port);
 
         // 收集所有使用该 Worker 的活跃客户端连接 ID
@@ -2313,6 +2317,7 @@ class PassthroughCore
         $prev = $this->workerPorts;
         foreach ($prev as $p) {
             if (!\in_array($p, $newPorts, true)) {
+                $this->clearJoinedWorkerHomepageWarmupTicket((int) $p);
                 $this->closeIdleSocketsByPort((int) $p);
             }
         }
@@ -2329,11 +2334,91 @@ class PassthroughCore
     }
 
     /**
-     * 替换整个 Worker 端口池（维护模式：仅维护 Worker / 恢复业务 Worker）
+     * Claim one homepage warmup ticket per currently joined worker.
      *
      * @param int[] $ports
-     * @return array{accepted: int[], rejected: array<int, string>}
+     * @return array<int, array{port: int, ticket: int}>
      */
+    public function claimJoinedWorkerHomepageWarmup(array $ports): array
+    {
+        if (!$this->homepageWarmupEnabled) {
+            return [];
+        }
+
+        $claims = [];
+        $candidatePorts = \array_values(\array_filter(
+            \array_unique(\array_map('intval', $ports)),
+            static fn(int $port): bool => $port > 0
+        ));
+
+        foreach ($candidatePorts as $port) {
+            if (!\in_array($port, $this->workerPorts, true)) {
+                continue;
+            }
+            if (isset($this->workerHomepageWarmupTickets[$port])) {
+                continue;
+            }
+
+            $ticket = $this->nextWorkerHomepageWarmupTicket++;
+            $this->workerHomepageWarmupTickets[$port] = $ticket;
+            $claims[] = ['port' => $port, 'ticket' => $ticket];
+        }
+
+        return $claims;
+    }
+
+    /**
+     * @param array<int, array{port?: int, ticket?: int}> $claims
+     * @return array{warmed: int[], failed: array<int, string>, skipped: int[]}
+     */
+    public function warmupJoinedWorkersViaHomepage(array $claims): array
+    {
+        $warmed = [];
+        $failed = [];
+        $skipped = [];
+
+        if (!$this->homepageWarmupEnabled) {
+            return ['warmed' => $warmed, 'failed' => $failed, 'skipped' => $skipped];
+        }
+
+        foreach ($claims as $claim) {
+            $port = (int)($claim['port'] ?? 0);
+            $ticket = (int)($claim['ticket'] ?? 0);
+            if ($port <= 0 || $ticket <= 0) {
+                continue;
+            }
+
+            if (($this->workerHomepageWarmupTickets[$port] ?? 0) !== $ticket
+                || !\in_array($port, $this->workerPorts, true)
+            ) {
+                $skipped[] = $port;
+                continue;
+            }
+
+            $result = $this->warmupWorkerViaHomepage(
+                $port,
+                self::IPC_READY_HOMEPAGE_WARMUP_RETRIES,
+                self::IPC_READY_HOMEPAGE_CONNECT_TIMEOUT_SEC,
+                self::IPC_READY_HOMEPAGE_TLS_TIMEOUT_SEC,
+                self::IPC_READY_HOMEPAGE_WRITE_TIMEOUT_SEC,
+                self::IPC_READY_HOMEPAGE_READ_TIMEOUT_SEC
+            );
+            if (!($result['success'] ?? false)) {
+                $failed[$port] = (string)($result['error'] ?? 'homepage warmup failed');
+                continue;
+            }
+
+            $warmed[] = $port;
+        }
+
+        return ['warmed' => $warmed, 'failed' => $failed, 'skipped' => $skipped];
+    }
+
+    private function clearJoinedWorkerHomepageWarmupTicket(int $port): void
+    {
+        unset($this->workerHomepageWarmupTickets[$port]);
+    }
+
     public function setWorkerPorts(array $ports, bool $preservePreviousOnTotalReject = true): array
     {
         $previousPorts = $this->workerPorts;

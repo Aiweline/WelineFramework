@@ -391,7 +391,7 @@ class View extends BaseController
         $host = function_exists('w_env_http_host') ? (string)w_env_http_host() : '';
 
         return sha1((string)json_encode([
-            'v' => 10,
+            'v' => 11,
             'handle' => (string)($handle ?? ''),
             'category_id' => $categoryId,
             'query' => $query,

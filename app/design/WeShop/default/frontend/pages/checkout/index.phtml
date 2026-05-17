@@ -8,11 +8,31 @@ $shippingMethods = $this->getData('shipping_methods') ?? [];
 $paymentMethods = $this->getData('payment_methods') ?? [];
 $countries = $this->getData('countries') ?? [];
 $isRetryPayment = (bool) ($this->getData('is_retry_payment') ?? false);
+$isGuestCheckout = (bool) ($this->getData('is_guest_checkout') ?? !$customer);
 $retryOrderId = (int) ($this->getData('retry_order_id') ?? 0);
 $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ?? '');
 $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'USD'));
+$customerEmail = '';
+if ($customer && method_exists($customer, 'getEmail')) {
+    $customerEmail = (string) $customer->getEmail();
+}
+if ($customerEmail === '' && $customer && method_exists($customer, 'getUsername')) {
+    $candidateEmail = (string) $customer->getUsername();
+    $customerEmail = filter_var($candidateEmail, FILTER_VALIDATE_EMAIL) ? $candidateEmail : '';
+}
+$formatCheckoutPrice = static function (float $amount) use ($checkoutCurrency): string {
+    $symbols = [
+        'CNY' => '¥',
+        'USD' => '$',
+        'EUR' => '€',
+        'GBP' => '£',
+        'JPY' => '¥',
+    ];
+    $symbol = $symbols[$checkoutCurrency] ?? ($checkoutCurrency . ' ');
+    return $symbol . number_format($amount, 2);
+};
 ?>
-<w:hook name="WeShop_Checkout::page::before"/>
+<w:hook name="Weline_Checkout::frontend::layouts::checkout::content-before"/>
 
 <style>
     .weshop-checkout-page {
@@ -27,11 +47,11 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
     }
 
     .weshop-checkout-card {
-        background: #fff;
-        border: 1px solid #e5e7eb;
-        border-radius: 1rem;
+        background: var(--color-bg-primary);
+        border: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+        border-radius: var(--border-radius-xl);
         padding: 1.25rem;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+        box-shadow: var(--shadow-card);
     }
 
     .weshop-checkout-card h2 {
@@ -58,17 +78,17 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
     .weshop-checkout-field label {
         font-size: 0.875rem;
         font-weight: 600;
-        color: #0f172a;
+        color: var(--color-text-dark);
     }
 
     .weshop-checkout-field input,
     .weshop-checkout-field select {
         width: 100%;
-        border: 1px solid #d1d5db;
-        border-radius: 0.75rem;
+        border: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
+        border-radius: var(--border-radius-lg);
         padding: 0.75rem 0.9rem;
         font-size: 0.95rem;
-        background: #fff;
+        background: var(--color-bg-primary);
     }
 
     .weshop-checkout-choice-list {
@@ -80,8 +100,8 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         display: flex;
         gap: 0.75rem;
         align-items: flex-start;
-        border: 1px solid #dbe2ea;
-        border-radius: 0.85rem;
+        border: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+        border-radius: var(--border-radius-lg);
         padding: 0.95rem 1rem;
     }
 
@@ -91,12 +111,12 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
 
     .weshop-checkout-choice-title {
         font-weight: 600;
-        color: #0f172a;
+        color: var(--color-text-dark);
     }
 
     .weshop-checkout-choice-meta {
         font-size: 0.875rem;
-        color: #475569;
+        color: var(--color-text-muted);
         margin-top: 0.25rem;
     }
 
@@ -118,17 +138,17 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         height: 64px;
         object-fit: cover;
         border-radius: 0.75rem;
-        background: #f8fafc;
+        background: var(--color-bg-secondary);
     }
 
     .weshop-checkout-summary-item-name {
         font-weight: 600;
-        color: #0f172a;
+        color: var(--color-text-dark);
     }
 
     .weshop-checkout-summary-item-meta {
         font-size: 0.85rem;
-        color: #64748b;
+        color: var(--color-text-secondary);
         margin-top: 0.25rem;
     }
 
@@ -136,20 +156,24 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         display: grid;
         gap: 0.55rem;
         padding-top: 1rem;
-        border-top: 1px solid #e5e7eb;
+        border-top: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
     }
 
     .weshop-checkout-summary-row {
         display: flex;
         justify-content: space-between;
         gap: 1rem;
-        color: #334155;
+        color: var(--color-text-secondary);
         font-size: 0.95rem;
+    }
+
+    .weshop-checkout-summary-row[hidden] {
+        display: none !important;
     }
 
     .weshop-checkout-summary-total {
         font-weight: 700;
-        color: #0f172a;
+        color: var(--color-text-dark);
         font-size: 1.05rem;
     }
 
@@ -159,20 +183,20 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         justify-content: center;
         width: 100%;
         border: 0;
-        border-radius: 999px;
+        border-radius: var(--border-radius-full);
         padding: 0.9rem 1.2rem;
         font-size: 1rem;
         font-weight: 700;
-        color: #fff;
-        background: #0f766e;
+        color: var(--color-text-primary);
+        background: var(--color-primary);
         cursor: pointer;
     }
 
     .weshop-checkout-empty {
         padding: 0.95rem 1rem;
-        border-radius: 0.85rem;
-        background: #fff7ed;
-        color: #9a3412;
+        border-radius: var(--border-radius-lg);
+        background: var(--color-accent-light);
+        color: var(--color-text-dark);
         font-size: 0.9rem;
     }
 
@@ -181,7 +205,13 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         gap: 0.65rem;
         align-items: flex-start;
         font-size: 0.9rem;
-        color: #475569;
+        color: var(--color-text-muted);
+    }
+
+    .weshop-checkout-submit-area {
+        margin-top: 1.1rem;
+        padding-top: 1.1rem;
+        border-top: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
     }
 
     @media (max-width: 991px) {
@@ -193,7 +223,263 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
             grid-template-columns: 1fr;
         }
     }
+
+    .weshop-checkout-shell {
+        width: min(100% - 2rem, var(--layout-max-width, 1600px));
+        max-width: none;
+        margin: 0 auto;
+        padding: 2rem 0 3.5rem;
+        color: var(--color-text-primary);
+        box-sizing: border-box;
+    }
+
+    .weshop-checkout-shell * {
+        box-sizing: border-box;
+    }
+
+    .weshop-checkout-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        padding-bottom: 1.25rem;
+        margin-bottom: 1.5rem;
+        border-bottom: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+    }
+
+    .weshop-checkout-brand {
+        color: var(--color-text-primary);
+        font-size: 1.45rem;
+        font-weight: 700;
+        text-decoration: none;
+        letter-spacing: -0.035em;
+    }
+
+    .weshop-checkout-breadcrumbs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        justify-content: flex-end;
+        color: var(--color-text-secondary);
+        font-size: 0.85rem;
+    }
+
+    .weshop-checkout-breadcrumbs span:not(:last-child)::after {
+        content: "›";
+        margin-left: 0.45rem;
+        color: var(--color-text-muted);
+    }
+
+    .weshop-checkout-header-meta {
+        display: grid;
+        justify-items: end;
+        gap: 0.25rem;
+        color: var(--color-text-secondary);
+        font-size: 0.9rem;
+        font-weight: 650;
+    }
+
+    .weshop-checkout-header-meta strong {
+        color: var(--color-text-primary);
+        font-size: 1rem;
+    }
+
+    .weshop-checkout-page {
+        grid-template-columns: minmax(0, 1fr) minmax(420px, 480px);
+        gap: 2.5rem;
+        align-items: flex-start;
+    }
+
+    .weshop-checkout-stack {
+        gap: 1.4rem;
+    }
+
+    .weshop-checkout-card {
+        border: 0;
+        border: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+        border-radius: var(--border-radius-xl);
+        padding: 1.35rem;
+        box-shadow: var(--shadow-card);
+        background: var(--color-bg-primary);
+    }
+
+    .weshop-checkout-card h2 {
+        font-size: 1rem;
+        letter-spacing: -0.01em;
+    }
+
+    .weshop-checkout-section-heading {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .weshop-checkout-step {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: var(--border-radius-full);
+        background: var(--color-primary);
+        color: var(--color-text-primary);
+        font-size: 0.8rem;
+        font-weight: 700;
+        flex: 0 0 auto;
+    }
+
+    .weshop-checkout-field input,
+    .weshop-checkout-field select {
+        border-color: var(--color-border-default);
+        border-radius: 0.75rem;
+        padding: 0.82rem 0.85rem;
+        transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .weshop-checkout-field input:focus,
+    .weshop-checkout-field select:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px var(--color-accent-light);
+    }
+
+    .weshop-checkout-choice {
+        border-color: var(--color-border-light);
+        border-radius: 0.75rem;
+        padding: 0.95rem;
+        background: var(--color-bg-primary);
+        transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+    }
+
+    .weshop-checkout-choice:has(input:checked) {
+        border-color: var(--color-primary);
+        background: var(--color-accent-light);
+        box-shadow: inset 0 0 0 1px var(--color-primary);
+    }
+
+    .weshop-checkout-summary {
+        position: sticky;
+        top: 1rem;
+        border: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+        border-radius: var(--border-radius-xl);
+        padding: 1.75rem;
+        background: var(--color-bg-primary);
+        box-shadow: var(--shadow-card);
+    }
+
+    .weshop-checkout-summary h2 {
+        margin-bottom: 1.25rem;
+    }
+
+    .weshop-checkout-summary-item {
+        grid-template-columns: 4.25rem minmax(0, 1fr) auto;
+    }
+
+    .weshop-checkout-summary-thumb {
+        position: relative;
+        width: 4.25rem;
+        height: 4.25rem;
+    }
+
+    .weshop-checkout-summary-thumb img {
+        width: 100%;
+        height: 100%;
+        border: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+        border-radius: var(--border-radius-lg);
+        background: var(--color-bg-primary);
+    }
+
+    .weshop-checkout-summary-qty {
+        position: absolute;
+        top: -0.5rem;
+        right: -0.5rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.35rem;
+        height: 1.35rem;
+        padding: 0 0.35rem;
+        border-radius: var(--border-radius-full);
+        color: var(--color-text-light);
+        background: var(--color-text-secondary);
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .weshop-checkout-summary-toggle {
+        display: none;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        border: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+        border-radius: var(--border-radius-lg);
+        padding: 0.95rem 1rem;
+        color: var(--color-text-primary);
+        background: var(--color-bg-primary);
+        cursor: pointer;
+        font-weight: 700;
+    }
+
+    .weshop-checkout-submit {
+        border-radius: 0.75rem;
+        background: var(--color-primary);
+        color: var(--color-text-primary);
+        min-height: 3.25rem;
+    }
+
+    .weshop-checkout-submit:hover {
+        filter: brightness(0.96);
+    }
+
+    @media (max-width: 991px) {
+        .weshop-checkout-shell {
+            width: min(100% - 1rem, 720px);
+            padding: 1rem 0 2.5rem;
+        }
+
+        .weshop-checkout-header {
+            display: block;
+        }
+
+        .weshop-checkout-breadcrumbs {
+            justify-content: flex-start;
+            margin-top: 0.65rem;
+        }
+
+        .weshop-checkout-summary-toggle {
+            display: flex;
+        }
+
+        .weshop-checkout-summary {
+            display: none;
+            position: static;
+            min-height: 0;
+            margin-bottom: 1.4rem;
+            padding: 1rem;
+        }
+
+        .weshop-checkout-summary.is-open {
+            display: block;
+        }
+    }
 </style>
+
+<div class="weshop-checkout-shell">
+    <header class="weshop-checkout-header">
+        <a class="weshop-checkout-brand" href="<?= $this->getUrl('') ?>"><?= __('WeShop') ?></a>
+        <div class="weshop-checkout-header-meta">
+            <strong><?= __('Secure one-page checkout') ?></strong>
+            <span><?= $isGuestCheckout ? __('Guest checkout enabled') : __('Signed-in checkout') ?></span>
+        </div>
+    </header>
+
+    <button class="weshop-checkout-summary-toggle" type="button" data-weshop-summary-toggle aria-expanded="false">
+        <span data-weshop-summary-toggle-label><?= __('Show order summary') ?></span>
+        <strong data-weshop-summary-toggle-total><?= $formatCheckoutPrice((float) ($cartSummary['grand_total'] ?? 0)) ?></strong>
+    </button>
 
 <div class="weshop-checkout-page">
     <form class="weshop-checkout-stack" id="weshop-checkout-form" action="<?= $this->getUrl('checkout/place-order') ?>" method="post">
@@ -201,14 +487,25 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
             <input type="hidden" name="order_id" value="<?= $retryOrderId ?>">
             <section class="weshop-checkout-card">
                 <h2><?= __('Retry Payment') ?></h2>
-                <div class="weshop-checkout-empty" style="background:#ecfeff;color:#155e75;">
+                <div class="weshop-checkout-empty">
                     <?= __('You are retrying payment for order #%{1}. The existing order will be reused instead of creating a new one.', [$retryOrderIncrementId !== '' ? $retryOrderIncrementId : (string) $retryOrderId]) ?>
                 </div>
             </section>
         <?php endif; ?>
 
         <section class="weshop-checkout-card">
-            <h2><?= __('Shipping Address') ?></h2>
+            <div class="weshop-checkout-section-heading">
+                <h2><?= __('Contact and Delivery') ?></h2>
+            </div>
+            <div class="weshop-checkout-grid" style="margin-bottom: 1rem;">
+                <div class="weshop-checkout-field full">
+                    <label for="checkout-contact-email"><?= __('Email') ?></label>
+                    <input id="checkout-contact-email" name="guest_email" type="email" value="<?= htmlspecialchars($customerEmail) ?>" autocomplete="email" required>
+                    <div class="weshop-checkout-choice-meta">
+                        <?= $isGuestCheckout ? __('Continue as guest. We will send order updates to this email.') : __('Order updates will be sent to this email.') ?>
+                    </div>
+                </div>
+            </div>
 
             <?php if ($savedAddresses): ?>
                 <div class="weshop-checkout-choice-list" style="margin-bottom: 1rem;">
@@ -270,26 +567,27 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         </section>
 
         <section class="weshop-checkout-card">
-            <h2><?= __('Shipping Method') ?></h2>
-            <w:hook name="WeShop_Shipping::frontend::layouts::checkout::methods"/>
+            <div class="weshop-checkout-section-heading">
+                <h2><?= __('Shipping Method') ?></h2>
+            </div>
+            <w:hook name="Weline_Checkout::frontend::layouts::checkout::shipping-methods-before"/>
             <div data-weshop-shipping-method-host>
-                <w:hook name="WeShop_Checkout::frontend::partials::checkout::shipping-methods"/>
+                <w:hook name="Weline_Checkout::frontend::partials::checkout::shipping-methods"/>
             </div>
+            <w:hook name="Weline_Checkout::frontend::layouts::checkout::shipping-methods-after"/>
         </section>
 
         <section class="weshop-checkout-card">
-            <h2><?= __('Payment Method') ?></h2>
+            <div class="weshop-checkout-section-heading">
+                <h2><?= __('Payment Method') ?></h2>
+            </div>
+            <w:hook name="Weline_Checkout::frontend::layouts::checkout::payment-methods-before"/>
             <div data-weshop-payment-method-host>
-                <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-methods"/>
+                <w:hook name="Weline_Checkout::frontend::partials::checkout::payment-methods"/>
             </div>
-            <div data-weshop-payment-detail-host>
-                <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-details"/>
-            </div>
-        </section>
-
-        <section class="weshop-checkout-card">
-            <h2><?= __('Review and Submit') ?></h2>
-            <w:hook name="WeShop_Checkout::review::before"/>
+            <w:hook name="Weline_Checkout::frontend::layouts::checkout::payment-methods-after"/>
+            <div class="weshop-checkout-submit-area">
+            <w:hook name="Weline_Checkout::frontend::layouts::checkout::review-before"/>
             <label class="weshop-checkout-terms">
                 <input type="checkbox" name="agree_terms" required>
                 <span>
@@ -300,65 +598,71 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
                 </span>
             </label>
             <div style="margin-top: 1rem;">
-                <w:hook name="WeShop_Checkout::review::place_order_button"/>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::place-order-button-before"/>
                 <button class="weshop-checkout-submit weline-pixel::begin_checkout" type="submit"><?= __('Place Order') ?></button>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::place-order-button-after"/>
             </div>
-            <w:hook name="WeShop_Checkout::review::after"/>
+            <w:hook name="Weline_Checkout::frontend::layouts::checkout::review-after"/>
+            </div>
         </section>
     </form>
 
-    <aside class="weshop-checkout-card">
-        <w:hook name="WeShop_Checkout::summary::before"/>
+    <aside class="weshop-checkout-card weshop-checkout-summary" data-weshop-summary-panel>
+        <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-before"/>
         <h2><?= __('Order Summary') ?></h2>
         <div class="weshop-checkout-summary-list">
             <?php foreach ($cartItems as $item): ?>
                 <div class="weshop-checkout-summary-item">
-                    <img src="<?= htmlspecialchars((string) ($item['image'] ?? '')) ?>" alt="<?= htmlspecialchars((string) ($item['name'] ?? '')) ?>">
+                    <div class="weshop-checkout-summary-thumb">
+                        <img src="<?= htmlspecialchars((string) ($item['image'] ?? '')) ?>" alt="<?= htmlspecialchars((string) ($item['name'] ?? '')) ?>">
+                        <span class="weshop-checkout-summary-qty"><?= (int) ($item['qty'] ?? 0) ?></span>
+                    </div>
                     <div>
                         <div class="weshop-checkout-summary-item-name"><?= htmlspecialchars((string) ($item['name'] ?? '')) ?></div>
                         <div class="weshop-checkout-summary-item-meta"><?= __('Qty: %{1}', (int) ($item['qty'] ?? 0)) ?></div>
                     </div>
-                    <div><?= $this->formatPrice((float) ($item['row_total'] ?? 0)) ?></div>
+                    <div><?= $formatCheckoutPrice((float) ($item['row_total'] ?? 0)) ?></div>
                 </div>
             <?php endforeach; ?>
         </div>
 
         <div class="weshop-checkout-summary-totals" data-weshop-summary-host data-weshop-summary-currency="<?= htmlspecialchars($checkoutCurrency) ?>">
-            <w:hook name="WeShop_Checkout::summary::rows_before"/>
+            <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-rows-before"/>
             <div class="weshop-checkout-summary-row">
-                <w:hook name="WeShop_Checkout::summary::subtotal_before"/>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-subtotal-before"/>
                 <span><?= __('Subtotal') ?></span>
-                <span data-weshop-summary-subtotal><?= $this->formatPrice((float) ($cartSummary['subtotal'] ?? 0)) ?></span>
-                <w:hook name="WeShop_Checkout::summary::subtotal_after"/>
+                <span data-weshop-summary-subtotal><?= $formatCheckoutPrice((float) ($cartSummary['subtotal'] ?? 0)) ?></span>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-subtotal-after"/>
             </div>
             <div class="weshop-checkout-summary-row">
-                <w:hook name="WeShop_Checkout::summary::shipping_before"/>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-shipping-before"/>
                 <span><?= __('Shipping') ?></span>
-                <span data-weshop-summary-shipping><?= $this->formatPrice((float) ($cartSummary['shipping'] ?? 0)) ?></span>
-                <w:hook name="WeShop_Checkout::summary::shipping_after"/>
+                <span data-weshop-summary-shipping><?= $formatCheckoutPrice((float) ($cartSummary['shipping'] ?? 0)) ?></span>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-shipping-after"/>
             </div>
             <div class="weshop-checkout-summary-row">
-                <w:hook name="WeShop_Checkout::summary::tax_before"/>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-tax-before"/>
                 <span><?= __('Tax') ?></span>
-                <span data-weshop-summary-tax><?= $this->formatPrice((float) ($cartSummary['tax'] ?? 0)) ?></span>
-                <w:hook name="WeShop_Checkout::summary::tax_after"/>
+                <span data-weshop-summary-tax><?= $formatCheckoutPrice((float) ($cartSummary['tax'] ?? 0)) ?></span>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-tax-after"/>
             </div>
             <div class="weshop-checkout-summary-row" data-weshop-summary-discount-row <?= (float) ($cartSummary['discount'] ?? 0) > 0 ? '' : 'hidden' ?>>
-                <w:hook name="WeShop_Checkout::summary::discount_before"/>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-discount-before"/>
                 <span><?= __('Discount') ?></span>
-                <span data-weshop-summary-discount>-<?= $this->formatPrice((float) ($cartSummary['discount'] ?? 0)) ?></span>
-                <w:hook name="WeShop_Checkout::summary::discount_after"/>
+                <span data-weshop-summary-discount>-<?= $formatCheckoutPrice((float) ($cartSummary['discount'] ?? 0)) ?></span>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-discount-after"/>
             </div>
             <div class="weshop-checkout-summary-row weshop-checkout-summary-total">
-                <w:hook name="WeShop_Checkout::summary::grand_total_before"/>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-grand-total-before"/>
                 <span><?= __('Grand Total') ?></span>
-                <span data-weshop-summary-grand-total><?= $this->formatPrice((float) ($cartSummary['grand_total'] ?? 0)) ?></span>
-                <w:hook name="WeShop_Checkout::summary::grand_total_after"/>
+                <span data-weshop-summary-grand-total><?= $formatCheckoutPrice((float) ($cartSummary['grand_total'] ?? 0)) ?></span>
+                <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-grand-total-after"/>
             </div>
-            <w:hook name="WeShop_Checkout::summary::rows_after"/>
+            <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-rows-after"/>
         </div>
-        <w:hook name="WeShop_Checkout::summary::after"/>
+        <w:hook name="Weline_Checkout::frontend::layouts::checkout::summary-after"/>
     </aside>
+</div>
 </div>
 
 <script>
@@ -371,7 +675,6 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         var methodsUrl = '<?= $this->getUrl('checkout/methods') ?>';
         var shippingMethodHost = document.querySelector('[data-weshop-shipping-method-host]');
         var paymentMethodHost = document.querySelector('[data-weshop-payment-method-host]');
-        var paymentDetailHost = document.querySelector('[data-weshop-payment-detail-host]');
         var summaryHost = document.querySelector('[data-weshop-summary-host]');
         var subtotalValue = document.querySelector('[data-weshop-summary-subtotal]');
         var shippingValue = document.querySelector('[data-weshop-summary-shipping]');
@@ -379,7 +682,30 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         var discountRow = document.querySelector('[data-weshop-summary-discount-row]');
         var discountValue = document.querySelector('[data-weshop-summary-discount]');
         var grandTotalValue = document.querySelector('[data-weshop-summary-grand-total]');
+        var summaryToggle = document.querySelector('[data-weshop-summary-toggle]');
+        var summaryPanel = document.querySelector('[data-weshop-summary-panel]');
+        var summaryToggleLabel = document.querySelector('[data-weshop-summary-toggle-label]');
+        var summaryToggleTotal = document.querySelector('[data-weshop-summary-toggle-total]');
+        var initialCartSummary = <?= json_encode($cartSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         var refreshTimer = null;
+
+        function syncSummaryToggle(expanded) {
+            if (summaryToggle) {
+                summaryToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            }
+
+            if (summaryToggleLabel) {
+                summaryToggleLabel.textContent = expanded ? '<?= __('Hide order summary') ?>' : '<?= __('Show order summary') ?>';
+            }
+        }
+
+        if (summaryToggle && summaryPanel) {
+            summaryToggle.addEventListener('click', function () {
+                var expanded = !summaryPanel.classList.contains('is-open');
+                summaryPanel.classList.toggle('is-open', expanded);
+                syncSummaryToggle(expanded);
+            });
+        }
 
         function syncNewAddressRequirement() {
             var hasSavedAddress = false;
@@ -484,7 +810,12 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
             }
 
             if (grandTotalValue) {
-                grandTotalValue.textContent = formatSummaryAmount(normalized.grand_total);
+                var grandTotalText = formatSummaryAmount(normalized.grand_total);
+                grandTotalValue.textContent = grandTotalText;
+
+                if (summaryToggleTotal) {
+                    summaryToggleTotal.textContent = grandTotalText;
+                }
             }
         }
 
@@ -537,76 +868,18 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
 
                 html += '<label class="weshop-checkout-choice">'
                     + '<input type="radio" name="payment_method" value="' + escapeHtml(method.code) + '"' + (method.is_default ? ' checked' : '') + ' required>'
-                    + '<span style="flex: 1; min-width: 0;">'
-                    + '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">'
+                    + '<span>'
                     + '<div class="weshop-checkout-choice-title">' + escapeHtml(method.title || method.name || method.code) + '</div>';
 
-                if (method.badge) {
-                    html += '<span class="weshop-checkout-payment-badge">' + escapeHtml(method.badge) + '</span>';
-                }
-
-                html += '</div>';
-
-                if (method.description) {
-                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(method.description) + '</div>';
-                }
-
-                if (method.checkout_note) {
-                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(method.checkout_note) + '</div>';
+                var helperText = method.checkout_note || method.description || '';
+                if (helperText) {
+                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(helperText) + '</div>';
                 }
 
                 html += '</span></label>';
             });
             html += '</div>';
             paymentMethodHost.innerHTML = html;
-        }
-
-        function renderPaymentDetails(methods) {
-            if (!paymentDetailHost) {
-                return;
-            }
-
-            if (!Array.isArray(methods) || methods.length === 0) {
-                paymentDetailHost.innerHTML = '';
-                return;
-            }
-
-            var html = '<div class="weshop-checkout-payment-details" data-weshop-payment-detail-list>';
-            methods.forEach(function (method) {
-                if (!method || !method.code) {
-                    return;
-                }
-
-                html += '<article class="weshop-checkout-payment-detail' + (method.is_default ? ' is-active' : '') + '" data-weshop-payment-detail="' + escapeHtml(method.code) + '">'
-                    + '<div class="weshop-checkout-payment-detail-title">' + escapeHtml(method.title || method.name || method.code) + '</div>';
-
-                if (method.flow_label) {
-                    html += '<div class="weshop-checkout-payment-detail-meta"><?= __('Payment flow: %{1}', '__FLOW__') ?>'.replace('__FLOW__', escapeHtml(method.flow_label)) + '</div>';
-                }
-
-                if (method.checkout_note) {
-                    html += '<div class="weshop-checkout-payment-detail-meta">' + escapeHtml(method.checkout_note) + '</div>';
-                } else if (method.description) {
-                    html += '<div class="weshop-checkout-payment-detail-meta">' + escapeHtml(method.description) + '</div>';
-                }
-
-                html += '</article>';
-            });
-            html += '</div>';
-            paymentDetailHost.innerHTML = html;
-            syncPaymentDetails();
-        }
-
-        function syncPaymentDetails() {
-            if (!form) {
-                return;
-            }
-
-            var selectedCode = getCheckedValue('payment_method');
-            document.querySelectorAll('[data-weshop-payment-detail]').forEach(function (panel) {
-                var isActive = panel.getAttribute('data-weshop-payment-detail') === selectedCode;
-                panel.classList.toggle('is-active', isActive);
-            });
         }
 
         function refreshCheckoutMethods() {
@@ -632,7 +905,6 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
                 var data = payload.data || {};
                 renderShippingMethods(Array.isArray(data.shipping_methods) ? data.shipping_methods : []);
                 renderPaymentMethods(Array.isArray(data.payment_methods) ? data.payment_methods : []);
-                renderPaymentDetails(Array.isArray(data.payment_methods) ? data.payment_methods : []);
                 renderCartSummary(data.cart_summary || {});
             }).catch(function (error) {
                 console.error('Checkout method refresh error:', error);
@@ -658,7 +930,6 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
                 }
 
                 if (target.name === 'payment_method') {
-                    syncPaymentDetails();
                     return;
                 }
 
@@ -692,6 +963,9 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
                     }
 
                     var redirectUrl = payload.data && payload.data.redirect_url ? payload.data.redirect_url : '';
+                    if (!redirectUrl && payload.data && payload.data.order_id) {
+                        redirectUrl = successUrl + (successUrl.indexOf('?') === -1 ? '?' : '&') + 'order_id=' + encodeURIComponent(payload.data.order_id);
+                    }
                     window.location.href = redirectUrl || successUrl;
                 }).catch(function (error) {
                     console.error('Checkout submit error:', error);
@@ -714,8 +988,8 @@ $checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'US
         });
 
         syncNewAddressRequirement();
-        syncPaymentDetails();
+        renderCartSummary(initialCartSummary);
     })();
 </script>
 
-<w:hook name="WeShop_Checkout::page::after"/>
+<w:hook name="Weline_Checkout::frontend::layouts::checkout::content-after"/>

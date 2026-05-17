@@ -205,11 +205,11 @@ if (empty($images) && !empty($mainImage)) {
                 
                 <div class="action-buttons">
                     <button type="button" 
-                            class="btn btn-primary btn-add-to-cart" 
+                            class="btn btn-primary btn-add-to-cart weline-pixel::add_to_cart" 
                             data-product-id="<?= (int)$productId ?>"
                             <?= !$inStock ? 'disabled' : '' ?>>
                         <span class="btn-icon">🛒</span>
-                        <span class="btn-text"><?= $inStock ? __('加入购物车') : __('缺货') ?></span>
+                        <span class="btn-text weline-pixel::add_to_cart"><?= $inStock ? __('加入购物车') : __('缺货') ?></span>
                     </button>
                     
                     <button type="button" 
@@ -220,9 +220,9 @@ if (empty($images) && !empty($mainImage)) {
                     </button>
                     
                     <button type="button" 
-                            class="btn btn-outline btn-wishlist" 
+                            class="btn btn-outline btn-wishlist weline-pixel::add_to_wishlist" 
                             data-product-id="<?= (int)$productId ?>">
-                        <span class="btn-icon">❤</span>
+                        <span class="btn-icon weline-pixel::add_to_wishlist">❤</span>
                     </button>
                 </div>
             </div>

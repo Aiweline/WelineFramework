@@ -1,7 +1,7 @@
 ---
 name: 文档知识库工程师-技能索引与知识库
 description: Documentation engineer skill for skill indexing, routing references, migration catalogs, and maintainable repository knowledge structure.
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Role
@@ -29,6 +29,7 @@ This skill owns skill catalogs, routing indexes, migration catalogs, and reposit
 - Preserve repository reading order and discovery guidance for future agents.
 - Record migration mappings and missing-source status when skills are reorganized.
 - Keep AI-facing knowledge concise, navigable, and self-consistent.
+- Promote repeated, corrected engineering mistakes into the narrowest matching skill instead of leaving them buried in rollout summaries.
 
 # Workflow
 
@@ -36,9 +37,11 @@ This skill owns skill catalogs, routing indexes, migration catalogs, and reposit
 2. Identify outdated paths, renamed skills, and role-based routing needs.
 3. Rewrite indexes and mapping documents to match the new structure.
 4. Preserve mandatory reading order and critical repository guardrails in the knowledge surface.
-5. Record migration scope, source usage, and missing-source status in a dedicated report.
-6. Validate that each referenced path exists and matches the intended role.
-7. Report the new navigation model and any remaining follow-up needs.
+5. When mining rollout history, only promote stable "wrong first, corrected later" patterns that changed implementation or validation behavior.
+6. Write the new lesson into the narrowest owning skill and avoid duplicating the same rule across many indexes unless it is truly cross-role.
+7. Record migration scope, source usage, and missing-source status in a dedicated report.
+8. Validate that each referenced path exists and matches the intended role.
+9. Report the new navigation model and any remaining follow-up needs.
 
 # Weline Rules
 
@@ -46,6 +49,7 @@ This skill owns skill catalogs, routing indexes, migration catalogs, and reposit
 - Prefer diagrams and module docs before reading source code.
 - Keep AI-facing routing material concise and discoverable.
 - Do not require legacy source files at runtime for the new skill system.
+- Do not turn one-off debugging trivia into a global rule; only keep corrections that are reusable, framework-shaped, and already validated.
 
 # Inputs Required
 

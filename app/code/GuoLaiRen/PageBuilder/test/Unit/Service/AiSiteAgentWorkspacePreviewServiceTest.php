@@ -80,7 +80,7 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
         self::assertStringContainsString('PageBuilderVisualEditor', $html);
         self::assertStringContainsString('"page_type":"home_page"', $html);
         self::assertStringContainsString('"page_type":"about_page"', $html);
-        self::assertStringContainsString('"preview_url":"https:\/\/backend.test\/pagebuilder\/backend\/ai-site-agent\/workspace-preview?public_id=demo-public&page_type=about_page&visual_editor=1&virtual_theme_id=22"', $html);
+        self::assertStringContainsString('"preview_url":"https:\/\/backend.test\/pagebuilder\/backend\/ai-site-agent\/workspace-preview?public_id=demo-public&page_type=about_page&preview=1&visual_editor=1&virtual_theme_id=22"', $html);
         self::assertStringContainsString('link.setAttribute(\'href\', String(page.preview_url));', $html);
         self::assertMatchesRegularExpression('/<\/script>\n<\/body>/u', $html);
     }

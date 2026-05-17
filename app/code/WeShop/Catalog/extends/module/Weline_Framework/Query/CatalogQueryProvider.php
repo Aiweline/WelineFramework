@@ -5,6 +5,8 @@ namespace WeShop\Catalog\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use WeShop\Catalog\Model\Category;
+use WeShop\Catalog\Service\CategoryService;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 分类查询器
@@ -44,9 +46,8 @@ class CatalogQueryProvider implements QueryProviderInterface
         if ($categoryId <= 0) {
             return null;
         }
-        $category = clone $this->categoryModel;
-        $category->load($categoryId);
-        if (!$category->getId()) {
+        $category = $this->categoryService()->getCategory($categoryId);
+        if (!$category || !$category->getId()) {
             return null;
         }
         return $this->categoryToArray($category);
@@ -58,27 +59,8 @@ class CatalogQueryProvider implements QueryProviderInterface
         if ($handle === '') {
             return null;
         }
-        $decodedHandle = urldecode($handle);
-        $category = clone $this->categoryModel;
-        $category->clear()
-            ->where(Category::schema_fields_HANDLE, $decodedHandle)
-            ->where(Category::schema_fields_IS_ACTIVE, 1)
-            ->find()
-            ->fetch();
-        if (!$category->getId()) {
-            if (str_contains($decodedHandle, '/')) {
-                $leafHandle = basename($decodedHandle);
-                if ($leafHandle !== '') {
-                    $category = clone $this->categoryModel;
-                    $category->clear()
-                        ->where(Category::schema_fields_HANDLE, $leafHandle)
-                        ->where(Category::schema_fields_IS_ACTIVE, 1)
-                        ->find()
-                        ->fetch();
-                }
-            }
-        }
-        if (!$category->getId()) {
+        $category = $this->categoryService()->getCategoryByHandle($handle);
+        if (!$category || !$category->getId()) {
             return null;
         }
         return $this->categoryToArray($category);
@@ -122,24 +104,7 @@ class CatalogQueryProvider implements QueryProviderInterface
         if ($parentId <= 0) {
             return [];
         }
-        $categoryIds = [$parentId];
-        $getChildrenIds = function (int $catId) use (&$getChildrenIds, &$categoryIds): void {
-            $category = clone $this->categoryModel;
-            $category->clear()
-                ->fields(Category::schema_fields_ID)
-                ->where(Category::schema_fields_PARENT_ID, $catId)
-                ->where(Category::schema_fields_IS_ACTIVE, 1);
-            $rows = $category->select()->fetch()->getItems();
-            foreach ($rows as $row) {
-                $childId = is_object($row) ? (int)$row->getData(Category::schema_fields_ID) : (int)($row[Category::schema_fields_ID] ?? 0);
-                if ($childId > 0 && !in_array($childId, $categoryIds, true)) {
-                    $categoryIds[] = $childId;
-                    $getChildrenIds($childId);
-                }
-            }
-        };
-        $getChildrenIds($parentId);
-        return array_values(array_unique($categoryIds));
+        return array_values(array_unique($this->categoryService()->getAllDescendantCategoryIds($parentId)));
     }
 
     private function getCategorySuggestions(array $params): array
@@ -183,6 +148,11 @@ class CatalogQueryProvider implements QueryProviderInterface
             'sort_order' => (int)($category->getData(Category::schema_fields_SORT_ORDER) ?? 0),
             'is_active' => (int)($category->getData(Category::schema_fields_IS_ACTIVE) ?? 1),
         ];
+    }
+
+    private function categoryService(): CategoryService
+    {
+        return ObjectManager::getInstance(CategoryService::class);
     }
 
     public function getDescriptor(): array

@@ -155,6 +155,12 @@ class AiSiteBuildQueue implements QueueInterface
                     $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 }
                 $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
+                $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+                $scope = $buildTaskService->ensureTaskScope(
+                    $scope,
+                    \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+                    $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+                );
                 if ($forceFullBuildRegeneration) {
                     $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
                     $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope, false);
@@ -291,6 +297,16 @@ class AiSiteBuildQueue implements QueueInterface
             }
             if (\in_array($operation, ['build', 'regenerate_page'], true)) {
                 $this->assertQueueBuildTasksComplete($sessionService, $scopeService, $buildTaskService, $session, $adminId, $operation);
+                $this->markQueueBuildOperationPassedGate(
+                    $sessionService,
+                    $scopeService,
+                    $buildTaskService,
+                    $session,
+                    $adminId,
+                    $operation,
+                    $effectiveExecutionToken,
+                    $queueId
+                );
             }
 
             $this->queueTrace($sse, '队列执行成功：构建完成');
@@ -299,10 +315,11 @@ class AiSiteBuildQueue implements QueueInterface
 
             return '构建完成。';
         } catch (\Throwable $throwable) {
+            $diagnostic = $this->formatThrowableDiagnostic($throwable);
             if ($sse instanceof QueueDbWriter) {
-                $this->queueTrace($sse, '异常：' . $throwable->getMessage());
+                $this->queueTrace($sse, '异常：' . $diagnostic);
             } else {
-                $this->appendQueueLifecycleLine($queue, '异常（SSE 未初始化）：' . $throwable->getMessage());
+                $this->appendQueueLifecycleLine($queue, '异常（SSE 未初始化）：' . $diagnostic);
             }
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $throwable->getMessage());
             throw new \RuntimeException('构建失败：' . $throwable->getMessage(), 0, $throwable);
@@ -616,7 +633,7 @@ class AiSiteBuildQueue implements QueueInterface
         );
         $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
         $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope, false);
-        $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
+        $sessionService->mergeScope((int)$fresh->getId(), $adminId, \array_replace($buildTaskService->extractBuildPlanDerivedScopePatch($scope), [
             'build_blueprint' => \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [],
             'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
             'virtual_pages_by_type' => [],
@@ -649,7 +666,7 @@ class AiSiteBuildQueue implements QueueInterface
                 'active' => 1,
                 'at' => \date('Y-m-d H:i:s'),
             ],
-        ]);
+        ]));
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
     }
@@ -666,26 +683,135 @@ class AiSiteBuildQueue implements QueueInterface
         $scope = $scopeService->normalizeScope(
             $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
-        $summary = $buildTaskService->summarize($scope);
-        $total = (int)($summary['total'] ?? 0);
-        $pending = (int)($summary['pending'] ?? 0);
-        $running = (int)($summary['running'] ?? 0);
-        $failed = (int)($summary['failed'] ?? 0);
-        $cancelled = (int)($summary['cancelled'] ?? 0);
+        $blueprintTasks = \is_array($scope['build_blueprint']['tasks'] ?? null) ? $scope['build_blueprint']['tasks'] : [];
+        if ($blueprintTasks === []) {
+            $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+            $restoredScope = $buildTaskService->ensureTaskScope(
+                $scope,
+                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+                $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+            );
+            $restoredScope = $buildTaskService->resetBuildTasksToPendingForRebuild($restoredScope, true);
+            if ($restoredScope !== $scope) {
+                $sessionService->replaceScope((int)$fresh->getId(), $adminId, $restoredScope);
+                $fresh = $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+                $scope = $scopeService->normalizeScope(
+                    $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
+            }
+        }
+        $finalizedScope = $buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
+        if ($finalizedScope !== $scope) {
+            $sessionService->replaceScope((int)$fresh->getId(), $adminId, $finalizedScope);
+            $fresh = $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+            $scope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
+        } else {
+            $scope = $finalizedScope;
+        }
+        $gate = $buildTaskService->inspectBuildCompletionGate($scope);
+        $total = (int)($gate['total'] ?? 0);
+        $pending = (int)($gate['pending'] ?? 0);
+        $running = (int)($gate['running'] ?? 0);
+        $failed = (int)($gate['failed'] ?? 0);
+        $cancelled = (int)($gate['cancelled'] ?? 0);
+        $invalidArtifacts = (int)($gate['invalid_artifacts'] ?? 0);
         if ($total <= 0) {
             throw new \RuntimeException('Build queue returned without any build task summary.');
         }
-        if ($buildTaskService->hasUnfinishedBlueprintTasks($scope) || $pending > 0 || $running > 0 || $failed > 0 || $cancelled > 0) {
+        if (empty($gate['passed'])) {
             throw new \RuntimeException(\sprintf(
-                'Build queue operation %s cannot finish while tasks are incomplete: total=%d pending=%d running=%d failed=%d cancelled=%d.',
+                'Build queue operation %s cannot finish while completion gate is blocked: total=%d pending=%d running=%d failed=%d cancelled=%d invalid_artifacts=%d reason=%s.',
                 $operation,
                 $total,
                 $pending,
                 $running,
                 $failed,
-                $cancelled
+                $cancelled,
+                $invalidArtifacts,
+                (string)($gate['reason'] ?? '')
             ));
         }
+    }
+
+    private function markQueueBuildOperationPassedGate(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteBuildTaskService $buildTaskService,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $operation,
+        string $executionToken,
+        int $queueId
+    ): void {
+        $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+        $gate = $buildTaskService->inspectBuildCompletionGate($scope);
+        if (empty($gate['passed'])) {
+            return;
+        }
+
+        $now = \date('Y-m-d H:i:s');
+        $message = $operation === 'regenerate_page' ? '页面重新生成完成。' : '构建完成。';
+        $operationStatePatch = [
+            'operation' => $operation,
+            'execution_token' => $executionToken,
+            'status' => 'done',
+            'queue_id' => $queueId,
+            'message' => $message,
+            'updated_at' => $now,
+            'finished_at' => $now,
+            'progress_percent' => 100,
+            'failure_mode' => '',
+            'retry_allowed' => 0,
+            'retryable_ai_failure_count' => 0,
+            'queue_waiting_for_scheduler' => false,
+            'can_close_stream' => true,
+            'continue_other_operations' => false,
+        ];
+
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $activeOperation = \trim((string)($active['operation'] ?? ''));
+        $activeToken = \trim((string)($active['execution_token'] ?? ''));
+        if (
+            $active === []
+            || $activeOperation === $operation
+            || $this->executionTokenMatches($activeToken, $executionToken)
+        ) {
+            $scope['active_operation'] = \array_replace($active, $operationStatePatch);
+        }
+
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $operationState = \is_array($activeOperations[$operation] ?? null) ? $activeOperations[$operation] : [];
+        $operationToken = \trim((string)($operationState['execution_token'] ?? ''));
+        if (
+            $operationState === []
+            || $this->executionTokenMatches($operationToken, $executionToken)
+        ) {
+            $activeOperations[$operation] = \array_replace($operationState, $operationStatePatch);
+            $scope['active_operations'] = $activeOperations;
+        }
+
+        $scope = $buildTaskService->clearRetryableAiFailures($scope, 'build');
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+        $scope['can_publish'] = 1;
+        $scope['site_ready'] = 1;
+        $scope['latest_build_failed'] = 0;
+        $scope['latest_build_failure'] = [];
+        $scope['publish_blocked_by_latest_ai_failure'] = 0;
+        $scope['publish_blocked_reason'] = '';
+        $scope['next_stage_blocked_by_ai_failures'] = 0;
+        $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
+        $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
+        $buildSummary['can_publish'] = true;
+        $buildSummary['active_operation'] = $operation;
+        $buildSummary['last_generated_at'] = $now;
+        $scope['build_summary'] = $buildSummary;
+
+        $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
     }
 
     private function clearQueueForceBuildMarker(AiSiteAgentSessionService $sessionService, int $sessionId, int $adminId): void
@@ -1028,6 +1154,28 @@ class AiSiteBuildQueue implements QueueInterface
             'level' => 'info',
         ]);
         $this->mirrorToCli('[' . \date('H:i:s') . '] LOG ' . $message);
+    }
+
+    private function formatThrowableDiagnostic(\Throwable $throwable): string
+    {
+        $frames = [];
+        foreach (\array_slice($throwable->getTrace(), 0, 8) as $frame) {
+            $file = \trim((string)($frame['file'] ?? ''));
+            $line = (int)($frame['line'] ?? 0);
+            $function = \trim((string)($frame['function'] ?? ''));
+            $class = \trim((string)($frame['class'] ?? ''));
+            $location = $file !== '' ? $file . ($line > 0 ? ':' . $line : '') : '[internal]';
+            $call = $class !== '' ? $class . '::' . $function : $function;
+            $frames[] = $location . ($call !== '' ? ' ' . $call : '');
+        }
+
+        return \sprintf(
+            '%s in %s:%d%s',
+            $throwable->getMessage(),
+            $throwable->getFile(),
+            (int)$throwable->getLine(),
+            $frames !== [] ? ' | trace: ' . \implode(' <- ', $frames) : ''
+        );
     }
 
     private function mirrorToCli(string $line): void

@@ -10,6 +10,10 @@ $relatedProducts = $this->getData('related_products') ?? [];
 $breadcrumbs = $this->getData('breadcrumbs') ?? [];
 $canonicalProductTabsContent = trim((string) $this->getHook('WeShop_Product::frontend::layouts::product::tabs-content'));
 ?>
+<script>
+    window.WeShop = window.WeShop || {};
+    window.WeShop.cartAddUrl = '<?= $this->getUrl('cart/frontend/api/add') ?>';
+</script>
 <main class="px-4 sm:px-6 lg:px-8 xl:px-20 py-10 flex-1">
     <div class="mx-auto max-w-7xl">
         <!-- Breadcrumb -->
@@ -123,7 +127,7 @@ $canonicalProductTabsContent = trim((string) $this->getHook('WeShop_Product::fro
                     
                     <!-- Add to Cart -->
                     <div class="flex flex-col gap-3 pt-4">
-                        <button type="submit" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary text-white gap-2 text-base font-bold leading-normal tracking-wide hover:opacity-90 transition-opacity weline-pixel::add_to_cart">
+                        <button type="button" class="add-to-cart w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary text-white gap-2 text-base font-bold leading-normal tracking-wide hover:opacity-90 transition-opacity weline-pixel::add_to_cart" data-product-id="<?= (int) ($product['product_id'] ?? 0) ?>">
                             <span class="material-symbols-outlined weline-pixel::add_to_cart">add_shopping_cart</span>
                             <?= __('Add to Cart') ?>
                         </button>
@@ -244,14 +248,20 @@ $canonicalProductTabsContent = trim((string) $this->getHook('WeShop_Product::fro
                 <h2 class="text-2xl font-bold mb-6"><?= __('You Might Also Like') ?></h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     <?php foreach ($relatedProducts as $related): ?>
-                        <a href="<?= $this->getUrl('product/view', ['id' => $related['product_id']]) ?>" class="flex flex-col gap-3 group">
-                            <div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg overflow-hidden" style='background-image: url("<?= $related['image'] ?? '' ?>");' data-alt="<?= htmlspecialchars($related['name']) ?>"></div>
-                            <div class="flex flex-col">
-                                <h3 class="font-bold text-base group-hover:text-primary transition-colors"><?= htmlspecialchars($related['name']) ?></h3>
+                        <article class="flex flex-col gap-3 group">
+                            <a href="<?= $this->getUrl('product/view', ['id' => $related['product_id']]) ?>" class="block">
+                                <div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg overflow-hidden" style='background-image: url("<?= $related['image'] ?? '' ?>");' data-alt="<?= htmlspecialchars($related['name']) ?>"></div>
+                            </a>
+                            <div class="flex flex-col gap-1">
+                                <a href="<?= $this->getUrl('product/view', ['id' => $related['product_id']]) ?>" class="font-bold text-base group-hover:text-primary transition-colors"><?= htmlspecialchars($related['name']) ?></a>
                                 <p class="text-text-secondary-light dark:text-text-secondary-dark text-sm"><?= number_format($related['rating'] ?? 0, 1) ?> ★ (<?= $related['review_count'] ?? 0 ?>)</p>
                                 <p class="font-bold mt-1"><?= $this->formatPrice($related['price']) ?></p>
                             </div>
-                        </a>
+                            <button type="button" class="add-to-cart inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 weline-pixel::add_to_cart" data-product-id="<?= (int) ($related['product_id'] ?? 0) ?>">
+                                <span class="material-symbols-outlined !text-lg weline-pixel::add_to_cart">add_shopping_cart</span>
+                                <?= __('Add to Cart') ?>
+                            </button>
+                        </article>
                     <?php endforeach; ?>
                 </div>
                 <w:hook name="WeShop_Product::detail::related_after"/>

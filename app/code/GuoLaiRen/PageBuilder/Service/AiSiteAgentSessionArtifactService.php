@@ -147,6 +147,9 @@ class AiSiteAgentSessionArtifactService
         }
 
         $scope = $this->removeSnapshotBackupsFromScope($scope);
+        $explicitArtifactRefReset = \array_key_exists(self::REF_KEY, $scope)
+            && \is_array($scope[self::REF_KEY])
+            && $scope[self::REF_KEY] === [];
         $refs = \is_array($scope[self::REF_KEY] ?? null) ? $scope[self::REF_KEY] : [];
         $touchedMap = \array_fill_keys($touchedArtifactKeys, true);
         $artifacts = [];
@@ -156,6 +159,12 @@ class AiSiteAgentSessionArtifactService
             $value = $this->getPathValue($scope, $definition['path'], $definition['empty']);
             $hasValue = $this->hasArtifactPayload($value);
             $existingRef = \is_array($refs[$stageCode][$artifactKey] ?? null) ? $refs[$stageCode][$artifactKey] : [];
+
+            if ($explicitArtifactRefReset && !isset($touchedMap[$artifactKey])) {
+                $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
+                unset($refs[$stageCode][$artifactKey]);
+                continue;
+            }
 
             if ($hasValue) {
                 $value = $this->compactArtifactPayloadForStorage($artifactKey, $value);
@@ -357,14 +366,18 @@ class AiSiteAgentSessionArtifactService
                 continue;
             }
 
-            $ref = $this->getArtifactRef($scope, $stageCode, $artifactKey);
-            if ($ref === []) {
-                continue;
-            }
-
             $artifact = $this->loadArtifactModel($sessionId, $stageCode, $artifactKey);
             if ($artifact->getId() <= 0) {
                 continue;
+            }
+
+            $ref = $this->getArtifactRef($scope, $stageCode, $artifactKey);
+            if ($ref !== []) {
+                $refHash = \trim((string)($ref['hash'] ?? ''));
+                $payloadHash = \trim((string)$artifact->getPayloadHash());
+                if ($refHash !== '' && $payloadHash !== '' && !\hash_equals($refHash, $payloadHash)) {
+                    continue;
+                }
             }
 
             $payload = $artifact->getPayloadValue();
@@ -477,6 +490,25 @@ class AiSiteAgentSessionArtifactService
         }
 
         return \array_values(\array_unique($expanded));
+    }
+
+    public function deleteArtifactsForSession(int $sessionId): void
+    {
+        if ($sessionId <= 0) {
+            return;
+        }
+        $this->ensureArtifactTableExists();
+        $pdo = $this->getPgsqlPdo();
+        if ($pdo === null) {
+            return;
+        }
+
+        $table = $this->artifactModel->getTable();
+        $sessionIdField = AiSiteAgentSessionArtifact::schema_fields_AGENT_SESSION_ID;
+        $stmt = $pdo->prepare("DELETE FROM {$table} WHERE \"{$sessionIdField}\" = :session_id");
+        if ($stmt) {
+            $stmt->execute(['session_id' => $sessionId]);
+        }
     }
 
     private function loadArtifactModel(int $sessionId, string $stageCode, string $artifactKey): AiSiteAgentSessionArtifact

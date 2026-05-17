@@ -59,7 +59,7 @@ final class AiSitePreviewLinkRewriteServiceTest extends TestCase
         );
 
         self::assertStringContainsString(
-            'href="https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&amp;page_type=about&amp;virtual_theme_id=169"',
+            'href="https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&amp;page_type=about&amp;preview=1&amp;virtual_theme_id=169"',
             $html
         );
     }
@@ -83,11 +83,11 @@ final class AiSitePreviewLinkRewriteServiceTest extends TestCase
         );
 
         self::assertStringContainsString(
-            'href="https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&amp;page_type=about_page&amp;visual_editor=1&amp;virtual_theme_id=169"',
+            'href="https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&amp;page_type=about_page&amp;preview=1&amp;visual_editor=1&amp;virtual_theme_id=169"',
             $html
         );
         self::assertStringContainsString(
-            'href="https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&amp;page_type=contact_page&amp;visual_editor=1&amp;virtual_theme_id=169"',
+            'href="https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&amp;page_type=contact_page&amp;preview=1&amp;visual_editor=1&amp;virtual_theme_id=169"',
             $html
         );
     }

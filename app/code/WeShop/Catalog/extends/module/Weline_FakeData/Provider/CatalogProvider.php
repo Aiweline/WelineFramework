@@ -14,6 +14,7 @@ class CatalogProvider implements FakeDataProviderInterface
 {
     private const CODE = 'weshop_catalog';
     private const ENTITY_CATEGORY = 'category';
+    public const EMPTY_CATEGORY_HANDLE = 'fake-empty-category';
 
     public function __construct(
         private readonly Category $category,
@@ -103,6 +104,8 @@ class CatalogProvider implements FakeDataProviderInterface
             $existingId > 0 ? $result->addUpdated() : $result->addCreated();
         }
 
+        $result->merge($this->backfillExistingCategoryImages());
+
         return $result;
     }
 
@@ -155,41 +158,101 @@ class CatalogProvider implements FakeDataProviderInterface
         return [
             [
                 'handle' => 'fake-electronics',
-                'name' => 'Fake Electronics',
-                'description' => 'Development category for electronic demo products.',
-                'image' => '/media/fake-data/category-electronics.jpg',
+                'name' => 'Consumer Electronics',
+                'description' => 'Phones, audio, wearables, and smart-device demo products.',
+                'image' => 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80',
                 'sort_order' => 10,
             ],
             [
                 'handle' => 'fake-apparel',
-                'name' => 'Fake Apparel',
-                'description' => 'Development category for apparel demo products.',
-                'image' => '/media/fake-data/category-apparel.jpg',
+                'name' => 'Everyday Apparel',
+                'description' => 'Casual clothing, sneakers, and daily-wear demo products.',
+                'image' => 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
                 'sort_order' => 20,
             ],
             [
                 'handle' => 'fake-home',
-                'name' => 'Fake Home',
-                'description' => 'Development category for home and lifestyle demo products.',
-                'image' => '/media/fake-data/category-home.jpg',
+                'name' => 'Home Living',
+                'description' => 'Furniture, lighting, and home-lifestyle demo products.',
+                'image' => 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1200&q=80',
                 'sort_order' => 30,
             ],
             [
                 'handle' => 'fake-smart-devices',
                 'parent_handle' => 'fake-electronics',
-                'name' => 'Fake Smart Devices',
-                'description' => 'Development subcategory for smart devices.',
-                'image' => '/media/fake-data/category-smart-devices.jpg',
+                'name' => 'Smart Devices',
+                'description' => 'Wearables, smart accessories, and connected devices.',
+                'image' => 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80',
                 'sort_order' => 11,
             ],
             [
                 'handle' => 'fake-daily-wear',
                 'parent_handle' => 'fake-apparel',
-                'name' => 'Fake Daily Wear',
-                'description' => 'Development subcategory for daily wear.',
-                'image' => '/media/fake-data/category-daily-wear.jpg',
+                'name' => 'Daily Wear',
+                'description' => 'Comfortable everyday tops, shoes, and accessories.',
+                'image' => 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
                 'sort_order' => 21,
             ],
+            [
+                'handle' => 'fake-living-space',
+                'parent_handle' => 'fake-home',
+                'name' => 'Living Space',
+                'description' => 'Living-room furniture, tables, seating, and decor.',
+                'image' => 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80',
+                'sort_order' => 31,
+            ],
+            [
+                'handle' => self::EMPTY_CATEGORY_HANDLE,
+                'name' => 'Empty Category Demo',
+                'description' => 'A deliberate empty category used to verify storefront empty-state behavior.',
+                'image' => 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80',
+                'sort_order' => 99,
+            ],
+        ];
+    }
+
+    private function backfillExistingCategoryImages(): FakeDataResult
+    {
+        $result = new FakeDataResult();
+        $pdo = $this->category->getConnection()->getConnector()->getLink();
+        $sql = 'UPDATE "m_weshop_category" SET "image" = :image, "updated_at" = :updated_at WHERE "category_id" = :category_id AND ("image" IS NULL OR "image" = \'\')';
+
+        foreach ($this->getExistingCategoryImageMap() as $handle => $image) {
+            $row = $this->category->clear()
+                ->where(Category::schema_fields_HANDLE, $handle)
+                ->find()
+                ->fetch();
+            $categoryId = (int)($row[Category::schema_fields_ID] ?? 0);
+            $currentImage = trim((string)($row[Category::schema_fields_IMAGE] ?? ''));
+            if ($categoryId <= 0 || $currentImage !== '') {
+                continue;
+            }
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                ':image' => $image,
+                ':updated_at' => date('Y-m-d H:i:s'),
+                ':category_id' => $categoryId,
+            ]);
+            if ($stmt->rowCount() > 0) {
+                $result->addUpdated();
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getExistingCategoryImageMap(): array
+    {
+        return [
+            'electronics' => 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80',
+            'phones' => 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80',
+            'computers' => 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80',
+            'smart-devices' => 'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?auto=format&fit=crop&w=1200&q=80',
+            'audio-video' => 'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=1200&q=80',
         ];
     }
 

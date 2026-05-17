@@ -18,6 +18,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
             "'code' => 'PLAN_NOT_CONFIRMED'",
             "'code' => 'BUILD_PLAN_NOT_CONFIRMED'",
             "'code' => 'WORKSPACE_NOT_READY'",
+            "'code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH'",
             "'code' => 'PUBLISH_QUALITY_GATE_FAILED'",
             "'code' => 'VISUAL_THEME_CONFIRM_REQUIRED'",
         ] as $expectedCode) {
@@ -39,12 +40,26 @@ final class AiSiteAgentPublishContractTest extends TestCase
             "'code' => 'WEBSITE_PROFILE_READY'",
             "'code' => 'VIRTUAL_PAGES_READY'",
             "'code' => 'VISUAL_EDITOR_READY'",
+            "'code' => 'STAGE2_TASK_BLOCK_INTEGRITY'",
             "'code' => \$passed ? 'PUBLISH_CHECKLIST_PASSED' : 'PUBLISH_CHECKLIST_BLOCKED'",
         ] as $expectedCode) {
             self::assertStringContainsString($expectedCode, $methodSource);
         }
         self::assertStringNotContainsString("'code' => 'HTML_BLOCKS_READY'", $methodSource);
         self::assertStringNotContainsString("'code' => 'SITE_READY'", $methodSource);
+    }
+
+    public function testPublishOperationRunsStageTwoTaskBlockGateBeforePublishService(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractMethodSource($source, 'runPublishOperation');
+
+        $readinessPos = \strpos($methodSource, 'buildStageTwoPublishReadinessReport($scope)');
+        $publishPos = \strpos($methodSource, '$this->publishService->publish(');
+        self::assertIsInt($readinessPos);
+        self::assertIsInt($publishPos);
+        self::assertLessThan($publishPos, $readinessPos);
+        self::assertStringContainsString("\$scope['stage2_publish_readiness'] = \$stageTwoReadiness;", $methodSource);
     }
 
     public function testWorkspaceSnapshotHandlerRemainsReadOnlyForWorkbenchStepStatus(): void

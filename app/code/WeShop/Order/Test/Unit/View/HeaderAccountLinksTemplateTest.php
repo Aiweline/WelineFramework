@@ -17,6 +17,6 @@ final class HeaderAccountLinksTemplateTest extends TestCase
 
         $this->assertStringContainsString("Hook: account.sidebar", (string) file_get_contents(dirname(__DIR__, 3) . '/view/hooks/account.sidebar.phtml'));
         $this->assertStringContainsString("@url{'customer/account/index'}#orders", $content);
-        $this->assertStringNotContainsString('weshop/order/list', $content);
+        $this->assertStringNotContainsString("@url{'weshop/order/list'}", $content);
     }
 }

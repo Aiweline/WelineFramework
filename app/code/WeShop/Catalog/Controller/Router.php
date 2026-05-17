@@ -104,6 +104,14 @@ class Router implements RouterInterface
      */
     private static function categoryHandleExists(string &$categoryHandle): bool
     {
+        $originalHandle = $categoryHandle;
+        $runtimeCategory = self::resolveCategoryFromRuntimeIndex($categoryHandle);
+        if ($runtimeCategory !== null) {
+            self::$urlKeyCache[$originalHandle] = true;
+            self::$urlKeyCache[$categoryHandle] = true;
+            return true;
+        }
+
         // 1. 首先检查请求内静态缓存（最快）
         if (isset(self::$urlKeyCache[$categoryHandle])) {
             return self::$urlKeyCache[$categoryHandle];
@@ -291,7 +299,96 @@ class Router implements RouterInterface
         }
         return self::$crossRequestCache;
     }
-    
+
+    private static function resolveCategoryFromRuntimeIndex(string &$categoryHandle): ?Category
+    {
+        try {
+            /** @var CategoryService $categoryService */
+            $categoryService = ObjectManager::getInstance(CategoryService::class);
+            $category = $categoryService->getCategoryByHandle($categoryHandle);
+            if (!$category || !$category->getId()) {
+                return null;
+            }
+
+            $resolvedHandle = trim((string)($category->getData(Category::schema_fields_HANDLE) ?? ''), '/');
+            if ($resolvedHandle !== '') {
+                $categoryHandle = $resolvedHandle;
+            }
+            self::hydrateRequestCategoryContext($category, $categoryService);
+
+            return $category;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private static function hydrateRequestCategoryContext(Category $category, CategoryService $categoryService): void
+    {
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $nodes = [];
+            $currentNode = $category;
+
+            while ($currentNode && $currentNode->getId()) {
+                array_unshift($nodes, $currentNode);
+                $parentId = (int)($currentNode->getData(Category::schema_fields_PARENT_ID) ?? 0);
+                if ($parentId <= 0) {
+                    break;
+                }
+
+                $currentNode = $categoryService->getCategory($parentId);
+            }
+
+            $breadcrumbs = [];
+            $pathSegments = [];
+            $currentCategory = null;
+            $nodesCount = count($nodes);
+
+            foreach ($nodes as $index => $node) {
+                if (!$node instanceof Category) {
+                    continue;
+                }
+
+                $handle = trim((string)($node->getData(Category::schema_fields_HANDLE) ?? ''), '/');
+                if ($handle === '') {
+                    continue;
+                }
+                $pathSegments[] = $handle;
+                $path = implode('/', $pathSegments);
+
+                $item = [
+                    'category_id' => (int)$node->getId(),
+                    'name' => (string)($node->getData(Category::schema_fields_NAME) ?? ''),
+                    'handle' => $handle,
+                    'path' => $path,
+                ];
+
+                if ($index < $nodesCount - 1) {
+                    $breadcrumbs[] = $item;
+                    continue;
+                }
+
+                $currentCategory = $item;
+                $currentCategory['description'] = (string)($node->getData(Category::schema_fields_DESCRIPTION) ?? '');
+                $currentCategory['image'] = (string)($node->getData(Category::schema_fields_IMAGE) ?? '');
+                $currentCategory['parent_id'] = (int)($node->getData(Category::schema_fields_PARENT_ID) ?? 0);
+                $currentCategory['sort_order'] = (int)($node->getData(Category::schema_fields_SORT_ORDER) ?? 0);
+            }
+
+            if ($currentCategory === null) {
+                return;
+            }
+
+            $request->setData('categories', [
+                'current' => $currentCategory,
+                'breadcrumbs' => $breadcrumbs,
+                'path' => implode('/', $pathSegments),
+            ]);
+        } catch (\Throwable) {
+        }
+    }
+
     /**
      * 清理缓存（用于测试或手动清理）
      */

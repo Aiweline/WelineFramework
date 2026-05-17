@@ -303,7 +303,7 @@ $dispatcher->configure([
     'startup_protection_ready_ratio' => (float)($startupProtectionConfig['ready_ratio'] ?? 0.0),
     'startup_protection_min_ready' => (int)($startupProtectionConfig['min_ready'] ?? 1),
     'spin_wait_max_seconds' => (float)($dispatcherConfig['spin_wait_max_seconds'] ?? 3.0),
-    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? false),
+    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? true),
     'cache' => [
         'default_ttl' => 3600,
         'connection_ttl' => 120,

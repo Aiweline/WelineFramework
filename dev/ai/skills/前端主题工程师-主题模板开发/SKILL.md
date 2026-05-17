@@ -28,6 +28,7 @@ This skill owns theme-level template work, source-template editing, layout-aware
 - Keep frontend and backend theme areas separated.
 - Organize layout, partial, widget, and asset changes in the expected theme structure.
 - Keep styles and scripts scoped, reusable, and consistent with theme tokens.
+- Keep frontend request interactions routed through Theme `theme.js` and the built-in `weline-api` worker chain.
 
 # Workflow
 
@@ -47,6 +48,7 @@ This skill owns theme-level template work, source-template editing, layout-aware
 - Do not hardcode user-facing text.
 - Use i18n for user-facing text.
 - Do not use JavaScript `alert`, `confirm`, or `prompt`.
+- Do not add direct frontend requests with `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or equivalent helpers in theme templates or module scripts; declare/register JS behavior and call the built-in `weline-api` through `theme.js` so requests run through the worker path.
 
 # Inputs Required
 
@@ -66,6 +68,7 @@ This skill owns theme-level template work, source-template editing, layout-aware
 - Confirm the edit was applied to source templates, not `view/tpl` output.
 - Confirm the page renders correctly on the intended route.
 - Confirm styles and scripts stay scoped to the relevant theme surface.
+- Confirm interactive requests use the Theme `theme.js` / `weline-api` worker route instead of direct browser-side HTTP calls.
 - Confirm user-facing text remains externalized for translation.
 
 # Constraints

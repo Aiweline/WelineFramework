@@ -15,8 +15,8 @@ use Weline\UrlManager\Model\UrlRewrite;
  * Product 产品路由重写器
  * 
  * 功能：将友好的URL路径重写为产品查看路由
- * 例如：/product/product-handle -> /weshop/product/view?id={product_id}
- *       /CNY/en_US/product/product-handle -> /weshop/product/view?id={product_id}
+ * 例如：/product/product-handle -> /product/view?id={product_id}
+ *       /CNY/en_US/product/product-handle -> /product/view?id={product_id}
  * 
  * 支持多站点：
  * - 优先从 product_website 表按 (website_id, handle) 查找
@@ -99,7 +99,7 @@ class Router implements RouterInterface
         }
         
         // 7. 重写路由到产品查看控制器
-        $path = 'product/frontend/product/view';
+        $path = 'product/view';
         $rule['module'] = 'WeShop_Product';
         self::setQueryParam('id', $productId);
         self::setQueryParam('product_id', $productId);
