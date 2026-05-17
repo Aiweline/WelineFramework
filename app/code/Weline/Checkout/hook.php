@@ -69,6 +69,75 @@ return [
         'doc' => 'frontend/layouts/checkout/payment-methods-after.md',
     ],
     
+    'Weline_Checkout::frontend::layouts::checkout::shipping-methods-before' => [
+        'name' => __('结账配送方式区域之前'),
+        'description' => __('在默认一页式结账的配送方式区域之前触发，允许配送模块注入提示、限制或扩展内容。'),
+        'doc' => 'frontend/layouts/checkout/shipping-methods-before.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::shipping-methods-after' => [
+        'name' => __('结账配送方式区域之后'),
+        'description' => __('在默认一页式结账的配送方式区域之后触发，允许配送模块注入补充说明或扩展内容。'),
+        'doc' => 'frontend/layouts/checkout/shipping-methods-after.md',
+    ],
+
+    'Weline_Checkout::frontend::partials::checkout::shipping-methods' => [
+        'name' => __('结账配送方式列表'),
+        'description' => __('渲染默认一页式结账中的配送方式列表；具体电商模块通过该 hook 提供数据化实现。'),
+        'doc' => 'frontend/partials/checkout/shipping-methods.md',
+    ],
+
+    'Weline_Checkout::frontend::partials::checkout::payment-methods' => [
+        'name' => __('结账支付方式列表'),
+        'description' => __('渲染默认一页式结账中的支付方式列表；支付模块通过该 hook 将支付方式放入结账布局。'),
+        'doc' => 'frontend/partials/checkout/payment-methods.md',
+    ],
+
+    'Weline_Checkout::frontend::partials::checkout::payment-details' => [
+        'name' => __('结账支付方式详情'),
+        'description' => __('渲染所选支付方式的补充说明、重定向提示或线下支付指引。'),
+        'doc' => 'frontend/partials/checkout/payment-details.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::review-before' => [
+        'name' => __('结账确认区域之前'),
+        'description' => __('在提交订单确认区域之前触发，用于促销、风控、协议或校验提示扩展。'),
+        'doc' => 'frontend/layouts/checkout/review-before.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::review-after' => [
+        'name' => __('结账确认区域之后'),
+        'description' => __('在提交订单确认区域之后触发，用于补充说明或转化追踪扩展。'),
+        'doc' => 'frontend/layouts/checkout/review-after.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::place-order-button-before' => [
+        'name' => __('提交订单按钮之前'),
+        'description' => __('在默认提交订单按钮之前触发，允许模块追加校验提示或替换性操作入口。'),
+        'doc' => 'frontend/layouts/checkout/place-order-button-before.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::place-order-button-after' => [
+        'name' => __('提交订单按钮之后'),
+        'description' => __('在默认提交订单按钮之后触发，允许模块追加支付协议、风控或分析埋点内容。'),
+        'doc' => 'frontend/layouts/checkout/place-order-button-after.md',
+    ],
+
+    'Weline_Checkout::frontend::layouts::checkout::summary-before' => ['name' => __('结账摘要之前'), 'description' => __('在订单摘要卡片标题之前触发。'), 'doc' => 'frontend/layouts/checkout/summary-before.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-after' => ['name' => __('结账摘要之后'), 'description' => __('在订单摘要卡片底部触发。'), 'doc' => 'frontend/layouts/checkout/summary-after.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-rows-before' => ['name' => __('结账金额行之前'), 'description' => __('在订单摘要金额明细行之前触发。'), 'doc' => 'frontend/layouts/checkout/summary-rows-before.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-rows-after' => ['name' => __('结账金额行之后'), 'description' => __('在订单摘要金额明细行之后触发。'), 'doc' => 'frontend/layouts/checkout/summary-rows-after.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-subtotal-before' => ['name' => __('商品小计之前'), 'description' => __('在商品小计行数值之前触发。'), 'doc' => 'frontend/layouts/checkout/summary-subtotal-before.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-subtotal-after' => ['name' => __('商品小计之后'), 'description' => __('在商品小计行数值之后触发。'), 'doc' => 'frontend/layouts/checkout/summary-subtotal-after.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-shipping-before' => ['name' => __('运费行之前'), 'description' => __('在运费行数值之前触发。'), 'doc' => 'frontend/layouts/checkout/summary-shipping-before.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-shipping-after' => ['name' => __('运费行之后'), 'description' => __('在运费行数值之后触发。'), 'doc' => 'frontend/layouts/checkout/summary-shipping-after.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-tax-before' => ['name' => __('税费行之前'), 'description' => __('在税费行数值之前触发。'), 'doc' => 'frontend/layouts/checkout/summary-tax-before.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-tax-after' => ['name' => __('税费行之后'), 'description' => __('在税费行数值之后触发。'), 'doc' => 'frontend/layouts/checkout/summary-tax-after.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-discount-before' => ['name' => __('优惠行之前'), 'description' => __('在优惠行数值之前触发。'), 'doc' => 'frontend/layouts/checkout/summary-discount-before.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-discount-after' => ['name' => __('优惠行之后'), 'description' => __('在优惠行数值之后触发。'), 'doc' => 'frontend/layouts/checkout/summary-discount-after.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-grand-total-before' => ['name' => __('应付合计之前'), 'description' => __('在应付合计行数值之前触发。'), 'doc' => 'frontend/layouts/checkout/summary-grand-total-before.md'],
+    'Weline_Checkout::frontend::layouts::checkout::summary-grand-total-after' => ['name' => __('应付合计之后'), 'description' => __('在应付合计行数值之后触发。'), 'doc' => 'frontend/layouts/checkout/summary-grand-total-after.md'],
+
     // ==================== Frontend Order List Layout ====================
     
     // 订单列表内容之前

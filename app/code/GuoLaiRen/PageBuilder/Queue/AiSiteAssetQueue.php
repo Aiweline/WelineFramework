@@ -107,7 +107,86 @@ class AiSiteAssetQueue implements QueueInterface
             if ((int)($slot['locked_by_user'] ?? 0) === 1) {
                 throw new \RuntimeException('Asset slot is locked by user: ' . $slotId);
             }
+            $expectedPlanningSignature = \trim((string)($content['planning_signature'] ?? ''));
+            $currentPlanningSignature = \trim((string)($slot['planning_signature'] ?? ''));
+            if (
+                $expectedPlanningSignature !== ''
+                && $currentPlanningSignature !== ''
+                && !\hash_equals($expectedPlanningSignature, $currentPlanningSignature)
+            ) {
+                $staleState = [
+                    'asset_manifest' => $manifest,
+                    'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+                    'asset_block_cache' => \is_array($scope['asset_block_cache'] ?? null)
+                        ? $scope['asset_block_cache']
+                        : [],
+                    'planning_signature' => $currentPlanningSignature,
+                    'stale_planning_signature' => $expectedPlanningSignature,
+                ];
+                $staleScopePatch = [
+                    'asset_manifest' => $manifest,
+                    'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+                    'asset_block_cache' => \is_array($scope['asset_block_cache'] ?? null)
+                        ? $scope['asset_block_cache']
+                        : [],
+                ];
+                $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge(
+                    $staleScopePatch,
+                    $this->buildReferenceImageInsightScopePatch($scope)
+                ));
+                $sse->sendEvent('asset_generation_skipped', [
+                    'slot_id' => $slotId,
+                    'message' => 'Image asset generation skipped because the planning contract changed.',
+                    'state' => $staleState,
+                ]);
+                $sse->complete([
+                    'success' => true,
+                    'slot_id' => $slotId,
+                    'stale' => true,
+                    'state' => $staleState,
+                ]);
+
+                return 'Image asset generation skipped because planning contract changed: ' . $slotId;
+            }
             $previousUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($mode !== 'regenerate' && $previousUrl !== '' && $manifestService->isReusableSessionBlockAsset($scope, $slot, $previousUrl)) {
+                $scope = $manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
+                $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $previousUrl);
+                $reuseState = \array_merge([
+                    'asset_manifest' => $manifest,
+                    'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+                    'asset_block_cache' => \is_array($scope['asset_block_cache'] ?? null)
+                        ? $scope['asset_block_cache']
+                        : [],
+                    'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
+                        ? $scope['asset_image_generation_failures']
+                        : [],
+                ], $this->buildIdentityAssetScopePatch($scope));
+                $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge(
+                    $reuseState,
+                    $this->buildReferenceImageInsightScopePatch($scope)
+                ));
+                $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest, 'state' => $reuseState]);
+                $sse->sendEvent('asset_generation_done', [
+                    'slot_id' => $slotId,
+                    'final_url' => $previousUrl,
+                    'asset_manifest' => $manifest,
+                    'website_profile' => \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+                    'state' => $reuseState,
+                    'message' => 'Image asset generation reused from the unchanged planning contract.',
+                ]);
+                $sse->complete([
+                    'success' => true,
+                    'slot_id' => $slotId,
+                    'final_url' => $previousUrl,
+                    'asset_manifest' => $manifest,
+                    'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+                    'state' => $reuseState,
+                    'reused' => true,
+                ] + $this->buildIdentityAssetScopePatch($scope));
+
+                return 'Image asset generation reused: ' . $slotId;
+            }
             $prompt = $manifestService->buildPrompt($slot, $scope);
             if ($prompt === '') {
                 throw new \RuntimeException('Asset slot prompt brief is empty: ' . $slotId);
@@ -179,9 +258,13 @@ class AiSiteAssetQueue implements QueueInterface
             $imagePatch = $this->applyGeneratedImagePatchToScope($scope, $content, $slot, $previousUrl, $finalUrl);
             $scope = \is_array($imagePatch['scope'] ?? null) ? $imagePatch['scope'] : $scope;
             $imageScopePatch = \is_array($imagePatch['patch'] ?? null) ? $imagePatch['patch'] : [];
+            $scope = $manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
             $successState = \array_merge([
                 'asset_manifest' => $manifest,
                 'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+                'asset_block_cache' => \is_array($scope['asset_block_cache'] ?? null)
+                    ? $scope['asset_block_cache']
+                    : [],
                 'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
                     ? $scope['asset_image_generation_failures']
                     : [],
@@ -189,6 +272,9 @@ class AiSiteAssetQueue implements QueueInterface
             $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge([
                 'asset_manifest' => $manifest,
                 'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+                'asset_block_cache' => \is_array($scope['asset_block_cache'] ?? null)
+                    ? $scope['asset_block_cache']
+                    : [],
                 'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
                     ? $scope['asset_image_generation_failures']
                     : [],
@@ -363,14 +449,17 @@ class AiSiteAssetQueue implements QueueInterface
         $targetPath = \ltrim($targetPath, '/');
         if ($targetPath !== '') {
             $targetPath = \preg_replace('/\.[a-z0-9]+$/i', '.' . $extension, $targetPath) ?? $targetPath;
-            return $this->normalizeMediaRelativePath($targetPath);
+            $targetPath = $this->normalizeMediaRelativePath($targetPath);
+            if ($this->isTargetPathUnderCurrentHandle($targetPath, $scope, $session)) {
+                return $targetPath;
+            }
         }
 
         $handle = $this->resolveTargetHandle($scope, $session);
         $safeSlotId = $this->safeFileSegment($slotId);
         $hash = \substr(\sha1($slotId . ':' . $bytes), 0, 16);
 
-        return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlotId . '-' . $hash . '.' . $extension;
+        return 'pub/media/page-build/ai-generated/' . $handle . '/' . $safeSlotId . '-' . $hash . '.' . $extension;
     }
 
     private function normalizeMediaRelativePath(string $targetPath): string
@@ -389,6 +478,11 @@ class AiSiteAssetQueue implements QueueInterface
      */
     private function resolveTargetHandle(array $scope, AiSiteAgentSession $session): string
     {
+        $localPreviewHost = $this->resolveLocalPreviewHost($scope);
+        if ($localPreviewHost !== '') {
+            return $this->safeFileSegment($localPreviewHost);
+        }
+
         foreach ([
             $scope['target_domain'] ?? null,
             $scope['selected_domain'] ?? null,
@@ -403,6 +497,40 @@ class AiSiteAssetQueue implements QueueInterface
         }
 
         return 'site';
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveLocalPreviewHost(array $scope): string
+    {
+        foreach (['preview_full_url', 'visual_preview_url', 'visual_edit_url', 'preview_url'] as $key) {
+            $url = \trim((string)($scope[$key] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $host = \parse_url($url, \PHP_URL_HOST);
+            $host = \is_string($host) ? \strtolower(\trim($host)) : '';
+            if ($host !== '' && (\str_ends_with($host, '.weline.test') || \str_ends_with($host, '.local.test'))) {
+                return $host;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function isTargetPathUnderCurrentHandle(string $targetPath, array $scope, AiSiteAgentSession $session): bool
+    {
+        $targetPath = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $targetPath)) ?? $targetPath, '/');
+        $handle = $this->resolveTargetHandle($scope, $session);
+        if ($handle === '') {
+            return false;
+        }
+
+        return \str_starts_with($targetPath, '/pub/media/page-build/ai-generated/' . $handle . '/');
     }
 
     private function safeFileSegment(string $value): string
@@ -800,8 +928,110 @@ class AiSiteAssetQueue implements QueueInterface
             $websiteProfile['favicon'] = $finalUrl;
         }
         $scope['website_profile'] = $websiteProfile;
+        $scope = $this->applyIdentityAssetToRenderPayloads($scope, $role, $finalUrl);
 
         return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function applyIdentityAssetToRenderPayloads(array $scope, string $role, string $finalUrl): array
+    {
+        $scope = $this->applyIdentityAssetToRenderPayload($scope, $role, $finalUrl);
+
+        if (\is_array($scope['render_data_contract']['payload'] ?? null)) {
+            $payload = $this->applyIdentityAssetToRenderPayload($scope['render_data_contract']['payload'], $role, $finalUrl);
+            $scope['render_data_contract']['payload'] = $payload;
+        }
+        if (\is_array($scope['build_contracts']['render_data']['payload'] ?? null)) {
+            $payload = $this->applyIdentityAssetToRenderPayload($scope['build_contracts']['render_data']['payload'], $role, $finalUrl);
+            $scope['build_contracts']['render_data']['payload'] = $payload;
+        }
+        if (\is_array($scope['build_workbench']['contracts']['render_data']['payload'] ?? null)) {
+            $payload = $this->applyIdentityAssetToRenderPayload($scope['build_workbench']['contracts']['render_data']['payload'], $role, $finalUrl);
+            $scope['build_workbench']['contracts']['render_data']['payload'] = $payload;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function applyIdentityAssetToRenderPayload(array $payload, string $role, string $finalUrl): array
+    {
+        if ($role === 'logo') {
+            if (\is_array($payload['shared_components']['header']['default_config'] ?? null)) {
+                $payload['shared_components']['header']['default_config']['logo']['url'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['logo']['image'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['logo.url'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['logo.image'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['identity.shared_logo_asset'] = $finalUrl;
+            }
+            if (\is_array($payload['shared_components']['footer']['default_config'] ?? null)) {
+                $payload['shared_components']['footer']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
+                $payload['shared_components']['footer']['default_config']['identity.shared_logo_asset'] = $finalUrl;
+                $payload['shared_components']['footer']['default_config']['brand']['logo'] = $finalUrl;
+                $payload['shared_components']['footer']['default_config']['brand.logo'] = $finalUrl;
+            }
+            foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $pageType => $layout) {
+                if (!\is_string($pageType) || !\is_array($layout)) {
+                    continue;
+                }
+                if (\is_array($layout['header']['config'] ?? null)) {
+                    $layout['header']['config']['logo']['url'] = $finalUrl;
+                    $layout['header']['config']['logo']['image'] = $finalUrl;
+                    $layout['header']['config']['logo.url'] = $finalUrl;
+                    $layout['header']['config']['logo.image'] = $finalUrl;
+                    $layout['header']['config']['identity']['shared_logo_asset'] = $finalUrl;
+                    $layout['header']['config']['identity.shared_logo_asset'] = $finalUrl;
+                }
+                if (\is_array($layout['footer']['config'] ?? null)) {
+                    $layout['footer']['config']['identity']['shared_logo_asset'] = $finalUrl;
+                    $layout['footer']['config']['identity.shared_logo_asset'] = $finalUrl;
+                    $layout['footer']['config']['brand']['logo'] = $finalUrl;
+                    $layout['footer']['config']['brand.logo'] = $finalUrl;
+                }
+                $payload['page_type_layouts'][$pageType] = $layout;
+            }
+            if (\is_array($payload['asset_manifest']['slots']['identity:website-logo'] ?? null)) {
+                $payload['asset_manifest']['slots']['identity:website-logo']['final_url'] = $finalUrl;
+                $payload['asset_manifest']['slots']['identity:website-logo']['url'] = $finalUrl;
+                if (\is_array($payload['asset_manifest']['slots']['identity:website-logo']['variants'][0] ?? null)) {
+                    $payload['asset_manifest']['slots']['identity:website-logo']['variants'][0]['url'] = $finalUrl;
+                    $payload['asset_manifest']['slots']['identity:website-logo']['variants'][0]['path'] = \ltrim($finalUrl, '/');
+                }
+            }
+        } elseif ($role === 'icon') {
+            if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon'] ?? null)) {
+                $payload['asset_manifest']['slots']['identity:site-title-icon']['final_url'] = $finalUrl;
+                $payload['asset_manifest']['slots']['identity:site-title-icon']['url'] = $finalUrl;
+                if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0] ?? null)) {
+                    $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['url'] = $finalUrl;
+                    $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['path'] = \ltrim($finalUrl, '/');
+                }
+            }
+            if (\is_array($payload['shared_components']['header']['default_config'] ?? null)) {
+                $payload['shared_components']['header']['default_config']['identity']['shared_icon_asset'] = $finalUrl;
+                $payload['shared_components']['header']['default_config']['identity.shared_icon_asset'] = $finalUrl;
+            }
+            foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $pageType => $layout) {
+                if (!\is_string($pageType) || !\is_array($layout)) {
+                    continue;
+                }
+                if (\is_array($layout['header']['config'] ?? null)) {
+                    $layout['header']['config']['identity']['shared_icon_asset'] = $finalUrl;
+                    $layout['header']['config']['identity.shared_icon_asset'] = $finalUrl;
+                }
+                $payload['page_type_layouts'][$pageType] = $layout;
+            }
+        }
+
+        return $payload;
     }
 
     /**

@@ -15,17 +15,14 @@ use Weline\Framework\Session\SessionFactory;
 
 // 获取购物车数据
 $cartCount = 0;
-$cartSubtotal = 0;
 
 try {
     $session = SessionFactory::getInstance()->createFrontendSession();
-    $customer = $session->getCustomer();
+    $customerId = (int)($session->getUserId() ?? 0);
     
-    if ($customer) {
+    if ($customerId > 0) {
         $cartService = ObjectManager::getInstance(CartService::class);
-        $cartCount = $cartService->getCartItemCount($customer->getId());
-        $totals = $cartService->calculateTotals($customer->getId());
-        $cartSubtotal = $totals['subtotal'] ?? 0;
+        $cartCount = $cartService->getCartItemCount($customerId);
     }
 } catch (\Exception $e) {
     // 忽略错误，使用默认值
@@ -55,7 +52,55 @@ try {
 </button>
 
 <!-- MiniCart Widget -->
-<w:widget type="mini-cart" name="mini-cart-drawer" params='{"position":"right","autoOpen":true}'/>
+<?= $this->fetch('WeShop_Cart::theme/frontend/widgets/mini-cart/drawer.phtml', [
+    'position' => 'right',
+    'autoOpen' => true,
+]) ?>
+
+<script>
+(function () {
+    function bindHeaderMiniCart() {
+        var trigger = document.querySelector('.header-cart-trigger[data-action="open-mini-cart"]');
+        var drawer = document.getElementById('mini-cart-drawer');
+        var overlay = document.getElementById('mini-cart-overlay');
+        if (!trigger || !drawer || !overlay || trigger.dataset.miniCartBound === 'true') {
+            return;
+        }
+
+        function setOpen(open) {
+            drawer.classList.toggle('is-open', open);
+            overlay.classList.toggle('is-visible', open);
+            overlay.style.display = open ? 'block' : 'none';
+            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+            drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+            overlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+        }
+
+        trigger.dataset.miniCartBound = 'true';
+        trigger.addEventListener('click', function (event) {
+            event.preventDefault();
+            setOpen(!drawer.classList.contains('is-open'));
+        });
+
+        overlay.addEventListener('click', function () {
+            setOpen(false);
+        });
+
+        document.querySelectorAll('[data-action="close-mini-cart"]').forEach(function (button) {
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                setOpen(false);
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindHeaderMiniCart);
+    } else {
+        bindHeaderMiniCart();
+    }
+})();
+</script>
 
 <style>
 /* Header Cart Trigger 样式（与 Weline_Theme 保持一致） */

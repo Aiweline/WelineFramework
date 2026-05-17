@@ -37,6 +37,13 @@ Redirect,Redirect
 "Payment flow: %{1}","Payment flow: %{1}"
 "Complete this payment flow after confirming the order.","Complete this payment flow after confirming the order."
 "No shipping methods are available for the current checkout context.","No shipping methods are available for the current checkout context."
+WeShop,WeShop
+"Checkout progress","Checkout progress"
+Cart,Cart
+Information,Information
+Shipping,Shipping
+Payment,Payment
+"Show order summary","Show order summary"
 "Retry Payment","Retry Payment"
 "You are retrying payment for order #%{1}. The existing order will be reused instead of creating a new one.","You are retrying payment for order #%{1}. The existing order will be reused instead of creating a new one."
 "Shipping Address","Shipping Address"
@@ -60,10 +67,10 @@ and,and
 "Order Summary","Order Summary"
 "Qty: %{1}","Qty: %{1}"
 Subtotal,Subtotal
-Shipping,Shipping
 Tax,Tax
 Discount,Discount
 "Grand Total","Grand Total"
+"Hide order summary","Hide order summary"
 "Order Confirmed!","Order Confirmed!"
 "Thank you for your purchase","Thank you for your purchase"
 "Order Number:","Order Number:"

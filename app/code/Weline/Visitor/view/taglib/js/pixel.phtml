@@ -103,6 +103,233 @@
             return path;
         }
     }
+
+    var __pixelSessionKey = 'weline_pixel_session_id';
+    var __pixelFunnelKey = 'weline_pixel_funnel_chain';
+    var __pixelPageStart = Date.now();
+    var __pixelPagePerfStart = (window.performance && typeof window.performance.now === 'function') ? window.performance.now() : 0;
+    var __pixelPageId = (__pixelPageStart.toString(36) + '-' + Math.random().toString(36).slice(2, 10));
+    var __pixelLastSearchInputTimer = null;
+    var __pixelLastLocation = window.location.href;
+    var __pixelPageExitSent = false;
+
+    function __safeJsonParse(value, fallback) {
+        try {
+            return JSON.parse(value);
+        } catch (e) {
+            return fallback;
+        }
+    }
+
+    function __safeSessionGet(key) {
+        try {
+            return window.sessionStorage ? window.sessionStorage.getItem(key) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function __safeSessionSet(key, value) {
+        try {
+            if (window.sessionStorage) {
+                window.sessionStorage.setItem(key, value);
+            }
+        } catch (e) {
+        }
+    }
+
+    function __getPixelSessionId() {
+        var sessionId = __safeSessionGet(__pixelSessionKey);
+        if (!sessionId) {
+            sessionId = 'wps-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+            __safeSessionSet(__pixelSessionKey, sessionId);
+        }
+        return sessionId;
+    }
+
+    function __getPixelPerformanceTiming() {
+        var timing = {
+            page_started_at_ms: __pixelPageStart,
+            page_age_ms: Date.now() - __pixelPageStart,
+            perf_now_ms: window.performance && typeof window.performance.now === 'function' ? Math.round(window.performance.now()) : null,
+            time_origin_ms: window.performance && window.performance.timeOrigin ? Math.round(window.performance.timeOrigin) : null
+        };
+
+        try {
+            var nav = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+            if (nav) {
+                timing.navigation = {
+                    type: nav.type || '',
+                    start_time_ms: Math.round(nav.startTime || 0),
+                    dom_interactive_ms: Math.round(nav.domInteractive || 0),
+                    dom_content_loaded_ms: Math.round(nav.domContentLoadedEventEnd || 0),
+                    load_event_end_ms: Math.round(nav.loadEventEnd || 0),
+                    response_start_ms: Math.round(nav.responseStart || 0),
+                    response_end_ms: Math.round(nav.responseEnd || 0),
+                    transfer_size: nav.transferSize || 0,
+                    encoded_body_size: nav.encodedBodySize || 0,
+                    decoded_body_size: nav.decodedBodySize || 0
+                };
+            }
+
+            var paints = performance.getEntriesByType ? performance.getEntriesByType('paint') : [];
+            timing.paint = {};
+            for (var i = 0; i < paints.length; i++) {
+                timing.paint[paints[i].name.replace(/-/g, '_') + '_ms'] = Math.round(paints[i].startTime || 0);
+            }
+
+            var resources = performance.getEntriesByType ? performance.getEntriesByType('resource') : [];
+            timing.resource_summary = {
+                count: resources.length,
+                slowest: resources.slice().sort(function (a, b) {
+                    return (b.duration || 0) - (a.duration || 0);
+                }).slice(0, 8).map(function (entry) {
+                    return {
+                        name: String(entry.name || '').slice(0, 180),
+                        initiator_type: entry.initiatorType || '',
+                        duration_ms: Math.round(entry.duration || 0),
+                        transfer_size: entry.transferSize || 0
+                    };
+                })
+            };
+        } catch (e) {
+        }
+
+        return timing;
+    }
+
+    function __getPixelTimeData(eventStartedAt) {
+        var now = new Date();
+        var startedAt = eventStartedAt || Date.now();
+        return {
+            event_timestamp: now.toISOString(),
+            event_timestamp_ms: now.getTime(),
+            event_started_at_ms: startedAt,
+            event_elapsed_ms: Math.max(0, Date.now() - startedAt),
+            page_elapsed_ms: Math.max(0, Date.now() - __pixelPageStart),
+            perf_elapsed_ms: window.performance && typeof window.performance.now === 'function'
+                ? Math.max(0, Math.round(window.performance.now() - __pixelPagePerfStart))
+                : null,
+            local_datetime: now.toLocaleString(),
+            timezone: Intl && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone : '',
+            timezone_offset_minutes: now.getTimezoneOffset()
+        };
+    }
+
+    function __normalizePixelEventName(eventName) {
+        return String(eventName || 'click').replace(/-/g, '_');
+    }
+
+    function __getFunnelStep(eventName) {
+        var normalized = __normalizePixelEventName(eventName);
+        var map = {
+            page_view: 10,
+            page_enter: 10,
+            search_focus: 20,
+            search_input: 21,
+            search_submit: 30,
+            search_suggestion_click: 31,
+            view_item: 40,
+            add_to_wishlist: 50,
+            add_to_cart: 60,
+            view_cart: 70,
+            begin_checkout: 80,
+            place_order: 90,
+            checkout_success: 100,
+            checkout_failure: 100
+        };
+        return map[normalized] || 0;
+    }
+
+    function __getFunnelChain(eventName) {
+        var chain = __safeJsonParse(__safeSessionGet(__pixelFunnelKey) || '[]', []);
+        if (!Array.isArray(chain)) {
+            chain = [];
+        }
+        var now = Date.now();
+        var previous = chain.length ? chain[chain.length - 1] : null;
+        var item = {
+            event: __normalizePixelEventName(eventName),
+            step: __getFunnelStep(eventName),
+            url: window.location.href,
+            path: window.location.pathname,
+            page_id: __pixelPageId,
+            timestamp_ms: now,
+            since_previous_ms: previous ? Math.max(0, now - (previous.timestamp_ms || now)) : null
+        };
+        chain.push(item);
+        if (chain.length > 40) {
+            chain = chain.slice(chain.length - 40);
+        }
+        __safeSessionSet(__pixelFunnelKey, JSON.stringify(chain));
+        return {
+            session_id: __getPixelSessionId(),
+            page_id: __pixelPageId,
+            step: item.step,
+            step_index: chain.length,
+            previous_event: previous ? previous.event : null,
+            since_previous_ms: item.since_previous_ms,
+            chain: chain
+        };
+    }
+
+    function __buildPixelBehaviorInfo(eventName, meta, eventStartedAt) {
+        return {
+            schema: 'weline_behavior_timing_v1',
+            time: __getPixelTimeData(eventStartedAt),
+            performance: __getPixelPerformanceTiming(),
+            funnel: __getFunnelChain(eventName),
+            navigation: {
+                current_url: window.location.href,
+                current_path: window.location.pathname,
+                current_search: window.location.search,
+                current_hash: window.location.hash,
+                referrer: document.referrer || '',
+                last_location: __pixelLastLocation
+            },
+            viewport: {
+                inner_width: window.innerWidth,
+                inner_height: window.innerHeight,
+                outer_width: window.outerWidth,
+                outer_height: window.outerHeight,
+                device_pixel_ratio: window.devicePixelRatio || 1,
+                visibility_state: document.visibilityState || ''
+            },
+            meta: meta || {}
+        };
+    }
+
+    function __findPixelEventNameFromElement(element) {
+        var current = element;
+        while (current && current !== document) {
+            var className = typeof current.className === 'string' ? current.className : '';
+            if (className.indexOf('weline-pixel::') > -1) {
+                var classNames = className.split(/\s+/);
+                for (var i = 0; i < classNames.length; i++) {
+                    if (classNames[i].indexOf('weline-pixel::') === 0 && classNames[i].indexOf(':value') === -1) {
+                        return classNames[i].replace('weline-pixel::', '');
+                    }
+                }
+            }
+            current = current.parentNode;
+        }
+        return '';
+    }
+
+    function __getElementSnapshot(element) {
+        if (!element || !element.tagName) {
+            return null;
+        }
+        return {
+            tagName: element.tagName,
+            className: typeof element.className === 'string' ? element.className : '',
+            id: element.id || '',
+            name: element.getAttribute ? (element.getAttribute('name') || '') : '',
+            type: element.getAttribute ? (element.getAttribute('type') || '') : '',
+            href: element.href || (element.getAttribute ? element.getAttribute('href') : null),
+            text: (element.innerText || element.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 180)
+        };
+    }
     
     window.WelinePixel = {
         url: __getPixelApiUrl('visitor/rest/v1/pixel'),
@@ -141,7 +368,35 @@
         send: function (data, url) {
             data = data || this.initData;
             url = url || this.url;
-            let xhr = new XMLHttpRequest();
+            var payloadData = Object.assign({}, data);
+            var keepalive = !!payloadData.__keepalive;
+            delete payloadData.__keepalive;
+            var payload = JSON.stringify(payloadData);
+
+            if (keepalive && navigator.sendBeacon) {
+                try {
+                    var blob = new Blob([payload], { type: 'application/json' });
+                    if (navigator.sendBeacon(url, blob)) {
+                        return;
+                    }
+                } catch (e) {
+                }
+            }
+
+            if (keepalive && window.fetch) {
+                try {
+                    fetch(url, {
+                        method: 'POST',
+                        body: payload,
+                        keepalive: true,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    return;
+                } catch (e) {
+                }
+            }
+
+            var xhr = new XMLHttpRequest();
             xhr.open('POST', url, true);
             xhr.setRequestHeader('Content-Type', 'application/json');
 
@@ -153,17 +408,40 @@
                 }
             };
 
-            xhr.send(JSON.stringify(data));
+            xhr.send(payload);
+        },
+        track: function (eventName, meta, options) {
+            options = options || {};
+            var normalizedEventName = __normalizePixelEventName(eventName || 'behavior_event');
+            var payload = JSON.parse(JSON.stringify(this.init));
+            var now = new Date();
+
+            payload.url = window.location.href;
+            payload.eventName = normalizedEventName;
+            payload.timestamp = now.toISOString();
+            payload.local_datetime = now.toLocaleString();
+            payload.userAgent = navigator.userAgent;
+            payload.referrer = document.referrer;
+            payload.screen = {
+                width: window.screen.width,
+                height: window.screen.height
+            };
+            payload.elementInfo = meta && meta.element ? meta.element : null;
+            payload.additionalInfo = __buildPixelBehaviorInfo(normalizedEventName, meta || {}, options.startedAt);
+
+            if (options.keepalive) {
+                payload.__keepalive = true;
+            }
+
+            this.send(payload, options.url || this.url);
+            return payload;
         },
         target: function (event) {
-            this.initData.elementInfo = {
-                tagName: event.target.tagName,
-                className: event.target.className,
-                id: event.target.id,
-                innerText: event.target.innerText,
-                href: event.target.href || null,
+            var eventStartedAt = Date.now();
+            var elementSnapshot = __getElementSnapshot(event.target);
+            this.initData.elementInfo = elementSnapshot ? Object.assign({}, elementSnapshot, {
                 eventType: event.type
-            };
+            }) : null;
             this.initData.timestamp = new Date().toISOString();
             this.initData.local_datetime = new Date().toLocaleString();
             this.initData.userAgent = navigator.userAgent;
@@ -172,7 +450,7 @@
                 width: window.screen.width,
                 height: window.screen.height
             };
-            this.initData.additionalInfo = {
+            var baseAdditionalInfo = {
                 innerWidth: window.innerWidth,
                 innerHeight: window.innerHeight,
                 outerWidth: window.outerWidth,
@@ -188,19 +466,19 @@
                         break;
                     case '/cart':
                     case '/cart.html':
-                        this.initData.eventName = 'view-cart';
+                        this.initData.eventName = 'view_cart';
                         break;
                     case '/checkout':
                     case '/checkout.html':
-                        this.initData.eventName = 'begin-checkout';
+                        this.initData.eventName = 'begin_checkout';
                         break;
                     case '/checkout/success':
                     case '/checkout/success.html':
-                        this.initData.eventName = 'checkout-success';
+                        this.initData.eventName = 'checkout_success';
                         break;
                     case '/checkout/failure':
                     case '/checkout/failure.html':
-                        this.initData.eventName = 'checkout-failure';
+                        this.initData.eventName = 'checkout_failure';
                         break;
                     case '/category':
                     case '/category.html':
@@ -213,7 +491,7 @@
                     if (url.pathname.startsWith('/page/')) {
                         this.initData.eventName = 'page_' + url.pathname.replace('/page/', '').replace('.html', '');
                     } else if (url.pathname.startsWith('/product/')) {
-                        this.initData.eventName = 'view-item';
+                        this.initData.eventName = 'view_item';
                     } else if (url.pathname.startsWith('/blog')) {
                         this.initData.eventName = 'blog';
                     } else if (url.pathname.startsWith('/account/')) {
@@ -223,28 +501,30 @@
             }
 
             // 使得自定义事件生效
-            if (event.target.className && event.type === 'click') {
-                if (event.target.className.indexOf('weline-pixel::') > -1) {
-                    let classNames = event.target.className.split(' ');
-                    for (let i = 0; i < classNames.length; i++) {
-                        if (classNames[i].indexOf('weline-pixel::') > -1) {
-                            this.initData.eventName = classNames[i].replace('weline-pixel::', '');
-                            break;
-                        }
-                    }
+            if (event.type === 'click') {
+                var pixelEventName = __findPixelEventNameFromElement(event.target);
+                if (pixelEventName) {
+                    this.initData.eventName = pixelEventName;
                 }
             }
 
+            this.initData.eventName = __normalizePixelEventName(this.initData.eventName);
+            this.initData.additionalInfo = Object.assign({}, baseAdditionalInfo, __buildPixelBehaviorInfo(this.initData.eventName, {
+                trigger: event.type,
+                source: 'pixel_target',
+                element: elementSnapshot
+            }, eventStartedAt));
+
             // 需要值的事件类型
             if ([
-                'view-item',
-                'add-to-cart',
-                'view-cart',
-                'buy-now',
-                'begin-checkout',
-                'place-order',
-                'checkout-success',
-                'checkout-failure',
+                'view_item',
+                'add_to_cart',
+                'view_cart',
+                'buy_now',
+                'begin_checkout',
+                'place_order',
+                'checkout_success',
+                'checkout_failure',
             ].indexOf(this.initData.eventName) > -1) {
                 if (!this.initData.value) {
                     try {
@@ -261,7 +541,225 @@
             }
         }
     };
-    
+
+    function __findSearchInput(scope) {
+        var root = scope || document;
+        if (root && __isSearchInput(root)) {
+            return root;
+        }
+        if (root && root.querySelector) {
+            return root.querySelector('input[type="search"], input[name="q"], input[name="search"], input[name="keyword"], input[name="query"], input[placeholder*="Search"], input[placeholder*="搜索"], [data-weshop-search] input, .search-input');
+        }
+        return null;
+    }
+
+    function __getSearchQueryFromUrl() {
+        try {
+            var params = new URLSearchParams(window.location.search || '');
+            return params.get('q') || params.get('search') || params.get('keyword') || params.get('query') || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function __getSearchMeta(input, trigger, form) {
+        var searchForm = form || (input && input.closest ? input.closest('form') : null);
+        var searchInput = input || __findSearchInput(searchForm) || __findSearchInput(document);
+        var value = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
+        if (!value && searchForm && window.FormData) {
+            try {
+                var formData = new FormData(searchForm);
+                value = formData.get('q') || formData.get('search') || formData.get('keyword') || formData.get('query') || '';
+            } catch (e) {
+            }
+        }
+        if (!value) {
+            value = __getSearchQueryFromUrl();
+        }
+        value = String(value || '');
+        return {
+            trigger: trigger,
+            source: 'behavior_monitor',
+            query: value,
+            query_length: value.length,
+            input_name: searchInput && searchInput.name ? searchInput.name : '',
+            input_id: searchInput && searchInput.id ? searchInput.id : '',
+            form_action: searchForm ? (searchForm.getAttribute('action') || '') : '',
+            form_method: searchForm ? (searchForm.getAttribute('method') || 'get') : '',
+            url_query: __getSearchQueryFromUrl()
+        };
+    }
+
+    function __isSearchInput(element) {
+        if (!element || !element.matches) {
+            return false;
+        }
+        return element.matches('input[type="search"], input[name="q"], input[name="search"], input[name="keyword"], input[name="query"], input[placeholder*="Search"], input[placeholder*="搜索"], [data-weshop-search] input, .search-input');
+    }
+
+    function __isSearchForm(form) {
+        if (!form || !form.matches) {
+            return false;
+        }
+        var action = String(form.getAttribute('action') || '').toLowerCase();
+        return action.indexOf('search') > -1 || !!__findSearchInput(form);
+    }
+
+    function __trackPageTransition(type, toUrl, extra) {
+        var fromUrl = __pixelLastLocation;
+        var nextUrl = toUrl ? String(toUrl) : window.location.href;
+        window.WelinePixel.track('page_transition', Object.assign({
+            trigger: type,
+            source: 'behavior_monitor',
+            from_url: fromUrl,
+            to_url: nextUrl,
+            from_path: (function () {
+                try { return new URL(fromUrl, window.location.href).pathname; } catch (e) { return ''; }
+            })(),
+            to_path: (function () {
+                try { return new URL(nextUrl, window.location.href).pathname; } catch (e) { return ''; }
+            })()
+        }, extra || {}));
+        __pixelLastLocation = nextUrl;
+    }
+
+    function __initBehaviorTelemetry() {
+        if (window.__WelinePixelBehaviorTelemetryLoaded) {
+            return;
+        }
+        window.__WelinePixelBehaviorTelemetryLoaded = true;
+
+        window.WelinePixel.track('page_view', {
+            trigger: document.readyState === 'loading' ? 'script_init' : document.readyState,
+            source: 'behavior_monitor'
+        });
+
+        if (__getSearchQueryFromUrl() || window.location.pathname.indexOf('/search') === 0) {
+            window.WelinePixel.track('search_result_view', __getSearchMeta(__findSearchInput(document), 'page_view'));
+        }
+
+        window.addEventListener('load', function () {
+            window.WelinePixel.track('page_load', {
+                trigger: 'load',
+                source: 'behavior_monitor'
+            });
+        });
+
+        function trackPageExit(trigger) {
+            if (__pixelPageExitSent) {
+                return;
+            }
+            __pixelPageExitSent = true;
+            window.WelinePixel.track('page_exit', {
+                trigger: trigger,
+                source: 'behavior_monitor',
+                duration_ms: Date.now() - __pixelPageStart
+            }, { keepalive: true });
+        }
+
+        window.addEventListener('pagehide', function () {
+            trackPageExit('pagehide');
+        });
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') {
+                trackPageExit('visibility_hidden');
+            }
+        });
+
+        document.addEventListener('focusin', function (event) {
+            if (__isSearchInput(event.target)) {
+                window.WelinePixel.track('search_focus', __getSearchMeta(event.target, 'focusin'));
+            }
+        }, true);
+
+        document.addEventListener('input', function (event) {
+            if (!__isSearchInput(event.target)) {
+                return;
+            }
+            var input = event.target;
+            clearTimeout(__pixelLastSearchInputTimer);
+            __pixelLastSearchInputTimer = setTimeout(function () {
+                window.WelinePixel.track('search_input', __getSearchMeta(input, 'input_debounce'));
+            }, 600);
+        }, true);
+
+        document.addEventListener('submit', function (event) {
+            if (__isSearchForm(event.target)) {
+                var input = __findSearchInput(event.target);
+                window.WelinePixel.track('search_submit', __getSearchMeta(input, 'submit', event.target));
+            }
+        }, true);
+
+        document.addEventListener('click', function (event) {
+            var element = event.target;
+            var startedAt = Date.now();
+            var pixelEventName = __findPixelEventNameFromElement(element);
+            if (pixelEventName) {
+                window.WelinePixel.track(pixelEventName, {
+                    trigger: 'click',
+                    source: 'behavior_monitor',
+                    element: __getElementSnapshot(element)
+                }, { startedAt: startedAt });
+            }
+
+            var suggestion = element && element.closest ? element.closest('[data-search-suggestion], .search-suggestion, .search-suggestions a, [role="option"]') : null;
+            if (suggestion) {
+                window.WelinePixel.track('search_suggestion_click', {
+                    trigger: 'click',
+                    source: 'behavior_monitor',
+                    element: __getElementSnapshot(suggestion),
+                    query: (suggestion.innerText || suggestion.textContent || '').trim().slice(0, 180)
+                }, { startedAt: startedAt });
+            }
+
+            var link = element && element.closest ? element.closest('a[href]') : null;
+            if (link) {
+                var href = link.href || link.getAttribute('href') || '';
+                window.WelinePixel.track('route_click', {
+                    trigger: 'click',
+                    source: 'behavior_monitor',
+                    element: __getElementSnapshot(link),
+                    href: href,
+                    same_origin: href ? (new URL(href, window.location.href).origin === window.location.origin) : false,
+                    button: event.button,
+                    alt_key: event.altKey,
+                    ctrl_key: event.ctrlKey,
+                    meta_key: event.metaKey,
+                    shift_key: event.shiftKey
+                }, { startedAt: startedAt, keepalive: true });
+            }
+        }, true);
+
+        var originalPushState = history.pushState;
+        var originalReplaceState = history.replaceState;
+        history.pushState = function (state, title, url) {
+            var result = originalPushState.apply(this, arguments);
+            __trackPageTransition('pushState', url || window.location.href, { state_title: title || '' });
+            return result;
+        };
+        history.replaceState = function (state, title, url) {
+            var result = originalReplaceState.apply(this, arguments);
+            __trackPageTransition('replaceState', url || window.location.href, { state_title: title || '' });
+            return result;
+        };
+        window.addEventListener('popstate', function () {
+            __trackPageTransition('popstate', window.location.href);
+        });
+        window.addEventListener('hashchange', function () {
+            __trackPageTransition('hashchange', window.location.href);
+        });
+
+        window.addEventListener('weline:search-suggestions-request', function (event) {
+            window.WelinePixel.track('search_suggestions_request', {
+                trigger: 'custom_event',
+                source: 'behavior_monitor',
+                detail: event.detail || {}
+            });
+        });
+    }
+
+    __initBehaviorTelemetry();
+
     // 创建 iframe 沙箱
     function initPixelSandbox() {
         var iframe = document.getElementById('sandbox-pixel');

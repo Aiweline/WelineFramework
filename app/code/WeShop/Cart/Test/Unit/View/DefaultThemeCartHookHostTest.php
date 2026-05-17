@@ -35,7 +35,14 @@ class DefaultThemeCartHookHostTest extends TestCase
         }
 
         $this->assertStringContainsString('Items (%{1}):', $template);
+        $this->assertStringContainsString('cart/frontend/api/update', $template);
+        $this->assertStringContainsString('cart/frontend/api/remove', $template);
+        $this->assertStringContainsString('cart/frontend/api/add', $template);
+        $this->assertStringContainsString('showCartMessage', $template);
+        $this->assertStringContainsString('add-to-cart', $template);
         $this->assertStringNotContainsString('Items (%1):', $template);
+        $this->assertStringNotContainsString('confirm(', $template);
+        $this->assertStringNotContainsString('alert(', $template);
     }
 
     public function testCartLayoutSellerLabelsUseWelineI18nPlaceholders(): void

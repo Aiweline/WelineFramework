@@ -35,11 +35,25 @@ class Order extends Model
     public const schema_fields_fulfillment_status = 'fulfillment_status';
     #[Col(type: 'varchar', length: 32, nullable: true, default: 'none', comment: 'Return status')]
     public const schema_fields_return_status = 'return_status';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: 'Shipping method')]
+    public const schema_fields_shipping_method = 'shipping_method';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: 'Payment method')]
+    public const schema_fields_payment_method = 'payment_method';
+    #[Col(type: 'text', nullable: true, comment: 'Shipping address JSON')]
+    public const schema_fields_shipping_address = 'shipping_address';
+    #[Col(type: 'varchar', length: 120, nullable: true, comment: 'Fulfillment carrier')]
+    public const schema_fields_fulfillment_carrier = 'fulfillment_carrier';
+    #[Col(type: 'varchar', length: 120, nullable: true, comment: 'Fulfillment tracking number')]
+    public const schema_fields_fulfillment_tracking_number = 'fulfillment_tracking_number';
+    #[Col(type: 'datetime', nullable: true, comment: 'Shipped at')]
+    public const schema_fields_shipped_at = 'shipped_at';
+    #[Col(type: 'datetime', nullable: true, comment: 'Delivered at')]
+    public const schema_fields_delivered_at = 'delivered_at';
     #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
     public const schema_fields_created_at = 'created_at';
     #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
     public const schema_fields_updated_at = 'updated_at';
     public string $indexer = 'order_indexer';
     public array $_unit_primary_keys = ['order_id'];
-    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'payment_status', 'total', 'subtotal', 'created_at'];
+    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'payment_status', 'fulfillment_status', 'total', 'subtotal', 'created_at'];
 }

@@ -206,7 +206,7 @@ class PreviewRenderer
             'social.twitter' => 'https://twitter.com',
             
             // 版权配置
-            'copyright.text' => 'All rights reserved.',
+            'copyright.text' => '',
             'copyright.year' => date('Y'),
         ];
     }

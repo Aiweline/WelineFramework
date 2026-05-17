@@ -134,5 +134,13 @@
                   shared="true"
                   sort="200"/>
     </event>
+
+    <event name="Weline_Framework_Runtime::worker_bootstrap_after">
+        <observer name="Weline_Theme::worker_bootstrap_warmup"
+                  instance="Weline\Theme\Observer\WorkerBootstrapWarmup"
+                  disabled="false"
+                  shared="true"
+                  sort="100"/>
+    </event>
     
 </config>

@@ -26,4 +26,9 @@ return [
         'description' => __('Inject content after the promotion product grid on storefront promotion pages.'),
         'doc' => 'frontend/promotion/page-after.md',
     ],
+    'WeShop_Promotion::frontend::partials::cart::coupon' => [
+        'name' => __('购物车优惠券'),
+        'description' => __('在购物车订单摘要优惠券区域渲染促销模块的优惠券入口。'),
+        'doc' => 'frontend/partials/cart/coupon.md',
+    ],
 ];

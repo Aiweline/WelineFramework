@@ -87,6 +87,14 @@ class OrderAdminPageDataService
             'created_at' => (string) $order->getData(Order::schema_fields_created_at),
             'updated_at' => (string) $order->getData(Order::schema_fields_updated_at),
             'payment_status' => (string) ($order->hasField('payment_status') ? $order->getData('payment_status') : OrderService::PAYMENT_STATUS_PENDING),
+            'fulfillment_status' => (string) ($order->hasField(Order::schema_fields_fulfillment_status) ? $order->getData(Order::schema_fields_fulfillment_status) : OrderService::FULFILLMENT_STATUS_PENDING),
+            'shipping_method' => (string) ($order->hasField(Order::schema_fields_shipping_method) ? $order->getData(Order::schema_fields_shipping_method) : ''),
+            'payment_method' => (string) ($order->hasField(Order::schema_fields_payment_method) ? $order->getData(Order::schema_fields_payment_method) : ''),
+            'shipping_address' => $this->decodeAddress((string) ($order->hasField(Order::schema_fields_shipping_address) ? $order->getData(Order::schema_fields_shipping_address) : '')),
+            'fulfillment_carrier' => (string) ($order->hasField(Order::schema_fields_fulfillment_carrier) ? $order->getData(Order::schema_fields_fulfillment_carrier) : ''),
+            'fulfillment_tracking_number' => (string) ($order->hasField(Order::schema_fields_fulfillment_tracking_number) ? $order->getData(Order::schema_fields_fulfillment_tracking_number) : ''),
+            'shipped_at' => (string) ($order->hasField(Order::schema_fields_shipped_at) ? $order->getData(Order::schema_fields_shipped_at) : ''),
+            'delivered_at' => (string) ($order->hasField(Order::schema_fields_delivered_at) ? $order->getData(Order::schema_fields_delivered_at) : ''),
         ];
     }
 
@@ -105,7 +113,22 @@ class OrderAdminPageDataService
             'created_at' => (string) ($order[Order::schema_fields_created_at] ?? $order['created_at'] ?? ''),
             'updated_at' => (string) ($order[Order::schema_fields_updated_at] ?? $order['updated_at'] ?? ''),
             'payment_status' => (string) ($order['payment_status'] ?? OrderService::PAYMENT_STATUS_PENDING),
+            'fulfillment_status' => (string) ($order['fulfillment_status'] ?? OrderService::FULFILLMENT_STATUS_PENDING),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeAddress(string $addressJson): array
+    {
+        if ($addressJson === '') {
+            return [];
+        }
+
+        $decoded = json_decode($addressJson, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     private function normalizeItemRow(array $item): array

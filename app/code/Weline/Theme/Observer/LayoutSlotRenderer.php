@@ -128,6 +128,13 @@ class LayoutSlotRenderer implements ObserverInterface
         // 鑾峰彇鐨勬槸瀹屾暣娓叉煋鍚庣殑 HTML锛屽寘鍚墍鏈夊瓙妯℃澘锛堝 partials锛夌殑鍐呭
         $hasSlotMarkers = strpos($html, 'data-wslot') !== false || strpos($html, 'widget-slot-area') !== false;
 
+        // Fast path: normal frontend HTML without slot markers needs no theme or DOM pass.
+        $isEditorOrPreview = $this->isEditorOrPreviewMode();
+        if (!$hasSlotMarkers && !$isEditorOrPreview) {
+            $event->setData('content', $html);
+            return;
+        }
+
         // Resolve preview/active theme through the shared theme context.
         $themeId = $this->resolveThemeId($area);
         // 濡傛灉娌℃湁涓婚 ID锛屾棤娉曞鐞嗘彃妲?
@@ -144,15 +151,13 @@ class LayoutSlotRenderer implements ObserverInterface
         $status = $this->detectStatus();
         
         // 鍒ゆ柇鏄惁涓虹紪杈?棰勮妯″紡锛堢敤浜庢樉绀鸿鍛婄瓑锛?
-        $isEditorOrPreview = $this->isEditorOrPreviewMode();
         $shouldReportSlotContractWarnings = $this->isLayoutTemplate($template) || stripos($html, '</body>') !== false;
 
-        $slotContractWarnings = $this->collectMissingSlotWarnings($area);
-        if (!empty($slotContractWarnings)) {
-            if ($isEditorOrPreview && $shouldReportSlotContractWarnings) {
+        $slotContractWarnings = [];
+        if ($isEditorOrPreview && $shouldReportSlotContractWarnings) {
+            $slotContractWarnings = $this->collectMissingSlotWarnings($area);
+            if (!empty($slotContractWarnings)) {
                 $html = $this->getThemeSlotContractService()->injectMissingSlotWarningHtml($html, $slotContractWarnings);
-            }
-            if ($shouldReportSlotContractWarnings) {
                 $this->getThemeSlotContractService()->notifyMissingDefaultSlots($slotContractWarnings, $area);
             }
         }

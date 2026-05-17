@@ -62,6 +62,7 @@ class AiSiteScopeCompatibilityService
         if (!\is_array($normalized['build_summary'] ?? null)) {
             $normalized['build_summary'] = [];
         }
+        unset($normalized['build_summary']['task_summary']);
 
         $selection = $this->resolvePreviewSelection(
             $normalized['pagebuilder_pages_by_type'],
@@ -276,6 +277,69 @@ class AiSiteScopeCompatibilityService
         return $this->normalizePageTypes($providedPageTypes);
     }
 
+    /**
+     * Old website-hub drafts may mark the legacy home/about/contact set as
+     * customized before the brief-driven pages are inferred. Keep true manual
+     * selections intact, but expand that legacy set when the brief asks for
+     * product/academy style pages that PageBuilder maps to generic page codes.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function augmentLegacyDefaultPageTypesFromBrief(array $scope): array
+    {
+        $pageTypes = $this->resolveScopedPageTypes($scope);
+        if (!$this->matchesLegacyDefaultPageTypes($pageTypes)) {
+            return $scope;
+        }
+
+        $brief = \trim(\implode("\n", \array_filter([
+            (string)($scope['user_description'] ?? ''),
+            (string)($scope['brief_description'] ?? ''),
+            (string)($scope['site_plan']['brief_description'] ?? ''),
+        ])));
+        $additional = $this->inferAdditionalPageTypesFromBrief($brief);
+        if ($additional === []) {
+            return $scope;
+        }
+
+        $merged = $this->normalizePageTypes(\array_merge($pageTypes, $additional));
+        if ($this->samePageTypeSet($merged, $pageTypes)) {
+            return $scope;
+        }
+
+        $scope['page_types'] = $merged;
+        $scope[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
+
+        return $scope;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function inferAdditionalPageTypesFromBrief(string $brief): array
+    {
+        $pageTypes = [];
+        if ($brief === '') {
+            return $pageTypes;
+        }
+
+        if ($this->matchesAnyTextPattern($brief, [
+            '/blog|article|news|academy|learn|education|guide|insight|resource|journal/i',
+            '/\x{5b66}\x{9662}|\x{77e5}\x{8bc6}|\x{6559}\x{7a0b}|\x{8d44}\x{8baf}|\x{6587}\x{7ae0}|\x{535a}\x{5ba2}|\x{8bfe}\x{5802}/u',
+        ])) {
+            $pageTypes[] = Page::TYPE_BLOG_LIST;
+        }
+        if ($this->matchesAnyTextPattern($brief, [
+            '/product|catalog|collection|service|solution|portfolio|case|menu|sku/i',
+            '/\x{4ea7}\x{54c1}|\x{7cfb}\x{5217}|\x{670d}\x{52a1}|\x{65b9}\x{6848}|\x{6848}\x{4f8b}|\x{9879}\x{76ee}/u',
+        ])) {
+            $pageTypes[] = Page::TYPE_CUSTOM;
+        }
+
+        return \array_values(\array_unique($pageTypes));
+    }
+
     public function normalizePageTypesUserCustomized(mixed $raw): bool
     {
         if (\is_bool($raw)) {
@@ -316,7 +380,10 @@ class AiSiteScopeCompatibilityService
      */
     private function defaultPageTypes(): array
     {
-        return \array_keys(Page::getPageTypes());
+        return [
+            Page::TYPE_HOME,
+            Page::TYPE_ABOUT,
+        ];
     }
 
     /**
@@ -411,6 +478,20 @@ class AiSiteScopeCompatibilityService
         \sort($right);
 
         return $left === $right;
+    }
+
+    /**
+     * @param list<string> $patterns
+     */
+    private function matchesAnyTextPattern(string $text, array $patterns): bool
+    {
+        foreach ($patterns as $pattern) {
+            if (@\preg_match($pattern, $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

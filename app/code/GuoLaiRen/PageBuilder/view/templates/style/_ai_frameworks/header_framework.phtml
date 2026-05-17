@@ -84,6 +84,16 @@ $parseNavItems = function($raw) {
 $componentId = 'header-' . substr(uniqid(), -8);
 $cls = $componentId;
 
+$normalizeNavPath = function($value) {
+    $path = parse_url((string)$value, PHP_URL_PATH);
+    $path = is_string($path) ? $path : (string)$value;
+    $path = trim($path);
+    if ($path === '' || $path === '#') {
+        return '';
+    }
+    return trim($path, '/');
+};
+
 // Logo配置
 $showLogo = $getConfig('logo.display', 'yes') !== 'no';
 $logoImage = $getConfig('logo.image', '');
@@ -123,6 +133,39 @@ if ($configuredNav !== []) {
 if (empty($navItems)) {
     $showNav = false;
 }
+
+$currentPageType = '';
+if ($page) {
+    foreach (['type', 'page_type', 'page_key'] as $field) {
+        $candidate = trim((string)$page->getData($field));
+        if ($candidate !== '') {
+            $currentPageType = $candidate;
+            break;
+        }
+    }
+}
+if ($currentPageType === '' && isset($_GET['page_type'])) {
+    $currentPageType = trim((string)$_GET['page_type']);
+}
+$currentPath = isset($_SERVER['REQUEST_URI']) ? $normalizeNavPath((string)$_SERVER['REQUEST_URI']) : '';
+$currentPagePath = match ($currentPageType) {
+    'home_page', 'home', 'index' => '',
+    'about_page', 'about' => 'about',
+    'contact_page', 'contact' => 'contact',
+    'blog_list', 'blog_category', 'blog' => 'blog',
+    default => $currentPath,
+};
+$isNavItemActive = function($href, $index) use ($normalizeNavPath, $currentPagePath, $currentPath) {
+    $navPath = $normalizeNavPath($href);
+    if ($currentPagePath !== '' || $currentPath !== '') {
+        if ($currentPagePath === '' && $navPath === '') {
+            return true;
+        }
+        return $navPath !== '' && $navPath === $currentPagePath;
+    }
+
+    return $index === 0;
+};
 
 // CTA配置
 $showCta = $getConfig('cta.show', 'yes') !== 'no';
@@ -346,7 +389,7 @@ try {
                     <?php 
                     $navHref = $navItem['href'] ?? '#';
                     $navText = $navItem['text'] ?? '';
-                    $isActive = $index === 0;
+                    $isActive = $isNavItemActive($navHref, $index);
                     ?>
                     <li><a href="<?= htmlspecialchars($navHref) ?>" class="<?= $cls ?>-nav-link <?= $isActive ? 'active' : '' ?>"><?= htmlspecialchars($navText) ?></a></li>
                 <?php endforeach; ?>

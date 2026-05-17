@@ -1,0 +1,63 @@
+<?php
+/**
+ * Default RMA layout.
+ *
+ * Theme owns the global chrome; RMA modules provide content only.
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::rma::head-after</w:hook>
+</head>
+<body>
+<w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::rma::body-start</w:hook>
+
+<div class="weline-page-wrapper">
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::rma::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::rma::header-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    </if>
+
+    <div class="weline-main-content">
+        <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::rma::content-before</w:hook>
+        <main class="rma-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="rma-main" data-layout="rma">
+            <if condition="meta.content">
+                {{meta.content}}
+                <elseif condition="content"/>
+                {{content}}
+                <elseif condition="meta.contentTemplate"/>
+                <?php echo $this->getChildHtml('content'); ?>
+            </if>
+        </main>
+        <w:hook>Weline_Theme::frontend::layouts::rma::content-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    </div>
+
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::rma::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+        <w:hook>Weline_Theme::frontend::layouts::rma::footer-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    </if>
+</div>
+
+<w:hook>Weline_Theme::frontend::layouts::rma::body-end</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+<style>
+    .weline-page-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+    .weline-main-content { flex: 1; display: flex; flex-direction: column; }
+    .rma-main { width: 100%; flex: 1; }
+</style>
+</body>
+</html>

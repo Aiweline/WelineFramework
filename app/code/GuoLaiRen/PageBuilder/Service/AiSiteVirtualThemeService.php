@@ -1125,6 +1125,14 @@ PHTML;
         array $defaultConfig,
         array $meta
     ): void {
+        $componentCode = $this->normalizeUtf8String($componentCode);
+        $area = $this->normalizeUtf8String($area);
+        $category = $this->normalizeUtf8String($category);
+        $name = $this->normalizeUtf8String($name);
+        $templateContent = $this->normalizeUtf8String($templateContent);
+        $defaultConfig = $this->normalizeUtf8Array($defaultConfig);
+        $meta = $this->normalizeUtf8Array($meta);
+
         /** @var VirtualThemeComponent $component */
         $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
         $component->clearData()->clearQuery();
@@ -1273,6 +1281,49 @@ PHTML;
 
         $component->setPublishedVersionId($version->getId());
         $component->save();
+    }
+
+    private function normalizeUtf8String(string $value): string
+    {
+        if ($value === '' || \preg_match('//u', $value) === 1) {
+            return $value;
+        }
+
+        $encoded = \json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE);
+        if (\is_string($encoded)) {
+            $decoded = \json_decode($encoded, true);
+            if (\is_string($decoded) && \preg_match('//u', $decoded) === 1) {
+                return $decoded;
+            }
+        }
+
+        $converted = \function_exists('iconv') ? @\iconv('UTF-8', 'UTF-8//IGNORE', $value) : false;
+        if (\is_string($converted) && \preg_match('//u', $converted) === 1) {
+            return $converted;
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<mixed> $value
+     * @return array<mixed>
+     */
+    private function normalizeUtf8Array(array $value): array
+    {
+        $result = [];
+        foreach ($value as $key => $item) {
+            $normalizedKey = \is_string($key) ? $this->normalizeUtf8String($key) : $key;
+            if (\is_string($item)) {
+                $result[$normalizedKey] = $this->normalizeUtf8String($item);
+            } elseif (\is_array($item)) {
+                $result[$normalizedKey] = $this->normalizeUtf8Array($item);
+            } else {
+                $result[$normalizedKey] = $item;
+            }
+        }
+
+        return $result;
     }
 
     private function saveThemeLayout(int $themeId, string $pageType, array $layout): void

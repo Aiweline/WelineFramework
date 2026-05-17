@@ -139,6 +139,16 @@ P99：%{1},P99：%{1}
 清除缓存失败,清除缓存失败
 未收到响应,未收到响应
 "清除 WLS Dispatcher 路由缓存","清除 WLS Dispatcher 路由缓存"
+"清理失效的 WLS 实例记录","清理失效的 WLS 实例记录"
+未发现需要清理的失效实例记录。,未发现需要清理的失效实例记录。
+"可使用 server:status 或 server:listing 查看当前实例状态。","可使用 server:status 或 server:listing 查看当前实例状态。"
+"已清理 %{1} 个失效实例记录。","已清理 %{1} 个失效实例记录。"
+已处理实例：%{1},已处理实例：%{1}
+"可使用 server:status 或 server:listing 查看清理后的实例状态。","可使用 server:status 或 server:listing 查看清理后的实例状态。"
+"清理已无运行进程但仍残留实例文件的 WLS 实例记录","清理已无运行进程但仍残留实例文件的 WLS 实例记录"
+"清理那些已经没有运行但仍占着实例文件的 WLS 实例记录","清理那些已经没有运行但仍占着实例文件的 WLS 实例记录"
+清理失效实例记录,清理失效实例记录
+清理后查看实例状态,清理后查看实例状态
 "Weline Server 性能优化指南","Weline Server 性能优化指南"
 "📋 您的 PHP 环境","📋 您的 PHP 环境"
 "PHP 版本","PHP 版本"
@@ -872,6 +882,7 @@ workers,workers
 服务：,服务：
 "使用 server:status <name> 查看详细状态","使用 server:status <name> 查看详细状态"
 "使用 server:stop <name> 停止实例","使用 server:stop <name> 停止实例"
+"如有残留实例文件，可执行 server:clean 清理失效记录","如有残留实例文件，可执行 server:clean 清理失效记录"
 "实例 [%{1}] 不存在","实例 [%{1}] 不存在"
 "实例 [%{1}] 状态","实例 [%{1}] 状态"
 实例名称：,实例名称：
