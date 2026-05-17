@@ -53,7 +53,7 @@ class OrderAdminPageDataServiceTest extends TestCase
         ], $orderService->receivedFilters);
         $this->assertCount(1, $data['orders']);
         $this->assertSame('WS100012', $data['orders'][0]['increment_id']);
-        $this->assertSame('Pending', $data['orders'][0]['status_label']);
+        $this->assertSame($orderService->getAvailableStatuses()[OrderService::STATUS_PENDING], $data['orders'][0]['status_label']);
         $this->assertSame('secondary', $data['orders'][0]['status_badge_class']);
     }
 

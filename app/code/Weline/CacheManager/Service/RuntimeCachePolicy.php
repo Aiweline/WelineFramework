@@ -22,12 +22,16 @@ final class RuntimeCachePolicy
         'theme' => [
             'runtime_data_ttl' => 300,
             'partial_output_ttl' => 300,
+            'hook_output_ttl' => 60,
+            'hook_aggregate_ttl' => 30,
             'slot_layout_ttl' => 120,
             'widget_output_ttl' => 120,
         ],
         'site' => [
             'currency_ttl' => 300,
             'i18n_locale_ttl' => 300,
+            'store_ttl' => 300,
+            'category_tree_ttl' => 60,
         ],
         'dev' => [
             'trace_ttl' => 60,
@@ -130,12 +134,16 @@ final class RuntimeCachePolicy
             'theme' => [
                 'runtime_data_ttl' => $this->normalizeInt($merged['theme']['runtime_data_ttl'] ?? null, 300, 1, 86400),
                 'partial_output_ttl' => $this->normalizeInt($merged['theme']['partial_output_ttl'] ?? null, 300, 1, 86400),
+                'hook_output_ttl' => $this->normalizeInt($merged['theme']['hook_output_ttl'] ?? null, 60, 1, 86400),
+                'hook_aggregate_ttl' => $this->normalizeInt($merged['theme']['hook_aggregate_ttl'] ?? null, 30, 1, 86400),
                 'slot_layout_ttl' => $this->normalizeInt($merged['theme']['slot_layout_ttl'] ?? null, 120, 1, 86400),
                 'widget_output_ttl' => $this->normalizeInt($merged['theme']['widget_output_ttl'] ?? null, 120, 1, 86400),
             ],
             'site' => [
                 'currency_ttl' => $this->normalizeInt($merged['site']['currency_ttl'] ?? null, 300, 1, 86400),
                 'i18n_locale_ttl' => $this->normalizeInt($merged['site']['i18n_locale_ttl'] ?? null, 300, 1, 86400),
+                'store_ttl' => $this->normalizeInt($merged['site']['store_ttl'] ?? null, 300, 1, 86400),
+                'category_tree_ttl' => $this->normalizeInt($merged['site']['category_tree_ttl'] ?? null, 60, 1, 86400),
             ],
             'dev' => [
                 'trace_ttl' => $this->normalizeInt($merged['dev']['trace_ttl'] ?? null, 60, 1, 86400),

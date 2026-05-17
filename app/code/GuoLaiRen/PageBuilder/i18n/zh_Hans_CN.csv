@@ -621,11 +621,10 @@ Component,Component
 "Failed to materialize PageBuilder page: %{1}","Failed to materialize PageBuilder page: %{1}"
 "Unsupported shared component region: %{1}","Unsupported shared component region: %{1}"
 "Unknown page section: %{section}","Unknown page section: %{section}"
+"AI generated component failed PHP syntax validation: %{message}","AI generated component failed PHP syntax validation: %{message}"
 "AI generated component failed PHP syntax validation after %{n} automatic repair attempts: %{message}","AI generated component failed PHP syntax validation after %{n} automatic repair attempts: %{message}"
-"AI 缁勪欢 JSON 鏍￠獙澶辫触锛?{message}","AI 缁勪欢 JSON 鏍￠獙澶辫触锛?{message}"
 "AI 缁勪欢鍖呭惈鏃犳晥鍥剧墖璧勬簮锛?{1}","AI 缁勪欢鍖呭惈鏃犳晥鍥剧墖璧勬簮锛?{1}"
 "AI 缁勪欢棰勮娓叉煋澶辫触锛?{message}","AI 缁勪欢棰勮娓叉煋澶辫触锛?{message}"
-"鏈湴瑙ｆ瀽涓庝慨澶嶄粛鏈緱鍒版湁鏁?JSON锛屽皢鎸夎疆娆¤皟鐢?AI 杩涜缁撴瀯淇锛堝叡 %{1} 杞級","鏈湴瑙ｆ瀽涓庝慨澶嶄粛鏈緱鍒版湁鏁?JSON锛屽皢鎸夎疆娆¤皟鐢?AI 杩涜缁撴瀯淇锛堝叡 %{1} 杞級"
 "AI publish verification failed: no materialized pages were produced.","AI publish verification failed: no materialized pages were produced."
 "AI publish verification failed: page %{1} has no materialized page_id.","AI publish verification failed: page %{1} has no materialized page_id."
 "AI publish verification failed: materialized page %{1} does not exist.","AI publish verification failed: materialized page %{1} does not exist."
@@ -735,13 +734,13 @@ Component,Component
 "Stage 1 plan: idle","Stage 1 plan: idle"
 "Confirm and Generate Plan","Confirm and Generate Plan"
 返回建站方案生成后再试,返回建站方案生成后再试
-"Preview and Publish","Preview and Publish"
-"The site is generated. Preview it, run checks, and publish after the result looks correct.","The site is generated. Preview it, run checks, and publish after the result looks correct."
-"Preview Site","Preview Site"
-"Check the homepage, about page, and contact page before publishing.","Check the homepage, about page, and contact page before publishing."
-"Current Site URL","Current Site URL"
-"Run Publish Checklist","Run Publish Checklist"
-"Publish Now","Publish Now"
+预览并发布,预览并发布
+站点已生成。请先预览、运行发布前预检，确认效果正确后再发布。,站点已生成。请先预览、运行发布前预检，确认效果正确后再发布。
+预览站点,预览站点
+发布前请检查首页、关于我们和联系我们等关键页面。,发布前请检查首页、关于我们和联系我们等关键页面。
+"当前站点 URL","当前站点 URL"
+运行发布前预检,运行发布前预检
+立即发布,立即发布
 任务进度,任务进度
 "AI generating","AI generating"
 Total,Total
@@ -799,7 +798,6 @@ Pending,Pending
 未选择,未选择
 已确认方案,已确认方案
 查看建站方案,查看建站方案
-已确认,已确认
 查看执行蓝图,查看执行蓝图
 如需调整，可直接在方案预览或虚拟主题编辑区继续微调。,如需调整，可直接在方案预览或虚拟主题编辑区继续微调。
 专家模式：查看完整日志、预览与调试面板。,专家模式：查看完整日志、预览与调试面板。
@@ -969,6 +967,7 @@ Footer,Footer
 确认方案并开始生成,确认方案并开始生成
 "先看建站方案是否符合预期；需要改动时点「AI 调整方案」，确认后进入下一阶段。","先看建站方案是否符合预期；需要改动时点「AI 调整方案」，确认后进入下一阶段。"
 "长耗时 AI 任务在后台队列执行；页面只展示进度、队列状态与最终可确认结果。","长耗时 AI 任务在后台队列执行；页面只展示进度、队列状态与最终可确认结果。"
+"AI 生成失败项已阻断发布；系统不再自动重试，请调整底座提示词后重新生成。","AI 生成失败项已阻断发布；系统不再自动重试，请调整底座提示词后重新生成。"
 "AI 队列仍处于 pending、queued 或 running 状态，发布按钮已锁定。","AI 队列仍处于 pending、queued 或 running 状态，发布按钮已锁定。"
 "最新 AI 生成失败或仍在运行，禁止发布旧站点；请先重新生成并等待成功完成。","最新 AI 生成失败或仍在运行，禁止发布旧站点；请先重新生成并等待成功完成。"
 "当前工作台尚未满足 can_publish 合同，发布按钮保持锁定。","当前工作台尚未满足 can_publish 合同，发布按钮保持锁定。"
@@ -977,7 +976,7 @@ Footer,Footer
 失败项明细,失败项明细
 失败项,失败项
 运行发布检查,运行发布检查
-立即发布,立即发布
+"AI 生成失败","AI 生成失败"
 可视化编辑,可视化编辑
 "切换页面时只会更新当前预览页和可视化 URL，不需要再手动填写 preview_page_id。","切换页面时只会更新当前预览页和可视化 URL，不需要再手动填写 preview_page_id。"
 可视化编辑器工具栏,可视化编辑器工具栏

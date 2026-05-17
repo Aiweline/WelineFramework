@@ -35,11 +35,12 @@ for ($i = 1; $i <= $limit; $i++) {
         'name' => __('浏览过的产品 %d', $i),
         'url' => '/product/viewed-' . $i,
         'image' => $placeholder,
-        'price' => rand(50, 400),
+        'price' => 50 + ($i * 37),
     ];
 }
 
-$widgetId = 'recently-viewed-' . uniqid();
+$widgetInstanceKey = (string)($this->getData('_widget_instance_key') ?: sha1(json_encode([$title, $limit, $columns, $layout, $showPrice]) ?: 'recently-viewed'));
+$widgetId = 'recently-viewed-' . substr(preg_replace('/[^a-zA-Z0-9_-]/', '', $widgetInstanceKey) ?: sha1($widgetInstanceKey), 0, 12);
 
 // 如果没有浏览记录，不显示
 if (empty($products)) {

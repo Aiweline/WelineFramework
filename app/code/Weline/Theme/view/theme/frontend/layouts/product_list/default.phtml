@@ -34,6 +34,12 @@ $showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
 $showToolbar = $meta['showToolbar'] ?? $this->getData('showToolbar') ?? true;
 $filterDrawerTitle = $meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? __('筛选条件');
 $gridColumns = $meta['gridColumns'] ?? $this->getData('gridColumns') ?? 4;
+$isSearchLayout = (bool) $this->getData('is_search_layout');
+
+if ($isSearchLayout) {
+    $showFilters = false;
+    $showToolbar = false;
+}
 
 $meta['showFilters'] = $showFilters;
 $meta['showToolbar'] = $showToolbar;
@@ -81,6 +87,17 @@ $this->assign('meta', $meta);
 
             <!-- ========== 商品列表页主体区域 ========== -->
             <main class="product-list-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-list-main" data-layout="product-list" data-columns="<?= (int)$gridColumns ?>">
+                <?php if ($isSearchLayout): ?>
+                    <div class="product-list-layout__container product-list-layout__container--search">
+                        <section class="product-list-layout__search-content">
+                            <if condition="meta.content">
+                                {{meta.content}}
+                            <elseif condition="meta.contentTemplate"/>
+                                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                            </if>
+                        </section>
+                    </div>
+                <?php else: ?>
                 <div class="product-list-layout__container">
                     <!-- ========== 筛选器侧边栏区域 ========== -->
                     <if condition="meta.showFilters">
@@ -192,9 +209,11 @@ $this->assign('meta', $meta);
                         </w:slot>
                     </div>
                 </div>
+                <?php endif; ?>
             </main>
 
             <!-- ========== 推荐产品区域 ========== -->
+            <?php if (!$isSearchLayout): ?>
             <w:slot id="list-recommendations"
                     name="推荐产品区域"
                     accept="featured-products,bestsellers,new-arrivals,recently-viewed,product-carousel"
@@ -215,6 +234,7 @@ $this->assign('meta', $meta);
                 </div>
                 <w:hook>Weline_Theme::frontend::layouts::product_list::recommendations-after</w:hook>
             </w:slot>
+            <?php endif; ?>
 
             <!-- 移动端遮罩层 -->
             <div class="product-list-layout__overlay" id="product-list-overlay" data-overlay hidden></div>
@@ -238,6 +258,7 @@ $this->assign('meta', $meta);
 
     <w:hook>Weline_Theme::frontend::layouts::product_list::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <pixel name="weshop_product_list_behavior" enabled="yes" />
 
     <script>
     (function() {
@@ -318,6 +339,14 @@ $this->assign('meta', $meta);
         grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
         gap: var(--spacing-6, 1.5rem);
         align-items: flex-start;
+    }
+
+    .product-list-layout__container--search {
+        display: block;
+    }
+
+    .product-list-layout__search-content {
+        width: 100%;
     }
 
     /* ---- 筛选侧边栏 ---- */

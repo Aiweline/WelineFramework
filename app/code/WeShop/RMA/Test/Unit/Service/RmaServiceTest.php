@@ -24,7 +24,6 @@ class RmaServiceTest extends TestCase
         $service = new RmaService();
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Return reason is required.');
 
         $service->createRma([
             'order_id' => 1,

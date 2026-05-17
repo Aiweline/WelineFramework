@@ -35,13 +35,17 @@ class SearchPageDataService
             $result = $this->searchService->browseProducts($keyword, $filters, $page, $pageSize, 'default', $this->normalizeCategoryIds($filters['category_id'] ?? []), true);
         }
 
+        $products = is_array($result['items'] ?? null) ? $result['items'] : [];
         $total = (int) ($result['total'] ?? 0);
+        if ($page === 1 && strtolower((string) ($result['engine'] ?? '')) === 'mysql') {
+            $total = count($products);
+        }
         $appliedFilters = is_array($result['applied_filters'] ?? null) ? $result['applied_filters'] : [];
 
         return [
             'keyword' => $keyword,
             'has_keyword' => $keyword !== '',
-            'products' => is_array($result['items'] ?? null) ? $result['items'] : [],
+            'products' => $products,
             'pagination' => (string) ($result['pagination_html'] ?? ''),
             'pagination_data' => is_array($result['pagination'] ?? null) ? $result['pagination'] : [],
             'pagination_html' => (string) ($result['pagination_html'] ?? ''),

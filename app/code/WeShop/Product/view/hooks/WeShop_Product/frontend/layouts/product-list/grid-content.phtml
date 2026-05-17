@@ -79,10 +79,10 @@ $configurableService = ObjectManager::getInstance(ConfigurableProductService::cl
                     👁
                 </button>
                 <button type="button" 
-                        class="action-btn btn-add-wishlist" 
+                        class="action-btn btn-add-wishlist weline-pixel::add_to_wishlist" 
                         data-product-id="<?= $productId ?>"
                         title="<?= __('收藏') ?>">
-                    ❤
+                    <span class="weline-pixel::add_to_wishlist">❤</span>
                 </button>
                 <button type="button" 
                         class="action-btn btn-add-compare" 
@@ -114,9 +114,9 @@ $configurableService = ObjectManager::getInstance(ConfigurableProductService::cl
             <p class="product-description"><?= htmlspecialchars(mb_substr($shortDescription, 0, 80)) ?><?= mb_strlen($shortDescription) > 80 ? '...' : '' ?></p>
             
             <div class="product-price-box">
-                <span class="product-price">¥<?= number_format($price, 2) ?></span>
+                <span class="product-price"><?= \Weline\Currency\Helper\CurrencyFormatter::formatConverted($price) ?></span>
                 <?php if ($originalPrice > 0 && $originalPrice > $price): ?>
-                <span class="product-original-price">¥<?= number_format($originalPrice, 2) ?></span>
+                <span class="product-original-price"><?= \Weline\Currency\Helper\CurrencyFormatter::formatConverted($originalPrice) ?></span>
                 <?php endif; ?>
             </div>
             
@@ -141,6 +141,7 @@ $configurableService = ObjectManager::getInstance(ConfigurableProductService::cl
 // 渲染规格选择弹窗（只渲染一次）
 echo $this->getHook('WeShop_Product::frontend::product::add-to-cart::options-popup');
 ?>
+<script src="/WeShop/Cart/view/statics/js/cart.js"></script>
 
 <style>
 /* ========================================

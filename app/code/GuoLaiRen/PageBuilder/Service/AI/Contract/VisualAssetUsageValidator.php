@@ -67,10 +67,34 @@ final class VisualAssetUsageValidator
             }
             $finalUrl = \trim((string)($slot['final_url'] ?? ''));
             if ($finalUrl !== '' && \str_contains($src, $finalUrl)) {
+                if ($this->isReusableIdentityAssetSlot($slot)) {
+                    return \max(2, (int)($slot['max_usage'] ?? 12));
+                }
                 return (int)($slot['max_usage'] ?? 1);
             }
         }
 
         return 1;
+    }
+
+    /**
+     * Header and footer should normally reuse the same brand identity asset.
+     * The single-use rule is intended for section photos/media, not logos/icons.
+     *
+     * @param array<string, mixed> $slot
+     */
+    private function isReusableIdentityAssetSlot(array $slot): bool
+    {
+        $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
+        $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $sectionCode = \strtolower(\trim((string)($slot['section_code'] ?? '')));
+
+        return \str_starts_with($slotId, 'identity:')
+            || \in_array($slotType, ['logo_icon', 'brand_identity', 'identity'], true)
+            || \in_array($kind, ['website_logo', 'brand_logo', 'site_title_icon', 'favicon'], true)
+            || \in_array($field, ['logo', 'favicon', 'icon', 'site.icon', 'brand.logo'], true)
+            || \in_array($sectionCode, ['identity', 'global'], true);
     }
 }

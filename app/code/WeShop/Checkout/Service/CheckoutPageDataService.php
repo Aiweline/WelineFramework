@@ -6,6 +6,7 @@ namespace WeShop\Checkout\Service;
 
 use Weline\Framework\App\State;
 use WeShop\Address\Service\AddressService;
+use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Cart\Service\CartService;
 use WeShop\Order\Service\OrderService;
 use WeShop\Shipping\Service\ShippingService;
@@ -66,6 +67,7 @@ class CheckoutPageDataService
             'countries' => $this->buildCountries(),
             'states' => [],
             'is_retry_payment' => $isRetryPayment,
+            'is_guest_checkout' => CartIdentityService::isGuestCartCustomerId($customerId),
             'retry_order_id' => $isRetryPayment ? (int) ($retryContext['order_id'] ?? 0) : 0,
             'retry_order_increment_id' => $isRetryPayment ? (string) ($retryContext['increment_id'] ?? '') : '',
         ];
@@ -246,7 +248,10 @@ class CheckoutPageDataService
             (string) ($checkoutData['shipping_method'] ?? '')
         );
         $prioritizedPaymentMethods = $this->prioritizeSelectedMethod(
-            $this->mapPaymentMethods($this->checkoutService->getCheckoutPaymentMethods($customerId, $shippingContext)),
+            $this->mapPaymentMethods($this->filterGuestPaymentMethods(
+                $this->checkoutService->getCheckoutPaymentMethods($customerId, $shippingContext),
+                CartIdentityService::isGuestCartCustomerId($customerId)
+            )),
             (string) ($checkoutData['payment_method'] ?? '')
         );
 
@@ -464,6 +469,25 @@ class CheckoutPageDataService
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<int, mixed> $methods
+     * @return array<int, mixed>
+     */
+    protected function filterGuestPaymentMethods(array $methods, bool $isGuest): array
+    {
+        if (!$isGuest) {
+            return $methods;
+        }
+
+        return array_values(array_filter($methods, static function (mixed $method): bool {
+            if (!\is_array($method)) {
+                return false;
+            }
+
+            return (string) ($method['code'] ?? '') !== 'b2b_credit_account';
+        }));
     }
 
     /**

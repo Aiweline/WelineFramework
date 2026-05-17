@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace WeShop\Catalog\Service;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 use WeShop\Catalog\Model\Category;
 
 /**
@@ -14,6 +17,7 @@ use WeShop\Catalog\Model\Category;
 class CategoryService
 {
     private const CATEGORY_TREE_CACHE_TTL_SECONDS = 60.0;
+    private const CACHE_NAMESPACE = 'weline_site_runtime';
 
     /**
      * Header hooks read category navigation on every frontend page. Cache only
@@ -34,6 +38,18 @@ class CategoryService
     private static array $headerNavigationCache = [];
 
     /**
+     * @var array<string, array{expires_at: float, data: array}>
+     */
+    private static array $categoryDataCache = [];
+
+    /**
+     * @var array<string, array{expires_at: float, data: array}>
+     */
+    private static array $categoryIndexCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
+
+    /**
      * 获取分类
      * 
      * @param int $categoryId 分类ID
@@ -41,6 +57,11 @@ class CategoryService
      */
     public function getCategory(int $categoryId): ?Category
     {
+        $row = $this->getActiveCategoryIndexes()['by_id'][$categoryId] ?? null;
+        if (is_array($row)) {
+            return $this->categoryFromRow($row);
+        }
+
         /** @var Category $category */
         $category = ObjectManager::getInstance(Category::class);
         $category->load($categoryId);
@@ -75,15 +96,17 @@ class CategoryService
      */
     private function getAllActiveCategoriesForTree(): array
     {
-        /** @var Category $category */
-        $category = ObjectManager::getInstance(Category::class);
+        return $this->categoryDataCacheRemember('category.active_rows', function (): array {
+            /** @var Category $category */
+            $category = ObjectManager::getInstance(Category::class);
 
-        return $category->clear()
-            ->where(Category::schema_fields_IS_ACTIVE, 1)
-            ->order(Category::schema_fields_PARENT_ID, 'ASC')
-            ->order(Category::schema_fields_SORT_ORDER, 'ASC')
-            ->select()
-            ->fetchArray();
+            return $this->normalizeCategoryRows($category->clear()
+                ->where(Category::schema_fields_IS_ACTIVE, 1)
+                ->order(Category::schema_fields_PARENT_ID, 'ASC')
+                ->order(Category::schema_fields_SORT_ORDER, 'ASC')
+                ->select()
+                ->fetchArray());
+        });
     }
 
     private function attachTreeAttributes(array &$category): void
@@ -122,6 +145,8 @@ class CategoryService
         self::$categoryTreeCache = [];
         self::$headerSearchOptionsCache = [];
         self::$headerNavigationCache = [];
+        self::$categoryDataCache = [];
+        self::$categoryIndexCache = [];
     }
 
     private function filterRightMenuTree(array $categories): array
@@ -149,16 +174,27 @@ class CategoryService
         if ($cached && $cached['expires_at'] > $now) {
             return $cached['data'];
         }
+        $runtimeCacheKey = 'category.header_search_options.' . $cacheKey;
+        $runtimeCached = $this->runtimeCacheGet($runtimeCacheKey);
+        if (is_array($runtimeCached)) {
+            self::$headerSearchOptionsCache[$cacheKey] = [
+                'expires_at' => $now + $this->categoryTreeCacheTtl(),
+                'data' => $runtimeCached,
+            ];
+            return $runtimeCached;
+        }
 
         $options = [];
         foreach ($this->getCategoryTree($parentId) as $category) {
             $this->appendHeaderSearchOption($options, $category);
         }
 
+        $ttl = $this->categoryTreeCacheTtl();
         self::$headerSearchOptionsCache[$cacheKey] = [
-            'expires_at' => $now + self::CATEGORY_TREE_CACHE_TTL_SECONDS,
+            'expires_at' => $now + $ttl,
             'data' => $options,
         ];
+        $this->runtimeCacheSet($runtimeCacheKey, $options, $ttl);
 
         return $options;
     }
@@ -204,6 +240,15 @@ class CategoryService
         if ($cached && $cached['expires_at'] > $now) {
             return $cached['data'];
         }
+        $runtimeCacheKey = 'category.header_navigation.' . sha1($cacheKey);
+        $runtimeCached = $this->runtimeCacheGet($runtimeCacheKey);
+        if (is_array($runtimeCached)) {
+            self::$headerNavigationCache[$cacheKey] = [
+                'expires_at' => $now + $this->categoryTreeCacheTtl(),
+                'data' => $runtimeCached,
+            ];
+            return $runtimeCached;
+        }
 
         $navItems = [];
         foreach ($this->getCategoryTree($parentId) as $category) {
@@ -225,10 +270,12 @@ class CategoryService
             'navItems' => $navItems,
             'sidebarShortcuts' => $sidebarShortcuts,
         ];
+        $ttl = $this->categoryTreeCacheTtl();
         self::$headerNavigationCache[$cacheKey] = [
-            'expires_at' => $now + self::CATEGORY_TREE_CACHE_TTL_SECONDS,
+            'expires_at' => $now + $ttl,
             'data' => $data,
         ];
+        $this->runtimeCacheSet($runtimeCacheKey, $data, $ttl);
 
         return $data;
     }
@@ -294,10 +341,14 @@ class CategoryService
      */
     public function getCategoryByHandle(string $handle): ?Category
     {
+        $decodedHandle = urldecode($handle);
+        $row = $this->findActiveCategoryRowByHandle($decodedHandle, $handle);
+        if (is_array($row)) {
+            return $this->categoryFromRow($row);
+        }
+
         /** @var Category $categoryModel */
         $categoryModel = ObjectManager::getInstance(Category::class);
-        
-        $decodedHandle = urldecode($handle);
 
         // 1. 优先用完整 handle 精确匹配（支持层级路径已直接存入 handle 的场景）
         // 克隆模型以避免状态污染
@@ -354,15 +405,8 @@ class CategoryService
      */
     public function getChildCategories(int $parentId): array
     {
-        /** @var Category $category */
-        $category = ObjectManager::getInstance(Category::class);
-        
-        return $category->clear()
-            ->where(Category::schema_fields_PARENT_ID, $parentId)
-            ->where(Category::schema_fields_IS_ACTIVE, 1)
-            ->order(Category::schema_fields_SORT_ORDER, 'ASC')
-            ->select()
-            ->fetchArray();
+        $children = $this->getActiveCategoryIndexes()['children_by_parent'][$parentId] ?? null;
+        return is_array($children) ? $children : [];
     }
     
     /**
@@ -384,12 +428,23 @@ class CategoryService
         if ($cached && $cached['expires_at'] > $now) {
             return $cached['data'];
         }
+        $runtimeCacheKey = 'category.tree.' . $cacheKey;
+        $runtimeCached = $this->runtimeCacheGet($runtimeCacheKey);
+        if (is_array($runtimeCached)) {
+            self::$categoryTreeCache[$cacheKey] = [
+                'expires_at' => $now + $this->categoryTreeCacheTtl(),
+                'data' => $runtimeCached,
+            ];
+            return $runtimeCached;
+        }
 
         $categories = $this->buildCategoryTree($parentId, $includeRightMenuOnly);
+        $ttl = $this->categoryTreeCacheTtl();
         self::$categoryTreeCache[$cacheKey] = [
-            'expires_at' => $now + self::CATEGORY_TREE_CACHE_TTL_SECONDS,
+            'expires_at' => $now + $ttl,
             'data' => $categories,
         ];
+        $this->runtimeCacheSet($runtimeCacheKey, $categories, $ttl);
 
         return $categories;
     }
@@ -469,10 +524,11 @@ class CategoryService
     public function getAllDescendantCategoryIds(int $parentId): array
     {
         $categoryIds = [$parentId]; // 包含当前分类ID
+        $childrenByParent = $this->getActiveCategoryIndexes()['children_by_parent'] ?? [];
         
         // 递归获取所有子分类ID
-        $getChildrenIds = function(int $catId) use (&$getChildrenIds, &$categoryIds) {
-            $children = $this->getChildCategories($catId);
+        $getChildrenIds = function(int $catId) use (&$getChildrenIds, &$categoryIds, $childrenByParent) {
+            $children = $childrenByParent[$catId] ?? [];
             foreach ($children as $child) {
                 $childId = (int)($child['category_id'] ?? 0);
                 if ($childId > 0 && !in_array($childId, $categoryIds)) {
@@ -512,6 +568,236 @@ class CategoryService
         $category->save();
         self::clearTreeCache();
         
+        return $category;
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get(self::CACHE_NAMESPACE, $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set(self::CACHE_NAMESPACE, $key, $value, max(1, $ttl));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            self::$runtimeCache = new MemoryStateFacade($policy->memoryOptions([
+                'consumer_code' => self::CACHE_NAMESPACE,
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function categoryTreeCacheTtl(): int
+    {
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            return $policy->ttl('site.category_tree_ttl', (int)self::CATEGORY_TREE_CACHE_TTL_SECONDS);
+        } catch (\Throwable) {
+            return (int)self::CATEGORY_TREE_CACHE_TTL_SECONDS;
+        }
+    }
+
+    /**
+     * @return array{by_id: array<int, array<string, mixed>>, by_handle: array<string, array<string, mixed>>, children_by_parent: array<int, array<int, array<string, mixed>>>}
+     */
+    private function getActiveCategoryIndexes(): array
+    {
+        $cacheKey = 'active_indexes';
+        $now = microtime(true);
+        $cached = self::$categoryIndexCache[$cacheKey] ?? null;
+        if (is_array($cached) && ($cached['expires_at'] ?? 0.0) >= $now && is_array($cached['data'] ?? null)) {
+            return $cached['data'];
+        }
+
+        $byId = [];
+        $byHandle = [];
+        $childrenByParent = [];
+
+        foreach ($this->getAllActiveCategoriesForTree() as $category) {
+            if (!is_array($category)) {
+                continue;
+            }
+
+            $categoryId = (int)($category[Category::schema_fields_ID] ?? 0);
+            if ($categoryId <= 0) {
+                continue;
+            }
+
+            $category[Category::schema_fields_ID] = $categoryId;
+            $category[Category::schema_fields_PARENT_ID] = (int)($category[Category::schema_fields_PARENT_ID] ?? 0);
+            $this->attachTreeAttributes($category);
+
+            $byId[$categoryId] = $category;
+
+            $handle = trim((string)($category[Category::schema_fields_HANDLE] ?? ''), '/');
+            if ($handle !== '') {
+                $byHandle[$handle] = $category;
+            }
+
+            $childrenByParent[$category[Category::schema_fields_PARENT_ID]][] = $category;
+        }
+
+        $indexes = [
+            'by_id' => $byId,
+            'by_handle' => $byHandle,
+            'children_by_parent' => $childrenByParent,
+        ];
+
+        self::$categoryIndexCache[$cacheKey] = [
+            'expires_at' => $now + $this->categoryTreeCacheTtl(),
+            'data' => $indexes,
+        ];
+
+        return $indexes;
+    }
+
+    /**
+     * @param callable(): array<int, array<string, mixed>> $loader
+     * @return array<int, array<string, mixed>>
+     */
+    private function categoryDataCacheRemember(string $key, callable $loader): array
+    {
+        $now = microtime(true);
+        $cached = self::$categoryDataCache[$key] ?? null;
+        if (is_array($cached) && ($cached['expires_at'] ?? 0.0) >= $now && is_array($cached['data'] ?? null)) {
+            return $cached['data'];
+        }
+
+        $runtimeCached = $this->runtimeCacheGet($key);
+        if (is_array($runtimeCached)) {
+            $rows = $this->normalizeCategoryRows($runtimeCached);
+            self::$categoryDataCache[$key] = [
+                'expires_at' => $now + $this->categoryTreeCacheTtl(),
+                'data' => $rows,
+            ];
+            return $rows;
+        }
+
+        $rows = $loader();
+        $ttl = $this->categoryTreeCacheTtl();
+        self::$categoryDataCache[$key] = [
+            'expires_at' => $now + $ttl,
+            'data' => $rows,
+        ];
+        $this->runtimeCacheSet($key, $rows, $ttl);
+
+        return $rows;
+    }
+
+    /**
+     * @param mixed $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeCategoryRows(mixed $rows): array
+    {
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $normalized[] = $row;
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function findActiveCategoryRowByHandle(string $decodedHandle, string $rawHandle): ?array
+    {
+        $byHandle = $this->getActiveCategoryIndexes()['by_handle'];
+        $candidates = [];
+
+        foreach ([$decodedHandle, $rawHandle] as $handle) {
+            $handle = trim($handle, '/');
+            if ($handle !== '') {
+                $candidates[] = $handle;
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            if (isset($byHandle[$candidate])) {
+                return $byHandle[$candidate];
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            if (!str_contains($candidate, '/')) {
+                continue;
+            }
+            $leaf = basename($candidate);
+            if ($leaf !== '' && isset($byHandle[$leaf])) {
+                return $byHandle[$leaf];
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($candidate === '' || str_contains($candidate, '/')) {
+                continue;
+            }
+
+            foreach ($byHandle as $handle => $row) {
+                if (str_ends_with($handle, '/' . $candidate)) {
+                    return $row;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function categoryFromRow(array $row): Category
+    {
+        /** @var Category $categoryModel */
+        $categoryModel = ObjectManager::getInstance(Category::class);
+        $category = clone $categoryModel;
+        $category->clear();
+        $category->setData($row);
+
         return $category;
     }
 }

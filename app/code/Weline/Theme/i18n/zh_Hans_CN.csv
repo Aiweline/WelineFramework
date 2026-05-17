@@ -1310,6 +1310,10 @@ Close,Close
 筛选条件,筛选条件
 关闭筛选,关闭筛选
 分类,分类
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
 结账,结账
 订单提交失败,订单提交失败
 很抱歉，您的订单提交失败，请稍后重试。,很抱歉，您的订单提交失败，请稍后重试。

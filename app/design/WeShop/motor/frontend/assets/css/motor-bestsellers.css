@@ -1,0 +1,286 @@
+[data-theme="motor"] .motor-bestsellers-widget {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+[data-theme="motor"] .motor-bestsellers-widget__header {
+    position: relative;
+    padding: 1.25rem 1.25rem 1.1rem;
+    border: 1px solid rgba(17, 17, 17, 0.08);
+    border-radius: 0.9rem;
+    background:
+        linear-gradient(135deg, rgba(227, 24, 55, 0.12), rgba(227, 24, 55, 0.02) 48%, rgba(17, 17, 17, 0.02) 100%),
+        var(--color-bg-primary, #ffffff);
+    overflow: hidden;
+}
+
+[data-theme="motor"] .motor-bestsellers-widget__header::after {
+    content: "";
+    position: absolute;
+    inset: auto -2rem -2rem auto;
+    width: 6rem;
+    height: 6rem;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(227, 24, 55, 0.22) 0%, rgba(227, 24, 55, 0) 72%);
+    pointer-events: none;
+}
+
+[data-theme="motor"] .motor-bestsellers-widget__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+    color: var(--color-text-secondary, #3d3d3d);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+[data-theme="motor"] .motor-bestsellers-widget__eyebrow-mark {
+    width: 1.5rem;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--color-primary, #e31837), rgba(227, 24, 55, 0.15));
+}
+
+[data-theme="motor"] .motor-bestsellers-widget__title {
+    margin: 0;
+    color: var(--color-text-primary, #1a1a1a);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.05;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+[data-theme="motor"] .motor-bestsellers-widget__subtitle {
+    margin: 0.45rem 0 0;
+    color: var(--color-text-secondary, #3d3d3d);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+[data-theme="motor"] .motor-bestsellers-widget__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+}
+
+[data-theme="motor"] .motor-bestsellers-card {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+    padding: 0.95rem;
+    border-radius: 1rem;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__media {
+    position: relative;
+    display: block;
+    aspect-ratio: 1 / 1;
+    border-radius: 0.85rem;
+    overflow: hidden;
+    background:
+        linear-gradient(145deg, rgba(227, 24, 55, 0.14), rgba(17, 17, 17, 0.02)),
+        var(--color-bg-secondary, #f2f2f2);
+}
+
+[data-theme="motor"] .motor-bestsellers-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.25s ease;
+}
+
+[data-theme="motor"] .motor-bestsellers-card:hover .motor-bestsellers-card__media img {
+    transform: scale(1.05);
+}
+
+[data-theme="motor"] .motor-bestsellers-card__placeholder {
+    display: inline-flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary, #e31837);
+    font-size: 1.9rem;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__rank {
+    position: absolute;
+    top: 0.55rem;
+    left: 0.55rem;
+    z-index: 2;
+    min-width: 2rem;
+    padding: 0.18rem 0.42rem;
+    border-radius: 999px;
+    background: rgba(17, 17, 17, 0.9);
+    color: #fff;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-align: center;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__badge {
+    position: absolute;
+    right: 0.55rem;
+    bottom: 0.55rem;
+    z-index: 2;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--color-text-secondary, #3d3d3d);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.18rem;
+    color: var(--color-primary, #e31837);
+}
+
+[data-theme="motor"] .motor-bestsellers-card__rating .material-symbols-outlined {
+    font-size: 0.95rem;
+    font-variation-settings: 'FILL' 1;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__sales,
+[data-theme="motor"] .motor-bestsellers-card__reviews {
+    opacity: 0.82;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__name {
+    margin: 0;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__name a {
+    color: var(--color-text-primary, #1a1a1a);
+    text-decoration: none;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__name a:hover {
+    color: var(--color-primary, #e31837);
+}
+
+[data-theme="motor"] .motor-bestsellers-card__price-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.45rem;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__price {
+    color: var(--color-primary, #e31837);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__price-old {
+    color: var(--color-text-tertiary, #6b6b6b);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-decoration: line-through;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__action {
+    display: inline-flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.72rem 0.9rem;
+    font-size: 0.82rem;
+    line-height: 1;
+}
+
+[data-theme="motor"] .motor-bestsellers-card__action .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+[data-theme="motor"].dark .motor-bestsellers-widget__header,
+.dark [data-theme="motor"] .motor-bestsellers-widget__header {
+    border-color: rgba(255, 255, 255, 0.08);
+    background:
+        linear-gradient(135deg, rgba(255, 77, 90, 0.18), rgba(255, 77, 90, 0.03) 50%, rgba(255, 255, 255, 0.02) 100%),
+        var(--color-bg-primary, #141414);
+}
+
+[data-theme="motor"].dark .motor-bestsellers-widget__title,
+.dark [data-theme="motor"] .motor-bestsellers-widget__title,
+[data-theme="motor"].dark .motor-bestsellers-card__name a,
+.dark [data-theme="motor"] .motor-bestsellers-card__name a {
+    color: var(--color-text-light, #f5f5f5);
+}
+
+[data-theme="motor"].dark .motor-bestsellers-widget__subtitle,
+.dark [data-theme="motor"] .motor-bestsellers-widget__subtitle,
+[data-theme="motor"].dark .motor-bestsellers-widget__eyebrow,
+.dark [data-theme="motor"] .motor-bestsellers-widget__eyebrow,
+[data-theme="motor"].dark .motor-bestsellers-card__meta,
+.dark [data-theme="motor"] .motor-bestsellers-card__meta,
+[data-theme="motor"].dark .motor-bestsellers-card__price-old,
+.dark [data-theme="motor"] .motor-bestsellers-card__price-old {
+    color: var(--color-text-light-secondary, #d4d4d4);
+}
+
+[data-theme="motor"].dark .motor-bestsellers-card__rank,
+.dark [data-theme="motor"] .motor-bestsellers-card__rank {
+    background: rgba(0, 0, 0, 0.72);
+}
+
+@media (min-width: 720px) {
+    [data-theme="motor"] .motor-bestsellers-widget__grid--2,
+    [data-theme="motor"] .motor-bestsellers-widget__grid--4,
+    [data-theme="motor"] .motor-bestsellers-widget__grid--5,
+    [data-theme="motor"] .motor-bestsellers-widget__grid--6 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1080px) {
+    [data-theme="motor"] .motor-bestsellers-widget__grid--3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    [data-theme="motor"] .motor-bestsellers-widget__grid--4,
+    [data-theme="motor"] .motor-bestsellers-widget__grid--5,
+    [data-theme="motor"] .motor-bestsellers-widget__grid--6 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    [data-theme="motor"] .motor-bestsellers-widget__grid--3 .motor-bestsellers-card,
+    [data-theme="motor"] .motor-bestsellers-widget__grid--4 .motor-bestsellers-card,
+    [data-theme="motor"] .motor-bestsellers-widget__grid--5 .motor-bestsellers-card,
+    [data-theme="motor"] .motor-bestsellers-widget__grid--6 .motor-bestsellers-card {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

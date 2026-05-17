@@ -9,9 +9,9 @@ use WeShop\Search\Service\SearchPageDataService;
 
 class Index extends BaseController
 {
-    protected const CONTENT_TEMPLATE = 'templates/Frontend/Search/index';
+    protected const CONTENT_TEMPLATE = 'WeShop_Search::templates/Frontend/Search/index.phtml';
 
-    protected ?string $layoutType = 'search';
+    protected ?string $layoutType = 'product_list';
 
     public function __construct(
         private readonly SearchPageDataService $searchPageDataService
@@ -81,6 +81,9 @@ class Index extends BaseController
 
     protected function renderPage(): string
     {
+        $this->assign('category_name', (string) __('Search Results'));
+        $this->assign('is_search_layout', true);
+
         return $this->fetchTemplateWithEvents(self::CONTENT_TEMPLATE);
     }
 }

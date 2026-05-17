@@ -47,6 +47,9 @@ class CheckoutService
                 'discount_amount' => $summary['discount'],
                 'tax_amount' => $summary['tax'],
                 'total' => $summary['grand_total'],
+                'shipping_method' => (string) ($checkoutData['shipping_method'] ?? ''),
+                'payment_method' => (string) ($checkoutData['payment_method'] ?? ''),
+                'shipping_address' => $this->normalizeShippingAddress($checkoutData),
             ],
         ]);
         if (!\is_array($orderSummary) || (int) ($orderSummary['order_id'] ?? 0) <= 0) {

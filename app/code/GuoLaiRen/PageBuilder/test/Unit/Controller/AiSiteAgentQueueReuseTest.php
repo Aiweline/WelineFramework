@@ -1014,6 +1014,51 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringNotContainsString("resume_task_plan", $body);
     }
 
+    public function testStartOperationChecksLiveQueueRowsBeforeCreatingNewQueue(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $body = $this->extractControllerMethodSource($source, 'startOperation');
+        $tableGuardOffset = \strpos($body, 'findActiveAiSiteSessionQueueRow($session, $operation)');
+        $tokenOffset = \strpos($body, '\\bin2hex(\\random_bytes(16))');
+        $enqueueOffset = \strpos($body, 'enqueueOperationQueueTask($freshForQueue');
+
+        self::assertNotFalse($tableGuardOffset, 'startOperation must check queue table before allocating a new token');
+        self::assertNotFalse($tokenOffset, 'new operation token allocation missing');
+        self::assertNotFalse($enqueueOffset, 'queue enqueue missing');
+        self::assertLessThan($tokenOffset, $tableGuardOffset);
+        self::assertLessThan($enqueueOffset, $tableGuardOffset);
+    }
+
+    public function testQueueTableStartGuardScansAllSessionSlotsAndRequiresLiveRunningPid(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $finder = $this->extractControllerMethodSource($source, 'findActiveAiSiteSessionQueueRow');
+        $operationResolver = $this->extractControllerMethodSource($source, 'resolveAiSiteQueueBackedOperationsForStartGuard');
+        $liveness = $this->extractControllerMethodSource($source, 'isAiSiteQueueRowLiveInProgress');
+
+        self::assertStringContainsString('resolveAiSiteQueueBackedOperationsForStartGuard($requestedOperation)', $finder);
+        self::assertStringContainsString('resolveAiSiteQueueLookupBizKeys((int)$session->getId(), $operation)', $finder);
+        self::assertStringContainsString('findAiSiteQueueRowsByBizKey($bizKey)', $finder);
+        self::assertStringContainsString("'plan'", $operationResolver);
+        self::assertStringContainsString("'build'", $operationResolver);
+        self::assertStringContainsString("'block_regenerate'", $operationResolver);
+        self::assertStringContainsString("'image_asset'", $operationResolver);
+        self::assertStringContainsString('Processer::isRunningByPid($pid)', $liveness);
+    }
+
+    public function testRunningQueueReuseClearsPreviousLatestBuildFailureBeforeReturningSnapshot(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $body = $this->extractControllerMethodSource($source, 'buildActiveAiSiteQueueAlreadyRunningResult');
+
+        self::assertStringContainsString('$shouldSuppressPriorBuildFailure = $sameOperation', $body);
+        self::assertStringContainsString('&& $this->isPublishBlockingAiBuildOperation($runningOperation)', $body);
+        self::assertStringContainsString('&& $this->isPublishBlockingAiRunningStatus($operationStatus);', $body);
+        self::assertStringContainsString("\$scope['latest_build_failed'] = 0;", $body);
+        self::assertStringContainsString("\$scope['publish_blocked_by_latest_ai_failure'] = 0;", $body);
+        self::assertStringContainsString("unset(\$scope['latest_build_failure'], \$scope['publish_blocked_reason']);", $body);
+    }
+
     /**
      * @return array<string, mixed>
      */

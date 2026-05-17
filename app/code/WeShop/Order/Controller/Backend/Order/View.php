@@ -39,6 +39,8 @@ class View extends BaseController
                 'title' => (string) __('Order Detail'),
                 'orderIndexUrl' => $this->getUrl('*/backend/order'),
                 'updateStatusUrl' => $this->getUrl('*/backend/order/update-status'),
+                'createShipmentUrl' => $this->getUrl('*/backend/order/create-shipment'),
+                'markDeliveredUrl' => $this->getUrl('*/backend/order/mark-delivered'),
             ],
             $detailData
         ));

@@ -4,36 +4,33 @@ declare(strict_types=1);
 
 namespace WeShop\Checkout\Controller\Frontend\Checkout;
 
+use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Checkout\Service\CheckoutPageDataService;
 use WeShop\Customer\Session\CustomerSession;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
 
 class Methods extends FrontendController
 {
     public function __construct(
         private readonly CheckoutPageDataService $checkoutPageDataService,
-        private readonly CustomerSession $customerSession
+        private readonly CartIdentityService|CustomerSession $cartIdentityService
     ) {
     }
 
     public function index(): string
     {
         try {
-            $customer = $this->customerSession->getCustomer();
-            if (!$customer || !$customer->getId()) {
-                $this->request->getResponse()->setHttpResponseCode(401);
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('Please log in to continue.'),
-                ]);
-            }
+            $cartIdentityService = $this->getCartIdentityService();
+            $cartCustomerId = $cartIdentityService->getCartCustomerId();
 
-            $data = $this->checkoutPageDataService->buildDynamicMethodData((int) $customer->getId(), [
+            $data = $this->checkoutPageDataService->buildDynamicMethodData($cartCustomerId, [
                 'shipping_address_id' => (int) ($this->readRequestValue('shipping_address_id') ?? 0),
                 'shipping_address' => $this->readShippingAddress(),
                 'shipping_method' => (string) ($this->readRequestValue('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->readRequestValue('payment_method') ?? ''),
                 'order_id' => (int) (($this->readRequestValue('order_id') ?? $this->readRequestValue('retry_order_id')) ?? 0),
+                'is_guest_checkout' => $cartIdentityService->isGuest(),
             ]);
 
             return $this->fetchJson([
@@ -68,6 +65,15 @@ class Methods extends FrontendController
         }
 
         return \is_array($shippingAddress) ? $shippingAddress : [];
+    }
+
+    private function getCartIdentityService(): CartIdentityService
+    {
+        if ($this->cartIdentityService instanceof CartIdentityService) {
+            return $this->cartIdentityService;
+        }
+
+        return ObjectManager::getInstance(CartIdentityService::class);
     }
 
     protected function readRequestValue(string $key): mixed

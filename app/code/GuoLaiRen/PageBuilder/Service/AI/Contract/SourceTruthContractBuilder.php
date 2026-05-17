@@ -132,7 +132,7 @@ final class SourceTruthContractBuilder
             $addedFromLine = false;
             foreach ($clauses as $clause) {
                 $clause = \trim((string)$clause);
-                if ($clause === '' || $this->isStyleOnlyBriefClause($clause)) {
+                if ($clause === '' || $this->isStyleOnlyBriefClause($clause) || $this->isConstraintOnlyBriefClause($clause)) {
                     continue;
                 }
                 ++$id;
@@ -147,7 +147,7 @@ final class SourceTruthContractBuilder
                 ];
                 $addedFromLine = true;
             }
-            if (!$addedFromLine) {
+            if (!$addedFromLine && !$this->isConstraintOnlyBriefClause($line)) {
                 ++$id;
                 $facts[] = [
                     'id' => 'f' . \str_pad((string)$id, 2, '0', \STR_PAD_LEFT),
@@ -161,7 +161,7 @@ final class SourceTruthContractBuilder
             }
         }
 
-        if ($instruction !== '') {
+        if ($instruction !== '' && !$this->isInternalControlInstruction($instruction)) {
             ++$id;
             $facts[] = [
                 'id' => 'f' . \str_pad((string)$id, 2, '0', \STR_PAD_LEFT),
@@ -172,12 +172,54 @@ final class SourceTruthContractBuilder
             ];
         }
 
+        if ($facts === []) {
+            $facts[] = [
+                'id' => 'f01',
+                'source' => 'fallback_requirement',
+                'text' => 'Create a complete website plan with clear positioning, navigation, content strategy, and conversion goals.',
+                'visible_copy_requirement' => $inputLocale !== $contentLocale
+                    ? "Translate meaning into {$contentLocale}, preserve core intent"
+                    : 'Use as the minimum planning requirement when no user brief was provided',
+                'weight' => 6,
+            ];
+        }
+
         return $facts;
+    }
+
+    private function isInternalControlInstruction(string $instruction): bool
+    {
+        $instruction = \trim($instruction);
+        if ($instruction === '') {
+            return false;
+        }
+
+        return \preg_match('/(?:^\s*\[FORCE\]|queue:run|--force|\s-f\b|强制重建建站方案|重新跑队列)/iu', $instruction) === 1;
     }
 
     private function isStyleOnlyBriefClause(string $clause): bool
     {
         return \preg_match('/(?:风格|丝滑|动效|视觉|配色|色彩|土豪气|高级感|氛围感|质感|UI|界面效果)/iu', $clause) === 1;
+    }
+
+    private function isConstraintOnlyBriefClause(string $clause): bool
+    {
+        $clause = \trim($clause);
+        if ($clause === '') {
+            return false;
+        }
+        $lower = \mb_strtolower($clause);
+        if (\preg_match('/^(?:home_page|about_page|contact_page|custom_page|blog_page|blog_list|blog_category)$/iu', $lower) === 1) {
+            return true;
+        }
+        if (\preg_match('/(?:页面代码|page\s*(?:type|code)|品牌名保留原文|preserve\s+brand\s+name|用户请求的页面意图|requested\s+page\s+intent)/iu', $clause) === 1) {
+            return true;
+        }
+
+        return \preg_match(
+            '/(?:不要|禁止|不得|不能|必须使用|除.+外|语言|简体中文|英文|大段描述|合同字段|提示词|JSON|do not|must not|forbid|forbidden|except|visible copy|contract field|prompt|json)/iu',
+            $clause
+        ) === 1;
     }
 
     /**
@@ -243,6 +285,12 @@ final class SourceTruthContractBuilder
             $forbidden[] = 'generic corporate profile site';
             $forbidden[] = 'flat blue SaaS style';
         }
+        if (\preg_match('/(?:英文|大段描述|language|locale|do not.*English)/iu', $brief)) {
+            $forbidden[] = 'large visible copy passages outside the requested website language';
+        }
+        if (\preg_match('/(?:合同字段|提示词|JSON|contract field|prompt|json)/iu', $brief)) {
+            $forbidden[] = 'internal contract fields, prompt text, JSON names, or implementation identifiers in visitor-visible copy';
+        }
 
         return $forbidden;
     }
@@ -255,8 +303,12 @@ final class SourceTruthContractBuilder
         $combined = $brief . "\n" . $instruction;
         $downloadIntent = \preg_match('/(?:APK|download|app|安装|下载|推广)/iu', $combined) === 1;
         $blocks = $downloadIntent
-            ? ['hero_download', 'final_download_cta']
-            : ['hero', 'final_cta'];
+            ? ['hero_download']
+            : ['hero'];
+
+        if ($this->hasExplicitFinalCtaIntent($combined)) {
+            $blocks[] = $downloadIntent ? 'final_download_cta' : 'final_cta';
+        }
 
         if (\preg_match('/(?:游戏|game|棋牌|card|Teen\s*Patti|rummy)/iu', $combined)) {
             $blocks[] = 'game_showcase_or_features';
@@ -269,6 +321,14 @@ final class SourceTruthContractBuilder
         }
 
         return \array_values(\array_unique($blocks));
+    }
+
+    private function hasExplicitFinalCtaIntent(string $value): bool
+    {
+        return \preg_match(
+            '/(?:final|bottom|footer|last|end|closing|末尾|底部|最后|最终|收口).{0,32}(?:cta|download|action|conversion|下载|行动|转化|引导)/iu',
+            $value
+        ) === 1;
     }
 
     /**

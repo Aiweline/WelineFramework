@@ -51,6 +51,7 @@ final class AiSitePageBlueprintService
         $siteTagline = $this->pickString($websiteProfile['site_tagline'] ?? null, $scope['site_tagline'] ?? null);
         $sectionRefinements = $this->normalizeStringMap($virtualPage['section_refinements'] ?? []);
         $siteSummary = $this->buildSiteMarketingSummary($websiteProfile, $scope);
+        $primaryCtaLabel = $this->resolveScopePrimaryCtaLabel($scope, $pageType, $pageLabel);
         $aiDescription = $this->buildCustomerFacingDescription($pageType, $pageLabel, $siteDisplayName, $siteSummary, $siteTagline);
         $promptPoints = $this->buildCustomerPromptPoints($pageType, $siteDisplayName, $siteSummary, $brief, 8);
         $baseCode = 'content/' . $this->slugify($pageType);
@@ -61,7 +62,7 @@ final class AiSitePageBlueprintService
         $ctaRefinement = $this->resolveRefinement($sectionRefinements, $baseCode . '-cta', 'cta');
 
         $sections = match ($pageType) {
-            Page::TYPE_HOME => $this->buildHomeSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement, $brief),
+            Page::TYPE_HOME => $this->buildHomeSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement, $brief, $primaryCtaLabel),
             Page::TYPE_ABOUT => $this->buildAboutSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement),
             Page::TYPE_CONTACT => $this->buildContactSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement),
             Page::TYPE_PRIVACY_POLICY,
@@ -101,7 +102,12 @@ final class AiSitePageBlueprintService
      */
     public function resolveSiteDisplayName(array $websiteProfile, array $scope = []): string
     {
-        $siteTitle = $this->pickString($websiteProfile['site_title'] ?? null, $scope['site_title'] ?? null);
+        $siteTitle = $this->pickString(
+            $this->resolveBuildPlanSiteDisplayName($scope),
+            $websiteProfile['site_title'] ?? null,
+            $scope['site_title'] ?? null
+        );
+        $siteTitle = $this->stripProfileLabelPrefix($siteTitle);
         if ($siteTitle !== '' && \strtolower($siteTitle) !== 'ai site' && \stripos($siteTitle, 'websiteprofile') === false) {
             return $siteTitle;
         }
@@ -139,6 +145,12 @@ final class AiSitePageBlueprintService
     public function buildSiteMarketingSummary(array $websiteProfile, array $scope = []): string
     {
         $siteDisplayName = $this->resolveSiteDisplayName($websiteProfile, $scope);
+        $buildPlanSummary = $this->resolveBuildPlanMarketingSummary($scope);
+        if ($buildPlanSummary !== '') {
+            return $siteDisplayName !== '' && !\str_contains($buildPlanSummary, $siteDisplayName)
+                ? $siteDisplayName . "\n" . $buildPlanSummary
+                : $buildPlanSummary;
+        }
         $brief = $this->pickString(
             $websiteProfile['brief_description'] ?? null,
             $scope['brief_description'] ?? null,
@@ -153,10 +165,10 @@ final class AiSitePageBlueprintService
         $headline = $siteDisplayName !== '' ? $siteDisplayName : '该网站';
         $market = $signals['market'] !== '' ? $signals['market'] . '，' : '';
 
-        $summary = $headline . ' 是一个' . $market . $offer . '，内容重点围绕' . $goal . '来组织。';
-        $supporting = '整体表达强调' . $trust . '。';
+        $summary = $headline . ' 面向' . ($market !== '' ? \rtrim($market, '，') : '目标用户') . '提供' . $offer . '，聚焦' . $goal . '。';
+        $supporting = '页面突出' . $trust . '。';
         if ($siteTagline !== '') {
-            $supporting = '整体表达延续“' . $siteTagline . '”的品牌语气，并强调' . $trust . '。';
+            $supporting = $this->normalizeCustomerTagline($headline, $siteTagline) . ' 页面突出' . $trust . '。';
         }
 
         return $summary . "\n" . $supporting;
@@ -183,7 +195,8 @@ final class AiSitePageBlueprintService
         string $middleRefinement,
         string $detailRefinement,
         string $ctaRefinement,
-        string $brief = ''
+        string $brief = '',
+        string $primaryCtaLabel = ''
     ): array {
         $combined = $brief . "\n" . $aiDescription;
         $isDownload = \preg_match('/(?:APK|download|app|安装|下载|推广)/iu', $combined) === 1;
@@ -200,12 +213,13 @@ final class AiSitePageBlueprintService
                 $this->applyRefinement($aiDescription, $heroRefinement),
                 $promptPoints,
                 10,
-                $isDownload ? 'hero_download' : 'hero'
+                $isDownload ? 'hero_download' : 'hero',
+                $primaryCtaLabel
             ),
             $this->buildCardsSection(
                 $baseCode . '-highlights',
                 $isGame || $isDownload ? '热门内容与下载亮点' : '核心卖点',
-                $isGame || $isDownload ? '把最值得点击的内容、下载收益和上手路径直接放到首页。' : '把首页第一屏以下最值得点击的理由放出来。',
+                $isGame || $isDownload ? '热门玩法、下载收益和上手路径清晰可见。' : '核心价值、适用场景和行动入口清晰可见。',
                 $isGame || $isDownload ? ['热门游戏', '下载亮点', '上手路径'] : ['核心卖点', '投放场景', '下载转化'],
                 $promptPoints,
                 $middleRefinement,
@@ -218,7 +232,7 @@ final class AiSitePageBlueprintService
             $sections[] = $this->buildChecklistSection(
                 $baseCode . '-trust-security',
                 '安全与信任保障',
-                '把下载安全、规则透明和服务支持讲清楚，先建立信任再承接动作。',
+                '下载安全、规则透明和服务支持一屏可读。',
                 $promptPoints,
                 $detailRefinement,
                 30,
@@ -229,7 +243,7 @@ final class AiSitePageBlueprintService
         $sections[] = $this->buildChecklistSection(
             $baseCode . ($isSeo ? '-seo-faq' : '-details'),
             $isSeo ? '下载前常见问题' : '转化路径',
-            $isSeo ? '围绕搜索意图和下载疑问，给用户一个能直接读懂的常见问题说明。' : '让用户知道进入站点后应该先看什么、再做什么。',
+            $isSeo ? '下载疑问、玩法入口和安全说明直接可读。' : '浏览重点、下载入口和支持信息清晰可见。',
             $promptPoints,
             $detailRefinement,
             $isTrust ? 40 : 30,
@@ -239,12 +253,54 @@ final class AiSitePageBlueprintService
         $sections[] = $this->buildCtaSection(
             $baseCode . '-cta',
             $isDownload ? '立即开始下载' : '开始承接流量',
-            $isDownload ? '把 APK 下载、站内信任感和转化动作串成一条明确路径。' : '把首页的核心价值和下一步动作收束成一个清晰入口。',
-            $this->resolveCtaLabel(Page::TYPE_HOME),
+            $isDownload ? '安全下载、奖励亮点和客服支持汇聚成明确入口。' : '核心价值和行动入口汇聚在一个清晰模块中。',
+            $primaryCtaLabel !== '' ? $primaryCtaLabel : $this->resolveCtaLabel(Page::TYPE_HOME),
             $ctaRefinement,
             $isTrust ? 50 : 40,
             $isDownload ? 'final_download_cta' : 'final_cta'
         );
+
+        if (!$isDownload) {
+            $sections = $this->normalizeNonDownloadHomeSections($sections, $primaryCtaLabel);
+        }
+
+        return $sections;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $sections
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeNonDownloadHomeSections(array $sections, string $primaryCtaLabel): array
+    {
+        foreach ($sections as $index => $section) {
+            if (!\is_array($section)) {
+                continue;
+            }
+            $key = \strtolower((string)($section['key'] ?? ''));
+            $template = \strtolower((string)($section['template'] ?? ''));
+            $config = \is_array($section['config'] ?? null) ? $section['config'] : [];
+            if ($template === 'cards' || $key === 'highlights') {
+                $section['name'] = $this->unicodeText('\u6838\u5fc3\u4ef7\u503c');
+                $config['section_title'] = $this->unicodeText('\u6838\u5fc3\u4ef7\u503c');
+                $config['section_intro'] = $this->unicodeText('\u628a\u4ea7\u54c1\u3001\u4f53\u9a8c\u3001\u54c1\u724c\u4fe1\u4efb\u4e0e\u4e3b\u8981\u884c\u52a8\u5165\u53e3\u6e05\u6670\u5c55\u793a\u3002');
+            }
+            if ($template === 'checklist' && ($key === 'details' || \str_contains($key, 'detail'))) {
+                $section['name'] = $this->unicodeText('\u8f6c\u5316\u8def\u5f84');
+                $config['section_title'] = $this->unicodeText('\u8f6c\u5316\u8def\u5f84');
+                $config['section_intro'] = $this->unicodeText('\u6d4f\u89c8\u91cd\u70b9\u3001\u9884\u7ea6\u3001\u8ba2\u8d2d\u6216\u8054\u7cfb\u5165\u53e3\u5fc5\u987b\u6e05\u6670\u53ef\u89c1\u3002');
+            }
+            if ($template === 'cta' || \str_contains($key, 'cta')) {
+                $section['name'] = $this->unicodeText('\u7ee7\u7eed\u6df1\u5165\u4f53\u9a8c');
+                $config['section_title'] = $this->unicodeText('\u7ee7\u7eed\u6df1\u5165\u4f53\u9a8c');
+                $config['section_text'] = $this->unicodeText('\u628a\u4e3b\u8981\u884c\u52a8\u3001\u54c1\u724c\u4fe1\u4efb\u548c\u8054\u7cfb\u5165\u53e3\u96c6\u4e2d\u5448\u73b0\u3002');
+                if ($primaryCtaLabel !== '') {
+                    $config['button_label'] = $primaryCtaLabel;
+                }
+            }
+            $section['config'] = $config;
+            $sections[$index] = $section;
+        }
 
         return $sections;
     }
@@ -274,9 +330,9 @@ final class AiSitePageBlueprintService
     ): array {
         return [
             $this->buildHeroSection($baseCode . '-hero', $pageLabel, $pageTitle, $siteDisplayName, $this->applyRefinement($aiDescription, $heroRefinement), $promptPoints, 10),
-            $this->buildCardsSection($baseCode . '-story', '品牌与团队', '把故事、能力和差异化表达清楚。', ['品牌起点', '团队能力', '市场理解'], $promptPoints, $middleRefinement, 20),
-            $this->buildChecklistSection($baseCode . '-values', '为什么值得信任', '用更稳妥的方式展示经验、规范和长期投入。', $promptPoints, $detailRefinement, 30),
-            $this->buildCtaSection($baseCode . '-cta', '继续了解合作方式', '关于页需要承接信任感，并把用户带去下一步动作。', $this->resolveCtaLabel(Page::TYPE_ABOUT), $ctaRefinement, 40),
+            $this->buildCardsSection($baseCode . '-story', '品牌与团队', '品牌起点、团队能力和差异化亮点清晰呈现。', ['品牌起点', '团队能力', '市场理解'], $promptPoints, $middleRefinement, 20),
+            $this->buildChecklistSection($baseCode . '-values', '值得信任的理由', '经验、规范和长期投入形成稳定信任。', $promptPoints, $detailRefinement, 30),
+            $this->buildCtaSection($baseCode . '-cta', '继续了解合作方式', '信任信息与咨询入口自然衔接。', $this->resolveCtaLabel(Page::TYPE_ABOUT), $ctaRefinement, 40),
         ];
     }
 
@@ -305,9 +361,9 @@ final class AiSitePageBlueprintService
     ): array {
         return [
             $this->buildHeroSection($baseCode . '-hero', $pageLabel, $pageTitle, $siteDisplayName, $this->applyRefinement($aiDescription, $heroRefinement), $promptPoints, 10),
-            $this->buildCardsSection($baseCode . '-channels', '联系渠道', '把商务、客服和合作咨询的路径拆得足够直接。', ['商务咨询', '客服支持', '渠道合作'], $promptPoints, $middleRefinement, 20),
-            $this->buildChecklistSection($baseCode . '-process', '响应预期', '让访客知道留言后会发生什么。', $promptPoints, $detailRefinement, 30),
-            $this->buildCtaSection($baseCode . '-cta', '现在发起联系', '联系页的目标是缩短决策路径，避免用户找不到入口。', $this->resolveCtaLabel(Page::TYPE_CONTACT), $ctaRefinement, 40),
+            $this->buildCardsSection($baseCode . '-channels', '联系渠道', '商务、客服和合作咨询路径直接可见。', ['商务咨询', '客服支持', '渠道合作'], $promptPoints, $middleRefinement, 20),
+            $this->buildChecklistSection($baseCode . '-process', '响应预期', '留言后的响应时效、处理流程和支持方式清晰透明。', $promptPoints, $detailRefinement, 30),
+            $this->buildCtaSection($baseCode . '-cta', '现在发起联系', '客服入口、咨询说明和行动按钮集中呈现。', $this->resolveCtaLabel(Page::TYPE_CONTACT), $ctaRefinement, 40),
         ];
     }
 
@@ -456,7 +512,8 @@ final class AiSitePageBlueprintService
         string $description,
         array $promptPoints,
         int $sortOrder,
-        string $sectionKey = 'hero'
+        string $sectionKey = 'hero',
+        string $primaryCtaLabel = ''
     ): array {
         return [
             'key' => $sectionKey,
@@ -469,7 +526,7 @@ final class AiSitePageBlueprintService
                 'headline' => $pageTitle !== '' ? $pageTitle : $siteDisplayName,
                 'description' => $description,
                 'chips' => \array_slice($promptPoints, 0, 3),
-                'primary_cta' => $this->resolveCtaLabel($pageLabel),
+                'primary_cta' => $primaryCtaLabel !== '' ? $primaryCtaLabel : $this->resolveCtaLabel($pageLabel),
                 'secondary_note' => $siteDisplayName,
             ],
         ];
@@ -606,6 +663,15 @@ final class AiSitePageBlueprintService
     private function resolveCtaLabel(string $value): string
     {
         return match ($value) {
+            Page::TYPE_HOME => $this->unicodeText('\u4e86\u89e3\u8be6\u60c5'),
+            Page::TYPE_ABOUT => $this->unicodeText('\u4e86\u89e3\u54c1\u724c'),
+            Page::TYPE_CONTACT => $this->unicodeText('\u7acb\u5373\u8054\u7cfb'),
+            Page::TYPE_PRIVACY_POLICY, Page::TYPE_TERMS_OF_SERVICE, Page::TYPE_REFUND_POLICY, Page::TYPE_SHIPPING_POLICY, Page::TYPE_COOKIE_POLICY => $this->unicodeText('\u8054\u7cfb\u652f\u6301'),
+            Page::TYPE_BLOG, Page::TYPE_BLOG_CATEGORY, Page::TYPE_BLOG_LIST => $this->unicodeText('\u6d4f\u89c8\u66f4\u591a\u5185\u5bb9'),
+            default => $this->unicodeText('\u7ee7\u7eed\u4e86\u89e3'),
+        };
+
+        return match ($value) {
             Page::TYPE_HOME, '首页' => '开始了解',
             Page::TYPE_ABOUT, '关于我们' => '查看团队与能力',
             Page::TYPE_CONTACT, '联系我们' => '立即联系',
@@ -623,30 +689,56 @@ final class AiSitePageBlueprintService
         string $siteTagline
     ): string {
         $headline = $siteDisplayName !== '' ? $siteDisplayName : $pageLabel;
+        $summary = $this->clipText($this->stripProfileLabelPrefix($siteSummary), 160);
+        $tagline = $this->stripProfileLabelPrefix($siteTagline);
+        $base = $summary !== '' ? $summary : $tagline;
+        $suffix = $base !== '' ? (' ' . $base) : '';
+
+        return match ($pageType) {
+            Page::TYPE_HOME => $headline . ' ' . $this->unicodeText('\u805a\u5408\u6838\u5fc3\u4ef7\u503c\u3001\u7279\u8272\u5185\u5bb9\u3001\u4fe1\u4efb\u4fe1\u606f\u548c\u4e3b\u8981\u884c\u52a8\u5165\u53e3\u3002') . $suffix,
+            Page::TYPE_ABOUT => $headline . ' ' . $this->unicodeText('\u5c55\u793a\u54c1\u724c\u5b9a\u4f4d\u3001\u80fd\u529b\u4fe1\u4efb\u548c\u5dee\u5f02\u5316\u4ef7\u503c\u3002') . $suffix,
+            Page::TYPE_CONTACT => $headline . ' ' . $this->unicodeText('\u63d0\u4f9b\u6e05\u6670\u7684\u8054\u7cfb\u5165\u53e3\u3001\u54cd\u5e94\u9884\u671f\u548c\u884c\u52a8\u8def\u5f84\u3002') . $suffix,
+            default => $headline . ' ' . $this->unicodeText('\u56f4\u7ed5\u8be5\u9875\u76ee\u6807\u7ec4\u7ec7\u5177\u4f53\u5185\u5bb9\u3001\u89c6\u89c9\u5c42\u6b21\u548c\u8f6c\u5316\u5165\u53e3\u3002') . $suffix,
+        };
+
+        $headline = $siteDisplayName !== '' ? $siteDisplayName : $pageLabel;
         $pageSummary = match ($pageType) {
-            Page::TYPE_HOME => $headline . ' 的首页先讲清核心价值、主要亮点和下一步动作，让访客在第一屏就知道为什么值得继续浏览。',
-            Page::TYPE_ABOUT => $headline . ' 的关于页重点呈现品牌定位、团队能力、服务经验和长期投入，帮助访客快速建立信任。',
-            Page::TYPE_CONTACT => $headline . ' 的联系页要把咨询入口、响应预期和合作路径讲清楚，减少用户发起联系前的犹豫。',
+            Page::TYPE_HOME => $headline . ' 汇集核心亮点、下载入口、信任信息和新手引导，让访客快速了解服务并安心行动。',
+            Page::TYPE_ABOUT => $headline . ' 展示品牌定位、服务经验、长期投入和可信承诺，让访客更快建立信任。',
+            Page::TYPE_CONTACT => $headline . ' 提供清晰的咨询入口、响应预期和支持方式，让访客顺畅获得帮助。',
             Page::TYPE_PRIVACY_POLICY,
             Page::TYPE_TERMS_OF_SERVICE,
             Page::TYPE_REFUND_POLICY,
             Page::TYPE_SHIPPING_POLICY,
-            Page::TYPE_COOKIE_POLICY => $headline . ' 的' . $pageLabel . '需要清楚说明适用范围、执行方式和用户权利，语言应当稳定、明确、可追溯。',
+            Page::TYPE_COOKIE_POLICY => $headline . ' 的' . $pageLabel . '说明适用范围、执行方式和用户权利，语言稳定、明确、可追溯。',
             Page::TYPE_BLOG,
             Page::TYPE_BLOG_CATEGORY,
-            Page::TYPE_BLOG_LIST => $headline . ' 的内容页要帮助访客理解栏目方向、文章重点和继续阅读路径，用内容承接信任与复访。',
-            default => $headline . ' 的' . $pageLabel . '需要围绕页面目标组织完整内容，保证结构清楚、信息完整、行动入口明确。',
+            Page::TYPE_BLOG_LIST => $headline . ' 提供实用内容、精选主题和继续阅读路径，让访客持续获取有价值的信息。',
+            default => $headline . ' 的' . $pageLabel . '提供结构清晰、信息完整、行动入口明确的页面内容。',
         };
 
         $segments = [$pageSummary];
-        if ($siteSummary !== '') {
-            $segments[] = $siteSummary;
-        }
         if ($siteTagline !== '') {
-            $segments[] = '文案语气延续“' . $siteTagline . '”的表达，但保持面向访客的自然品牌口吻。';
+            $tagline = $this->normalizeCustomerTagline($headline, $siteTagline);
+            if ($tagline !== '' && !\str_contains($pageSummary, $tagline)) {
+                $segments[] = $tagline;
+            }
         }
 
         return \implode("\n", \array_values(\array_unique(\array_filter($segments, static fn(string $item): bool => \trim($item) !== ''))));
+    }
+
+    private function normalizeCustomerTagline(string $headline, string $siteTagline): string
+    {
+        $tagline = \trim($siteTagline, " \t\n\r\0\x0B。.!！“”\"'");
+        if ($tagline === '') {
+            return '';
+        }
+        if (\preg_match('/^(?:是|为|面向|专为|服务于)/u', $tagline) === 1) {
+            return $headline . $tagline . '。';
+        }
+
+        return $tagline . '。';
     }
 
     /**
@@ -663,52 +755,52 @@ final class AiSitePageBlueprintService
 
         $chunks = match ($pageType) {
             Page::TYPE_HOME => [
-                '用一句话讲清 ' . $brand . ' 的核心价值与差异点',
-                '突出 ' . $offer . ' 的主要亮点与适用场景',
-                '让访客迅速理解为什么现在就要继续了解或开始行动',
-                '补足 ' . $trust,
-                '首屏与首屏下方都保留明确的转化入口',
+                $brand . ' 的核心亮点与差异价值',
+                $offer . ' 的玩法、权益与适用场景',
+                $goal . ' 的醒目入口',
+                $trust,
+                '下载、咨询或继续浏览入口清晰可见',
             ],
             Page::TYPE_ABOUT => [
-                '说明品牌定位、团队背景和服务经验',
-                '解释为什么由 ' . $brand . ' 来服务 ' . $market,
-                '用里程碑、流程或方法论建立信任',
-                '把长期投入、稳定支持和差异化讲清楚',
-                '让关于页自然衔接到咨询或下一步动作',
+                '品牌定位、团队背景和服务经验',
+                $brand . ' 服务 ' . $market . ' 的优势',
+                '可信里程碑、服务流程或方法论',
+                '长期投入、稳定支持和差异化价值',
+                '咨询、下载或继续了解入口',
             ],
             Page::TYPE_CONTACT => [
-                '把商务、客服与合作咨询入口拆分清楚',
-                '说明响应时效、处理流程和常见咨询方向',
-                '帮助用户快速判断该走哪条联系路径',
-                '减少发起联系前的顾虑',
-                '用清晰的行动提示承接 ' . $goal,
+                '商务、客服与合作咨询入口',
+                '响应时效、处理流程和常见咨询方向',
+                '不同需求对应的联系路径',
+                '联系前需要了解的支持信息',
+                $goal . ' 的清晰行动提示',
             ],
             Page::TYPE_PRIVACY_POLICY,
             Page::TYPE_TERMS_OF_SERVICE,
             Page::TYPE_REFUND_POLICY,
             Page::TYPE_SHIPPING_POLICY,
             Page::TYPE_COOKIE_POLICY => [
-                '明确政策覆盖范围与适用对象',
-                '拆分用户权利、执行流程与更新时间',
-                '对第三方、Cookie、退款或配送边界做清楚说明',
-                '保持语言稳定、准确、便于查阅',
-                '预留联系与补充说明入口',
+                '政策覆盖范围与适用对象',
+                '用户权利、执行流程与更新时间',
+                '第三方、Cookie、退款或配送边界',
+                '稳定、准确、便于查阅的说明',
+                '联系与补充说明入口',
             ],
             Page::TYPE_BLOG,
             Page::TYPE_BLOG_CATEGORY,
             Page::TYPE_BLOG_LIST => [
-                '围绕用户关心的主题组织栏目与文章结构',
-                '说明读者能获得什么信息或帮助',
-                '给出继续阅读、分类浏览和最新内容入口',
-                '用内容建立专业度与复访理由',
-                '兼顾阅读体验与后续转化',
+                '用户关心的主题栏目与精选文章',
+                '读者可获得的信息、方法或帮助',
+                '继续阅读、分类浏览和最新内容入口',
+                '专业内容与复访价值',
+                '顺畅阅读体验和后续行动入口',
             ],
             default => [
-                '围绕页面目标组织完整信息模块',
-                '把 ' . $offer . ' 的重点内容拆成可编辑区块',
-                '保留清晰的行动入口与补充说明',
-                '兼顾品牌表达、信任信息与实际转化',
-                '确保内容适合继续逐块微调',
+                '结构清晰的信息模块',
+                $offer . ' 的重点内容',
+                '清晰的行动入口与补充说明',
+                '品牌表达、信任信息与实际转化',
+                '适合继续逐块微调的内容',
             ],
         };
 
@@ -717,7 +809,7 @@ final class AiSitePageBlueprintService
         }
 
         while (\count($chunks) < $limit) {
-            $chunks[] = '继续补充更具体的利益点、信任点和转化动作。';
+            $chunks[] = '更具体的利益点、信任点和行动入口';
         }
 
         return \array_slice(\array_values(\array_unique($chunks)), 0, $limit);
@@ -1000,6 +1092,121 @@ final class AiSitePageBlueprintService
         }
 
         return '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveBuildPlanSiteDisplayName(array $scope): string
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $siteBrief = \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [];
+        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+
+        return $this->stripProfileLabelPrefix($this->pickString(
+            $siteBrief['site_name'] ?? null,
+            $requirements['site_name'] ?? null,
+            $siteStrategy['site_display_name'] ?? null
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveBuildPlanMarketingSummary(array $scope): string
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $siteBrief = \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [];
+        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+
+        return $this->stripProfileLabelPrefix($this->pickString(
+            $requirements['site_goal'] ?? null,
+            $requirements['content_direction'] ?? null,
+            $requirements['expanded_brief'] ?? null,
+            $requirements['planning_summary'] ?? null,
+            $siteBrief['summary'] ?? null,
+            $requirementExpansion['site_goal'] ?? null,
+            $requirementExpansion['content_direction'] ?? null,
+            $requirementExpansion['expanded_brief'] ?? null,
+            $siteStrategy['core_goal'] ?? null,
+            $siteStrategy['content_strategy'] ?? null
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveScopePrimaryCtaLabel(array $scope, string $pageType, string $pageLabel): string
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+        $raw = $this->pickString(
+            $requirements['primary_cta'] ?? null,
+            $requirementExpansion['primary_cta'] ?? null,
+            $siteStrategy['primary_cta'] ?? null
+        );
+        if ($raw === '') {
+            return $this->resolveCtaLabel($pageType !== '' ? $pageType : $pageLabel);
+        }
+
+        return $this->selectCtaLabelForPage($raw, $pageType);
+    }
+
+    private function selectCtaLabelForPage(string $primaryCta, string $pageType): string
+    {
+        $parts = \preg_split('/\s*(?:\/|\||,|\x{FF0C}|\x{3001})\s*/u', $primaryCta, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+        $labels = [];
+        foreach ($parts as $part) {
+            $label = $this->stripProfileLabelPrefix((string)$part);
+            if ($label !== '' && !\in_array($label, $labels, true)) {
+                $labels[] = $label;
+            }
+        }
+        if ($labels === []) {
+            return $primaryCta;
+        }
+
+        $preferOrder = \preg_match('/custom|menu|product|order|shop|store/u', $pageType) === 1;
+        foreach ($labels as $label) {
+            if ($preferOrder && \preg_match('/order|buy|shop|purchase|\x{8BA2}\x{8D2D}|\x{8D2D}\x{4E70}/iu', $label) === 1) {
+                return $label;
+            }
+        }
+
+        return $labels[0];
+    }
+
+    private function stripProfileLabelPrefix(string $value): string
+    {
+        $value = \trim((string)\preg_replace('/\s+/u', ' ', $value));
+        if ($value === '') {
+            return '';
+        }
+        $value = (string)\preg_replace(
+            '/^\s*(?:\x{7AD9}\x{70B9}\x{540D}\x{79F0}|\x{7F51}\x{7AD9}\x{540D}\x{79F0}|\x{54C1}\x{724C}\x{540D}|site\s*(?:title|name)|brand\s*name|\x{4E00}\x{53E5}\x{8BDD}\x{5B9A}\x{4F4D}|positioning|tagline)\s*[:\x{FF1A}]\s*/iu',
+            '',
+            $value
+        );
+
+        return \trim($value);
+    }
+
+    private function unicodeText(string $jsonEscaped): string
+    {
+        $decoded = \json_decode('"' . $jsonEscaped . '"');
+
+        return \is_string($decoded) ? $decoded : $jsonEscaped;
     }
 
     private function slugify(string $value): string

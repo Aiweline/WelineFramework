@@ -169,21 +169,33 @@
     // Add to Cart
     // ============================================
     WeShop.initAddToCart = function() {
-        document.querySelectorAll('.add-to-cart').forEach(function(btn) {
+        document.querySelectorAll('.add-to-cart, .btn-add-to-cart').forEach(function(btn) {
+            if (btn.dataset.weshopAddToCartBound === '1') {
+                return;
+            }
+            btn.dataset.weshopAddToCartBound = '1';
+
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
 
                 var productId = this.dataset.productId;
                 if (!productId) return;
+                var form = this.closest('form');
+                var qtyInput = form ? form.querySelector('[name="qty"]') : null;
+                var qty = parseInt(this.dataset.qty || (qtyInput ? qtyInput.value : '1'), 10) || 1;
 
                 // Show loading state
                 var originalText = this.innerHTML;
                 this.innerHTML = '<span class="material-symbols-outlined animate-spin">sync</span>';
                 this.disabled = true;
 
-                WeShop.addToCart(productId, 1)
+                WeShop.addToCart(productId, qty)
                     .then(function(data) {
+                        if (WeShop.handleRedirectPayload(data)) {
+                            return;
+                        }
+
                         if (data.success) {
                             // Show success
                             btn.innerHTML = '<span class="material-symbols-outlined">check</span>';
@@ -204,16 +216,20 @@
                         btn.innerHTML = originalText;
                         btn.disabled = false;
                         console.error('Add to cart error:', error);
+                        WeShop.showNotification('Unable to add this product to cart right now.', 'error');
                     });
             });
         });
     };
 
     WeShop.addToCart = function(productId, qty) {
-        return fetch('/cart/add', {
+        var addUrl = window.WeShop.cartAddUrl || '/cart/frontend/api/add';
+
+        return fetch(addUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({ product_id: productId, qty: qty })
         }).then(function(response) {
@@ -484,7 +500,7 @@
                 notification.className += ' bg-primary text-white';
         }
         
-        notification.innerHTML = message;
+        notification.textContent = message;
         document.body.appendChild(notification);
         
         setTimeout(function() {

@@ -34,6 +34,11 @@ class AiSiteBuildTaskService
         'task_script',
         'block_task.content_plan',
         'block_task.style_plan',
+        '&lt;2 class=',
+        '<2 class=',
+        '</pa>',
+        '</pdiv>',
+        '</divsection>',
         'Required by block task schema',
         'Built from plan',
         'generated from plan',
@@ -169,6 +174,7 @@ class AiSiteBuildTaskService
     public function ensureTaskScope(array $scope, array $websiteProfile, string $workspaceTrack): array
     {
         $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : \array_keys(Page::getPageTypes());
+        $scope = $this->refreshConfirmedBuildPlanContract($scope, $websiteProfile, $workspaceTrack);
         $scope = $this->normalizeConfirmedBuildPlanFlag($scope);
         $existingBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $existingTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
@@ -402,7 +408,7 @@ class AiSiteBuildTaskService
             if (\trim((string)($scope['build_plan_confirmed_at'] ?? '')) === '') {
                 $scope['build_plan_confirmed_at'] = (string)($meta['confirmed_at'] ?? \date('Y-m-d H:i:s'));
             }
-            return $scope;
+            return $this->restoreScopeIdentityFromBuildPlanContract($scope);
         }
 
         return $scope;
@@ -430,8 +436,171 @@ class AiSiteBuildTaskService
         foreach (\array_merge(self::BUILD_LOCKED_PLAN_SCOPE_KEYS, self::DEPRECATED_BUILD_PLAN_SCOPE_KEYS) as $key) {
             unset($scopePatch[$key]);
         }
+        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'user_description', 'default_locale', 'plan_locale'] as $key) {
+            if (\array_key_exists($key, $scopePatch) && \is_scalar($scopePatch[$key]) && \trim((string)$scopePatch[$key]) === '') {
+                unset($scopePatch[$key]);
+            }
+        }
+        if (\is_array($scopePatch['site_profile_manual'] ?? null)) {
+            foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale', 'plan_locale'] as $key) {
+                if (!\array_key_exists($key, $scopePatch)) {
+                    unset($scopePatch['site_profile_manual'][$key]);
+                }
+            }
+            if ($scopePatch['site_profile_manual'] === []) {
+                unset($scopePatch['site_profile_manual']);
+            }
+        }
 
         return $scopePatch;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function restoreScopeIdentityFromBuildPlanContract(array $scope): array
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($contract === []) {
+            return $scope;
+        }
+        $siteBrief = \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [];
+        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
+        $profile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+
+        $identityDefaults = [
+            'site_title' => $this->firstNonEmptyBuildPlanText([
+                $siteBrief['site_name'] ?? null,
+                $requirements['site_name'] ?? null,
+                $profile['site_title'] ?? null,
+            ]),
+            'site_tagline' => $this->firstNonEmptyBuildPlanText([
+                $requirements['site_goal'] ?? null,
+                $requirements['content_direction'] ?? null,
+                $profile['site_tagline'] ?? null,
+            ]),
+            'brief_description' => $this->firstNonEmptyBuildPlanText([
+                $requirements['expanded_brief'] ?? null,
+                $requirements['planning_summary'] ?? null,
+                $requirements['site_goal'] ?? null,
+                $siteBrief['summary'] ?? null,
+                $profile['brief_description'] ?? null,
+            ]),
+            'target_domain' => $this->firstNonEmptyBuildPlanText([
+                $profile['target_domain'] ?? null,
+                $scope['selected_domain'] ?? null,
+                $this->extractLocalHostFromScopeUrls($scope),
+            ]),
+        ];
+
+        foreach ($identityDefaults as $key => $value) {
+            if ($value !== '' && \trim((string)($scope[$key] ?? '')) === '') {
+                $scope[$key] = $value;
+            }
+        }
+        if (\trim((string)($scope['user_description'] ?? '')) === '' && $identityDefaults['brief_description'] !== '') {
+            $scope['user_description'] = $identityDefaults['brief_description'];
+        }
+
+        return $scope;
+    }
+
+    /**
+     * Confirmed BuildPlan is derived state from the stage-1 source of truth. Rebuild
+     * the contract before task graph assembly so prompt/manifest contract fixes
+     * take effect without mutating generated output directly.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @return array<string, mixed>
+     */
+    private function refreshConfirmedBuildPlanContract(array $scope, array $websiteProfile, string $workspaceTrack): array
+    {
+        if (!$this->shouldRefreshConfirmedBuildPlanContract($scope)) {
+            return $scope;
+        }
+
+        try {
+            /** @var AiSiteBuildPlanTaskScheduler $scheduler */
+            $scheduler = ObjectManager::getInstance(AiSiteBuildPlanTaskScheduler::class);
+            $patch = $scheduler->buildConfirmationScopePatch($scope, $websiteProfile, $workspaceTrack);
+        } catch (\Throwable $throwable) {
+            $scope['build_plan_v2_validation'] = [
+                'valid' => false,
+                'errors' => [$throwable->getMessage()],
+            ];
+            $scope['build_plan_confirmed'] = 0;
+            $scope['has_build_plan_v2'] = 0;
+
+            return $scope;
+        }
+
+        if ((int)($patch['build_plan_confirmed'] ?? 0) !== 1) {
+            if (\array_key_exists('build_plan_v2_validation', $patch)) {
+                $scope['build_plan_v2_validation'] = \is_array($patch['build_plan_v2_validation'] ?? null)
+                    ? $patch['build_plan_v2_validation']
+                    : [];
+            }
+            $scope['build_plan_confirmed'] = 0;
+            $scope['has_build_plan_v2'] = 0;
+
+            return $scope;
+        }
+
+        foreach ($this->buildPlanDerivedScopeKeys() as $key) {
+            if (\array_key_exists($key, $patch)) {
+                $scope[$key] = $patch[$key];
+            }
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function shouldRefreshConfirmedBuildPlanContract(array $scope): bool
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        $status = \strtolower(\trim((string)($meta['status'] ?? '')));
+
+        return (int)($scope['build_plan_confirmed'] ?? 0) === 1 || $status === 'confirmed';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function buildPlanDerivedScopeKeys(): array
+    {
+        return [
+            'build_plan_v2',
+            'plan_projection',
+            'content_manifest',
+            'build_plan_confirmed',
+            'build_plan_confirmed_at',
+            'build_plan_v2_validation',
+            'has_build_plan_v2',
+            'workspace_track',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function extractBuildPlanDerivedScopePatch(array $scope): array
+    {
+        $patch = [];
+        foreach ($this->buildPlanDerivedScopeKeys() as $key) {
+            if (\array_key_exists($key, $scope)) {
+                $patch[$key] = $scope[$key];
+            }
+        }
+
+        return $patch;
     }
 
     /**
@@ -567,6 +736,7 @@ class AiSiteBuildTaskService
         $contentManifest = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
         $contentItems = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
         $promptContextAssembler = new AiSiteBuildPromptContextAssembler();
+        $stage2RuntimeContext = $this->resolveBuildPlanStage2RuntimeContext($scope, $contract);
         $orderedTaskIds = $this->normalizeBuildPlanStringList($contract['build_order'] ?? []);
         foreach (\array_keys($tasksById) as $taskId) {
             if (!\in_array($taskId, $orderedTaskIds, true)) {
@@ -633,10 +803,18 @@ class AiSiteBuildTaskService
                 'result_ref' => $isShared
                     ? ['region' => $region]
                     : ['page_type' => $pageType, 'section_code' => $sectionCode],
-                'runtime_context' => [
+                'runtime_context' => \array_replace($stage2RuntimeContext, [
                     'build_plan_contract_id' => (string)($meta['id'] ?? ''),
                     'content_locale' => (string)($contract['i18n']['primary_locale'] ?? $scope['default_locale'] ?? ''),
-                ],
+                    'context_refs' => [
+                        'global_context_ref' => 'build_plan_v2.source_of_truth',
+                        'theme_context_ref' => 'build_plan_v2.runtime_context.theme_context_snapshot',
+                        'shared_context_ref' => 'build_plan_v2.runtime_context.shared_prompt_context',
+                        'page_context_ref' => $pageId !== '' ? ('build_plan_v2.pages.' . $pageId) : '',
+                        'block_context_ref' => $blockId !== '' ? ('build_plan_v2.blocks.' . $blockId) : '',
+                        'asset_context_ref' => 'scope.asset_manifest',
+                    ],
+                ]),
                 'plan_context' => $promptContextAssembler->assemble($contract, $contractTask),
                 'task_script' => [
                     'component_type' => $isShared ? $region : 'section',
@@ -693,6 +871,269 @@ class AiSiteBuildTaskService
                 'tasks' => $tasks,
             ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
         ];
+    }
+
+    /**
+     * Stage2 prompt context is frozen while the task tree is built. Later prompt
+     * assembly must read these task-level references instead of falling back to
+     * broad mutable scope state.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $contract
+     * @return array<string, mixed>
+     */
+    private function resolveBuildPlanStage2RuntimeContext(array $scope, array $contract): array
+    {
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $planWorkbenchConfirmed = \is_array($scope['plan_workbench']['confirmed'] ?? null) ? $scope['plan_workbench']['confirmed'] : [];
+        $workbenchContractContext = \is_array($planWorkbenchConfirmed['contract_context'] ?? null)
+            ? $planWorkbenchConfirmed['contract_context']
+            : [];
+        $contractContext = \is_array($scope['contract_context'] ?? null) ? $scope['contract_context'] : [];
+
+        $buildPlanThemeContext = $this->buildThemeContextFromBuildPlanContract($scope, $contract);
+        $themeContext = $buildPlanThemeContext !== []
+            ? $buildPlanThemeContext
+            : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null)
+                ? $executionBlueprint['theme_context_snapshot']
+                : (\is_array($planWorkbenchConfirmed['theme_context_snapshot'] ?? null)
+                    ? $planWorkbenchConfirmed['theme_context_snapshot']
+                    : []));
+
+        $buildPlanSharedContext = $this->buildSharedContextFromBuildPlanContract($scope, $contract);
+        $sharedPromptContext = $buildPlanSharedContext !== []
+            ? $buildPlanSharedContext
+            : (\is_array($executionBlueprint['shared_prompt_context'] ?? null)
+                ? $executionBlueprint['shared_prompt_context']
+                : (\is_array($planWorkbenchConfirmed['shared_prompt_context'] ?? null)
+                    ? $planWorkbenchConfirmed['shared_prompt_context']
+                    : []));
+
+        return [
+            'site_context' => [
+                'site_brief' => \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [],
+                'source_of_truth' => \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [],
+                'website_profile' => \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+            ],
+            'theme_context_snapshot' => $themeContext,
+            'shared_prompt_context' => $sharedPromptContext,
+            'policy_context' => [
+                'policy_ref' => \is_array($contract['policy_ref'] ?? null) ? $contract['policy_ref'] : [],
+                'policy_projection' => \is_array($contract['policy_projection'] ?? null) ? $contract['policy_projection'] : [],
+                'design_manifest' => \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [],
+            ],
+            'skill_context' => [
+                'selected_skill_codes' => $this->normalizeBuildPlanStringList(
+                    $scope['selected_skill_codes']
+                    ?? $workbenchContractContext['selected_skill_codes']
+                    ?? $contractContext['selected_skill_codes']
+                    ?? []
+                ),
+                'skill_snapshots' => \is_array($workbenchContractContext['skill_snapshots'] ?? null)
+                    ? $workbenchContractContext['skill_snapshots']
+                    : (\is_array($contractContext['skill_snapshots'] ?? null) ? $contractContext['skill_snapshots'] : []),
+            ],
+            'reference_context' => [
+                'source_contracts' => \is_array($contract['source_contracts'] ?? null) ? $contract['source_contracts'] : [],
+                'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
+            ],
+            'asset_context' => [
+                'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [],
+                'verified_assets' => \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [],
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $contract
+     * @return array<string, mixed>
+     */
+    private function buildThemeContextFromBuildPlanContract(array $scope, array $contract): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $designManifest = \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [];
+        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
+
+        return [
+            'site_display_name' => $this->firstNonEmptyBuildPlanText([
+                $contract['site_brief']['site_name'] ?? null,
+                $requirements['site_name'] ?? null,
+                $scope['site_title'] ?? null,
+            ]),
+            'theme_design' => \is_array($designManifest['visual_contract'] ?? null)
+                ? $designManifest['visual_contract']
+                : (\is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : []),
+            'theme_style' => \is_array($designManifest['theme_style'] ?? null)
+                ? $designManifest['theme_style']
+                : (\is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : []),
+            'palette' => \is_array($designManifest['palette'] ?? null)
+                ? $designManifest['palette']
+                : (\is_array($planJson['palette'] ?? null) ? $planJson['palette'] : []),
+            'design_manifest' => $designManifest,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $contract
+     * @return array<string, mixed>
+     */
+    private function buildSharedContextFromBuildPlanContract(array $scope, array $contract): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $siteBrief = \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [];
+        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
+        $contentManifest = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
+        $contentItems = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
+        $siteDisplayName = $this->firstNonEmptyBuildPlanText([
+            $siteBrief['site_name'] ?? null,
+            $requirements['site_name'] ?? null,
+            $scope['site_title'] ?? null,
+        ]);
+        $primaryCta = $this->normalizeBuildPlanPrimaryCta((string)($requirements['primary_cta'] ?? ''));
+        $navigationItems = $this->buildSharedNavigationItemsFromBuildPlanContract($contract, $contentItems);
+        $sitePositioning = $this->firstNonEmptyBuildPlanText([
+            $requirements['expanded_brief'] ?? null,
+            $requirements['site_goal'] ?? null,
+            $requirements['content_direction'] ?? null,
+            $siteBrief['summary'] ?? null,
+        ]);
+        if ($sitePositioning === '' && \is_array($planJson['site_strategy'] ?? null)) {
+            $sitePositioning = $this->firstNonEmptyBuildPlanText([
+                $planJson['site_strategy']['core_goal'] ?? null,
+                $planJson['site_strategy']['content_strategy'] ?? null,
+            ]);
+        }
+
+        return [
+            'site_display_name' => $siteDisplayName,
+            'site_positioning' => $sitePositioning,
+            'header_items' => $navigationItems,
+            'navigation_plan' => $navigationItems !== [] ? ['items' => $navigationItems] : (\is_array($planJson['navigation_plan'] ?? null) ? $planJson['navigation_plan'] : []),
+            'footer_plan' => \is_array($planJson['footer_plan'] ?? null) ? $planJson['footer_plan'] : [],
+            'footer_featured' => \array_slice($navigationItems, 0, 5),
+            'footer_policies' => [],
+            'shared_cta_strategy' => \array_filter([
+                'primary_action' => $primaryCta,
+                'primary_target' => $this->resolveBuildPlanPrimaryCtaTarget($navigationItems),
+            ], static fn(string $value): bool => $value !== ''),
+            'shared_components' => \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @param array<string, string> $contentItems
+     * @return list<array{label:string,href:string,type:string}>
+     */
+    private function buildSharedNavigationItemsFromBuildPlanContract(array $contract, array $contentItems): array
+    {
+        $items = [];
+        foreach (\is_array($contract['pages'] ?? null) ? $contract['pages'] : [] as $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? ''));
+            if ($pageType === '' || $pageType === Page::TYPE_BLOG || $pageType === Page::TYPE_BLOG_CATEGORY) {
+                continue;
+            }
+            $pageId = \trim((string)($page['page_id'] ?? $pageType));
+            $titleKey = \trim((string)($page['title_key'] ?? ''));
+            $label = $this->firstNonEmptyBuildPlanText([
+                $titleKey !== '' ? ($contentItems[$titleKey] ?? null) : null,
+                $pageId !== '' ? ($contentItems['page.' . $pageId . '.title'] ?? null) : null,
+                Page::getPageTypes()[$pageType] ?? null,
+                $pageType,
+            ]);
+            if ($label === '') {
+                continue;
+            }
+            $handle = Page::getDefaultHandleForType($pageType);
+            $items[] = [
+                'label' => $label,
+                'href' => $pageType === Page::TYPE_HOME ? '/' : '/' . $handle,
+                'type' => $pageType,
+            ];
+            if (\count($items) >= 6) {
+                break;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param list<array{label:string,href:string,type:string}> $navigationItems
+     */
+    private function resolveBuildPlanPrimaryCtaTarget(array $navigationItems): string
+    {
+        foreach ([Page::TYPE_CONTACT, Page::TYPE_CUSTOM] as $preferredType) {
+            foreach ($navigationItems as $item) {
+                if (($item['type'] ?? '') === $preferredType && \trim((string)($item['href'] ?? '')) !== '') {
+                    return (string)$item['href'];
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizeBuildPlanPrimaryCta(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+        $parts = \preg_split('/\s*(?:\/|\||,|\x{FF0C}|\x{3001})\s*/u', $value, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($parts as $part) {
+            $part = \trim((string)$part);
+            if ($part !== '') {
+                return $part;
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmptyBuildPlanText(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $text = \trim((string)$value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function extractLocalHostFromScopeUrls(array $scope): string
+    {
+        foreach (['preview_full_url', 'visual_preview_url', 'visual_edit_url', 'preview_url'] as $key) {
+            $url = \trim((string)($scope[$key] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $host = \parse_url($url, \PHP_URL_HOST);
+            $host = \is_string($host) ? \strtolower(\trim($host)) : '';
+            if ($host !== '' && (\str_ends_with($host, '.weline.test') || \str_ends_with($host, '.local.test'))) {
+                return $host;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -1697,7 +2138,10 @@ class AiSiteBuildTaskService
             }
             $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
             $status = $this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING));
-            if ($status === self::TASK_STATUS_DONE || $status === self::TASK_STATUS_CANCELLED) {
+            if ($status === self::TASK_STATUS_CANCELLED) {
+                continue;
+            }
+            if ($status === self::TASK_STATUS_DONE && $this->isGeneratedArtifactAvailableForTask($scope, $task)) {
                 continue;
             }
 
@@ -1714,7 +2158,7 @@ class AiSiteBuildTaskService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    public function reconcileGeneratedArtifactsWithTaskState(array $scope): array
+    public function reconcileGeneratedArtifactsWithTaskState(array $scope, bool $allowActiveRegenerationArtifacts = false): array
     {
         $taskState = $this->extractTaskState($scope);
         foreach ($this->extractBlueprintTasks($scope) as $task) {
@@ -1726,7 +2170,7 @@ class AiSiteBuildTaskService
             if (!\in_array($status, [self::TASK_STATUS_PENDING, self::TASK_STATUS_RUNNING], true)) {
                 continue;
             }
-            if (!$this->isGeneratedArtifactAvailableForTask($scope, $task)) {
+            if (!$this->isGeneratedArtifactAvailableForTask($scope, $task, $allowActiveRegenerationArtifacts)) {
                 continue;
             }
 
@@ -1774,7 +2218,7 @@ class AiSiteBuildTaskService
      */
     public function finalizeBuildTaskStatesAfterRunLoop(array $scope): array
     {
-        $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope);
+        $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope, true);
         $scope = $this->clearResolvedRetryableAiFailures($scope);
         $summary = $this->summarize($scope);
         if ((int)($summary['running'] ?? 0) <= 0) {
@@ -1787,7 +2231,7 @@ class AiSiteBuildTaskService
             )
         );
 
-        $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope);
+        $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope, true);
         $scope = $this->clearResolvedRetryableAiFailures($scope);
 
         return $this->attachBuildRenderDataContract($scope);
@@ -2117,6 +2561,85 @@ class AiSiteBuildTaskService
         }
 
         return $summary;
+    }
+
+    /**
+     * Build completion gate is intentionally sourced only from build_blueprint.tasks
+     * plus build_tasks state. Derived summaries are display snapshots, not truth.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function inspectBuildCompletionGate(array $scope): array
+    {
+        $summary = $this->summarize($scope);
+        $total = (int)($summary['total'] ?? 0);
+        $done = (int)($summary['done'] ?? 0);
+        $pending = (int)($summary['pending'] ?? 0);
+        $running = (int)($summary['running'] ?? 0);
+        $failed = (int)($summary['failed'] ?? 0);
+        $cancelled = (int)($summary['cancelled'] ?? 0);
+        $invalidArtifacts = $this->countInvalidCompletedTaskArtifacts($scope);
+        $unfinished = \max(0, $total - $done, $pending + $running + $failed + $cancelled);
+        $hasIncompleteTasks = $total <= 0
+            || $this->hasUnfinishedBlueprintTasks($scope)
+            || $pending > 0
+            || $running > 0
+            || $failed > 0
+            || $cancelled > 0
+            || $invalidArtifacts > 0
+            || $done < $total;
+
+        $reason = '';
+        if ($total <= 0) {
+            $reason = 'missing_build_blueprint_tasks';
+        } elseif ($failed > 0) {
+            $reason = 'failed_build_tasks';
+        } elseif ($cancelled > 0) {
+            $reason = 'cancelled_build_tasks';
+        } elseif ($invalidArtifacts > 0) {
+            $reason = 'invalid_generated_artifacts';
+        } elseif ($unfinished > 0) {
+            $reason = 'unfinished_build_tasks';
+        }
+
+        return [
+            'passed' => !$hasIncompleteTasks,
+            'reason' => $reason,
+            'total' => $total,
+            'done' => $done,
+            'pending' => $pending,
+            'running' => $running,
+            'failed' => $failed,
+            'cancelled' => $cancelled,
+            'invalid_artifacts' => $invalidArtifacts,
+            'unfinished' => $unfinished,
+            'summary' => $summary,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function countInvalidCompletedTaskArtifacts(array $scope): int
+    {
+        $count = 0;
+        $taskState = $this->extractTaskState($scope);
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            if ($this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING)) !== self::TASK_STATUS_DONE) {
+                continue;
+            }
+            if (!$this->isGeneratedArtifactAvailableForTask($scope, $task)) {
+                ++$count;
+            }
+        }
+
+        return $count;
     }
 
     /**
@@ -2487,68 +3010,8 @@ class AiSiteBuildTaskService
     {
         $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
-        if ($tasks === []) {
-            $tasks = $this->extractBlueprintTasksFromBuildSummary($scope);
-        }
 
         return \array_values(\array_filter($tasks, static fn($task): bool => \is_array($task)));
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return list<array<string, mixed>>
-     */
-    private function extractBlueprintTasksFromBuildSummary(array $scope): array
-    {
-        $summary = \is_array($scope['build_summary']['task_summary'] ?? null)
-            ? $scope['build_summary']['task_summary']
-            : [];
-        $groups = \is_array($summary['groups'] ?? null) ? $summary['groups'] : [];
-        $tasks = [];
-        foreach ($groups as $groupKey => $group) {
-            if (!\is_array($group)) {
-                continue;
-            }
-            $pageType = \trim((string)($group['page_type'] ?? ''));
-            foreach (\is_array($group['tasks'] ?? null) ? $group['tasks'] : [] as $task) {
-                if (!\is_array($task)) {
-                    continue;
-                }
-                $taskKey = \trim((string)($task['task_key'] ?? ''));
-                if ($taskKey === '') {
-                    continue;
-                }
-                $tasks[] = \array_replace([
-                    'task_key' => $taskKey,
-                    'task_type' => $this->inferTaskTypeFromTaskKey($taskKey),
-                    'group_key' => \is_string($groupKey) ? $groupKey : ($pageType !== '' ? $pageType : 'shared'),
-                    'page_type' => $pageType,
-                    'section_code' => '',
-                    'region' => '',
-                    'label' => $taskKey,
-                    'sort_order' => \count($tasks) * 10,
-                ], $task, [
-                    'task_key' => $taskKey,
-                    'group_key' => (string)($task['group_key'] ?? (\is_string($groupKey) ? $groupKey : ($pageType !== '' ? $pageType : 'shared'))),
-                    'page_type' => (string)($task['page_type'] ?? $pageType),
-                    'task_type' => (string)($task['task_type'] ?? $this->inferTaskTypeFromTaskKey($taskKey)),
-                ]);
-            }
-        }
-
-        return $tasks;
-    }
-
-    private function inferTaskTypeFromTaskKey(string $taskKey): string
-    {
-        if (\str_starts_with($taskKey, 'shared:')) {
-            return 'shared_component';
-        }
-        if (\str_starts_with($taskKey, 'page:')) {
-            return 'page_section';
-        }
-
-        return '';
     }
 
     /**
@@ -2718,10 +3181,10 @@ class AiSiteBuildTaskService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $task
      */
-    private function isGeneratedArtifactAvailableForTask(array $scope, array $task): bool
+    private function isGeneratedArtifactAvailableForTask(array $scope, array $task, bool $allowActiveRegenerationArtifacts = false): bool
     {
         $regeneration = \is_array($scope['_build_regeneration'] ?? null) ? $scope['_build_regeneration'] : [];
-        if ((int)($regeneration['active'] ?? 0) === 1) {
+        if ((int)($regeneration['active'] ?? 0) === 1 && !$allowActiveRegenerationArtifacts) {
             return false;
         }
 
@@ -2759,8 +3222,18 @@ class AiSiteBuildTaskService
         $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
         $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
         if ($this->layoutContainsSectionCode($layout, $sectionCode)) {
-            return !$this->arrayContainsGeneratedArtifactPromptTrace($layout)
-                && !$this->virtualThemeComponentHasPromptTrace($scope, $sectionCode);
+            if (
+                $this->arrayContainsGeneratedArtifactPromptTrace($layout)
+                || $this->virtualThemeComponentHasPromptTrace($scope, $sectionCode)
+            ) {
+                return false;
+            }
+
+            if ($this->requiresPersistedVirtualThemeLayoutCheck($scope)) {
+                return $this->persistedVirtualThemeLayoutContainsSectionCode($scope, $pageType, $sectionCode);
+            }
+
+            return true;
         }
         if ($this->persistedVirtualThemeLayoutContainsSectionCode($scope, $pageType, $sectionCode)) {
             return !$this->virtualThemeComponentHasPromptTrace($scope, $sectionCode);
@@ -2771,6 +3244,16 @@ class AiSiteBuildTaskService
         return $this->virtualPageContainsSectionCode($virtualPage, $sectionCode)
             && !$this->arrayContainsGeneratedArtifactPromptTrace($virtualPage)
             && !$this->virtualThemeComponentHasPromptTrace($scope, $sectionCode);
+    }
+
+    /**
+     * In virtual-theme workspaces, in-memory scope is not enough: the preview,
+     * publish checklist, and final materialization read the saved theme layout.
+     */
+    private function requiresPersistedVirtualThemeLayoutCheck(array $scope): bool
+    {
+        return (int)($scope['virtual_theme_id'] ?? 0) > 0
+            && AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME === (string)($scope['workspace_track'] ?? '');
     }
 
     /**
@@ -2818,7 +3301,62 @@ class AiSiteBuildTaskService
             }
         }
 
+        if ($this->containsGeneratedArtifactVisibleHtmlLeak($payload)) {
+            return true;
+        }
+
         return false;
+    }
+
+    private function containsGeneratedArtifactVisibleHtmlLeak(string $payload): bool
+    {
+        if ($payload === '') {
+            return false;
+        }
+
+        // Valid templates contain raw HTML tags. Only escaped tags or malformed
+        // numeric tags are visitor-visible leakage and must invalidate artifacts.
+        if (\preg_match('/&lt;\s*\/?\s*[a-z0-9][^&\n]{0,160}(?:class\s*=|&gt;)/iu', $payload) === 1) {
+            return true;
+        }
+        if (\preg_match('/<\s*\/?\s*[0-9][^>\n]{0,160}>/u', $payload) === 1) {
+            return true;
+        }
+        if ($this->containsGeneratedArtifactMalformedCss($payload)) {
+            return true;
+        }
+        if (\preg_match('/\bbox-sizing\s*:\s*border\s*(?:[;}])/i', $payload) === 1) {
+            return true;
+        }
+        if (\preg_match('/\$isActive\s*=\s*\$index\s*===\s*0\s*;/u', $payload) === 1) {
+            return true;
+        }
+        if (\preg_match('/"brand\.logo"\s*:\s*"[^"]+\/"/iu', $payload) === 1) {
+            return true;
+        }
+        if ($this->containsGeneratedArtifactDuplicateHeroMediaPlaceholder($payload)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function containsGeneratedArtifactMalformedCss(string $payload): bool
+    {
+        $property = '(?:position|inset|overflow|display|width|min-width|max-width|height|min-height|max-height|z-index|opacity|background(?:-image)?|color|border(?:-radius|-color)?|box-shadow|font(?:-size|weight|family)?|line-height|padding|margin|flex(?:-direction|-wrap|-grow|-shrink|-basis)?|grid-template-columns|gap|align-items|justify-content|object-fit|object-position|box-sizing|text-decoration|cursor|outline)';
+
+        return \preg_match('/(?:\d+(?:\.\d+)?(?:px|rem|em|vh|vw|%)|#[0-9a-f]{3,8})(?=\s*' . $property . '\s*:)/i', $payload) === 1
+            || \preg_match('/\b' . $property . '\s*:\s*(?:\.{1,3}|[,+-])\s*(?:[;}])/i', $payload) === 1;
+    }
+
+    private function containsGeneratedArtifactDuplicateHeroMediaPlaceholder(string $payload): bool
+    {
+        $payload = \str_replace(['\"', "\\'"], ['"', "'"], $payload);
+
+        return \preg_match(
+            '/<img\b(?=[^>]*\bdata-pb-ai-image-role\s*=\s*(["\'])generated-asset\1)[^>]*>[\s\S]{0,800}<div\b(?=[^>]*\bclass\s*=\s*(["\'])[^"\']*media[^"\']*\2)[^>]*>\s*<\/div>/iu',
+            $payload
+        ) === 1;
     }
 
     /**

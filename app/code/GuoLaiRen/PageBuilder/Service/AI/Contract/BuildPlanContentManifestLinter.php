@@ -11,6 +11,13 @@ final class BuildPlanContentManifestLinter
         'read more',
         'more',
         'details',
+        'contact us',
+        'consult now',
+        'download now',
+        "\u{4E86}\u{89E3}\u{8BE6}\u{60C5}",
+        "\u{8054}\u{7CFB}\u{6211}\u{4EEC}",
+        "\u{7ACB}\u{5373}\u{54A8}\u{8BE2}",
+        "\u{7ACB}\u{5373}\u{4E0B}\u{8F7D}",
         '了解更多',
         '查看更多',
         '更多',
@@ -56,6 +63,12 @@ final class BuildPlanContentManifestLinter
         foreach ($items as $key => $value) {
             if ($this->looksLikePlaceholder($value)) {
                 $errors[] = 'content_manifest.items contains placeholder copy: ' . $key;
+            }
+            if ($this->looksLikePlanningOrImplementationCopy($value)) {
+                $errors[] = 'content_manifest.items contains planning or implementation copy: ' . $key;
+            }
+            if ($this->looksLikeLocaleLeak($value, $primaryLocale, $key)) {
+                $errors[] = 'content_manifest.items contains non-locale visible copy: ' . $key;
             }
         }
 
@@ -184,6 +197,100 @@ final class BuildPlanContentManifestLinter
         }
 
         return false;
+    }
+
+    private function looksLikePlanningOrImplementationCopy(string $value): bool
+    {
+        $normalized = \strtolower(\trim($value));
+        if ($normalized === '') {
+            return false;
+        }
+
+        $patterns = [
+            '/\b(?:full[- ]?screen|hero\s+(?:area|section)|card\s+grid|grid\s+cards?|hover|pulse|shadow|background\s+gradient|left\s+and\s+right|two[- ]?column|four[- ]?column|layout|section\s+composition)\b/i',
+            '/\b(?:showcase|highlight|explain|introduce|reassure|educate|encourage|guide)\b.{0,90}\b(?:visitor|player|user|download|trust|cta|card|section|block)\b/i',
+            '/(?:全屏|英雄区|卡片网格|四列|两侧|背景|渐变|粒子|按钮|脉冲|hover|阴影|布局|模块).{0,80}(?:展示|呈现|引导|说明|吸引|建立|减少|转化|下载)/u',
+            '/(?:首页|关于页|联系页|内容页|当前页|这个区块|这个模块).{0,40}(?:讲清|呈现|解释|说明|帮助|承接|引导|建立|减少|展示)/u',
+            '/(?:为什么|为何).{0,30}(?:添加|需要|选择|放置|存在)(?:这个|该)?(?:块|区块|模块|页面)/u',
+        ];
+        foreach ($patterns as $pattern) {
+            if (\preg_match($pattern, $value) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function looksLikeLocaleLeak(string $value, string $locale, string $key): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        if ($locale === '' || $value === '' || \in_array($key, ['site.name'], true)) {
+            return false;
+        }
+
+        if ($this->isCjkLocale($locale)) {
+            return $this->hasDominantLatinCopy($value);
+        }
+        if (!$this->isCjkLocale($locale)) {
+            return $this->hasMeaningfulCjkCopy($value);
+        }
+
+        return false;
+    }
+
+    private function isCjkLocale(string $locale): bool
+    {
+        return $locale === 'zh'
+            || \str_starts_with($locale, 'zh_')
+            || \str_starts_with($locale, 'zh-')
+            || $locale === 'ja'
+            || \str_starts_with($locale, 'ja_')
+            || \str_starts_with($locale, 'ja-')
+            || $locale === 'ko'
+            || \str_starts_with($locale, 'ko_')
+            || \str_starts_with($locale, 'ko-');
+    }
+
+    private function hasDominantLatinCopy(string $value): bool
+    {
+        $allowed = \array_fill_keys(['apk', 'app', 'seo', 'ios', 'android', 'upi', 'ssl', 'vip', 'faq', 'url', 'www'], true);
+        \preg_match_all('/\b[A-Za-z][A-Za-z0-9\'-]{2,}\b/u', $value, $matches);
+        $words = [];
+        foreach ($matches[0] ?? [] as $word) {
+            $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
+            if ($normalized !== '' && !isset($allowed[$normalized])) {
+                $words[] = $normalized;
+            }
+        }
+        if ($words === []) {
+            return false;
+        }
+
+        $letterCount = 0;
+        foreach ($words as $word) {
+            $letterCount += \strlen($word);
+        }
+
+        return \count($words) >= 3 && $letterCount >= 16;
+    }
+
+    private function hasMeaningfulCjkCopy(string $value): bool
+    {
+        if (\preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+/u', $value, $matches) <= 0) {
+            return false;
+        }
+
+        $total = 0;
+        foreach ($matches[0] ?? [] as $segment) {
+            $length = \function_exists('mb_strlen') ? \mb_strlen((string)$segment) : \strlen((string)$segment);
+            $total += $length;
+            if ($length >= 8) {
+                return true;
+            }
+        }
+
+        return $total >= 12;
     }
 
     /**

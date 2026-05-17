@@ -8,6 +8,12 @@ use WeShop\Catalog\Service\CategoryService;
 
 /** @var \Weline\Framework\View\Template $this */
 
+$contentHtmlOverride = $this->request->getData('weshop_category_content_html_override') ?? null;
+if (is_string($contentHtmlOverride) && $contentHtmlOverride !== '') {
+    echo $contentHtmlOverride;
+    return;
+}
+
 // WLS workers can reuse template instances across requests, so prefer current request data.
 $categoriesCtx = $this->request->getData('categories') ?? null;
 $requestCategory = $this->request->getData('category') ?? null;
@@ -51,6 +57,42 @@ if ($currentPath === '') {
 
 $hasValidChildren = $childCategories !== [];
 $products = $this->request->getData('products') ?? $this->getData('products') ?? [];
+$requestUri = function_exists('w_env_request_uri') ? (string) w_env_request_uri() : '';
+$storefrontPrefix = '';
+if (preg_match('#^/([A-Z]{3})(?:/([A-Za-z]{2}_[A-Za-z]+_[A-Z]{2}))?(?:/|$)#', $requestUri, $prefixMatches)) {
+    $storefrontPrefix = '/' . $prefixMatches[1] . (!empty($prefixMatches[2]) ? '/' . $prefixMatches[2] : '');
+}
+$buildStorefrontUrl = static function (string $path) use ($storefrontPrefix): string {
+    return $storefrontPrefix . '/' . ltrim($path, '/');
+};
+$resolveCategoryCardImage = static function (array $categoryRow): string {
+    $image = trim((string) ($categoryRow['image'] ?? ''));
+    if ($image !== '') {
+        return $image;
+    }
+
+    $rawHandle = trim((string) ($categoryRow['handle'] ?? ''), '/');
+    $handle = strtolower($rawHandle);
+    $handleLeaf = strtolower(basename($rawHandle));
+    $name = trim((string) ($categoryRow['name'] ?? ''));
+    $fallbacks = [
+        'electronics' => 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80',
+        'phones' => 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80',
+        'computers' => 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80',
+        'smart-devices' => 'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?auto=format&fit=crop&w=1200&q=80',
+        'audio-video' => 'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=1200&q=80',
+        'smartphones' => 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=1200&q=80',
+        'laptops' => 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80',
+        'wireless-headphones' => 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=80',
+        '电子产品' => 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80',
+        '手机通讯' => 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80',
+        '电脑办公' => 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80',
+        '智能设备' => 'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?auto=format&fit=crop&w=1200&q=80',
+        '影音娱乐' => 'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=1200&q=80',
+    ];
+
+    return $fallbacks[$handle] ?? $fallbacks[$handleLeaf] ?? $fallbacks[$name] ?? '';
+};
 ?>
 
 <?php if ($hasValidChildren): ?>
@@ -63,10 +105,10 @@ $products = $this->request->getData('products') ?? $this->getData('products') ??
             }
 
             $childPath = $currentPath !== '' ? $currentPath . '/' . rawurlencode($childHandle) : rawurlencode($childHandle);
-            $childUrl = $this->getUrl('catalog/category/' . $childPath);
+            $childUrl = $buildStorefrontUrl('catalog/category/' . $childPath);
             $childName = htmlspecialchars((string) ($child['name'] ?? ''));
             $childDescription = htmlspecialchars((string) ($child['description'] ?? ''));
-            $childImage = (string) ($child['image'] ?? '');
+            $childImage = $resolveCategoryCardImage($child);
             $grandChildren = $child['children'] ?? [];
             $grandChildrenCount = is_array($grandChildren) ? count($grandChildren) : 0;
             ?>
@@ -98,12 +140,15 @@ $products = $this->request->getData('products') ?? $this->getData('products') ??
             </a>
         <?php endforeach; ?>
     </div>
-<?php else: ?>
-    <?php if (!is_array($products) || $products === []): ?>
+<?php endif; ?>
+
+<?php if (!is_array($products) || $products === []): ?>
+    <?php if (!$hasValidChildren): ?>
         <div class="category-empty">
             <p><?= __('该分类下暂无商品') ?></p>
         </div>
-    <?php else: ?>
+    <?php endif; ?>
+<?php else: ?>
         <?php
         $browseProductIdsForDom = array_values(array_filter(array_map(
             static fn (mixed $p): int => (int) (is_array($p) ? ($p['product_id'] ?? $p['entity_id'] ?? 0) : 0),
@@ -129,7 +174,9 @@ $products = $this->request->getData('products') ?? $this->getData('products') ??
                 $productHandle = (string) ($product['handle'] ?? '');
                 $productSku = htmlspecialchars((string) ($product['sku'] ?? ''));
                 $inStock = (bool) ($product['in_stock'] ?? ((int) ($product['stock'] ?? 0) > 0));
-                $productUrl = $productHandle !== '' ? $this->getUrl('product/' . $productHandle) : $this->getUrl('product/view', ['id' => $productId]);
+                $productUrl = $productHandle !== ''
+                    ? $buildStorefrontUrl('product/' . rawurlencode($productHandle))
+                    : $buildStorefrontUrl('product/view?id=' . $productId);
                 ?>
                 <div class="product-card" data-product-id="<?= $productId ?>">
                     <a href="<?= htmlspecialchars($productUrl) ?>" class="product-card__link">
@@ -172,7 +219,6 @@ $products = $this->request->getData('products') ?? $this->getData('products') ??
                 </div>
             <?php endforeach; ?>
         </div>
-    <?php endif; ?>
 <?php endif; ?>
 
 <style>

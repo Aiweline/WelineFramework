@@ -19,7 +19,7 @@
 
     // API 端点
     const API_ENDPOINTS = {
-        add: '/api123/api/rest/v1/weshop/cart/add',
+        add: window.WeShop?.cartAddUrl || '/cart/frontend/api/add',
         getOptions: '/api123/api/rest/v1/weshop/cart/options',
     };
 
@@ -531,7 +531,7 @@
                 }),
             });
 
-            const result = await response.json();
+            const result = normalizeApiPayload(await response.json());
 
             if (result.success) {
                 // 触发成功事件（使用 snake_case 以兼容 MiniCart）
