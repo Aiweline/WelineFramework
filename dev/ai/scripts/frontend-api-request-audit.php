@@ -26,6 +26,7 @@ $skipPathFragments = [
     '/view/statics/frontend/lib/',
     '/view/statics/lib/',
     '/view/statics/libs/',
+    '/view/tpl/',
     '/tests/lib/',
     '/dev/ai/codex/tasks/',
     '/dev/ai/codex/artifacts/',
@@ -172,10 +173,22 @@ function classify_hit(string $path, string $extension, string $line, string $pat
     $lineLower = strtolower($line);
 
     if ($extension === 'md') {
+        if (str_ends_with($lower, '/dev/ai/global-constraints.md')) {
+            return 'docs_only';
+        }
         if (str_contains($lineLower, 'oauth') || str_contains($lineLower, 'external')) {
             return 'external_api';
         }
         if (str_contains($lineLower, '->fetch') || str_contains($lineLower, '$this->fetch') || str_contains($lineLower, 'fetchhtml')) {
+            return 'docs_only';
+        }
+        if (str_contains($lineLower, '禁止')
+            || str_contains($lineLower, '不得')
+            || str_contains($lineLower, '不允许')
+            || str_contains($lineLower, 'ban')
+            || str_contains($lineLower, 'must not')
+            || str_contains($lineLower, 'deprecated')
+        ) {
             return 'docs_only';
         }
         if (str_contains($lineLower, 'fetch(')
