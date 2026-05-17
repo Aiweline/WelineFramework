@@ -17,12 +17,6 @@
 (function (window, document) {
     'use strict';
 
-    // API 端点
-    const API_ENDPOINTS = {
-        add: window.WeShop?.cartAddUrl || '/cart/frontend/api/add',
-        getOptions: '/api123/api/rest/v1/weshop/cart/options',
-    };
-
     // 状态
     let state = {
         currentProductId: null,
@@ -45,6 +39,18 @@
         qtyInput: null,
         addToCartBtn: null,
     };
+
+    let cartApiPromise = null;
+
+    function getCartApi() {
+        if (!cartApiPromise) {
+            if (!window.Weline?.Api?.resource) {
+                return Promise.reject(new Error('Weline.Api.resource is not available'));
+            }
+            cartApiPromise = Promise.resolve(window.Weline.Api.resource('cart'));
+        }
+        return cartApiPromise;
+    }
 
     /**
      * 初始化模块
@@ -518,20 +524,12 @@
             // 触发添加前事件
             dispatchEvent('weshop:cart:add', { productId, qty, selectedOptions });
 
-            const response = await fetch(API_ENDPOINTS.add, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: new URLSearchParams({
-                    product_id: productId,
-                    qty: qty,
-                    selected_options: JSON.stringify(selectedOptions),
-                }),
-            });
-
-            const result = normalizeApiPayload(await response.json());
+            const CartApi = await getCartApi();
+            const result = normalizeApiPayload(await CartApi.add({
+                product_id: productId,
+                qty: qty,
+                selected_options: selectedOptions,
+            }));
 
             if (result.success) {
                 // 触发成功事件（使用 snake_case 以兼容 MiniCart）
@@ -600,13 +598,8 @@
      * 获取产品选项
      */
     async function fetchProductOptions(productId) {
-        const response = await fetch(`${API_ENDPOINTS.getOptions}?product_id=${productId}`, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-        });
-        return normalizeApiPayload(await response.json());
+        const CartApi = await getCartApi();
+        return normalizeApiPayload(await CartApi.options({ product_id: productId }));
     }
 
     /**

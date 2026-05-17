@@ -188,6 +188,7 @@ SQL调试输出,SQL调试输出
 "只编译 weline.modules.js","只编译 weline.modules.js"
 "只编译 less","只编译 less"
 使用别名,使用别名
+"Frontend JSON query is deprecated. Use the Weline frontend worker API.","Frontend JSON query is deprecated. Use the Weline frontend worker API."
 查询成功,查询成功
 查询失败：%{1},查询失败：%{1}
 未知,未知

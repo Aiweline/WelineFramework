@@ -154,7 +154,7 @@
         var tokenUsage = resolveTokenUsage(info || {});
         var jobKey = snapshot.job_key || (info && info.job_key) || snapshot.biz_key || '';
         var jobType = snapshot.job_type || (info && info.job_type) || '';
-        var status = snapshot.job_status || snapshot.status || (info && (info.job_status || info.status)) || '';
+        var status = (info && (info.status || info.queue_status || info.job_status)) || snapshot.job_status || snapshot.status || snapshot.queue_status || '';
         var token = snapshot.token || snapshot.execution_token || (info && (info.token || info.execution_token)) || '';
         return '<div class="row g-2 mb-2 pb-ai-build-queue-token-summary" role="list" data-queue-info-list="' + escapeHtml(operation) + '">'
             + renderQueueSummaryItem('job_key', queueMessages.jobKeyLabel, jobKey, true)
@@ -208,7 +208,7 @@
         procEl.textContent = String(info.process || '').trim() || queueMessages.unknown;
         resEl.textContent = String(info.result_log || '').trim() || queueMessages.unknown;
         if (statusEl) {
-            statusEl.textContent = String((info.snapshot && (info.snapshot.job_status || info.snapshot.status)) || '').trim();
+            statusEl.textContent = String((info.status || info.queue_status || info.job_status || (info.snapshot && (info.snapshot.job_status || info.snapshot.status || info.snapshot.queue_status)) || '')).trim();
         }
     }
 

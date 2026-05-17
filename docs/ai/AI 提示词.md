@@ -433,8 +433,8 @@ class UserController extends BackendController
 function loadData() {
     showLoading();  // 显示加载动画
     
-    fetch('/api/data')
-        .then(response => response.json())
+    Weline.Api.resource('data')
+        .then(DataApi => DataApi.list({}))
         .then(data => {
             hideLoading();  // 隐藏加载动画
             // 处理数据

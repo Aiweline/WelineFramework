@@ -246,6 +246,19 @@ class ApiDocImporter
         $content .= "- **类**: `" . ($api['class'] ?? '') . "`\n";
         $content .= "- **方法**: `" . ($api['method'] ?? '') . "`\n";
         $content .= "- **路由**: `" . ($api['route']['method'] ?? '') . " " . ($api['route']['path'] ?? '') . "`\n\n";
+
+        if (($api['frontend_worker'] ?? false) === true) {
+            $worker = $api['worker'] ?? [];
+            $content .= "## Frontend Worker API\n\n";
+            $content .= "- **调用方式**: `Weline.Api.resource()` / `Weline.Api.graph()` / `Weline.Api.stream()`\n";
+            $content .= "- **Provider**: `" . ($worker['provider'] ?? '') . "`\n";
+            $content .= "- **Operation**: `" . ($worker['operation'] ?? '') . "`\n";
+            $content .= "- **Mode**: `" . ($worker['mode'] ?? '') . "`\n";
+            $content .= "- **Graph**: `" . (($worker['graph'] ?? false) ? 'true' : 'false') . "`\n";
+            $content .= "- **Cost**: `" . ($worker['cost'] ?? 1) . "`\n";
+            $content .= "- **Cache TTL**: `" . ($worker['cache_ttl'] ?? 0) . "`\n\n";
+            $content .= "`/api/framework/query-bin` 是协议实现细节，业务前端不得手写该 URL，也不得改回 direct `fetch()`。\n\n";
+        }
         
         // 参数
         if (!empty($api['parameters'])) {
@@ -271,6 +284,14 @@ class ApiDocImporter
         if (!empty($api['example'])) {
             $content .= "## 示例\n\n";
             $example = $api['example'];
+
+            if (($example['frontend_worker'] ?? false) === true) {
+                $content .= "**前端调用**:\n\n";
+                $content .= "```js\n";
+                $content .= (string)($example['code'] ?? '') . "\n";
+                $content .= "```\n\n";
+                return $content;
+            }
             
             if (!empty($example['method']) && !empty($example['path'])) {
                 $content .= "**请求**:\n\n";

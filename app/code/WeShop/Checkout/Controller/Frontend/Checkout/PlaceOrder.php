@@ -7,6 +7,7 @@ namespace WeShop\Checkout\Controller\Frontend\Checkout;
 use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Checkout\Service\CheckoutService;
 use WeShop\Customer\Session\CustomerSession;
+use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\ResponseTerminateException;
@@ -15,7 +16,8 @@ class PlaceOrder extends FrontendController
     public function __construct(
         private readonly CheckoutService $checkoutService,
         private readonly CustomerSession $customerSession,
-        private readonly ?CartIdentityService $cartIdentityService = null
+        private readonly ?CartIdentityService $cartIdentityService = null,
+        private readonly ?CheckoutIdentityService $checkoutIdentityService = null
     ) {
     }
 
@@ -24,19 +26,21 @@ class PlaceOrder extends FrontendController
         try {
             $cartIdentityService = $this->getCartIdentityService();
             $cartCustomerId = $cartIdentityService->getCartCustomerId();
-            $isGuestCheckout = $cartIdentityService->isGuest();
-            $guestEmail = $this->readGuestEmail();
-            if ($isGuestCheckout && $guestEmail === '') {
-                $this->request->getResponse()->setHttpResponseCode(400);
-                return $this->fetchJson(['success' => false, 'message' => __('Email is required for guest checkout.')]);
-            }
+            $authenticatedCustomerId = $cartIdentityService->getAuthenticatedCustomerId();
+            $checkoutIdentity = $this->resolveCheckoutIdentity($cartIdentityService, $cartCustomerId, $authenticatedCustomerId);
+            $isGuestCheckout = !empty($checkoutIdentity['is_guest_checkout']);
+            $guestEmail = (string) ($checkoutIdentity['guest_email'] ?? $this->readGuestEmail());
+            $orderCustomerId = $isGuestCheckout ? $cartIdentityService->getGuestCartCustomerId() : $cartCustomerId;
 
             $checkoutData = [
-                'customer_id' => $cartCustomerId,
+                'customer_id' => $orderCustomerId,
+                'cart_customer_id' => $cartCustomerId,
+                'authenticated_customer_id' => $authenticatedCustomerId,
+                'checkout_mode' => (string) ($checkoutIdentity['checkout_mode'] ?? CheckoutIdentityService::MODE_GUEST),
                 'is_guest_checkout' => $isGuestCheckout,
                 'guest_email' => $guestEmail,
                 'order_id' => (int) (($this->readRequestValue('order_id') ?? $this->readRequestValue('retry_order_id')) ?? 0),
-                'shipping_address_id' => (int) ($this->readRequestValue('shipping_address_id') ?? 0),
+                'shipping_address_id' => $isGuestCheckout ? 0 : (int) ($this->readRequestValue('shipping_address_id') ?? 0),
                 'billing_address_id' => (int) ($this->readRequestValue('billing_address_id') ?? 0),
                 'shipping_address' => $this->readShippingAddress(),
                 'shipping_method' => (string) ($this->readRequestValue('shipping_method') ?? ''),
@@ -49,7 +53,10 @@ class PlaceOrder extends FrontendController
             $this->customerSession->set('weshop_checkout_last_order_context', [
                 'order_id' => (int) ($result['order_id'] ?? 0),
                 'order_increment_id' => (string) ($result['order_increment_id'] ?? ''),
-                'customer_id' => $cartCustomerId,
+                'customer_id' => $orderCustomerId,
+                'cart_customer_id' => $cartCustomerId,
+                'authenticated_customer_id' => $authenticatedCustomerId,
+                'checkout_mode' => (string) ($checkoutIdentity['checkout_mode'] ?? CheckoutIdentityService::MODE_GUEST),
                 'is_guest_checkout' => $isGuestCheckout,
                 'guest_email' => $guestEmail,
                 'shipping_address' => $checkoutData['shipping_address'],
@@ -58,10 +65,11 @@ class PlaceOrder extends FrontendController
                 'cart_summary' => \is_array($result['order_summary'] ?? null) ? $result['order_summary'] : [],
                 'is_retry_payment' => (bool) ($result['is_retry_payment'] ?? false),
             ]);
+            $this->customerSession->getSession()->save();
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('Order placed successfully.'),
+                'message' => __('订单提交成功。'),
                 'data' => [
                     'order_id' => (int) ($result['order_id'] ?? 0),
                     'increment_id' => (string) ($result['order_increment_id'] ?? ''),
@@ -126,6 +134,27 @@ class PlaceOrder extends FrontendController
     private function getCartIdentityService(): CartIdentityService
     {
         return $this->cartIdentityService ?? new CartIdentityService($this->customerSession);
+    }
+
+    private function getCheckoutIdentityService(): CheckoutIdentityService
+    {
+        return $this->checkoutIdentityService ?? \Weline\Framework\Manager\ObjectManager::getInstance(CheckoutIdentityService::class);
+    }
+
+    private function resolveCheckoutIdentity(
+        CartIdentityService $cartIdentityService,
+        int $cartCustomerId,
+        int $authenticatedCustomerId
+    ): array {
+        return $this->getCheckoutIdentityService()->resolve([
+            'checkout_mode' => (string) ($this->readRequestValue('checkout_mode') ?? ''),
+            'customer_id' => $cartCustomerId,
+            'cart_customer_id' => $cartCustomerId,
+            'authenticated_customer_id' => $authenticatedCustomerId,
+            'guest_email' => $this->readGuestEmail(),
+            'guest_allowed' => true,
+            'customer_allowed' => $authenticatedCustomerId > 0,
+        ]);
     }
 
     protected function readRequestValue(string $key): mixed

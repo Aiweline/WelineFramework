@@ -1007,8 +1007,11 @@ class AiSiteBuildQueue implements QueueInterface
                 continue;
             }
             $status = \trim((string)($row['status'] ?? ''));
-            if (!\in_array($status, ['pending', 'running', 'done'], true)) {
+            if (!\in_array($status, ['pending', 'queued', 'running', 'done', 'error', 'stop'], true)) {
                 continue;
+            }
+            if ($this->isStrictSupersedingQueueSlot($bizKey)) {
+                return $row;
             }
             if ($this->queueRowMatchesOperationToken($row, $operation, $executionToken)) {
                 return $row;
@@ -1043,6 +1046,17 @@ class AiSiteBuildQueue implements QueueInterface
         }
 
         return 0;
+    }
+
+    private function isStrictSupersedingQueueSlot(string $bizKey): bool
+    {
+        $bizKey = \trim($bizKey);
+        if ($bizKey === '') {
+            return false;
+        }
+
+        return \str_contains($bizKey, ':queue_slot:')
+            || \str_contains($bizKey, ':operation:');
     }
 
     /**

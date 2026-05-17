@@ -28,7 +28,7 @@ class Success extends BaseController
     {
         $orderId = (int) ($this->request->getParam('order_id') ?? 0);
         if (!$orderId) {
-            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->getMessageManager()->addError(__('缺少订单 ID。'));
             $this->redirect('weshop/cart');
             return '';
         }
@@ -53,7 +53,7 @@ class Success extends BaseController
         }
 
         if (!$order || $orderCustomerId !== $sessionCustomerId || $sessionCustomerId <= 0) {
-            $this->getMessageManager()->addError(__('The requested order could not be found.'));
+            $this->getMessageManager()->addError(__('未找到请求的订单。'));
             $this->redirect('weshop/cart');
             return '';
         }

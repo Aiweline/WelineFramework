@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace WeShop\Checkout\Api\Rest\V1;
 
+use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Checkout\Service\CheckoutPageDataService;
 use WeShop\Customer\Api\CustomerContextInterface;
 use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Framework\Manager\ObjectManager;
 
 class Checkout extends FrontendRestController
 {
     public function __construct(
         private readonly CustomerContextInterface $customerContext,
-        private readonly CheckoutPageDataService $checkoutPageDataService
+        private readonly CheckoutPageDataService $checkoutPageDataService,
+        private readonly ?CartIdentityService $cartIdentityService = null
     ) {
     }
 
@@ -24,12 +27,9 @@ class Checkout extends FrontendRestController
     public function postMethods(): string
     {
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
+        $isGuestCheckout = $customerId <= 0;
         if ($customerId <= 0) {
-            return $this->fetchJson([
-                'code' => 401,
-                'msg' => (string) __('Please log in first'),
-                'data' => $this->buildEmptyMethodsPayload(),
-            ]);
+            $customerId = $this->getCartIdentityService()->getCartCustomerId();
         }
 
         try {
@@ -39,6 +39,7 @@ class Checkout extends FrontendRestController
                 'shipping_method' => (string) ($this->readRequestValue('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->readRequestValue('payment_method') ?? ''),
                 'order_id' => (int) (($this->readRequestValue('order_id') ?? $this->readRequestValue('retry_order_id')) ?? 0),
+                'is_guest_checkout' => $isGuestCheckout,
             ]);
 
             return $this->fetchJson([
@@ -92,6 +93,11 @@ class Checkout extends FrontendRestController
         }
 
         return $this->request->getParam($key, null);
+    }
+
+    private function getCartIdentityService(): CartIdentityService
+    {
+        return $this->cartIdentityService ?? ObjectManager::getInstance(CartIdentityService::class);
     }
 
     /**

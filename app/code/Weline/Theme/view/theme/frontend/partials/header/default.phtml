@@ -724,7 +724,7 @@ $defaultNavItemsFactory = static function (): array {
                     <nav class="header-nav-links">
                         <ul class="nav-links-list" id="nav-links-list">
                             <li><a href="/deals"><lang>今日特价</lang></a></li>
-                            <li><a href="/video"><lang>Prime Video</lang></a></li>
+                            <li><a href="/video"><lang>会员视频</lang></a></li>
                             <li><a href="/registry"><lang>礼品心愿单</lang></a></li>
                             <li><a href="/gift-cards"><lang>礼品卡</lang></a></li>
                             <li><a href="/help"><lang>客户服务</lang></a></li>
@@ -783,7 +783,7 @@ $defaultNavItemsFactory = static function (): array {
                     // 如果没有 hook 数据，使用默认快捷方式
                 ?>
                     <li><a href="/deals"><i class="fas fa-bolt"></i> <lang>今日特价</lang></a></li>
-                    <li><a href="/video"><i class="fas fa-play"></i> <lang>Prime Video</lang></a></li>
+                    <li><a href="/video"><i class="fas fa-play"></i> <lang>会员视频</lang></a></li>
                     <li><a href="/registry"><i class="fas fa-gift"></i> <lang>礼品心愿单</lang></a></li>
                     <li><a href="/gift-cards"><i class="fas fa-credit-card"></i> <lang>礼品卡</lang></a></li>
                     <li><a href="/help"><i class="fas fa-question-circle"></i> <lang>客户服务</lang></a></li>
@@ -3186,15 +3186,26 @@ textarea::-webkit-scrollbar-thumb:hover,
 
         // 导航链接"更多"按钮功能
         const categoriesList = document.getElementById('categories-list');
-        const categoriesOverflowWrapper = document.getElementById('categories-overflow-wrapper');
-        const categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
-        const categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');
+        let categoriesOverflowWrapper = document.getElementById('categories-overflow-wrapper');
+        let categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
+        let categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');
         const navLinksList = document.getElementById('nav-links-list');
         const navMoreWrapper = document.getElementById('nav-more-wrapper');
         const navMoreBtn = document.getElementById('nav-more-btn');
         const navMoreDropdown = document.getElementById('nav-more-dropdown');
         const headerNavFill = document.getElementById('header-nav-fill');
         const headerMainNav = document.querySelector('.header-main-nav');
+
+        if (categoriesList && !categoriesOverflowWrapper) {
+            categoriesOverflowWrapper = document.createElement('li');
+            categoriesOverflowWrapper.className = 'categories-overflow-wrapper';
+            categoriesOverflowWrapper.id = 'categories-overflow-wrapper';
+            categoriesOverflowWrapper.style.display = 'none';
+            categoriesOverflowWrapper.innerHTML = '<button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="更多分类" aria-expanded="false" type="button"><span>更多</span><i class="fas fa-chevron-down"></i></button><ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true"></ul>';
+            categoriesList.appendChild(categoriesOverflowWrapper);
+            categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
+            categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');
+        }
         
         if (navLinksList && navMoreWrapper && navMoreBtn && navMoreDropdown && headerNavFill) {
             let resizeTimeout;

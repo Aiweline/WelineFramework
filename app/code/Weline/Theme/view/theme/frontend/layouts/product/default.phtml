@@ -14,12 +14,12 @@
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
- * @param showSidebar {default=true,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
+ * @param showSidebar {default=false,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
  * @param showRelatedProducts {default=true,name="是否显示相关产品",description="是否显示相关产品推荐区域"}
  * @param showTabs {default=true,name="是否显示详情标签",description="是否显示产品详情标签区域"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
- * @param layout.rightsider {default=1,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
+ * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
  *
  * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
  * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
@@ -107,24 +107,24 @@ $this->assign('meta', $meta);
 
                         <!-- ========== 产品侧边栏区域 ========== -->
                         <if condition="meta.showSidebar">
-                            <w:slot id="product-sidebar"
-                                    name="产品侧边栏"
-                                    accept="related-products,up-sell,cross-sell,recently-viewed,sidebar-ads"
-                                    multiple="true"
-                                    position="sidebar"
-                                    wrapper="aside"
-                                    class="product-detail-layout__sidebar">
-                                <w:hook>Weline_Theme::frontend::layouts::product::sidebar-before</w:hook>
-                                <div class="product-detail-layout__placeholder" data-placeholder="product-sidebar">
-                                    <div class="product-detail-layout__placeholder-icon">
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
+                            <aside class="product-detail-layout__sidebar">
+                                <w:slot id="product-sidebar"
+                                        name="产品侧边栏"
+                                        accept="related-products,up-sell,cross-sell,recently-viewed,sidebar-ads"
+                                        multiple="true"
+                                        position="sidebar">
+                                    <w:hook>Weline_Theme::frontend::layouts::product::sidebar-before</w:hook>
+                                    <div class="product-detail-layout__placeholder" data-placeholder="product-sidebar">
+                                        <div class="product-detail-layout__placeholder-icon">
+                                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </div>
+                                        <span class="product-detail-layout__placeholder-text"><lang>侧边栏区域 - 拖拽推荐部件到此处</lang></span>
                                     </div>
-                                    <span class="product-detail-layout__placeholder-text"><lang>侧边栏区域 - 拖拽推荐部件到此处</lang></span>
-                                </div>
-                                <w:hook>Weline_Theme::frontend::layouts::product::sidebar-after</w:hook>
-                            </w:slot>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::sidebar-after</w:hook>
+                                </w:slot>
+                            </aside>
                         </if>
                     </div>
                 </div>
@@ -160,7 +160,7 @@ $this->assign('meta', $meta);
             <if condition="meta.showRelatedProducts">
                 <w:slot id="product-related"
                         name="相关产品推荐"
-                        accept="related-products,you-may-like,recently-viewed,cross-sell,up-sell,product-carousel"
+                        accept="related-products,you-may-like,recently-viewed,cross-sell,up-sell,product-carousel,bestsellers"
                         multiple="true"
                         position="content"
                         wrapper="section"
@@ -264,6 +264,20 @@ $this->assign('meta', $meta);
         max-width: var(--layout-max-width, 1600px);
         margin: 0 auto;
         padding: 0 var(--spacing-4, 1.5rem);
+    }
+
+    /*
+     * Some product-detail render paths currently nest the global footer
+     * under the detail container in the final DOM. When that happens,
+     * force the footer to break out of the centered container and span
+     * the viewport width so the visible layout stays correct.
+     */
+    .product-detail-layout__container > .weline-footer,
+    .product-detail-layout__container > footer.font-display {
+        width: 100vw;
+        max-width: 100vw;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
     }
 
     /* ---- 占位符 ---- */

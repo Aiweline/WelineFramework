@@ -15,7 +15,7 @@ class CashOnDelivery implements PaymentProviderInterface
             'status' => 'pending',
             'requires_action' => false,
             'redirect_url' => '',
-            'instructions' => (string) __('Collect payment from the customer when the shipment is delivered.'),
+            'instructions' => (string) __('配送送达时向客户收款。'),
         ];
     }
 

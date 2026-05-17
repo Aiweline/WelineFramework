@@ -8,7 +8,7 @@ This file is an index only. The single source of AI rules is:
 
 ## Read First
 
-1. **AI general rules** -> `dev/ai/global-constraints.md`
+1. **AI general rules** -> `dev/ai/global-constraints.md`（含第 8 节：**layout 仅默认骨架/占位/挂载点，禁止交互与业务逻辑**）
 2. **Architecture diagrams** -> `dev/ai/diagrams/00-INDEX.txt`
 3. **Module docs** -> `dev/ai/diagrams/08-module-docs-index.txt`
 4. **Skills** -> `dev/ai/skills/_index.md` (on demand)

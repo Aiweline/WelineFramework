@@ -193,7 +193,9 @@ class AiSiteBuildTaskService
 
         if ($signature === '' || (string)($existingBlueprint['signature'] ?? '') !== $signature) {
             $scope['build_blueprint'] = $blueprint;
-            $scope['build_tasks'] = $this->buildDefaultTaskState($blueprint);
+            $scope['build_tasks'] = $this->canPreserveExistingTaskLedgerForBlueprint($blueprint, $existingTasks)
+                ? $this->mergeTaskStateWithBlueprint($blueprint, $existingTasks)
+                : $this->buildDefaultTaskState($blueprint);
             return $scope;
         }
 
@@ -505,6 +507,28 @@ class AiSiteBuildTaskService
         }
 
         return $scope;
+    }
+
+    /**
+     * Preserve the mutable task ledger when only the generated blueprint signature
+     * drifted but the executable task key set did not. Workbench snapshots must not
+     * turn terminal done/failed state back into pending unless a real task set change
+     * happened or an explicit rebuild cleared the ledger first.
+     *
+     * @param array<string, mixed> $blueprint
+     * @param array<string, mixed> $existingTasks
+     */
+    private function canPreserveExistingTaskLedgerForBlueprint(array $blueprint, array $existingTasks): bool
+    {
+        if ($existingTasks === []) {
+            return false;
+        }
+        $newTaskKeys = \array_keys($this->buildDefaultTaskState($blueprint));
+        $existingTaskKeys = \array_keys($this->extractTaskState(['build_tasks' => $existingTasks]));
+        \sort($newTaskKeys);
+        \sort($existingTaskKeys);
+
+        return $newTaskKeys !== [] && $newTaskKeys === $existingTaskKeys;
     }
 
     /**

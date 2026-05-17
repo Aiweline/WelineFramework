@@ -1,19 +1,20 @@
 ﻿"Decrease quantity","Decrease quantity"
 "Increase quantity","Increase quantity"
 "Remove item","Remove item"
-"Your cart is empty","Your cart is empty"
-"Start Shopping","Start Shopping"
-请求方法不允许,"Request method not allowed"
-请先登录,"Please log in first"
-无效的产品ID,"Invalid Product ID"
-产品不存在,"Product does not exist"
-产品已下架,"Product Discontinued"
-请选择产品规格,"Select product specifications"
-所选规格组合不可用,"The selected specification combination is not available"
-"库存不足，当前库存: %{1}","Insufficient inventory, current stock: %{1}"
-已成功加入购物车,"Successfully added to cart"
-"添加购物车失败: %{1}","Add to Cart Failed: %{1}"
-"获取产品选项失败: %{1}","Failed to retrieve product options: %{1}"
+购物车是空的,购物车是空的
+开始购物,开始购物
+"Direct browser cart REST API is deprecated. Use the frontend worker API.","Direct browser cart REST API is deprecated. Use the frontend worker API."
+"Request method is not allowed.","Request method is not allowed."
+"Invalid product ID.","Invalid product ID."
+"Product does not exist.","Product does not exist."
+"Product is disabled.","Product is disabled."
+"Please choose product options.","Please choose product options."
+"The selected product option combination is unavailable.","The selected product option combination is unavailable."
+"Insufficient stock. Current stock: %{1}","Insufficient stock. Current stock: %{1}"
+"Added to cart successfully.","Added to cart successfully."
+"Add to cart failed: %{1}","Add to cart failed: %{1}"
+"Unable to load product options: %{1}","Unable to load product options: %{1}"
+"Direct browser cart API is deprecated. Use the frontend worker API.","Direct browser cart API is deprecated. Use the frontend worker API."
 Product,Product
 "Please login first","Please login first"
 "Invalid cart item","Invalid cart item"
@@ -53,8 +54,15 @@ Product,Product
 迷你购物车已加载,"Mini Cart Loaded"
 "在迷你购物车数据加载完成后触发，用于 AJAX 请求响应。","Triggered after the mini cart data finishes loading, used for AJAX request responses."
 "Cart 查询器不支持的操作：%{1}","Operations not supported by Cart query: %{1}"
+"Cart count loaded successfully.","Cart count loaded successfully."
 购物车查询,"Cart query"
 提供购物车读取与总额计算能力,"Provides shopping cart reading and total calculation capabilities"
+"Frontend cart add operation","Frontend cart add operation"
+"Frontend product options operation","Frontend product options operation"
+"Frontend mini cart items operation","Frontend mini cart items operation"
+"Frontend cart count operation","Frontend cart count operation"
+"Frontend cart update operation","Frontend cart update operation"
+"Frontend cart remove operation","Frontend cart remove operation"
 获取客户购物车商品列表,"Get customer shopping cart product list"
 计算客户购物车总额,"Calculate customer cart total"
 清空客户购物车,"Clear customer shopping cart"
@@ -100,18 +108,60 @@ Product,Product
 购物车页面侧边栏扩展区域，可用于展示促销信息、推荐商品等。,"Cart page sidebar extension area, can be used to display promotional information, recommended items, etc."
 空购物车状态,"Empty cart status"
 空购物车状态显示区域，可自定义空购物车提示。,"Empty cart status display area, customizable empty cart prompt."
+购物车页面内容前,购物车页面内容前
+在购物车页面主体内容开始前渲染内容。,在购物车页面主体内容开始前渲染内容。
+购物车页面内容后,购物车页面内容后
+在购物车页面主体内容结束后渲染内容。,在购物车页面主体内容结束后渲染内容。
+购物车商品区域后,购物车商品区域后
+在购物车商品列表区域之后、摘要区域之前渲染内容。,在购物车商品列表区域之后、摘要区域之前渲染内容。
+购物车推荐商品前,购物车推荐商品前
+在购物车推荐商品区域之前渲染内容。,在购物车推荐商品区域之前渲染内容。
+购物车推荐商品后,购物车推荐商品后
+在购物车推荐商品区域之后渲染内容。,在购物车推荐商品区域之后渲染内容。
+购物车摘要前,购物车摘要前
+在购物车订单摘要卡片内容前渲染内容。,在购物车订单摘要卡片内容前渲染内容。
+购物车摘要后,购物车摘要后
+在购物车订单摘要卡片内容后渲染内容。,在购物车订单摘要卡片内容后渲染内容。
+购物车摘要行前,购物车摘要行前
+在购物车摘要金额行之前渲染内容。,在购物车摘要金额行之前渲染内容。
+购物车摘要行后,购物车摘要行后
+在购物车摘要金额行之后渲染内容。,在购物车摘要金额行之后渲染内容。
+购物车小计前,购物车小计前
+在购物车小计行之前渲染内容。,在购物车小计行之前渲染内容。
+购物车小计后,购物车小计后
+在购物车小计行之后渲染内容。,在购物车小计行之后渲染内容。
+购物车配送前,购物车配送前
+在购物车配送金额行之前渲染内容。,在购物车配送金额行之前渲染内容。
+购物车配送后,购物车配送后
+在购物车配送金额行之后渲染内容。,在购物车配送金额行之后渲染内容。
+购物车折扣前,购物车折扣前
+在购物车折扣金额行之前渲染内容。,在购物车折扣金额行之前渲染内容。
+购物车折扣后,购物车折扣后
+在购物车折扣金额行之后渲染内容。,在购物车折扣金额行之后渲染内容。
+购物车税费前,购物车税费前
+在购物车税费金额行之前渲染内容。,在购物车税费金额行之前渲染内容。
+购物车税费后,购物车税费后
+在购物车税费金额行之后渲染内容。,在购物车税费金额行之后渲染内容。
+购物车总计前,购物车总计前
+在购物车总计金额行之前渲染内容。,在购物车总计金额行之前渲染内容。
+购物车总计后,购物车总计后
+在购物车总计金额行之后渲染内容。,在购物车总计金额行之后渲染内容。
 迷你购物车头部之前,"Before Mini Cart Header"
 在迷你购物车头部之前插入内容。,"Insert content before the mini cart header."
 迷你购物车头部之后,"After Mini Cart Header"
 在迷你购物车头部之后插入内容，如促销信息横幅。,"Insert content after the mini cart header, such as a promotional banner."
 迷你购物车商品列表前,"Before Mini Cart Product List"
 在迷你购物车商品列表前渲染内容，如免邮提示。,"Render content before the mini cart product list, such as free shipping tips."
+迷你购物车免邮进度,迷你购物车免邮进度
+在迷你购物车商品列表前渲染免邮或促销进度内容。,在迷你购物车商品列表前渲染免邮或促销进度内容。
 迷你购物车商品列表后,"After Mini Cart Product List"
 在迷你购物车商品列表后渲染内容，如推荐商品。,"Render content after the mini cart product list, such as recommended products."
 迷你购物车底部之前,"Before Mini Cart Footer"
 在迷你购物车底部之前插入内容。,"Insert content before the mini cart footer."
 迷你购物车底部之后,"After Mini Cart Footer"
 在迷你购物车底部之后插入内容。,"Insert content after the mini cart footer."
+迷你购物车快捷支付,迷你购物车快捷支付
+在迷你购物车底部操作后渲染快捷支付或外部支付入口。,在迷你购物车底部操作后渲染快捷支付或外部支付入口。
 迷你购物车空状态,"Mini Cart Empty State"
 迷你购物车空状态显示区域。,"Mini Cart Empty State Display Area."
 "WeShop Header 迷你购物车","WeShop Header mini shopping cart"
@@ -127,13 +177,10 @@ Product,Product
 购物车侧边栏（兼容）,"Cart sidebar (compatible)"
 迷你购物车商品列表前（兼容）,"Before Mini Cart Product List (Compatible)"
 迷你购物车商品列表后（兼容）,"After Mini Cart Product List (Compatible)"
-"Invalid product ID.","Invalid product ID."
-"Product does not exist.","Product does not exist."
 "Product is unavailable.","Product is unavailable."
 "Please select product options.","Please select product options."
 "The selected product configuration is unavailable.","The selected product configuration is unavailable."
 "Insufficient stock. Available quantity: %{1}","Insufficient stock. Available quantity: %{1}"
-"Added to cart successfully.","Added to cart successfully."
 "Product options loaded successfully.","Product options loaded successfully."
 "Invalid cart item.","Invalid cart item."
 "Invalid quantity.","Invalid quantity."
@@ -145,8 +192,8 @@ Option,Option
 购物车项不存在,"Cart item does not exist"
 无权更新此购物车项,"No permission to update this cart item"
 无权移除此购物车项,"No permission to remove this cart item"
-Cart,Cart
-"Open Cart","Open Cart"
+购物车,购物车
+打开购物车,打开购物车
 加入购物车,"Add to Cart"
 缺货,"Out of Stock"
 选择规格,"Select Specification"
@@ -158,27 +205,47 @@ Cart,Cart
 添加购物车失败,"Failed to add to cart"
 已添加,Added
 "Shopping Cart","Shopping Cart"
-"%{1} items in your cart","%{1} items in your cart"
+"Deselect all items","Deselect all items"
 Price,Price
+"Your cart is empty","Your cart is empty"
+"Continue Shopping","Continue Shopping"
+"In Stock","In Stock"
+"Low Stock","Low Stock"
+"Eligible for FREE Shipping","Eligible for FREE Shipping"
+Delete,Delete
+"Save for later","Save for later"
+"Order Summary","Order Summary"
+"Items (%{1}):","Items (%{1}):"
+"Shipping & handling:","Shipping & handling:"
+Discount:,Discount:
+"Estimated tax:","Estimated tax:"
+"Order Total:","Order Total:"
+"Have a promo code?","Have a promo code?"
+"Enter code","Enter code"
+Apply,Apply
+"Proceed to Checkout","Proceed to Checkout"
+"You May Also Like","You May Also Like"
+"Add to Cart","Add to Cart"
+"Error updating cart","Error updating cart"
+"Error removing item","Error removing item"
+"Save for later is not available through the frontend worker API yet.","Save for later is not available through the frontend worker API yet."
+"Promo code is not available through the frontend worker API yet.","Promo code is not available through the frontend worker API yet."
+"%{1} items in your cart","%{1} items in your cart"
 Quantity,Quantity
 Total,Total
 "Sold by","Sold by"
-"In Stock","In Stock"
 "Out of Stock","Out of Stock"
-"Save for later","Save for later"
 Remove,Remove
-"Continue Shopping","Continue Shopping"
-"Order Summary","Order Summary"
 "Enter coupon code","Enter coupon code"
-Apply,Apply
 Subtotal,Subtotal
 Shipping,Shipping
 "Calculated at checkout","Calculated at checkout"
 Tax,Tax
-"Proceed to Checkout","Proceed to Checkout"
 "Secure Checkout","Secure Checkout"
 "Free Returns","Free Returns"
-"View Cart","View Cart"
+"Start Shopping","Start Shopping"
+查看购物车,查看购物车
 "Close cart","Close cart"
-"Shipping and taxes calculated at checkout","Shipping and taxes calculated at checkout"
-Checkout,Checkout
+小计,小计
+运费和税费将在结算时计算,运费和税费将在结算时计算
+去结算,去结算

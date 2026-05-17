@@ -151,8 +151,8 @@ class ShippingService
         return [
             'flat_rate' => [
                 'code' => 'flat_rate',
-                'name' => (string) __('Flat Rate'),
-                'description' => (string) __('Standard delivery with a fixed shipping fee.'),
+                'name' => (string) __('固定运费'),
+                'description' => (string) __('按固定运费配送。'),
                 'enabled' => true,
                 'is_default' => true,
                 'sort_order' => 10,
@@ -163,8 +163,8 @@ class ShippingService
             ],
             'free_shipping' => [
                 'code' => 'free_shipping',
-                'name' => (string) __('Free Shipping'),
-                'description' => (string) __('Free delivery for eligible orders.'),
+                'name' => (string) __('免运费'),
+                'description' => (string) __('符合条件的订单免费配送。'),
                 'enabled' => true,
                 'is_default' => false,
                 'sort_order' => 20,
@@ -175,8 +175,8 @@ class ShippingService
             ],
             'local_pickup' => [
                 'code' => 'local_pickup',
-                'name' => (string) __('Local Pickup'),
-                'description' => (string) __('Pick up your order at the selected local location.'),
+                'name' => (string) __('到店自提'),
+                'description' => (string) __('到选择的本地门店自提订单。'),
                 'enabled' => true,
                 'is_default' => false,
                 'sort_order' => 30,
@@ -188,7 +188,7 @@ class ShippingService
             'dhl' => [
                 'code' => 'dhl',
                 'name' => (string) __('DHL'),
-                'description' => (string) __('DHL carrier integration (sandbox-ready, disabled by default).'),
+                'description' => (string) __('DHL 承运商集成（沙箱可用，默认关闭）。'),
                 'enabled' => false,
                 'is_default' => false,
                 'sort_order' => 40,
@@ -200,7 +200,7 @@ class ShippingService
             'fedex' => [
                 'code' => 'fedex',
                 'name' => (string) __('FedEx'),
-                'description' => (string) __('FedEx carrier integration (sandbox-ready, disabled by default).'),
+                'description' => (string) __('FedEx 承运商集成（沙箱可用，默认关闭）。'),
                 'enabled' => false,
                 'is_default' => false,
                 'sort_order' => 50,
@@ -451,16 +451,16 @@ class ShippingService
             (int) ($service['estimated_days_max'] ?? 0)
         );
         if ($estimatedDays !== '') {
-            $parts[] = (string) __('Estimated delivery: %{1}.', [$estimatedDays]);
+            $parts[] = (string) __('预计送达：%{1}。', [$estimatedDays]);
         }
 
         if (!empty($service['is_free_shipping'])) {
-            $parts[] = (string) __('Free shipping available for this service.');
+            $parts[] = (string) __('该服务支持免运费。');
         }
 
         if ($parts === []) {
-            $serviceName = (string) ($service['service_name'] ?? $service['service_code'] ?? __('shipping service'));
-            return (string) __('Shipping service provided by %{1}.', [$serviceName]);
+            $serviceName = (string) ($service['service_name'] ?? $service['service_code'] ?? __('配送服务'));
+            return (string) __('由 %{1} 提供配送服务。', [$serviceName]);
         }
 
         return implode(' ', $parts);
@@ -476,7 +476,7 @@ class ShippingService
         }
 
         if ($minDays > 0 && $maxDays > 0 && $minDays !== $maxDays) {
-            return (string) __('%{1}-%{2} days', [$minDays, $maxDays]);
+            return (string) __('%{1}-%{2} 天', [$minDays, $maxDays]);
         }
 
         $days = max($minDays, $maxDays);
@@ -484,7 +484,7 @@ class ShippingService
             return '';
         }
 
-        return (string) __('%{1} day(s)', [$days]);
+        return (string) __('%{1} 天', [$days]);
     }
 
     /**

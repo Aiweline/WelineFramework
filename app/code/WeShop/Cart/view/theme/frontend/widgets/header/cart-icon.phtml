@@ -38,12 +38,12 @@ $isDrawer = $triggerAction === 'drawer';
 <button type="button" 
         class="header-cart-icon" 
         data-action="open-mini-cart"
-        aria-label="<?= __('Open Cart') ?>"
+        aria-label="<?= __('打开购物车') ?>"
         aria-haspopup="dialog">
 <?php else: ?>
 <a href="<?= $this->getUrl('cart') ?>" 
    class="header-cart-icon"
-   aria-label="<?= __('View Cart') ?>">
+   aria-label="<?= __('查看购物车') ?>">
 <?php endif; ?>
 
     <span class="header-cart-icon__wrapper">
@@ -58,7 +58,7 @@ $isDrawer = $triggerAction === 'drawer';
     </span>
     
     <?php if ($showLabel): ?>
-        <span class="header-cart-icon__label"><?= __('Cart') ?></span>
+        <span class="header-cart-icon__label"><?= __('购物车') ?></span>
     <?php endif; ?>
 
 <?php if ($isDrawer): ?>

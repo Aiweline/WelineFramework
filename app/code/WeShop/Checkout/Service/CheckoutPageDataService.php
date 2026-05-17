@@ -226,9 +226,12 @@ class CheckoutPageDataService
         bool $includeSummaryPreview = false
     ): array
     {
+        $isGuestCheckout = array_key_exists('is_guest_checkout', $checkoutData)
+            ? (bool) $checkoutData['is_guest_checkout']
+            : CartIdentityService::isGuestCartCustomerId($customerId);
         $selectedAddress = $this->resolveSelectedShippingAddress(
             $savedAddresses,
-            (int) ($checkoutData['shipping_address_id'] ?? 0)
+            $isGuestCheckout ? 0 : (int) ($checkoutData['shipping_address_id'] ?? 0)
         );
         $selectedShippingAddressId = (int) ($selectedAddress['address_id'] ?? 0);
         $inlineAddress = \is_array($checkoutData['shipping_address'] ?? null) ? $checkoutData['shipping_address'] : [];
@@ -236,6 +239,12 @@ class CheckoutPageDataService
         $shippingContext = [
             'area' => 'frontend',
             'currency' => $this->resolveCheckoutCurrency(),
+            'customer_id' => $customerId,
+            'cart_customer_id' => (int) ($checkoutData['cart_customer_id'] ?? $customerId),
+            'authenticated_customer_id' => (int) ($checkoutData['authenticated_customer_id'] ?? 0),
+            'checkout_mode' => $isGuestCheckout ? 'guest' : 'customer',
+            'is_guest_checkout' => $isGuestCheckout,
+            'guest_email' => (string) ($checkoutData['guest_email'] ?? $checkoutData['email'] ?? ''),
         ] + $this->resolveShippingContext($resolvedAddress !== [] ? $resolvedAddress : $selectedAddress);
 
         $shippingMethods = $this->checkoutService->getCheckoutShippingMethods($customerId, $shippingContext);
@@ -250,7 +259,7 @@ class CheckoutPageDataService
         $prioritizedPaymentMethods = $this->prioritizeSelectedMethod(
             $this->mapPaymentMethods($this->filterGuestPaymentMethods(
                 $this->checkoutService->getCheckoutPaymentMethods($customerId, $shippingContext),
-                CartIdentityService::isGuestCartCustomerId($customerId)
+                $isGuestCheckout
             )),
             (string) ($checkoutData['payment_method'] ?? '')
         );
@@ -270,6 +279,8 @@ class CheckoutPageDataService
         $previewCheckoutData['shipping_address'] = $resolvedAddress !== [] ? $resolvedAddress : $selectedAddress;
         $previewCheckoutData['shipping_method'] = $this->resolveSelectedMethodCode($prioritizedShippingMethods);
         $previewCheckoutData['payment_method'] = $this->resolveSelectedMethodCode($prioritizedPaymentMethods);
+        $previewCheckoutData['checkout_mode'] = $isGuestCheckout ? 'guest' : 'customer';
+        $previewCheckoutData['is_guest_checkout'] = $isGuestCheckout;
 
         $payload['cart_summary'] = $this->normalizeSummary(
             $this->checkoutService->previewCheckoutSummary($customerId, $previewCheckoutData)
@@ -359,7 +370,7 @@ class CheckoutPageDataService
                 $result[] = [
                     'code' => $code,
                     'name' => $name,
-                    'description' => (string) ($method['description'] ?? __('Available shipping option: %{1}', [$name])),
+                    'description' => (string) ($method['description'] ?? __('可用配送方式：%{1}', [$name])),
                     'price' => (float) ($method['price'] ?? 0),
                     'is_default' => (bool) ($method['is_default'] ?? $isFirst),
                     'sort_order' => (int) ($method['sort_order'] ?? $sortOrder),
@@ -375,7 +386,7 @@ class CheckoutPageDataService
             $result[] = [
                 'code' => $code,
                 'name' => $label,
-                'description' => (string) __('Available shipping option: %{1}', [$label]),
+                'description' => (string) __('可用配送方式：%{1}', [$label]),
                 'price' => 0.0,
                 'is_default' => $isFirst,
                 'sort_order' => $sortOrder,
@@ -409,7 +420,8 @@ class CheckoutPageDataService
     protected function buildCountries(): array
     {
         $countries = [];
-        foreach ($this->i18n->getCountries('en') as $code => $name) {
+        $displayLocale = \Weline\Framework\Http\Cookie::getLangLocal() ?: 'zh_Hans_CN';
+        foreach ($this->i18n->getCountries($displayLocale) as $code => $name) {
             $countries[] = [
                 'code' => (string) $code,
                 'name' => (string) $name,
@@ -547,20 +559,20 @@ class CheckoutPageDataService
     protected function resolvePaymentFlowLabel(string $flow): string
     {
         return match ($flow) {
-            'redirect' => (string) __('Redirect after order placement'),
-            'offline' => (string) __('Pay after order creation'),
-            'offline_collection' => (string) __('Pay on delivery'),
-            default => (string) __('Pay during checkout'),
+            'redirect' => (string) __('下单后跳转支付'),
+            'offline' => (string) __('下单后支付'),
+            'offline_collection' => (string) __('送达后付款'),
+            default => (string) __('结账时支付'),
         };
     }
 
     protected function resolvePaymentBadge(string $code, string $flow): string
     {
         return match (strtolower($code)) {
-            'paypal' => (string) __('Popular'),
-            'manual_transfer' => (string) __('Offline'),
-            'cash_on_delivery' => (string) __('Doorstep'),
-            default => $flow === 'redirect' ? (string) __('Redirect') : '',
+            'paypal' => (string) __('常用'),
+            'manual_transfer' => (string) __('线下'),
+            'cash_on_delivery' => (string) __('送达收款'),
+            default => $flow === 'redirect' ? (string) __('跳转支付') : '',
         };
     }
 
@@ -582,8 +594,8 @@ class CheckoutPageDataService
         }
 
         return match (strtolower($code)) {
-            'paypal' => (string) __('You will be redirected to PayPal after placing the order to complete payment securely.'),
-            'cash_on_delivery' => (string) __('Prepare the order amount for the courier when your shipment arrives.'),
+            'paypal' => (string) __('下单后将跳转到 PayPal 安全完成支付。'),
+            'cash_on_delivery' => (string) __('请在配送到达时准备好订单金额。'),
             default => trim((string) ($method['description'] ?? '')),
         };
     }

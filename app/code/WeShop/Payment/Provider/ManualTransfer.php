@@ -15,7 +15,7 @@ class ManualTransfer implements PaymentProviderInterface
     {
         $instructions = $this->readConfigString($context, 'instructions');
         if ($instructions === '') {
-            $instructions = (string) __('Please complete a manual bank transfer after the order is placed.');
+            $instructions = (string) __('请在订单创建后完成手动银行转账。');
         }
 
         $amount = $this->readOrderAmount($order, $paymentData);

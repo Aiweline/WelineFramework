@@ -8,15 +8,17 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ProductPageLayoutNormalizer;
 use Weline\Theme\Service\ThemeContextService;
 
 class Upgrade implements InstallInterface
 {
-    public const VERSION = '1.0.3';
+    public const VERSION = '1.0.4';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
         $this->backfillDefaultAreaThemes();
+        $this->relocateProductBestsellersFromSidebar();
     }
 
     public function getVersion(): string
@@ -57,6 +59,15 @@ class Upgrade implements InstallInterface
         }
 
         return $updates;
+    }
+
+    private function relocateProductBestsellersFromSidebar(): void
+    {
+        try {
+            ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
+                ->relocateBestsellersInDatabase();
+        } catch (\Throwable) {
+        }
     }
 
     private function backfillDefaultAreaThemes(): void
