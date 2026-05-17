@@ -3,40 +3,33 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Controller\Api;
 
-use Weline\Framework\App\Controller\FrontendRestController;
-use Weline\Framework\Service\Query\FrameworkQueryService;
+use Weline\Framework\App\Controller\FrontendController;
 
-class Query extends FrontendRestController
+class Query extends FrontendController
 {
-    public function __construct(
-        private readonly FrameworkQueryService $queryService
-    ) {
-    }
-
     public function postIndex(): string
     {
-        try {
-            $body = $this->request->getBodyParams(true);
-            if (!\is_array($body)) {
-                $body = [];
-            }
-            $provider = (string)($body['provider'] ?? '');
-            $operation = (string)($body['operation'] ?? '');
-            $params = (array)($body['params'] ?? []);
+        return $this->deprecatedJsonQueryResponse();
+    }
 
-            $result = $this->queryService->execute($provider, $operation, $params, 'frontend');
-            return $this->fetch([
-                'code' => 200,
-                'msg' => __('查询成功'),
-                'data' => $result,
-            ]);
-        } catch (\Throwable $throwable) {
-            return $this->fetch([
-                'code' => 400,
-                'msg' => __('查询失败：%{1}', $throwable->getMessage()),
-                'data' => '',
-            ]);
-        }
+    private function deprecatedJsonQueryResponse(): string
+    {
+        $response = $this->request->getResponse();
+        $response->setHttpResponseCode(410);
+        $response->setHeader('Content-Type', 'application/json; charset=utf-8');
+        $response->setHeader('Cache-Control', 'no-store');
+
+        $json = \json_encode([
+            'code' => 410,
+            'msg' => (string)__('Frontend JSON query is deprecated. Use the Weline frontend worker API.'),
+            'data' => [
+                'deprecated' => true,
+                'browser_direct' => false,
+                'replacement' => 'Weline.Api.resource()/graph()/stream()',
+                'implementation' => '/api/framework/query-bin',
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+
+        return $json === false ? '{}' : $json;
     }
 }
-

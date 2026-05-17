@@ -921,6 +921,9 @@ class SlotRendererService
             }
         }
 
+        $layout = ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
+            ->normalizeLayoutForRender($pageType, $layout);
+
         // 仅已发布状态写入缓存；草稿不缓存
         if (!$isDraft) {
             $this->layoutCache[$cacheKey] = $layout;

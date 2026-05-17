@@ -43,6 +43,30 @@ return [
         'description' => __('在创建订单之后触发，允许其他模块执行后续操作，如扣减库存、发送通知、发起支付等。'),
         'doc' => 'checkout/创建订单后.md',
     ],
+
+    'Weline_Checkout::checkout::identity::resolve::before' => [
+        'name' => __('结账身份解析前'),
+        'description' => __('在标准化账户结账/匿名结账选择之前触发，允许模块调整身份上下文。'),
+        'doc' => 'checkout/identity-resolve-before.md',
+    ],
+
+    'Weline_Checkout::checkout::identity::resolve::after' => [
+        'name' => __('结账身份解析后'),
+        'description' => __('在标准化账户结账/匿名结账选择之后触发，允许模块补充或覆盖身份结果。'),
+        'doc' => 'checkout/identity-resolve-after.md',
+    ],
+
+    'Weline_Checkout::checkout::guest::validate::before' => [
+        'name' => __('匿名结账验证前'),
+        'description' => __('在匿名结账邮箱和上下文验证之前触发，允许模块加入额外验证输入。'),
+        'doc' => 'checkout/guest-validate-before.md',
+    ],
+
+    'Weline_Checkout::checkout::guest::validate::after' => [
+        'name' => __('匿名结账验证后'),
+        'description' => __('在匿名结账邮箱和上下文验证之后触发，允许模块追加错误或执行通过后的处理。'),
+        'doc' => 'checkout/guest-validate-after.md',
+    ],
     
     // ========== 订单事件 ==========
     

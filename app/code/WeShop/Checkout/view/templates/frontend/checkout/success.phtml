@@ -1,218 +1,566 @@
 <?php
 /**
- * WeShop Default Theme - Order Success Page
- * 订单确认成功页模板
+ * WeShop default checkout success page.
  */
 $order = $this->getData('order') ?? [];
 $orderItems = $this->getData('order_items') ?? [];
 $shippingAddress = $this->getData('shipping_address') ?? [];
 $paymentMethod = $this->getData('payment_method') ?? [];
 $recommendations = $this->getData('recommendations') ?? [];
+
+$formatSuccessPrice = function (mixed $amount): string {
+    $amount = (float) $amount;
+    if (method_exists($this, 'formatPrice')) {
+        $formatted = trim((string) $this->formatPrice($amount));
+        if ($formatted !== '') {
+            return $formatted;
+        }
+    }
+
+    return '¥' . number_format($amount, 2);
+};
+
+$createdAt = (string) ($order['created_at'] ?? '');
+$placedAt = $createdAt !== '' ? date('Y年n月j日', strtotime($createdAt)) : date('Y年n月j日');
+$orderNumber = (string) ($order['increment_id'] ?? '');
 ?>
-<main class="flex-1 w-full max-w-[1000px] mx-auto p-4 md:p-6 lg:p-8">
-    <w:hook name="WeShop_Checkout::success::before"/>
-    
-    <!-- Success Header -->
-    <div class="text-center mb-12">
-        <div class="flex justify-center mb-6">
-            <div class="relative">
-                <div class="w-24 h-24 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center animate-scale-up">
-                    <span class="material-symbols-outlined text-5xl text-green-600 dark:text-green-400" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-                </div>
-                <div class="absolute -bottom-2 -right-2 bg-primary text-white rounded-full p-2">
-                    <span class="material-symbols-outlined text-xl">local_shipping</span>
-                </div>
-            </div>
+<main class="weshop-success-page">
+    <w:hook name="WeShop_Checkout::frontend::layouts::checkout-success::before"/>
+
+    <section class="weshop-success-hero">
+        <div class="weshop-success-mark" aria-hidden="true">
+            <span class="material-symbols-outlined">check_circle</span>
         </div>
-        <h1 class="text-3xl font-bold text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Order Confirmed!') ?></h1>
-        <p class="text-lg text-text-secondary-light dark:text-text-secondary-dark mb-4"><?= __('Thank you for your purchase') ?></p>
-        <p class="text-text-secondary-light dark:text-text-secondary-dark">
-            <?= __('Order Number:') ?> <span class="font-bold text-text-primary-light dark:text-text-primary-dark">#<?= htmlspecialchars($order['increment_id'] ?? '') ?></span>
-        </p>
-    </div>
-    
-    <!-- Order Details Card -->
-    <div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark overflow-hidden mb-8">
-        <!-- Order Summary Header -->
-        <div class="bg-primary/5 border-b border-border-light dark:border-border-dark p-6">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Order placed on') ?></p>
-                    <p class="font-bold text-text-primary-light dark:text-text-primary-dark"><?= date('F j, Y', strtotime($order['created_at'] ?? 'now')) ?></p>
-                </div>
-                <div class="text-right">
-                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Total') ?></p>
-                    <p class="text-2xl font-bold text-primary"><?= $this->formatPrice($order['grand_total'] ?? 0) ?></p>
-                </div>
-            </div>
+        <p class="weshop-success-eyebrow"><?= __('订单提交成功！') ?></p>
+        <h1><?= __('订单已确认！') ?></h1>
+        <p class="weshop-success-lead"><?= __('感谢购买，我们已收到你的订单，并会持续更新处理进度。') ?></p>
+        <div class="weshop-success-meta">
+            <span><?= __('订单号：') ?> <strong>#<?= htmlspecialchars($orderNumber) ?></strong></span>
+            <span><?= __('下单时间') ?> <strong><?= htmlspecialchars($placedAt) ?></strong></span>
+            <span><?= __('合计') ?> <strong><?= $formatSuccessPrice($order['grand_total'] ?? 0) ?></strong></span>
         </div>
-        
-        <!-- Order Items -->
-        <div class="p-6 border-b border-border-light dark:border-border-dark">
-            <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark mb-4"><?= __('Order Items') ?></h2>
-            <div class="space-y-4">
-                <?php foreach ($orderItems as $item): ?>
-                    <div class="flex gap-4">
-                        <div class="w-16 h-16 rounded-lg bg-background-light dark:bg-background-dark overflow-hidden">
-                            <img src="<?= $item['image'] ?? '' ?>" alt="<?= htmlspecialchars($item['name']) ?>" class="w-full h-full object-cover">
-                        </div>
-                        <div class="flex-1">
-                            <p class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($item['name']) ?></p>
-                            <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Qty: %{1}', $item['qty']) ?></p>
-                        </div>
-                        <div class="text-right">
-                            <p class="font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($item['row_total']) ?></p>
+    </section>
+
+    <div class="weshop-success-layout">
+        <div class="weshop-success-main">
+            <section class="weshop-success-card">
+                <div class="weshop-success-card-head">
+                    <div>
+                        <p class="weshop-success-kicker"><?= __('订单详情') ?></p>
+                        <h2><?= __('商品明细') ?></h2>
+                    </div>
+                    <strong><?= $formatSuccessPrice($order['grand_total'] ?? 0) ?></strong>
+                </div>
+
+                <div class="weshop-success-items">
+                    <?php foreach ($orderItems as $item): ?>
+                        <?php
+                        $itemName = (string) ($item['name'] ?? '');
+                        $itemImage = (string) ($item['image'] ?? '');
+                        ?>
+                        <article class="weshop-success-item">
+                            <div class="weshop-success-item-media">
+                                <?php if ($itemImage !== ''): ?>
+                                    <img src="<?= htmlspecialchars($itemImage) ?>" alt="<?= htmlspecialchars($itemName) ?>">
+                                <?php else: ?>
+                                    <span><?= htmlspecialchars(mb_substr($itemName, 0, 1) ?: 'W') ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <h3><?= htmlspecialchars($itemName) ?></h3>
+                                <p><?= __('数量：%{1}', $item['qty'] ?? 1) ?></p>
+                            </div>
+                            <strong><?= $formatSuccessPrice($item['row_total'] ?? 0) ?></strong>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+
+            <section class="weshop-success-info-grid">
+                <article class="weshop-success-card weshop-success-info">
+                    <span class="material-symbols-outlined">location_on</span>
+                    <div>
+                        <h2><?= __('收货地址') ?></h2>
+                        <p><strong><?= htmlspecialchars($shippingAddress['name'] ?? '') ?></strong></p>
+                        <p><?= htmlspecialchars($shippingAddress['street'] ?? '') ?></p>
+                        <p><?= htmlspecialchars($shippingAddress['city'] ?? '') ?>, <?= htmlspecialchars($shippingAddress['region'] ?? '') ?> <?= htmlspecialchars($shippingAddress['postcode'] ?? '') ?></p>
+                        <p><?= htmlspecialchars($shippingAddress['country'] ?? '') ?></p>
+                    </div>
+                </article>
+
+                <article class="weshop-success-card weshop-success-info">
+                    <span class="material-symbols-outlined">payments</span>
+                    <div>
+                        <h2><?= __('支付方式') ?></h2>
+                        <p><strong><?= htmlspecialchars($paymentMethod['name'] ?? '') ?></strong></p>
+                        <?php if (!empty($paymentMethod['description'])): ?>
+                            <p><?= htmlspecialchars($paymentMethod['description']) ?></p>
+                        <?php endif; ?>
+                        <?php if ($paymentMethod['card_last4'] ?? null): ?>
+                            <p><?= __('尾号 %{1} 的银行卡', $paymentMethod['card_last4']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            </section>
+
+            <section class="weshop-success-card">
+                <div class="weshop-success-card-head">
+                    <div>
+                        <p class="weshop-success-kicker"><?= __('后续流程') ?></p>
+                        <h2><?= __('接下来会发生什么？') ?></h2>
+                    </div>
+                </div>
+                <div class="weshop-success-steps">
+                    <article>
+                        <span class="material-symbols-outlined">mail</span>
+                        <h3><?= __('确认邮件') ?></h3>
+                        <p><?= __('确认邮件已发送到你的邮箱。') ?></p>
+                    </article>
+                    <article>
+                        <span class="material-symbols-outlined">inventory_2</span>
+                        <h3><?= __('处理中') ?></h3>
+                        <p><?= __('订单正在处理，很快会安排发货。') ?></p>
+                    </article>
+                    <article>
+                        <span class="material-symbols-outlined">local_shipping</span>
+                        <h3><?= __('物流追踪') ?></h3>
+                        <p><?= __('订单发货后你会收到物流信息。') ?></p>
+                    </article>
+                </div>
+            </section>
+
+            <w:hook name="WeShop_Checkout::frontend::layouts::checkout-success::recommendations-before"/>
+            <?php if (!empty($recommendations)): ?>
+                <section class="weshop-success-card">
+                    <div class="weshop-success-card-head">
+                        <div>
+                            <p class="weshop-success-kicker"><?= __('猜你喜欢') ?></p>
+                            <h2><?= __('购买该商品的顾客还购买了') ?></h2>
                         </div>
                     </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        
-        <!-- Shipping & Payment Info -->
-        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Shipping Address -->
-            <div>
-                <h3 class="text-sm font-bold text-text-primary-light dark:text-text-primary-dark mb-3 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-lg">location_on</span>
-                    <?= __('Shipping Address') ?>
-                </h3>
-                <div class="text-sm text-text-secondary-light dark:text-text-secondary-dark space-y-1">
-                    <p class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($shippingAddress['name'] ?? '') ?></p>
-                    <p><?= htmlspecialchars($shippingAddress['street'] ?? '') ?></p>
-                    <p><?= htmlspecialchars($shippingAddress['city'] ?? '') ?>, <?= htmlspecialchars($shippingAddress['region'] ?? '') ?> <?= htmlspecialchars($shippingAddress['postcode'] ?? '') ?></p>
-                    <p><?= htmlspecialchars($shippingAddress['country'] ?? '') ?></p>
-                </div>
-            </div>
-            
-            <!-- Payment Method -->
-            <div>
-                <h3 class="text-sm font-bold text-text-primary-light dark:text-text-primary-dark mb-3 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-lg">payment</span>
-                    <?= __('Payment Method') ?>
-                </h3>
-                <div class="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                    <p class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($paymentMethod['name'] ?? '') ?></p>
-                    <?php if ($paymentMethod['card_last4'] ?? null): ?>
-                        <p><?= __('Card ending in %{1}', $paymentMethod['card_last4']) ?></p>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Order Summary -->
-        <div class="p-6 bg-background-light dark:bg-background-dark">
-            <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                    <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Subtotal') ?></span>
-                    <span class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($order['subtotal'] ?? 0) ?></span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Shipping') ?></span>
-                    <span class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($order['shipping_amount'] ?? 0) ?></span>
-                </div>
-                <?php if (($order['discount_amount'] ?? 0) > 0): ?>
-                    <div class="flex justify-between text-green-600">
-                        <span><?= __('Discount') ?></span>
-                        <span class="font-medium">-<?= $this->formatPrice($order['discount_amount']) ?></span>
+                    <div class="weshop-success-recommendations">
+                        <?php foreach ($recommendations as $product): ?>
+                            <?php
+                            $productName = (string) ($product['name'] ?? '');
+                            $productImage = (string) ($product['image'] ?? '');
+                            ?>
+                            <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="weshop-success-product">
+                                <span class="weshop-success-product-media">
+                                    <?php if ($productImage !== ''): ?>
+                                        <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($productName) ?>">
+                                    <?php else: ?>
+                                        <span><?= htmlspecialchars(mb_substr($productName, 0, 1) ?: 'W') ?></span>
+                                    <?php endif; ?>
+                                </span>
+                                <strong><?= htmlspecialchars($productName) ?></strong>
+                                <em><?= $formatSuccessPrice($product['price'] ?? 0) ?></em>
+                            </a>
+                        <?php endforeach; ?>
                     </div>
-                <?php endif; ?>
-                <div class="flex justify-between">
-                    <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Tax') ?></span>
-                    <span class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($order['tax_amount'] ?? 0) ?></span>
-                </div>
-                <div class="flex justify-between pt-2 border-t border-border-light dark:border-border-dark text-lg">
-                    <span class="font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Total') ?></span>
-                    <span class="font-bold text-primary"><?= $this->formatPrice($order['grand_total'] ?? 0) ?></span>
-                </div>
-            </div>
+                </section>
+            <?php endif; ?>
+            <w:hook name="WeShop_Checkout::frontend::layouts::checkout-success::recommendations-after"/>
         </div>
-    </div>
-    
-    <!-- What's Next -->
-    <div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark p-6 mb-8">
-        <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark mb-4"><?= __("What's Next?") ?></h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="flex gap-4">
-                <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-                    <span class="material-symbols-outlined text-2xl text-primary">mail</span>
-                </div>
-                <div>
-                    <h3 class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= __('Confirmation Email') ?></h3>
-                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('A confirmation email has been sent to your address.') ?></p>
-                </div>
+
+        <aside class="weshop-success-summary" aria-label="<?= __('订单摘要') ?>">
+            <h2><?= __('订单摘要') ?></h2>
+            <div class="weshop-success-summary-row">
+                <span><?= __('小计') ?></span>
+                <strong><?= $formatSuccessPrice($order['subtotal'] ?? 0) ?></strong>
             </div>
-            <div class="flex gap-4">
-                <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-                    <span class="material-symbols-outlined text-2xl text-primary">inventory_2</span>
-                </div>
-                <div>
-                    <h3 class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= __('Processing') ?></h3>
-                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Your order is being processed and will ship soon.') ?></p>
-                </div>
+            <div class="weshop-success-summary-row">
+                <span><?= __('运费') ?></span>
+                <strong><?= $formatSuccessPrice($order['shipping_amount'] ?? 0) ?></strong>
             </div>
-            <div class="flex gap-4">
-                <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-                    <span class="material-symbols-outlined text-2xl text-primary">local_shipping</span>
+            <?php if (($order['discount_amount'] ?? 0) > 0): ?>
+                <div class="weshop-success-summary-row weshop-success-summary-discount">
+                    <span><?= __('优惠') ?></span>
+                    <strong>-<?= $formatSuccessPrice($order['discount_amount']) ?></strong>
                 </div>
-                <div>
-                    <h3 class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= __('Tracking') ?></h3>
-                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __("You'll receive tracking info when your order ships.") ?></p>
-                </div>
+            <?php endif; ?>
+            <div class="weshop-success-summary-row">
+                <span><?= __('税费') ?></span>
+                <strong><?= $formatSuccessPrice($order['tax_amount'] ?? 0) ?></strong>
             </div>
-        </div>
+            <div class="weshop-success-summary-total">
+                <span><?= __('合计') ?></span>
+                <strong><?= $formatSuccessPrice($order['grand_total'] ?? 0) ?></strong>
+            </div>
+            <div class="weshop-success-actions">
+                <a href="<?= $this->getUrl('weshop/order/list') ?>"><?= __('查看订单详情') ?></a>
+                <a href="<?= $this->getUrl('weshop') ?>"><?= __('继续购物') ?></a>
+            </div>
+        </aside>
     </div>
 
-    <w:hook name="WeShop_Checkout::success::recommendations_before"/>
-    <?php if (!empty($recommendations)): ?>
-        <div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark p-6 mb-8">
-            <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark mb-6"><?= __('Customers who bought this also bought') ?></h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <?php foreach ($recommendations as $product): ?>
-                    <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="group flex flex-col gap-3 rounded-xl border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark p-3 hover:border-primary/40 hover:shadow-md transition-all">
-                        <div class="aspect-square rounded-lg overflow-hidden bg-surface-light dark:bg-surface-dark">
-                            <img src="<?= $product['image'] ?? '' ?>" alt="<?= htmlspecialchars($product['name'] ?? '') ?>" class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform">
-                        </div>
-                        <div class="space-y-1">
-                            <p class="font-medium text-sm text-text-primary-light dark:text-text-primary-dark line-clamp-2"><?= htmlspecialchars($product['name'] ?? '') ?></p>
-                            <p class="text-primary font-bold"><?= $this->formatPrice($product['price'] ?? 0) ?></p>
-                        </div>
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    <?php endif; ?>
-    <w:hook name="WeShop_Checkout::success::recommendations_after"/>
-    
-    <!-- Actions -->
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="<?= $this->getUrl('weshop/order/list') ?>" class="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-colors">
-            <span class="material-symbols-outlined">receipt_long</span>
-            <?= __('View Order Details') ?>
-        </a>
-        <a href="<?= $this->getUrl('weshop') ?>" class="flex items-center justify-center gap-2 px-6 py-3 border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark font-bold rounded-lg hover:bg-background-light dark:hover:bg-background-dark transition-colors">
-            <span class="material-symbols-outlined">shopping_bag</span>
-            <?= __('Continue Shopping') ?>
-        </a>
-    </div>
-    
-    <w:hook name="WeShop_Checkout::success::after"/>
+    <w:hook name="WeShop_Checkout::frontend::layouts::checkout-success::after"/>
 </main>
 
 <style>
-@keyframes scale-up {
-    0% {
-        transform: scale(0);
-        opacity: 0;
+.weshop-success-page {
+    --ws-primary: var(--weshop-color-primary, var(--color-primary, #f7c441));
+    --ws-primary-strong: var(--weshop-color-primary-strong, #d99d00);
+    --ws-text: var(--weshop-color-text, var(--color-text, #111827));
+    --ws-muted: var(--weshop-color-muted, #6b7280);
+    --ws-border: var(--weshop-color-border, #e5e7eb);
+    --ws-surface: var(--weshop-color-surface, #ffffff);
+    --ws-soft: var(--weshop-color-soft, #f6f7f9);
+    width: min(100% - 2rem, var(--layout-max-width, 1200px));
+    margin: 1.5rem auto 4rem;
+    color: var(--ws-text);
+}
+
+.checkout-success-content > .success-title {
+    display: none !important;
+}
+
+.weshop-success-page * {
+    box-sizing: border-box;
+}
+
+.weshop-success-hero,
+.weshop-success-card,
+.weshop-success-summary {
+    background: var(--ws-surface);
+    border: 1px solid var(--ws-border);
+    border-radius: 24px;
+    box-shadow: 0 20px 50px rgba(17, 24, 39, .08);
+}
+
+.weshop-success-hero {
+    display: grid;
+    gap: .75rem;
+    justify-items: center;
+    padding: 2.5rem;
+    text-align: center;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(247, 196, 65, .24), transparent 34rem),
+        var(--ws-surface);
+}
+
+.weshop-success-mark {
+    display: grid;
+    width: 76px;
+    height: 76px;
+    place-items: center;
+    color: #0f7b4f;
+    background: #dff8ea;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 8px #f2fff7;
+}
+
+.weshop-success-mark .material-symbols-outlined {
+    display: grid;
+    place-items: center;
+    font-size: 0;
+    font-variation-settings: 'FILL' 1;
+}
+
+.weshop-success-mark .material-symbols-outlined::before {
+    content: "";
+    display: block;
+    width: 18px;
+    height: 34px;
+    border-right: 5px solid currentColor;
+    border-bottom: 5px solid currentColor;
+    transform: rotate(45deg) translate(-2px, -4px);
+}
+
+.weshop-success-eyebrow,
+.weshop-success-kicker {
+    margin: 0;
+    color: var(--ws-primary-strong);
+    font-size: .8rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.weshop-success-hero h1,
+.weshop-success-card h2,
+.weshop-success-summary h2 {
+    margin: 0;
+    color: var(--ws-text);
+    line-height: 1.15;
+}
+
+.weshop-success-hero h1 {
+    font-size: clamp(2rem, 4vw, 3.5rem);
+}
+
+.weshop-success-lead {
+    max-width: 660px;
+    margin: 0;
+    color: var(--ws-muted);
+    font-size: 1rem;
+}
+
+.weshop-success-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .75rem;
+    margin-top: .75rem;
+}
+
+.weshop-success-meta span {
+    display: inline-flex;
+    gap: .35rem;
+    align-items: center;
+    padding: .7rem 1rem;
+    color: var(--ws-muted);
+    background: rgba(255, 255, 255, .76);
+    border: 1px solid var(--ws-border);
+    border-radius: 999px;
+}
+
+.weshop-success-meta strong {
+    color: var(--ws-text);
+}
+
+.weshop-success-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    align-items: start;
+}
+
+.weshop-success-main {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.weshop-success-card,
+.weshop-success-summary {
+    padding: 1.5rem;
+}
+
+.weshop-success-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.weshop-success-card-head > strong {
+    color: var(--ws-text);
+    font-size: 1.35rem;
+}
+
+.weshop-success-items {
+    display: grid;
+    gap: .85rem;
+}
+
+.weshop-success-item {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: center;
+    padding: .9rem;
+    background: var(--ws-soft);
+    border-radius: 18px;
+}
+
+.weshop-success-item-media,
+.weshop-success-product-media {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid var(--ws-border);
+}
+
+.weshop-success-item-media {
+    width: 76px;
+    height: 76px;
+    border-radius: 16px;
+}
+
+.weshop-success-item-media img,
+.weshop-success-product-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.weshop-success-item h3,
+.weshop-success-steps h3,
+.weshop-success-product strong {
+    margin: 0;
+    color: var(--ws-text);
+    font-size: .98rem;
+}
+
+.weshop-success-item p,
+.weshop-success-info p,
+.weshop-success-steps p {
+    margin: .25rem 0 0;
+    color: var(--ws-muted);
+}
+
+.weshop-success-info-grid,
+.weshop-success-steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.weshop-success-info {
+    display: flex;
+    gap: 1rem;
+    box-shadow: none;
+}
+
+.weshop-success-info > .material-symbols-outlined,
+.weshop-success-steps .material-symbols-outlined {
+    display: grid;
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    color: var(--ws-primary-strong);
+    background: rgba(247, 196, 65, .15);
+    border-radius: 14px;
+    font-size: 0;
+}
+
+.weshop-success-info > .material-symbols-outlined::before,
+.weshop-success-steps .material-symbols-outlined::before {
+    content: "";
+    display: block;
+    width: 12px;
+    height: 12px;
+    background: currentColor;
+    border-radius: 999px;
+}
+
+.weshop-success-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.weshop-success-steps article {
+    padding: 1rem;
+    background: var(--ws-soft);
+    border-radius: 18px;
+}
+
+.weshop-success-recommendations {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.weshop-success-product {
+    display: grid;
+    gap: .7rem;
+    color: inherit;
+    text-decoration: none;
+}
+
+.weshop-success-product-media {
+    aspect-ratio: 1;
+    border-radius: 18px;
+}
+
+.weshop-success-product em {
+    color: var(--ws-primary-strong);
+    font-style: normal;
+    font-weight: 800;
+}
+
+.weshop-success-summary {
+    position: sticky;
+    top: 1rem;
+}
+
+.weshop-success-summary-row,
+.weshop-success-summary-total {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .7rem 0;
+    color: var(--ws-muted);
+    border-bottom: 1px solid var(--ws-border);
+}
+
+.weshop-success-summary-row strong {
+    color: var(--ws-text);
+}
+
+.weshop-success-summary-discount strong {
+    color: #0f7b4f;
+}
+
+.weshop-success-summary-total {
+    margin-top: .25rem;
+    color: var(--ws-text);
+    font-size: 1.2rem;
+    font-weight: 900;
+    border-bottom: 0;
+}
+
+.weshop-success-actions {
+    display: grid;
+    gap: .75rem;
+    margin-top: 1rem;
+}
+
+.weshop-success-actions a {
+    display: inline-flex;
+    justify-content: center;
+    padding: .9rem 1rem;
+    color: var(--ws-text);
+    font-weight: 800;
+    text-decoration: none;
+    background: var(--ws-primary);
+    border: 1px solid var(--ws-primary);
+    border-radius: 999px;
+}
+
+.weshop-success-actions a + a {
+    color: var(--ws-text);
+    background: #fff;
+    border-color: var(--ws-border);
+}
+
+@media (max-width: 980px) {
+    .weshop-success-layout,
+    .weshop-success-info-grid,
+    .weshop-success-steps {
+        grid-template-columns: 1fr;
     }
-    50% {
-        transform: scale(1.1);
-    }
-    100% {
-        transform: scale(1);
-        opacity: 1;
+
+    .weshop-success-summary {
+        position: static;
     }
 }
-.animate-scale-up {
-    animation: scale-up 0.5s ease-out;
+
+@media (max-width: 640px) {
+    .weshop-success-page {
+        width: min(100% - 1rem, var(--layout-max-width, 1200px));
+        margin-top: .75rem;
+    }
+
+    .weshop-success-hero,
+    .weshop-success-card,
+    .weshop-success-summary {
+        border-radius: 18px;
+        padding: 1rem;
+    }
+
+    .weshop-success-item {
+        grid-template-columns: 60px minmax(0, 1fr);
+    }
+
+    .weshop-success-item > strong {
+        grid-column: 2;
+    }
+
+    .weshop-success-recommendations {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 </style>

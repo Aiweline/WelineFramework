@@ -232,19 +232,20 @@ class DefaultLayoutSeeder
                     ],
                     'sort_order' => 1,
                 ],
-                // 侧边栏 - 销量榜单
+                // 热销产品（全宽推荐区，避免挤在右侧栏导致布局溢出）
                 [
-                    'area' => ThemeLayout::AREA_RIGHT_SIDEBAR,
-                    'slot_id' => 'product-sidebar',
+                    'area' => ThemeLayout::AREA_CONTENT,
+                    'slot_id' => 'product-related',
                     'widget_code' => 'bestsellers',
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
                         'title' => '热销产品',
-                        'limit' => 5,
-                        'show_image' => true,
+                        'limit' => 4,
+                        'columns' => 4,
+                        'layout' => 'carousel',
                     ],
-                    'sort_order' => 0,
+                    'sort_order' => 2,
                 ],
             ],
 

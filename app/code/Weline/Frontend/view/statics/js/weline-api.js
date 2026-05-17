@@ -1,11 +1,23 @@
 /**
  * Weline Api Module
- * 可被 theme.js 按需加载的 API 模块
+ *
+ * Browser business requests are only allowed through:
+ * theme.js -> Weline.Api -> worker -> /api/framework/query-bin.
  */
 (function (window) {
     'use strict';
 
-    // 获取配置（从 Weline 主对象或全局配置）
+    const RESERVED_METHODS = new Set([
+        'then',
+        'catch',
+        'finally',
+        '__proto__',
+        'prototype',
+        'constructor',
+        'toString',
+        'valueOf',
+    ]);
+
     const getConfig = () => {
         if (window.Weline && window.Weline.config && window.Weline.config.api) {
             return window.Weline.config.api;
@@ -14,46 +26,30 @@
             return window.__WelineThemeConfig.api;
         }
         if (window.WelineApiConfig) {
-            console.warn('[Weline.Api] window.WelineApiConfig 已废弃，请通过 Theme.js 注入配置。');
             return window.WelineApiConfig;
         }
         return {};
     };
 
-    // URL 解析辅助函数
-    const resolveWorkerUrl = (path) => {
-        if (!path) return null;
-        if (/^https?:\/\//i.test(path)) {
-            return path;
+    const sameOriginUrl = (path, fallbackPath) => {
+        const value = path || fallbackPath;
+        const url = new URL(value, window.location.origin);
+        if (url.origin !== window.location.origin) {
+            throw new Error('[Weline.Api] worker and query-bin URLs must be same-origin.');
         }
-
-        // 尝试使用 Weline.Url.resolve
-        if (window.Weline && window.Weline.Url && typeof window.Weline.Url.resolve === 'function') {
-            try {
-                return window.Weline.Url.resolve(path, { type: 'frontend' });
-            } catch (e) {
-                // 如果解析失败，使用原始路径
-            }
-        }
-
-        // Fallback: 直接返回绝对路径
-        const normalizedOrigin = window.location.origin.replace(/\/+$/, '');
-        const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-        return normalizedOrigin + '/' + cleanPath;
+        return url.href;
     };
 
-    // 检测环境并生成默认 workerUrl
     const getDefaultWorkerUrl = () => {
-        const isDev = window.DEV || (window.WELINE_ENV === 'DEV');
+        const isDev = window.DEV || window.WELINE_ENV === 'DEV';
         if (isDev) {
             return '/Weline/Frontend/view/statics/js/weline-api-worker.js';
         }
-        // 尝试使用静态资源解析器
         if (window.Weline && window.Weline.staticResourceResolver) {
             try {
                 return window.Weline.staticResourceResolver.resolve('Weline_Frontend::js/weline-api-worker.js');
-            } catch (e) {
-                // 如果解析失败，使用默认路径
+            } catch (error) {
+                /* fall through */
             }
         }
         return '/static/Weline/Frontend/js/weline-api-worker.js';
@@ -61,36 +57,28 @@
 
     const apiConfig = getConfig();
     const config = Object.assign({
-        baseUrl: window.location.origin,
-        useCredentials: 'same-origin',
+        endpoint: '/api/framework/query-bin',
+        deployVersion: 'dev',
+        workerBuildId: 'dev',
         cartFlagStorageKey: 'weline_cart_has_items',
         cartProbeSessionKey: 'weline_cart_probe_done',
         cartCountCookieKey: 'weline_cart_item_count',
-        cartStatusUrl: null,
-        cartStatusResolver: null,
-        autoRequests: [],
         autoEnableOnCartClickSelector: '[data-weline-cart-trigger]',
-        maintenanceHandler: null,
-        onHttpError: null, // (status, error, silent) => void，可选全局 HTTP 错误钩子
-        // workerUrl 自动处理：优先使用配置中的，否则使用默认值
-        workerUrl: apiConfig.workerUrl ? resolveWorkerUrl(apiConfig.workerUrl) : getDefaultWorkerUrl(),
+        onHttpError: null,
     }, apiConfig);
 
-    // 如果配置中提供了 workerUrl，需要解析
-    if (apiConfig.workerUrl && !config.workerUrl) {
-        config.workerUrl = resolveWorkerUrl(apiConfig.workerUrl);
-    }
+    config.workerUrl = sameOriginUrl(apiConfig.workerUrl || getDefaultWorkerUrl(), getDefaultWorkerUrl());
+    config.endpoint = sameOriginUrl(apiConfig.endpoint || apiConfig.queryBinUrl || '/api/framework/query-bin', '/api/framework/query-bin');
+    config.deployVersion = String(apiConfig.deployVersion || apiConfig.deploy_version || config.deployVersion || 'dev');
+    config.workerBuildId = String(apiConfig.workerBuildId || apiConfig.worker_build_id || config.workerBuildId || 'dev');
 
     class WelineApiClient {
-        constructor(config) {
-            this.config = config;
+        constructor(clientConfig) {
+            this.config = clientConfig;
             this.worker = null;
             this.requestId = 0;
             this.pending = new Map();
-            this.pendingMaintenanceRequests = new Map(); // 保存维护期间的请求，维护完成后重试
             this.autoRequestsEnabled = false;
-            this.maintenanceRetryTimer = null;
-            this.isMaintenanceMode = false;
 
             this.handleWorkerMessage = this.handleWorkerMessage.bind(this);
             this.handleWorkerError = this.handleWorkerError.bind(this);
@@ -98,174 +86,103 @@
             this.restoreCartState();
             this.listenCartTriggers();
             this.listenCartUpdateEvent();
-            this.listenMaintenanceResolved();
         }
 
-        /**
-         * @param {string} url
-         * @param {object} [options]
-         * @param {function(number, Error): boolean|void} [options.onError] - 请求级错误回调；返回 true 表示已处理，不再执行默认 Toast
-         * @param {function(number, Error): boolean|void} [options.onHttpError] - 同上，与 onError 二选一
-         * @param {boolean} [options.silent] - 为 true 时不触发任何错误提示
-         */
-        /**
-         * 判断 body 是否为 postMessage 不可克隆类型（FormData/Blob/File 等）
-         */
-        isNonCloneableBody(body) {
-            if (body === undefined || body === null) {
-                return false;
+        call(provider, operation, params = {}, options = {}) {
+            if (!provider || !operation) {
+                return Promise.reject(new Error('[Weline.Api] provider and operation are required.'));
             }
-            return (
-                typeof FormData !== 'undefined' && body instanceof FormData ||
-                typeof Blob !== 'undefined' && body instanceof Blob ||
-                typeof File !== 'undefined' && body instanceof File ||
-                typeof ReadableStream !== 'undefined' && body instanceof ReadableStream
-            );
-        }
-
-        request(url, options = {}) {
-            if (!url) {
-                return Promise.reject(new Error('请求地址不能为空'));
-            }
-
-            // 如果处于维护模式，保存请求以便维护完成后重试
-            if (this.isMaintenanceMode) {
-                return new Promise((resolve, reject) => {
-                    const requestInfo = {
-                        url,
-                        options,
-                        resolve,
-                        reject,
-                        timestamp: Date.now(),
-                    };
-                    const requestId = this.buildMessageId();
-                    this.pendingMaintenanceRequests.set(requestId, requestInfo);
-                    // 返回一个特殊的错误，表示请求被延迟
-                    reject(new Error('系统维护中，请求已保存，维护完成后将自动重试'));
-                });
-            }
-
-            const resolvedUrl = this.resolveUrl(url);
-            const prepared = this.prepareOptions(options);
-
-            // FormData/Blob/File 无法通过 postMessage 传给 Worker，改用主线程直接 fetch
-            if (this.isNonCloneableBody(prepared.body)) {
-                return this.directFetch(resolvedUrl, prepared, options);
-            }
-
-            this.ensureWorker();
-            const messageId = this.buildMessageId();
-            const payload = {
-                id: messageId,
-                url: resolvedUrl,
-                options: prepared,
-            };
-
-            return new Promise((resolve, reject) => {
-                this.pending.set(messageId, { resolve, reject, url, options });
-                this.worker?.postMessage(payload);
+            return this.send({
+                type: 'call',
+                provider,
+                operation,
+                params: params || {},
+                options,
             });
         }
 
-        /**
-         * 主线程直接 fetch，用于 FormData/Blob/File 等无法 postMessage 的 body
-         */
-        async directFetch(url, prepared, originalOptions) {
-            const init = {
-                method: prepared.method || 'GET',
-                credentials: prepared.credentials ?? this.config.useCredentials,
-                headers: prepared.headers,
-                body: prepared.body,
-            };
-            try {
-                const response = await fetch(url, init);
-                const contentType = (response.headers.get('content-type') || '').toLowerCase();
-                let body = null;
-                if (contentType.indexOf('application/json') !== -1) {
-                    try {
-                        body = await response.json();
-                    } catch (e) {
-                        body = { parse_error: true, message: e instanceof Error ? e.message : String(e) };
-                    }
-                } else {
-                    const text = await response.text();
-                    const trimmed = text.trim();
-                    if (
-                        trimmed.length > 0 &&
-                        ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-                            (trimmed.startsWith('[') && trimmed.endsWith(']')))
-                    ) {
-                        try {
-                            body = JSON.parse(text);
-                        } catch (e) {
-                            body = text;
-                        }
-                    } else {
-                        body = text;
-                    }
-                }
-                const maintenance = response.status === 503 || (
-                    body && typeof body === 'object' &&
-                    (
-                        (typeof body.code === 'string' && body.code.toLowerCase() === 'maintenance') ||
-                        body.maintenance === true ||
-                        (body.data && body.data.maintenance === true)
-                    )
-                );
-                if (maintenance) {
-                    this.handleMaintenance({
-                        ok: false,
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: {},
-                        body,
-                        maintenance: true,
-                    });
-                    const err = new Error('系统维护中，请求已保存，维护完成后将自动重试');
-                    err.response = { ok: false, status: response.status, statusText: response.statusText, data: body, maintenance: true };
-                    err.maintenance = true;
-                    throw err;
-                }
-                const result = {
-                    ok: response.ok,
-                    status: response.status,
-                    statusText: response.statusText || '',
-                    headers: {},
-                    data: body,
-                    maintenance: false,
-                };
-                response.headers.forEach((v, k) => { result.headers[k] = v; });
-                if (!response.ok) {
-                    const friendlyMessage = (body && typeof body === 'object' && (body.msg || body.message)) ||
-                        (response.status === 404 ? '接口或页面不存在，请刷新重试' : response.status >= 500 ? '服务异常，请稍后重试' : '请求失败');
-                    const error = new Error(friendlyMessage);
-                    error.response = result;
-                    error.status = response.status;
-                    error.requestUrl = url;
-                    this.handleHttpError(response.status, error, originalOptions?.silent, originalOptions);
-                    throw error;
-                }
-                return result;
-            } catch (err) {
-                if (err.response) {
-                    throw err;
-                }
-                const error = new Error(err instanceof Error ? err.message : String(err));
-                error.status = 0;
-                error.requestUrl = url;
-                error.response = { ok: false, status: 0, statusText: '', data: null, maintenance: false };
-                this.handleHttpError(0, error, originalOptions?.silent, originalOptions);
-                throw error;
+        graph(graph, options = {}) {
+            return this.send({
+                type: 'graph',
+                graph: graph || {},
+                options,
+            });
+        }
+
+        async stream(channel, params = {}, options = {}) {
+            const ticket = await this.send({
+                type: 'stream-ticket',
+                channel,
+                params: params || {},
+                options,
+            });
+            if (!ticket || !ticket.url) {
+                throw new Error('[Weline.Api] stream ticket did not include a stream URL.');
             }
+            const url = sameOriginUrl(ticket.url, ticket.url);
+            return new EventSource(url, { withCredentials: options.withCredentials !== false });
+        }
+
+        resource(provider, optionalMap) {
+            if (!provider || typeof provider !== 'string') {
+                throw new Error('[Weline.Api] resource provider is required.');
+            }
+            const methodMap = optionalMap && typeof optionalMap === 'object' ? optionalMap : null;
+            const client = this;
+
+            return new Proxy(Object.create(null), {
+                get(_target, property) {
+                    if (typeof property === 'symbol' || RESERVED_METHODS.has(property)) {
+                        return undefined;
+                    }
+                    const methodName = String(property);
+                    if (methodMap && !Object.prototype.hasOwnProperty.call(methodMap, methodName)) {
+                        return undefined;
+                    }
+                    const operation = methodMap ? String(methodMap[methodName]) : methodName;
+                    if (!operation) {
+                        return undefined;
+                    }
+                    return (params = {}, options = {}) => client.call(provider, operation, params, options);
+                },
+                has(_target, property) {
+                    if (typeof property !== 'string' || RESERVED_METHODS.has(property)) {
+                        return false;
+                    }
+                    return !methodMap || Object.prototype.hasOwnProperty.call(methodMap, property);
+                },
+            });
+        }
+
+        request() {
+            return Promise.reject(new Error('[Weline.Api] direct request(url) is disabled. Use Weline.Api.resource()/call()/graph()/stream().'));
+        }
+
+        send(payload) {
+            this.ensureWorker();
+            const messageId = this.buildMessageId();
+            return new Promise((resolve, reject) => {
+                this.pending.set(messageId, { resolve, reject, payload });
+                this.worker.postMessage(Object.assign({}, payload, {
+                    id: messageId,
+                    config: {
+                        endpoint: this.config.endpoint,
+                        deployVersion: this.config.deployVersion,
+                        workerBuildId: this.config.workerBuildId,
+                    },
+                }));
+            });
         }
 
         ensureWorker() {
             if (this.worker) {
                 return;
             }
-
+            if (!window.Worker) {
+                throw new Error('[Weline.Api] Worker is unavailable; direct frontend API fallback is disabled.');
+            }
             if (!this.config.workerUrl) {
-                throw new Error('[Weline.Api] workerUrl 未配置，无法创建 Worker。');
+                throw new Error('[Weline.Api] workerUrl is not configured.');
             }
 
             this.worker = new Worker(this.config.workerUrl);
@@ -278,531 +195,97 @@
             return `req_${Date.now()}_${this.requestId}`;
         }
 
-        prepareOptions(options) {
-            const prepared = Object.assign({}, options);
-
-            if (!prepared.method) {
-                prepared.method = 'GET';
-            }
-
-            if (prepared.json === true && typeof prepared.body === 'object' && prepared.body !== null) {
-                prepared.body = JSON.stringify(prepared.body);
-                prepared.headers = Object.assign(
-                    { 'Content-Type': 'application/json' },
-                    prepared.headers || {}
-                );
-            }
-
-            if (prepared.headers) {
-                prepared.headers = this.normalizeHeaders(prepared.headers);
-            }
-
-            if (!prepared.credentials) {
-                prepared.credentials = this.config.useCredentials;
-            }
-
-            if (prepared.body === undefined) {
-                delete prepared.body;
-            }
-
-            delete prepared.json;
-            delete prepared.signal;
-            delete prepared.onError;
-            delete prepared.onHttpError;
-
-            return prepared;
-        }
-
-        normalizeHeaders(headers) {
-            const normalized = {};
-
-            if (headers instanceof Headers) {
-                headers.forEach((value, key) => {
-                    normalized[key] = value ?? '';
-                });
-                return normalized;
-            }
-
-            Object.keys(headers).forEach((key) => {
-                const value = headers[key];
-                if (value !== undefined && value !== null) {
-                    normalized[key] = String(value);
-                }
-            });
-
-            return normalized;
-        }
-
-        resolveUrl(url) {
-            if (/^https?:\/\//i.test(url)) {
-                return url;
-            }
-
-            if (url.startsWith('/')) {
-                return window.location.origin + url;
-            }
-
-            return `${(this.config.baseUrl || window.location.origin).replace(/\/$/, '')}/${url}`;
-        }
-
         handleWorkerMessage(event) {
             const data = event.data || {};
             const pending = this.pending.get(data.id);
             if (!pending) {
                 return;
             }
-
             this.pending.delete(data.id);
 
-            if (data.maintenance) {
-                this.handleMaintenance(data);
-                // 维护模式下，将请求保存到待处理队列
-                if (pending.url && pending.options) {
-                    const requestId = this.buildMessageId();
-                    this.pendingMaintenanceRequests.set(requestId, {
-                        url: pending.url,
-                        options: pending.options,
-                        resolve: pending.resolve,
-                        reject: pending.reject,
-                        timestamp: Date.now(),
-                    });
-                }
-                // 返回维护模式错误
-                const error = new Error('系统维护中，请求已保存，维护完成后将自动重试');
-                error.response = this.buildResponse(data);
-                error.maintenance = true;
-                pending.reject(error);
+            const wrapper = data.body || {};
+            if (data.ok === true && wrapper.ok === true) {
+                pending.resolve(wrapper.data);
                 return;
             }
 
-            if (data.ok !== false && !data.error) {
-                pending.resolve(this.buildResponse(data));
-            } else {
-                const response = this.buildResponse(data);
-                const status = response.status;
-                const serverMsg = (response.data && typeof response.data === 'object') ? (response.data.msg || response.data.message) : null;
-                let friendlyMessage = data.error || data.statusText || serverMsg || '请求失败';
-                if (!serverMsg) {
-                    if (status === 404) {
-                        friendlyMessage = '接口或页面不存在，请刷新重试';
-                    } else if (status >= 500) {
-                        friendlyMessage = '服务异常，请稍后重试';
-                    }
-                }
-                const error = new Error(friendlyMessage);
-                error.response = response;
-                error.status = status;
-                if (pending.url) {
-                    error.requestUrl = pending.url;
-                }
-                this.handleHttpError(status, error, pending.options?.silent, pending.options);
-                pending.reject(error);
-            }
+            const serverError = wrapper.error || {};
+            const error = new Error(serverError.message || data.error || 'Weline worker API request failed.');
+            error.code = serverError.code || 'protocol_error';
+            error.status = data.status || 0;
+            error.response = {
+                ok: false,
+                status: data.status || 0,
+                statusText: data.statusText || '',
+                data: wrapper,
+                maintenance: !!data.maintenance,
+            };
+            this.handleHttpError(error.status, error, pending.payload && pending.payload.options && pending.payload.options.silent, pending.payload && pending.payload.options);
+            pending.reject(error);
         }
 
-        /**
-         * 统一 HTTP 错误处理：先执行请求级回调，再全局回调，最后默认 Toast。
-         * @param {number} status - HTTP 状态码
-         * @param {Error} error - 错误对象（含 response、requestUrl）
-         * @param {boolean} silent - 是否静默（静默时不做任何提示）
-         * @param {object} [requestOptions] - 本次请求的 options，可含 onError/onHttpError 回调
-         *   - onError(status, error) 或 onHttpError(status, error): 返回 true 表示业务已处理，不再执行默认 Toast
-         */
+        handleWorkerError(event) {
+            console.error('[Weline.Api] worker error:', event);
+        }
+
         handleHttpError(status, error, silent, requestOptions) {
             if (silent) return;
-            const isDev = window.DEV === true || window.WELINE_ENV === 'DEV';
-            const detailParts = [];
-            if (isDev) {
-                if (error.requestUrl) detailParts.push('URL: ' + error.requestUrl);
-                detailParts.push('HTTP ' + (status || 0));
-                if (error.response?.data != null) {
-                    const d = error.response.data;
-                    detailParts.push(typeof d === 'object' ? JSON.stringify(d, null, 2) : String(d));
-                }
-                if (error.message) detailParts.push(error.message);
-                console.error('[Weline.Api] 请求失败', { status, requestUrl: error.requestUrl, response: error.response, error: error.message });
-            }
             const requestCb = requestOptions && (requestOptions.onError || requestOptions.onHttpError);
             if (typeof requestCb === 'function') {
                 try {
                     if (requestCb.call(null, status, error) === true) {
                         return;
                     }
-                } catch (e) {
-                    console.error('[Weline.Api] 请求 onError/onHttpError 执行失败:', e);
+                } catch (callbackError) {
+                    console.error('[Weline.Api] request error callback failed:', callbackError);
                 }
             }
             if (typeof this.config.onHttpError === 'function') {
                 try {
                     this.config.onHttpError(status, error, silent);
-                } catch (e) {
-                    console.error('[Weline.Api] onHttpError 执行失败:', e);
-                }
-                return;
-            }
-            const Toast = window.BackendToast || window.BackendToast || window.FrontendToast;
-            if (typeof Toast === 'object' && typeof Toast.error === 'function') {
-                let msg = error.response?.data?.msg || (typeof error.response?.data === 'object' && error.response?.data?.message) || error.message;
-                if (!msg) msg = status === 404 ? '接口或页面不存在，请刷新重试' : status >= 500 ? '服务异常，请稍后重试' : '请求失败';
-                if (isDev && detailParts.length) {
-                    msg = msg + '\n\n[DEV] ' + detailParts.join('\n');
-                }
-                Toast.error(msg);
-            }
-        }
-
-        handleWorkerError(event) {
-            console.error('[Weline.Api] Worker 错误:', event);
-        }
-
-        buildResponse(data) {
-            return {
-                ok: data.ok !== false,
-                status: data.status ?? 0,
-                statusText: data.statusText ?? '',
-                headers: this.collectHeaders(data.headers),
-                data: data.body ?? null,
-                maintenance: !!data.maintenance,
-            };
-        }
-
-        collectHeaders(headers) {
-            if (!headers) {
-                return {};
-            }
-
-            if (Array.isArray(headers)) {
-                return headers.reduce((accumulator, header) => {
-                    if (Array.isArray(header) && header.length === 2) {
-                        accumulator[header[0]] = header[1];
-                    }
-                    return accumulator;
-                }, {});
-            }
-
-            return headers;
-        }
-
-        handleMaintenance(payload) {
-            // 如果已经在维护模式，不重复处理
-            if (this.isMaintenanceMode) {
-                return;
-            }
-
-            this.isMaintenanceMode = true;
-            this.disableAutoRequests();
-            const detail = {
-                retryAfter: payload.body && payload.body.data ? payload.body.data.retry_after ?? null : null,
-                message: payload.body && typeof payload.body === 'object' ? payload.body.message ?? '' : '',
-                raw: payload,
-            };
-
-            window.dispatchEvent(new CustomEvent('weline:maintenance', { detail }));
-
-            // 如果没有自定义的 maintenanceHandler，使用默认的维护模式提示
-            if (typeof this.config.maintenanceHandler === 'function') {
-                try {
-                    this.config.maintenanceHandler(detail);
-                } catch (error) {
-                    console.error('[Weline.Api] maintenanceHandler 执行失败:', error);
-                    this.showDefaultMaintenanceNotice(detail);
-                }
-            } else {
-                this.showDefaultMaintenanceNotice(detail);
-            }
-        }
-
-        showDefaultMaintenanceNotice(detail) {
-            // 如果已经显示了维护提示，不再重复显示
-            if (document.getElementById('weline-maintenance-notice')) {
-                return;
-            }
-
-            const message = detail.message || '系统正在升级，请稍后再试。';
-            const retryAfter = detail.retryAfter || 60;
-
-            // 创建维护提示界面
-            const notice = document.createElement('div');
-            notice.id = 'weline-maintenance-notice';
-            notice.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.7);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 99999;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            `;
-
-            const content = document.createElement('div');
-            content.style.cssText = `
-                background: #fff;
-                border-radius: 12px;
-                padding: 32px;
-                max-width: 500px;
-                width: 90%;
-                text-align: center;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            `;
-
-            const icon = document.createElement('div');
-            icon.style.cssText = `
-                font-size: 64px;
-                margin-bottom: 20px;
-            `;
-            icon.textContent = '🔧';
-
-            const title = document.createElement('h2');
-            title.style.cssText = `
-                font-size: 24px;
-                font-weight: 600;
-                color: #1f2937;
-                margin: 0 0 12px 0;
-            `;
-            title.textContent = '系统维护中';
-
-            const messageEl = document.createElement('p');
-            messageEl.style.cssText = `
-                font-size: 16px;
-                color: #6b7280;
-                margin: 0 0 24px 0;
-                line-height: 1.6;
-            `;
-            messageEl.textContent = message;
-
-            const countdown = document.createElement('div');
-            countdown.id = 'weline-maintenance-countdown';
-            countdown.style.cssText = `
-                font-size: 14px;
-                color: #9ca3af;
-                margin-bottom: 24px;
-            `;
-
-            const closeBtn = document.createElement('button');
-            closeBtn.style.cssText = `
-                background: #f3f4f6;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-size: 14px;
-                color: #6b7280;
-                cursor: pointer;
-                transition: all 0.2s;
-            `;
-            closeBtn.textContent = '关闭提示';
-            closeBtn.onmouseover = () => {
-                closeBtn.style.background = '#e5e7eb';
-            };
-            closeBtn.onmouseout = () => {
-                closeBtn.style.background = '#f3f4f6';
-            };
-            closeBtn.onclick = () => {
-                this.closeMaintenanceNotice();
-            };
-
-            content.appendChild(icon);
-            content.appendChild(title);
-            content.appendChild(messageEl);
-            content.appendChild(countdown);
-            content.appendChild(closeBtn);
-            notice.appendChild(content);
-            document.body.appendChild(notice);
-
-            // 启动自动重试机制
-            this.startMaintenanceRetry(countdown);
-        }
-
-        closeMaintenanceNotice() {
-            const notice = document.getElementById('weline-maintenance-notice');
-            if (notice) {
-                notice.remove();
-            }
-            // 停止重试
-            if (this.maintenanceRetryTimer) {
-                clearInterval(this.maintenanceRetryTimer);
-                this.maintenanceRetryTimer = null;
-            }
-        }
-
-        startMaintenanceRetry(countdownEl) {
-            const RETRY_INTERVAL = 15000; // 15秒
-            let retryCount = 0;
-
-            const updateCountdown = () => {
-                const seconds = RETRY_INTERVAL / 1000;
-                countdownEl.textContent = `系统将每 ${seconds} 秒自动重试，已重试 ${retryCount} 次`;
-            };
-
-            const performRetry = async () => {
-                // 检查提示是否已关闭
-                if (!document.getElementById('weline-maintenance-notice')) {
-                    if (this.maintenanceRetryTimer) {
-                        clearInterval(this.maintenanceRetryTimer);
-                        this.maintenanceRetryTimer = null;
-                    }
                     return;
+                } catch (callbackError) {
+                    console.error('[Weline.Api] onHttpError failed:', callbackError);
                 }
-
-                retryCount++;
-                updateCountdown();
-
-                try {
-                    // 尝试发送一个简单的健康检查请求
-                    // 使用一个简单的 API 端点来检查维护状态
-                    const healthCheckUrl = this.config.healthCheckUrl || '/api/health';
-                    const response = await fetch(this.resolveUrl(healthCheckUrl), {
-                        method: 'GET',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Accept': 'application/json',
-                        }
-                    });
-
-                    // 检查响应状态
-                    if (response.status === 503) {
-                        // 仍然是维护模式，继续等待
-                        return;
-                    }
-
-                    if (response.ok) {
-                        const contentType = response.headers.get('content-type') || '';
-                        if (contentType.includes('application/json')) {
-                            try {
-                                const body = await response.json();
-                                // 检查是否是维护模式响应
-                                if (body && typeof body === 'object' && body.code === 'maintenance') {
-                                    // 仍然是维护模式，继续等待
-                                    return;
-                                }
-                            } catch (e) {
-                                // JSON 解析失败，可能不是维护模式
-                            }
-                        }
-
-                        // 如果不是维护模式响应，说明维护已完成
-                        // 触发维护完成事件
-                        window.dispatchEvent(new CustomEvent('weline:maintenance:resolved'));
-
-                        // 关闭提示
-                        this.closeMaintenanceNotice();
-
-                        // 通知所有待处理的请求可以继续
-                        this.resumePendingRequests();
-                    }
-                } catch (error) {
-                    // 请求失败，继续等待
-                    console.log('[Weline.Api] 维护模式重试检查:', error.message);
-                }
-            };
-
-            // 立即执行一次
-            updateCountdown();
-            performRetry();
-
-            // 每15秒重试一次
-            this.maintenanceRetryTimer = setInterval(performRetry, RETRY_INTERVAL);
-        }
-
-        resumePendingRequests() {
-            // 标记维护模式已结束
-            this.isMaintenanceMode = false;
-
-            // 重新启用自动请求
-            if (this.autoRequestsEnabled) {
-                this.enableAutoRequests();
             }
-
-            // 重试所有保存的请求
-            if (this.pendingMaintenanceRequests.size > 0) {
-                const requests = Array.from(this.pendingMaintenanceRequests.values());
-                this.pendingMaintenanceRequests.clear();
-
-                // 依次重试所有请求
-                requests.forEach((requestInfo) => {
-                    this.request(requestInfo.url, requestInfo.options)
-                        .then(requestInfo.resolve)
-                        .catch(requestInfo.reject);
-                });
+            const Toast = window.BackendToast || window.FrontendToast;
+            if (Toast && typeof Toast.error === 'function') {
+                Toast.error(error.message || 'Request failed');
             }
-        }
-
-        listenMaintenanceResolved() {
-            // 监听维护完成事件
-            window.addEventListener('weline:maintenance:resolved', () => {
-                this.resumePendingRequests();
-            });
         }
 
         restoreCartState() {
-            const storedFlag = localStorage.getItem(this.config.cartFlagStorageKey);
-            if (storedFlag === 'true') {
-                this.enableAutoRequests();
-            }
+            try {
+                const storedFlag = localStorage.getItem(this.config.cartFlagStorageKey);
+                if (storedFlag === 'true') {
+                    this.enableAutoRequests();
+                }
 
-            const cookieFlag = this.readCartCookie();
-            if (cookieFlag === true) {
-                this.markCartActive();
-            } else if (cookieFlag === false && storedFlag !== 'true') {
-                this.markCartEmpty();
-            }
-
-            if (sessionStorage.getItem(this.config.cartProbeSessionKey) !== 'true') {
-                this.probeCartStatus();
-                sessionStorage.setItem(this.config.cartProbeSessionKey, 'true');
+                const cookieFlag = this.readCartCookie();
+                if (cookieFlag === true) {
+                    this.markCartActive();
+                } else if (cookieFlag === false && storedFlag !== 'true') {
+                    this.markCartEmpty();
+                }
+            } catch (error) {
+                /* storage may be unavailable */
             }
         }
 
         readCartCookie() {
             const key = this.config.cartCountCookieKey;
-            if (!key) {
+            if (!key || !document.cookie) {
                 return null;
             }
-
             const match = document.cookie.split('; ').find((row) => row.startsWith(`${key}=`));
             if (!match) {
                 return null;
             }
-
-            const value = parseInt(match.split('=')[1] ?? '0', 10);
+            const value = parseInt(match.split('=')[1] || '0', 10);
             if (Number.isNaN(value)) {
                 return null;
             }
-
-            if (value > 0) {
-                return true;
-            }
-
-            if (value === 0) {
-                return false;
-            }
-
-            return null;
-        }
-
-        probeCartStatus() {
-            const statusUrl = this.config.cartStatusUrl;
-            if (!statusUrl) {
-                return;
-            }
-
-            this.request(statusUrl, { method: 'GET' })
-                .then((response) => {
-                    const resolver = typeof this.config.cartStatusResolver === 'function'
-                        ? this.config.cartStatusResolver
-                        : defaultCartStatusResolver;
-                    if (resolver(response)) {
-                        this.markCartActive();
-                    } else {
-                        this.markCartEmpty();
-                    }
-                })
-                .catch((error) => {
-                    console.warn('[Weline.Api] 购物车状态检查失败:', error);
-                });
+            return value > 0 ? true : value === 0 ? false : null;
         }
 
         listenCartTriggers() {
@@ -811,7 +294,6 @@
                 if (!selector || !(event.target instanceof Element)) {
                     return;
                 }
-
                 if (event.target.closest(selector)) {
                     this.markCartActive();
                 }
@@ -822,23 +304,32 @@
             window.addEventListener('weline:cart:update', (event) => {
                 const detail = event.detail || {};
                 const count = typeof detail.count === 'number' ? detail.count : null;
-                if (count !== null) {
-                    if (count > 0) {
-                        this.markCartActive();
-                    } else {
-                        this.markCartEmpty();
-                    }
+                if (count === null) {
+                    return;
+                }
+                if (count > 0) {
+                    this.markCartActive();
+                } else {
+                    this.markCartEmpty();
                 }
             });
         }
 
         markCartActive() {
-            localStorage.setItem(this.config.cartFlagStorageKey, 'true');
+            try {
+                localStorage.setItem(this.config.cartFlagStorageKey, 'true');
+            } catch (error) {
+                /* storage may be unavailable */
+            }
             this.enableAutoRequests();
         }
 
         markCartEmpty() {
-            localStorage.removeItem(this.config.cartFlagStorageKey);
+            try {
+                localStorage.removeItem(this.config.cartFlagStorageKey);
+            } catch (error) {
+                /* storage may be unavailable */
+            }
             this.disableAutoRequests();
         }
 
@@ -846,10 +337,7 @@
             if (this.autoRequestsEnabled) {
                 return;
             }
-
             this.autoRequestsEnabled = true;
-            this.ensureWorker();
-            this.scheduleAutoRequests();
             window.dispatchEvent(new CustomEvent('weline:api:auto-enabled'));
         }
 
@@ -857,73 +345,22 @@
             if (!this.autoRequestsEnabled) {
                 return;
             }
-
             this.autoRequestsEnabled = false;
             window.dispatchEvent(new CustomEvent('weline:api:auto-disabled'));
         }
-
-        scheduleAutoRequests() {
-            if (!this.autoRequestsEnabled) {
-                return;
-            }
-
-            const tasks = Array.isArray(this.config.autoRequests) ? this.config.autoRequests : [];
-            tasks.forEach((task) => {
-                if (!task || !task.url) {
-                    return;
-                }
-
-                const options = task.options || { method: 'GET' };
-                this.request(task.url, options).catch((error) => {
-                    console.warn('[Weline.Api] 自动请求失败:', error);
-                });
-            });
-        }
     }
 
-    function defaultCartStatusResolver(response) {
-        if (!response || typeof response !== 'object') {
-            return false;
-        }
-
-        const data = response.data;
-        if (!data || typeof data !== 'object') {
-            return false;
-        }
-
-        if (typeof data.has_items !== 'undefined') {
-            return !!data.has_items;
-        }
-
-        if (typeof data.hasItems !== 'undefined') {
-            return !!data.hasItems;
-        }
-
-        if (typeof data.count !== 'undefined') {
-            return Number(data.count) > 0;
-        }
-
-        if (typeof data.total !== 'undefined') {
-            return Number(data.total) > 0;
-        }
-
-        return false;
-    }
-
-    // 创建客户端实例
     const client = new WelineApiClient(config);
 
-    // 导出模块接口
     const ApiModule = {
         __full: true,
-        request: (url, options) => client.request(url, options),
-        get: (url, options) => client.request(url, Object.assign({ method: 'GET' }, options)),
-        post: (url, data, options) => {
-            const opts = Object.assign({}, options, { method: 'POST' });
-            opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
-            opts.body = typeof data === 'string' ? data : JSON.stringify(data || {});
-            return client.request(url, opts);
-        },
+        request: () => client.request(),
+        get: () => client.request(),
+        post: () => client.request(),
+        call: (provider, operation, params, options) => client.call(provider, operation, params, options),
+        graph: (graph, options) => client.graph(graph, options),
+        stream: (channel, params, options) => client.stream(channel, params, options),
+        resource: (provider, optionalMap) => client.resource(provider, optionalMap),
         markCartActive: () => client.markCartActive(),
         markCartEmpty: () => client.markCartEmpty(),
         enableAutoRequests: () => client.enableAutoRequests(),
@@ -931,6 +368,5 @@
         getClient: () => client,
     };
 
-    // 挂载到全局，供 theme.js 加载
     window.WelineApiModule = ApiModule;
 })(window);

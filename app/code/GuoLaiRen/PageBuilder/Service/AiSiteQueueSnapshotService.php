@@ -22,6 +22,8 @@ namespace GuoLaiRen\PageBuilder\Service;
  */
 class AiSiteQueueSnapshotService
 {
+    private const MAX_CONTENT_JSON_DECODE_BYTES = 262144;
+
     /**
      * 对外暴露的 queue 公共快照字段，供前端状态栏、SSE 下发、事件回放共用。
      *
@@ -51,7 +53,7 @@ class AiSiteQueueSnapshotService
         $jobStatus = '';
         $token = '';
         $tokenUsage = $this->normalizeTokenUsage($queueRow);
-        $contentRaw = (string)($queueRow['content'] ?? '');
+        $contentRaw = $this->normalizeSnapshotContentForJsonDecode($queueRow['content'] ?? null);
         if ($contentRaw !== '') {
             $decoded = \json_decode($contentRaw, true);
             if (\is_array($decoded)) {
@@ -110,6 +112,66 @@ class AiSiteQueueSnapshotService
      *
      * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null}
      */
+    private function normalizeSnapshotContentForJsonDecode(mixed $content): string
+    {
+        if (\is_array($content)) {
+            try {
+                return (string)\json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                return '';
+            }
+        }
+        if (!\is_string($content)) {
+            return '';
+        }
+        $content = \trim($content);
+        if ($content === '' || \strlen($content) <= self::MAX_CONTENT_JSON_DECODE_BYTES) {
+            return $content;
+        }
+
+        $summary = [];
+        foreach (['public_id', 'job_key', 'job_type', 'status', 'token', 'execution_token'] as $key) {
+            $value = $this->extractJsonStringValue($content, $key);
+            if ($value !== '') {
+                $summary[$key] = $value;
+            }
+        }
+        foreach (['input_tokens', 'prompt_tokens', 'output_tokens', 'completion_tokens', 'total_tokens'] as $key) {
+            $value = $this->extractJsonIntegerValue($content, $key);
+            if ($value !== null) {
+                $summary[$key] = $value;
+            }
+        }
+        if ($summary === []) {
+            return '';
+        }
+
+        try {
+            return (string)\json_encode($summary, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return '';
+        }
+    }
+
+    private function extractJsonStringValue(string $json, string $key): string
+    {
+        if (\preg_match('/"' . \preg_quote($key, '/') . '"\s*:\s*"((?:\\\\.|[^"\\\\])*)"/', $json, $match) !== 1) {
+            return '';
+        }
+        $decoded = \json_decode('"' . $match[1] . '"');
+
+        return \is_string($decoded) ? \trim($decoded) : '';
+    }
+
+    private function extractJsonIntegerValue(string $json, string $key): ?int
+    {
+        if (\preg_match('/"' . \preg_quote($key, '/') . '"\s*:\s*(\d+)/', $json, $match) !== 1) {
+            return null;
+        }
+
+        return (int)$match[1];
+    }
+
     public function normalizeTokenUsage(array $source): array
     {
         $nested = \is_array($source['token_usage'] ?? null) ? $source['token_usage'] : [];

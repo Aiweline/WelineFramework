@@ -58,7 +58,7 @@ try {
         <w:hook>WeShop_Cart::frontend::partials::mini-cart::header-before</w:hook>
         <div class="mini-cart-header-content" data-wslot="mini-cart-header" data-wslot-name="mini-cart-header" data-wslot-multiple="false">
             <h3 id="mini-cart-title" class="mini-cart-drawer__title">
-                <?= __('Shopping Cart') ?>
+                <?= __('购物车') ?>
                 <span class="mini-cart-drawer__count" data-cart-count-badge>
                     (<span data-cart-count><?= $cartCount ?></span>)
                 </span>
@@ -119,8 +119,8 @@ try {
                     <w:hook>WeShop_Cart::frontend::partials::mini-cart::empty</w:hook>
                     <div class="mini-cart-empty">
                         <span class="mini-cart-empty__icon material-symbols-outlined">shopping_cart</span>
-                        <p class="mini-cart-empty__message"><?= __('Your cart is empty') ?></p>
-                        <a href="<?= $this->getUrl('/') ?>" class="mini-cart-empty__link" data-action="close-mini-cart"><?= __('Start Shopping') ?></a>
+                        <p class="mini-cart-empty__message"><?= __('购物车是空的') ?></p>
+                        <a href="<?= $this->getUrl('/') ?>" class="mini-cart-empty__link" data-action="close-mini-cart"><?= __('开始购物') ?></a>
                     </div>
                 </div>
             <?php endif; ?>
@@ -136,14 +136,14 @@ try {
         <div class="mini-cart-drawer__footer-content" data-wslot="mini-cart-footer" data-wslot-name="mini-cart-footer" data-wslot-multiple="true" data-wslot-accept="summary,actions,coupon">
             <div class="mini-cart-drawer__summary">
                 <div class="mini-cart-drawer__summary-row">
-                    <span class="mini-cart-drawer__summary-label"><?= __('Subtotal') ?></span>
+                    <span class="mini-cart-drawer__summary-label"><?= __('小计') ?></span>
                     <span class="mini-cart-drawer__summary-value" data-mini-cart-subtotal><?= $this->formatPrice($cartTotal) ?></span>
                 </div>
-                <p class="mini-cart-drawer__summary-note"><?= __('Shipping and taxes calculated at checkout') ?></p>
+                <p class="mini-cart-drawer__summary-note"><?= __('运费和税费将在结算时计算') ?></p>
             </div>
             <div class="mini-cart-drawer__actions">
-                <a href="<?= $this->getUrl('cart') ?>" class="mini-cart-drawer__view-cart"><?= __('View Cart') ?></a>
-                <a href="<?= $this->getUrl('checkout') ?>" class="mini-cart-drawer__checkout weline-pixel::begin_checkout"><?= __('Checkout') ?></a>
+                <a href="<?= $this->getUrl('cart') ?>" class="mini-cart-drawer__view-cart"><?= __('查看购物车') ?></a>
+                <a href="<?= $this->getUrl('checkout') ?>" class="mini-cart-drawer__checkout weline-pixel::begin_checkout"><?= __('去结算') ?></a>
             </div>
             <div class="mini-cart-drawer__express" data-wslot="mini-cart-express" data-wslot-name="mini-cart-express" data-wslot-multiple="true" data-wslot-accept="express-checkout,payment">
                 <w:hook>WeShop_Cart::frontend::partials::mini-cart::express-checkout</w:hook>
@@ -158,11 +158,6 @@ window.__WelineMiniCartConfig = <?= json_encode([
     'position' => $position,
     'width' => $width,
     'autoOpen' => $autoOpen,
-    'api' => [
-        'items' => '/api123/api/rest/v1/weshop/cart/mini-items',
-        'update' => '/api123/api/rest/v1/weshop/cart',
-        'remove' => '/api123/api/rest/v1/weshop/cart/remove',
-    ],
     'cart' => [
         'count' => $cartCount,
         'subtotal' => $cartTotal,
