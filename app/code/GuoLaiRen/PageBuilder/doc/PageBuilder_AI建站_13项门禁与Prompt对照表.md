@@ -69,7 +69,7 @@ ok = count(signals) >= 3
 patterns = [
     'media_query'        => '/@media\s*\(\s*(?:max|min)-width\s*:/iu',
     'small_breakpoint'   => '/@media\s*\(\s*max-width\s*:\s*(?:4[0-9]{2}|3[0-9]{2})px/iu',
-    'single_column'      => '/grid-template-columns\s*:\s*(?:minmax\(...\)?1fr|flex-direction:column/iu',
+    'single_column'      => '/grid-template-columns\s*:\s*(?:minmax\(...\))?1fr|flex-direction:column/iu',
     'min_width_reset'    => '/min-width\s*:\s*0/iu',
     'media_responsive'   => '/(?:max-width:100%|height:auto|object-fit:cover)/iu',
     'overflow_guard'     => '/overflow-x:hidden|overflow-wrap:break-word/iu',
@@ -108,74 +108,4 @@ ok = isset(signals['media_query']) && count(signals) >= 4
 
 REQUIRED_PALETTE_ROLE_MAP (HARD)：
   {primary=..., accent=..., surface=..., text=..., cta_bg=..., cta_text=..., scrim=..., ...}
-  ← css_extra 中所有颜色必须来自该字典；禁用所有硬编码模板色（#111827 / #f59e0b 等）
-```
-
----
-
-## 4. visual_assets_safe — 图片资源安全门禁
-
-**门禁判定**：`inspectRenderedPage.visuals_safe`：
-- 所有 `<img src>` 必须出现在 `verified_asset_src_allowlist`
-- 不允许 `<svg>`、`data:image/svg+xml`、unsplash/pexels/picsum 等外站
-- 缺图位不允许出现破图
-
-**Prompt 反向编码**：
-
-```
-[gate#visual_assets_safe] 图片资源安全门禁：
-  - 所有 <img src> 必须来自 verified_asset_src_allowlist
-  - 不允许出现 <svg>、空 src、broken alt
-  - css_extra 里 url(...) 仅允许引用 verified_asset_src_allowlist 中的 URL
-```
-
----
-
-## 5. language_consistency — 语言一致门禁
-
-**门禁判定**（`matchLanguageViolations`）：检查可见文案非 content_locale 的字符比例。
-
-**Prompt 反向编码**：
-
-```
-content_locale (HARD): {locale}
-  - 全部可见文案（h2 / p / 卡片 / CTA / form label / 备注）必须用该语种书写
-  - 不要把 plan_locale 或英文模板词直接放进最终页面
-
-[gate#language_consistency] 语言一致门禁：
-  - 每段可见文案（含 alt、placeholder、aria-label）必须使用 content_locale
-  - 数字、品牌名、URL 不受语种限制
-```
-
----
-
-## 6. source_truth_coverage / stage1_content_visible
-
-**门禁判定**：
-- `SourceTruthCoverageLinter` 计算 must_include_facts、必需区块、禁忌规则的命中率
-- `matchStageOneContent` 计算阶段一关键样本在 HTML 中的出现率
-
-**Prompt 反向编码**：
-
-```
-must_include_facts (HARD)：可见文案至少自然包含以下事实（不要逐字硬贴，按 content_locale 改写）：
-  Free APK | Daily bonus 100 | Verified safe | ...
-
-[gate#stage1_content_visible] 阶段一内容可见门禁：
-  - 可见文案必须从 must_include_facts / page_goal / block_goal 中提取真实业务名词
-```
-
----
-
-## 7. content_quality — 内容洁净门禁
-
-**门禁判定**：`inspectRenderedPage.content_clean` —— 检测页面是否仍包含 metadata 字符串、demo 字样、契约关键字。
-
-**Prompt 反向编码**：
-
-```
-[gate#content_quality] 内容洁净门禁：
-  - 严禁把 page_goal / block_goal / why_this_block / content_contract /
-    design_contract / visual_contract / runtime_context / shared:/page:/
-    content/ 这类元数据字符串直接渲染成可见 HTML。
-  - 严禁出现 'lorem ipsum' / 'TODO' / 'placeholder' / 'demo' / '占
+  ← css_extra 中所有颜色必须来自该字典；禁用所有硬编码模板色（#111827 / #f59e0b / #f8fafc / #92400e /
