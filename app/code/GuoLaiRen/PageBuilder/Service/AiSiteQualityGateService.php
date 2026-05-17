@@ -628,7 +628,7 @@ final class AiSiteQualityGateService
             return $this->matchLargeCjkProseBlocks($text);
         }
 
-        return [];
+        return $this->matchLargeLatinProseBlocks($text);
     }
 
     /**
@@ -1839,6 +1839,7 @@ final class AiSiteQualityGateService
         $sharedHeader = $scheduled['__shared_header__'] ?? false;
         $sharedFooter = $scheduled['__shared_footer__'] ?? false;
         unset($scheduled['__shared_header__'], $scheduled['__shared_footer__']);
+        $expected = $this->removeSharedBlocksFromPerPageCoverage($expected, $sharedHeader, $sharedFooter);
 
         // 蓝图未生成（例如方案尚未确认）时不阻断发布，避免与 build_tasks_done / required_pages_render 双重报错；
         // 此时报告 evaluated=false，由其它门禁覆盖。
@@ -1879,6 +1880,39 @@ final class AiSiteQualityGateService
             'shared' => ['header' => $sharedHeader, 'footer' => $sharedFooter],
             'evaluated' => true,
         ];
+    }
+
+    /**
+     * Shared header/footer are produced by dedicated shared:* tasks and checked
+     * by shared_blocks_ready. They are not missing per-page content blocks.
+     *
+     * @param array<string, list<string>> $expected
+     * @return array<string, list<string>>
+     */
+    private function removeSharedBlocksFromPerPageCoverage(array $expected, bool $sharedHeader, bool $sharedFooter): array
+    {
+        if (!$sharedHeader && !$sharedFooter) {
+            return $expected;
+        }
+
+        $sharedAliases = [];
+        if ($sharedHeader) {
+            $sharedAliases[] = 'header';
+            $sharedAliases[] = 'shared_header';
+        }
+        if ($sharedFooter) {
+            $sharedAliases[] = 'footer';
+            $sharedAliases[] = 'shared_footer';
+        }
+
+        foreach ($expected as $pageType => $blocks) {
+            $expected[$pageType] = \array_values(\array_filter(
+                \array_map('\strval', $blocks),
+                static fn(string $block): bool => !\in_array($block, $sharedAliases, true)
+            ));
+        }
+
+        return $expected;
     }
 
     /**
@@ -2054,7 +2088,7 @@ final class AiSiteQualityGateService
             }
             $renderDataBucket[] = $finding;
         }
-        $sourceTruthBucket = $this->filterStaleSourceTruthRequiredBlockFindings($scope, $sourceTruthBucket);
+        $sourceTruthBucket = $this->filterStaleSourceTruthFindings($scope, $sourceTruthBucket);
 
         $sourceTruth = $this->summarizeFindingsBucket($sourceTruthBucket, $evaluated);
         $renderData = $this->summarizeFindingsBucket($renderDataBucket, $evaluated);
@@ -2113,6 +2147,79 @@ final class AiSiteQualityGateService
      * build_blueprint task tree. Do not let an older qa_report snapshot keep a
      * missing-block error after the canonical task tree has moved on.
      *
+     * @param list<array<string, mixed>> $findings
+     * @return list<array<string, mixed>>
+     */
+    private function filterStaleSourceTruthFindings(array $scope, array $findings): array
+    {
+        $findings = $this->filterStaleSourceTruthRequiredBlockFindings($scope, $findings);
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        $linter = new SourceTruthCoverageLinter();
+        $visibleFactIds = [];
+        $visibleFactsById = [];
+        foreach ($linter->visibleMustIncludeFacts($sourceTruth) as $fact) {
+            if (\is_array($fact)) {
+                $id = \trim((string)($fact['id'] ?? ''));
+                if ($id !== '') {
+                    $visibleFactIds[$id] = true;
+                    $visibleFactsById[$id] = \trim((string)($fact['text'] ?? ''));
+                }
+            }
+        }
+        $currentCoverageText = $this->collectSourceTruthCoverageTextFromScope($scope);
+        if ($visibleFactIds === []) {
+            return \array_values(\array_filter(
+                $findings,
+                static function (array $finding): bool {
+                    $path = \trim((string)($finding['path'] ?? $finding['target_path'] ?? ''));
+                    return !\str_starts_with($path, 'content_quality.missing_must_include_fact');
+                }
+            ));
+        }
+
+        $filtered = [];
+        foreach ($findings as $finding) {
+            $path = \trim((string)($finding['path'] ?? $finding['target_path'] ?? ''));
+            if (!\str_starts_with($path, 'content_quality.missing_must_include_fact')) {
+                $filtered[] = $finding;
+                continue;
+            }
+            $message = (string)($finding['message'] ?? '');
+            if (\preg_match('/Missing must-include fact \[([^\]]+)\]/u', $message, $match) !== 1) {
+                $filtered[] = $finding;
+                continue;
+            }
+            $factId = \trim((string)($match[1] ?? ''));
+            if (!isset($visibleFactIds[$factId])) {
+                continue;
+            }
+            $factText = (string)($visibleFactsById[$factId] ?? '');
+            if ($currentCoverageText !== '' && $factText !== '' && $linter->textCoversFact($currentCoverageText, $factText)) {
+                continue;
+            }
+            $filtered[] = $finding;
+        }
+
+        return $filtered;
+    }
+
+    private function collectSourceTruthCoverageTextFromScope(array $scope): string
+    {
+        $parts = [];
+        foreach (['page_type_layouts', 'virtual_pages_by_type', 'shared_components'] as $key) {
+            if (!\array_key_exists($key, $scope)) {
+                continue;
+            }
+            $json = \json_encode($scope[$key], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+            if (\is_string($json) && $json !== '' && $json !== 'null') {
+                $parts[] = $json;
+            }
+        }
+
+        return \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags(\implode(' ', $parts))));
+    }
+
+    /**
      * @param list<array<string, mixed>> $findings
      * @return list<array<string, mixed>>
      */
