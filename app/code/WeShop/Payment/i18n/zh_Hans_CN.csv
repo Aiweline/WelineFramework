@@ -17,57 +17,62 @@
 "Query payment status by order number.",按订单号查询支付状态。
 "An order instance is required for payment processing.",支付处理需要订单实例。
 "Unable to sign the Alipay request with the configured private key.","Unable to sign the Alipay request with the configured private key."
-"Collect payment from the customer when the shipment is delivered.",配送送达时向客户收款。
-"Please complete a manual bank transfer after the order is placed.",请在订单创建后完成手动银行转账。
+配送送达时向客户收款。,配送送达时向客户收款。
+请在订单创建后完成手动银行转账。,请在订单创建后完成手动银行转账。
 "%{1} is missing required configuration: %{2}","%{1} is missing required configuration: %{2}"
 "Order %{1}","Order %{1}"
 "Unable to initialize the WeChat Pay order.","Unable to initialize the WeChat Pay order."
-"B2B Credit Account","B2B 信用账户"
-"Charge the order to your enterprise credit line and pay by invoice before the due date.",使用企业授信下单，请在到期日前按账单付款。
-"Available only for approved B2B customers with an active credit line.","仅对已审核且授信有效的 B2B 客户开放。"
-Instructions,说明
-"Manual Transfer",手动转账
-"Pay by bank transfer after the order is created.",订单创建后通过银行转账付款。
-"Use the order number as the payment reference.",请使用订单号作为付款备注。
-"Shown to the customer after the order is created.",下单成功后展示给客户。
-"Account Name",账户名称
-"Bank Name",银行名称
-"Account Number",账号
-"Reference Note",备注说明
-"Cash on Delivery",货到付款
-"Pay in cash when the shipment is delivered.",在配送送达时现金付款。
-"Collect the payment from the customer when the shipment is delivered.",配送送达时向客户收款。
-"COD Fee",货到付款手续费
+企业信用账户,企业信用账户
+订单计入企业信用额度，并在到期日前按发票付款。,订单计入企业信用额度，并在到期日前按发票付款。
+仅适用于已开通有效信用额度的企业客户。,仅适用于已开通有效信用额度的企业客户。
+说明,说明
+银行转账,银行转账
+下单后通过银行转账付款。,下单后通过银行转账付款。
+请将订单金额转入配置的银行账户，并使用订单号作为付款备注。,请将订单金额转入配置的银行账户，并使用订单号作为付款备注。
+请使用订单号作为付款备注。,请使用订单号作为付款备注。
+订单创建后展示给客户。,订单创建后展示给客户。
+账户名称,账户名称
+开户银行,开户银行
+银行账号,银行账号
+付款备注,付款备注
+货到付款,货到付款
+配送送达时现金付款。,配送送达时现金付款。
+货到付款手续费,货到付款手续费
 PayPal,PayPal
-"Pay online with your PayPal account.","使用您的 PayPal 账户在线支付。"
-"Sandbox Mode",沙箱模式
-"Keep enabled until the production PayPal credentials are ready.","在生产 PayPal 凭据准备好之前请保持开启。"
-"Client ID","客户端 ID"
-"Client Secret",客户端密钥
-"Merchant Email",商户邮箱
+"使用 PayPal 账户在线支付。","使用 PayPal 账户在线支付。"
+沙箱模式,沙箱模式
+"生产 PayPal 凭据准备好之前保持开启。","生产 PayPal 凭据准备好之前保持开启。"
+"客户端 ID","客户端 ID"
+客户端密钥,客户端密钥
+商户邮箱,商户邮箱
 "Webhook ID","Webhook ID"
-Alipay,支付宝
-"Pay with Alipay through a hosted redirect checkout.","Pay with Alipay through a hosted redirect checkout."
+支付宝,支付宝
+通过托管跳转结账使用支付宝付款。,通过托管跳转结账使用支付宝付款。
 "App ID","应用 ID"
-"Merchant ID","商户 ID"
-"Public Key",公钥
-"Private Key",私钥
-"Notify URL","Notify URL"
-"Return URL","Return URL"
-"Product Code","Product Code"
-"Payment Timeout","Payment Timeout"
-"Signature Type","Signature Type"
-"WeChat Pay",微信支付
-"Pay with WeChat Pay through the unified order gateway.","Pay with WeChat Pay through the unified order gateway."
-"API v3 Key","API v3 密钥"
-"Merchant Certificate Path",商户证书路径
-"Trade Type","Trade Type"
-"Scene Info","Scene Info"
-"Client IP Override","Client IP Override"
+"商户 ID","商户 ID"
+公钥,公钥
+私钥,私钥
+通知地址,通知地址
+返回地址,返回地址
+产品编码,产品编码
+支付超时时间,支付超时时间
+签名类型,签名类型
+微信支付,微信支付
+通过统一下单网关使用微信支付。,通过统一下单网关使用微信支付。
+商户号,商户号
+"API v3 密钥","API v3 密钥"
+商户证书路径,商户证书路径
+交易类型,交易类型
+场景信息,场景信息
+"客户端 IP 覆盖","客户端 IP 覆盖"
 "Unsupported payment method: %{1}",不支持的支付方式：%{1}
 "Payment method %{1} is missing required configuration: %{2}","Payment method %{1} is missing required configuration: %{2}"
 "Payment provider is not configured for %{1}.","支付提供方未为 %{1} 配置。"
 "Payment provider is invalid for %{1}.","支付提供方 %{1} 配置无效。"
+"2. 支付方式","2. 支付方式"
+当前结账上下文没有可用支付方式。,当前结账上下文没有可用支付方式。
+支付流程：%{1},支付流程：%{1}
+确认订单后完成该支付流程。,确认订单后完成该支付流程。
 支付管理,支付管理
 支付方式,支付方式
 "Total Methods",支付方式总数

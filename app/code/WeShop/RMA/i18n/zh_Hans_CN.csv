@@ -87,6 +87,6 @@ Description,Description
 "Submit Request","Submit Request"
 "Request Timeline","Request Timeline"
 "Your Latest RMA Records","Your Latest RMA Records"
-"Order #%1","Order #%1"
-"Submitted at: %1","Submitted at: %1"
+Order,Order
+"Submitted at","Submitted at"
 "Unable to submit your request right now.","Unable to submit your request right now."

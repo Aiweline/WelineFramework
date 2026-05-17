@@ -209,7 +209,7 @@ class CategoryService
         $categoryId = (string)($category['category_id'] ?? '');
         $pathSegment = $handle !== '' ? $handle : $categoryId;
         $fullPath = $parentPath !== '' ? $parentPath . '/' . $pathSegment : $pathSegment;
-        $label = (string)($category['name'] ?? '');
+        $label = $this->localizeCategoryDisplayName((string)($category['name'] ?? ''));
         if ($level > 0) {
             $indent = str_repeat('&nbsp;&nbsp;&nbsp;', $level);
             $separator = $level > 1 ? ' - ' : ' > ';
@@ -219,7 +219,7 @@ class CategoryService
         $options[] = [
             'value' => $fullPath,
             'label' => $label,
-            'display_label' => (string)($category['name'] ?? ''),
+            'display_label' => $this->localizeCategoryDisplayName((string)($category['name'] ?? '')),
             'level' => $level,
             'full_path' => $fullPath,
         ];
@@ -294,7 +294,7 @@ class CategoryService
         $encodedSlug = rawurlencode($rawSlug);
         $fullHandle = $parentPath === '' ? $encodedSlug : $parentPath . '/' . $encodedSlug;
         $menuItem = [
-            'text' => (string)($category['name'] ?? ''),
+            'text' => $this->localizeCategoryDisplayName((string)($category['name'] ?? '')),
             'url' => $categoryBaseUrl . $fullHandle,
         ];
 
@@ -327,10 +327,33 @@ class CategoryService
         }
 
         return [
-            'text' => (string)($category['name'] ?? ''),
+            'text' => $this->localizeCategoryDisplayName((string)($category['name'] ?? '')),
             'url' => $categoryBaseUrl . rawurlencode($categoryHandle),
             'icon' => (string)($category['icon'] ?? 'fas fa-circle'),
         ];
+    }
+
+    private function localizeCategoryDisplayName(string $name): string
+    {
+        $name = trim($name);
+        $map = [
+            'Consumer Electronics' => '消费电子',
+            'Smart Devices' => '智能设备',
+            'Everyday Apparel' => '日常服饰',
+            'Daily Wear' => '日常穿搭',
+            'Home Living' => '家居生活',
+            'Living Space' => '生活空间',
+            'Empty Category Demo' => '演示分类',
+            'Prime Video' => '会员视频',
+            'Gift Cards' => '礼品卡',
+            'Customer Service' => '客户服务',
+            'Today\'s Deals' => '今日特价',
+            'Best Sellers' => '热销榜',
+            'New Arrivals' => '新品上市',
+            'Shop by Category' => '按分类选购',
+        ];
+
+        return $map[$name] ?? $name;
     }
     
     /**

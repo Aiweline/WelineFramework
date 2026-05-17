@@ -1,6 +1,26 @@
 <?php
 
 return [
+    'WeShop_Checkout::frontend::layouts::checkout-success::before' => [
+        'name' => __('Checkout success page before content'),
+        'description' => __('Render extension content before the checkout success page body.'),
+        'doc' => 'frontend/checkout/success-before.md',
+    ],
+    'WeShop_Checkout::frontend::layouts::checkout-success::recommendations-before' => [
+        'name' => __('Checkout success recommendations before'),
+        'description' => __('Render extension content before the success page recommendation block.'),
+        'doc' => 'frontend/checkout/success-recommendations-before.md',
+    ],
+    'WeShop_Checkout::frontend::layouts::checkout-success::recommendations-after' => [
+        'name' => __('Checkout success recommendations after'),
+        'description' => __('Render extension content after the success page recommendation block.'),
+        'doc' => 'frontend/checkout/success-recommendations-after.md',
+    ],
+    'WeShop_Checkout::frontend::layouts::checkout-success::after' => [
+        'name' => __('Checkout success page after content'),
+        'description' => __('Render extension content after the checkout success page body.'),
+        'doc' => 'frontend/checkout/success-after.md',
+    ],
     'WeShop_Checkout::frontend::partials::checkout::shipping-methods' => [
         'name' => __('Checkout shipping method list'),
         'description' => __('Render the dynamic list of checkout shipping methods gathered from the shipping query provider.'),

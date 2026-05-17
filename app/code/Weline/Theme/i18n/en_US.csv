@@ -1302,9 +1302,9 @@ Close,Close
 在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。,"Display the core selling points of the promotion here, such as spend-and-save, discounts, flash sales, member exclusives, etc."
 活动商品示例,"Event Product Example"
 在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。,"Display the product list or product recommendation component participating in the promotion here, providing users with a quick purchase entry."
-继续购物,"Continue Shopping"
 购物车是空的,"Cart is empty"
 您的购物车是空的,"Your shopping cart is empty"
+继续购物,"Continue Shopping"
 筛选,Filter
 "分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
 筛选条件,"Filter Conditions"
@@ -1660,11 +1660,11 @@ CNY,CNY
 查看购物车,"View Shopping Cart"
 去结算,"Proceed to Checkout"
 打开所有类别菜单,"Open all categories menu"
+更多,More
 今日特价,"Today's Deals"
-"Prime Video","Prime Video"
+会员视频,会员视频
 礼品心愿单,"Gift List"
 客户服务,"Customer Service"
-更多,More
 关闭菜单,"Close menu"
 分类导航,"Category Navigation"
 手机通讯,"Mobile Phones & Communication"
