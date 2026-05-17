@@ -102,6 +102,6 @@ final class FrontendWorkerContractTest extends TestCase
 
         self::assertStringContainsString('typeof property === \'symbol\'', $source);
         self::assertStringContainsString('sameOriginUrl', $source);
-        self::assertStringContainsString('worker unavailable', strtolower($source));
+        self::assertStringContainsString('worker is unavailable', strtolower($source));
     }
 }

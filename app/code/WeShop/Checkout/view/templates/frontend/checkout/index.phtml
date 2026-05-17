@@ -508,7 +508,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             </a>
             <p><?= __('一页式结账：联系信息、配送和支付一次完成。') ?></p>
         </div>
-        <div class="weshop-checkout-mode">
+        <div class="weshop-checkout-mode" data-weshop-checkout-mode-badge>
             <?= $isGuestCheckout ? __('匿名结账') : __('账户结账') ?>
         </div>
     </div>
@@ -810,6 +810,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             grandTotal: document.querySelector('[data-weshop-summary-grand-total]')
         };
         var checkoutShell = document.querySelector('[data-weshop-checkout-mode]');
+        var modeBadge = document.querySelector('[data-weshop-checkout-mode-badge]');
         var checkoutModeInputs = Array.prototype.slice.call(form.querySelectorAll('input[name="checkout_mode"]'));
         var contactModeLabel = document.querySelector('[data-weshop-contact-mode-label]');
         var contactHelp = document.querySelector('[data-weshop-contact-help]');
@@ -855,6 +856,9 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             var guestMode = isGuestCheckoutMode();
             if (checkoutShell) {
                 checkoutShell.setAttribute('data-weshop-checkout-mode', guestMode ? 'guest' : 'customer');
+            }
+            if (modeBadge) {
+                modeBadge.textContent = guestMode ? '<?= __('匿名结账') ?>' : '<?= __('账户结账') ?>';
             }
             if (contactModeLabel) {
                 contactModeLabel.textContent = guestMode ? '<?= __('无需账户') ?>' : '<?= __('账户邮箱') ?>';
@@ -1082,7 +1086,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
         form.addEventListener('submit', function (event) {
             event.preventDefault();
             showCheckoutMessage('', '');
-            syncAddressRequiredState();
+            syncCheckoutModeState(false);
 
             if (!form.reportValidity()) {
                 return;
@@ -1123,7 +1127,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             });
         });
 
-        syncAddressRequiredState();
+        syncCheckoutModeState(false);
         renderCartSummary(initialCartSummary);
     })();
 </script>
