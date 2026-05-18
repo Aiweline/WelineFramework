@@ -128,6 +128,22 @@
         return typeof FormData !== 'undefined' && value instanceof FormData;
     };
 
+    const normalizeCallParams = (params) => {
+        if (!params || typeof params !== 'object' || Array.isArray(params) || isFormData(params)) {
+            return params || {};
+        }
+
+        const normalized = {};
+        Object.keys(params).forEach(key => {
+            if (key === 'form_key' || key === 'csrf_token' || key === '_token') {
+                return;
+            }
+            normalized[key] = params[key];
+        });
+
+        return normalized;
+    };
+
     const apiConfig = getConfig();
     const config = Object.assign({
         endpoint: '/api/framework/query-bin',
@@ -172,7 +188,7 @@
                 type: 'call',
                 provider,
                 operation,
-                params: params || {},
+                params: normalizeCallParams(params),
                 options,
             });
         }
@@ -189,7 +205,7 @@
             const ticket = await this.send({
                 type: 'stream-ticket',
                 channel,
-                params: params || {},
+                params: normalizeCallParams(params),
                 options,
             });
             if (!ticket || !ticket.url) {
