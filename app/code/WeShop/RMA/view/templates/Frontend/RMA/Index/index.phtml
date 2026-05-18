@@ -367,7 +367,7 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
                 return RmaApi.create(payload, {silent: true});
             }).then(function (result) {
                 if (result && result.success) {
-                    feedback.textContent = result.message || '<?= __('Your return request has been submitted.') ?>';
+                    feedback.textContent = '<?= __('Your return request has been submitted.') ?>';
                     feedback.classList.remove('text-red-500');
                     feedback.classList.add('text-emerald-500');
                     window.setTimeout(function () {
