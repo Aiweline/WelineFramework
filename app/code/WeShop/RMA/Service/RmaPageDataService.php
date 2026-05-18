@@ -7,6 +7,7 @@ namespace WeShop\RMA\Service;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
 use WeShop\RMA\Model\Rma;
+use Weline\Framework\Http\Cookie;
 
 class RmaPageDataService
 {
@@ -33,19 +34,59 @@ class RmaPageDataService
             'order_options' => $orderOptions,
             'rma_list' => $rmaList,
             'rma_count' => count($rmaList),
-            'request_types' => [
-                ['code' => 'return', 'label' => (string) __('Return')],
-                ['code' => 'exchange', 'label' => (string) __('Exchange')],
-            ],
-            'reason_options' => [
-                (string) __('Wrong size'),
-                (string) __('Damaged in transit'),
-                (string) __('Defective item'),
-                (string) __('Item not as described'),
-                (string) __('Changed my mind'),
-                (string) __('Other'),
+            'request_types' => $this->getRequestTypes(),
+            'reason_options' => $this->getReasonOptions(),
+        ];
+    }
+
+    /**
+     * @return array<int,array{code:string,label:string}>
+     */
+    protected function getRequestTypes(): array
+    {
+        return [
+            ['code' => 'return', 'label' => $this->label('Return')],
+            ['code' => 'exchange', 'label' => $this->label('Exchange')],
+        ];
+    }
+
+    /**
+     * @return array<int,array{value:string,label:string}>
+     */
+    protected function getReasonOptions(): array
+    {
+        $values = [
+            'Wrong size',
+            'Damaged in transit',
+            'Defective item',
+            'Item not as described',
+            'Changed my mind',
+            'Other',
+        ];
+
+        return array_map(fn(string $value): array => [
+            'value' => $value,
+            'label' => $this->label($value),
+        ], $values);
+    }
+
+    protected function label(string $key): string
+    {
+        $locale = Cookie::getLangLocal() ?: 'en_US';
+        $labels = [
+            'zh_Hans_CN' => [
+                'Return' => '退货',
+                'Exchange' => '换货',
+                'Wrong size' => '尺码不合适',
+                'Damaged in transit' => '运输损坏',
+                'Defective item' => '商品有缺陷',
+                'Item not as described' => '商品与描述不符',
+                'Changed my mind' => '改变主意',
+                'Other' => '其他',
             ],
         ];
+
+        return $labels[$locale][$key] ?? (string) __($key);
     }
 
     /**
