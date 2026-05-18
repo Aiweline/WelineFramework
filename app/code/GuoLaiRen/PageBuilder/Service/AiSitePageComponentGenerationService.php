@@ -1863,6 +1863,26 @@ class AiSitePageComponentGenerationService
             . $strictImageTail;
     }
 
+    private function buildRoleSpecificRecoveryContract(string $componentCode, string $componentPrefix): string
+    {
+        $identity = \mb_strtolower($componentCode);
+        if (
+            \preg_match('/(?:contact[-_\/ ]*methods?|contact[-_\/ ]*channels?|support[-_\/ ]*channels?)/u', $identity) === 1
+            && !\str_contains($identity, 'form')
+            && !\str_contains($identity, 'faq')
+        ) {
+            return "- CONTACT_METHOD_REQUIRED_STRUCTURE (HARD): html_content must contain a visible channel hub, not only hero text or an image. Include at least two repeated channel rows/cards shaped like `<div class='{$componentPrefix}-channel'><span class='pb-c-label'>Email:</span><span class='pb-c-value'>support@example.com</span></div>`. Keep the exact `pb-c-label` and `pb-c-value` classes on the label/value spans; use real visitor contact facts from the plan. A verified image may be a background or side visual, but it cannot replace the channel rows.\n";
+        }
+        if (\preg_match('/(?:support[-_\/ ]*form|form[-_\/ ]*guidance|contact[-_\/ ]*form|message)/u', $identity) === 1) {
+            return "- FORM_GUIDANCE_REQUIRED_STRUCTURE (HARD): html_content must contain `<form class='pb-c-form'>` with at least two `<label>` elements, at least two `<input>` or `<textarea>` fields, and one message/issue textarea. Do not output email/phone/address cards for this role.\n";
+        }
+        if (\str_contains($identity, 'faq')) {
+            return "- FAQ_REQUIRED_STRUCTURE (HARD): html_content must contain `.pb-c-faq-list` with repeated `.pb-c-faq-item` groups; each group has `.pb-c-question` ending with `?` and a separate `<p class='pb-c-answer'>...</p>` answer. Do not output contact cards for FAQ.\n";
+        }
+
+        return '';
+    }
+
     private function shouldRetryAiComponentGeneration(\Throwable $throwable): bool
     {
         // 强契约异常一律允许重试：findings 已经携带定点修复线索，
