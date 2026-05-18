@@ -54,6 +54,7 @@ class Form implements TaglibInterface
             'allow-frontend' => false,
             'api-url' => false,
             'field-api-url' => false,
+            'api-provider' => false,
             'dependencies' => false,
             'transaction' => false,
             'for' => false,
@@ -116,6 +117,7 @@ class Form implements TaglibInterface
             $buttonIcon = $attributes['button-icon'] ?? 'fas fa-plus';
             $apiUrl = $attributes['api-url'] ?? $action;
             $fieldApiUrl = $attributes['field-api-url'] ?? '';
+            $apiProvider = $attributes['api-provider'] ?? '';
             $dependencies = $attributes['dependencies'] ?? '';
             $transaction = array_key_exists('transaction', $attributes)
                 ? filter_var($attributes['transaction'], FILTER_VALIDATE_BOOLEAN)
@@ -158,6 +160,9 @@ class Form implements TaglibInterface
             if (empty($fieldApiUrl) && $tableContext) {
                 $fieldApiUrl = $tableContext['field-api-url'] ?? '';
             }
+            if (empty($apiProvider) && $tableContext) {
+                $apiProvider = $tableContext['api-provider'] ?? '';
+            }
             if (empty($dependencies) && $tableContext) {
                 $dependencies = $tableContext['dependencies'] ?? '';
             }
@@ -167,6 +172,10 @@ class Form implements TaglibInterface
                     : false;
             }
             $transaction = $transaction ?? false;
+            $allowFrontend = filter_var($attributes['allow-frontend'] ?? ($tableContext['allow-frontend'] ?? false), FILTER_VALIDATE_BOOLEAN);
+            if ($allowFrontend && empty($apiProvider)) {
+                $apiProvider = 'datatable';
+            }
 
             // 濡傛灉d-form鍦╠-table鍐呴儴涓攊d灞炴€ф湭鎸囧畾锛屼娇鐢╰able鐨処D鐢熸垚琛ㄥ崟ID
             // 杩欐牱Table.php涓殑鏂板鎸夐挳灏辫兘姝ｇ‘鎵惧埌琛ㄥ崟浜?
@@ -250,7 +259,7 @@ class Form implements TaglibInterface
                 $content, $autoFields, $excludeFieldsArray,
                 $includeFieldsArray, $for, $buttonText, $buttonClass, $buttonIcon,
                 $formMode, $showTriggerButton, $isInsideTable, $apiUrl, $fieldApiUrl,
-                $dependencies, $transaction, $modelConfig
+                $dependencies, $transaction, $modelConfig, $apiProvider
             );
 
             // 寮瑰嚭琛ㄥ崟涓婁笅鏂?
@@ -313,7 +322,8 @@ class Form implements TaglibInterface
         $fieldApiUrl = 'datatable/rest/v1/form/fields',
         $dependencies = '',
         $transaction = false,
-        $modelConfig = []
+        $modelConfig = [],
+        $apiProvider = ''
     )
     {
         $layoutClass = $layout === 'horizontal' ? 'w-form-horizontal' : 'w-form-vertical';
@@ -337,6 +347,8 @@ class Form implements TaglibInterface
         $formMode = (string)$formMode;
         $dependenciesJs = addslashes((string)$dependencies);
         $transactionJs = $transaction ? 'true' : 'false';
+        $workerApiJs = $apiProvider ? 'true' : 'false';
+        $apiProviderJs = addslashes((string)$apiProvider);
         $modelConfigJson = json_encode($modelConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($modelConfigJson === false) {
             $modelConfigJson = '{}';
@@ -477,8 +489,11 @@ class Form implements TaglibInterface
                             autoFields: ' . ($autoFields ? 'true' : 'false') . ',
                             excludeFields: ' . json_encode($excludeFields, JSON_UNESCAPED_UNICODE) . ',
                             includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . ',
-                            apiUrl: "' . addslashes($apiUrl) . '",
-                            fieldApiUrl: "' . addslashes($fieldApiUrl) . '",
+                            apiUrl: ' . ($workerApiJs === 'true' ? '""' : '"' . addslashes($apiUrl) . '"') . ',
+                            fieldApiUrl: ' . ($workerApiJs === 'true' ? '""' : '"' . addslashes($fieldApiUrl) . '"') . ',
+                            workerApi: ' . $workerApiJs . ',
+                            apiProvider: "' . $apiProviderJs . '",
+                            operations: {formFields: "formFields", formRecord: "formRecord", create: "create", update: "update", saveData: "saveData"},
                             dependencies: "' . $dependenciesJs . '",
                             transaction: ' . $transactionJs . ',
                             modelConfig: ' . $modelConfigJson . '
@@ -507,8 +522,11 @@ class Form implements TaglibInterface
                     autoFields: ' . ($autoFields ? 'true' : 'false') . ',
                     excludeFields: ' . json_encode($excludeFields, JSON_UNESCAPED_UNICODE) . ',
                     includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . ',
-                    apiUrl: "' . addslashes($apiUrl) . '",
-                    fieldApiUrl: "' . addslashes($fieldApiUrl) . '",
+                    apiUrl: ' . ($workerApiJs === 'true' ? '""' : '"' . addslashes($apiUrl) . '"') . ',
+                    fieldApiUrl: ' . ($workerApiJs === 'true' ? '""' : '"' . addslashes($fieldApiUrl) . '"') . ',
+                    workerApi: ' . $workerApiJs . ',
+                    apiProvider: "' . $apiProviderJs . '",
+                    operations: {formFields: "formFields", formRecord: "formRecord", create: "create", update: "update", saveData: "saveData"},
                     dependencies: "' . $dependenciesJs . '",
                     transaction: ' . $transactionJs . ',
                     modelConfig: ' . $modelConfigJson . '
@@ -526,8 +544,11 @@ class Form implements TaglibInterface
                             autoFields: ' . ($autoFields ? 'true' : 'false') . ',
                             excludeFields: ' . json_encode($excludeFields, JSON_UNESCAPED_UNICODE) . ',
                             includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . ',
-                            apiUrl: "' . addslashes($apiUrl) . '",
-                            fieldApiUrl: "' . addslashes($fieldApiUrl) . '",
+                            apiUrl: ' . ($workerApiJs === 'true' ? '""' : '"' . addslashes($apiUrl) . '"') . ',
+                            fieldApiUrl: ' . ($workerApiJs === 'true' ? '""' : '"' . addslashes($fieldApiUrl) . '"') . ',
+                            workerApi: ' . $workerApiJs . ',
+                            apiProvider: "' . $apiProviderJs . '",
+                            operations: {formFields: "formFields", formRecord: "formRecord", create: "create", update: "update", saveData: "saveData"},
                             dependencies: "' . $dependenciesJs . '",
                             transaction: ' . $transactionJs . ',
                             modelConfig: ' . $modelConfigJson . '

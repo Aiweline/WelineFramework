@@ -99,7 +99,7 @@ Price,Price
 已完成,Completed
 已取消,Canceled
 已退款,Refunded
-订单号：%1,订单号：%1
+订单号：%{1},订单号：%{1}
 待支付,"To pay"
 订单金额：,"Order Amount:"
 查看详情,"View Details"
@@ -189,3 +189,14 @@ N/A,N/A
 "Updated At","Updated At"
 Items,Items
 "No order items are available for this order yet.","No order items are available for this order yet."
+订单中心,"Order Center"
+我的订单,"My Orders"
+"在这里追踪购买记录、完成待支付订单、查看配送进度。","Track purchases, complete unpaid orders, and review delivery progress here."
+继续购物,"Continue Shopping"
+返回账户,"Back to Account"
+"下单后，您的订单记录将显示在这里。","Your order history will appear here after you place your first purchase."
+订单,Order
+订单金额：,"Order Amount:"
+"查看本订单的最新状态、支付状态和商品明细。","Review the latest status, payment state, and items for this order."
+时间轴,Timeline
+暂无,N/A

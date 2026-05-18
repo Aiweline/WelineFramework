@@ -971,7 +971,7 @@
                         (function (du, name) {
                             var filename = (name.replace(/[^\w\u4e00-\u9fa5\-]/g, '_') || 'layer') + '.png';
                             copyImgBtn.addEventListener('click', function () {
-                                fetch(du).then(function (r) { return r.blob(); }).then(function (blob) {
+                                Promise.resolve(dataUrlToBlob(du)).then(function (blob) {
                                     if (navigator.clipboard && navigator.clipboard.write) {
                                         return navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
                                     }

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace WeShop\Checkout\Service;
 
+use Weline\Currency\Helper\CurrencyFormatter;
 use Weline\Framework\App\State;
+use Weline\Checkout\Service\CheckoutIdentityService;
 use WeShop\Address\Service\AddressService;
 use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Cart\Service\CartService;
@@ -27,22 +29,34 @@ class CheckoutPageDataService
     /**
      * @return array<string, mixed>
      */
-    public function build(int $customerId, int $currentStep = 1, int $retryOrderId = 0): array
+    public function build(int $customerId, int $currentStep = 1, int $retryOrderId = 0, array $checkoutData = []): array
     {
+        $checkoutCurrency = $this->resolveCheckoutCurrency();
+        $isGuestCheckout = $this->resolveIsGuestCheckout($customerId, $checkoutData);
+        $addressCustomerId = $this->resolveAddressCustomerId($customerId, $checkoutData, $isGuestCheckout);
         $retryContext = $retryOrderId > 0 ? $this->orderService->getRetryPaymentContext($retryOrderId, $customerId) : null;
         $isRetryPayment = \is_array($retryContext);
 
         if ($isRetryPayment) {
-            $cartItems = $this->mapRetryOrderItems((array) ($retryContext['items'] ?? []));
-            $summary = $this->normalizeSummary((array) ($retryContext['summary'] ?? []));
+            $cartItems = $this->mapRetryOrderItems((array) ($retryContext['items'] ?? []), $checkoutCurrency);
+            $summary = $this->convertSummaryForDisplay(
+                $this->normalizeSummary((array) ($retryContext['summary'] ?? [])),
+                $checkoutCurrency
+            );
         } else {
             $items = $this->cartService->getCartItems($customerId);
-            $cartItems = $this->mapCartItems($items);
-            $summary = $this->normalizeSummary($this->cartService->calculateTotals($customerId));
+            $cartItems = $this->mapCartItems($items, $checkoutCurrency);
+            $summary = $this->convertSummaryForDisplay(
+                $this->normalizeSummary($this->cartService->calculateTotals($customerId)),
+                $checkoutCurrency
+            );
         }
 
-        $savedAddresses = $this->mapSavedAddresses($this->addressService->getCustomerAddresses($customerId));
-        $methodData = $this->buildMethodDataPayload($customerId, $savedAddresses, []);
+        $savedAddresses = $this->loadSavedAddresses($addressCustomerId);
+        $methodData = $this->buildMethodDataPayload($customerId, $savedAddresses, $checkoutData + [
+            'address_customer_id' => $addressCustomerId,
+            'is_guest_checkout' => $isGuestCheckout,
+        ]);
 
         $itemCount = array_reduce(
             $cartItems,
@@ -58,8 +72,10 @@ class CheckoutPageDataService
             'shipping' => (float) ($summary['shipping'] ?? 0),
             'tax' => (float) ($summary['tax'] ?? 0),
             'cart_summary' => $summary,
+            'checkout_currency' => $checkoutCurrency,
             'saved_addresses' => $savedAddresses,
             'shipping_addresses' => $savedAddresses,
+            'address_customer_id' => $addressCustomerId,
             'selected_shipping_address_id' => (int) ($methodData['selected_shipping_address_id'] ?? 0),
             'shipping_methods' => $methodData['shipping_methods'] ?? [],
             'payment_methods' => $methodData['payment_methods'] ?? [],
@@ -67,7 +83,7 @@ class CheckoutPageDataService
             'countries' => $this->buildCountries(),
             'states' => [],
             'is_retry_payment' => $isRetryPayment,
-            'is_guest_checkout' => CartIdentityService::isGuestCartCustomerId($customerId),
+            'is_guest_checkout' => $isGuestCheckout,
             'retry_order_id' => $isRetryPayment ? (int) ($retryContext['order_id'] ?? 0) : 0,
             'retry_order_increment_id' => $isRetryPayment ? (string) ($retryContext['increment_id'] ?? '') : '',
         ];
@@ -79,17 +95,23 @@ class CheckoutPageDataService
      */
     public function buildDynamicMethodData(int $customerId, array $checkoutData = []): array
     {
-        $savedAddresses = $this->mapSavedAddresses($this->addressService->getCustomerAddresses($customerId));
+        $isGuestCheckout = $this->resolveIsGuestCheckout($customerId, $checkoutData);
+        $addressCustomerId = $this->resolveAddressCustomerId($customerId, $checkoutData, $isGuestCheckout);
+        $savedAddresses = $this->loadSavedAddresses($addressCustomerId);
 
-        return $this->buildMethodDataPayload($customerId, $savedAddresses, $checkoutData, true);
+        return $this->buildMethodDataPayload($customerId, $savedAddresses, $checkoutData + [
+            'address_customer_id' => $addressCustomerId,
+            'is_guest_checkout' => $isGuestCheckout,
+        ], true);
     }
 
     /**
      * @param array<int, mixed> $items
      * @return array<int, array<string, mixed>>
      */
-    protected function mapCartItems(array $items): array
+    protected function mapCartItems(array $items, ?string $targetCurrency = null): array
     {
+        $targetCurrency = $targetCurrency ?: $this->resolveCheckoutCurrency();
         $result = [];
         foreach ($items as $item) {
             if (!\is_array($item)) {
@@ -99,14 +121,15 @@ class CheckoutPageDataService
             $product = \is_array($item['product'] ?? null) ? $item['product'] : [];
             $qty = (int) ($item['quantity'] ?? $item['qty'] ?? 1);
             $price = (float) ($item['price'] ?? 0);
+            $rowTotal = $price * $qty;
             $result[] = [
                 'item_id' => (int) ($item['item_id'] ?? $item['cart_id'] ?? 0),
                 'product_id' => (int) ($item['product_id'] ?? 0),
                 'name' => (string) ($product['name'] ?? $item['product_name'] ?? ''),
                 'image' => (string) ($product['image'] ?? $item['image'] ?? ''),
-                'price' => $price,
+                'price' => $this->convertDisplayAmount($price, $targetCurrency),
                 'qty' => $qty,
-                'row_total' => $price * $qty,
+                'row_total' => $this->convertDisplayAmount($rowTotal, $targetCurrency),
             ];
         }
 
@@ -117,22 +140,25 @@ class CheckoutPageDataService
      * @param array<int, mixed> $items
      * @return array<int, array<string, mixed>>
      */
-    protected function mapRetryOrderItems(array $items): array
+    protected function mapRetryOrderItems(array $items, ?string $targetCurrency = null): array
     {
+        $targetCurrency = $targetCurrency ?: $this->resolveCheckoutCurrency();
         $result = [];
         foreach ($items as $item) {
             if (!\is_array($item)) {
                 continue;
             }
 
+            $price = (float) ($item['price'] ?? 0);
+            $rowTotal = (float) ($item['row_total'] ?? $item['total'] ?? 0);
             $result[] = [
                 'item_id' => (int) ($item['item_id'] ?? 0),
                 'product_id' => (int) ($item['product_id'] ?? 0),
                 'name' => (string) ($item['name'] ?? $item['product_name'] ?? ''),
                 'image' => (string) ($item['image'] ?? ''),
-                'price' => (float) ($item['price'] ?? 0),
+                'price' => $this->convertDisplayAmount($price, $targetCurrency),
                 'qty' => (int) ($item['qty'] ?? $item['quantity'] ?? 0),
-                'row_total' => (float) ($item['row_total'] ?? $item['total'] ?? 0),
+                'row_total' => $this->convertDisplayAmount($rowTotal, $targetCurrency),
             ];
         }
 
@@ -141,17 +167,55 @@ class CheckoutPageDataService
 
     /**
      * @param array<string, mixed> $summary
-     * @return array<string, float>
+     * @return array<string, mixed>
      */
     protected function normalizeSummary(array $summary): array
     {
-        return [
+        $normalized = [
             'subtotal' => (float) ($summary['subtotal'] ?? 0),
             'shipping' => (float) ($summary['shipping'] ?? 0),
             'discount' => (float) ($summary['discount'] ?? 0),
             'tax' => (float) ($summary['tax'] ?? 0),
             'grand_total' => (float) ($summary['grand_total'] ?? $summary['total'] ?? 0),
         ];
+
+        foreach (['coupon_code', 'coupon_discount'] as $key) {
+            if (array_key_exists($key, $summary)) {
+                $normalized[$key] = $summary[$key];
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     * @return array<string, mixed>
+     */
+    protected function convertSummaryForDisplay(array $summary, string $targetCurrency): array
+    {
+        foreach (['subtotal', 'shipping', 'discount', 'tax', 'grand_total', 'coupon_discount'] as $key) {
+            if (!array_key_exists($key, $summary)) {
+                continue;
+            }
+            $summary[$key] = $this->convertDisplayAmount((float) ($summary[$key] ?? 0), $targetCurrency);
+        }
+
+        return $summary;
+    }
+
+    protected function convertDisplayAmount(float $amount, string $targetCurrency): float
+    {
+        $targetCurrency = strtoupper(trim($targetCurrency));
+        if ($targetCurrency === '') {
+            return round($amount, 2);
+        }
+
+        try {
+            return round(CurrencyFormatter::convert($amount, null, $targetCurrency), 2);
+        } catch (\Throwable) {
+            return round($amount, 2);
+        }
     }
 
     /**
@@ -226,6 +290,7 @@ class CheckoutPageDataService
         bool $includeSummaryPreview = false
     ): array
     {
+        $checkoutCurrency = $this->resolveCheckoutCurrency();
         $isGuestCheckout = array_key_exists('is_guest_checkout', $checkoutData)
             ? (bool) $checkoutData['is_guest_checkout']
             : CartIdentityService::isGuestCartCustomerId($customerId);
@@ -238,9 +303,10 @@ class CheckoutPageDataService
         $resolvedAddress = $this->mergeShippingAddress($selectedAddress, $inlineAddress);
         $shippingContext = [
             'area' => 'frontend',
-            'currency' => $this->resolveCheckoutCurrency(),
+            'currency' => $checkoutCurrency,
             'customer_id' => $customerId,
             'cart_customer_id' => (int) ($checkoutData['cart_customer_id'] ?? $customerId),
+            'address_customer_id' => (int) ($checkoutData['address_customer_id'] ?? 0),
             'authenticated_customer_id' => (int) ($checkoutData['authenticated_customer_id'] ?? 0),
             'checkout_mode' => $isGuestCheckout ? 'guest' : 'customer',
             'is_guest_checkout' => $isGuestCheckout,
@@ -282,8 +348,11 @@ class CheckoutPageDataService
         $previewCheckoutData['checkout_mode'] = $isGuestCheckout ? 'guest' : 'customer';
         $previewCheckoutData['is_guest_checkout'] = $isGuestCheckout;
 
-        $payload['cart_summary'] = $this->normalizeSummary(
-            $this->checkoutService->previewCheckoutSummary($customerId, $previewCheckoutData)
+        $payload['cart_summary'] = $this->convertSummaryForDisplay(
+            $this->normalizeSummary(
+                $this->checkoutService->previewCheckoutSummary($customerId, $previewCheckoutData)
+            ),
+            $checkoutCurrency
         );
 
         return $payload;
@@ -481,6 +550,61 @@ class CheckoutPageDataService
         }
 
         return $result;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function loadSavedAddresses(int $addressCustomerId): array
+    {
+        if ($addressCustomerId <= 0) {
+            return [];
+        }
+
+        return $this->mapSavedAddresses($this->addressService->getCustomerAddresses($addressCustomerId));
+    }
+
+    /**
+     * @param array<string, mixed> $checkoutData
+     */
+    protected function resolveIsGuestCheckout(int $customerId, array $checkoutData): bool
+    {
+        $mode = strtolower(trim((string) ($checkoutData['checkout_mode'] ?? '')));
+        if ($mode === CheckoutIdentityService::MODE_GUEST) {
+            return true;
+        }
+
+        if ($mode === CheckoutIdentityService::MODE_CUSTOMER) {
+            return false;
+        }
+
+        if (array_key_exists('is_guest_checkout', $checkoutData)) {
+            return (bool) $checkoutData['is_guest_checkout'];
+        }
+
+        return CartIdentityService::isGuestCartCustomerId($customerId);
+    }
+
+    /**
+     * @param array<string, mixed> $checkoutData
+     */
+    protected function resolveAddressCustomerId(int $customerId, array $checkoutData, bool $isGuestCheckout): int
+    {
+        if ($isGuestCheckout) {
+            return 0;
+        }
+
+        $authenticatedCustomerId = (int) ($checkoutData['authenticated_customer_id'] ?? 0);
+        if ($authenticatedCustomerId > 0) {
+            return $authenticatedCustomerId;
+        }
+
+        $explicitCustomerId = (int) ($checkoutData['customer_id'] ?? 0);
+        if ($explicitCustomerId > 0 && !CartIdentityService::isGuestCartCustomerId($explicitCustomerId)) {
+            return $explicitCustomerId;
+        }
+
+        return CartIdentityService::isGuestCartCustomerId($customerId) ? 0 : $customerId;
     }
 
     /**

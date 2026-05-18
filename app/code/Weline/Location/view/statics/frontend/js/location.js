@@ -229,21 +229,13 @@
                 return;
             }
 
-            // 调用后端API（后端会自动fallback到多个免费通道）
-            const apiUrl = window.__WelineThemeConfig?.location?.ipApiUrl || '/location/rest/v1/frontend/location/ip';
+            if (!window.Weline || !window.Weline.Api) {
+                reject(new Error(__('Weline API is not available')));
+                return;
+            }
 
-            fetch(apiUrl, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(__('IP定位服务响应错误'));
-                }
-                return response.json();
-            })
+            Promise.resolve(window.Weline.Api.resource('location'))
+            .then(LocationApi => LocationApi.ip({}, {silent: true}))
             .then(response => {
                 // 检查响应格式
                 if (response.code !== 200 || !response.data) {

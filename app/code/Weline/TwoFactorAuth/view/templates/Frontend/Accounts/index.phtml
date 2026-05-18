@@ -783,6 +783,29 @@
     <!-- SweetAlert2 JS -->
     <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
+        const TwoFactorApiClient = (function () {
+            let apiPromise = null;
+            function get() {
+                if (!apiPromise) {
+                    apiPromise = Promise.resolve().then(function () {
+                        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                            throw new Error('Weline.Api is not ready.');
+                        }
+                        return window.Weline.Api.resource('twoFactor');
+                    });
+                }
+                return apiPromise;
+            }
+            async function call(method, params, options) {
+                const api = await get();
+                if (!api || typeof api[method] !== 'function') {
+                    throw new Error('TwoFactor API method is unavailable: ' + method);
+                }
+                return api[method](params || {}, options || { silent: true });
+            }
+            return { call };
+        })();
+
         // Worker管理器 - 使用加密混淆的Worker处理TOTP计算
         const TotpWorkerManager = (function() {
             let worker = null;
@@ -790,6 +813,64 @@
             const callbacks = new Map();
             let callbackId = 0;
             let globalCountdownTimer = null;
+
+            async function fetchCode(accountId) {
+                try {
+                    const result = await TwoFactorApiClient.call('getCode', { account_id: Number(accountId) });
+                    postMessage('code_data', { accountId: String(accountId), data: result });
+                } catch (error) {
+                    console.error('Failed to load TOTP code data:', error);
+                    postMessage('code_data', {
+                        accountId: String(accountId),
+                        data: { success: false, message: error && error.message ? error.message : 'Request failed' }
+                    });
+                }
+            }
+
+            async function handleImportAccounts(accounts) {
+                const summary = { success: 0, fail: 0, errors: [] };
+                for (const account of accounts || []) {
+                    try {
+                        const uri = account && (account.uri || account.url || account);
+                        const result = await TwoFactorApiClient.call('importAccount', { uri: String(uri || '') });
+                        if (result && result.success !== false) {
+                            summary.success += 1;
+                        } else {
+                            summary.fail += 1;
+                            summary.errors.push((result && (result.message || result.msg)) || 'Import failed');
+                        }
+                    } catch (error) {
+                        summary.fail += 1;
+                        summary.errors.push(error && error.message ? error.message : 'Import failed');
+                    }
+                }
+                showImportResult(summary);
+            }
+
+            function showImportResult(result) {
+                let message = `Import complete. Success: ${result.success}`;
+                if (result.fail > 0) {
+                    message += `, failed: ${result.fail}`;
+                }
+                if (result.errors && result.errors.length > 0) {
+                    message += "\n" + result.errors.slice(0, 5).join("\n");
+                }
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: result.fail > 0 ? 'warning' : 'success',
+                        title: '<?= __('鎻愮ず') ?>',
+                        html: message.replace(/\n/g, '<br>'),
+                        confirmButtonText: '<?= __('纭畾') ?>',
+                        width: '600px'
+                    });
+                } else {
+                    console.log(message);
+                }
+                if (result.success > 0) {
+                    closeModal('addModal');
+                    location.reload();
+                }
+            }
             
             // 初始化Worker
             function initWorker() {
@@ -818,6 +899,14 @@
                                     
                                 case 'code_update':
                                     updateAccountDisplay(data.accountId, data.code, data.data);
+                                    break;
+
+                                case 'fetch_code':
+                                    fetchCode(data.accountId);
+                                    break;
+
+                                case 'import_request':
+                                    handleImportAccounts(data.accounts || []);
                                     break;
                                     
                         case 'countdown_update':
@@ -874,27 +963,7 @@
                             break;
                             
                         case 'import_result':
-                            // 导入结果
-                            let message = `导入完成！成功：${data.result.success} 个`;
-                            if (data.result.fail > 0) {
-                                message += `，失败：${data.result.fail} 个`;
-                            }
-                            if (typeof Swal !== 'undefined') {
-                                Swal.fire({
-                                    icon: 'info',
-                                    title: '<?= __('提示') ?>',
-                                    html: message.replace(/\n/g, '<br>'),
-                                    confirmButtonText: '<?= __('确定') ?>',
-                                    width: '600px'
-                                });
-                            } else {
-                                console.log(message);
-                            }
-                            
-                            if (data.result.success > 0) {
-                                closeModal('addModal');
-                                location.reload();
-                            }
+                            showImportResult(data.result || { success: 0, fail: 0, errors: [] });
                             break;
                             }
                         };
@@ -931,7 +1000,7 @@
                 }
                 globalCountdownTimer = setInterval(() => {
                     postMessage('update_countdowns', {});
-                }, 100);
+                }, 1000);
                 
                 // 然后发送初始化请求（并行获取所有账户数据）
                 postMessage('init', { accountIds });
@@ -1165,7 +1234,7 @@
         }
         
         // 处理解析的URI
-        function handleQRCodeURI(uri) {
+        async function handleQRCodeURI(uri) {
             if (!uri.startsWith('otpauth://')) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
@@ -1193,16 +1262,8 @@
                 period: params.get('period') || '30'
             };
             
-            // 通过导入接口添加账户
-            fetch('/two-factor-auth/frontend/accounts/import', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `uri=${encodeURIComponent(uri)}`
-            })
-            .then(res => res.json())
-            .then(result => {
+            try {
+                const result = await TwoFactorApiClient.call('importAccount', { uri });
                 if (result.success) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
@@ -1232,8 +1293,7 @@
                         console.error(result.message || '添加失败，请重试');
                     }
                 }
-            })
-            .catch(error => {
+            } catch (error) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
@@ -1244,7 +1304,7 @@
                 } else {
                     console.error('添加失败，请重试');
                 }
-            });
+            }
         }
 
         // 添加账户
@@ -1254,15 +1314,14 @@
             const data = Object.fromEntries(formData);
             
             try {
-                const response = await fetch('/two-factor-auth/frontend/accounts/save', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams(data)
+                const result = await TwoFactorApiClient.call('saveAccount', {
+                    name: data.name || '',
+                    secret: data.secret || '',
+                    issuer: data.issuer || '',
+                    algorithm: data.algorithm || 'SHA1',
+                    digits: Number(data.digits || 6),
+                    period: Number(data.period || 30)
                 });
-                
-                const result = await response.json();
                 
                 if (result.success) {
                     if (typeof Swal !== 'undefined') {
@@ -1313,15 +1372,9 @@
             const formData = new FormData(event.target);
             
             try {
-                const response = await fetch('/two-factor-auth/frontend/accounts/import', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: formData
+                const result = await TwoFactorApiClient.call('importAccount', {
+                    uri: String(formData.get('uri') || '')
                 });
-                
-                const result = await response.json();
                 
                 if (result.success) {
                     if (typeof Swal !== 'undefined') {
@@ -1401,15 +1454,9 @@
         // 删除账户（实际执行）
         async function deleteAccount(accountId) {
             try {
-                const response = await fetch('/two-factor-auth/frontend/accounts/delete', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `account_id=${accountId}`
+                const result = await TwoFactorApiClient.call('deleteAccount', {
+                    account_id: Number(accountId)
                 });
-                
-                const result = await response.json();
                 
                 if (result.success) {
                     // 从Worker中移除账户

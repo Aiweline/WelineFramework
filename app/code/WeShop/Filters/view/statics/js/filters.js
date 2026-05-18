@@ -45,6 +45,7 @@
             
             this.currentFilters = {};
             this.isLoading = false;
+            this.filterApiPromise = null;
             
             this.init();
         }
@@ -374,6 +375,14 @@
             );
             return item?.textContent || value;
         }
+
+        getFilterApi() {
+            if (!this.filterApiPromise) {
+                this.filterApiPromise = Promise.resolve(window.Weline.Api.resource('filter'));
+            }
+
+            return this.filterApiPromise;
+        }
         
         /**
          * 获取筛选后的产品（AJAX）
@@ -409,15 +418,19 @@
                     }
                 });
                 
-                const response = await fetch(`${this.options.filterApiUrl}?${params.toString()}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json',
-                    },
+                const filterPayload = {
+                    category_id: parseInt(this.options.categoryId, 10) || 0,
+                    filters: Object.assign({}, this.currentFilters),
+                };
+                params.forEach((value, key) => {
+                    if (key !== 'category_id' && key !== 'filters') {
+                        filterPayload[key] = value;
+                    }
                 });
-                
-                const result = await response.json();
+
+                const result = await (await this.getFilterApi()).filter(filterPayload, {
+                    silent: true,
+                });
                 
                 if (result.success) {
                     this.handleFilterResult(result.data);
@@ -537,7 +550,7 @@
                     '</div>' +
                     '<div class="product-card-info">' +
                     '<h3 class="product-name"><a href="' + productUrl + '">' + name + '</a></h3>' +
-                    '<div class="product-price-row"><span class="product-price">¥' + price.toFixed(2) + '</span></div>' +
+                    '<div class="product-price-row"><span class="product-price">' + (typeof window.formatConvertedCurrency === 'function' ? window.formatConvertedCurrency(price) : parseFloat(price).toFixed(2)) + '</span></div>' +
                     '</div></div>'
                 );
             }).join('');

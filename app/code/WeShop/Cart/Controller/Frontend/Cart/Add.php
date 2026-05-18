@@ -17,7 +17,7 @@ class Add extends FrontendController
     {
         if ($this->request->getMethod() !== 'POST') {
             $this->getMessageManager()->addError(__('Request method is not allowed.'));
-            $this->redirect('weshop/cart');
+            $this->redirect('/cart');
             return;
         }
 
@@ -90,6 +90,6 @@ class Add extends FrontendController
             exit;
         }
 
-        $this->redirect('weshop/cart');
+        $this->redirect('/cart');
     }
 }

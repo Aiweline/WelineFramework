@@ -46,11 +46,7 @@ class SlotRendererService
     private array $layoutCache = [];
     private const PUBLISHED_LAYOUT_CACHE_TTL = 120.0;
     private const WIDGET_OUTPUT_CACHE_TTL = 120.0;
-    private const CACHEABLE_WIDGET_OUTPUTS = [
-        'Weline_Theme::bestsellers' => true,
-        'Weline_Theme::related-products' => true,
-        'Weline_Theme::recently-viewed' => true,
-    ];
+    private const CACHEABLE_WIDGET_OUTPUTS = [];
     private static array $publishedLayoutDataCache = [];
     private static array $widgetOutputCache = [];
     private static ?MemoryStateFacade $runtimeCache = null;

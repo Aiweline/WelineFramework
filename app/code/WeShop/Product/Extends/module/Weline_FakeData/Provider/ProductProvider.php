@@ -8,11 +8,17 @@ use WeShop\Catalog\Model\Category;
 use WeShop\Catalog\Extends\Module\Weline_FakeData\Provider\CatalogProvider;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
+use WeShop\Product\Model\Product\OptionId as ProductOptionId;
+use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Model\EavAttribute\Group;
+use Weline\Eav\Model\EavAttribute\Option;
 use Weline\Eav\Model\EavAttribute\Set;
+use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavEntity;
 use Weline\FakeData\Api\FakeDataProviderInterface;
 use Weline\FakeData\Data\FakeDataContext;
 use Weline\FakeData\Data\FakeDataResult;
+use Weline\Framework\Manager\ObjectManager;
 
 class ProductProvider implements FakeDataProviderInterface
 {
@@ -25,6 +31,11 @@ class ProductProvider implements FakeDataProviderInterface
         private readonly ProductCategory $productCategory,
         private readonly EavEntity $eavEntity,
         private readonly Set $attributeSet,
+        private readonly ?ProductOptionId $productOptionId = null,
+        private readonly ?EavAttribute $eavAttribute = null,
+        private readonly ?Option $eavAttributeOption = null,
+        private readonly ?Group $attributeGroup = null,
+        private readonly ?Type $attributeType = null,
     ) {
     }
 
@@ -71,8 +82,14 @@ class ProductProvider implements FakeDataProviderInterface
 
         $products = $this->applyLimit($this->getProducts(), $context->getLimit());
         foreach ($products as $productData) {
+            $productData = $this->withGalleryImages($productData);
             $existingId = $this->getProductIdBySku((string)$productData['sku']);
-            $this->product->clear()
+            $productModel = clone $this->product;
+            $productModel->reset()->clearData();
+            if ($existingId > 0) {
+                $productModel->load($existingId);
+            }
+            $productModel
                 ->setName((string)$productData['name'])
                 ->setSku((string)$productData['sku'])
                 ->setSpu((string)$productData['spu'])
@@ -91,7 +108,6 @@ class ProductProvider implements FakeDataProviderInterface
                 ->setMetaName((string)$productData['name'])
                 ->setMetaDescription((string)$productData['short_description'])
                 ->setMetaKeywords((string)$productData['meta_keywords'])
-                ->forceCheck(true, [Product::schema_fields_sku])
                 ->save();
 
             $productId = $this->getProductIdBySku((string)$productData['sku']);
@@ -101,6 +117,7 @@ class ProductProvider implements FakeDataProviderInterface
             }
 
             $this->syncCategories($productId, $productData);
+            $this->saveProductAttributes($productId, $productData, 0);
             $variantResult = $this->syncVariants($productId, $productData, $setId, $context);
             $result->merge($variantResult);
             $context->record(
@@ -114,6 +131,9 @@ class ProductProvider implements FakeDataProviderInterface
             $existingId > 0 ? $result->addUpdated() : $result->addCreated();
         }
         $this->backfillMissingProductImages();
+        $this->repairStaleDemoFoodHandleCollisions();
+        $this->repairDuplicateSkus();
+        $this->cleanupInvalidManagedAttributeOptions();
 
         return $result;
     }
@@ -336,6 +356,14 @@ class ProductProvider implements FakeDataProviderInterface
                 'images' => '[]',
                 'meta_keywords' => 'hoodie,fleece,daily wear',
                 'category_handles' => ['fake-apparel', 'fake-daily-wear'],
+                'configurable_attributes' => ['color', 'size'],
+                'attributes' => ['brand' => 'uniqlo', 'material' => 'cotton_blend'],
+                'variants' => [
+                    ['sku' => 'FAKE-DAILY-HOODIE-NAVY-M', 'handle' => 'daily-fleece-hoodie-navy-m', 'name' => 'Daily Fleece Hoodie Navy M', 'price' => 199.00, 'cost' => 82.00, 'stock' => 18, 'color' => 'navy', 'size' => 'm'],
+                    ['sku' => 'FAKE-DAILY-HOODIE-NAVY-L', 'handle' => 'daily-fleece-hoodie-navy-l', 'name' => 'Daily Fleece Hoodie Navy L', 'price' => 199.00, 'cost' => 82.00, 'stock' => 22, 'color' => 'navy', 'size' => 'l'],
+                    ['sku' => 'FAKE-DAILY-HOODIE-GRAY-M', 'handle' => 'daily-fleece-hoodie-gray-m', 'name' => 'Daily Fleece Hoodie Gray M', 'price' => 199.00, 'cost' => 82.00, 'stock' => 20, 'color' => 'gray', 'size' => 'm'],
+                    ['sku' => 'FAKE-DAILY-HOODIE-BLK-XL', 'handle' => 'daily-fleece-hoodie-black-xl', 'name' => 'Daily Fleece Hoodie Black XL', 'price' => 209.00, 'cost' => 88.00, 'stock' => 15, 'color' => 'black', 'size' => 'xl'],
+                ],
             ],
             [
                 'sku' => 'FAKE-CITY-TEE-001',
@@ -352,6 +380,14 @@ class ProductProvider implements FakeDataProviderInterface
                 'images' => '[]',
                 'meta_keywords' => 'cotton t-shirt,casual wear',
                 'category_handles' => ['fake-apparel', 'fake-daily-wear'],
+                'configurable_attributes' => ['color', 'size'],
+                'attributes' => ['brand' => 'uniqlo', 'material' => 'cotton'],
+                'variants' => [
+                    ['sku' => 'FAKE-CITY-TEE-WHT-S', 'handle' => 'city-cotton-tee-white-s', 'name' => 'City Cotton T-Shirt White S', 'price' => 69.00, 'cost' => 24.00, 'stock' => 36, 'color' => 'white', 'size' => 's'],
+                    ['sku' => 'FAKE-CITY-TEE-WHT-M', 'handle' => 'city-cotton-tee-white-m', 'name' => 'City Cotton T-Shirt White M', 'price' => 69.00, 'cost' => 24.00, 'stock' => 42, 'color' => 'white', 'size' => 'm'],
+                    ['sku' => 'FAKE-CITY-TEE-BLK-M', 'handle' => 'city-cotton-tee-black-m', 'name' => 'City Cotton T-Shirt Black M', 'price' => 69.00, 'cost' => 24.00, 'stock' => 38, 'color' => 'black', 'size' => 'm'],
+                    ['sku' => 'FAKE-CITY-TEE-BLUE-L', 'handle' => 'city-cotton-tee-blue-l', 'name' => 'City Cotton T-Shirt Blue L', 'price' => 69.00, 'cost' => 24.00, 'stock' => 31, 'color' => 'blue', 'size' => 'l'],
+                ],
             ],
             [
                 'sku' => 'FAKE-STREET-SNEAKERS-001',
@@ -368,6 +404,14 @@ class ProductProvider implements FakeDataProviderInterface
                 'images' => '[]',
                 'meta_keywords' => 'knit sneakers,casual shoes',
                 'category_handles' => ['fake-apparel'],
+                'configurable_attributes' => ['color', 'size'],
+                'attributes' => ['brand' => 'adidas', 'material' => 'knit'],
+                'variants' => [
+                    ['sku' => 'FAKE-STREET-SNEAKERS-BLK-41', 'handle' => 'street-knit-sneakers-black-41', 'name' => 'Street Knit Sneakers Black EU 41', 'price' => 159.00, 'cost' => 66.00, 'stock' => 12, 'color' => 'black', 'size' => '41'],
+                    ['sku' => 'FAKE-STREET-SNEAKERS-BLK-42', 'handle' => 'street-knit-sneakers-black-42', 'name' => 'Street Knit Sneakers Black EU 42', 'price' => 159.00, 'cost' => 66.00, 'stock' => 15, 'color' => 'black', 'size' => '42'],
+                    ['sku' => 'FAKE-STREET-SNEAKERS-WHT-42', 'handle' => 'street-knit-sneakers-white-42', 'name' => 'Street Knit Sneakers White EU 42', 'price' => 159.00, 'cost' => 66.00, 'stock' => 18, 'color' => 'white', 'size' => '42'],
+                    ['sku' => 'FAKE-STREET-SNEAKERS-GREEN-43', 'handle' => 'street-knit-sneakers-green-43', 'name' => 'Street Knit Sneakers Green EU 43', 'price' => 169.00, 'cost' => 72.00, 'stock' => 10, 'color' => 'green', 'size' => '43'],
+                ],
             ],
             ],
         );
@@ -394,10 +438,12 @@ class ProductProvider implements FakeDataProviderInterface
                 'images' => '[]',
                 'meta_keywords' => 'iphone,smartphone,configurable,storage',
                 'category_handles' => ['electronics', 'phones', 'smartphones', 'fake-electronics'],
+                'configurable_attributes' => ['color', 'size'],
+                'attributes' => ['brand' => 'apple', 'material' => 'titanium'],
                 'variants' => [
-                    ['sku' => 'ELEC-IPHONE-15-PRO-BLK-256', 'handle' => 'iphone-15-pro-black-256', 'name' => 'iPhone 15 Pro Black 256GB', 'price' => 7999.00, 'cost' => 6200.00, 'stock' => 22, 'image' => 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=80'],
-                    ['sku' => 'ELEC-IPHONE-15-PRO-BLK-512', 'handle' => 'iphone-15-pro-black-512', 'name' => 'iPhone 15 Pro Black 512GB', 'price' => 9499.00, 'cost' => 7200.00, 'stock' => 16, 'image' => 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=80'],
-                    ['sku' => 'ELEC-IPHONE-15-PRO-WHT-256', 'handle' => 'iphone-15-pro-white-256', 'name' => 'iPhone 15 Pro White 256GB', 'price' => 7999.00, 'cost' => 6200.00, 'stock' => 19, 'image' => 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=80'],
+                    ['sku' => 'ELEC-IPHONE-15-PRO-BLK-256', 'handle' => 'iphone-15-pro-black-256', 'name' => 'iPhone 15 Pro Black 256GB', 'price' => 7999.00, 'cost' => 6200.00, 'stock' => 22, 'color' => 'black', 'size' => '256gb', 'image' => 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=80'],
+                    ['sku' => 'ELEC-IPHONE-15-PRO-BLK-512', 'handle' => 'iphone-15-pro-black-512', 'name' => 'iPhone 15 Pro Black 512GB', 'price' => 9499.00, 'cost' => 7200.00, 'stock' => 16, 'color' => 'black', 'size' => '512gb', 'image' => 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=80'],
+                    ['sku' => 'ELEC-IPHONE-15-PRO-WHT-256', 'handle' => 'iphone-15-pro-white-256', 'name' => 'iPhone 15 Pro White 256GB', 'price' => 7999.00, 'cost' => 6200.00, 'stock' => 19, 'color' => 'white', 'size' => '256gb', 'image' => 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=80'],
                 ],
             ],
             [
@@ -415,10 +461,12 @@ class ProductProvider implements FakeDataProviderInterface
                 'images' => '[]',
                 'meta_keywords' => 'samsung,smartphone,configurable,android',
                 'category_handles' => ['electronics', 'phones', 'smartphones', 'fake-electronics'],
+                'configurable_attributes' => ['color', 'size'],
+                'attributes' => ['brand' => 'samsung', 'material' => 'titanium'],
                 'variants' => [
-                    ['sku' => 'ELEC-GALAXY-S24-TITANIUM-256', 'handle' => 'galaxy-s24-ultra-titanium-256', 'name' => 'Samsung Galaxy S24 Ultra Titanium 256GB', 'price' => 7299.00, 'cost' => 5600.00, 'stock' => 14, 'image' => 'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?auto=format&fit=crop&w=900&q=80'],
-                    ['sku' => 'ELEC-GALAXY-S24-TITANIUM-512', 'handle' => 'galaxy-s24-ultra-titanium-512', 'name' => 'Samsung Galaxy S24 Ultra Titanium 512GB', 'price' => 8299.00, 'cost' => 6300.00, 'stock' => 11, 'image' => 'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?auto=format&fit=crop&w=900&q=80'],
-                    ['sku' => 'ELEC-GALAXY-S24-GRAY-256', 'handle' => 'galaxy-s24-ultra-gray-256', 'name' => 'Samsung Galaxy S24 Ultra Gray 256GB', 'price' => 7299.00, 'cost' => 5600.00, 'stock' => 13, 'image' => 'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?auto=format&fit=crop&w=900&q=80'],
+                    ['sku' => 'ELEC-GALAXY-S24-TITANIUM-256', 'handle' => 'galaxy-s24-ultra-titanium-256', 'name' => 'Samsung Galaxy S24 Ultra Titanium 256GB', 'price' => 7299.00, 'cost' => 5600.00, 'stock' => 14, 'color' => 'silver', 'size' => '256gb', 'image' => 'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?auto=format&fit=crop&w=900&q=80'],
+                    ['sku' => 'ELEC-GALAXY-S24-TITANIUM-512', 'handle' => 'galaxy-s24-ultra-titanium-512', 'name' => 'Samsung Galaxy S24 Ultra Titanium 512GB', 'price' => 8299.00, 'cost' => 6300.00, 'stock' => 11, 'color' => 'silver', 'size' => '512gb', 'image' => 'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?auto=format&fit=crop&w=900&q=80'],
+                    ['sku' => 'ELEC-GALAXY-S24-GRAY-256', 'handle' => 'galaxy-s24-ultra-gray-256', 'name' => 'Samsung Galaxy S24 Ultra Gray 256GB', 'price' => 7299.00, 'cost' => 5600.00, 'stock' => 13, 'color' => 'gray', 'size' => '256gb', 'image' => 'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?auto=format&fit=crop&w=900&q=80'],
                 ],
             ],
             [
@@ -436,9 +484,11 @@ class ProductProvider implements FakeDataProviderInterface
                 'images' => '[]',
                 'meta_keywords' => 'airpods,earbuds,configurable,audio',
                 'category_handles' => ['electronics', 'fake-electronics', 'fake-smart-devices'],
+                'configurable_attributes' => ['size'],
+                'attributes' => ['brand' => 'apple', 'material' => 'plastic', 'color' => 'white'],
                 'variants' => [
-                    ['sku' => 'ELEC-AIRPODS-PRO-USBC', 'handle' => 'airpods-pro-usbc', 'name' => 'AirPods Pro USB-C Case', 'price' => 1699.00, 'cost' => 1200.00, 'stock' => 31, 'image' => 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=900&q=80'],
-                    ['sku' => 'ELEC-AIRPODS-PRO-MAGSAFE', 'handle' => 'airpods-pro-magsafe', 'name' => 'AirPods Pro MagSafe Case', 'price' => 1799.00, 'cost' => 1280.00, 'stock' => 24, 'image' => 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=900&q=80'],
+                    ['sku' => 'ELEC-AIRPODS-PRO-USBC', 'handle' => 'airpods-pro-usbc', 'name' => 'AirPods Pro USB-C Case', 'price' => 1699.00, 'cost' => 1200.00, 'stock' => 31, 'size' => 'usb-c', 'image' => 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=900&q=80'],
+                    ['sku' => 'ELEC-AIRPODS-PRO-MAGSAFE', 'handle' => 'airpods-pro-magsafe', 'name' => 'AirPods Pro MagSafe Case', 'price' => 1799.00, 'cost' => 1280.00, 'stock' => 24, 'size' => 'magsafe', 'image' => 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=900&q=80'],
                 ],
             ],
             [
@@ -680,6 +730,7 @@ class ProductProvider implements FakeDataProviderInterface
                 'images' => '[]',
                 'meta_keywords' => 'downloadable,digital asset,watch face bundle',
                 'category_handles' => ['electronics', 'fake-smart-devices'],
+                'attributes' => ['delivery_type' => 'download', 'download_format' => 'zip', 'license_term' => 'lifetime', 'brand' => 'apple'],
             ],
             [
                 'sku' => 'ELEC-SAMPLE-PRESET-PACK',
@@ -696,6 +747,7 @@ class ProductProvider implements FakeDataProviderInterface
                 'images' => '[]',
                 'meta_keywords' => 'virtual product,digital download,audio preset',
                 'category_handles' => ['electronics'],
+                'attributes' => ['delivery_type' => 'download', 'download_format' => 'zip', 'license_term' => 'commercial'],
             ],
         ];
     }
@@ -715,7 +767,10 @@ class ProductProvider implements FakeDataProviderInterface
             ->fetch();
 
         foreach ($variants as $variant) {
-            $this->product->clear()
+            $variant = $this->withGalleryImages($this->mergeVariantProductData($productData, $variant));
+            $variantModel = clone $this->product;
+            $variantModel->reset()->clearData();
+            $variantModel
                 ->setName((string)($variant['name'] ?? $productData['name']))
                 ->setSku((string)$variant['sku'])
                 ->setSpu((string)($productData['spu'] ?? $variant['sku']))
@@ -734,7 +789,6 @@ class ProductProvider implements FakeDataProviderInterface
                 ->setMetaName((string)($variant['name'] ?? $productData['name']))
                 ->setMetaDescription((string)($variant['short_description'] ?? $productData['short_description']))
                 ->setMetaKeywords((string)($productData['meta_keywords'] ?? ''))
-                ->forceCheck(true, [Product::schema_fields_sku])
                 ->save();
 
             $variantId = $this->getProductIdBySku((string)$variant['sku']);
@@ -742,6 +796,14 @@ class ProductProvider implements FakeDataProviderInterface
                 $result->addError((string)__('Failed to resolve variant after save: %{1}', [$variant['sku'] ?? '']));
                 continue;
             }
+
+            $this->syncCategories($variantId, $productData);
+            $this->saveProductAttributes(
+                $variantId,
+                $variant,
+                $parentId,
+                $productData['configurable_attributes'] ?? []
+            );
 
             $context->record(
                 self::CODE,
@@ -814,7 +876,11 @@ class ProductProvider implements FakeDataProviderInterface
             'stock' => 40 + ($categoryId % 90),
             'weight' => 1 + ($categoryId % 8),
             'image' => $image,
-            'images' => '[]',
+            'images' => $this->encodeGalleryImages($this->resolveProductGalleryImages(
+                'DEMO-CAT-' . str_pad((string)$categoryId, 4, '0', STR_PAD_LEFT),
+                $displayName,
+                $image
+            )),
             'meta_keywords' => strtolower($englishName) . ',demo product,category sample',
             'category_ids' => [$categoryId],
         ];
@@ -880,8 +946,13 @@ class ProductProvider implements FakeDataProviderInterface
     private function backfillMissingProductImages(): void
     {
         $rows = $this->product->clear()
-            ->fields('main_table.' . Product::schema_fields_ID . ',main_table.' . Product::schema_fields_sku . ',main_table.' . Product::schema_fields_name)
-            ->where(Product::schema_fields_image, '')
+            ->fields(
+                'main_table.' . Product::schema_fields_ID
+                . ',main_table.' . Product::schema_fields_sku
+                . ',main_table.' . Product::schema_fields_name
+                . ',main_table.' . Product::schema_fields_image
+                . ',main_table.' . Product::schema_fields_images
+            )
             ->select()
             ->fetchArray();
 
@@ -891,16 +962,272 @@ class ProductProvider implements FakeDataProviderInterface
                 continue;
             }
 
-            $image = $this->resolveProductImage(
-                (string)($row[Product::schema_fields_sku] ?? ''),
-                (string)($row[Product::schema_fields_name] ?? '')
+            $sku = (string)($row[Product::schema_fields_sku] ?? '');
+            $name = (string)($row[Product::schema_fields_name] ?? '');
+            $image = trim((string)($row[Product::schema_fields_image] ?? ''));
+            $currentImages = $this->decodeGalleryImages((string)($row[Product::schema_fields_images] ?? ''));
+            if ($image !== '' && count($currentImages) >= 3) {
+                continue;
+            }
+            if ($image === '') {
+                $image = $this->resolveProductImage($sku, $name);
+            }
+            $galleryImages = $this->resolveProductGalleryImages(
+                $sku,
+                $name,
+                $image,
+                []
             );
-            $this->product->clear()
+            if (count($galleryImages) < 3) {
+                continue;
+            }
+
+            $productModel = clone $this->product;
+            $productModel->reset()->clearData();
+            $productModel
                 ->load($productId)
                 ->setImage($image)
-                ->setImages(json_encode([$image], JSON_UNESCAPED_SLASHES))
+                ->setImages($this->encodeGalleryImages($galleryImages))
                 ->save();
         }
+    }
+
+    private function repairStaleDemoFoodHandleCollisions(): void
+    {
+        $rows = $this->product->clear()
+            ->fields(
+                'main_table.' . Product::schema_fields_ID
+                . ',main_table.' . Product::schema_fields_sku
+                . ',main_table.' . Product::schema_fields_HANDLE
+            )
+            ->where(Product::schema_fields_HANDLE, 'demo-category-126-food')
+            ->select()
+            ->fetchArray();
+
+        $keepFirstDemoProduct = true;
+        foreach ($rows as $row) {
+            $productId = (int)($row[Product::schema_fields_ID] ?? 0);
+            $sku = trim((string)($row[Product::schema_fields_sku] ?? ''));
+            if ($productId <= 0 || $sku === '') {
+                continue;
+            }
+            if ($keepFirstDemoProduct && str_starts_with($sku, 'DEMO-CAT-')) {
+                $keepFirstDemoProduct = false;
+                continue;
+            }
+
+            $productModel = clone $this->product;
+            $productModel->reset()->clearData();
+            $productModel
+                ->load($productId)
+                ->setData(Product::schema_fields_HANDLE, $this->buildUniqueRepairHandle($sku, $productId))
+                ->save();
+        }
+    }
+
+    private function buildUniqueRepairHandle(string $sku, int $productId): string
+    {
+        $handle = strtolower((string)preg_replace('/[^a-z0-9]+/i', '-', $sku));
+        $handle = trim($handle, '-');
+        if ($handle === '') {
+            $handle = 'product';
+        }
+        return 'repaired-' . $handle . '-' . $productId;
+    }
+
+    private function repairDuplicateSkus(): void
+    {
+        $pdo = $this->product->getConnection()->getConnector()->getLink();
+        $statement = $pdo->query(
+            'SELECT sku, ARRAY_AGG(product_id ORDER BY product_id DESC) AS product_ids '
+            . 'FROM "m_weshop_product" WHERE sku <> \'\' GROUP BY sku HAVING COUNT(*) > 1'
+        );
+        foreach ($statement->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $rawIds = trim((string)($row['product_ids'] ?? ''), '{}');
+            $ids = array_values(array_filter(array_map('intval', explode(',', $rawIds))));
+            if (count($ids) <= 1) {
+                continue;
+            }
+            array_shift($ids);
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $pdo->prepare("DELETE FROM \"m_weshop_product_category\" WHERE product_id IN ({$placeholders})")->execute($ids);
+            $pdo->prepare("DELETE FROM \"m_weshop_product_option_id\" WHERE product_id IN ({$placeholders})")->execute($ids);
+            $pdo->prepare("DELETE FROM \"m_eav_product_select_option\" WHERE entity_id IN ({$placeholders})")->execute($ids);
+            $pdo->prepare("DELETE FROM \"m_weshop_product\" WHERE product_id IN ({$placeholders})")->execute($ids);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function withGalleryImages(array $productData): array
+    {
+        $image = (string)($productData['image'] ?? '');
+        if ($image === '') {
+            $image = $this->resolveProductImage(
+                (string)($productData['sku'] ?? ''),
+                (string)($productData['name'] ?? '')
+            );
+        }
+        $productData['image'] = $image;
+        $productData['images'] = $this->encodeGalleryImages($this->resolveProductGalleryImages(
+            (string)($productData['sku'] ?? ''),
+            (string)($productData['name'] ?? ''),
+            $image,
+            [],
+            $productData
+        ));
+
+        return $productData;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function decodeGalleryImages(string $images): array
+    {
+        $decoded = json_decode($images, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('strval', $decoded)));
+    }
+
+    /**
+     * @param array<int, string> $images
+     */
+    private function encodeGalleryImages(array $images): string
+    {
+        return json_encode(array_values(array_unique($images)), JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * @param array<int, string> $existingImages
+     * @return array<int, string>
+     */
+    private function resolveProductGalleryImages(string $sku, string $name, string $mainImage, array $existingImages = [], array $productData = []): array
+    {
+        $gallery = array_values(array_filter(array_merge([$mainImage], $existingImages)));
+        foreach ($this->resolveProductGalleryPool($sku, $name, $productData) as $image) {
+            $gallery[] = $image;
+            if (count(array_unique($gallery)) >= 5) {
+                break;
+            }
+        }
+
+        return array_values(array_unique($gallery));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolveProductGalleryPool(string $sku, string $name, array $productData = []): array
+    {
+        $needle = strtolower(
+            $sku . ' ' . $name . ' '
+            . (string)($productData['gallery_family'] ?? '') . ' '
+            . (string)($productData['meta_keywords'] ?? '') . ' '
+            . implode(' ', array_map('strval', $productData['category_handles'] ?? []))
+        );
+        $sets = [
+            'phone' => [
+                'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1616348436168-de43ad0db179?auto=format&fit=crop&w=900&q=80',
+            ],
+            'computer' => [
+                'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=900&q=80',
+            ],
+            'office' => [
+                'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1555212697-194d092e3b8f?auto=format&fit=crop&w=900&q=80',
+            ],
+            'audio' => [
+                'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=900&q=80',
+            ],
+            'apparel' => [
+                'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=900&q=80',
+            ],
+            'shoes' => [
+                'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1460353581641-37baddab0fa2?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?auto=format&fit=crop&w=900&q=80',
+            ],
+            'home' => [
+                'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80',
+            ],
+            'digital' => [
+                'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=900&q=80',
+            ],
+            'generic' => [
+                'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=900&q=80',
+                'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=900&q=80',
+            ],
+        ];
+
+        return match (true) {
+            str_contains($needle, 'gallery_family:apparel'),
+            str_contains($needle, 'fake-apparel'),
+            str_contains($needle, 'daily-wear') => $sets['apparel'],
+            str_contains($needle, 'gallery_family:office'),
+            str_contains($needle, 'office gear'),
+            str_contains($needle, 'desk setup'),
+            str_contains($needle, 'office') => $sets['office'],
+            str_contains($needle, 'watchface'),
+            str_contains($needle, 'preset'),
+            str_contains($needle, 'download') => $sets['digital'],
+            str_contains($needle, 'shoe'),
+            str_contains($needle, 'sneaker') => $sets['shoes'],
+            str_contains($needle, 'hoodie'),
+            str_contains($needle, 'shirt'),
+            str_contains($needle, 'tee'),
+            str_contains($needle, 'apparel'),
+            str_contains($needle, 'clothing') => $sets['apparel'],
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'lamp'),
+            str_contains($needle, 'home') => $sets['home'],
+            str_contains($needle, 'airpods'),
+            str_contains($needle, 'earbuds'),
+            str_contains($needle, 'speaker'),
+            str_contains($needle, 'headphone'),
+            str_contains($needle, 'audio'),
+            str_contains($needle, 'bose'),
+            str_contains($needle, 'sony') => $sets['audio'],
+            str_contains($needle, 'macbook'),
+            str_contains($needle, 'ipad'),
+            str_contains($needle, 'monitor'),
+            str_contains($needle, 'keyboard'),
+            str_contains($needle, 'mouse'),
+            str_contains($needle, 'computer'),
+            str_contains($needle, 'laptop') => $sets['computer'],
+            str_contains($needle, 'iphone'),
+            str_contains($needle, 'galaxy'),
+            str_contains($needle, 'phone') => $sets['phone'],
+            default => $sets['generic'],
+        };
     }
 
     private function resolveProductImage(string $sku, string $name): string
@@ -940,6 +1267,496 @@ class ProductProvider implements FakeDataProviderInterface
         }
 
         return $this->resolveCategoryImage($needle);
+    }
+
+    private function saveProductAttributes(
+        int $productId,
+        array $productData,
+        int $parentProductId,
+        array $configurableAttributes = []
+    ): void
+    {
+        $this->resetProductAttributeData($productId);
+        $configurableAttributes = array_flip(array_map('strval', $configurableAttributes));
+        foreach ($this->resolveAttributePayload($productData) as $attributeCode => $optionCode) {
+            $attributeId = $this->ensureAttribute($attributeCode);
+            if ($attributeId <= 0) {
+                continue;
+            }
+            $optionId = $this->ensureAttributeOption($attributeId, $attributeCode, $optionCode);
+            if ($optionId <= 0) {
+                continue;
+            }
+            $this->saveAttributeValue($attributeId, $productId, $optionId);
+            if ($parentProductId > 0 && isset($configurableAttributes[$attributeCode])) {
+                $this->linkVariantOption($parentProductId, $productId, $attributeId, $optionId);
+            }
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function resolveAttributePayload(array $productData): array
+    {
+        $payload = [];
+        foreach ($productData['attributes'] ?? [] as $attributeCode => $value) {
+            $value = trim((string)$value);
+            if ($value !== '') {
+                $payload[(string)$attributeCode] = $value;
+            }
+        }
+
+        foreach (['color', 'size', 'material', 'brand', 'delivery_type', 'download_format', 'license_term'] as $attributeCode) {
+            $value = trim((string)($productData[$attributeCode] ?? ''));
+            if ($value !== '') {
+                $payload[$attributeCode] = $value;
+            }
+        }
+        $payload += $this->resolveDefaultAttributes($productData);
+
+        $sku = strtolower((string)($productData['sku'] ?? ''));
+        $name = strtolower((string)($productData['name'] ?? ''));
+
+        if (!isset($payload['color'])) {
+            if (str_contains($sku, '-blk-') || str_contains($sku, 'black')) {
+                $payload['color'] = 'black';
+            } elseif (str_contains($sku, '-wht-') || str_contains($sku, 'white')) {
+                $payload['color'] = 'white';
+            } elseif (str_contains($sku, '-gray-') || str_contains($sku, 'gray')) {
+                $payload['color'] = 'gray';
+            } elseif (str_contains($sku, 'titanium')) {
+                $payload['color'] = 'silver';
+            }
+        }
+
+        if (!isset($payload['size'])) {
+            if (preg_match('/-(256|512)\b/i', $sku, $matches)) {
+                $payload['size'] = $matches[1] . 'gb';
+            } elseif (str_contains($sku, 'usbc')) {
+                $payload['size'] = 'usb-c';
+            } elseif (str_contains($sku, 'magsafe')) {
+                $payload['size'] = 'magsafe';
+            } elseif (str_contains($sku, '15') && str_contains($name, 'inch')) {
+                $payload['size'] = '15-inch';
+            } elseif (str_contains($sku, '13') && str_contains($name, 'inch')) {
+                $payload['size'] = '13-inch';
+            } elseif (str_contains($sku, '27') && str_contains($name, 'monitor')) {
+                $payload['size'] = '27-inch';
+            } elseif (str_contains($sku, '20k')) {
+                $payload['size'] = '20000mah';
+            } elseif (str_contains($sku, '2pk')) {
+                $payload['size'] = '2-pack';
+            }
+        }
+
+        if (str_contains($sku, 'watchface') || str_contains($sku, 'preset-pack') || str_contains($name, 'download')) {
+            $payload['delivery_type'] = $payload['delivery_type'] ?? 'download';
+            $payload['download_format'] = $payload['download_format'] ?? 'zip';
+            $payload['license_term'] = $payload['license_term'] ?? (str_contains($sku, 'preset-pack') ? 'commercial' : 'lifetime');
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function resolveDefaultAttributes(array $productData): array
+    {
+        $needle = strtolower(
+            (string)($productData['sku'] ?? '') . ' '
+            . (string)($productData['name'] ?? '') . ' '
+            . implode(' ', array_map('strval', $productData['category_handles'] ?? []))
+        );
+
+        $payload = [];
+        $brandMap = [
+            'iphone' => 'apple',
+            'ipad' => 'apple',
+            'macbook' => 'apple',
+            'airpods' => 'apple',
+            'watchface' => 'apple',
+            'galaxy' => 'samsung',
+            'sony' => 'sony',
+            'bose' => 'bose',
+            'logitech' => 'logitech',
+            'canon' => 'canon',
+            'nike' => 'nike',
+            'adidas' => 'adidas',
+            'levis' => 'levis',
+            'uniqlo' => 'uniqlo',
+            'ikea' => 'ikea',
+            'muji' => 'muji',
+            'dyson' => 'dyson',
+            'nespresso' => 'nespresso',
+            'osprey' => 'osprey',
+            'herman' => 'herman_miller',
+            'lindt' => 'lindt',
+            'lego' => 'lego',
+            'tesla' => 'tesla',
+        ];
+        foreach ($brandMap as $keyword => $brand) {
+            if (str_contains($needle, $keyword)) {
+                $payload['brand'] = $brand;
+                break;
+            }
+        }
+
+        $materialMap = [
+            'iphone' => 'titanium',
+            'galaxy' => 'titanium',
+            'macbook' => 'aluminum',
+            'ipad' => 'aluminum',
+            'airpods' => 'plastic',
+            'headphones' => 'plastic',
+            'earbuds' => 'plastic',
+            'keyboard' => 'plastic',
+            'mouse' => 'plastic',
+            'hoodie' => 'cotton_blend',
+            't-shirt' => 'cotton',
+            'tee' => 'cotton',
+            'sneakers' => 'knit',
+            'sofa' => 'linen',
+            'table' => 'oak',
+            'lamp' => 'metal',
+            'bag' => 'nylon',
+        ];
+        foreach ($materialMap as $keyword => $material) {
+            if (str_contains($needle, $keyword)) {
+                $payload['material'] = $material;
+                break;
+            }
+        }
+
+        $weight = (float)($productData['weight'] ?? 0);
+        $payload['delivery_type'] = $weight <= 0 ? 'download' : 'physical';
+
+        return $payload;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mergeVariantProductData(array $productData, array $variant): array
+    {
+        $merged = $productData;
+        unset($merged['variants'], $merged['configurable_attributes']);
+        return array_replace($merged, $variant);
+    }
+
+    private function ensureAttribute(string $attributeCode): int
+    {
+        $entityId = $this->getProductEntityId();
+        $pdo = $this->product->getConnection()->getConnector()->getLink();
+        $statement = $pdo->prepare('SELECT attribute_id FROM "m_eav_attribute" WHERE eav_entity_id = ? AND code = ? LIMIT 1');
+        $statement->execute([$entityId, $attributeCode]);
+        $attributeId = (int)($statement->fetch(\PDO::FETCH_ASSOC)['attribute_id'] ?? 0);
+        if ($attributeId > 0) {
+            return $attributeId;
+        }
+
+        $definition = $this->getAttributeDefinitions()[$attributeCode] ?? ['name' => ucfirst(str_replace('_', ' ', $attributeCode))];
+        $statement = $pdo->prepare(
+            'INSERT INTO "m_eav_attribute" '
+            . '(code, eav_entity_id, set_id, group_id, name, type_id, basic_is_enable, frontend_is_visible, frontend_is_filterable, frontend_is_searchable, data_is_multiple, data_has_option) '
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $statement->execute([
+            $attributeCode,
+            $entityId,
+            $this->getDefaultProductSetId(),
+            $this->getDefaultAttributeGroupId(),
+            (string)$definition['name'],
+            $this->getSelectTypeId(),
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+        ]);
+
+        $statement = $pdo->prepare('SELECT attribute_id FROM "m_eav_attribute" WHERE eav_entity_id = ? AND code = ? LIMIT 1');
+        $statement->execute([$entityId, $attributeCode]);
+        return (int)($statement->fetch(\PDO::FETCH_ASSOC)['attribute_id'] ?? 0);
+    }
+
+    private function resetProductAttributeData(int $productId): void
+    {
+        $attributeIds = $this->getManagedAttributeIds();
+        if ($attributeIds === []) {
+            return;
+        }
+
+        $pdo = $this->product->getConnection()->getConnector()->getLink();
+        $placeholders = implode(',', array_fill(0, count($attributeIds), '?'));
+        $pdo->prepare("DELETE FROM \"m_eav_product_select_option\" WHERE entity_id = ? AND attribute_id IN ({$placeholders})")
+            ->execute(array_merge([$productId], $attributeIds));
+        $pdo->prepare("DELETE FROM \"m_weshop_product_option_id\" WHERE product_id = ? AND attribute_id IN ({$placeholders})")
+            ->execute(array_merge([$productId], $attributeIds));
+    }
+
+    private function cleanupInvalidManagedAttributeOptions(): void
+    {
+        $attributeIds = $this->getManagedAttributeIdsByCode();
+        if ($attributeIds === []) {
+            return;
+        }
+
+        $pdo = $this->product->getConnection()->getConnector()->getLink();
+        foreach ($attributeIds as $attributeCode => $attributeId) {
+            $allowedCodes = array_keys($this->getAttributeDefinitions()[$attributeCode]['options'] ?? []);
+            if ($allowedCodes === []) {
+                continue;
+            }
+
+            $placeholders = implode(',', array_fill(0, count($allowedCodes), '?'));
+            $invalidOptionIds = [];
+            $statement = $pdo->prepare(
+                "SELECT option_id FROM \"m_eav_attribute_option\" WHERE attribute_id = ? AND code NOT IN ({$placeholders})"
+            );
+            $statement->execute(array_merge([$attributeId], $allowedCodes));
+            foreach ($statement->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                $invalidOptionIds[] = (int)($row['option_id'] ?? 0);
+            }
+            $invalidOptionIds = array_values(array_filter($invalidOptionIds));
+            if ($invalidOptionIds === []) {
+                continue;
+            }
+
+            $optionPlaceholders = implode(',', array_fill(0, count($invalidOptionIds), '?'));
+            $pdo->prepare("DELETE FROM \"m_weshop_product_option_id\" WHERE option_id IN ({$optionPlaceholders})")
+                ->execute($invalidOptionIds);
+            $pdo->prepare("DELETE FROM \"m_eav_product_select_option\" WHERE attribute_id = ? AND value IN ({$optionPlaceholders})")
+                ->execute(array_merge([$attributeId], array_map('strval', $invalidOptionIds)));
+            $pdo->prepare("DELETE FROM \"m_eav_attribute_option\" WHERE option_id IN ({$optionPlaceholders})")
+                ->execute($invalidOptionIds);
+        }
+    }
+
+    /**
+     * @return int[]
+     */
+    private function getManagedAttributeIds(): array
+    {
+        return array_values($this->getManagedAttributeIdsByCode());
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function getManagedAttributeIdsByCode(): array
+    {
+        $entityId = $this->getProductEntityId();
+        if ($entityId <= 0) {
+            return [];
+        }
+
+        $rows = ($this->eavAttribute ?? ObjectManager::getInstance(EavAttribute::class))->reset()
+            ->fields(EavAttribute::schema_fields_ID . ',' . EavAttribute::schema_fields_code)
+            ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
+            ->where(EavAttribute::schema_fields_code, array_keys($this->getAttributeDefinitions()), 'in')
+            ->select()
+            ->fetchArray();
+
+        $ids = [];
+        foreach ($rows as $row) {
+            $attributeId = (int)($row[EavAttribute::schema_fields_ID] ?? 0);
+            $code = (string)($row[EavAttribute::schema_fields_code] ?? '');
+            if ($attributeId > 0 && $code !== '') {
+                $ids[$code] = $attributeId;
+            }
+        }
+
+        return $ids;
+    }
+
+    private function ensureAttributeOption(int $attributeId, string $attributeCode, string $optionCode): int
+    {
+        $pdo = $this->product->getConnection()->getConnector()->getLink();
+        $statement = $pdo->prepare('SELECT option_id FROM "m_eav_attribute_option" WHERE attribute_id = ? AND code = ? LIMIT 1');
+        $statement->execute([$attributeId, $optionCode]);
+        $optionId = (int)($statement->fetch(\PDO::FETCH_ASSOC)['option_id'] ?? 0);
+        if ($optionId > 0) {
+            $definition = $this->getAttributeDefinitions()[$attributeCode]['options'][$optionCode] ?? null;
+            if (is_array($definition)) {
+                $pdo->prepare(
+                    'UPDATE "m_eav_attribute_option" SET value = ?, swatch_color = ?, swatch_image = ?, swatch_text = ? WHERE option_id = ?'
+                )->execute([
+                    (string)$definition['value'],
+                    (string)($definition['swatch_color'] ?? ''),
+                    (string)($definition['swatch_image'] ?? ''),
+                    (string)($definition['swatch_text'] ?? ''),
+                    $optionId,
+                ]);
+            }
+            return $optionId;
+        }
+
+        $definition = $this->getAttributeDefinitions()[$attributeCode]['options'][$optionCode] ?? ['value' => strtoupper($optionCode)];
+        $statement = $pdo->prepare(
+            'INSERT INTO "m_eav_attribute_option" (eav_entity_id, attribute_id, code, value, swatch_color, swatch_image, swatch_text) '
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $statement->execute([
+            $this->getProductEntityId(),
+            $attributeId,
+            $optionCode,
+            (string)$definition['value'],
+            (string)($definition['swatch_color'] ?? ''),
+            (string)($definition['swatch_image'] ?? ''),
+            (string)($definition['swatch_text'] ?? ''),
+        ]);
+
+        $statement = $pdo->prepare('SELECT option_id FROM "m_eav_attribute_option" WHERE attribute_id = ? AND code = ? LIMIT 1');
+        $statement->execute([$attributeId, $optionCode]);
+        return (int)($statement->fetch(\PDO::FETCH_ASSOC)['option_id'] ?? 0);
+    }
+
+    private function saveAttributeValue(int $attributeId, int $productId, int $optionId): void
+    {
+        $pdo = $this->product->getConnection()->getConnector()->getLink();
+        $table = 'm_eav_product_select_option';
+        $pdo->prepare("DELETE FROM \"{$table}\" WHERE attribute_id=:attribute_id AND entity_id=:entity_id")
+            ->execute([':attribute_id' => $attributeId, ':entity_id' => $productId]);
+        $pdo->prepare("INSERT INTO \"{$table}\" (attribute_id, entity_id, value) VALUES (:attribute_id,:entity_id,:value)")
+            ->execute([':attribute_id' => $attributeId, ':entity_id' => $productId, ':value' => (string)$optionId]);
+    }
+
+    private function linkVariantOption(int $parentProductId, int $productId, int $attributeId, int $optionId): void
+    {
+        $pdo = $this->product->getConnection()->getConnector()->getLink();
+        $pdo->prepare(
+            'DELETE FROM "m_weshop_product_option_id" WHERE parent_product_id = ? AND product_id = ? AND attribute_id = ? AND option_id = ?'
+        )->execute([$parentProductId, $productId, $attributeId, $optionId]);
+        $pdo->prepare(
+            'INSERT INTO "m_weshop_product_option_id" (parent_product_id, attribute_id, option_id, product_id) VALUES (?, ?, ?, ?)'
+        )->execute([$parentProductId, $attributeId, $optionId, $productId]);
+    }
+
+    private function getDefaultAttributeGroupId(): int
+    {
+        $groupModel = $this->attributeGroup ?? ObjectManager::getInstance(Group::class);
+        $group = $groupModel->reset()
+            ->where(Group::schema_fields_code, 'default')
+            ->where(Group::schema_fields_set_id, $this->getDefaultProductSetId())
+            ->where(Group::schema_fields_eav_entity_id, $this->getProductEntityId())
+            ->find()
+            ->fetch();
+        return (int)($group->getId() ?? 0);
+    }
+
+    private function getSelectTypeId(): int
+    {
+        $typeModel = $this->attributeType ?? ObjectManager::getInstance(Type::class);
+        foreach (['select', 'select_option', 'select_yes_no'] as $typeCode) {
+            $type = $typeModel->reset()->where(Type::schema_fields_code, $typeCode)->find()->fetch();
+            if ($type->getId()) {
+                return (int)$type->getId();
+            }
+        }
+        return 0;
+    }
+
+    private function getProductEntityId(): int
+    {
+        return (int)$this->eavEntity->clear()->loadByCode(Product::entity_code)->getId();
+    }
+
+    /**
+     * @return array<string, array{name:string, options: array<string, array<string, string>>}>
+     */
+    private function getAttributeDefinitions(): array
+    {
+        return [
+            'color' => ['name' => 'Color', 'options' => [
+                'black' => ['value' => 'Black', 'swatch_color' => '#111111'],
+                'white' => ['value' => 'White', 'swatch_color' => '#f5f5f5'],
+                'gray' => ['value' => 'Gray', 'swatch_color' => '#7c7c7c'],
+                'silver' => ['value' => 'Silver', 'swatch_color' => '#c0c0c0'],
+                'blue' => ['value' => 'Blue', 'swatch_color' => '#2563eb'],
+                'green' => ['value' => 'Green', 'swatch_color' => '#16a34a'],
+                'red' => ['value' => 'Red', 'swatch_color' => '#dc2626'],
+                'navy' => ['value' => 'Navy', 'swatch_color' => '#1e3a8a'],
+                'beige' => ['value' => 'Beige', 'swatch_color' => '#d6c6a8'],
+                'natural' => ['value' => 'Natural', 'swatch_color' => '#b08d57'],
+            ]],
+            'size' => ['name' => 'Size', 'options' => [
+                'xs' => ['value' => 'XS'],
+                's' => ['value' => 'S'],
+                'm' => ['value' => 'M'],
+                'l' => ['value' => 'L'],
+                'xl' => ['value' => 'XL'],
+                'xxl' => ['value' => 'XXL'],
+                '256gb' => ['value' => '256GB'],
+                '512gb' => ['value' => '512GB'],
+                '128gb' => ['value' => '128GB'],
+                '1tb' => ['value' => '1TB'],
+                'usb-c' => ['value' => 'USB-C'],
+                'magsafe' => ['value' => 'MagSafe'],
+                '13-inch' => ['value' => '13-inch'],
+                '15-inch' => ['value' => '15-inch'],
+                '27-inch' => ['value' => '27-inch'],
+                '20000mah' => ['value' => '20000mAh'],
+                '2-pack' => ['value' => '2-Pack'],
+                '40' => ['value' => 'EU 40'],
+                '41' => ['value' => 'EU 41'],
+                '42' => ['value' => 'EU 42'],
+                '43' => ['value' => 'EU 43'],
+            ]],
+            'material' => ['name' => 'Material', 'options' => [
+                'titanium' => ['value' => 'Titanium'],
+                'aluminum' => ['value' => 'Aluminum'],
+                'plastic' => ['value' => 'Plastic'],
+                'cotton' => ['value' => 'Cotton'],
+                'cotton_blend' => ['value' => 'Cotton Blend'],
+                'linen' => ['value' => 'Linen'],
+                'oak' => ['value' => 'Oak'],
+                'metal' => ['value' => 'Metal'],
+                'nylon' => ['value' => 'Nylon'],
+                'knit' => ['value' => 'Knit'],
+            ]],
+            'brand' => ['name' => 'Brand', 'options' => [
+                'apple' => ['value' => 'Apple'],
+                'samsung' => ['value' => 'Samsung'],
+                'sony' => ['value' => 'Sony'],
+                'bose' => ['value' => 'Bose'],
+                'logitech' => ['value' => 'Logitech'],
+                'canon' => ['value' => 'Canon'],
+                'nike' => ['value' => 'Nike'],
+                'adidas' => ['value' => 'Adidas'],
+                'levis' => ['value' => 'Levi\'s'],
+                'uniqlo' => ['value' => 'Uniqlo'],
+                'ikea' => ['value' => 'IKEA'],
+                'muji' => ['value' => 'MUJI'],
+                'dyson' => ['value' => 'Dyson'],
+                'nespresso' => ['value' => 'Nespresso'],
+                'osprey' => ['value' => 'Osprey'],
+                'herman_miller' => ['value' => 'Herman Miller'],
+                'lindt' => ['value' => 'Lindt'],
+                'lego' => ['value' => 'LEGO'],
+                'tesla' => ['value' => 'Tesla'],
+            ]],
+            'delivery_type' => ['name' => 'Delivery Type', 'options' => [
+                'physical' => ['value' => 'Physical Shipment'],
+                'download' => ['value' => 'Download'],
+                'virtual' => ['value' => 'Virtual Access'],
+            ]],
+            'download_format' => ['name' => 'Download Format', 'options' => [
+                'zip' => ['value' => 'ZIP'],
+                'pdf' => ['value' => 'PDF'],
+                'mp3' => ['value' => 'MP3'],
+                'wav' => ['value' => 'WAV'],
+                'license_key' => ['value' => 'License Key'],
+            ]],
+            'license_term' => ['name' => 'License Term', 'options' => [
+                'lifetime' => ['value' => 'Lifetime'],
+                'commercial' => ['value' => 'Commercial Use'],
+                'personal' => ['value' => 'Personal Use'],
+                'subscription' => ['value' => 'Subscription'],
+            ]],
+        ];
     }
 
     /**

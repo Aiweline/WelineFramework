@@ -51,7 +51,7 @@
             </div>
             <div class="product-info">
                 <h1 class="product-name"><?= htmlspecialchars($product->getName()) ?></h1>
-                <div class="product-price">￥<?= number_format($product->getPrice(), 2) ?></div>
+                <div class="product-price"><?= \Weline\Currency\Helper\CurrencyFormatter::formatConverted($product->getPrice()) ?></div>
                 <div class="product-description">
                     <?= $product->getDescription() ?>
                 </div>
@@ -59,7 +59,7 @@
         </div>
         <?php else: ?>
         <div class="product-not-found">
-            <p>产品不存在或已下架</p>
+            <p><?= __('产品不存在或已下架') ?></p>
         </div>
         <?php endif; ?>
     </main>

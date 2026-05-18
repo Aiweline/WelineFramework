@@ -77,7 +77,7 @@ class MeilisearchEngine implements SearchEngineInterface, SearchWritableEngineIn
                 'total' => $results->getEstimatedTotalHits(),
             ];
         } catch (\Exception $e) {
-            w_log_error('Meilisearch 搜索失败: ' . $e->getMessage());
+            w_log_warning('Meilisearch 搜索失败: ' . $e->getMessage());
             return $this->fallbackSearch($keyword, $filters, $page, $pageSize);
         }
     }
@@ -113,7 +113,7 @@ class MeilisearchEngine implements SearchEngineInterface, SearchWritableEngineIn
 
             return $suggestions;
         } catch (\Exception $e) {
-            w_log_error('Meilisearch 获取建议失败: ' . $e->getMessage());
+            w_log_warning('Meilisearch 获取建议失败: ' . $e->getMessage());
 
             $suggestions = [];
             $productSuggestions = w_query('product', 'getProductSuggestions', [
@@ -165,8 +165,7 @@ class MeilisearchEngine implements SearchEngineInterface, SearchWritableEngineIn
 
             $health = $this->client->health();
             return isset($health['status']) && $health['status'] === 'available';
-        } catch (\Exception $e) {
-            w_log_error('Meilisearch 连接测试失败: ' . $e->getMessage());
+        } catch (\Exception) {
             return false;
         }
     }

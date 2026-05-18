@@ -7,7 +7,6 @@ $wishlistCount = (int) ($this->getData('wishlist_count') ?? 0);
 $recommendations = (array) ($this->getData('recommendations') ?? []);
 $wishlistUrl = (string) ($this->getData('wishlist_url') ?? $this->getUrl('wishlist'));
 $browseUrl = (string) ($this->getData('browse_url') ?? $this->getUrl('catalog/category'));
-$removeUrl = (string) ($this->getData('remove_url') ?? $this->getUrl('wishlist/remove'));
 ?>
 <main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
     <section class="rounded-[2rem] border border-border-light bg-surface-light p-8 shadow-sm dark:border-border-dark dark:bg-surface-dark">
@@ -106,27 +105,38 @@ $removeUrl = (string) ($this->getData('remove_url') ?? $this->getUrl('wishlist/r
 
 <script>
 (function () {
+    var wishlistApiPromise = null;
+
+    function getWishlistApi() {
+        if (!wishlistApiPromise) {
+            if (!window.Weline?.Api?.resource) {
+                return Promise.reject(new Error('Weline.Api.resource is not available'));
+            }
+            wishlistApiPromise = Promise.resolve(window.Weline.Api.resource('wishlist'));
+        }
+        return wishlistApiPromise;
+    }
+
     document.querySelectorAll('[data-remove-wishlist-item]').forEach(function (button) {
-        button.addEventListener('click', function () {
+        button.addEventListener('click', async function () {
             var wishlistId = this.getAttribute('data-remove-wishlist-item');
             if (!wishlistId) {
                 return;
             }
 
-            fetch('<?= htmlspecialchars($removeUrl, ENT_QUOTES) ?>', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ wishlist_id: wishlistId })
-            }).then(function (response) {
-                return response.json();
-            }).then(function (payload) {
+            try {
+                var WishlistApi = await getWishlistApi();
+                var payload = await WishlistApi.remove({ wishlist_id: parseInt(wishlistId, 10) });
                 if (payload && payload.success) {
                     window.location.reload();
+                    return;
                 }
-            });
+                if (payload && payload.data && payload.data.redirect_url) {
+                    window.location.href = payload.data.redirect_url;
+                }
+            } catch (error) {
+                console.error('Wishlist remove error:', error);
+            }
         });
     });
 })();

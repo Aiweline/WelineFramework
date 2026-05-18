@@ -510,16 +510,14 @@
         }
 
         /**
-         * 格式化价格
+         * 格式化价格 - 使用全局货币配置，与 PHP CurrencyFormatter 保持一致
          */
         formatPrice(price, currency = 'CNY') {
-            const symbols = {
-                'CNY': '¥',
-                'USD': '$',
-                'EUR': '€',
-            };
-            const symbol = symbols[currency] || currency;
-            return symbol + parseFloat(price).toFixed(2);
+            if (typeof window.formatConvertedCurrency === 'function') {
+                return window.formatConvertedCurrency(price);
+            }
+            // 降级：仅在全局函数不可用时使用
+            return parseFloat(price).toFixed(2);
         }
     }
 

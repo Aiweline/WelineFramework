@@ -169,9 +169,12 @@ class AccountDashboardDataService
                 continue;
             }
 
+            $orderId = (int) ($rma['order_id'] ?? $rma[Rma::schema_fields_ORDER_ID] ?? 0);
+            $order = $orderId > 0 ? $this->orderService->getOrder($orderId) : null;
             $mapped[] = [
                 'rma_id' => (int) ($rma['rma_id'] ?? $rma[Rma::schema_fields_ID] ?? 0),
-                'order_id' => (int) ($rma['order_id'] ?? $rma[Rma::schema_fields_ORDER_ID] ?? 0),
+                'order_id' => $orderId,
+                'order_increment_id' => $order ? (string) ($order->getData(Order::schema_fields_increment_id) ?? '') : '',
                 'reason' => (string) ($rma['reason'] ?? $rma[Rma::schema_fields_REASON] ?? ''),
                 'status' => (string) ($rma['status'] ?? $rma[Rma::schema_fields_STATUS] ?? RmaService::STATUS_PENDING),
                 'created_at' => (string) ($rma['created_at'] ?? $rma[Rma::schema_fields_CREATED_AT] ?? ''),
@@ -203,12 +206,12 @@ class AccountDashboardDataService
             ],
             [
                 'title' => (string) __('My Orders'),
-                'url' => 'weshop/order/list',
+                'url' => 'customer/account/index#orders',
                 'icon' => 'receipt_long',
             ],
             [
                 'title' => (string) __('Returns & Exchanges'),
-                'url' => 'rma',
+                'url' => 'customer/account/index#returns',
                 'icon' => 'assignment_return',
             ],
             [
