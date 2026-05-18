@@ -2776,15 +2776,15 @@ class AiSiteBuildTaskService
                 \is_array($gate['summary'] ?? null) ? $gate['summary'] : []
             );
             if ($failedLines !== '') {
-                return $failedLines . ' ' . (string)__('请在工作台点击「继续失败任务」后重新调度构建队列。');
+                return $failedLines . ' ' . (string)__('请在工作台点击「重试失败项」后重新调度构建队列。');
             }
 
-            return (string)__('有构建任务失败，请在工作台点击「继续失败任务」后重新调度构建队列。');
+            return (string)__('有构建任务失败，请在工作台点击「重试失败项」后重新调度构建队列。');
         }
         if ($reason === 'invalid_generated_artifacts') {
             $count = (int)($gate['invalid_artifacts'] ?? 0);
 
-            return (string)__('有 %{count} 项构建产物无效，请继续失败任务或强制重新生成后重试。', ['count' => $count]);
+            return (string)__('有 %{count} 项构建产物无效，请点击「重试失败项」或「完全重建」后重试。', ['count' => $count]);
         }
         if ($reason === 'duplicate_generated_artifacts') {
             $count = (int)($gate['duplicate_artifacts'] ?? 0);
@@ -2798,7 +2798,7 @@ class AiSiteBuildTaskService
             $done = (int)($gate['done'] ?? 0);
             $total = (int)($gate['total'] ?? 0);
 
-            return (string)__('构建任务尚未全部完成（%{done}/%{total}），请等待或继续失败任务。', [
+            return (string)__('构建任务尚未全部完成（%{done}/%{total}），请等待或点击「重试失败项」。', [
                 'done' => $done,
                 'total' => $total,
             ]);
