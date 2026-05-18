@@ -366,8 +366,8 @@ final class AiSiteAssetManifestService
      */
     public function buildPrompt(array $slot, array $scope = []): string
     {
-        $isLogoSlot = $this->isLogoAssetSlot($slot);
-        $isFaviconLikeSlot = $isLogoSlot && $this->isFaviconLikeSlot($slot);
+        $isFaviconLikeSlot = $this->isFaviconLikeSlot($slot);
+        $isLogoSlot = $this->isLogoAssetSlot($slot) || $isFaviconLikeSlot;
         $rawBrief = $this->firstString([
             $slot['prompt_brief'] ?? null,
             $slot['brief'] ?? null,
@@ -378,7 +378,7 @@ final class AiSiteAssetManifestService
             $scope['website_profile']['site_title'] ?? null,
             $scope['site_title'] ?? null,
         ]);
-        $businessContext = $this->firstString([
+        $businessContext = $this->firstBusinessContextString([
             $scope['website_profile']['brief_description'] ?? null,
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
@@ -435,6 +435,10 @@ final class AiSiteAssetManifestService
                 ? 'Brand personality for styling (mood/color palette only; never spell out this tagline inside the logo): ' . $siteTagline
                 : 'Brand personality (reflect this tone in visual style): ' . $siteTagline;
         }
+        $confirmedThemePalettePrompt = $this->buildConfirmedThemePalettePrompt($scope, $isLogoSlot, $isFaviconLikeSlot);
+        if ($confirmedThemePalettePrompt !== '') {
+            $parts[] = $confirmedThemePalettePrompt;
+        }
 
         $kind = $this->firstString([$slot['kind'] ?? null, $slot['slot_type'] ?? null]);
         if ($kind !== '') {
@@ -443,32 +447,18 @@ final class AiSiteAssetManifestService
 
         $isHeroSlot = (bool)\preg_match('/\b(hero|banner|cover)\b/i', $kind . ' ' . ((string)($slot['label'] ?? '')));
 
-        if ($isLogoSlot) {
+        if ($isFaviconLikeSlot) {
+            $parts[] = 'Title icon / favicon output requirements: generate a production-ready square 1:1 PNG icon. Keep it highly recognizable at 16-64px with one bold symbol or monogram, transparent background or a clean solid background from the confirmed theme palette only; no paragraph text, no mockup, no watermark, no screenshot frame.';
+        } elseif ($isLogoSlot) {
             $parts[] = 'Logo output requirements: generate a PNG logo with a transparent alpha background. Keep the logo isolated on transparency; do not place it on a card, wall, photo scene, colored rectangle, gradient backdrop, website mockup, or screenshot frame.';
         } elseif ($isHeroSlot) {
             $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed — cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
             $parts[] = 'Hero visual quality bar (CRITICAL): premium cinematic website banner background, very wide horizontal composition, edge-to-edge coverage, strong depth, realistic lighting, high-end commercial art direction. Do NOT generate flat vector art, SVG-like shapes, childish cartoon, icon collage, clip-art, rough geometric placeholder art, cardboard-looking cards, UI mockups, or simplistic low-detail illustration. Prefer realistic/editorial photography or photoreal premium 3D only when the subject cannot be photographed.';
-            $parts[] = 'Block-only visual constraints (very important):'
-                . ' generate a single self-contained premium cinematic scene filling the whole canvas.'
-                . ' DO NOT draw a website mockup, screenshot frame, browser chrome, mobile-app frame, or any UI surface.'
-                . ' DO NOT include a website header, top navigation bar, brand logo, navigation menu, hamburger icon, or language switcher.'
-                . ' DO NOT include a website footer, copyright row, or footer link columns.'
-                . ' DO NOT draw call-to-action buttons, "Sign up"/"Get Started"/"Explore"/"Buy Now" buttons, badges that look like UI buttons, or any clickable controls.'
-                . ' DO NOT render readable English/Chinese paragraph text, slogans, headings, captions, watermarks, price tags, labels, or speech bubbles.'
-                . ' DO NOT show multiple separate page sections stitched together (no two-column site previews, no "as seen on" rows, no website screenshots).'
-                . ' Only render the subject-matter visual that fits inside one rectangular block area; treat the canvas as the inside of a single content block, not as a whole web page.';
+            $parts[] = $this->buildBlockImageArtifactContract(true);
         } else {
             $parts[] = 'Section image output requirements: generate a premium editorial/commercial website image that fills the whole rectangular canvas with intentional composition, depth, and lighting. Do not use transparent cutouts unless the slot explicitly says logo/icon.';
             $parts[] = 'Style-match requirement (CRITICAL): the visual style, color temperature, lighting, and composition MUST align with the overall brand aesthetic described in the reference style keywords/color palette above. Do NOT generate a generic stock photo, overly saturated 3D render, childish cartoon illustration, flat vector/SVG-like shapes, clip-art, rough geometric placeholder art, or dark/gritty image unless those match the brand style. Keep the rendering quality consistent with a premium brand website.';
-            $parts[] = 'Block-only visual constraints (very important):'
-                . ' generate a single self-contained illustration or photograph filling the whole canvas.'
-                . ' DO NOT draw a website mockup, screenshot frame, browser chrome, mobile-app frame, or any UI surface.'
-                . ' DO NOT include a website header, top navigation bar, brand logo, navigation menu, hamburger icon, or language switcher.'
-                . ' DO NOT include a website footer, copyright row, or footer link columns.'
-                . ' DO NOT draw call-to-action buttons, "Sign up"/"Get Started"/"Explore"/"Buy Now" buttons, badges that look like UI buttons, or any clickable controls.'
-                . ' DO NOT render readable English/Chinese paragraph text, slogans, headings, captions, watermarks, price tags, labels, or speech bubbles.'
-                . ' DO NOT show multiple separate page sections stitched together (no two-column site previews, no "as seen on" rows, no website screenshots).'
-                . ' Only render the subject-matter visual that fits inside one rectangular block area; treat the canvas as the inside of a single content block, not as a whole web page.';
+            $parts[] = $this->buildBlockImageArtifactContract(false);
         }
         $pageType = $this->firstString([$slot['page_type'] ?? null]);
         if ($pageType !== '') {
@@ -509,7 +499,7 @@ final class AiSiteAssetManifestService
     {
         $businessContext = \trim($businessContext);
         $siteTagline = \trim($siteTagline);
-        $slotBrief = \trim((string)($slot['prompt_brief'] ?? $slot['brief'] ?? ''));
+        $slotBrief = $this->normalizeAssetBusinessContextString((string)($slot['prompt_brief'] ?? $slot['brief'] ?? ''));
 
         if ($businessContext === '' && $siteTagline === '' && $slotBrief === '') {
             return '';
@@ -904,7 +894,7 @@ final class AiSiteAssetManifestService
             $scope['website_profile']['site_tagline'] ?? null,
             $scope['site_tagline'] ?? null,
         ]);
-        $briefDescription = $this->firstString([
+        $briefDescription = $this->firstBusinessContextString([
             $scope['website_profile']['brief_description'] ?? null,
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
@@ -934,6 +924,10 @@ final class AiSiteAssetManifestService
         if ($siteTagline !== '' && $siteTagline !== $subjectAnchor) {
             $logoBriefParts[] = 'Style/personality hint (mood and palette only, never spell out as text): ' . $siteTagline;
         }
+        $logoThemePalettePrompt = $this->buildConfirmedThemePalettePrompt($scope, true, false);
+        if ($logoThemePalettePrompt !== '') {
+            $logoBriefParts[] = $logoThemePalettePrompt;
+        }
         if ($briefDescription !== '' && $briefDescription !== $subjectAnchor) {
             $logoBriefParts[] = 'Business context (every glyph element must reflect this domain): ' . $briefDescription;
         }
@@ -950,6 +944,10 @@ final class AiSiteAssetManifestService
         }
         if ($siteTagline !== '' && $siteTagline !== $subjectAnchor) {
             $iconBriefParts[] = 'Style hint (mood/palette only): ' . $siteTagline;
+        }
+        $iconThemePalettePrompt = $this->buildConfirmedThemePalettePrompt($scope, true, true);
+        if ($iconThemePalettePrompt !== '') {
+            $iconBriefParts[] = $iconThemePalettePrompt;
         }
         if ($briefDescription !== '' && $briefDescription !== $subjectAnchor) {
             $iconBriefParts[] = 'Business context: ' . $briefDescription;
@@ -1003,7 +1001,7 @@ final class AiSiteAssetManifestService
      */
     private function buildRequiredHeroBannerSlots(array $scope): array
     {
-        $businessContext = $this->firstString([
+        $businessContext = $this->firstBusinessContextString([
             $scope['website_profile']['brief_description'] ?? null,
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
@@ -1025,6 +1023,7 @@ final class AiSiteAssetManifestService
                     . $businessContext;
             }
             $briefParts[] = 'Format default: 1920x750-style full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Unless the user explicitly requests a different hero visual composition, fill the entire canvas edge-to-edge with one immersive wide scene and keep important subjects within the center-safe crop area. Apply a subtle gradient overlay at top and bottom edges (dark-to-transparent) so text and page content can overlay the image naturally. The style and color temperature MUST match the brand identity — not a generic stock photo.';
+            $briefParts[] = $this->buildBlockImageArtifactContract(true);
             if ($title !== '') {
                 $briefParts[] = 'Section headline context (do not render as readable slogan text inside the image): ' . $title;
             }
@@ -1065,7 +1064,7 @@ final class AiSiteAssetManifestService
     private function buildRequiredContentBlockSlots(array $scope): array
     {
         $slots = [];
-        $businessContext = $this->firstString([
+        $businessContext = $this->firstBusinessContextString([
             $scope['website_profile']['brief_description'] ?? null,
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
@@ -1083,25 +1082,30 @@ final class AiSiteAssetManifestService
                 if ($blockKey === '' || \preg_match('/hero|banner|opening/i', $blockKey) === 1) {
                     continue;
                 }
+                $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+                if ($imageIntent !== [] && !$this->imageIntentNeedsImage($imageIntent)) {
+                    continue;
+                }
                 $sectionCode = $this->buildSectionCodeFromBlockKey((string)$pageType, $blockKey);
                 $slotId = $this->normalizeSlotId('page:' . (string)$pageType . ':' . \str_replace('/', '-', $sectionCode));
-                $brief = $this->firstString([
-                    $block['execution_script']['media_assets'][0] ?? null,
-                    $block['design_tags']['visual'][0] ?? null,
-                    $block['content'] ?? null,
-                    $block['goal'] ?? null,
-                    $blockKey,
-                ]);
+                $brief = $this->buildContentBlockImageSubjectBrief($blockKey, $block, $imageIntent, $businessContext);
                 $briefParts = [];
                 if ($businessContext !== '') {
                     $briefParts[] = 'PRIMARY SUBJECT: ' . $businessContext;
                 }
                 $briefParts[] = 'Block visual for "' . $blockKey . '": ' . ($brief !== '' ? $brief : $blockKey);
-                $briefParts[] = 'One polished subject-matter image for this single section only; no website mockup, no text bars, no placeholder UI, no duplicated neighboring block composition.';
+                if ($imageIntent !== []) {
+                    $briefParts[] = 'Stage-1 image intent: role=' . $this->firstString([$imageIntent['image_role'] ?? null])
+                        . '; subject=' . $this->firstString([$imageIntent['image_subject'] ?? null])
+                        . '; placement=' . $this->firstString([$imageIntent['placement'] ?? null])
+                        . '; reuse_policy=' . $this->firstString([$imageIntent['reuse_policy'] ?? null]);
+                }
+                $briefParts[] = $this->buildBlockImageArtifactContract(false);
                 $brief = \implode("\n", $briefParts);
                 $slotType = \preg_match('/trust|badge|testimonial|review|client|rating|certificate/i', $blockKey . ' ' . $brief) === 1
                     ? 'trust_brand_image'
                     : 'section_image';
+                $required = $this->blockShouldRequireGeneratedImage($block, $imageIntent) ? 1 : 0;
                 $slots[] = [
                     'slot_id' => $slotId,
                     'slot_type' => $slotType,
@@ -1117,14 +1121,174 @@ final class AiSiteAssetManifestService
                     'status' => 'pending',
                     'source' => 'planned',
                     'final_url' => '',
-                    'required' => 0,
+                    'required' => $required,
                     'desired_image' => 1,
+                    'image_intent' => $imageIntent,
                     'locked_by_user' => 0,
                 ];
             }
         }
 
         return $slots;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $imageIntent
+     */
+    private function buildContentBlockImageSubjectBrief(string $blockKey, array $block, array $imageIntent, string $businessContext): string
+    {
+        $intentSubject = $this->firstString([
+            $imageIntent['image_subject'] ?? null,
+            $imageIntent['image_role'] ?? null,
+        ]);
+        if ($intentSubject !== '' && !$this->isIconOnlyBlockImageBrief($intentSubject)) {
+            return $intentSubject;
+        }
+
+        $goal = $this->firstString([
+            $block['goal'] ?? null,
+            $block['content'] ?? null,
+            $block['execution_script']['core_copy'] ?? null,
+            $blockKey,
+        ]);
+        $mediaCue = '';
+        foreach (\is_array($block['execution_script']['media_assets'] ?? null) ? $block['execution_script']['media_assets'] : [] as $asset) {
+            $assetText = $this->firstString([$asset]);
+            if ($assetText !== '' && !$this->isIconOnlyBlockImageBrief($assetText)) {
+                $mediaCue = $assetText;
+                break;
+            }
+        }
+        if ($mediaCue === '') {
+            $mediaCue = $this->firstString([
+                $block['visual_signature']['media_strategy'] ?? null,
+                $block['design_tags']['visual'][0] ?? null,
+            ]);
+            if ($this->isIconOnlyBlockImageBrief($mediaCue)) {
+                $mediaCue = '';
+            }
+        }
+
+        $parts = [];
+        $parts[] = 'Block-level subject scene for "' . $blockKey . '"';
+        if ($goal !== '') {
+            $parts[] = 'visitor purpose: ' . $goal;
+        }
+        if ($businessContext !== '') {
+            $parts[] = 'business domain: ' . $businessContext;
+        }
+        if ($mediaCue !== '') {
+            $parts[] = 'media cue: ' . $mediaCue;
+        }
+        $parts[] = 'not an icon-only SVG/glyph/chevron/sparkle asset';
+
+        return $this->clipText(\implode('; ', $parts), 520);
+    }
+
+    private function isIconOnlyBlockImageBrief(string $brief): bool
+    {
+        $brief = \mb_strtolower(\trim($brief));
+        if ($brief === '') {
+            return false;
+        }
+        $mentionsIcon = \preg_match('/\b(?:svg|icon|glyph|chevron|sparkle|line\s+art|line\s+icon|symbol)\b/u', $brief) === 1;
+        if (!$mentionsIcon) {
+            return false;
+        }
+
+        return \preg_match('/\b(?:scene|photo|photograph|illustration|cinematic|editorial|environment|people|players|table|room|product|device|screenshot|mockup|background)\b/u', $brief) !== 1;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $imageIntent
+     */
+    private function blockShouldRequireGeneratedImage(array $block, array $imageIntent): bool
+    {
+        if ($imageIntent !== []) {
+            if ($this->imageIntentNeedsImage($imageIntent)) {
+                return true;
+            }
+            return !$this->blockDeclaresCssOnlyVisual($block, $imageIntent)
+                && $this->blockPlansConcreteMediaAsset($block);
+        }
+
+        $role = \strtolower($this->firstString([$block['page_flow_role'] ?? null]));
+        if (\in_array($role, ['opening', 'hero', 'proof'], true)) {
+            return true;
+        }
+
+        $mediaAssets = \is_array($block['execution_script']['media_assets'] ?? null)
+            ? $block['execution_script']['media_assets']
+            : (\is_array($block['media_assets'] ?? null) ? $block['media_assets'] : []);
+        foreach ($mediaAssets as $asset) {
+            $text = \strtolower($this->firstString([$asset]));
+            if ($text === '') {
+                continue;
+            }
+            if (\preg_match('/\b(?:image|photo|visual|illustration|screenshot|mockup|scene|hero|banner|card|avatar|icon)\b/i', $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $imageIntent
+     */
+    private function blockDeclaresCssOnlyVisual(array $block, array $imageIntent): bool
+    {
+        $text = \mb_strtolower(\trim((string)\preg_replace('/\s+/u', ' ', \implode(' ', \array_filter([
+            $this->firstString([$imageIntent['css_motif'] ?? null]),
+            $this->firstString([$imageIntent['rationale'] ?? null]),
+            $this->firstString([$block['visual_signature']['media_strategy'] ?? null]),
+        ])))));
+        if ($text === '') {
+            return false;
+        }
+
+        return \preg_match('/\b(?:css-only|css only|no image|without image|no generated image|gradient|pattern|motif|shape|decorative css|css illustration|css icon)\b/u', $text) === 1;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function blockPlansConcreteMediaAsset(array $block): bool
+    {
+        $mediaAssets = \is_array($block['execution_script']['media_assets'] ?? null)
+            ? $block['execution_script']['media_assets']
+            : (\is_array($block['media_assets'] ?? null) ? $block['media_assets'] : []);
+        foreach ($mediaAssets as $asset) {
+            $text = \strtolower($this->firstString([$asset]));
+            if ($text === '') {
+                continue;
+            }
+            if (\preg_match('/\b(?:image|photo|visual|illustration|screenshot|mockup|scene|hero|banner|card|avatar|icon)\b/i', $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $imageIntent
+     */
+    private function imageIntentNeedsImage(array $imageIntent): bool
+    {
+        $value = $imageIntent['needs_image'] ?? null;
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return ((int)$value) === 1;
+        }
+        $normalized = \mb_strtolower(\trim((string)$value));
+
+        return \in_array($normalized, ['true', 'yes', 'y', '1', 'required', 'needed'], true);
     }
 
     /**
@@ -1367,6 +1531,7 @@ final class AiSiteAssetManifestService
             'allowed_blocks' => \is_array($slot['allowed_blocks'] ?? null) ? $slot['allowed_blocks'] : ['*'],
             'max_usage' => (int)($slot['max_usage'] ?? self::MAX_USAGE_DEFAULT),
             'reuse_policy' => \trim((string)($slot['reuse_policy'] ?? 'do_not_repeat_raw_image')),
+            'image_intent' => \is_array($slot['image_intent'] ?? null) ? $slot['image_intent'] : [],
             'planning_context_hash' => \trim((string)($slot['planning_context_hash'] ?? '')),
         ];
         $normalized['planning_signature'] = \trim((string)($slot['planning_signature'] ?? ''));
@@ -1406,6 +1571,9 @@ final class AiSiteAssetManifestService
             ),
             'max_usage' => (int)($slot['max_usage'] ?? self::MAX_USAGE_DEFAULT),
             'reuse_policy' => \trim((string)($slot['reuse_policy'] ?? 'do_not_repeat_raw_image')),
+            'image_intent' => $this->normalizeSignatureValue(
+                \is_array($slot['image_intent'] ?? null) ? $slot['image_intent'] : []
+            ),
             'planning_context_hash' => \trim((string)($slot['planning_context_hash'] ?? '')),
         ];
         $json = \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
@@ -1641,6 +1809,76 @@ final class AiSiteAssetManifestService
         return '';
     }
 
+    private function firstBusinessContextString(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $normalized = $this->normalizeAssetBusinessContextString((string)$value);
+            if ($normalized !== '') {
+                return $normalized;
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizeAssetBusinessContextString(string $value): string
+    {
+        $value = \trim(\strip_tags(\html_entity_decode($value, \ENT_QUOTES | \ENT_HTML5, 'UTF-8')));
+        if ($value === '') {
+            return '';
+        }
+
+        $value = \str_replace(["\r\n", "\r"], "\n", $value);
+        foreach ([
+            '/(?:^|\n)\s*(?:the\s+website\s+is\s*:|website\s*:|business\s*:|project\s*:)\s*/iu',
+            '/(?:^|\n)\s*(?:the\s+site\s+is\s*:|site\s*:|brand\s*:|approved\s+brief\s*:)\s*/iu',
+        ] as $pattern) {
+            if (\preg_match($pattern, $value, $match, \PREG_OFFSET_CAPTURE) === 1) {
+                $value = \substr($value, (int)$match[0][1] + \strlen((string)$match[0][0]));
+                break;
+            }
+        }
+
+        $cutAt = null;
+        foreach (["\n# ", "\n## ", "\n### ", "\nYou must", "\nYour task", "\nThe final result", "\nOutput", "\nReturn", "\nRules", "\nRequirements"] as $marker) {
+            $pos = \stripos($value, $marker);
+            if ($pos !== false && $pos > 80 && ($cutAt === null || $pos < $cutAt)) {
+                $cutAt = $pos;
+            }
+        }
+        if ($cutAt !== null) {
+            $value = \substr($value, 0, $cutAt);
+        }
+
+        $lines = [];
+        foreach (\preg_split('/\n+/u', $value) ?: [] as $line) {
+            $line = \trim((string)\preg_replace('/^\s*[-*]\s*/u', '', (string)$line));
+            if ($line === '') {
+                continue;
+            }
+            if (\preg_match('/^(?:#\s*role|you\s+are\b|you\s+are\s+generating\b|the\s+final\s+result\b|return\s+only\b|output\s+format\b|do\s+not\b|must\s+output\b)/iu', $line) === 1) {
+                continue;
+            }
+            if (\preg_match('/\b(?:world-class\s+AI|SEO-first\s+website\s+architecture|Generative\s+Engine\s+Optimization|AI-generated\s+scalable|production-grade\s+website\s+plan)\b/iu', $line) === 1) {
+                continue;
+            }
+            $lines[] = $line;
+            if (\count($lines) >= 8) {
+                break;
+            }
+        }
+
+        $value = \trim((string)\preg_replace('/\s+/u', ' ', \implode('; ', $lines)));
+        if ($value === '' || \preg_match('/^(?:#\s*role|you\s+are\b|return\s+only\b)/iu', $value) === 1) {
+            return '';
+        }
+
+        return $this->clipText($value, 360);
+    }
+
     /**
      * @param array<string, mixed> $scope
      */
@@ -1712,6 +1950,129 @@ final class AiSiteAssetManifestService
         }
 
         return \implode("\n", $lines);
+    }
+
+    private function buildBlockImageArtifactContract(bool $isHeroSlot): string
+    {
+        $composition = $isHeroSlot
+            ? 'a single self-contained premium cinematic scene filling the whole canvas'
+            : 'a single self-contained premium illustration or photograph filling the whole canvas';
+
+        return 'Block-only image artifact contract (HARD):'
+            . ' generate ' . $composition . '.'
+            . ' Treat this as raw visual media for one page block, not as a rendered website or page screenshot.'
+            . ' DO NOT include website chrome: header, navigation, footer, menu items, hamburger icons, language switchers, browser frames, mobile-app frames, UI cards, CTA buttons, clickable controls, badges styled as buttons, or multi-section page previews.'
+            . ' DO NOT include any readable text in any language, including brand names, headlines, slogans, captions, labels, watermarks, price tags, readable signage, speech bubbles, pseudo-menu text, or lorem ipsum.'
+            . ' Only render subject-matter imagery that can sit behind or beside separately generated HTML text.'
+            . ' Exception: identity logo/favicon slots may contain the approved brand wordmark or initial; this block-image contract is not used for identity slots.';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function buildConfirmedThemePalettePrompt(array $scope, bool $isLogoSlot, bool $isFaviconLikeSlot): string
+    {
+        $palette = $this->resolveConfirmedThemePalette($scope);
+        if ($palette === []) {
+            return '';
+        }
+
+        $pairs = [];
+        foreach ($palette as $role => $hex) {
+            $pairs[] = $role . '=' . $hex;
+        }
+        $paletteLine = \implode(', ', \array_slice($pairs, 0, 10));
+        if ($paletteLine === '') {
+            return '';
+        }
+
+        if ($isLogoSlot) {
+            $assetName = $isFaviconLikeSlot ? 'title icon / favicon' : 'logo';
+            return 'Confirmed site theme palette (HARD): ' . $paletteLine . "\n"
+                . 'Brand asset color contract (HARD): the ' . $assetName . ' MUST visibly follow the confirmed site theme palette above for glyph, accent, shadow, or background. Do not introduce unrelated default brand colors unless the exact hex exists in this palette. If the business subject has natural colors outside the palette, express that subject through silhouette, material, texture, or composition while keeping color usage palette-compatible.';
+        }
+
+        return 'Confirmed site theme palette: ' . $paletteLine . "\n"
+            . 'Image color contract: keep color temperature and accents compatible with the confirmed site theme palette; do not invent unrelated default brand colors.';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, string>
+     */
+    private function resolveConfirmedThemePalette(array $scope): array
+    {
+        $candidates = [];
+        $this->appendPaletteCandidates($candidates, $scope);
+
+        foreach ([
+            $scope['plan_json'] ?? null,
+            $scope['plan_structured'] ?? null,
+            $scope['execution_blueprint'] ?? null,
+            $scope['execution_blueprint_draft'] ?? null,
+            $scope['theme_context_snapshot'] ?? null,
+            $scope['plan_workbench']['confirmed'] ?? null,
+            $scope['plan_workbench']['draft'] ?? null,
+        ] as $source) {
+            if (\is_array($source)) {
+                $this->appendPaletteCandidates($candidates, $source);
+            }
+        }
+
+        $palette = [];
+        foreach ($candidates as $candidate) {
+            foreach ($candidate as $key => $value) {
+                if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                    continue;
+                }
+                $hex = $this->normalizeThemeHex((string)$value);
+                if ($hex === '') {
+                    continue;
+                }
+                $role = \strtolower(\preg_replace('/[^a-z0-9_]+/i', '_', (string)$key) ?: 'token');
+                $role = \trim($role, '_') ?: 'token';
+                if (!isset($palette[$role])) {
+                    $palette[$role] = $hex;
+                }
+            }
+        }
+
+        return $palette;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $candidates
+     * @param array<string, mixed> $source
+     */
+    private function appendPaletteCandidates(array &$candidates, array $source): void
+    {
+        foreach (['palette', 'color_palette', 'theme_palette', 'color_scheme'] as $key) {
+            if (\is_array($source[$key] ?? null)) {
+                $candidates[] = $source[$key];
+            }
+        }
+        if (\is_array($source['theme_design']['color_scheme'] ?? null)) {
+            $candidates[] = $source['theme_design']['color_scheme'];
+        }
+        if (\is_array($source['theme_context_snapshot'] ?? null)) {
+            $this->appendPaletteCandidates($candidates, $source['theme_context_snapshot']);
+        }
+    }
+
+    private function normalizeThemeHex(string $value): string
+    {
+        $value = \trim($value);
+        if (\preg_match('/^#[0-9a-f]{3}$/i', $value) === 1) {
+            return '#' . $value[1] . $value[1] . $value[2] . $value[2] . $value[3] . $value[3];
+        }
+        if (\preg_match('/^#[0-9a-f]{6}$/i', $value) === 1) {
+            return $value;
+        }
+        if (\preg_match('/#[0-9a-f]{6}\b/i', $value, $matches) === 1) {
+            return (string)$matches[0];
+        }
+
+        return '';
     }
 
     private function normalizePromptList(mixed $values): string
