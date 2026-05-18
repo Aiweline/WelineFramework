@@ -89,8 +89,8 @@ $jsText = [
                     <label class="weshop-returns-form__field">
                         <span>订单 ID</span>
                         <input
-                            type="number"
-                            min="1"
+                            type="text"
+                            inputmode="numeric"
                             name="order_id"
                             value="<?= $escape($order['order_id'] ?? '') ?>"
                             data-rma-order-id-input
@@ -479,6 +479,29 @@ $jsText = [
                 }
             }
 
+            function normalizeOrderPayload(payload) {
+                var rawOrderId = String(payload.order_id || '').trim();
+                if (!rawOrderId) {
+                    delete payload.order_id;
+                    return payload;
+                }
+
+                if (!/^\d+$/.test(rawOrderId)) {
+                    delete payload.order_id;
+                    return payload;
+                }
+
+                var numericOrderId = Number(rawOrderId);
+                if (!Number.isSafeInteger(numericOrderId)) {
+                    payload.order_increment_id = payload.order_increment_id || rawOrderId;
+                    delete payload.order_id;
+                    return payload;
+                }
+
+                payload.order_id = numericOrderId;
+                return payload;
+            }
+
             document.addEventListener('click', function (event) {
                 var trigger = event.target.closest('a[href*="rma/create"], a[href*="rma?order_id="], .js-account-rma-trigger');
                 if (!trigger) {
@@ -527,9 +550,7 @@ $jsText = [
                     }
                     payload[key] = value;
                 });
-                if (payload.order_id) {
-                    payload.order_id = parseInt(payload.order_id, 10) || 0;
-                }
+                payload = normalizeOrderPayload(payload);
 
                 if (!payload.return_url) {
                     payload.return_url = buildDefaultReturnUrl();
