@@ -42,7 +42,6 @@
     var uploadReferenceImageUrl = <?= \json_encode((string)$this->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-upload-reference-image'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRefineComponentUrl = <?= \json_encode($startRefineComponentUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var startRegenerateBlockUrl = <?= \json_encode((string)($startRefineComponentUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startPatchBlockUrl = <?= \json_encode($startPatchBlockUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var retryAiOperationUrl = <?= \json_encode($retryAiOperationUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var updateBlockConfigUrl = <?= \json_encode($updateBlockConfigUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -75,7 +74,6 @@
     uploadReferenceImageUrl = normalizeLocalPreviewUrlForCurrentHost(uploadReferenceImageUrl);
     startRegeneratePageUrl = normalizeLocalPreviewUrlForCurrentHost(startRegeneratePageUrl);
     startRefineComponentUrl = normalizeLocalPreviewUrlForCurrentHost(startRefineComponentUrl);
-    startRegenerateBlockUrl = normalizeLocalPreviewUrlForCurrentHost(startRegenerateBlockUrl);
     startPatchBlockUrl = normalizeLocalPreviewUrlForCurrentHost(startPatchBlockUrl);
     retryAiOperationUrl = normalizeLocalPreviewUrlForCurrentHost(retryAiOperationUrl);
     updateBlockConfigUrl = normalizeLocalPreviewUrlForCurrentHost(updateBlockConfigUrl);
@@ -108,10 +106,7 @@
     var refineComponentState = {
         pageType: '',
         blockId: '',
-        blockKey: '',
         componentCode: '',
-        sectionCode: '',
-        taskKey: '',
         componentLabel: '',
         refineStreaming: <?= \json_encode((string)__('已开始区块微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         regenerateStreaming: <?= \json_encode((string)__('已开始区块重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -7126,22 +7121,16 @@
             document.body.appendChild(modalEl);
         }
         var pageType = String((payload && payload.page_type) || getActivePreviewPageType() || '');
-        var componentCode = String((payload && (payload.component_code || payload.component || payload.section_code || payload.block_id)) || '');
-        var blockId = String((payload && (payload.block_id || payload.block_key || payload.component_code || payload.component)) || componentCode || '');
-        var blockKey = String((payload && (payload.block_key || payload.block_id)) || blockId || '');
-        var sectionCode = String((payload && (payload.section_code || payload.component_code || payload.component)) || componentCode || '');
-        var taskKey = String((payload && payload.task_key) || sectionCode || blockKey || componentCode || '');
-        if (!pageType || (!componentCode && !blockId && !sectionCode && !taskKey)) {
+        var componentCode = String((payload && (payload.component_code || payload.component)) || '');
+        var blockId = String((payload && (payload.block_id || payload.component_code || payload.component)) || '');
+        if (!pageType || !componentCode || !blockId) {
             markRefineOpenStatus('failed', 'invalid_payload');
             toast('error', messages.refineUnavailable);
             return false;
         }
         refineComponentState.pageType = pageType;
         refineComponentState.blockId = blockId;
-        refineComponentState.blockKey = blockKey;
         refineComponentState.componentCode = componentCode;
-        refineComponentState.sectionCode = sectionCode;
-        refineComponentState.taskKey = taskKey;
         refineComponentState.componentLabel = buildComponentLabel(payload);
         contextEl.textContent = buildBlockContextText(
             pageType,
@@ -7998,7 +7987,7 @@
             }
             return;
         }
-        if (!startPatchBlockUrl || !window.PbAiOperationRunner || typeof window.PbAiOperationRunner.startFromResponse !== 'function' || !refineComponentState.pageType || (!refineComponentState.componentCode && !refineComponentState.blockId && !refineComponentState.sectionCode && !refineComponentState.taskKey)) {
+        if (!startPatchBlockUrl || !window.PbAiOperationRunner || typeof window.PbAiOperationRunner.startFromResponse !== 'function' || !refineComponentState.pageType || !refineComponentState.componentCode || !refineComponentState.blockId) {
             toast('error', messages.refineUnavailable);
             return;
         }
@@ -8010,7 +7999,7 @@
         }
         blockRefreshState.active = true;
         blockRefreshState.pageType = refineComponentState.pageType;
-        blockRefreshState.blockId = refineComponentState.blockId || refineComponentState.componentCode || refineComponentState.sectionCode || refineComponentState.taskKey;
+        blockRefreshState.blockId = refineComponentState.componentCode;
         if (typeof renderBlockStreamingState === 'function') {
             renderBlockStreamingState(messages.blockSseRefineAwaitingConfirm);
         }
@@ -8021,10 +8010,7 @@
             public_id: publicId,
             page_type: refineComponentState.pageType,
             block_id: refineComponentState.blockId,
-            block_key: refineComponentState.blockKey || refineComponentState.blockId,
             component_code: refineComponentState.componentCode,
-            section_code: refineComponentState.sectionCode,
-            task_key: refineComponentState.taskKey,
             component_label: refineComponentState.componentLabel || refineComponentState.componentCode,
             instruction: instruction
         }).then(function (data) {
@@ -8046,34 +8032,25 @@
 
     function startBlockRegenerate(payload) {
         var pageType = String((payload && payload.page_type) || getActivePreviewPageType() || '');
-        var componentCode = String((payload && (payload.component_code || payload.component || payload.section_code || payload.block_id)) || '');
-        var blockId = String((payload && (payload.block_id || payload.block_key || payload.component_code || payload.component)) || componentCode || '');
-        var blockKey = String((payload && (payload.block_key || payload.block_id)) || blockId || '');
-        var sectionCode = String((payload && (payload.section_code || payload.component_code || payload.component)) || componentCode || '');
-        var taskKey = String((payload && payload.task_key) || sectionCode || blockKey || componentCode || '');
-        var targetUrl = startRegenerateBlockUrl || startRefineComponentUrl;
-        if (!targetUrl || !window.PbAiOperationRunner || typeof window.PbAiOperationRunner.startFromResponse !== 'function' || !pageType || (!componentCode && !blockId && !sectionCode && !taskKey)) {
+        var componentCode = String((payload && (payload.component_code || payload.component)) || '');
+        if (!startRefineComponentUrl || !window.PbAiOperationRunner || typeof window.PbAiOperationRunner.startFromResponse !== 'function' || !pageType || !componentCode) {
             toast('error', messages.refineUnavailable);
             return;
         }
 
         blockRefreshState.active = true;
         blockRefreshState.pageType = pageType;
-        blockRefreshState.blockId = blockId || componentCode || sectionCode || taskKey;
+        blockRefreshState.blockId = componentCode;
         if (typeof renderBlockStreamingState === 'function') {
             renderBlockStreamingState(messages.blockSseRebuildAwaitingConfirm);
         }
         if (typeof renderBlockStreamingState === 'function') {
             renderBlockStreamingState(messages.regenerateQueued);
         }
-        postForm(targetUrl, {
+        postForm(startRefineComponentUrl, {
             public_id: publicId,
             page_type: pageType,
-            block_id: blockId,
-            block_key: blockKey,
             component_code: componentCode,
-            section_code: sectionCode,
-            task_key: taskKey,
             component_label: buildComponentLabel(payload),
             instruction: ''
         }).then(function (data) {
@@ -8183,36 +8160,6 @@
         ]);
     }
 
-    function resolvePayloadSectionCode(wrapper, sourceEl) {
-        return resolvePayloadIdentifier(wrapper, sourceEl, [
-            'data-section-code',
-            'data-component-code',
-            'data-component',
-            'data-block-key',
-            'data-block-id'
-        ]);
-    }
-
-    function resolvePayloadBlockKey(wrapper, sourceEl) {
-        return resolvePayloadIdentifier(wrapper, sourceEl, [
-            'data-block-key',
-            'data-block-id',
-            'data-ai-block-id',
-            'data-component-code',
-            'data-section-code'
-        ]);
-    }
-
-    function resolvePayloadTaskKey(wrapper, sourceEl) {
-        return resolvePayloadIdentifier(wrapper, sourceEl, [
-            'data-task-key',
-            'data-section-code',
-            'data-component-code',
-            'data-block-key',
-            'data-block-id'
-        ]);
-    }
-
     function buildEmbeddedPreviewPayload(wrapper, sourceEl) {
         var actions = sourceEl && sourceEl.closest ? sourceEl.closest('.component-actions') : null;
         if (!wrapper && !actions) {
@@ -8220,16 +8167,10 @@
         }
         var blockId = resolvePayloadBlockId(wrapper, sourceEl);
         var componentCode = resolvePayloadComponentCode(wrapper, sourceEl);
-        var sectionCode = resolvePayloadSectionCode(wrapper, sourceEl);
-        var blockKey = resolvePayloadBlockKey(wrapper, sourceEl);
-        var taskKey = resolvePayloadTaskKey(wrapper, sourceEl);
         return {
-            component: componentCode || sectionCode || blockId,
-            component_code: componentCode || sectionCode || blockId,
-            block_id: blockId || blockKey || componentCode || sectionCode,
-            block_key: blockKey || blockId || componentCode || sectionCode,
-            section_code: sectionCode || componentCode || blockId,
-            task_key: taskKey || sectionCode || componentCode || blockId,
+            component: componentCode || blockId,
+            component_code: componentCode || blockId,
+            block_id: blockId || componentCode,
             region: String(
                 (wrapper && wrapper.getAttribute ? wrapper.getAttribute('data-region') : '')
                 || (actions && actions.getAttribute ? actions.getAttribute('data-region') : '')
@@ -8273,7 +8214,7 @@
         var key = [
             String(action || normalized.action || ''),
             String(normalized.page_type || getActivePreviewPageType() || ''),
-            String(normalized.component_code || normalized.component || normalized.section_code || normalized.block_id || normalized.block_key || normalized.task_key || '')
+            String(normalized.component_code || normalized.component || normalized.block_id || '')
         ].join('|');
         var now = Date.now ? Date.now() : new Date().getTime();
         if (embeddedPreviewActionGuard.key === key && now - embeddedPreviewActionGuard.timestamp < 700) {
@@ -8317,7 +8258,7 @@
     }
 
     function getEmbeddedActionButtonInlineDispatch() {
-        return "return (window.__pbDispatchComponentActionFromButton ? window.__pbDispatchComponentActionFromButton(this, event) : (function(target, e) { if (!target) { return true; } if (e && typeof e.preventDefault === 'function') { e.preventDefault(); } var wrapper = target.closest ? target.closest('.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper') : null; if (!wrapper || !window.parent || window.parent === window) { return true; } var currentPageType = ''; try { currentPageType = new URLSearchParams(window.location.search).get('page_type') || ''; } catch (err) { currentPageType = ''; } var componentCode = wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-component') || wrapper.getAttribute('data-section-code') || wrapper.getAttribute('data-block-id') || ''; var blockId = wrapper.getAttribute('data-block-id') || wrapper.getAttribute('data-ai-block-id') || wrapper.getAttribute('data-block-key') || componentCode || ''; var sectionCode = wrapper.getAttribute('data-section-code') || componentCode || blockId || ''; var blockKey = wrapper.getAttribute('data-block-key') || blockId || componentCode || ''; var taskKey = wrapper.getAttribute('data-task-key') || sectionCode || blockKey || componentCode || ''; var payload = { type: 'pb-component-action', action: target.getAttribute('data-pb-action') || '', component: componentCode || sectionCode || blockId, component_code: componentCode || sectionCode || blockId, block_id: blockId || blockKey || componentCode, block_key: blockKey || blockId || componentCode, section_code: sectionCode || componentCode || blockId, task_key: taskKey || sectionCode || blockKey || componentCode, page_type: wrapper.getAttribute('data-page-type') || currentPageType, region: wrapper.getAttribute('data-region') || '', index: wrapper.getAttribute('data-index') || '' }; try { if (window.parent.PbAiWorkspacePreview && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === 'function' && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } } catch (err) {} window.parent.postMessage(payload, '*'); return false; })(this, event));";
+        return "return (window.__pbDispatchComponentActionFromButton ? window.__pbDispatchComponentActionFromButton(this, event) : (function(target, e) { if (!target) { return true; } if (e && typeof e.preventDefault === 'function') { e.preventDefault(); } var wrapper = target.closest ? target.closest('.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper') : null; if (!wrapper || !window.parent || window.parent === window) { return true; } var currentPageType = ''; try { currentPageType = new URLSearchParams(window.location.search).get('page_type') || ''; } catch (err) { currentPageType = ''; } var payload = { type: 'pb-component-action', action: target.getAttribute('data-pb-action') || '', component: wrapper.getAttribute('data-component') || wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-block-id') || '', component_code: wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-component') || wrapper.getAttribute('data-block-id') || '', block_id: wrapper.getAttribute('data-block-id') || wrapper.getAttribute('data-ai-block-id') || wrapper.getAttribute('data-component') || '', page_type: wrapper.getAttribute('data-page-type') || currentPageType, region: wrapper.getAttribute('data-region') || '', index: wrapper.getAttribute('data-index') || '' }; try { if (window.parent.PbAiWorkspacePreview && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === 'function' && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } } catch (err) {} window.parent.postMessage(payload, '*'); return false; })(this, event));";
     }
 
     function ensureEmbeddedActionButtonInlineDispatch(button) {
