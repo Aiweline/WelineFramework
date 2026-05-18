@@ -896,6 +896,7 @@ HTML;
                     'language' => $options['language'] ?? '',
                     'refine_mode' => true,
                     'existing_code' => $existingCode,
+                    'allow_zero_balance_provider' => true,
                 ],
                 is_callable($streamCallback) ? $streamCallback : null
             );

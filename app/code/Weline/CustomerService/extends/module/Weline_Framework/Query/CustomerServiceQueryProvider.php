@@ -83,15 +83,12 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             $customerId ?: $sessionId,
             $content
         );
+        $viewerLocale = $this->resolveViewerLocale($params, $sessionId);
+        $messageData = $this->chatService->formatMessageForCustomerView($message, $viewerLocale);
 
         return [
             'success' => true,
-            'data' => [
-                'message_id' => (int)$message->getId(),
-                'content' => $message->getContent(),
-                'translated_content' => $message->getTranslatedContent(),
-                'created_at' => $message->getData('created_at'),
-            ],
+            'data' => $messageData,
         ];
     }
 
@@ -107,8 +104,9 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
 
         return [
             'success' => true,
-            'data' => $this->chatService->getMessages(
+            'data' => $this->chatService->getMessagesForCustomerView(
                 $sessionId,
+                $this->resolveViewerLocale($params, $sessionId),
                 min(100, max(1, (int)($params['limit'] ?? 50))),
                 max(0, (int)($params['offset'] ?? 0))
             ),
@@ -216,6 +214,20 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
         ];
     }
 
+    private function resolveViewerLocale(array $params, int $sessionId): string
+    {
+        $viewerLocale = trim((string)($params['locale'] ?? ''));
+        if ($viewerLocale !== '') {
+            return $viewerLocale;
+        }
+
+        /** @var \Weline\CustomerService\Model\ChatSession $session */
+        $session = ObjectManager::getInstance(\Weline\CustomerService\Model\ChatSession::class);
+        $session->load($sessionId);
+
+        return $session->getId() ? $session->getCustomerLocale() : 'zh_Hans_CN';
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -246,6 +258,7 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                     'params' => [
                         'session_id' => ['type' => 'int', 'required' => true, 'min' => 1],
                         'content' => ['type' => 'string', 'required' => true, 'max_length' => 4000],
+                        'locale' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Send customer chat message',
@@ -261,6 +274,7 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                         'session_id' => ['type' => 'int', 'required' => true, 'min' => 1],
                         'limit' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 100],
                         'offset' => ['type' => 'int', 'required' => false, 'min' => 0, 'max' => 10000],
+                        'locale' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load chat messages',
