@@ -175,8 +175,12 @@ $rmaCleanDescription = static function (string $description): string {
                         <select name="reason" required>
                             <option value="">请选择原因</option>
                             <?php foreach ($reasonOptions as $reason): ?>
-                                <option value="<?= $escape($reason) ?>">
-                                    <?= $escape($reason) ?>
+                                <?php
+                                $reasonValue = is_array($reason) ? (string) ($reason['value'] ?? '') : (string) $reason;
+                                $reasonLabel = is_array($reason) ? (string) ($reason['label'] ?? $reasonValue) : (string) __($reasonValue);
+                                ?>
+                                <option value="<?= $escape($reasonValue) ?>">
+                                    <?= $escape($reasonLabel) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
