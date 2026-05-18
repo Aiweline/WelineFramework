@@ -1232,6 +1232,6 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $detail = $service->formatBuildCompletionGateFailureDetail($gate);
         self::assertStringContainsString('page:blog_category:article_collection', $detail);
         self::assertStringContainsString('AI HTML generation timeout', $detail);
-        self::assertStringContainsString('继续失败任务', $detail);
+        self::assertStringContainsString('重试失败项', $detail);
     }
 }
