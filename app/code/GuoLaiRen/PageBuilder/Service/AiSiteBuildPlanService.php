@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContentManifestLinter;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContractSchema;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContractValidator;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
@@ -646,7 +647,7 @@ final class AiSiteBuildPlanService
                 continue;
             }
             $text = $this->cleanVisibleCopy((string)$value);
-            if ($text === '' || $this->looksLikeInternalControlCopy($text)) {
+            if ($text === '' || $this->looksLikeUnusableBuildPlanVisibleCopy($text)) {
                 continue;
             }
 
@@ -666,7 +667,7 @@ final class AiSiteBuildPlanService
                 continue;
             }
             $text = $this->cleanVisibleCopy((string)$value);
-            if ($text === '' || $this->looksLikeInternalControlCopy($text)) {
+            if ($text === '' || $this->looksLikeUnusableBuildPlanVisibleCopy($text)) {
                 continue;
             }
             if ($this->looksLikeVisibleLocaleLeak($text, $locale)) {
@@ -677,6 +678,12 @@ final class AiSiteBuildPlanService
         }
 
         return '';
+    }
+
+    private function looksLikeUnusableBuildPlanVisibleCopy(string $value): bool
+    {
+        return $this->looksLikeInternalControlCopy($value)
+            || BuildPlanContentManifestLinter::isPlanningOrImplementationCopy($value);
     }
 
     private function looksLikeInternalControlCopy(string $value): bool
@@ -1180,7 +1187,7 @@ final class AiSiteBuildPlanService
         string $pageType
     ): string
     {
-        $fieldCta = $this->extractFieldPlanText($block, ['cta', 'button', 'action']);
+        $fieldCta = $this->extractFieldPlanText($block, ['cta', 'button', 'action', 'button_text']);
         $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
         $ctas = \is_array($realtime['ctas'] ?? null) ? $realtime['ctas'] : [];
         $candidates = [$fieldCta];

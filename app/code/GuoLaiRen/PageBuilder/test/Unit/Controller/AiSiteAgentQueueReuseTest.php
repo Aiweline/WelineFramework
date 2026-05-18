@@ -398,6 +398,19 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'resume_generation'", $source);
     }
 
+    public function testRetryablePlanFailuresDefaultToResumeInsteadOfForcedRebuild(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $handleStartPlan = $this->extractControllerMethodSource($source, 'handleStartPlan');
+
+        self::assertStringContainsString('if ($hasRetryablePlanFailures)', $handleStartPlan);
+        self::assertStringContainsString("\$effectivePlanPromptMode = \$requestedPromptMode === 'rebuild'", $handleStartPlan);
+        self::assertStringContainsString(": 'resume_plan';", $handleStartPlan);
+        self::assertStringContainsString("\$planOperationDetails['resume_failed_tasks'] = 1;", $handleStartPlan);
+        self::assertStringContainsString("elseif (\$operation === 'plan')", $source);
+        self::assertStringContainsString("\$details['prompt_mode'] = 'resume_plan';", $source);
+    }
+
     public function testTaskPlanQueueMutationGuardIsDeletedWithLegacyQueueExecution(): void
     {
         self::assertFileDoesNotExist(\dirname(__DIR__, 3) . '/Queue/AiSiteTaskPlanQueue.php');
@@ -996,11 +1009,13 @@ final class AiSiteAgentQueueReuseTest extends TestCase
             '!$this->shouldKeepQueuedObserverStreamOpen($operation)',
             $body
         );
-        self::assertStringContainsString(
-            "if (\$queueWaitingForScheduler && (bool)(\$observed['deferred_queue_progress'] ?? false))",
+        self::assertStringNotContainsString(
+            "if (\$queueWaitingForScheduler && (bool)(\$observed['deferred_queue_progress'] ?? false)) {\n                return;",
             $body
         );
-        self::assertStringContainsString("'queue_waiting_for_scheduler' => \$queueWaitingForScheduler", $body);
+        self::assertStringContainsString('$maxObserveResumeCycles = 720', $body);
+        self::assertStringContainsString('$emitDeferredQueueHandoff', $body);
+        self::assertStringContainsString("'queue_status' => \$queueStatusForObserver", $body);
         self::assertStringNotContainsString("\$operation === 'plan'", $observer);
     }
 
