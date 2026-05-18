@@ -48,6 +48,7 @@ class AiSiteAgentWorkspaceEntryNoticeService
         $statusLabel = $this->statusLabel($status);
         $level = $this->noticeLevel($status);
         $resultLog = \trim((string)($queueInfo['result_log'] ?? ''));
+        $reloadOnAck = $operation === 'plan' && $this->isFailureStatus($status);
 
         return [
             'show' => true,
@@ -63,6 +64,8 @@ class AiSiteAgentWorkspaceEntryNoticeService
             'biz_key' => (string)($snapshot['biz_key'] ?? ''),
             'process' => \trim((string)($queueInfo['process'] ?? '')),
             'result_excerpt' => $resultLog !== '' ? \mb_substr($resultLog, -600) : '',
+            'ack_action' => $reloadOnAck ? 'reload_workspace' : '',
+            'reload_on_ack' => $reloadOnAck ? 1 : 0,
             'confirm_label' => (string)__('知道了'),
         ];
     }
@@ -113,11 +116,16 @@ class AiSiteAgentWorkspaceEntryNoticeService
     private function noticeLevel(string $status): string
     {
         return match ($status) {
-            'error' => 'error',
+            'error', 'failed', 'fail' => 'error',
             'done', 'complete', 'completed' => 'success',
             'pending', 'queued', 'running' => 'warning',
             default => 'info',
         };
+    }
+
+    private function isFailureStatus(string $status): bool
+    {
+        return \in_array(\strtolower(\trim($status)), ['error', 'failed', 'fail'], true);
     }
 
     private function messageForStatus(string $status, string $operationLabel, int $queueId, string $statusLabel): string

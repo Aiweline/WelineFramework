@@ -12,6 +12,18 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 use WeShop\Cart\Service\CartService;
 
+$renderIcon = static function (string $name): string {
+    return match ($name) {
+        'close' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.4 6.4a1 1 0 0 1 1.4 0L12 10.6l4.2-4.2a1 1 0 1 1 1.4 1.4L13.4 12l4.2 4.2a1 1 0 0 1-1.4 1.4L12 13.4l-4.2 4.2a1 1 0 0 1-1.4-1.4l4.2-4.2-4.2-4.2a1 1 0 0 1 0-1.4Z" fill="currentColor"/></svg>',
+        'minus' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 11a1 1 0 0 0 0 2h12a1 1 0 1 0 0-2H6Z" fill="currentColor"/></svg>',
+        'plus' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 6a1 1 0 1 1 2 0v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H6a1 1 0 0 1 0-2h5V6Z" fill="currentColor"/></svg>',
+        'trash' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3a1 1 0 0 0-.8.4L7.4 4H5a1 1 0 1 0 0 2h.5l1 11.1A2 2 0 0 0 8.5 19h7a2 2 0 0 0 2-1.9l1-11.1H19a1 1 0 1 0 0-2h-2.4l-.8-.6A1 1 0 0 0 15 3H9Zm-.5 3h7l-.9 10.9H9.4L8.5 6Zm1.5 2a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1Zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1Z" fill="currentColor"/></svg>',
+        'image' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 5a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3H6Zm0 2h12a1 1 0 0 1 1 1v5.4l-2.8-2.8a1 1 0 0 0-1.4 0L10 15.4l-1.8-1.8a1 1 0 0 0-1.4 0L5 15.4V8a1 1 0 0 1 1-1Zm0 10 1.5-1.5 1.8 1.8a1 1 0 0 0 1.4 0l4.8-4.8 3.5 3.5a1 1 0 0 1-1 1H6Zm9-7a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"/></svg>',
+        'cart' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 4a1 1 0 0 1 1-1h1.3a2 2 0 0 1 2 1.6L7.5 6H20a1 1 0 0 1 1 .8 1 1 0 0 1-.1.7l-2.4 5.8A2 2 0 0 1 16.6 15H9a2 2 0 0 1-2-1.6L5.1 5H4a1 1 0 0 1-1-1Zm5 4 .9 4.2H16.6L18.2 8H8ZM9 20a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm8 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" fill="currentColor"/></svg>',
+        default => '',
+    };
+};
+
 $position = $this->getData('position') ?? 'right';
 $width = $this->getData('width') ?? '400px';
 $showEmptyState = $this->getData('showEmptyState') ?? true;
@@ -64,7 +76,7 @@ try {
                 </span>
             </h3>
             <button type="button" class="mini-cart-drawer__close" data-action="close-mini-cart" aria-label="<?= __('Close cart') ?>">
-                <span class="material-symbols-outlined">close</span>
+                <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('close') ?></span>
             </button>
         </div>
         <w:hook>WeShop_Cart::frontend::partials::mini-cart::header-after</w:hook>
@@ -93,24 +105,24 @@ try {
                             <?php if ($productImage !== ''): ?>
                                 <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($productName) ?>" loading="lazy"/>
                             <?php else: ?>
-                                <div class="mini-cart-item__placeholder"><span class="material-symbols-outlined">image</span></div>
+                                <div class="mini-cart-item__placeholder"><span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('image') ?></span></div>
                             <?php endif; ?>
                         </div>
                         <div class="mini-cart-item__details">
                             <a href="#" class="mini-cart-item__name"><?= htmlspecialchars($productName) ?></a>
                             <div class="mini-cart-item__price"><?= $this->formatPrice($price) ?></div>
                             <div class="mini-cart-item__qty">
-                                <button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="<?= $itemId ?>">
-                                    <span class="material-symbols-outlined">remove</span>
+                                <button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="<?= $itemId ?>" aria-label="<?= __('Decrease quantity') ?>">
+                                    <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('minus') ?></span>
                                 </button>
                                 <span class="mini-cart-item__qty-value"><?= $quantity ?></span>
-                                <button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="<?= $itemId ?>">
-                                    <span class="material-symbols-outlined">add</span>
+                                <button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="<?= $itemId ?>" aria-label="<?= __('Increase quantity') ?>">
+                                    <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('plus') ?></span>
                                 </button>
                             </div>
                         </div>
                         <button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="<?= $itemId ?>" aria-label="<?= __('Remove item') ?>">
-                            <span class="material-symbols-outlined">delete_outline</span>
+                            <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('trash') ?></span>
                         </button>
                     </div>
                 <?php endforeach; ?>
@@ -118,7 +130,7 @@ try {
                 <div class="mini-cart-items__empty" id="mini-cart-empty">
                     <w:hook>WeShop_Cart::frontend::partials::mini-cart::empty</w:hook>
                     <div class="mini-cart-empty">
-                        <span class="mini-cart-empty__icon material-symbols-outlined">shopping_cart</span>
+                        <span class="mini-cart-empty__icon mini-cart-icon" aria-hidden="true"><?= $renderIcon('cart') ?></span>
                         <p class="mini-cart-empty__message"><?= __('购物车是空的') ?></p>
                         <a href="<?= $this->getUrl('/') ?>" class="mini-cart-empty__link" data-action="close-mini-cart"><?= __('开始购物') ?></a>
                     </div>
@@ -175,6 +187,8 @@ window.__WelineMiniCartConfig = <?= json_encode([
 .mini-cart-drawer { position: fixed; top: 0; right: 0; z-index: 9999; width: var(--mini-cart-width, 400px); max-width: 92vw; height: 100dvh; display: flex; flex-direction: column; background: var(--color-bg-primary, #fff); box-shadow: -24px 0 60px rgba(15, 23, 42, .18); transform: translateX(100%); transition: transform .24s ease; }
 .mini-cart-drawer--left { left: 0; right: auto; transform: translateX(-100%); }
 .mini-cart-drawer.is-open { transform: translateX(0); }
+#customer-service-widget .cs-status-dot { bottom: 7px !important; right: 7px !important; width: 10px !important; height: 10px !important; box-sizing: border-box !important; pointer-events: none !important; }
+body:has(#mini-cart-drawer.is-open) #customer-service-widget { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
 .mini-cart-drawer__header, .mini-cart-drawer__footer { flex-shrink: 0; border-color: var(--color-border-light, #e5e7eb); }
 .mini-cart-drawer__header { border-bottom: 1px solid var(--color-border-light, #e5e7eb); }
 .mini-cart-drawer__footer { border-top: 1px solid var(--color-border-light, #e5e7eb); }
@@ -182,6 +196,8 @@ window.__WelineMiniCartConfig = <?= json_encode([
 .mini-cart-header-content { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .mini-cart-drawer__title { margin: 0; font-size: 18px; font-weight: 700; color: var(--color-text-dark, #111827); }
 .mini-cart-drawer__count { color: var(--color-text-secondary, #6b7280); font-weight: 500; }
+.mini-cart-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.mini-cart-icon svg { width: 1em; height: 1em; display: block; }
 .mini-cart-drawer__close, .mini-cart-item__qty-btn, .mini-cart-item__remove { border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .mini-cart-drawer__close { width: 38px; height: 38px; border-radius: 999px; background: var(--color-bg-secondary, #f3f4f6); color: var(--color-text-dark, #111827); }
 .mini-cart-drawer__body { flex: 1; overflow: auto; }
@@ -190,13 +206,16 @@ window.__WelineMiniCartConfig = <?= json_encode([
 .mini-cart-item__image { width: 72px; height: 72px; flex: 0 0 72px; overflow: hidden; border-radius: 14px; background: var(--color-bg-secondary, #f3f4f6); }
 .mini-cart-item__image img { width: 100%; height: 100%; object-fit: cover; }
 .mini-cart-item__placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--color-text-tertiary, #9ca3af); }
+.mini-cart-item__placeholder .mini-cart-icon { font-size: 26px; }
 .mini-cart-item__details { min-width: 0; flex: 1; padding-right: 28px; }
 .mini-cart-item__name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--color-text-dark, #111827); font-weight: 600; line-height: 1.4; text-decoration: none; }
 .mini-cart-item__price { margin-top: 6px; color: var(--color-text-dark, #111827); font-weight: 700; }
-.mini-cart-item__qty { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.mini-cart-item__qty { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--color-text-dark, #111827); }
 .mini-cart-item__qty-btn { width: 28px; height: 28px; border-radius: 8px; background: var(--color-bg-secondary, #f3f4f6); color: var(--color-text-secondary, #4b5563); }
-.mini-cart-item__qty-value { min-width: 24px; text-align: center; font-weight: 600; }
+.mini-cart-item__qty-btn .mini-cart-icon { font-size: 16px; }
+.mini-cart-item__qty-value { min-width: 24px; text-align: center; font-weight: 600; color: var(--color-text-dark, #111827); }
 .mini-cart-item__remove { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 999px; background: transparent; color: var(--color-text-tertiary, #9ca3af); }
+.mini-cart-item__remove .mini-cart-icon { font-size: 18px; }
 .mini-cart-items__empty { padding: 56px 20px; text-align: center; }
 .mini-cart-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--color-text-secondary, #6b7280); }
 .mini-cart-empty__icon { font-size: 54px; }

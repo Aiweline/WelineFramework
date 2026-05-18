@@ -627,6 +627,44 @@ final class AiSiteQualityGateServiceTest extends TestCase
         self::assertFalse($report['passed']);
     }
 
+    public function testInspectScopeTaskCoverageIgnoresDisplayBlocksWhenCanonicalBlocksExist(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][] = [
+            'block_key' => 'trust_proof',
+            'field_plan' => [
+                ['field' => 'title', 'sample' => 'Trust proof section'],
+            ],
+        ];
+        $scope['execution_blueprint']['pages']['home_page']['display_blocks'] = [
+            ['block_key' => 'shared:header', 'display_role' => 'shared_header'],
+            ['block_key' => 'hero_banner', 'display_role' => 'page_block'],
+            ['block_key' => 'trust_proof', 'display_role' => 'page_block'],
+            ['block_key' => 'shared:footer', 'display_role' => 'shared_footer'],
+        ];
+        $scope['build_blueprint']['tasks'] = [
+            ['task_key' => 'shared:header', 'task_type' => 'shared_component', 'page_type' => '', 'group_key' => 'shared', 'region' => 'header'],
+            ['task_key' => 'shared:footer', 'task_type' => 'shared_component', 'page_type' => '', 'group_key' => 'shared', 'region' => 'footer'],
+            ['task_key' => 'page:home_page:hero_banner', 'task_type' => 'page_section', 'page_type' => 'home_page', 'group_key' => 'home_page', 'block_key' => 'hero_banner', 'section_code' => 'content/home-page-hero-banner'],
+            ['task_key' => 'page:home_page:trust_proof', 'task_type' => 'page_section', 'page_type' => 'home_page', 'group_key' => 'home_page', 'block_key' => 'trust_proof', 'section_code' => 'content/home-page-trust-proof'],
+        ];
+        $scope['build_tasks'] = [
+            'shared:header' => ['task_key' => 'shared:header', 'status' => 'done'],
+            'shared:footer' => ['task_key' => 'shared:footer', 'status' => 'done'],
+            'page:home_page:hero_banner' => ['task_key' => 'page:home_page:hero_banner', 'status' => 'done'],
+            'page:home_page:trust_proof' => ['task_key' => 'page:home_page:trust_proof', 'status' => 'done'],
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Header</header><main><section><h1>Hero</h1><p>Trust proof</p></section></main><footer>Footer</footer>',
+        ]);
+
+        $item = $this->findItem($report['items'], 'task_coverage');
+        self::assertTrue((bool)($item['ok'] ?? false), \json_encode($item, \JSON_UNESCAPED_UNICODE));
+        self::assertSame(['hero_banner', 'trust_proof'], $item['value']['expected_blocks']['home_page'] ?? ['missing']);
+    }
+
     public function testInspectScopeTaskCoverageFailureIncludesDetailText(): void
     {
         $service = $this->createService();

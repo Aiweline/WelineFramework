@@ -1836,7 +1836,6 @@ class AiSitePageComponentGenerationService
             : '{' . \implode(', ', \array_map(static fn(string $k, string $v): string => $k . '=' . $v, \array_keys($roleMap), \array_values($roleMap))) . '}';
 
         $findingsBlock = '';
-        $roleSpecificRecoveryContract = $this->buildRoleSpecificRecoveryContract($componentCode, $componentPrefix);
         if ($failure instanceof \GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException) {
             $rendered = $failure->renderFindingsForPrompt();
             if ($rendered !== '') {
@@ -1847,7 +1846,6 @@ class AiSitePageComponentGenerationService
         return "STRICT PAGEBUILDER COMPONENT RECOVERY PROMPT (本次为修复重试，必须严格按 palette + 结构重写，禁止凭空发明颜色):\n"
             . "- Previous output failed validation: " . $this->summarizeThrowable($failure) . "\n"
             . $findingsBlock
-            . $roleSpecificRecoveryContract
             . "- Generate exactly one {$region} component for {$sectionName}.\n"
             . "- Site: {$siteTitle}. " . ($brief !== '' ? "Brief: {$brief}. " : '') . "Visitor copy locale: " . ($locale !== '' ? $locale : 'site default') . ".\n"
             . "- Output exactly one minified JSON object with these string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
@@ -2094,55 +2092,11 @@ class AiSitePageComponentGenerationService
                 $lowQualityCssSource
             );
             if ($lowQualityReason !== null) {
-                throw new \GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException(
-                    'AI component content quality failed: ' . $lowQualityReason,
-                    [[
-                        'rule' => $this->buildContentQualityFindingRule($lowQualityReason),
-                        'field' => 'html_content',
-                        'found' => $lowQualityReason,
-                        'expected' => 'visitor-facing block HTML satisfies the current role, readability, and quality contract',
-                        'hint' => $this->buildContentQualityFindingHint($lowQualityReason),
-                    ]]
-                );
+                throw new \RuntimeException('AI component content quality failed: ' . $lowQualityReason);
             }
         }
 
         return $aiData;
-    }
-
-    private function buildContentQualityFindingRule(string $reason): string
-    {
-        $reason = \mb_strtolower($reason);
-        if (\str_contains($reason, 'faq block role fidelity')) {
-            return 'content_quality.block_role_fidelity.faq';
-        }
-        if (\str_contains($reason, 'contact-method block role fidelity')) {
-            return 'content_quality.block_role_fidelity.contact_methods';
-        }
-        if (\str_contains($reason, 'label/value')) {
-            return 'content_quality.field_readability';
-        }
-        if (\str_contains($reason, 'typography')) {
-            return 'content_quality.typography';
-        }
-
-        return 'content_quality.generated_html';
-    }
-
-    private function buildContentQualityFindingHint(string $reason): string
-    {
-        $reason = \mb_strtolower($reason);
-        if (\str_contains($reason, 'faq block role fidelity')) {
-            return 'Rewrite this block as a real FAQ section. Use a `.pb-c-faq-list` with repeated `<div class=\'pb-c-faq-item\'><div class=\'pb-c-question\'>Question?</div><p class=\'pb-c-answer\'>Answer.</p></div>` groups. Questions must end with ? and answers must be separate paragraphs. Style `.pb-c-faq-item` with padding, border-radius, and background/border/shadow so it is not a plain text list. Do not use <strong>Question?</strong><span>Answer</span>, contact channel cards, requirement/stat cards, or a generic support CTA-only block for an FAQ role.';
-        }
-        if (\str_contains($reason, 'contact-method block role fidelity')) {
-            return 'Rewrite this block as a real contact-channel hub. Include at least two repeated channel items such as `<div class=\'pb-c-channel\'><span class=\'pb-c-label\'>Email:</span><span class=\'pb-c-value\'>support@example.com</span></div>`. A verified image can be a background/supporting visual, but it must not replace the channel list.';
-        }
-        if (\str_contains($reason, 'label/value')) {
-            return 'Rewrite labels and values with visible punctuation and sibling structure: use `<span class=\'pb-c-label\'>Email:</span><span class=\'pb-c-value\'>support@example.com</span>` or equivalent block siblings. Never use <strong>Label</strong>Value, <strong>Label:</strong>Value, or inline Label:Value text.';
-        }
-
-        return 'Rewrite html_content so it satisfies the current block role and visible quality contract; do not rely on local fallback cleanup.';
     }
 
     private function resolveVirtualThemeCssValidationLimit(string $region, string $cssKey): int
@@ -2473,19 +2427,6 @@ class AiSitePageComponentGenerationService
         }
         if ($componentCode !== '' && !\str_starts_with($className, 'pb-')) {
             return 'custom classes for generated content must use a pb-* prefix';
-        }
-
-        $labelCount = \preg_match_all('/\\b' . $labelPattern . '\\s*:/u', $visibleText);
-        $identity = \strtolower($componentCode . ' ' . $visibleText);
-        $isFieldDenseBlock = $labelCount >= 2
-            || \str_contains($identity, 'contact')
-            || \str_contains($identity, 'method')
-            || \str_contains($identity, 'hours')
-            || \str_contains($identity, 'address');
-        if ($isFieldDenseBlock && $labelCount >= 2) {
-            if (\preg_match('/\bpb-c(?:-[a-z0-9]+)*-label\b/iu', $normalizedHtml) !== 1 || \preg_match('/\bpb-c(?:-[a-z0-9]+)*-value\b/iu', $normalizedHtml) !== 1) {
-                return 'label/value markup must use sibling .pb-c-label and .pb-c-value elements';
-            }
         }
 
         return null;
@@ -3829,10 +3770,6 @@ class AiSitePageComponentGenerationService
         if ($this->containsVisibleRawHtmlFragment($visibleText)) {
             return 'raw HTML fragment leaked into visitor content';
         }
-        $readabilityReason = $this->detectLabelValueReadabilityViolation($trimmed, $visibleText);
-        if ($readabilityReason !== null) {
-            return $readabilityReason;
-        }
         if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|\$[a-z_][a-z0-9_]*|=>|===/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
         }
@@ -3865,42 +3802,6 @@ class AiSitePageComponentGenerationService
         return \preg_match('/(?:<|&lt;)\s*\/?\s*[a-z0-9][^>\n]{0,120}(?:>|&gt;)|\bclass\s*=\s*(["\']).{1,120}\1/iu', $visibleText) === 1;
     }
 
-    private function detectLabelValueReadabilityViolation(string $html, string $visibleText, string $componentCode = ''): ?string
-    {
-        $visibleText = \trim((string)\preg_replace('/\s+/u', ' ', $visibleText));
-        if ($visibleText === '') {
-            return null;
-        }
-
-        $labelPattern = '(?:Email(?:\\s*&\\s*Phone)?|Email\\s+Support|Phone\\s+Support|Phone|Office\\s+Address|Office|Business\\s+Hours|Hours|Quick\\s+Help|Android\\s+Version|Storage\\s+Space|Permissions|Internet)';
-        if (\preg_match('/\\b' . $labelPattern . '(?=(?:support@|\\+?\\d|[A-Z][a-z]))/u', $visibleText) === 1) {
-            return 'label/value text is concatenated without punctuation or spacing';
-        }
-        if (\preg_match('/\\b' . $labelPattern . '\\s*:(?=\\S)/u', $visibleText) === 1) {
-            return 'label/value text needs spacing and sibling structure after the colon';
-        }
-
-        $normalizedHtml = \html_entity_decode($html, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
-        if (\preg_match('/\\b' . $labelPattern . '\\s*<\\/\\s*(?:strong|span|small|div|p)\\s*>\\s*(?:<[^>]+>\\s*)*(?![:：\\-–—])(?:support@|\\+?\\d|[A-Z][a-z])/iu', $normalizedHtml) === 1) {
-            return 'label/value markup lacks visible separator punctuation';
-        }
-
-        $labelCount = \preg_match_all('/\\b' . $labelPattern . '\\s*:/u', $visibleText);
-        $identity = \strtolower($componentCode . ' ' . $visibleText);
-        $isFieldDenseBlock = $labelCount >= 2
-            || \str_contains($identity, 'contact')
-            || \str_contains($identity, 'method')
-            || \str_contains($identity, 'hours')
-            || \str_contains($identity, 'address');
-        if ($isFieldDenseBlock && $labelCount >= 2) {
-            if (\preg_match('/\bpb-c-label\b/iu', $normalizedHtml) !== 1 || \preg_match('/\bpb-c-value\b/iu', $normalizedHtml) !== 1) {
-                return 'label/value markup must use sibling .pb-c-label and .pb-c-value elements';
-            }
-        }
-
-        return null;
-    }
-
     private function detectInlineSvgGeneratedSectionViolation(string $html): ?string
     {
         if (\preg_match('/<svg\b|data:image\/svg\+xml/iu', $html) === 1) {
@@ -3930,14 +3831,6 @@ class AiSitePageComponentGenerationService
         $visibleText = $this->extractVisibleHtmlText($trimmed);
         if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
-        }
-        $readabilityReason = $this->detectLabelValueReadabilityViolation($trimmed, $visibleText, $componentCode);
-        if ($readabilityReason !== null) {
-            return $readabilityReason;
-        }
-        $roleFidelityReason = $this->detectBlockRoleFidelityViolation($componentCode, $trimmed, $visibleText, $styleCss);
-        if ($roleFidelityReason !== null) {
-            return $roleFidelityReason;
         }
         if ($this->containsEnglishBoilerplateVisibleCopy($visibleText)) {
             return 'English boilerplate copy leaked into visitor content';
@@ -4007,94 +3900,6 @@ class AiSitePageComponentGenerationService
         }
 
         return null;
-    }
-
-    private function detectBlockRoleFidelityViolation(string $componentCode, string $html, string $visibleText, string $styleCss = ''): ?string
-    {
-        $identity = \mb_strtolower($componentCode . ' ' . $html);
-        if (
-            (\str_contains($identity, 'form') || \str_contains($identity, 'support_form') || \str_contains($identity, 'form_guidance'))
-            && !\str_contains($identity, 'faq')
-        ) {
-            if (\preg_match('/<form\b/iu', $html) !== 1) {
-                return 'Form-guidance block role fidelity failed: expected a real form structure instead of contact cards';
-            }
-            if (\preg_match_all('/<(?:input|textarea)\b/iu', $html) < 2) {
-                return 'Form-guidance block role fidelity failed: expected at least two editable form fields';
-            }
-            if (\preg_match_all('/<label\b/iu', $html) < 2) {
-                return 'Form-guidance block role fidelity failed: expected visible labels for form fields';
-            }
-        }
-        $componentIdentity = \mb_strtolower($componentCode);
-        if (
-            \preg_match('/(?:contact[-_\/ ]*methods?|contact[-_\/ ]*channels?|support[-_\/ ]*channels?)/u', $componentIdentity) === 1
-            && !\str_contains($componentIdentity, 'form')
-            && !\str_contains($componentIdentity, 'faq')
-        ) {
-            $labelNodeCount = \preg_match_all('/\bpb-c(?:-[a-z0-9]+)*-label\b/iu', $html);
-            $valueNodeCount = \preg_match_all('/\bpb-c(?:-[a-z0-9]+)*-value\b/iu', $html);
-            if ($labelNodeCount < 2 || $valueNodeCount < 2) {
-                return 'Contact-method block role fidelity failed: expected at least two contact channels using sibling .pb-c-label and .pb-c-value elements';
-            }
-            if (\preg_match('/<form\b/iu', $html) === 1 || \preg_match('/\bpb-c-faq-item\b/iu', $html) === 1) {
-                return 'Contact-method block role fidelity failed: contact channel hub must not collapse into a form or FAQ block';
-            }
-        }
-        if (!\str_contains($identity, 'faq')) {
-            return null;
-        }
-
-        $questionCount = \preg_match_all('/[?？]/u', $visibleText);
-        if ($questionCount < 2) {
-            return 'FAQ block role fidelity failed: expected at least two explicit visitor questions with separate answers';
-        }
-
-        if (\preg_match('/[?？]<\/(?:strong|span|div)>\s*<span\b/iu', $html) === 1) {
-            return 'FAQ block role fidelity failed: answer must be a separate paragraph, not an inline span after the question';
-        }
-        $answerParagraphCount = \preg_match_all('/<p\b[^>]*class=(["\'])[^"\']*\bpb-c-answer\b[^"\']*\1/iu', $html);
-        if ($answerParagraphCount < 2) {
-            return 'FAQ block role fidelity failed: expected separate answer paragraphs with pb-c-answer';
-        }
-        $faqItemCount = \preg_match_all('/\bpb-c-faq-item\b/iu', $html);
-        if ($faqItemCount < 2) {
-            return 'FAQ block role fidelity failed: expected repeated pb-c-faq-item containers';
-        }
-        $faqItemCss = $this->extractCssRuleBodyForSelector($styleCss, 'pb-c-faq-item');
-        if ($faqItemCss === '') {
-            return 'FAQ block role fidelity failed: expected visible FAQ item surface styling';
-        }
-        foreach (['padding', 'border-radius'] as $requiredProperty) {
-            if (!\str_contains($faqItemCss, $requiredProperty)) {
-                return 'FAQ block role fidelity failed: FAQ item surface styling is too weak';
-            }
-        }
-        if (!\preg_match('/\b(?:background(?:-[a-z-]+)?|border|box-shadow)\s*:/iu', $faqItemCss)) {
-            return 'FAQ block role fidelity failed: FAQ item surface needs background, border, or shadow';
-        }
-
-        return null;
-    }
-
-    private function extractCssRuleBodyForSelector(string $styleCss, string $className): string
-    {
-        if (\trim($styleCss) === '' || \trim($className) === '') {
-            return '';
-        }
-
-        $body = '';
-        if (\preg_match_all('/([^{}]+)\{([^{}]*)\}/u', $styleCss, $matches, \PREG_SET_ORDER) > 0) {
-            foreach ($matches as $match) {
-                $selector = \strtolower((string)($match[1] ?? ''));
-                if (!\str_contains($selector, '.' . \strtolower($className))) {
-                    continue;
-                }
-                $body .= ' ' . \strtolower((string)($match[2] ?? ''));
-            }
-        }
-
-        return \trim((string)\preg_replace('/\s+/u', ' ', $body));
     }
 
     private function detectTypographyQualityViolation(string $styleCss): ?string
@@ -6801,104 +6606,13 @@ class AiSitePageComponentGenerationService
         }
 
         return [
-            'task_key' => (string)($buildPlanTask['task_key'] ?? ''),
-            'page_type' => (string)($buildPlanTask['page_type'] ?? $planContext['page_type'] ?? ''),
-            'block_key' => (string)($buildPlanTask['block_key'] ?? $buildPlanTask['section_key'] ?? $planContext['block_key'] ?? $section['key'] ?? ''),
-            'section_code' => (string)($buildPlanTask['section_code'] ?? $planContext['section_code'] ?? $section['code'] ?? ''),
-            'page_flow_role' => (string)($planContext['page_flow_role'] ?? $blockTask['page_flow_role'] ?? ''),
-            'role_fidelity_hint' => $this->buildBlockRoleHintForPrompt($buildPlanTask, $blockTask, $planContext),
             'page_goal' => (string)($planContext['page_goal'] ?? $blockTask['page_goal'] ?? ''),
             'block_goal' => (string)($planContext['block_goal'] ?? $blockTask['task_goal'] ?? ''),
-            'stage1_block_content' => (string)($planContext['stage1_block_content'] ?? $blockTask['stage1_block_content'] ?? ''),
-            'why_this_block' => (string)($planContext['why_this_block'] ?? $blockTask['why_this_block'] ?? ''),
             'must_include_facts' => \array_values(\array_unique($facts)),
             'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
             'site_brand' => (string)($websiteProfile['site_brand'] ?? $scope['site_brand'] ?? ''),
             'brand_name' => (string)($websiteProfile['brand_name'] ?? $scope['brand_name'] ?? ''),
         ];
-    }
-
-    /**
-     * @param array<string,mixed> $buildPlanTask
-     * @param array<string,mixed> $blockTask
-     * @param array<string,mixed> $planContext
-     */
-    private function buildBlockRoleHintForPrompt(array $buildPlanTask, array $blockTask = [], array $planContext = []): string
-    {
-        $identityParts = [
-            $buildPlanTask['task_key'] ?? '',
-            $buildPlanTask['page_type'] ?? '',
-            $buildPlanTask['block_key'] ?? '',
-            $buildPlanTask['section_key'] ?? '',
-            $buildPlanTask['section_code'] ?? '',
-            $buildPlanTask['label'] ?? '',
-            $planContext['page_flow_role'] ?? '',
-            $planContext['block_goal'] ?? '',
-            $planContext['stage1_block_content'] ?? '',
-            $blockTask['page_flow_role'] ?? '',
-            $blockTask['task_goal'] ?? '',
-            $blockTask['stage1_block_content'] ?? '',
-            $blockTask['why_this_block'] ?? '',
-        ];
-
-        foreach ([
-            $blockTask['content_plan'] ?? null,
-            $blockTask['style_plan'] ?? null,
-            $planContext['field_plan'] ?? null,
-            $planContext['stage1_visual_signature'] ?? null,
-            $planContext['stage1_image_intent'] ?? null,
-        ] as $candidate) {
-            if (\is_array($candidate)) {
-                $identityParts[] = $this->jsonEncodeForPrompt($candidate, 900);
-            }
-        }
-
-        $identity = \strtolower(\trim((string)\preg_replace('/\s+/u', ' ', \implode(' ', \array_map(
-            static fn($value): string => \is_scalar($value) || (\is_object($value) && \method_exists($value, '__toString')) ? (string)$value : '',
-            $identityParts
-        )))));
-
-        if ($identity === '') {
-            return '';
-        }
-
-        if (\preg_match('/\b(faq|qna|q&a|question|questions|common[-_\s]*questions|support[-_\s]*faq|help[-_\s]*center)\b/', $identity) === 1) {
-            return 'ROLE_HINT: FAQ block. Required output is one h2, short intro, and 3-4 explicit visitor question-answer groups. Wrap them in a visually designed `.pb-c-faq-list`. Each item uses `<div class=\'pb-c-faq-item\'><div class=\'pb-c-question\'>Question?</div><p class=\'pb-c-answer\'>Answer.</p></div>`. Every question must end with ? and every answer must be a separate paragraph. Style each `.pb-c-faq-item` as a visible surface with padding, border-radius, and background/border/shadow so the block is not a plain centered text list. Never use inline strong+span that visually glues question?Answer. Do not render contact channel cards, requirement/stat cards, or a generic support CTA-only block for an FAQ role.';
-        }
-
-        if (\preg_match('/\b(contact[-_\s]*method|contact[-_\s]*methods|contact[-_\s]*channel|support[-_\s]*channel|email|phone|address|hours?)\b/', $identity) === 1) {
-            return 'ROLE_HINT: contact-method block. Required output is a contact-channel hub, not a hero text card or reused split copy/card slab. Use a compact intro plus a visually distinct channel rail, diagonal console, map/contact strip, or stacked availability panel. Include at least two contact channel items; every contact fact uses sibling `<span class=\'pb-c-label\'>Email:</span><span class=\'pb-c-value\'>support@example.com</span>` style elements. If a verified generated image is supplied, use it as supporting atmosphere while keeping the channel hub visible. Do not render form fields, FAQ rows, or the same left-copy/right-card layout used by neighboring blocks.';
-        }
-
-        if (\preg_match('/\b(form|message|inquiry|enquiry|request|support[-_\s]*form|form[-_\s]*guidance|contact[-_\s]*form)\b/', $identity) === 1) {
-            return 'ROLE_HINT: form-guidance block. Required output is a real guided form section, visually different from contact-method cards. Use `<form class=\'pb-c-form\'>` with visible labels, at least two fields, and a textarea or message field, plus a short trust/response-time note. Prefer a red/brand support band, side helper panel, or stepped intake layout. Do not render email/phone/address cards or FAQ rows unless the task explicitly asks for them.';
-        }
-
-        if (\preg_match('/\b(cta|call[-_\s]*to[-_\s]*action|download|install|start|join|conversion|next[-_\s]*step|action[-_\s]*band)\b/', $identity) === 1) {
-            return 'ROLE_HINT: CTA block. Required output is one focused next-step conversion stage with a dominant action, supporting reassurance, and a different composition from contact/form/FAQ blocks. Use a centered stage, sticky-mobile action, media-backed callout, or proof-plus-action strip. Do not render contact cards, form fields, or FAQ rows.';
-        }
-
-        if (\preg_match('/\b(requirement|requirements|spec|specs|compatibility|device|version|storage|permission|permissions)\b/', $identity) === 1) {
-            return 'ROLE_HINT: requirements block. Required output is structured requirement or compatibility facts with readable label/value pairs. Use colons and separate value text. Do not pretend this is FAQ unless the task identity also contains FAQ/question language.';
-        }
-
-        if (\preg_match('/\b(proof|trust|testimonial|review|rating|metric|stats?|credibility|social[-_\s]*proof)\b/', $identity) === 1) {
-            return 'ROLE_HINT: proof block. Required output is credibility evidence, metrics, reviews, or trust signals with varied layout. Do not reuse hero, FAQ, or contact-method patterns.';
-        }
-
-        if (\preg_match('/\b(step|steps|process|how[-_\s]*it[-_\s]*works|workflow|timeline|journey)\b/', $identity) === 1) {
-            return 'ROLE_HINT: process block. Required output is a sequence or guided step flow with clear progression. Do not render contact cards, generic feature cards, or a CTA-only block.';
-        }
-
-        if (\preg_match('/\b(feature|features|benefit|benefits|advantage|service|services|capability|capabilities)\b/', $identity) === 1) {
-            return 'ROLE_HINT: feature block. Required output is differentiated benefits or capabilities with visitor-facing proof and varied composition. Do not reuse another block headline, image treatment, or contact-card grid.';
-        }
-
-        if (\preg_match('/\b(hero|banner|masthead|lead|intro)\b/', $identity) === 1) {
-            return 'ROLE_HINT: hero/intro block. Required output is the page-opening promise with one dominant headline, support copy, and appropriate media or CSS-only hero visual. Do not render FAQ rows or contact-method cards.';
-        }
-
-        return '';
     }
 
     private function getVisualBlockContractRenderer(): \GuoLaiRen\PageBuilder\Service\AI\Contract\AiSiteVisualBlockContractRenderer
@@ -6959,9 +6673,6 @@ class AiSitePageComponentGenerationService
             . "13. Hero/media readability rule: if text sits over media, the html_content skeleton must include a scrim div and a text-panel div using the exact component prefix provided below, and css_extra must include matching scoped scrim/text-panel selectors. If you cannot include those two classes correctly, do not place text over media; use a normal side-by-side layout instead.\n"
             . "14. Content rule: visible copy must be target-locale visitor copy derived from this block's page_goal/block_goal/content_plan and CTX_BLOCK_QA_CONTRACT.must_include_facts. Do not render why_this_block, page_goal, block_goal, data_contract, visual_contract, runtime_context, selected_skill_codes, template fragments, raw HTML tag source, or CSS source. Visible copy must not contain double quote characters because they often break JSON strings.\n"
             . "14a. CSS brace rule: css_extra must be a series of well-formed selector blocks like `#componentId .pb-c-name{property:value;}`. @media blocks belong in css_responsive ONLY and must be one complete `@media (...) { selector{...} }` body each. No `}}` glued without a `{` between, no comma selectors that span unrelated regions. Count opening and closing braces before returning; counts must match exactly.\n"
-            . "14b. Block role fidelity rule: task_identity plus current_block_context are binding. Generate the exact current block role only; do not reuse a previous block's headline, contact-card grid, media treatment, image slot, or CTA as a shortcut. FAQ roles must become explicit question/answer groups inside `.pb-c-faq-list`; each item uses `<div class='pb-c-faq-item'><div class='pb-c-question'>Question?</div><p class='pb-c-answer'>Answer.</p></div>`, every question ends with `?`, every answer is a paragraph, and `.pb-c-faq-item` must have visible surface styling in css_extra. Form-guidance roles must render a real `<form class='pb-c-form'>` with labels and input/textarea fields, never contact cards. CTA roles must become one focused next-step band. Contact-method roles must render at least two visible channel items using `.pb-c-label` and `.pb-c-value` siblings and a distinct channel rail/console/strip composition; do not collapse contact methods into a hero image + CTA.\n"
-            . "14c. Field readability rule: label/value and question/answer content must be separated by visible punctuation and structure. Put a colon inside label text (`Email:`, `Android version:`) and put the value in a sibling `.pb-c-value` block or paragraph; label/value blocks must use `.pb-c-label` and `.pb-c-value` elements when a block has multiple facts. FAQ answers must be paragraphs, not inline spans glued after the question. Never use a bare `<strong>Label</strong>Value`, `<strong>Label:</strong>Value`, or `<strong>Question?</strong><span>Answer</span>` pattern. Never output concatenated text such as EmailSupport, Email:support, Phone+91, Address42, HoursMonday, Android VersionRequires, Storage SpaceMinimum, PermissionsAllow, Android version required?Android, or paragraph text glued directly to CTA text.\n"
-            . "14d. Same-page diversity rule: if current_block_context.visual_signature or page_design_plan is supplied, use it to vary this block's composition, surface, rhythm, media strategy, and interaction pattern from neighboring blocks while staying in the same theme palette. Repeating the same dark slab + yellow card/grid formula across unrelated roles is invalid.\n"
             . "15. Size budget: html_content <= 2400 chars, css_extra <= 2400 chars, css_responsive <= 900 chars. If close to budget, simplify selector list but never drop visual_depth / responsive_signals required by CTX_BLOCK_QA_CONTRACT; never truncate JSON.\n"
             . "16. Final self-check before output: JSON parses; HTML tags/quotes are balanced; CSS braces and parentheses are balanced; CSS selectors match HTML classes exactly; theme palette hex tokens are used; css_extra includes non-default brand font-family declarations for `#componentId .pb-c-title` and one body/root selector; gradient + @media + clamp signals each appear at least once; no raw text after the JSON object.\n";
     }
@@ -7064,8 +6775,6 @@ class AiSitePageComponentGenerationService
             . "- html_extra, html_extra_column, html_content: static HTML fragments only. No PHP tags, no <style>, no <script>, no @component_start/@fields_start metadata.\n"
             . "- HTML_IN_JSON: html_content must be parsed markup, not visible source text. The decoded html_content string should begin with `<section`; do not output legacy skeleton labels, raw `<section ...>` examples, `class='...'`, CSS declarations, or escaped `&lt;section` as visitor-visible copy.\n"
             . "- Visitor text node contract: h2/p/small/span/div text may contain only final customer-facing copy in the target locale. It must never contain JSON keys, prompt labels, slot ids, raw tag snippets, CSS source, or framework/build-plan identifiers.\n"
-            . "- Block role fidelity: generate only the requested task_key/section_code role. Do not satisfy an FAQ, form-guidance, trust, comparison, or CTA block by reusing generic contact cards or a previous hero/card layout. Section/task identifiers are role constraints, not visitor copy.\n"
-            . "- Field readability: contact facts, metrics, hours, addresses, labels, and values must be readable as separated text. Put a colon inside each label and put the value in a sibling block/paragraph; never concatenate adjacent text nodes into strings like EmailSupport, Phone+91, Address42, HoursMonday, Android VersionRequires, Storage SpaceMinimum, or PermissionsAllow.\n"
             . "- HTML fragments must be balanced and embeddable: close every non-void tag, do not output full <html>/<head>/<body> documents, and do not leave stray closing tags.\n"
             . "- Closing-tag grammar: never merge adjacent closing tags into one token. `</p></a>`, `</small></div>`, and `</div></section>` are valid; `</pa>`, `</smalldiv>`, `</pdiv>`, and `</divsection>` are invalid build-breaking HTML.\n"
             . "- Heading grammar: heading elements must close with the same exact element name, and inline tags inside headings must close first. Valid: `<h3><span>Safe APK</span></h3>`. Invalid: `</h>`, `</spanh2>`, `</h3div>`, or closing a parent while span/strong remains open.\n"
@@ -8663,7 +8372,6 @@ class AiSitePageComponentGenerationService
                 $buildPlanTask
             );
         }
-        $roleHint = $this->buildBlockRoleHintForPrompt($buildPlanTask, $blockTask, $planContext);
         $verifiedAssetRule = $verifiedAssets !== []
             ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 1800) . "\n"
                 . "- HARD CONTRACT: every verified_asset final_url for this section MUST appear as a real editable <img> in html_content by copying the concrete template below. Do not skip any. Unused generated images waste API tokens.\n"
@@ -8705,15 +8413,10 @@ class AiSitePageComponentGenerationService
             . "5 current_block_context: " . $this->jsonEncodeForPrompt([
                 'block_goal' => (string)($planContext['block_goal'] ?? ''),
                 'stage1_block_content' => (string)($planContext['stage1_block_content'] ?? ''),
-                'page_flow_role' => (string)($planContext['page_flow_role'] ?? $stylePlan['page_flow_role'] ?? ''),
-                'role_fidelity_hint' => $roleHint,
                 'story_goal' => (string)($taskScript['story_goal'] ?? ''),
                 'stage3_directive' => (string)($taskScript['stage3_directive'] ?? ''),
                 'content_plan' => $contentPlan,
-                'field_plan' => \is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : [],
                 'style_plan' => $stylePlan,
-                'visual_signature' => \is_array($stylePlan['visual_signature'] ?? null) ? $stylePlan['visual_signature'] : (\is_array($planContext['stage1_visual_signature'] ?? null) ? $planContext['stage1_visual_signature'] : []),
-                'image_intent' => \is_array($stylePlan['image_intent'] ?? null) ? $stylePlan['image_intent'] : (\is_array($planContext['stage1_image_intent'] ?? null) ? $planContext['stage1_image_intent'] : []),
                 'implementation_detail' => (string)($blockTask['implementation_detail'] ?? ''),
                 'field_content_requirements' => $fieldRequirements,
                 'data_contract' => \array_replace_recursive($implementationDataContract, $taskScriptDataContract),
@@ -8732,11 +8435,6 @@ class AiSitePageComponentGenerationService
                     : 'use only the verified_assets listed here',
             ], 1400) . "\n"
             . "- design execution rule: apply page_design_plan and theme_context first, then current_block_context. Generate only this task's block, not why the block exists.\n"
-            . "- role hint rule: current_block_context.role_fidelity_hint is binding when block_task, content_plan, or stage1_block_content is generic, empty, or conflicts with task_identity. Use it to choose the structure; do not print the role hint as visible copy.\n"
-            . "- block role fidelity rule: task_identity and current_block_context are authoritative. Do not collapse distinct same-page roles into the same card/contact/hero pattern. If the role is FAQ, create explicit Q&A groups inside `.pb-c-faq-list`; every item uses `<div class='pb-c-faq-item'><div class='pb-c-question'>Question?</div><p class='pb-c-answer'>Answer.</p></div>` and css_extra styles `.pb-c-faq-item` with padding, border-radius, and background/border/shadow. If it is form guidance, render a real `<form class='pb-c-form'>` with visible labels plus input/textarea fields; do not render email/phone/address cards. If it is CTA, create a focused next-step band. If it is contact methods, create at least two visible contact channel items with `.pb-c-label`/`.pb-c-value` sibling pairs and a distinct channel rail/console/strip composition; a verified image may support the layout but cannot replace the channels. Use these semantics without rendering the internal role labels.\n"
-            . "- visual signature rule: current_block_context.visual_signature is authoritative. Use its composition_pattern, surface_treatment, media_strategy, spatial_rhythm, and interaction_pattern for this block. Do not copy a previous hero/card/media arrangement or repeat another block's headline, CTA, or image treatment.\n"
-            . "- field readability rule: labels and values must be visually separated by a colon plus distinct elements or paragraphs. Multi-fact blocks must use `.pb-c-label` and `.pb-c-value` siblings, never inline `Label:Value`. Do not concatenate support facts, addresses, hours, prices, requirements, metrics, badges, or CTA labels into one unreadable text run.\n"
-            . "- image intent rule: current_block_context.image_intent decides whether this block needs a real image slot. If needs_image=true, use verified_assets for that slot and never substitute a placeholder; if no verified final_url is available, render no <img> and let the contract fail/retry rather than inventing or reusing another block image.\n"
             . "- CSS execution rule: write fewer complete selectors instead of many fragile selectors. If a decoration is hard to express safely, omit the decoration and keep the layout valid.\n"
             . "- responsive execution rule: normal grid/flex flow only; stack at <=900px and use one column at <=420px with min-width:0 and max-width:100% for layout containers, media, cards, forms, and inputs only. Apply the compact CTA override only to the actual clickable CTA button/anchor element; full-width bands, layout containers, and form wrappers may remain responsive. Prefer action/actions for wrappers so wrapper CSS is not mistaken for button CSS.\n"
             . $ctaResponsiveOverride

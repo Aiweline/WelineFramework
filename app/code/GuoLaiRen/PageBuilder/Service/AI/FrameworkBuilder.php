@@ -47,6 +47,7 @@ class FrameworkBuilder
         'FOOTER_EXTRA_TEXT',
         'JS_CONTENT',
         'WRAPPER_TAG',
+        'CONTENT_OWNS_AI_SHELL',
     ];
     
     /**
@@ -433,6 +434,7 @@ class FrameworkBuilder
         $replacements['COMPONENT_DESC'] = $componentInfo['description'] ?? '';
         $replacements['CATEGORY'] = $category;
         $replacements['WRAPPER_TAG'] = $category === 'header' ? 'header' : ($category === 'footer' ? 'footer' : 'section');
+        $replacements['CONTENT_OWNS_AI_SHELL'] = $this->contentOwnsAiShell($category, $aiData) ? 'true' : 'false';
         
         // AI生成的代码
         $replacements['EXTRA_FIELDS'] = $this->formatExtraFields($aiData['extra_fields'] ?? '');
@@ -476,6 +478,24 @@ class FrameworkBuilder
         $css = preg_replace('/#=\s*\$componentId\b/', $componentSelector, $css) ?? $css;
 
         return str_replace('#componentId', $componentSelector, $css);
+    }
+
+    private function contentOwnsAiShell(string $category, array $aiData): bool
+    {
+        if (strtolower($category) !== 'content') {
+            return false;
+        }
+
+        $html = trim((string)($aiData['html_content'] ?? ''));
+        if ($html === '') {
+            return false;
+        }
+
+        // Stage-2 content blocks are contracted to emit a complete pb-c-root shell.
+        // When that shell is present, the framework must not add a second visible
+        // heading/description layer with its own typography.
+        $leadingHtml = substr($html, 0, 800);
+        return preg_match('/<(?:section|article|div)\b[^>]*\bclass\s*=\s*(["\'])(?=[^"\']*\bpb-c-root\b)[^"\']*\1/i', $leadingHtml) === 1;
     }
     
     /**

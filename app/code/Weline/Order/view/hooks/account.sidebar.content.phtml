@@ -1,0 +1,15 @@
+<?php
+/**
+ * Weline_Order module - account page content section.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 160
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+$GLOBALS['__weline_order_account_sidebar_content_rendered'] = true;
+?>
+<section class="account-hook-section account-index__section d-none motor-account-section" id="orders-section" data-account-section="orders" hidden>
+    <w:hook name="Weline_Order::frontend::account::index::orders"/>
+</section>

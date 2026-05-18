@@ -8,7 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 
 final class AiSiteStageOneContractService
 {
-    public const CONTRACT_VERSION = 'stage1_contract_v2';
+    public const CONTRACT_VERSION = 'stage1_contract_v3';
     public const FIELD_PLAN_COUNT = 3;
 
     /** @var list<string> */
@@ -25,6 +25,24 @@ final class AiSiteStageOneContractService
     /** @var list<string> */
     public const RECOMMENDED_DESIGN_TAG_KEYS = [
         'color_layering',
+    ];
+
+    /** @var list<string> */
+    public const VISUAL_SIGNATURE_KEYS = [
+        'composition_pattern',
+        'spatial_rhythm',
+        'media_strategy',
+        'surface_treatment',
+        'interaction_pattern',
+    ];
+
+    /** @var list<string> */
+    public const IMAGE_INTENT_KEYS = [
+        'needs_image',
+        'image_role',
+        'image_subject',
+        'placement',
+        'reuse_policy',
     ];
 
     /** @var list<string> */
@@ -74,12 +92,19 @@ final class AiSiteStageOneContractService
                 'requires_theme_alignment_summary' => true,
                 'requires_page_design_plan' => true,
                 'requires_execution_core_copy' => true,
+                'requires_visual_signature' => true,
+                'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
+                'visual_signature_uniqueness_scope' => 'same_page_adjacent_blocks',
+                'forbid_repeated_composition_patterns_within_page' => true,
+                'requires_image_intent' => true,
+                'image_intent_keys' => self::IMAGE_INTENT_KEYS,
+                'block_count_handoff_required' => true,
             ];
         }
 
         $contract = [
             'contract_version' => self::CONTRACT_VERSION,
-            'version' => 2,
+            'version' => 3,
             'stage' => 'stage1',
             'step' => $step,
             'plan_locale' => $planLocale,
@@ -142,6 +167,8 @@ final class AiSiteStageOneContractService
                 'forbid_prompt_like_copy' => true,
                 'forbid_schema_placeholders' => true,
                 'must_reuse_brief_nouns' => true,
+                'same_page_blocks_must_not_reuse_same_opening_message' => true,
+                'same_page_blocks_must_not_reuse_same_core_copy' => true,
             ],
             'field_plan_rules' => [
                 'rows_per_block' => self::FIELD_PLAN_COUNT,
@@ -178,6 +205,11 @@ final class AiSiteStageOneContractService
                 'reuse_when_stage1_contract_hash_and_block_intent_match' => true,
                 'regenerate_when_contract_hash_or_block_image_intent_changes' => true,
                 'forbid_external_symbolic_urls' => true,
+                'each_block_must_declare_image_intent' => true,
+                'needs_image_true_requires_role_subject_placement' => true,
+                'needs_image_false_requires_css_motif_or_rationale' => true,
+                'opening_or_media_asset_blocks_default_to_needs_image' => true,
+                'planned_image_without_verified_asset_blocks_placeholder_rendering' => true,
             ],
             'visual_quality_rules' => [
                 'non_generic_visual_direction' => true,
@@ -186,6 +218,20 @@ final class AiSiteStageOneContractService
                 'requires_deliberate_typography' => true,
                 'requires_mobile_composition_plan' => true,
                 'requires_reduced_motion_safe_effects' => true,
+            ],
+            'visual_diversity_rules' => [
+                'each_block_must_have_visual_signature' => true,
+                'adjacent_blocks_must_not_share_same_composition_surface_media' => true,
+                'composition_pattern_must_match_block_role' => true,
+                'forbid_reusing_hero_layout_for_non_hero_blocks' => true,
+                'stage3_must_consume_visual_signature' => true,
+            ],
+            'build_handoff_rules' => [
+                'stage1_page_block_count_is_build_blueprint_truth' => true,
+                'stage1_block_key_order_is_build_order' => true,
+                'one_page_section_task_per_stage1_block' => true,
+                'completed_task_must_match_task_identity' => true,
+                'duplicated_html_or_title_between_page_blocks_is_invalid' => true,
             ],
             'retry_policy' => [
                 'product_flow_allows_ai_recovery' => true,
@@ -232,8 +278,17 @@ final class AiSiteStageOneContractService
         );
         $pageContracts = [];
         foreach ($targetPageTypes as $pageType) {
+            $basePageContract = \is_array($base['page_contracts'][$pageType] ?? null) ? $base['page_contracts'][$pageType] : [];
             if (\is_array($sourcePageContracts[$pageType] ?? null)) {
-                $pageContracts[$pageType] = $sourcePageContracts[$pageType];
+                $pageContracts[$pageType] = \array_replace($basePageContract, $sourcePageContracts[$pageType], [
+                    'requires_visual_signature' => true,
+                    'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
+                    'visual_signature_uniqueness_scope' => 'same_page_adjacent_blocks',
+                    'forbid_repeated_composition_patterns_within_page' => true,
+                    'requires_image_intent' => true,
+                    'image_intent_keys' => self::IMAGE_INTENT_KEYS,
+                    'block_count_handoff_required' => true,
+                ]);
             }
         }
 
@@ -255,6 +310,8 @@ final class AiSiteStageOneContractService
             'field_plan_rules' => \is_array($contractForMerge['field_plan_rules'] ?? null) ? $contractForMerge['field_plan_rules'] : $base['field_plan_rules'],
             'image_planning_rules' => \is_array($contractForMerge['image_planning_rules'] ?? null) ? $contractForMerge['image_planning_rules'] : $base['image_planning_rules'],
             'visual_quality_rules' => \is_array($contractForMerge['visual_quality_rules'] ?? null) ? $contractForMerge['visual_quality_rules'] : $base['visual_quality_rules'],
+            'visual_diversity_rules' => \is_array($contractForMerge['visual_diversity_rules'] ?? null) ? $contractForMerge['visual_diversity_rules'] : $base['visual_diversity_rules'],
+            'build_handoff_rules' => \is_array($contractForMerge['build_handoff_rules'] ?? null) ? $contractForMerge['build_handoff_rules'] : $base['build_handoff_rules'],
             'retry_policy' => \is_array($contractForMerge['retry_policy'] ?? null) ? $contractForMerge['retry_policy'] : $base['retry_policy'],
         ]);
         $normalized['navigation_address_rules'] = \is_array($normalized['navigation_address_rules'] ?? null) ? $normalized['navigation_address_rules'] : [];
@@ -348,6 +405,10 @@ final class AiSiteStageOneContractService
                 'field_plan_count' => self::FIELD_PLAN_COUNT,
                 'required_design_tag_keys' => self::DESIGN_TAG_KEYS,
                 'forbidden_block_keys' => self::GENERIC_BLOCK_KEYS,
+                'requires_visual_signature' => true,
+                'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
+                'requires_image_intent' => true,
+                'image_intent_keys' => self::IMAGE_INTENT_KEYS,
             ];
     }
 
@@ -399,6 +460,8 @@ final class AiSiteStageOneContractService
             'field_plan_rules' => \is_array($contract['field_plan_rules'] ?? null) ? $contract['field_plan_rules'] : [],
             'image_planning_rules' => \is_array($contract['image_planning_rules'] ?? null) ? $contract['image_planning_rules'] : [],
             'visual_quality_rules' => \is_array($contract['visual_quality_rules'] ?? null) ? $contract['visual_quality_rules'] : [],
+            'visual_diversity_rules' => \is_array($contract['visual_diversity_rules'] ?? null) ? $contract['visual_diversity_rules'] : [],
+            'build_handoff_rules' => \is_array($contract['build_handoff_rules'] ?? null) ? $contract['build_handoff_rules'] : [],
             'source_truth_contract_hash' => (string)($contract['source_truth_contract_hash'] ?? ''),
             'asset_manifest_hash' => (string)($contract['asset_manifest_hash'] ?? ''),
         ];

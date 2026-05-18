@@ -57,6 +57,8 @@ try {
     'autoOpen' => true,
 ]) ?>
 
+<script src="@static(WeShop_Cart::js/mini-cart.js)?v=20260518-mini-cart-ops-2"></script>
+
 <script>
 (function () {
     function bindHeaderMiniCart() {
@@ -79,16 +81,31 @@ try {
         trigger.dataset.miniCartBound = 'true';
         trigger.addEventListener('click', function (event) {
             event.preventDefault();
+            if (window.MiniCart && typeof window.MiniCart.toggle === 'function') {
+                event.stopPropagation();
+                window.MiniCart.toggle();
+                return;
+            }
             setOpen(!drawer.classList.contains('is-open'));
         });
 
-        overlay.addEventListener('click', function () {
+        overlay.addEventListener('click', function (event) {
+            if (window.MiniCart && typeof window.MiniCart.close === 'function') {
+                event.stopPropagation();
+                window.MiniCart.close();
+                return;
+            }
             setOpen(false);
         });
 
         document.querySelectorAll('[data-action="close-mini-cart"]').forEach(function (button) {
             button.addEventListener('click', function (event) {
                 event.preventDefault();
+                if (window.MiniCart && typeof window.MiniCart.close === 'function') {
+                    event.stopPropagation();
+                    window.MiniCart.close();
+                    return;
+                }
                 setOpen(false);
             });
         });

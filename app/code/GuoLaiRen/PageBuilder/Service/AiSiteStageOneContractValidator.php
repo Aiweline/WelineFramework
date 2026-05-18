@@ -91,6 +91,14 @@ final class AiSiteStageOneContractValidator
                 'actual' => \count($blocks),
             ]);
         }
+        $targetBlocks = \max(0, (int)($pageContract['target_blocks'] ?? 0));
+        if ($targetBlocks > 0 && !empty($pageContract['block_count_handoff_required']) && \count($blocks) !== $targetBlocks) {
+            $issues[] = $this->issue('target_block_count_mismatch', 'pages.' . $pageType . '.blocks', 'high', [
+                'page_type' => $pageType,
+                'expected' => $targetBlocks,
+                'actual' => \count($blocks),
+            ]);
+        }
 
         $requiredBlockKeys = [];
         foreach (\is_array($pageContract['required_block_keys'] ?? null) ? $pageContract['required_block_keys'] : [] as $blockKey) {
@@ -99,8 +107,11 @@ final class AiSiteStageOneContractValidator
                 $requiredBlockKeys[$blockKey] = false;
             }
         }
+        $requiredBlockOrder = \array_values(\array_keys($requiredBlockKeys));
         $forbiddenBlockKeys = \array_fill_keys(\array_map('strval', \is_array($pageContract['forbidden_block_keys'] ?? null) ? $pageContract['forbidden_block_keys'] : AiSiteStageOneContractService::GENERIC_BLOCK_KEYS), true);
         $seen = [];
+        $visualSignatures = [];
+        $contentFingerprints = [];
 
         foreach ($blocks as $index => $block) {
             if (!\is_array($block)) {
@@ -143,6 +154,14 @@ final class AiSiteStageOneContractValidator
             $this->validateDesignTags($block, $pageContract, $path, $pageType, $blockKey, $issues);
             $this->validateFieldPlan($block, $pageContract, $path, $pageType, $blockKey, $issues);
             $this->validateExecutionScript($block, $path, $pageType, $blockKey, $issues);
+            $this->validateBlockContentDiversity($block, $path, $pageType, $blockKey, $contentFingerprints, $issues);
+            $visualSignatures[] = [
+                'index' => $index,
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+                'signature' => $this->validateBlockVisualSignature($block, $pageContract, $path, $pageType, $blockKey, $issues),
+            ];
+            $this->validateBlockImageIntent($block, $pageContract, $path, $pageType, $blockKey, $issues);
         }
 
         foreach ($requiredBlockKeys as $requiredBlockKey => $seenRequired) {
@@ -154,6 +173,8 @@ final class AiSiteStageOneContractValidator
                 ]);
             }
         }
+        $this->validateRequiredBlockOrder($blocks, $requiredBlockOrder, $pageType, $issues);
+        $this->validateVisualSignatureDiversity($visualSignatures, $pageType, $issues);
 
         return $this->report($pagePlan, $contract, $issues, $context);
     }
@@ -383,6 +404,339 @@ final class AiSiteStageOneContractValidator
     }
 
     /**
+     * @param array<string, mixed> $block
+     * @param array<string, string> $fingerprints
+     * @param list<array<string, mixed>> $issues
+     */
+    private function validateBlockContentDiversity(array $block, string $path, string $pageType, string $blockKey, array &$fingerprints, array &$issues): void
+    {
+        $values = [
+            'content' => \trim((string)($block['content'] ?? '')),
+            'core_copy' => \trim((string)($block['execution_script']['core_copy'] ?? '')),
+        ];
+        foreach ($values as $field => $value) {
+            $fingerprint = $this->buildTextDiversityFingerprint($value);
+            if ($fingerprint === '') {
+                continue;
+            }
+            $key = $field . ':' . $fingerprint;
+            if (isset($fingerprints[$key]) && $fingerprints[$key] !== $blockKey) {
+                $issues[] = $this->issue('duplicate_block_message', $path . '.' . ($field === 'core_copy' ? 'execution_script.core_copy' : $field), 'high', [
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'duplicate_of' => $fingerprints[$key],
+                    'field' => $field,
+                    'snippet' => $this->clip($value),
+                ]);
+                continue;
+            }
+            $fingerprints[$key] = $blockKey;
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @param list<string> $requiredBlockOrder
+     * @param list<array<string, mixed>> $issues
+     */
+    private function validateRequiredBlockOrder(array $blocks, array $requiredBlockOrder, string $pageType, array &$issues): void
+    {
+        foreach ($requiredBlockOrder as $expectedIndex => $expectedBlockKey) {
+            $expectedBlockKey = \trim((string)$expectedBlockKey);
+            if ($expectedBlockKey === '') {
+                continue;
+            }
+            $actualBlock = \is_array($blocks[$expectedIndex] ?? null) ? $blocks[$expectedIndex] : [];
+            $actualBlockKey = \trim((string)($actualBlock['block_key'] ?? ''));
+            if ($actualBlockKey === $expectedBlockKey) {
+                continue;
+            }
+            $issues[] = $this->issue('required_block_order_mismatch', 'pages.' . $pageType . '.blocks.' . $expectedIndex . '.block_key', 'high', [
+                'page_type' => $pageType,
+                'expected' => $expectedBlockKey,
+                'actual' => $actualBlockKey,
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $pageContract
+     * @param list<array<string, mixed>> $issues
+     * @return array<string, string>
+     */
+    private function validateBlockVisualSignature(array $block, array $pageContract, string $path, string $pageType, string $blockKey, array &$issues): array
+    {
+        $signature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+        if ($signature === []) {
+            $issues[] = $this->issue('missing_visual_signature', $path . '.visual_signature', 'high', [
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+            ]);
+        }
+
+        $normalized = [];
+        $requiredKeys = \is_array($pageContract['visual_signature_keys'] ?? null)
+            ? $pageContract['visual_signature_keys']
+            : AiSiteStageOneContractService::VISUAL_SIGNATURE_KEYS;
+        foreach ($requiredKeys as $key) {
+            $key = \trim((string)$key);
+            if ($key === '') {
+                continue;
+            }
+            $value = $this->normalizeSignatureText($signature[$key] ?? null);
+            $normalized[$key] = $value;
+            if ($value === '' || $this->isPromptLikeText($value)) {
+                $issues[] = $this->issue('invalid_visual_signature', $path . '.visual_signature.' . $key, 'high', [
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'expected' => 'concrete block-specific visual signature text',
+                    'actual' => $this->clip($value),
+                ]);
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $pageContract
+     * @param list<array<string, mixed>> $issues
+     */
+    private function validateBlockImageIntent(array $block, array $pageContract, string $path, string $pageType, string $blockKey, array &$issues): void
+    {
+        if (empty($pageContract['requires_image_intent'])) {
+            return;
+        }
+        $intent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+        if ($intent === []) {
+            $issues[] = $this->issue('missing_image_intent', $path . '.image_intent', 'high', [
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+            ]);
+            return;
+        }
+
+        [$hasNeedsImage, $needsImage] = $this->normalizeImageIntentNeedsImage($intent['needs_image'] ?? null);
+        if (!$hasNeedsImage) {
+            $issues[] = $this->issue('invalid_image_intent_needs_image', $path . '.image_intent.needs_image', 'high', [
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+            ]);
+        }
+
+        if ($needsImage) {
+            foreach (['image_role', 'image_subject', 'placement', 'reuse_policy'] as $field) {
+                $value = $this->normalizeSignatureText($intent[$field] ?? null);
+                if ($value === '' || $this->isPromptLikeText($value)) {
+                    $issues[] = $this->issue('invalid_image_intent_field', $path . '.image_intent.' . $field, 'high', [
+                        'page_type' => $pageType,
+                        'block_key' => $blockKey,
+                        'expected' => 'concrete image role, subject, placement, and reuse policy',
+                    ]);
+                }
+            }
+            $subject = $this->normalizeSignatureText($intent['image_subject'] ?? null);
+            if ($this->isIconOnlyImageSubject($subject)) {
+                $issues[] = $this->issue('icon_only_image_subject', $path . '.image_intent.image_subject', 'high', [
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'expected' => 'block-level scene, editorial photo, product visual, or premium illustration subject',
+                    'actual' => $this->clip($subject),
+                ]);
+            }
+            return;
+        }
+
+        $cssMotif = $this->normalizeSignatureText($intent['css_motif'] ?? null);
+        $rationale = $this->normalizeSignatureText($intent['rationale'] ?? null);
+        if (($cssMotif === '' || $this->isPromptLikeText($cssMotif)) && ($rationale === '' || $this->isPromptLikeText($rationale))) {
+            $issues[] = $this->issue('missing_css_motif_for_no_image_block', $path . '.image_intent.css_motif', 'high', [
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+            ]);
+        }
+
+        $imageConflict = $this->detectNoImageIntentPlanConflict($block);
+        if ($imageConflict !== null) {
+            $issues[] = $this->issue('image_intent_conflicts_with_block_plan', $path . '.image_intent.needs_image', 'high', [
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+                'expected' => 'needs_image=true with concrete image role, subject, placement, and reuse policy, or remove media asset planning and declare a CSS-only motif',
+                'actual' => $imageConflict,
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function detectNoImageIntentPlanConflict(array $block): ?string
+    {
+        if ($this->blockDeclaresCssOnlyVisual($block)) {
+            return null;
+        }
+
+        $role = $this->normalizeSignatureText($block['page_flow_role'] ?? null);
+        if (\in_array($role, ['opening', 'hero', 'proof'], true)) {
+            return 'opening/proof block declared without an image or CSS-only visual rationale';
+        }
+
+        $mediaText = $this->normalizeSignatureText([
+            $block['execution_script']['media_assets'] ?? null,
+            $block['media_assets'] ?? null,
+            $block['visual_signature']['media_strategy'] ?? null,
+        ]);
+        if ($mediaText !== '' && \preg_match('/\b(?:image|photo|visual|illustration|screenshot|mockup|scene|hero|banner|card|avatar|icon)\b/u', $mediaText) === 1) {
+            return 'block plans media assets while image_intent.needs_image=false';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function blockDeclaresCssOnlyVisual(array $block): bool
+    {
+        $intent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+        $text = $this->normalizeSignatureText([
+            $intent['css_motif'] ?? null,
+            $intent['rationale'] ?? null,
+            $block['visual_signature']['media_strategy'] ?? null,
+        ]);
+        if ($text === '') {
+            return false;
+        }
+
+        return \preg_match('/\b(?:css-only|css only|no image|without image|no generated image|gradient|pattern|motif|shape|decorative css|css illustration|css icon)\b/u', $text) === 1;
+    }
+
+    private function isIconOnlyImageSubject(string $subject): bool
+    {
+        if ($subject === '') {
+            return false;
+        }
+        $mentionsIcon = \preg_match('/\b(?:svg|icon|glyph|chevron|sparkle|badge|line\s+art|line\s+icon|symbol)\b/u', $subject) === 1;
+        if (!$mentionsIcon) {
+            return false;
+        }
+
+        return \preg_match('/\b(?:scene|photo|photograph|illustration|cinematic|editorial|environment|people|players|table|room|product|device|screenshot|mockup)\b/u', $subject) !== 1;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $visualSignatures
+     * @param list<array<string, mixed>> $issues
+     */
+    private function validateVisualSignatureDiversity(array $visualSignatures, string $pageType, array &$issues): void
+    {
+        $previousFingerprint = '';
+        $compositionCounts = [];
+        foreach ($visualSignatures as $row) {
+            $signature = \is_array($row['signature'] ?? null) ? $row['signature'] : [];
+            $fingerprint = $this->visualSignatureFingerprint($signature, ['composition_pattern', 'surface_treatment', 'media_strategy']);
+            if ($fingerprint !== '' && $fingerprint === $previousFingerprint) {
+                $issues[] = $this->issue('adjacent_visual_signature_duplicate', 'pages.' . $pageType . '.blocks.' . (int)($row['index'] ?? 0) . '.visual_signature', 'high', [
+                    'page_type' => $pageType,
+                    'block_key' => (string)($row['block_key'] ?? ''),
+                    'fingerprint' => $fingerprint,
+                ]);
+            }
+            $previousFingerprint = $fingerprint;
+
+            $composition = $this->normalizeSignatureText($signature['composition_pattern'] ?? '');
+            if ($composition !== '') {
+                $compositionCounts[$composition] = ($compositionCounts[$composition] ?? 0) + 1;
+            }
+        }
+
+        foreach ($compositionCounts as $composition => $count) {
+            if ($count <= 2) {
+                continue;
+            }
+            $issues[] = $this->issue('overused_composition_pattern', 'pages.' . $pageType . '.blocks.visual_signature.composition_pattern', 'medium', [
+                'page_type' => $pageType,
+                'composition_pattern' => $composition,
+                'count' => $count,
+            ]);
+        }
+    }
+
+    /**
+     * @return array{0:bool,1:bool}
+     */
+    private function normalizeImageIntentNeedsImage(mixed $value): array
+    {
+        if (\is_bool($value)) {
+            return [true, $value];
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return [true, ((int)$value) === 1];
+        }
+        $normalized = \mb_strtolower(\trim((string)$value));
+        if (\in_array($normalized, ['true', 'yes', 'y', '1', 'required', 'needed'], true)) {
+            return [true, true];
+        }
+        if (\in_array($normalized, ['false', 'no', 'n', '0', 'none', 'not_needed'], true)) {
+            return [true, false];
+        }
+
+        return [false, false];
+    }
+
+    private function normalizeSignatureText(mixed $value): string
+    {
+        if (\is_array($value)) {
+            $value = \implode(' ', \array_filter(\array_map(
+                static fn($item): string => \is_scalar($item) ? \trim((string)$item) : '',
+                $value
+            ), static fn(string $item): bool => $item !== ''));
+        } elseif (!\is_scalar($value) && $value !== null) {
+            return '';
+        }
+
+        return \mb_strtolower(\trim((string)\preg_replace('/\s+/', ' ', (string)$value)));
+    }
+
+    /**
+     * @param array<string, string> $signature
+     * @param list<string> $keys
+     */
+    private function visualSignatureFingerprint(array $signature, array $keys): string
+    {
+        $parts = [];
+        foreach ($keys as $key) {
+            $value = $this->normalizeSignatureText($signature[$key] ?? '');
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+
+        return $parts === [] ? '' : \implode('|', $parts);
+    }
+
+    private function buildTextDiversityFingerprint(string $value): string
+    {
+        $value = \mb_strtolower(\trim((string)\preg_replace('/\s+/', ' ', $value)));
+        if ($value === '' || $this->isPromptLikeText($value)) {
+            return '';
+        }
+        $words = \preg_split('/[^\p{L}\p{N}]+/u', $value, -1, \PREG_SPLIT_NO_EMPTY);
+        if (!\is_array($words) || \count($words) < 5) {
+            return '';
+        }
+        $leadWords = \array_slice($words, 0, 12);
+        $leadText = \implode(' ', $leadWords);
+        if (\mb_strlen($leadText) < 28) {
+            return '';
+        }
+
+        return \sha1($leadText);
+    }
+
+    /**
      * @param list<array<string, mixed>> $issues
      * @param array<string, mixed> $artifact
      * @param array<string, mixed> $contract
@@ -451,6 +805,10 @@ final class AiSiteStageOneContractValidator
         }
 
         if (\preg_match('/^(?:how this page obeys|explaining how|schema|placeholder|prompt|instruction|return only|final visitor copy|website content locale)$/iu', $value) === 1) {
+            return true;
+        }
+
+        if (\preg_match('/\bvisible\s+[a-z0-9_-]+\s+content\s+for\b/iu', $value) === 1) {
             return true;
         }
 

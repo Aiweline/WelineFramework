@@ -1350,12 +1350,7 @@ final class AiSiteQualityGateService
         if ($page === [] && \is_array($pagePlans[$pageType] ?? null)) {
             $page = $pagePlans[$pageType];
         }
-        $blocks = [];
-        foreach (['blocks', 'display_blocks'] as $blockKey) {
-            if (\is_array($page[$blockKey] ?? null)) {
-                $blocks = \array_merge($blocks, \array_values($page[$blockKey]));
-            }
-        }
+        $blocks = $this->collectCanonicalStageOnePageBlocks($page);
         foreach ($blocks as $block) {
             if (!\is_array($block)) {
                 continue;
@@ -1394,7 +1389,7 @@ final class AiSiteQualityGateService
     {
         $tokens = $this->collectThemeTokens($scope);
         if ($tokens === []) {
-            $tokens = ['#111827', '#f59e0b', '#dc2626', '#FFD700', '#8B0000', '#228B22'];
+            return [];
         }
 
         $hits = [];
@@ -1938,12 +1933,7 @@ final class AiSiteQualityGateService
                 if ($pageTypeKey === '') {
                     continue;
                 }
-                $blocks = [];
-                foreach (['blocks', 'display_blocks'] as $blockKey) {
-                    if (\is_array($page[$blockKey] ?? null)) {
-                        $blocks = \array_merge($blocks, $page[$blockKey]);
-                    }
-                }
+                $blocks = $this->collectCanonicalStageOnePageBlocks($page);
                 foreach ($blocks as $block) {
                     if (!\is_array($block)) {
                         continue;
@@ -2017,6 +2007,37 @@ final class AiSiteQualityGateService
         }
 
         return $scheduled;
+    }
+
+    /**
+     * Stage-1 `display_blocks` already prepends shared header/footer onto page blocks.
+     * Merging both arrays double-counts and makes build task coverage look wrong.
+     *
+     * @param array<string, mixed> $page
+     * @return list<array<string, mixed>>
+     */
+    private function collectCanonicalStageOnePageBlocks(array $page): array
+    {
+        $blocks = \is_array($page['blocks'] ?? null) ? \array_values($page['blocks']) : [];
+        $blocks = \array_values(\array_filter($blocks, static fn(mixed $block): bool => \is_array($block)));
+        if ($blocks !== []) {
+            return $blocks;
+        }
+
+        $displayBlocks = \is_array($page['display_blocks'] ?? null) ? \array_values($page['display_blocks']) : [];
+        $pageBlocks = [];
+        foreach ($displayBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $displayRole = \trim((string)($block['display_role'] ?? ''));
+            if ($displayRole !== '' && $displayRole !== 'page_block') {
+                continue;
+            }
+            $pageBlocks[] = $block;
+        }
+
+        return $pageBlocks;
     }
 
     private function normalizeBlockIdentifier(string $value): string

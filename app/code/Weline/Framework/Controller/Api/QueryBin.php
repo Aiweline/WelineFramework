@@ -27,6 +27,9 @@ class QueryBin extends FrontendController
     public function postIndex(): Response
     {
         $requestId = \bin2hex(\random_bytes(8));
+        $guard = $this->beginBinaryOutputGuard();
+        $payload = null;
+        $statusCode = 200;
 
         try {
             $this->assertProtocolHeaders();
@@ -44,21 +47,23 @@ class QueryBin extends FrontendController
             }
 
             if (($payload['type'] ?? '') === 'handshake') {
-                return $this->binaryResponse($this->handleHandshake($payload, $requestId), 200);
+                $payload = $this->handleHandshake($payload, $requestId);
+                $statusCode = 200;
+            } else {
+                $headers = $this->readSignedHeaders();
+                $this->validateSignedRequest($headers, $rawBody);
+
+                $result = $this->gateway->execute($payload, $headers['capability']);
+                $payload = [
+                    'ok' => true,
+                    'data' => $result,
+                    'error' => null,
+                    'request_id' => $requestId,
+                ];
+                $statusCode = 200;
             }
-
-            $headers = $this->readSignedHeaders();
-            $this->validateSignedRequest($headers, $rawBody);
-
-            $result = $this->gateway->execute($payload, $headers['capability']);
-            return $this->binaryResponse([
-                'ok' => true,
-                'data' => $result,
-                'error' => null,
-                'request_id' => $requestId,
-            ], 200);
         } catch (FrontendQueryException $exception) {
-            return $this->binaryResponse([
+            $payload = [
                 'ok' => false,
                 'data' => null,
                 'error' => [
@@ -66,9 +71,10 @@ class QueryBin extends FrontendController
                     'message' => $exception->getMessage(),
                 ],
                 'request_id' => $requestId,
-            ], $exception->getHttpStatus());
+            ];
+            $statusCode = $exception->getHttpStatus();
         } catch (\InvalidArgumentException $exception) {
-            return $this->binaryResponse([
+            $payload = [
                 'ok' => false,
                 'data' => null,
                 'error' => [
@@ -76,9 +82,10 @@ class QueryBin extends FrontendController
                     'message' => $exception->getMessage(),
                 ],
                 'request_id' => $requestId,
-            ], 400);
+            ];
+            $statusCode = 400;
         } catch (\Throwable $throwable) {
-            return $this->binaryResponse([
+            $payload = [
                 'ok' => false,
                 'data' => null,
                 'error' => [
@@ -86,8 +93,21 @@ class QueryBin extends FrontendController
                     'message' => $throwable->getMessage(),
                 ],
                 'request_id' => $requestId,
-            ], 500);
+            ];
+            $statusCode = 500;
         }
+
+        $this->endBinaryOutputGuard($guard);
+
+        return $this->binaryResponse(\is_array($payload) ? $payload : [
+            'ok' => false,
+            'data' => null,
+            'error' => [
+                'code' => 'protocol_error',
+                'message' => 'Empty query-bin payload.',
+            ],
+            'request_id' => $requestId,
+        ], $statusCode);
     }
 
     /**
@@ -236,5 +256,59 @@ class QueryBin extends FrontendController
         $response->setHeader('X-Content-Type-Options', 'nosniff');
 
         return $response;
+    }
+
+    /**
+     * @return array{display_errors:string|false,html_errors:string|false}
+     */
+    private function beginBinaryOutputGuard(): array
+    {
+        $preExisting = '';
+        while (\ob_get_level() > 0) {
+            $chunk = \ob_get_clean();
+            if (\is_string($chunk) && $chunk !== '') {
+                $preExisting = $chunk . $preExisting;
+            }
+        }
+
+        if ($preExisting !== '' && \function_exists('w_log_warning')) {
+            \w_log_warning('[QueryBin] Cleared pre-existing output buffer before binary response: ' . \mb_substr(\trim($preExisting), 0, 500));
+        }
+
+        $guard = [
+            'display_errors' => \ini_get('display_errors'),
+            'html_errors' => \ini_get('html_errors'),
+        ];
+
+        @\ini_set('display_errors', '0');
+        @\ini_set('html_errors', '0');
+        \ob_start();
+
+        return $guard;
+    }
+
+    /**
+     * @param array{display_errors:string|false,html_errors:string|false} $guard
+     */
+    private function endBinaryOutputGuard(array $guard): void
+    {
+        $captured = '';
+        while (\ob_get_level() > 0) {
+            $chunk = \ob_get_clean();
+            if (\is_string($chunk) && $chunk !== '') {
+                $captured = $chunk . $captured;
+            }
+        }
+
+        if (\is_string($guard['display_errors']) || $guard['display_errors'] === false) {
+            @\ini_set('display_errors', $guard['display_errors'] === false ? '0' : (string)$guard['display_errors']);
+        }
+        if (\is_string($guard['html_errors']) || $guard['html_errors'] === false) {
+            @\ini_set('html_errors', $guard['html_errors'] === false ? '0' : (string)$guard['html_errors']);
+        }
+
+        if ($captured !== '' && \function_exists('w_log_warning')) {
+            \w_log_warning('[QueryBin] Suppressed stray output during binary response: ' . \mb_substr(\trim($captured), 0, 500));
+        }
     }
 }

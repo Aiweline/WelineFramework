@@ -6,6 +6,11 @@ namespace GuoLaiRen\PageBuilder\Queue;
 
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Model\PageLayout;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponentVersion;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeLayout;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
@@ -150,6 +155,9 @@ class AiSiteAssetQueue implements QueueInterface
             }
             $previousUrl = \trim((string)($slot['final_url'] ?? ''));
             if ($mode !== 'regenerate' && $previousUrl !== '' && $manifestService->isReusableSessionBlockAsset($scope, $slot, $previousUrl)) {
+                $imagePatch = $this->applyGeneratedImagePatchToScope($scope, $content, $slot, '', $previousUrl);
+                $scope = \is_array($imagePatch['scope'] ?? null) ? $imagePatch['scope'] : $scope;
+                $imageScopePatch = \is_array($imagePatch['patch'] ?? null) ? $imagePatch['patch'] : [];
                 $scope = $manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
                 $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $previousUrl);
                 $reuseState = \array_merge([
@@ -161,7 +169,7 @@ class AiSiteAssetQueue implements QueueInterface
                     'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
                         ? $scope['asset_image_generation_failures']
                         : [],
-                ], $this->buildIdentityAssetScopePatch($scope));
+                ], $this->buildIdentityAssetScopePatch($scope), $imageScopePatch);
                 $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge(
                     $reuseState,
                     $this->buildReferenceImageInsightScopePatch($scope)
@@ -215,6 +223,7 @@ class AiSiteAssetQueue implements QueueInterface
                 'params' => [
                     'disable_conversation_history' => true,
                     'disable_conversation_persist' => true,
+                    'allow_zero_balance_provider' => true,
                     'is_backend' => true,
                     'user_id' => $adminId,
                     'slot_id' => $slotId,
@@ -232,6 +241,8 @@ class AiSiteAssetQueue implements QueueInterface
             if ($bytes === '') {
                 throw new \RuntimeException('Image generation returned empty image bytes.');
             }
+            $generatedModel = (string)($result['model'] ?? '');
+            $revisedPrompt = (string)($image['revised_prompt'] ?? '');
 
             $relativePath = $this->resolveTargetRelativePath($content, $scope, $session, $slotId, $bytes, $mimeType);
             $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
@@ -242,6 +253,7 @@ class AiSiteAssetQueue implements QueueInterface
             if (\file_put_contents($absolutePath, $bytes) === false) {
                 throw new \RuntimeException('Failed to write image asset file: ' . $absolutePath);
             }
+            unset($bytes, $image, $result);
 
             $finalUrl = '/' . \str_replace('\\', '/', $relativePath);
             $variant = [
@@ -249,8 +261,8 @@ class AiSiteAssetQueue implements QueueInterface
                 'mime_type' => $mimeType,
                 'path' => $relativePath,
                 'mode' => $mode,
-                'model' => (string)($result['model'] ?? ''),
-                'revised_prompt' => (string)($image['revised_prompt'] ?? ''),
+                'model' => $generatedModel,
+                'revised_prompt' => $revisedPrompt,
             ];
             $manifest = $manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
             $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
@@ -300,6 +312,7 @@ class AiSiteAssetQueue implements QueueInterface
 
             return 'Image asset generation completed: ' . $slotId;
         } catch (\Throwable $throwable) {
+            unset($bytes, $image, $result);
             $scope = $scopeService->normalizeScope(
                 $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
             );
@@ -579,6 +592,9 @@ class AiSiteAssetQueue implements QueueInterface
         $updatedAt = \date('Y-m-d H:i:s');
         $changed = false;
         $patchedBlocks = [];
+        $materializedPageId = 0;
+        $siblingPattern = $this->buildGeneratedAssetSiblingPattern($finalUrl);
+        $scopeReferencePatch = [];
 
         $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
@@ -588,7 +604,8 @@ class AiSiteAssetQueue implements QueueInterface
                 $candidates,
                 $finalUrl,
                 $targetBlockId,
-                $targetComponentCode
+                $targetComponentCode,
+                $siblingPattern
             );
             if ($blockChanged) {
                 $virtualPage['blocks'] = \array_values($blocks);
@@ -598,6 +615,47 @@ class AiSiteAssetQueue implements QueueInterface
                 $changed = true;
                 $patchedBlocks = \array_values($blocks);
             }
+        }
+
+        $scopeReferenceResult = $this->patchScopeGeneratedImageReferences(
+            $scope,
+            $pageType,
+            $candidates,
+            $finalUrl,
+            $siblingPattern
+        );
+        if (!empty($scopeReferenceResult['changed'])) {
+            $scope = \is_array($scopeReferenceResult['scope'] ?? null) ? $scopeReferenceResult['scope'] : $scope;
+            $scopeReferencePatch = \is_array($scopeReferenceResult['patch'] ?? null) ? $scopeReferenceResult['patch'] : [];
+            $changed = true;
+        }
+
+        $materializedPatch = $this->patchMaterializedPageImageUrls(
+            $scope,
+            $pageType,
+            $candidates,
+            $finalUrl,
+            $targetBlockId,
+            $targetComponentCode,
+            $siblingPattern
+        );
+        if (!empty($materializedPatch['changed'])) {
+            $changed = true;
+            $materializedPageId = (int)($materializedPatch['page_id'] ?? 0);
+            if ($patchedBlocks === [] && \is_array($materializedPatch['blocks'] ?? null)) {
+                $patchedBlocks = \array_values($materializedPatch['blocks']);
+            }
+        }
+
+        $virtualThemePatch = $this->patchVirtualThemeImageUrls(
+            $scope,
+            $pageType,
+            $candidates,
+            $finalUrl,
+            $siblingPattern
+        );
+        if (!empty($virtualThemePatch['changed'])) {
+            $changed = true;
         }
 
         if (!$changed) {
@@ -614,10 +672,15 @@ class AiSiteAssetQueue implements QueueInterface
                 'previous_url' => $previousUrl,
                 'final_url' => $finalUrl,
                 'updated_at' => $updatedAt,
+                'materialized_page_id' => $materializedPageId,
+                'virtual_theme_patch' => $virtualThemePatch,
             ],
         ];
         if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
             $patch['virtual_pages_by_type'] = $scope['virtual_pages_by_type'];
+        }
+        if ($scopeReferencePatch !== []) {
+            $patch = \array_replace($patch, $scopeReferencePatch);
         }
 
         return ['scope' => $scope, 'patch' => $patch, 'changed' => true];
@@ -696,6 +759,545 @@ class AiSiteAssetQueue implements QueueInterface
         return \array_values(\array_unique($candidates));
     }
 
+    private function buildGeneratedAssetSiblingPattern(string $finalUrl): string
+    {
+        $value = \trim(\html_entity_decode($finalUrl, \ENT_QUOTES | \ENT_HTML5, 'UTF-8'));
+        if ($value === '') {
+            return '';
+        }
+        $path = \parse_url($value, \PHP_URL_PATH);
+        $path = \is_string($path) && \trim($path) !== '' ? $path : $value;
+        $path = '/' . \ltrim(\str_replace('\\', '/', $path), '/');
+        if (!\preg_match('#^/pub/media/page-build/ai-generated/[^/]+/.+-[a-f0-9]{8,64}\.(?:jpg|jpeg|png|webp)$#i', $path)) {
+            return '';
+        }
+        $prefix = \preg_replace('#-[a-f0-9]{8,64}\.(?:jpg|jpeg|png|webp)$#i', '-', $path);
+        if (!\is_string($prefix) || $prefix === '') {
+            return '';
+        }
+
+        return "#(?:https?://[^\\s'\"()<>]+)?" . \preg_quote($prefix, '#') . "[a-f0-9]{8,64}\\.(?:jpg|jpeg|png|webp)(?:\\?[^\\s'\"()<>]*)?#i";
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param list<string> $candidates
+     * @return array{changed:bool,scope?:array<string,mixed>,patch?:array<string,mixed>}
+     */
+    private function patchScopeGeneratedImageReferences(
+        array $scope,
+        string $pageType,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern
+    ): array {
+        $changedTopLevel = [];
+        foreach ([
+            ['page_type_layouts', $pageType],
+            ['render_data_contract', 'payload', 'page_type_layouts', $pageType],
+            ['build_contracts', 'render_data', 'payload', 'page_type_layouts', $pageType],
+            ['build_workbench', 'contracts', 'render_data', 'payload', 'page_type_layouts', $pageType],
+        ] as $path) {
+            $pathChanged = false;
+            $scope = $this->replaceScopePathImageReferences($scope, $path, $candidates, $finalUrl, $siblingPattern, $pathChanged);
+            if ($pathChanged && \is_string($path[0] ?? null)) {
+                $changedTopLevel[$path[0]] = true;
+            }
+        }
+
+        if ($changedTopLevel === []) {
+            return ['changed' => false];
+        }
+
+        $patch = [];
+        foreach (\array_keys($changedTopLevel) as $key) {
+            if (isset($scope[$key])) {
+                $patch[$key] = $scope[$key];
+            }
+        }
+
+        return [
+            'changed' => true,
+            'scope' => $scope,
+            'patch' => $patch,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param list<string> $path
+     * @param list<string> $candidates
+     */
+    private function replaceScopePathImageReferences(
+        array $scope,
+        array $path,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern,
+        bool &$changed
+    ): array {
+        $value = $this->getNestedValue($scope, $path);
+        if ($value === null || !$this->mixedContainsAnyCandidate($value, $candidates, $siblingPattern)) {
+            return $scope;
+        }
+
+        $localChanged = false;
+        $nextValue = $this->replaceCandidatesInMixed($value, $candidates, $finalUrl, $localChanged, $siblingPattern);
+        if (!$localChanged) {
+            return $scope;
+        }
+
+        $changed = true;
+        return $this->setNestedValue($scope, $path, $nextValue);
+    }
+
+    /**
+     * @param array<string,mixed> $source
+     * @param list<string> $path
+     */
+    private function getNestedValue(array $source, array $path): mixed
+    {
+        $cursor = $source;
+        foreach ($path as $segment) {
+            if (!\is_array($cursor) || !\array_key_exists($segment, $cursor)) {
+                return null;
+            }
+            $cursor = $cursor[$segment];
+        }
+
+        return $cursor;
+    }
+
+    /**
+     * @param array<string,mixed> $source
+     * @param list<string> $path
+     */
+    private function setNestedValue(array $source, array $path, mixed $value): array
+    {
+        $segment = \array_shift($path);
+        if (!\is_string($segment) || $segment === '') {
+            return $source;
+        }
+        if ($path === []) {
+            $source[$segment] = $value;
+            return $source;
+        }
+        $child = \is_array($source[$segment] ?? null) ? $source[$segment] : [];
+        $source[$segment] = $this->setNestedValue($child, $path, $value);
+
+        return $source;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param list<string> $candidates
+     * @return array{changed:bool,page_id?:int,blocks?:list<mixed>}
+     */
+    private function patchMaterializedPageImageUrls(
+        array $scope,
+        string $pageType,
+        array $candidates,
+        string $finalUrl,
+        string $targetBlockId,
+        string $targetComponentCode,
+        string $siblingPattern
+    ): array {
+        $pageId = $this->resolveMaterializedPageId($scope, $pageType);
+        if ($pageId <= 0) {
+            return ['changed' => false];
+        }
+
+        /** @var Page $page */
+        $page = ObjectManager::make(Page::class);
+        $page->clearData()->clearQuery()->load($pageId);
+        if ((int)$page->getId() <= 0) {
+            return ['changed' => false];
+        }
+
+        $changed = false;
+        $nextBlocks = [];
+        $renderMode = \trim((string)$page->getData(Page::schema_fields_RENDER_MODE));
+        if ($renderMode === Page::RENDER_MODE_AI_HTML) {
+            $layout = \json_decode((string)$page->getData(Page::schema_fields_AI_LAYOUT), true);
+            $blocks = \is_array($layout['blocks'] ?? null) ? \array_values($layout['blocks']) : [];
+            if ($blocks !== []) {
+                [$nextBlocks, $blockChanged] = $this->patchBlocksImageUrls(
+                    $blocks,
+                    $candidates,
+                    $finalUrl,
+                    $targetBlockId,
+                    $targetComponentCode,
+                    $siblingPattern
+                );
+                if ($blockChanged) {
+                    $layout['blocks'] = \array_values($nextBlocks);
+                    $page->setData(
+                        Page::schema_fields_AI_LAYOUT,
+                        \json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)
+                    )->setData(Page::schema_fields_AI_PUBLISH_SNAPSHOTS, null);
+                    $changed = true;
+                }
+            }
+        }
+
+        foreach ([Page::schema_fields_LAYOUT_CONFIG, Page::schema_fields_CONTENT] as $field) {
+            $fieldChanged = false;
+            $nextValue = $this->replaceJsonOrStringImageReferences(
+                (string)$page->getData($field),
+                $candidates,
+                $finalUrl,
+                $siblingPattern,
+                $fieldChanged
+            );
+            if ($fieldChanged) {
+                $page->setData($field, $nextValue);
+                $changed = true;
+            }
+        }
+
+        $layoutChanged = $this->patchPageLayoutImageUrls(
+            $pageId,
+            $candidates,
+            $finalUrl,
+            $siblingPattern
+        );
+        if ($layoutChanged) {
+            $changed = true;
+        }
+
+        if (!$changed) {
+            return ['changed' => false];
+        }
+
+        $page->save(true);
+
+        return [
+            'changed' => true,
+            'page_id' => $pageId,
+            'blocks' => \array_values($nextBlocks),
+        ];
+    }
+
+    /**
+     * @param list<string> $candidates
+     */
+    private function patchPageLayoutImageUrls(
+        int $pageId,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern
+    ): bool {
+        if ($pageId <= 0) {
+            return false;
+        }
+
+        $layout = PageLayout::getByPageId($pageId);
+        if (!$layout instanceof PageLayout || (int)$layout->getId() <= 0) {
+            return false;
+        }
+
+        $changed = false;
+        foreach ([
+            PageLayout::schema_fields_LAYOUT_CONFIG,
+            PageLayout::schema_fields_HEADER_CONFIG,
+            PageLayout::schema_fields_FOOTER_CONFIG,
+            PageLayout::schema_fields_CONTENT_COMPONENTS,
+        ] as $field) {
+            $fieldChanged = false;
+            $nextValue = $this->replaceJsonOrStringImageReferences(
+                (string)$layout->getData($field),
+                $candidates,
+                $finalUrl,
+                $siblingPattern,
+                $fieldChanged
+            );
+            if ($fieldChanged) {
+                $layout->setData($field, $nextValue);
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $layout->save(true);
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param list<string> $candidates
+     * @return array{changed:bool,virtual_theme_id:int,layout_id:int,component_ids:list<int>,version_ids:list<int>}
+     */
+    private function patchVirtualThemeImageUrls(
+        array $scope,
+        string $pageType,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern
+    ): array {
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId <= 0) {
+            return [
+                'changed' => false,
+                'virtual_theme_id' => 0,
+                'layout_id' => 0,
+                'component_ids' => [],
+                'version_ids' => [],
+            ];
+        }
+
+        $layoutId = $this->patchVirtualThemeLayoutImageUrls(
+            $virtualThemeId,
+            $pageType,
+            $candidates,
+            $finalUrl,
+            $siblingPattern
+        );
+        $componentPatch = $this->patchVirtualThemeComponentImageUrls(
+            $virtualThemeId,
+            $candidates,
+            $finalUrl,
+            $siblingPattern
+        );
+
+        return [
+            'changed' => $layoutId > 0 || $componentPatch['component_ids'] !== [] || $componentPatch['version_ids'] !== [],
+            'virtual_theme_id' => $virtualThemeId,
+            'layout_id' => $layoutId,
+            'component_ids' => $componentPatch['component_ids'],
+            'version_ids' => $componentPatch['version_ids'],
+        ];
+    }
+
+    /**
+     * @param list<string> $candidates
+     */
+    private function patchVirtualThemeLayoutImageUrls(
+        int $virtualThemeId,
+        string $pageType,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern
+    ): int {
+        /** @var VirtualThemeLayout $layout */
+        $layout = clone ObjectManager::getInstance(VirtualThemeLayout::class);
+        $layout->clearData()->clearQuery()
+            ->where(VirtualThemeLayout::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+            ->where(VirtualThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+            ->where(VirtualThemeLayout::schema_fields_AREA, 'frontend')
+            ->order(VirtualThemeLayout::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
+        if ((int)$layout->getId() <= 0) {
+            return 0;
+        }
+
+        $changed = false;
+        $nextValue = $this->replaceJsonOrStringImageReferences(
+            (string)$layout->getData(VirtualThemeLayout::schema_fields_CONFIG),
+            $candidates,
+            $finalUrl,
+            $siblingPattern,
+            $changed
+        );
+        if (!$changed) {
+            return 0;
+        }
+
+        $layout->setData(VirtualThemeLayout::schema_fields_CONFIG, $nextValue)
+            ->save(true);
+
+        return (int)$layout->getId();
+    }
+
+    /**
+     * @param list<string> $candidates
+     * @return array{component_ids:list<int>,version_ids:list<int>}
+     */
+    private function patchVirtualThemeComponentImageUrls(
+        int $virtualThemeId,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern
+    ): array {
+        /** @var VirtualThemeComponent $componentModel */
+        $componentModel = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+        $components = $componentModel->clearData()->clearQuery()
+            ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+            ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
+            ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $componentIds = [];
+        $versionIds = [];
+        foreach ($components as $component) {
+            if (!$component instanceof VirtualThemeComponent || (int)$component->getId() <= 0) {
+                continue;
+            }
+            $changed = $this->patchModelImageFields($component, [
+                VirtualThemeComponent::schema_fields_TEMPLATE_CONTENT,
+                VirtualThemeComponent::schema_fields_DEFAULT_CONFIG,
+                VirtualThemeComponent::schema_fields_META_JSON,
+            ], $candidates, $finalUrl, $siblingPattern);
+            if ($changed) {
+                $componentIds[] = (int)$component->getId();
+            }
+
+            foreach ($this->patchVirtualThemeComponentVersionsImageUrls(
+                (int)$component->getId(),
+                $candidates,
+                $finalUrl,
+                $siblingPattern
+            ) as $versionId) {
+                $versionIds[] = $versionId;
+            }
+        }
+
+        return [
+            'component_ids' => \array_values(\array_unique($componentIds)),
+            'version_ids' => \array_values(\array_unique($versionIds)),
+        ];
+    }
+
+    /**
+     * @param list<string> $candidates
+     * @return list<int>
+     */
+    private function patchVirtualThemeComponentVersionsImageUrls(
+        int $componentId,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern
+    ): array {
+        /** @var VirtualThemeComponentVersion $versionModel */
+        $versionModel = clone ObjectManager::getInstance(VirtualThemeComponentVersion::class);
+        $versions = $versionModel->clearData()->clearQuery()
+            ->where(VirtualThemeComponentVersion::schema_fields_COMPONENT_ID, $componentId)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $versionIds = [];
+        foreach ($versions as $version) {
+            if (!$version instanceof VirtualThemeComponentVersion || (int)$version->getId() <= 0) {
+                continue;
+            }
+            $changed = $this->patchModelImageFields($version, [
+                VirtualThemeComponentVersion::schema_fields_TEMPLATE_CONTENT,
+                VirtualThemeComponentVersion::schema_fields_DEFAULT_CONFIG,
+                VirtualThemeComponentVersion::schema_fields_META_JSON,
+            ], $candidates, $finalUrl, $siblingPattern);
+            if ($changed) {
+                $versionIds[] = (int)$version->getId();
+            }
+        }
+
+        return $versionIds;
+    }
+
+    /**
+     * @param list<string> $fields
+     * @param list<string> $candidates
+     */
+    private function patchModelImageFields(
+        object $model,
+        array $fields,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern
+    ): bool {
+        if (!\method_exists($model, 'getData') || !\method_exists($model, 'setData') || !\method_exists($model, 'save')) {
+            return false;
+        }
+
+        $changed = false;
+        foreach ($fields as $field) {
+            $fieldChanged = false;
+            $nextValue = $this->replaceJsonOrStringImageReferences(
+                (string)$model->getData($field),
+                $candidates,
+                $finalUrl,
+                $siblingPattern,
+                $fieldChanged
+            );
+            if ($fieldChanged) {
+                $model->setData($field, $nextValue);
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $model->save(true);
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param list<string> $candidates
+     */
+    private function replaceJsonOrStringImageReferences(
+        string $raw,
+        array $candidates,
+        string $finalUrl,
+        string $siblingPattern,
+        bool &$changed
+    ): string {
+        $raw = \trim($raw);
+        if ($raw === '') {
+            return $raw;
+        }
+
+        $decoded = \json_decode($raw, true);
+        if (\is_array($decoded)) {
+            if (!$this->mixedContainsAnyCandidate($decoded, $candidates, $siblingPattern)) {
+                return $raw;
+            }
+            $localChanged = false;
+            $next = $this->replaceCandidatesInMixed($decoded, $candidates, $finalUrl, $localChanged, $siblingPattern);
+            if ($localChanged) {
+                $changed = true;
+                return \json_encode($next, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            }
+
+            return $raw;
+        }
+
+        if (!$this->mixedContainsAnyCandidate($raw, $candidates, $siblingPattern)) {
+            return $raw;
+        }
+        $localChanged = false;
+        $nextRaw = $this->replaceCandidatesInMixed($raw, $candidates, $finalUrl, $localChanged, $siblingPattern);
+        if ($localChanged && \is_string($nextRaw)) {
+            $changed = true;
+            return $nextRaw;
+        }
+
+        return $raw;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveMaterializedPageId(array $scope, string $pageType): int
+    {
+        foreach ([
+            $scope['virtual_pages_by_type'][$pageType]['materialized_page_id'] ?? null,
+            $scope['virtual_pages_by_type'][$pageType]['page_id'] ?? null,
+            $scope['pagebuilder_pages_by_type'][$pageType]['page_id'] ?? null,
+            $scope['materialized_pages_by_type'][$pageType]['page_id'] ?? null,
+        ] as $value) {
+            $pageId = (int)$value;
+            if ($pageId > 0) {
+                return $pageId;
+            }
+        }
+
+        return 0;
+    }
+
     /**
      * @param list<mixed> $blocks
      * @param list<string> $candidates
@@ -706,7 +1308,8 @@ class AiSiteAssetQueue implements QueueInterface
         array $candidates,
         string $finalUrl,
         string $targetBlockId,
-        string $targetComponentCode
+        string $targetComponentCode,
+        string $siblingPattern = ''
     ): array {
         $changed = false;
         $hasTarget = $targetBlockId !== '' || $targetComponentCode !== '';
@@ -717,11 +1320,11 @@ class AiSiteAssetQueue implements QueueInterface
             if ($hasTarget && !$this->blockMatchesTarget($block, $targetBlockId, $targetComponentCode)) {
                 continue;
             }
-            if (!$this->mixedContainsAnyCandidate($block, $candidates)) {
+            if (!$this->mixedContainsAnyCandidate($block, $candidates, $siblingPattern)) {
                 continue;
             }
             $blockChanged = false;
-            $nextBlock = $this->replaceCandidatesInMixed($block, $candidates, $finalUrl, $blockChanged);
+            $nextBlock = $this->replaceCandidatesInMixed($block, $candidates, $finalUrl, $blockChanged, $siblingPattern);
             if ($blockChanged && \is_array($nextBlock)) {
                 $blocks[$index] = $nextBlock;
                 $changed = true;
@@ -812,12 +1415,15 @@ class AiSiteAssetQueue implements QueueInterface
     /**
      * @param list<string> $candidates
      */
-    private function mixedContainsAnyCandidate(mixed $value, array $candidates, int $depth = 0): bool
+    private function mixedContainsAnyCandidate(mixed $value, array $candidates, string $siblingPattern = '', int $depth = 0): bool
     {
         if ($depth > 10) {
             return false;
         }
         if (\is_string($value)) {
+            if ($siblingPattern !== '' && \preg_match($siblingPattern, $value) === 1) {
+                return true;
+            }
             foreach ($candidates as $candidate) {
                 if ($candidate !== '' && \str_contains($value, $candidate)) {
                     return true;
@@ -827,7 +1433,7 @@ class AiSiteAssetQueue implements QueueInterface
         }
         if (\is_array($value)) {
             foreach ($value as $child) {
-                if ($this->mixedContainsAnyCandidate($child, $candidates, $depth + 1)) {
+                if ($this->mixedContainsAnyCandidate($child, $candidates, $siblingPattern, $depth + 1)) {
                     return true;
                 }
             }
@@ -839,7 +1445,14 @@ class AiSiteAssetQueue implements QueueInterface
     /**
      * @param list<string> $candidates
      */
-    private function replaceCandidatesInMixed(mixed $value, array $candidates, string $finalUrl, bool &$changed, int $depth = 0): mixed
+    private function replaceCandidatesInMixed(
+        mixed $value,
+        array $candidates,
+        string $finalUrl,
+        bool &$changed,
+        string $siblingPattern = '',
+        int $depth = 0
+    ): mixed
     {
         if ($depth > 10) {
             return $value;
@@ -852,6 +1465,13 @@ class AiSiteAssetQueue implements QueueInterface
                 }
                 $next = \str_replace($candidate, $finalUrl, $next);
             }
+            if ($siblingPattern !== '') {
+                $count = 0;
+                $replaced = \preg_replace($siblingPattern, $finalUrl, $next, -1, $count);
+                if (\is_string($replaced) && $count > 0) {
+                    $next = $replaced;
+                }
+            }
             if ($next !== $value) {
                 $changed = true;
             }
@@ -860,7 +1480,7 @@ class AiSiteAssetQueue implements QueueInterface
         }
         if (\is_array($value)) {
             foreach ($value as $key => $child) {
-                $value[$key] = $this->replaceCandidatesInMixed($child, $candidates, $finalUrl, $changed, $depth + 1);
+                $value[$key] = $this->replaceCandidatesInMixed($child, $candidates, $finalUrl, $changed, $siblingPattern, $depth + 1);
             }
         }
 
