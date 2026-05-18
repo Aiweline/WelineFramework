@@ -659,6 +659,9 @@
                 confirmText: opts.confirmText || <?= \json_encode((string)__('我知道了'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                 cancelText: opts.cancelText || <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
             }).then(function (confirmed) {
+                if (confirmed && opts.reloadOnConfirm !== false) {
+                    reloadWorkspacePageNow();
+                }
                 return !!confirmed;
             }).catch(function () {
                 return false;
@@ -670,7 +673,9 @@
 
     function offerRetryForFailedOperation(operation, payload) {
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
-        var modalOptions = {};
+        var modalOptions = {
+            reloadOnConfirm: true
+        };
         if (op === 'plan' || op === 'build') {
             modalOptions.extraMessage = (typeof messages === 'object' && messages.retryableAiFailuresPending)
                 ? String(messages.retryableAiFailuresPending || '')
@@ -1304,6 +1309,14 @@
         return lines;
     }
 
+    function reloadWorkspacePageNow() {
+        if (queueCompletionReloadTimer) {
+            window.clearTimeout(queueCompletionReloadTimer);
+            queueCompletionReloadTimer = null;
+        }
+        window.location.reload();
+    }
+
     function scheduleReloadAfterQueueCompleted(operation, payload, eventKind) {
         var normalizedOperation = String(operation || '').toLowerCase();
         var status = readQueueStatusFromPayload(operation, payload);
@@ -1312,7 +1325,7 @@
             return;
         }
         queueCompletionReloadTimer = window.setTimeout(function () {
-            window.location.reload();
+            reloadWorkspacePageNow();
         }, 650);
     }
 
@@ -1696,8 +1709,7 @@
         if (!doc) {
             return;
         }
-        var selector = '.pb-ai-block-wrapper[data-page-type="' + blockRefreshState.pageType + '"][data-component="' + blockRefreshState.blockId + '"]';
-        var wrapper = doc.querySelector(selector);
+        var wrapper = findBlockRefreshWrapper(doc, blockRefreshState.pageType, blockRefreshState.blockId);
         if (!wrapper) {
             return;
         }
@@ -1712,6 +1724,33 @@
             wrapper.appendChild(overlay);
         }
         overlay.textContent = String(messageText || '');
+    }
+
+    function escapeBlockRefreshSelectorValue(value) {
+        var raw = String(value || '');
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(raw);
+        }
+        return raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    }
+
+    function findBlockRefreshWrapper(doc, pageType, blockId) {
+        if (!doc || !blockId) {
+            return null;
+        }
+        var page = escapeBlockRefreshSelectorValue(pageType);
+        var id = escapeBlockRefreshSelectorValue(blockId);
+        var attrs = ['data-component', 'data-component-code', 'data-block-id', 'data-block-key', 'data-section-code', 'data-task-key'];
+        for (var i = 0; i < attrs.length; i += 1) {
+            var selector = '.pb-ai-block-wrapper[data-page-type="' + page + '"][' + attrs[i] + '="' + id + '"],'
+                + '.tpmst-component-wrapper[data-page-type="' + page + '"][' + attrs[i] + '="' + id + '"],'
+                + '.pb-component-wrapper[data-page-type="' + page + '"][' + attrs[i] + '="' + id + '"]';
+            var wrapper = doc.querySelector(selector);
+            if (wrapper) {
+                return wrapper;
+            }
+        }
+        return null;
     }
 
     function clearBlockStreamingState() {
