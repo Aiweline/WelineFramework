@@ -7,7 +7,8 @@ namespace GuoLaiRen\PageBuilder\Service;
 final class AiSiteStageOneContractValidator
 {
     public function __construct(
-        private readonly ?AiSiteStageOneContractService $contractService = null
+        private readonly ?AiSiteStageOneContractService $contractService = null,
+        private readonly ?AiSitePageRouteContractService $pageRouteContractService = null
     ) {
     }
 
@@ -191,10 +192,16 @@ final class AiSiteStageOneContractValidator
      */
     private function validateLinkRequirements(array $planJson, array $contract, array &$issues): void
     {
+        $routeContract = \is_array($contract['page_route_contract'] ?? null) ? $contract['page_route_contract'] : [];
+        $allowedPaths = $this->pageRouteContractService()->allowedPathMap($routeContract);
         foreach (\is_array($contract['shared_link_requirements'] ?? null) ? $contract['shared_link_requirements'] : [] as $path) {
             $path = \trim((string)$path);
             if ($path === '') {
                 continue;
+            }
+            $fieldAllowedPaths = $this->allowedPathsForLinkRequirement($routeContract, $path);
+            if ($fieldAllowedPaths === []) {
+                $fieldAllowedPaths = $allowedPaths;
             }
             $links = $this->valueAtPath($planJson, $path);
             if (!\is_array($links) || $links === []) {
@@ -204,9 +211,91 @@ final class AiSiteStageOneContractValidator
             foreach (\array_values($links) as $index => $link) {
                 if (!\is_array($link) || \trim((string)($link['label'] ?? '')) === '' || \trim((string)($link['href'] ?? '')) === '') {
                     $issues[] = $this->issue('invalid_link_row', $path . '.' . $index, 'high');
+                    continue;
+                }
+                if ($allowedPaths === []) {
+                    continue;
+                }
+                $href = \trim((string)($link['href'] ?? ''));
+                if (!$this->isExactInternalRoutePath($href)) {
+                    $issues[] = $this->issue('link_href_not_exact_route_path', $path . '.' . $index . '.href', 'high', [
+                        'href' => $href,
+                        'allowed_internal_paths' => \array_values($fieldAllowedPaths),
+                    ]);
+                    continue;
+                }
+                $resolvedPath = $this->pageRouteContractService()->normalizeHrefToContractPath($routeContract, $href);
+                if ($resolvedPath === '') {
+                    $resolvedPath = $this->pageRouteContractService()->normalizeHrefPath($href);
+                }
+                if ($resolvedPath === '' || !isset($fieldAllowedPaths[$resolvedPath])) {
+                    $issues[] = $this->issue('link_href_not_in_route_contract', $path . '.' . $index . '.href', 'high', [
+                        'href' => $href,
+                        'resolved_path' => $resolvedPath,
+                        'allowed_internal_paths' => \array_values($fieldAllowedPaths),
+                    ]);
                 }
             }
         }
+    }
+
+    /**
+     * @param array<string, mixed> $routeContract
+     * @return array<string, string>
+     */
+    private function allowedPathsForLinkRequirement(array $routeContract, string $requirementPath): array
+    {
+        $linkGroup = \is_array($routeContract['link_groups'][$requirementPath] ?? null) ? $routeContract['link_groups'][$requirementPath] : [];
+        if ($linkGroup !== []) {
+            $paths = [];
+            foreach (\is_array($linkGroup['allowed_paths'] ?? null) ? $linkGroup['allowed_paths'] : [] as $path) {
+                $path = $this->pageRouteContractService()->normalizeHrefPath((string)$path);
+                if ($path !== '') {
+                    $paths[$path] = $path;
+                }
+            }
+            if ($paths !== []) {
+                return $paths;
+            }
+        }
+
+        $routeTypesKey = match ($requirementPath) {
+            'navigation_plan.header_items' => 'header_route_types',
+            'footer_plan.featured' => 'footer_featured_route_types',
+            'footer_plan.policies' => 'footer_policy_route_types',
+            default => '',
+        };
+        if ($routeTypesKey === '') {
+            return [];
+        }
+
+        $routesByType = $this->pageRouteContractService()->routesByType($routeContract);
+        $paths = [];
+        foreach (\is_array($routeContract[$routeTypesKey] ?? null) ? $routeContract[$routeTypesKey] : [] as $pageType) {
+            $pageType = \trim((string)$pageType);
+            $path = \is_array($routesByType[$pageType] ?? null) ? \trim((string)($routesByType[$pageType]['path'] ?? '')) : '';
+            if ($path !== '') {
+                $paths[$path] = $path;
+            }
+        }
+
+        return $paths;
+    }
+
+    private function isExactInternalRoutePath(string $href): bool
+    {
+        $href = \trim($href);
+        if ($href === '' || $href === '#') {
+            return false;
+        }
+        if (\preg_match('#^[a-z][a-z0-9+.-]*://#i', $href) === 1 || \str_starts_with($href, '//')) {
+            return false;
+        }
+        if (\str_contains($href, '#') || \str_contains($href, '?')) {
+            return false;
+        }
+
+        return \str_starts_with($href, '/');
     }
 
     /**
@@ -264,7 +353,7 @@ final class AiSiteStageOneContractValidator
             }
             foreach (['field', 'sample', 'implementation_note'] as $field) {
                 $value = \trim((string)($row[$field] ?? ''));
-                if ($value === '' || ($field !== 'field' && $this->isPromptLikeText($value))) {
+                if ($value === '' || $this->isPromptLikeText($value)) {
                     $issues[] = $this->issue('instruction_like_or_empty', $path . '.field_plan.' . $index . '.' . $field, $field === 'implementation_note' ? 'medium' : 'high', [
                         'page_type' => $pageType,
                         'block_key' => $blockKey,
@@ -357,11 +446,15 @@ final class AiSiteStageOneContractValidator
         if (\mb_strlen($value) <= 2) {
             return true;
         }
-        if (\in_array(\mb_strtolower($value), ['string', 'sentence', 'text', 'copy', 'placeholder', 'todo', 'n/a'], true)) {
+        if (\in_array(\mb_strtolower($value), ['string', 'sentence', 'text', 'copy', 'content', 'details', 'item', 'placeholder', 'todo', 'n/a'], true)) {
             return true;
         }
 
-        return \preg_match('/(?:how this page obeys|explaining how|schema|placeholder|prompt|instruction|return only|write|rewrite|describe the|use this field|final visitor copy|website content locale|do not output|must include)/iu', $value) === 1;
+        if (\preg_match('/^(?:how this page obeys|explaining how|schema|placeholder|prompt|instruction|return only|final visitor copy|website content locale)$/iu', $value) === 1) {
+            return true;
+        }
+
+        return \preg_match('/^(?:write|rewrite|describe|use this field|do not output|围绕|突出|说明|完善|优化)\b/iu', $value) === 1;
     }
 
     private function hasNonEmptyValue(mixed $value): bool
@@ -402,5 +495,10 @@ final class AiSiteStageOneContractValidator
     private function contractService(): AiSiteStageOneContractService
     {
         return $this->contractService ?? new AiSiteStageOneContractService();
+    }
+
+    private function pageRouteContractService(): AiSitePageRouteContractService
+    {
+        return $this->pageRouteContractService ?? new AiSitePageRouteContractService();
     }
 }

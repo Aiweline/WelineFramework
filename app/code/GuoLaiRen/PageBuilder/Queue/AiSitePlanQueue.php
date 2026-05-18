@@ -622,7 +622,17 @@ class AiSitePlanQueue implements QueueInterface
             ? $scope['stage1_validation_report']
             : (\is_array($planJson['stage1_validation_report'] ?? null) ? $planJson['stage1_validation_report'] : []);
 
-        return $validationReport !== [] && !empty($validationReport['passed']);
+        if ($validationReport === [] || empty($validationReport['passed'])) {
+            return false;
+        }
+
+        $stageOneContract = \is_array($scope['stage1_contract'] ?? null)
+            ? $scope['stage1_contract']
+            : (\is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : []);
+        $contractHash = \trim((string)($stageOneContract['contract_hash'] ?? ''));
+        $reportContractHash = \trim((string)($validationReport['contract_hash'] ?? ''));
+
+        return $contractHash !== '' && $reportContractHash !== '' && \hash_equals($contractHash, $reportContractHash);
     }
 
     /**
@@ -797,11 +807,25 @@ class AiSitePlanQueue implements QueueInterface
             $planFailures = \is_array($scope[AiSiteBuildTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY]['plan']['items'] ?? null)
                 ? $scope[AiSiteBuildTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY]['plan']['items']
                 : [];
+            $normalizedMessage = \mb_strtolower(\trim($message));
+            $failureSource = \str_contains($normalizedMessage, 'undefined constant')
+                || \str_contains($normalizedMessage, 'undefined method')
+                || \str_contains($normalizedMessage, 'fatal error')
+                ? 'platform'
+                : (\str_contains($normalizedMessage, 'missing_page') || \str_contains($normalizedMessage, 'stage-1 plan invalid')
+                    ? 'gate_assemble'
+                    : 'plan_pipeline');
             $planFailures['stage1_plan'] = [
                 'operation' => 'plan',
                 'item_key' => 'stage1_plan',
                 'item_type' => 'stage_one_plan',
                 'retry_scope' => 'plan',
+                'failure_source' => $failureSource,
+                'failure_class' => match ($failureSource) {
+                    'platform' => '平台/代码异常（非 AI 文案问题）',
+                    'gate_assemble' => '阶段一总装配门禁未通过',
+                    default => '阶段一方案流水线失败',
+                },
                 'message' => $message,
                 'queue_id' => (int)($active['queue_id'] ?? 0),
                 'execution_token' => (string)($active['execution_token'] ?? ''),
