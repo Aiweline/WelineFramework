@@ -43,6 +43,7 @@ final class AiSiteVisualBlockContractRenderer
 
         $themeLine = $this->renderThemePaletteLine($themePalette);
         $factsLine = $this->renderMustIncludeFactsLine($brief);
+        $roleLine = $this->renderCurrentBlockRoleLine($brief);
 
         $heroNote = $hasVerifiedHeroImage
             ? "- visual.image：必须保留已验证的 <img>，类名 .pb-c-hero-img / .pb-c-img 不变，src 来自 final_url；不要替换成 background-image 或 svg。"
@@ -54,6 +55,7 @@ final class AiSiteVisualBlockContractRenderer
         $sections[] = $localeLine;
         $sections[] = $themeLine;
         $sections[] = $factsLine;
+        $sections[] = $roleLine;
         $sections[] = $heroNote;
 
         $sections[] = "\n[gate#visual_depth] 视觉层次门禁 — 需在 css_extra / html_content 中至少命中 3 条；建议同时命中 4 条以确保稳定通过：";
@@ -73,6 +75,8 @@ final class AiSiteVisualBlockContractRenderer
         $sections[] = "  6) 在 .pb-c-root 或主容器加 `overflow-x:hidden` 或 `overflow-wrap:break-word`。";
         $sections[] = "  7) 使用 `clamp(...)` / `min(...)` / `max(...)` 至少一次，做字号或间距流式缩放。";
         $sections[] = "  8) （可选加分）`@media (prefers-reduced-motion: reduce)`，把 transition / animation 关掉。";
+        $sections[] = "  9) CTA selector exception: responsive width:100% applies to containers/media/forms first. The actual CTA button should remain a recognizable button in the default layout and must not become a desktop page-width bar. Prefer .pb-c-action or .pb-c-actions for wrappers so wrapper CSS is not mistaken for button CSS.";
+        $sections[] = "  10) Typography quality: css_extra must define explicit font-family declarations for both `#componentId .pb-c-title` and one body/root selector (`#componentId .pb-c-root`, `#componentId .pb-c-copy`, or `#componentId .pb-c-text`). Each stack starts with a named brand family before generic fallback; pure system-ui/-apple-system/Segoe UI/Roboto/Arial/sans-serif alone is invalid.";
 
         $sections[] = "\n[gate#visual_assets_safe] 图片资源安全门禁：";
         $sections[] = "  - 所有 <img src> 必须来自 verified_asset_src_allowlist；不要使用 example.com、unsplash、picsum、CDN 占位或 data:image/svg+xml。";
@@ -89,6 +93,20 @@ final class AiSiteVisualBlockContractRenderer
         $sections[] = "\n[gate#content_quality] 内容洁净门禁：";
         $sections[] = "  - 严禁把 page_goal / block_goal / why_this_block / content_contract / design_contract / visual_contract / runtime_context / shared:/page:/content/ 这类元数据字符串直接渲染成可见 HTML。";
         $sections[] = "  - 严禁出现 'lorem ipsum' / 'TODO' / 'placeholder' / 'sample text' / '示例文案' / 'demo' / '占位' 等 demo 字样。";
+
+        $sections[] = "\n[gate#block_role_fidelity] Current block role gate:";
+        $sections[] = "  - task_key, section_code, block_key, page_flow_role, and block_goal are binding generation constraints. Generate only this block role; never reuse another block's headline, image, CTA, card grid, or contact-method layout to pass quickly.";
+        $sections[] = "  - FAQ/support-question roles must render explicit question-answer groups inside `.pb-c-faq-list`: each item uses `<div class='pb-c-faq-item'><div class='pb-c-question'>Question?</div><p class='pb-c-answer'>Answer.</p></div>`. Style `.pb-c-faq-item` as a visible surface with padding, border-radius, and background/border/shadow. Do not use inline strong+span markup that visually glues question?Answer. They must not render requirement/stat cards or contact method grids.";
+        $sections[] = "  - Form-guidance roles must render a real `<form class='pb-c-form'>` with visible labels and input/textarea fields; they must not render email/phone/address cards. CTA roles must render one focused next-step band. Contact-method roles must render at least two visible email/phone/address/hours channel items with `.pb-c-label`/`.pb-c-value` siblings and a distinct channel rail/console/strip; a verified image may support the atmosphere but cannot replace the channel hub.";
+        $sections[] = "  - These identifiers are not visitor copy. Use them to choose structure and content, then rewrite everything visible into final customer-facing language.";
+
+        $sections[] = "\n[gate#field_readability] Label/value readability gate:";
+        $sections[] = "  - Facts such as email, phone, address, hours, metrics, prices, support labels, and FAQ answers must have visible separation from their labels/questions with punctuation and sibling block elements such as .pb-c-label/.pb-c-value or .pb-c-question/.pb-c-answer.";
+        $sections[] = "  - Invalid visible output examples: EmailSupport, Email:support, Phone+91, Address42, HoursMonday, Android VersionRequires, Storage SpaceMinimum, PermissionsAllow, Android version required?Android, paragraph text glued directly to CTA text. Rewrite into readable sibling elements before returning JSON.";
+
+        $sections[] = "\n[gate#same_page_block_diversity] Same-page diversity gate:";
+        $sections[] = "  - Adjacent blocks on the same page must vary composition according to current_block_context.visual_signature and page_design_plan: split panel, step rail, proof band, FAQ rows, form guidance, CTA band, or media feature as appropriate.";
+        $sections[] = "  - Repeating one dark slab plus the same yellow cards/grid for unrelated roles is invalid, even if colors match the theme.";
 
         $sections[] = "\n[gate#language_consistency] 语言一致门禁：";
         $sections[] = "  - 每段可见文案（含 alt、placeholder、aria-label）必须使用 content_locale；混入其它语种文字会直接判负。";
@@ -133,6 +151,7 @@ final class AiSiteVisualBlockContractRenderer
             . "- content_locale (HARD): {$contentLocale}，所有可见文案使用该语种。\n"
             . $themeLine . "\n"
             . $brandLine . "\n"
+            . "- Footer/header text is optional and must be target-locale visitor copy. Do not copy the approved brief, source objective, source truth, or English brand summary verbatim; leave optional text empty if no target-locale sentence can be safely synthesized.\n"
             . "- 视觉简约但有质感：使用 themePalette 的中性色/强调色 + 一处微妙渐变或细边框 + 一处 box-shadow；不要重新设计页面板块。\n"
             . "- 不要输出图片标签；logo 由框架配置渲染。\n"
             . "- 不要使用元数据字符串、demo 文案、占位词；不要复刻其它区块的卡片结构。\n";
@@ -158,6 +177,50 @@ final class AiSiteVisualBlockContractRenderer
         }
 
         return "- theme_palette (HARD)：必须在 css_extra 中至少使用以下 ≥2 个 hex token —— " . \implode(' / ', \array_slice($hexes, 0, 8));
+    }
+
+    private function renderCurrentBlockRoleLine(array $brief): string
+    {
+        $parts = [];
+        foreach ([
+            'task_key',
+            'section_code',
+            'block_key',
+            'page_type',
+            'page_flow_role',
+            'role_fidelity_hint',
+            'block_goal',
+            'stage1_block_content',
+        ] as $key) {
+            $value = $brief[$key] ?? null;
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $value = $this->compactPromptValue((string)$value);
+            if ($value !== '') {
+                $parts[] = $key . '=' . $value;
+            }
+        }
+
+        if ($parts === []) {
+            return "- current_block_role (HARD): no explicit task identifiers were supplied; use page_goal, block_goal, and must_include_facts only. Do not reuse another block's structure or copy.";
+        }
+
+        return "- current_block_role (HARD): " . \implode(' / ', \array_slice($parts, 0, 8)) . ". Treat these as generation constraints, not visitor-visible copy.";
+    }
+
+    private function compactPromptValue(string $value): string
+    {
+        $value = \trim((string)\preg_replace('/\s+/u', ' ', $value));
+        if ($value === '') {
+            return '';
+        }
+
+        if (\function_exists('mb_strlen') && \function_exists('mb_substr')) {
+            return \mb_strlen($value) > 120 ? \mb_substr($value, 0, 117) . '...' : $value;
+        }
+
+        return \strlen($value) > 120 ? \substr($value, 0, 117) . '...' : $value;
     }
 
     private function renderMustIncludeFactsLine(array $brief): string

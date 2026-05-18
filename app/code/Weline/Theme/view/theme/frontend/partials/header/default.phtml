@@ -384,12 +384,12 @@ $defaultNavItemsFactory = static function (): array {
                                 <w:hook>header-account-links<else/>
                                     <li role="none"><a href="/account/login" role="menuitem"><i class="fas fa-user" aria-hidden="true"></i> <lang>账户及心愿单</lang></a></li>
                                     <li role="none"><a href="/account/dashboard" role="menuitem"><i class="fas fa-tachometer-alt" aria-hidden="true"></i> <lang>账户</lang></a></li>
-                                    <li role="none"><a href="/account/orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
+                                    <li role="none"><a href="/customer/account/index#orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
                                     <li role="none"><a href="/account/settings" role="menuitem"><i class="fas fa-cog" aria-hidden="true"></i> <lang>账户设置</lang></a></li>
                                     <li role="none"><a href="/account/logout" role="menuitem"><i class="fas fa-sign-out-alt" aria-hidden="true"></i> <lang>退出登录</lang></a></li>
                                 </w:hook>
                             <?php else: ?>
-                                <li role="none"><a href="/account/orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
+                                <li role="none"><a href="/customer/account/index#orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
                             <?php endif; ?>
                             <!-- 语言和货币切换（移动端也放到下拉菜单中） -->
                             <li role="none" class="my-menu-divider"></li>
@@ -551,7 +551,7 @@ $defaultNavItemsFactory = static function (): array {
                             <ul>
                                 <w:hook>header-account-links<else/>
                                     <li role="none"><a href="/account/dashboard" role="menuitem"><lang>账户</lang></a></li>
-                                    <li role="none"><a href="/account/orders" role="menuitem"><lang>我的订单</lang></a></li>
+                                    <li role="none"><a href="/customer/account/index#orders" role="menuitem"><lang>我的订单</lang></a></li>
                                     <li role="none"><a href="/account/settings" role="menuitem"><lang>账户设置</lang></a></li>
                                     <li role="none"><a href="/account/logout" role="menuitem"><lang>退出登录</lang></a></li>
                                 </w:hook>
@@ -563,7 +563,7 @@ $defaultNavItemsFactory = static function (): array {
                 <!-- 订单 Hook -->
                 <div class="header-action-item">
                     <w:hook>header-orders<else/>
-                        <a href="/account/orders" class="action-link" title="<lang>我的订单</lang>">
+                        <a href="/customer/account/index#orders" class="action-link" title="<lang>我的订单</lang>">
                             <span class="action-line-1"><lang>退货</lang></span>
                             <span class="action-line-2"><lang>与我的订单</lang></span>
                         </a>

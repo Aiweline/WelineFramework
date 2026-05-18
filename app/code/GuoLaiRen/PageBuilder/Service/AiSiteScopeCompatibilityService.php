@@ -79,6 +79,15 @@ class AiSiteScopeCompatibilityService
         if (!\is_array($normalized['website_profile'] ?? null)) {
             $normalized['website_profile'] = [];
         }
+        $routeContractRaw = \is_array($scope['page_route_contract'] ?? null)
+            ? $scope['page_route_contract']
+            : (\is_array($scope['stage1_contract']['page_route_contract'] ?? null) ? $scope['stage1_contract']['page_route_contract'] : []);
+        $normalized['page_route_contract'] = $this->getPageRouteContractService()->normalize(
+            $routeContractRaw,
+            $normalized['page_types'],
+            $normalized,
+            $this->resolveContentLocale($normalized, $normalized['website_profile'])
+        );
 
         $normalized['workspace_track'] = $this->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         $normalized['extra_page_types_panel_open'] = ((int)($scope['extra_page_types_panel_open'] ?? 0) === 1) ? 1 : 0;
@@ -607,6 +616,15 @@ class AiSiteScopeCompatibilityService
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $siteTitle = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''));
         $contentLocale = $this->resolveContentLocale($scope, $websiteProfile);
+        $pageRouteContract = $this->getPageRouteContractService()->normalize(
+            \is_array($scope['page_route_contract'] ?? null)
+                ? $scope['page_route_contract']
+                : (\is_array($scope['stage1_contract']['page_route_contract'] ?? null) ? $scope['stage1_contract']['page_route_contract'] : []),
+            $pageTypes,
+            \array_replace($scope, ['website_profile' => $websiteProfile]),
+            $contentLocale
+        );
+        $routesByType = $this->getPageRouteContractService()->routesByType($pageRouteContract);
         $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
 
         foreach ($pageTypes as $pageType) {
@@ -622,6 +640,10 @@ class AiSiteScopeCompatibilityService
             }
             if (\trim((string)($record['handle'] ?? '')) === '') {
                 $record['handle'] = Page::getDefaultHandleForType($pageType);
+            }
+            if (\is_array($routesByType[$pageType] ?? null)) {
+                $record['handle'] = (string)($routesByType[$pageType]['handle'] ?? $record['handle']);
+                $record['route_path'] = (string)($routesByType[$pageType]['path'] ?? '');
             }
             if (\trim((string)($record['locale'] ?? '')) === '') {
                 $record['locale'] = (string)($websiteProfile['default_locale'] ?? 'en_US');
@@ -649,6 +671,11 @@ class AiSiteScopeCompatibilityService
         }
 
         return $existing;
+    }
+
+    private function getPageRouteContractService(): AiSitePageRouteContractService
+    {
+        return ObjectManager::getInstance(AiSitePageRouteContractService::class);
     }
 
     /**

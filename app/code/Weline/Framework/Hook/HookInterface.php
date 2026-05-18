@@ -122,7 +122,8 @@ interface HookInterface
     /** 登录页第三方登录入口扩展 */
     const CUSTOMER_FRONTEND_ACCOUNT_LOGIN_PROVIDERS = 'Weline_Customer::frontend::account::login::providers';
     /** 账户首页「我的订单」分区注入 */
-    const CUSTOMER_FRONTEND_ACCOUNT_INDEX_ORDERS = 'Weline_Customer::frontend::account::index::orders';
+    const ORDER_FRONTEND_ACCOUNT_INDEX_ORDERS = 'Weline_Order::frontend::account::index::orders';
+    const CUSTOMER_FRONTEND_ACCOUNT_INDEX_ORDERS = self::ORDER_FRONTEND_ACCOUNT_INDEX_ORDERS;
     /** 账户首页「订阅」分区注入 */
     const CUSTOMER_FRONTEND_ACCOUNT_INDEX_SUBSCRIPTIONS = 'Weline_Customer::frontend::account::index::subscriptions';
 

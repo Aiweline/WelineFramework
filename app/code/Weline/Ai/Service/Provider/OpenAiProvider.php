@@ -1096,13 +1096,16 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      */
     private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout): \CurlHandle|false
     {
+        $payload = $this->encodeJsonRequestPayload($data);
         $ch = curl_init($url);
         
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
+            'Accept: application/json',
+            'Content-Length: ' . strlen($payload),
             'Authorization: Bearer ' . $apiKey,
         ]);
         // 根据模型配置设置超时（秒）；0 表示不限制
@@ -1145,6 +1148,19 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         return $ch;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function encodeJsonRequestPayload(array $data): string
+    {
+        $payload = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (!is_string($payload) || $payload === '') {
+            throw new Exception('AI API request payload JSON encode failed: ' . json_last_error_msg());
+        }
+
+        return $payload;
     }
 
     private function applyExecutionTimeLimit(int $timeout): void

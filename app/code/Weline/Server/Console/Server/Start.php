@@ -348,7 +348,9 @@ class Start extends CommandAbstract
         }
         
         // 检查是否强制重启（-r）及是否强制直接切换（-f：不等待 worker 空闲，直接停再启）
-        $forceRestart = isset($args['r']) || isset($args['restart']) || isset($args['force']);
+        // 仅承认帮助文档明示的开关 -r / --restart；--force 未文档化，过去会隐式触发 -r 平滑路径，
+        // 容易让用户在毫不知情下进入"停旧实例 + 等空闲"分支，移除以减少认知裂缝。
+        $forceRestart = isset($args['r']) || isset($args['restart']);
         $forceSwitch = isset($args['f']); // -f：直接切换，不进入平滑重启（不开维护模式、不等待）
         $mainStop = ObjectManager::getInstance(MainStop::class);
         $occupantWls = $mainStop->findWelineServerInstanceNameByPort($port);
@@ -435,6 +437,15 @@ class Start extends CommandAbstract
                         break;
                     }
                 }
+                // 端口仍被占用时不能盲目继续：直接拉起新实例会被后续 checkAndReleasePort 报错返回，
+                // 期间却已经把旧 Master 杀掉，再让维护态被 finalize 清掉，会造成裸 RST。
+                // 这里立刻拉起维护态再退出，把流量稳在 503 友好态，让用户手动处理端口占用。
+                if (Processer::isPortInUse($port)) {
+                    $this->printer->error(__('-r -f 强制切换后主端口 %{1} 在 %{2}ms 内仍未释放，已中止启动以避免裸 RST。', [$port, $maxWaitMs]));
+                    $this->printer->note(__('已开启维护模式保护流量，请人工排查端口占用后再启动；可执行 php bin/w server:kill-port %{1} --info 查看占用进程。', [$port]));
+                    $this->enableMaintenanceMode($instanceName);
+                    return;
+                }
             } else {
                 $this->printer->warning(__('检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...'));
                 $this->enableMaintenanceMode($instanceName);
@@ -443,7 +454,7 @@ class Start extends CommandAbstract
                 // 通过健康检查接口智能等待
                 $maxWait = (int) ($args['wait'] ?? 30);
                 $maxWait = $maxWait > 0 ? $maxWait : 30;
-                $waited = $this->waitForIdleWorkers($host, $port, $count, $maxWait, $sslEnabled ?? false);
+                $waited = $this->waitForIdleWorkers($host, $port, $count, $maxWait, $sslEnabled ?? false, $instanceName);
                 
                 if ($waited) {
                     $this->printer->success(__('所有 Worker 已空闲，开始切换...'));
@@ -875,8 +886,6 @@ class Start extends CommandAbstract
         
             // 创建 Worker 脚本路径（Dispatcher 模式下使用非 SSL 脚本）
             wls_http_redirect_conflict_done:
-            $workerScript = $this->ensureWorkerScript($workerSslEnabled);
-        
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
             $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($windowMode);
@@ -889,9 +898,7 @@ class Start extends CommandAbstract
         }
         
         // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
-        $this->saveInstanceConfig($instanceName, $args, $config);
-        
-        // 将实际的 host/port/https 同步到 env.php，供 http:req 等 CLI 工具读取
+        // 同时将实际的 host/port/https 同步到 env.php，供 http:req 等 CLI 工具读取
         $this->saveInstanceConfig($instanceName, $args, $config);
         $this->syncServerConfigToEnv($host, $port, $sslEnabled);
         
@@ -904,15 +911,9 @@ class Start extends CommandAbstract
         $this->startHotReloadIfEnabled($config, $instanceName);
         // ========== 热重载结束 ==========
         
-        // 平滑重启时由我们开启的维护模式，启动完成后关闭
-        if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
-            $this->disableMaintenanceMode($instanceName);
-            if (!empty($maintenanceResetAfterForceSwitch) && empty($maintenanceEnabledByUs)) {
-                $this->printer->success(__('已清理残留维护态，恢复业务流量模式。'));
-            } else {
-                $this->printer->success(__('维护模式已关闭。'));
-            }
-        }
+        // 注意：平滑重启 / -r -f 引入的维护态不在此处提前关闭。
+        // 旧 Master 已死、新 Master 尚未起来期间若提前关维护态，会出现"半裸 RST"空窗。
+        // 改为在 daemon 分支拿到 startMasterInBackground=true 后、或前台分支 runMasterProcess 即将占用端口前再关闭。
         
         // ========== Master 进程负责启动所有进程 ==========
         // Master 统一管理：Dispatcher、Worker、HTTP Redirect
@@ -933,6 +934,13 @@ class Start extends CommandAbstract
             $this->wlsStartupProcessHandoffDone = true;
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
+            // 关闭由本次启动流程引入的维护态：仅在新 Master 全部就绪后才关，避免空窗。
+            $this->finalizeMaintenanceModeAfterStartup(
+                $instanceName,
+                $maintenanceEnabledByUs,
+                $maintenanceResetAfterForceSwitch,
+                $startupCompleted
+            );
             $this->finalizeBackgroundStartupOutput(
                 $startupCompleted,
                 $instanceName,
@@ -964,9 +972,46 @@ class Start extends CommandAbstract
         $config['host'] = $listenHost;
         $this->warnWindowsLocalDomainProxyRisk((string)$config['public_host']);
 
+        // 前台模式：runMasterProcess 即将同步占用端口，此时关闭维护态空窗最短（亚秒级）。
+        // 视为"成功路径"清理；若 runMasterProcess 后续抛错，PHP 进程退出由系统兜底。
+        $this->finalizeMaintenanceModeAfterStartup(
+            $instanceName,
+            $maintenanceEnabledByUs,
+            $maintenanceResetAfterForceSwitch,
+            true
+        );
+
         // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
         $this->wlsChildProcessesMayExist = true;
         $this->runMasterProcess($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $windowMode);
+    }
+
+    /**
+     * 启动流程结束后统一关闭"由本次启动引入"的维护态，避免提前关导致空窗期裸 RST。
+     *
+     * - $maintenanceEnabledByUs：本次启动主动开启的维护态（-r 平滑路径）
+     * - $maintenanceResetAfterForceSwitch：-r -f 停机型切换时残留维护态的兜底清理
+     * - $startupCompleted=false：保持维护态，让流量继续走 503 友好态而非裸 RST
+     */
+    protected function finalizeMaintenanceModeAfterStartup(
+        string $instanceName,
+        bool $maintenanceEnabledByUs,
+        bool $maintenanceResetAfterForceSwitch,
+        bool $startupCompleted
+    ): void {
+        if (!$maintenanceEnabledByUs && !$maintenanceResetAfterForceSwitch) {
+            return;
+        }
+        if (!$startupCompleted) {
+            $this->printer->warning(__('新 Master 未在预期时间内就绪，维护态保留以避免裸 RST；待 server:status 显示就绪后请手动执行 php bin/w sys:maintenance off。'));
+            return;
+        }
+        $this->disableMaintenanceMode($instanceName);
+        if ($maintenanceResetAfterForceSwitch && !$maintenanceEnabledByUs) {
+            $this->printer->success(__('已清理残留维护态，恢复业务流量模式。'));
+        } else {
+            $this->printer->success(__('维护模式已关闭。'));
+        }
     }
 
     /**
@@ -1406,14 +1451,19 @@ class Start extends CommandAbstract
         $instanceFile = $this->getRuntimeInstanceFile($instanceName);
         $maxWaitMs = $this->resolveBackgroundMasterConfirmWaitMs($spawnedMasterPid);
         $waitStepMs = 200;      // 每 200ms 检查一次
+        $hardWaitMs = $this->resolveBackgroundMasterControlHardWaitMs($spawnedMasterPid);
         $waited = 0;
         $masterStarted = false;
         $startupCompleted = false;
         $lastMasterPid = 0;
         $lastControlPort = 0;
         $lastStartupPhase = '';
+        $readyResult = null;
         
-        while ($waited < $maxWaitMs) {
+        // 阶段 A：等待 master_pid + control_port 写入实例文件
+        // 超过软超时（$maxWaitMs）后，仅当我们拉起的 Master 仍存活时才继续延展到硬超时（$hardWaitMs），
+        // 否则视为启动失败，跳出循环走失败诊断；避免在 8 秒边界把"慢启动"误判为"已挂"。
+        while ($waited < $hardWaitMs) {
             SchedulerSystem::usleep($waitStepMs * 1000);
             $waited += $waitStepMs;
             
@@ -1439,6 +1489,18 @@ class Start extends CommandAbstract
                             }
                         }
                     }
+                }
+            }
+
+            // 软超时后做一次"我们拉起的 Master 是否还活着"的校验
+            if ($waited >= $maxWaitMs) {
+                if ($spawnedMasterPid > 0 && !$this->isSpawnedBackgroundMasterAlive($spawnedMasterPid)) {
+                    // 我们拉起的 Master 已死，没必要继续等到硬超时
+                    break;
+                }
+                if ($spawnedMasterPid <= 0) {
+                    // 没拿到 Spawn PID（非 Windows 路径或 PowerShell 回退）：用软超时为准
+                    break;
                 }
             }
         }
@@ -1606,13 +1668,37 @@ class Start extends CommandAbstract
         return $spawnedMasterPid > 0 ? 8000 : 5000;
     }
 
+    /**
+     * 控制面确认的硬超时：在软超时（resolveBackgroundMasterConfirmWaitMs）到达后，
+     * 若我们拉起的 Master 仍然存活，最多继续等待到这个上限。
+     * 超时仍未拿到 master_pid+control_port → 走启动失败诊断。
+     */
+    protected function resolveBackgroundMasterControlHardWaitMs(int $spawnedMasterPid = 0): int
+    {
+        $configuredSec = (float) ($this->getEnvironmentValue('wls.orchestrator.background_master_control_hard_wait_sec', 0.0) ?? 0.0);
+        if ($configuredSec > 0.0) {
+            return (int) \round(\max(0.5, \min(120.0, $configuredSec)) * 1000);
+        }
+        $softMs = $this->resolveBackgroundMasterConfirmWaitMs($spawnedMasterPid);
+        // 硬超时默认为软超时的 4 倍，封顶 60 秒；
+        // 覆盖 Windows + HTTPS + 共享 Session/Memory + 多 Worker 的首启 opcache 冷启动场景。
+        return (int) \min(60000, \max($softMs, $softMs * 4));
+    }
+
     protected function isSpawnedBackgroundMasterAlive(int $pid): bool
     {
-        // createWindowsDetachedPhpArgv() only returns a positive PID after Windows
-        // Start-Process accepted the detached Master. Do not run processExists()
-        // here: on Windows it may trigger a slow tasklist/WMI pass and reintroduce
-        // the exact startup delay this fast handoff path avoids.
-        return $pid > 0;
+        if ($pid <= 0) {
+            return false;
+        }
+        // 早先版本因担心 Windows tasklist 慢而直接 return $pid > 0，
+        // 导致 Master 启动崩溃时仍打印"后台 Master 进程已创建"的乐观假成功。
+        // 这里改为真正调用 processExists()：成本远小于一次启动失败误报。
+        try {
+            return Processer::processExists($pid);
+        } catch (\Throwable $e) {
+            // 探测异常按"未知"处理：不阻断后续诊断输出，但不做乐观判定。
+            return false;
+        }
     }
 
     protected function resolveBackgroundStartupReadyWaitMs(array $instanceData = []): int
@@ -1647,8 +1733,26 @@ class Start extends CommandAbstract
             return (int) \round(\max(5.0, \min(180.0, $timeoutSec)) * 1000);
         }
 
-        // 默认兜底改为 15 秒，减少 Linux 冷启动/慢机场景下的误报。
-        return 15000;
+        // 默认软超时：按并发子服务规模估算（与 Orchestrator 批量拉起对齐），避免固定 15s 在 8 进程栈上偏紧。
+        $workerCount = \max(1, (int) ($instanceData['count'] ?? $instanceData['worker_count'] ?? 1));
+        $dispatcherEnabled = (bool) ($instanceData['dispatcher_enabled'] ?? false);
+        $sslEnabled = (bool) ($instanceData['ssl_enabled'] ?? false);
+        $sharedState = $instanceData['shared_state'] ?? [];
+        $sharedServiceCount = 0;
+        if (\is_array($sharedState)) {
+            foreach (['session', 'memory'] as $sharedRole) {
+                if (!empty($sharedState[$sharedRole])) {
+                    $sharedServiceCount++;
+                }
+            }
+        }
+        $softSec = 12.0
+            + \max(0, $workerCount - 1) * 2.5
+            + ($dispatcherEnabled ? 4.0 : 0.0)
+            + ($sslEnabled ? 3.0 : 0.0)
+            + $sharedServiceCount * 2.0;
+
+        return (int) \round(\max(15.0, \min(90.0, $softSec)) * 1000);
     }
 
     protected function resolveBackgroundStartupReadyHardWaitMs(array $instanceData = []): int
@@ -1659,21 +1763,24 @@ class Start extends CommandAbstract
         }
 
         $idleWaitMs = $this->resolveBackgroundStartupReadyWaitMs($instanceData);
+        $idleWaitSec = \max(1.0, $idleWaitMs / 1000.0);
         $workerCount = \max(1, (int) ($instanceData['count'] ?? $instanceData['worker_count'] ?? 1));
         $configuredReadySec = (float) ($this->getEnvironmentValue('wls.orchestrator.background_ready_wait_sec', 0.0) ?? 0.0);
         $configuredStartupSec = (float) ($this->getEnvironmentValue('wls.orchestrator.startup_timeout_sec', 0.0) ?? 0.0);
         if ($configuredReadySec <= 0.0 && $configuredStartupSec <= 0.0) {
-            $hardWaitSec = \max(3.0, \min(8.0, \ceil($idleWaitMs / 1000) * 2.0));
+            // 硬超时必须 >= 软超时；并发启动时子进程 READY 可能长时间停在同一 phase，
+            // 仅靠「有进展则续期」不够，需要绝对上限覆盖整批子服务拉起。
+            $hardWaitSec = \max($idleWaitSec * 2.5, 30.0 + \max(0, $workerCount - 1) * 4.0);
 
-            return (int) \round($hardWaitSec * 1000);
+            return (int) \round(\min(180.0, $hardWaitSec) * 1000);
         }
 
         $hardWaitSec = \max(
             90.0 + \max(0, $workerCount - 1) * 15.0,
-            \ceil($idleWaitMs / 1000) * 2.0
+            $idleWaitSec * 2.0
         );
 
-        return (int) \round(\max(30.0, \min(600.0, $hardWaitSec)) * 1000);
+        return (int) \round(\max($idleWaitSec, \min(600.0, $hardWaitSec)) * 1000);
     }
 
     protected function getEnvironmentValue(string $path, mixed $default = null): mixed
@@ -1790,7 +1897,10 @@ class Start extends CommandAbstract
             : \max($maxWaitMs, $hardMaxWaitMs);
         $waited = 0;
         $lastData = $this->readBackgroundStartupData($instanceFile);
-        $progressDeadlineMs = \min($hardMaxWaitMs, $maxWaitMs);
+        // 无进展时的首轮截止：应为软超时 maxWaitMs，而非 min(hard, max)。
+        // 旧逻辑在默认 hard=8s、max=15s 时 8 秒就判失败，与"默认等 15 秒"矛盾，
+        // 并发启动（8 个子进程批量 READY）时尤其容易误报超时。
+        $progressDeadlineMs = $maxWaitMs;
         $lastProgressToken = $this->buildBackgroundStartupProgressToken($lastData);
         $lastProgress = $this->formatBackgroundStartupProgress($lastData, $waited);
 
@@ -2433,6 +2543,71 @@ class Start extends CommandAbstract
         Env::getInstance()->setConfig('system.maintenance', $enabled);
     }
 
+    /**
+     * 从实例文件读取真实 Worker 监听端口列表，用于平滑重启时的健康检查。
+     * - Dispatcher 模式：Worker 监听内网端口（worker_ports），与主端口不同。
+     * - 直连模式 / SO_REUSEPORT：所有 Worker 共用主端口。
+     * - 实例文件缺失或字段缺失：回退到旧算法 port+i 兜底。
+     *
+     * @return array<int, int>
+     */
+    protected function resolveExistingInstanceWorkerPorts(?string $instanceName, int $port, int $workerCount): array
+    {
+        if ($instanceName !== null && $instanceName !== '') {
+            try {
+                $info = $this->getInstanceManager()->getInstanceInfo($instanceName, false);
+            } catch (\Throwable $e) {
+                $info = null;
+            }
+            if (\is_array($info)) {
+                $workerPorts = $info['worker_ports'] ?? null;
+                if (\is_array($workerPorts) && $workerPorts !== []) {
+                    $normalized = [];
+                    foreach ($workerPorts as $p) {
+                        $intPort = (int) $p;
+                        if ($intPort > 0) {
+                            $normalized[] = $intPort;
+                        }
+                    }
+                    if ($normalized !== []) {
+                        return \array_values(\array_unique($normalized));
+                    }
+                }
+                $workerPort = (int) ($info['worker_port'] ?? 0);
+                $dispatcherEnabled = (bool) ($info['dispatcher_enabled'] ?? false);
+                if ($workerPort > 0 && $dispatcherEnabled) {
+                    return \range($workerPort, $workerPort + \max(1, $workerCount) - 1);
+                }
+            }
+        }
+        // 兜底：保留旧 port+i 算法
+        return \range($port, $port + \max(1, $workerCount) - 1);
+    }
+
+    /**
+     * 读取旧实例的 Worker 是否启用 SSL。Dispatcher 模式下 Worker 本身使用 HTTP（SSL 在 Dispatcher 卸载），
+     * 因此即使主端口为 HTTPS，对 Worker 健康检查也要走 HTTP，否则握手失败拿不到 health 数据。
+     */
+    protected function resolveExistingInstanceWorkerSslEnabled(?string $instanceName, bool $sslEnabledFallback): bool
+    {
+        if ($instanceName !== null && $instanceName !== '') {
+            try {
+                $info = $this->getInstanceManager()->getInstanceInfo($instanceName, false);
+            } catch (\Throwable $e) {
+                $info = null;
+            }
+            if (\is_array($info)) {
+                $dispatcherEnabled = (bool) ($info['dispatcher_enabled'] ?? false);
+                if ($dispatcherEnabled) {
+                    // Dispatcher 模式下 Worker 端走 HTTP
+                    return false;
+                }
+                return (bool) ($info['ssl_enabled'] ?? $sslEnabledFallback);
+            }
+        }
+        return $sslEnabledFallback;
+    }
+
     protected function syncWlsMaintenanceMode(?string $instanceName, bool $enabled): void
     {
         try {
@@ -2463,14 +2638,20 @@ class Start extends CommandAbstract
      * @param int $workerCount Worker 数量
      * @param int $maxWait 最大等待秒数
      * @param bool $sslEnabled 是否 HTTPS
+     * @param string|null $instanceName 实例名，用于读取真实 Worker 端口列表
      * @return bool 是否成功等待到空闲
      */
-    protected function waitForIdleWorkers(string $host, int $port, int $workerCount, int $maxWait, bool $sslEnabled = false): bool
+    protected function waitForIdleWorkers(string $host, int $port, int $workerCount, int $maxWait, bool $sslEnabled = false, ?string $instanceName = null): bool
     {
         $startTime = \time();
         $checkInterval = 500000; // 500ms
         $scheme = $sslEnabled ? 'https' : 'http';
         $healthUrl = "/_wls/health";
+
+        // 旧实例的 Worker 真实监听端口（Dispatcher 模式与主端口不同）从实例文件读取。
+        // 读取失败 / 字段缺失时回退到旧的 port+i 算法，至少不退化。
+        $workerPorts = $this->resolveExistingInstanceWorkerPorts($instanceName, $port, $workerCount);
+        $workerSslEnabled = $this->resolveExistingInstanceWorkerSslEnabled($instanceName, $sslEnabled);
         
         $this->printer->note(__('正在检测 Worker 状态（最长等待 %{1} 秒）...', [$maxWait]));
         
@@ -2481,9 +2662,11 @@ class Start extends CommandAbstract
             $healthyWorkers = 0;
             
             // 检查所有 Worker 端口的健康状态
-            for ($i = 0; $i < $workerCount; $i++) {
-                $workerPort = $port + $i;
-                $health = $this->checkWorkerHealth($host, $workerPort, $sslEnabled);
+            foreach ($workerPorts as $workerPort) {
+                if ($workerPort <= 0) {
+                    continue;
+                }
+                $health = $this->checkWorkerHealth($host, $workerPort, $workerSslEnabled);
                 
                 if ($health !== null) {
                     $healthyWorkers++;

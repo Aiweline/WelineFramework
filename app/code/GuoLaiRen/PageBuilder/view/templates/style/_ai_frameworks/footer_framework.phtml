@@ -25,13 +25,15 @@
  * group:brand => 品牌信息
  * brand.logo => Logo图片:textarea:|留空使用文字
  * brand.name => 品牌名称:text:Brand Name
- * brand.description => 品牌描述:textarea:A curated destination with clear information, trusted support, and simple next steps.
+ * brand.description => 品牌描述:textarea:
  * 
  * group:links => 链接设置
  * links.column1_title => 第一列标题:text:Quick Links
  * links.column1_items => 第一列链接:textarea:Home=>/\nAbout=>/about\nServices=>/services\nContact=>/contact|格式：名称=>链接
  * links.column2_title => 第二列标题:text:Legal
  * links.column2_items => 第二列链接:textarea:Privacy Policy=>/privacy\nTerms of Service=>/terms|格式：名称=>链接
+ * links.column3_title => 第三列标题:text:All Pages
+ * links.column3_items => 第三列链接:textarea:Blog=>/blog\nContact=>/contact|格式：名称=>链接
  * 
  * group:social => 社交媒体
  * social.show => 显示社交图标:select:yes|yes,no
@@ -105,13 +107,15 @@ $normalizeBrandLogo = function($value) {
 };
 $brandLogo = $normalizeBrandLogo($brandLogo) ?: $normalizeBrandLogo($fallbackBrandLogo);
 $brandName = $getConfig('brand.name', 'Brand Name');
-$brandDesc = $getConfig('brand.description', 'A curated destination with clear information, trusted support, and simple next steps.');
+$brandDesc = $getConfig('brand.description', '');
 
 // 链接配置
 $col1Title = $getConfig('links.column1_title', 'Quick Links');
 $col1Items = $parseLinks($getConfig('links.column1_items', "Home=>/\nAbout=>/about\nServices=>/services\nContact=>/contact"));
 $col2Title = $getConfig('links.column2_title', 'Legal');
 $col2Items = $parseLinks($getConfig('links.column2_items', "Privacy Policy=>/privacy\nTerms of Service=>/terms"));
+$col3Title = $getConfig('links.column3_title', 'All Pages');
+$col3Items = $parseLinks($getConfig('links.column3_items', ''));
 
 // 社交媒体配置
 $showSocial = $getConfig('social.show', 'yes') !== 'no';
@@ -385,7 +389,18 @@ try {
                 </ul>
             </div>
             <?php endif; ?>
-            
+
+            <?php if (!empty($col3Items)): ?>
+            <div class="<?= $cls ?>-column">
+                <h4><?= htmlspecialchars($col3Title) ?></h4>
+                <ul class="<?= $cls ?>-links">
+                    <?php foreach ($col3Items as $item): ?>
+                    <li><a href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+             
             {{HTML_EXTRA_COLUMN}}
         </div>
         

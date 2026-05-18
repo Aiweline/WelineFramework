@@ -167,18 +167,20 @@ class OrderService
         }
         
         // 派遣订单取消前事件
-        $this->eventsManager->dispatch('Weline_Checkout::order::cancel::before', [
+        $beforeEventData = [
             'order_id' => $orderId,
             'order' => $order,
-        ]);
+        ];
+        $this->eventsManager->dispatch('Weline_Checkout::order::cancel::before', $beforeEventData);
         
         $result = $this->updateOrderStatus($orderId, Order::STATUS_CANCELLED);
         
         // 派遣订单取消后事件
-        $this->eventsManager->dispatch('Weline_Checkout::order::cancel::after', [
+        $afterEventData = [
             'order_id' => $orderId,
             'order' => $order,
-        ]);
+        ];
+        $this->eventsManager->dispatch('Weline_Checkout::order::cancel::after', $afterEventData);
         
         return $result;
     }

@@ -248,7 +248,66 @@ class AiSiteAgentSessionArtifactService
 
     private function compactArtifactPayloadForStorage(string $artifactKey, mixed $value): mixed
     {
+        if ($artifactKey === 'build_blueprint' && \is_array($value)) {
+            return $this->compactBuildBlueprintPayload($value);
+        }
+
         return $value;
+    }
+
+    /**
+     * @param array<string, mixed> $blueprint
+     * @return array<string, mixed>
+     */
+    private function compactBuildBlueprintPayload(array $blueprint): array
+    {
+        if (\is_array($blueprint['tasks'] ?? null)) {
+            foreach ($blueprint['tasks'] as $idx => $task) {
+                if (\is_array($task)) {
+                    $blueprint['tasks'][$idx] = $this->compactBuildBlueprintTask($task);
+                }
+            }
+        }
+
+        return $blueprint;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @return array<string, mixed>
+     */
+    private function compactBuildBlueprintTask(array $task): array
+    {
+        if (!\is_array($task['runtime_context'] ?? null)) {
+            return $task;
+        }
+
+        $runtimeContext = $task['runtime_context'];
+        if (\is_array($runtimeContext['asset_context'] ?? null)) {
+            $runtimeContext['asset_context'] = $this->summarizeArtifactAssetContext($runtimeContext['asset_context']);
+        }
+
+        $task['runtime_context'] = $runtimeContext;
+
+        return $task;
+    }
+
+    /**
+     * @param array<string, mixed> $assetContext
+     * @return array<string, mixed>
+     */
+    private function summarizeArtifactAssetContext(array $assetContext): array
+    {
+        $manifest = \is_array($assetContext['asset_manifest'] ?? null) ? $assetContext['asset_manifest'] : [];
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        $verifiedAssets = \is_array($assetContext['verified_assets'] ?? null) ? $assetContext['verified_assets'] : [];
+
+        return [
+            'asset_context_ref' => 'scope.asset_manifest',
+            'asset_manifest_hash' => \sha1($this->encodeValueDocument($manifest)),
+            'slot_count' => \count($slots),
+            'verified_asset_count' => \count($verifiedAssets),
+        ];
     }
 
     /**

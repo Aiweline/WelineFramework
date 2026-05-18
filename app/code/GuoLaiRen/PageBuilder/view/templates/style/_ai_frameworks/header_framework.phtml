@@ -153,6 +153,12 @@ $currentPagePath = match ($currentPageType) {
     'about_page', 'about' => 'about',
     'contact_page', 'contact' => 'contact',
     'blog_list', 'blog_category', 'blog' => 'blog',
+    'privacy_policy', 'privacy' => 'privacy',
+    'terms_of_service', 'terms' => 'terms',
+    'refund_policy', 'refund' => 'refund',
+    'shipping_policy', 'shipping' => 'shipping',
+    'cookie_policy', 'cookies' => 'cookies',
+    'custom_page', 'page' => 'page',
     default => $currentPath,
 };
 $isNavItemActive = function($href, $index) use ($normalizeNavPath, $currentPagePath, $currentPath) {

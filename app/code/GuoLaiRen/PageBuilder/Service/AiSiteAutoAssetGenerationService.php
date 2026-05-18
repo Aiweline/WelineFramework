@@ -87,6 +87,8 @@ class AiSiteAutoAssetGenerationService
                 if ($bytes === '') {
                     throw new \RuntimeException('Image generation returned empty image bytes.');
                 }
+                $generatedModel = (string)($result['model'] ?? '');
+                $revisedPrompt = (string)($image['revised_prompt'] ?? '');
 
                 $relativePath = $this->buildTargetPath($scope, $session, $slotId, $bytes, $mimeType);
                 $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
@@ -97,6 +99,7 @@ class AiSiteAutoAssetGenerationService
                 if (\file_put_contents($absolutePath, $bytes) === false) {
                     throw new \RuntimeException('Failed to write image asset file: ' . $absolutePath);
                 }
+                unset($bytes, $image, $result);
 
                 $finalUrl = '/' . \str_replace('\\', '/', $relativePath);
                 $variant = [
@@ -104,8 +107,8 @@ class AiSiteAutoAssetGenerationService
                     'mime_type' => $mimeType,
                     'path' => $relativePath,
                     'mode' => 'auto_build',
-                    'model' => (string)($result['model'] ?? ''),
-                    'revised_prompt' => (string)($image['revised_prompt'] ?? ''),
+                    'model' => $generatedModel,
+                    'revised_prompt' => $revisedPrompt,
                 ];
                 $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
                 $scope = $this->manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
@@ -115,6 +118,7 @@ class AiSiteAutoAssetGenerationService
                 $scope = $this->clearAssetImageGenerationFailureForSlot($scope, $slotId);
                 $generatedSlots[] = $slotId;
             } catch (\Throwable $throwable) {
+                unset($bytes, $image, $result);
                 $manifest = $this->manifestService->recordError($manifest, $slotId, $throwable->getMessage());
                 $scope['asset_manifest'] = $manifest;
                 $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
@@ -263,6 +267,8 @@ class AiSiteAutoAssetGenerationService
             if ($bytes === '') {
                 throw new \RuntimeException('Image generation returned empty image bytes.');
             }
+            $generatedModel = (string)($result['model'] ?? '');
+            $revisedPrompt = (string)($image['revised_prompt'] ?? '');
 
             $relativePath = $this->buildTargetPath($scope, $session, $slotId, $bytes, $mimeType);
             $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
@@ -273,6 +279,7 @@ class AiSiteAutoAssetGenerationService
             if (\file_put_contents($absolutePath, $bytes) === false) {
                 throw new \RuntimeException('Failed to write image asset file: ' . $absolutePath);
             }
+            unset($bytes, $image, $result);
 
             $finalUrl = '/' . \str_replace('\\', '/', $relativePath);
             $variant = [
@@ -280,8 +287,8 @@ class AiSiteAutoAssetGenerationService
                 'mime_type' => $mimeType,
                 'path' => $relativePath,
                 'mode' => 'inline_block',
-                'model' => (string)($result['model'] ?? ''),
-                'revised_prompt' => (string)($image['revised_prompt'] ?? ''),
+                'model' => $generatedModel,
+                'revised_prompt' => $revisedPrompt,
             ];
             $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
             $scope = $this->manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
@@ -297,6 +304,7 @@ class AiSiteAutoAssetGenerationService
                 'generated' => true,
             ];
         } catch (\Throwable $throwable) {
+            unset($bytes, $image, $result);
             $manifest = $this->manifestService->recordError($manifest, $slotId, $throwable->getMessage());
             $scope['asset_manifest'] = $manifest;
             $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
@@ -481,6 +489,7 @@ class AiSiteAutoAssetGenerationService
                 'params' => [
                     'disable_conversation_history' => true,
                     'disable_conversation_persist' => true,
+                    'allow_zero_balance_provider' => true,
                     'is_backend' => true,
                     'user_id' => $adminId,
                     'slot_id' => $slotId,
@@ -968,29 +977,57 @@ class AiSiteAutoAssetGenerationService
         ));
 
         \usort($slots, function (array $left, array $right) use ($prioritizeIdentityAssets): int {
-            $priority = [
-                'hero_image' => 10,
-                'logo_icon' => $prioritizeIdentityAssets ? 5 : 20,
-                'trust_brand_image' => 30,
-                'section_image' => 40,
+            $leftRank = [
+                $this->slotBuildPriority($left, $prioritizeIdentityAssets),
+                $this->slotPagePriority((string)($left['page_type'] ?? '')),
+                (string)($left['slot_id'] ?? ''),
             ];
-            $leftPriority = $priority[(string)($left['slot_type'] ?? '')] ?? 999;
-            $rightPriority = $priority[(string)($right['slot_type'] ?? '')] ?? 999;
-            if ($leftPriority !== $rightPriority) {
-                return $leftPriority <=> $rightPriority;
+            $rightRank = [
+                $this->slotBuildPriority($right, $prioritizeIdentityAssets),
+                $this->slotPagePriority((string)($right['page_type'] ?? '')),
+                (string)($right['slot_id'] ?? ''),
+            ];
+            foreach ([0, 1] as $index) {
+                if ($leftRank[$index] !== $rightRank[$index]) {
+                    return $leftRank[$index] <=> $rightRank[$index];
+                }
             }
-            $leftPage = (string)($left['page_type'] ?? '');
-            $rightPage = (string)($right['page_type'] ?? '');
-            if ($leftPage === 'home' && $rightPage !== 'home') {
-                return -1;
-            }
-            if ($rightPage === 'home' && $leftPage !== 'home') {
-                return 1;
-            }
-            return \strcmp((string)($left['slot_id'] ?? ''), (string)($right['slot_id'] ?? ''));
+            return \strcmp((string)$leftRank[2], (string)$rightRank[2]);
         });
 
         return \array_slice($slots, 0, \max(0, $limit));
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function slotBuildPriority(array $slot, bool $prioritizeIdentityAssets): int
+    {
+        $slotType = (string)($slot['slot_type'] ?? '');
+        $required = (int)($slot['required'] ?? 0) === 1;
+        if ($prioritizeIdentityAssets && $slotType === 'logo_icon') {
+            return 0;
+        }
+        if ($required && $slotType === 'hero_image' && $this->slotPagePriority((string)($slot['page_type'] ?? '')) === 0) {
+            return 1;
+        }
+        if ($required) {
+            return 2;
+        }
+
+        return match ($slotType) {
+            'hero_image' => 10,
+            'logo_icon' => $prioritizeIdentityAssets ? 20 : 15,
+            'trust_brand_image' => 30,
+            'section_image' => 40,
+            default => 999,
+        };
+    }
+
+    private function slotPagePriority(string $pageType): int
+    {
+        $pageType = \strtolower(\trim($pageType));
+        return \in_array($pageType, ['home', 'home_page', 'index', 'landing_page'], true) ? 0 : 10;
     }
 
     /**

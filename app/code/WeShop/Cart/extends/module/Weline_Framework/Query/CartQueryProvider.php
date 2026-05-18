@@ -356,7 +356,7 @@ class CartQueryProvider implements QueryProviderInterface
 
             $imageHtml = $image !== ''
                 ? '<img src="' . $this->escapeHtml($image) . '" alt="' . $name . '" loading="lazy"/>'
-                : '<div class="mini-cart-item__placeholder"><span class="material-symbols-outlined">image</span></div>';
+                : '<div class="mini-cart-item__placeholder"><span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('image') . '</span></div>';
             $optionsHtml = $options !== ''
                 ? '<div class="mini-cart-item__options">' . $this->escapeHtml($options) . '</div>'
                 : '';
@@ -371,17 +371,17 @@ class CartQueryProvider implements QueryProviderInterface
                 . $optionsHtml
                 . '<div class="mini-cart-item__price">' . $priceFormatted . '</div>'
                 . '<div class="mini-cart-item__qty">'
-                . '<button type="button" class="qty-btn" data-action="decrease-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('Decrease quantity')) . '">'
-                . '<span class="material-symbols-outlined">remove</span>'
+                . '<button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('Decrease quantity')) . '">'
+                . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('minus') . '</span>'
                 . '</button>'
-                . '<span class="qty-value">' . $quantityText . '</span>'
-                . '<button type="button" class="qty-btn" data-action="increase-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('Increase quantity')) . '">'
-                . '<span class="material-symbols-outlined">add</span>'
+                . '<span class="mini-cart-item__qty-value">' . $quantityText . '</span>'
+                . '<button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('Increase quantity')) . '">'
+                . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('plus') . '</span>'
                 . '</button>'
                 . '</div>'
                 . '</div>'
                 . '<button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('Remove item')) . '">'
-                . '<span class="material-symbols-outlined">delete_outline</span>'
+                . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('trash') . '</span>'
                 . '</button>'
                 . '</div>';
         }
@@ -393,11 +393,23 @@ class CartQueryProvider implements QueryProviderInterface
     {
         return '<div class="mini-cart-empty" id="mini-cart-empty">'
             . '<div class="empty-state">'
-            . '<span class="material-symbols-outlined empty-icon">shopping_cart</span>'
+            . '<span class="mini-cart-empty__icon mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('cart') . '</span>'
             . '<p class="empty-message">' . $this->escapeHtml((string)__('购物车是空的')) . '</p>'
             . '<a href="/" class="start-shopping-link" data-action="close-mini-cart">' . $this->escapeHtml((string)__('开始购物')) . '</a>'
             . '</div>'
             . '</div>';
+    }
+
+    private function renderMiniCartIconHtml(string $name): string
+    {
+        return match ($name) {
+            'minus' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 11a1 1 0 0 0 0 2h12a1 1 0 1 0 0-2H6Z" fill="currentColor"/></svg>',
+            'plus' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 6a1 1 0 1 1 2 0v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H6a1 1 0 0 1 0-2h5V6Z" fill="currentColor"/></svg>',
+            'trash' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3a1 1 0 0 0-.8.4L7.4 4H5a1 1 0 1 0 0 2h.5l1 11.1A2 2 0 0 0 8.5 19h7a2 2 0 0 0 2-1.9l1-11.1H19a1 1 0 1 0 0-2h-2.4l-.8-.6A1 1 0 0 0 15 3H9Zm-.5 3h7l-.9 10.9H9.4L8.5 6Zm1.5 2a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1Zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1Z" fill="currentColor"/></svg>',
+            'image' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 5a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3H6Zm0 2h12a1 1 0 0 1 1 1v5.4l-2.8-2.8a1 1 0 0 0-1.4 0L10 15.4l-1.8-1.8a1 1 0 0 0-1.4 0L5 15.4V8a1 1 0 0 1 1-1Zm0 10 1.5-1.5 1.8 1.8a1 1 0 0 0 1.4 0l4.8-4.8 3.5 3.5a1 1 0 0 1-1 1H6Zm9-7a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"/></svg>',
+            'cart' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 4a1 1 0 0 1 1-1h1.3a2 2 0 0 1 2 1.6L7.5 6H20a1 1 0 0 1 1 .8 1 1 0 0 1-.1.7l-2.4 5.8A2 2 0 0 1 16.6 15H9a2 2 0 0 1-2-1.6L5.1 5H4a1 1 0 0 1-1-1Zm5 4 .9 4.2H16.6L18.2 8H8ZM9 20a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm8 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" fill="currentColor"/></svg>',
+            default => '',
+        };
     }
 
     private function escapeHtml(string $value): string
