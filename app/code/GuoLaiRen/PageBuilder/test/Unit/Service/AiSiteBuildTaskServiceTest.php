@@ -282,6 +282,45 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertCount(9, $scope['build_tasks']);
     }
 
+    public function testEnsureTaskScopeUsesStageOnePagePlansWhenExecutionPagesAreEmpty(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page', 'about_page'],
+            'plan_confirmed' => 1,
+            'execution_blueprint_confirmed_signature' => 'stage-one-confirmed',
+            'execution_blueprint' => [
+                'page_plans' => [
+                    'home_page' => [
+                        'blocks' => [
+                            ['block_key' => 'hero'],
+                            ['block_key' => 'trust'],
+                        ],
+                    ],
+                    'about_page' => [
+                        'blocks' => [
+                            ['block_key' => 'story'],
+                        ],
+                    ],
+                ],
+                'pages' => [],
+            ],
+        ], [], 'virtual_theme');
+
+        self::assertSame('stage1_execution_blueprint', $scope['build_blueprint']['source'] ?? null);
+        self::assertSame(
+            [
+                'shared:header',
+                'shared:footer',
+                'page:home_page:hero',
+                'page:home_page:trust',
+                'page:about_page:story',
+            ],
+            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
+        );
+    }
+
     public function testFreshRepairResetsAttemptCountForQualityRetry(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
@@ -679,7 +718,11 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $pageTaskKey = 'page:home_page:content/home-page-hero';
         $scope = $service->markTaskRunning($scope, 'shared:header');
         $scope = $service->markTaskRunning($scope, $pageTaskKey);
-        $scope['shared_components']['header'] = ['region' => 'header', 'html' => '<header>Ready</header>'];
+        $scope['shared_components']['header'] = [
+            'region' => 'header',
+            'code' => 'header/ai-site-header',
+            'html' => '<header>Ready</header>',
+        ];
         $scope['page_type_layouts']['home_page']['content'][] = [
             'code' => 'content/home-page-hero',
             'component' => 'content/home-page-hero',
@@ -708,7 +751,11 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $pageTaskKey = 'page:home_page:content/home-page-hero';
         $scope['build_tasks']['shared:header']['status'] = AiSiteBuildTaskService::TASK_STATUS_PENDING;
         $scope['build_tasks'][$pageTaskKey]['status'] = AiSiteBuildTaskService::TASK_STATUS_PENDING;
-        $scope['shared_components']['header'] = ['region' => 'header', 'html' => '<header>Ready</header>'];
+        $scope['shared_components']['header'] = [
+            'region' => 'header',
+            'code' => 'header/ai-site-header',
+            'html' => '<header>Ready</header>',
+        ];
         $scope['page_type_layouts']['home_page']['content'][] = [
             'code' => 'content/home-page-hero',
             'component' => 'content/home-page-hero',
@@ -742,7 +789,11 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $pageTaskKey = 'page:home_page:content/home-page-hero';
         $scope['build_tasks']['shared:header']['status'] = AiSiteBuildTaskService::TASK_STATUS_DONE;
         $scope['build_tasks'][$pageTaskKey]['status'] = AiSiteBuildTaskService::TASK_STATUS_DONE;
-        $scope['shared_components']['header'] = ['region' => 'header', 'html' => '<header>Ready</header>'];
+        $scope['shared_components']['header'] = [
+            'region' => 'header',
+            'code' => 'header/ai-site-header',
+            'html' => '<header>Ready</header>',
+        ];
         $scope['page_type_layouts']['home_page']['content'][] = [
             'code' => 'content/home-page-hero',
             'component' => 'content/home-page-hero',
@@ -1122,5 +1173,65 @@ class AiSiteBuildTaskServiceTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $service->finalizeBuildTaskStatesAfterRunLoop($scope);
+    }
+
+    public function testReconcileDoesNotTreatStageOneSharedPlanAsBuiltArtifact(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+        ], [
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Gaming entertainment site',
+        ], 'virtual_theme');
+        $scope['shared_components'] = [
+            'header' => [
+                'task_key' => 'shared:header',
+                'task_type' => 'shared_component',
+                'component' => 'header',
+                'goal' => 'Build the shared site header with brand recognition, navigation, and a primary CTA.',
+            ],
+            'footer' => [
+                'task_key' => 'shared:footer',
+                'task_type' => 'shared_component',
+                'component' => 'footer',
+                'goal' => 'Build the shared site footer with contact, policy, and support links.',
+            ],
+        ];
+
+        $scope = $service->reconcileGeneratedArtifactsWithTaskState($scope);
+        $pendingKeys = \array_column($service->listPendingTasks($scope), 'task_key');
+
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['shared:header']['status'] ?? null);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['shared:footer']['status'] ?? null);
+        self::assertContains('shared:header', $pendingKeys);
+        self::assertContains('shared:footer', $pendingKeys);
+    }
+
+    public function testFormatBuildCompletionGateFailureDetailIncludesFailedTaskMessage(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $gate = $service->inspectBuildCompletionGate([
+            'build_blueprint' => [
+                'tasks' => [[
+                    'task_key' => 'page:blog_category:article_collection',
+                    'label' => '文章集合',
+                    'page_type' => 'blog_category',
+                    'group_key' => 'blog_category',
+                ]],
+            ],
+            'build_tasks' => [
+                'page:blog_category:article_collection' => [
+                    'task_key' => 'page:blog_category:article_collection',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_FAILED,
+                    'message' => 'AI HTML generation timeout',
+                ],
+            ],
+        ]);
+
+        $detail = $service->formatBuildCompletionGateFailureDetail($gate);
+        self::assertStringContainsString('page:blog_category:article_collection', $detail);
+        self::assertStringContainsString('AI HTML generation timeout', $detail);
+        self::assertStringContainsString('继续失败任务', $detail);
     }
 }
