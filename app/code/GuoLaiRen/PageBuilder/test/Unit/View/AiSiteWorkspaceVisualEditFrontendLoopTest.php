@@ -850,11 +850,14 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertIsString($visualEditPanel);
         self::assertIsString($publishCard);
         self::assertIsString($controller);
-        self::assertStringContainsString('id="pb-ai-retry-plan-failures"', $planPanel);
-        self::assertStringContainsString('data-retryable-ai-operation="plan"', $planPanel);
+        self::assertStringContainsString('id="pb-ai-plan-retry-generate"', $planPanel);
+        self::assertStringContainsString('重试失败项', $planPanel);
         self::assertStringContainsString('id="pb-ai-retry-build-failures"', $visualEditPanel);
-        self::assertStringContainsString('id="pb-ai-retry-build-failures"', $publishCard);
         self::assertStringContainsString('data-retryable-ai-operation="build"', $visualEditPanel);
+        self::assertStringContainsString('data-retryable-ai-operation="build"', $publishCard);
+        self::assertStringContainsString('完全重建', $visualEditPanel);
+        self::assertStringContainsString('buildFullRebuildConfirmMessage', $script);
+        self::assertStringContainsString('buildResumeFailedTasks', $script);
         self::assertStringContainsString('function bindRetryableAiFailureButtons()', $script);
         self::assertStringContainsString("operation !== 'plan' && operation !== 'build'", $script);
         self::assertStringContainsString('workspaceApi.retryPhaseOnePlanGeneration = function (options)', $script);
