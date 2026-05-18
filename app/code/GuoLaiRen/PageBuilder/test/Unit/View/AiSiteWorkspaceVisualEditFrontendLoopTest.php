@@ -808,6 +808,21 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("['pending', 'queued', 'running', 'processing']", $body);
         self::assertStringContainsString('!$this->shouldKeepQueuedObserverStreamOpen($operation)', $body);
         self::assertStringNotContainsString('$queueWaitingForScheduler || !$this->shouldKeepQueuedObserverStreamOpen($operation)', $body);
+        self::assertStringContainsString('$maxObserveResumeCycles = 720', $body);
+    }
+
+    public function testRuntimeResumesOperationStreamWhenDeferredQueueDoneArrivesBeforeQueueTerminal(): void
+    {
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+        $doneBody = $this->extractFunctionBody($runtime, 'startOperationStream');
+        $doneHandlerOffset = \strpos($doneBody, "source.addEventListener('done'");
+        self::assertNotFalse($doneHandlerOffset, 'operation stream done handler missing');
+        $doneHandler = \substr($doneBody, $doneHandlerOffset, 2600);
+
+        self::assertStringContainsString('resumeOperationStreamForQueueWatch(operation, payload', $doneHandler);
+        self::assertStringContainsString('deferred-queue-handoff', $doneHandler);
+        self::assertStringContainsString('workspaceStateHasBlockingPlanFailures', $runtime);
     }
 
     public function testRuntimeStartsSseWhenStreamParametersArePresentDespiteQueueWaitHints(): void
