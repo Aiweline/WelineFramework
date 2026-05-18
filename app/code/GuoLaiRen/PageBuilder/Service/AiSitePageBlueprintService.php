@@ -97,45 +97,37 @@ final class AiSitePageBlueprintService
     }
 
     /**
+     * 客户在工作台填写的站点名称（唯一权威来源，不读描述/提示词/BuildPlan）。
+     *
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     */
+    public function resolveUserSiteTitle(array $websiteProfile, array $scope = []): string
+    {
+        return $this->pickSiteDisplayName(
+            $scope['site_title'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+            $websiteProfile['site_name'] ?? null,
+            $scope['store_name'] ?? null,
+        );
+    }
+
+    /**
+     * 访客可见站点名：仅用客户填写的 site_title，或从域名推导；禁止用 user_description / brief / BuildPlan 充当标题。
+     *
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $scope
      */
     public function resolveSiteDisplayName(array $websiteProfile, array $scope = []): string
     {
-        $siteTitle = $this->pickString(
-            $this->resolveBuildPlanSiteDisplayName($scope),
-            $websiteProfile['site_title'] ?? null,
-            $scope['site_title'] ?? null
-        );
-        $siteTitle = $this->stripProfileLabelPrefix($siteTitle);
-        if ($siteTitle !== '' && \strtolower($siteTitle) !== 'ai site' && \stripos($siteTitle, 'websiteprofile') === false) {
-            return $siteTitle;
+        $userTitle = $this->resolveUserSiteTitle($websiteProfile, $scope);
+        if ($userTitle !== '') {
+            return $userTitle;
         }
 
-        $brief = $this->pickString(
-            $websiteProfile['brief_description'] ?? null,
-            $scope['brief_description'] ?? null,
-            $scope['user_description'] ?? null
-        );
-        if ($brief === '') {
-            $domain = $this->pickString($websiteProfile['target_domain'] ?? null, $scope['target_domain'] ?? null);
-            return $siteTitle !== '' ? $siteTitle : $this->deriveTitleFromDomain($domain);
-        }
+        $domain = $this->pickString($websiteProfile['target_domain'] ?? null, $scope['target_domain'] ?? null);
 
-        if (\preg_match('/印度/u', $brief) === 1 && \preg_match('/棋牌/u', $brief) === 1) {
-            return \stripos($brief, 'apk') !== false ? '印度棋牌 APK 平台' : '印度棋牌平台';
-        }
-        if (\preg_match('/棋牌/u', $brief) === 1) {
-            return \stripos($brief, 'apk') !== false ? '棋牌 APK 平台' : '棋牌平台';
-        }
-
-        $candidate = \trim((string)\preg_replace('/\s+/', ' ', $brief));
-        if ($candidate === '') {
-            $domain = $this->pickString($websiteProfile['target_domain'] ?? null, $scope['target_domain'] ?? null);
-            return $siteTitle !== '' ? $siteTitle : $this->deriveTitleFromDomain($domain);
-        }
-
-        return $this->clipText($candidate, 18);
+        return $this->deriveTitleFromDomain($domain);
     }
 
     /**
@@ -1187,6 +1179,64 @@ final class AiSitePageBlueprintService
         return $labels[0];
     }
 
+    /**
+     * 用户填写的站点标题优先；拒绝提示词/ROLE/长描述泄漏为品牌名。
+     */
+    public function normalizeSiteDisplayNameCandidate(string $value): string
+    {
+        $value = $this->stripProfileLabelPrefix($value);
+        if ($value === '' || !$this->isUsableSiteDisplayName($value)) {
+            return '';
+        }
+
+        return $value;
+    }
+
+    private function isUsableSiteDisplayName(string $value): bool
+    {
+        $normalized = \mb_strtolower(\trim($value));
+        if ($normalized === '' || $normalized === 'ai site') {
+            return false;
+        }
+        if (\str_contains($normalized, 'websiteprofile') || \str_contains($normalized, 'website profile')) {
+            return false;
+        }
+        if (\preg_match('/^\s*#\s*role\b/u', $normalized) === 1 || \preg_match('/^\s*role\s*:/u', $normalized) === 1) {
+            return false;
+        }
+        if (\preg_match('/\byou are a\b/u', $normalized) === 1 && \mb_strlen($value) > 32) {
+            return false;
+        }
+        if (\preg_match('/\b(?:return only|must not|do not|json|prompt|contract field|visitor-visible|html_content)\b/u', $normalized) === 1) {
+            return false;
+        }
+
+        $maxLength = 48;
+        if (\function_exists('mb_strlen') ? \mb_strlen($value) > $maxLength : \strlen($value) > $maxLength) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function pickSiteDisplayName(mixed ...$values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $candidate = $this->normalizeSiteDisplayNameCandidate((string)$value);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
     private function stripProfileLabelPrefix(string $value): string
     {
         $value = \trim((string)\preg_replace('/\s+/u', ' ', $value));
@@ -1198,6 +1248,12 @@ final class AiSitePageBlueprintService
             '',
             $value
         );
+        $value = (string)\preg_replace(
+            '/\b(?:website\s*profile|site\s*profile|profile)\b/iu',
+            '',
+            $value
+        );
+        $value = \trim((string)\preg_replace('/\s+/u', ' ', $value));
 
         return \trim($value);
     }
