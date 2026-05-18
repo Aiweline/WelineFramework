@@ -8,7 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 
 final class AiSiteStageOneContractService
 {
-    public const CONTRACT_VERSION = 'stage1_contract_v1';
+    public const CONTRACT_VERSION = 'stage1_contract_v2';
     public const FIELD_PLAN_COUNT = 3;
 
     /** @var list<string> */
@@ -23,6 +23,11 @@ final class AiSiteStageOneContractService
     ];
 
     /** @var list<string> */
+    public const RECOMMENDED_DESIGN_TAG_KEYS = [
+        'color_layering',
+    ];
+
+    /** @var list<string> */
     public const GENERIC_BLOCK_KEYS = [
         'details',
         'content',
@@ -31,6 +36,11 @@ final class AiSiteStageOneContractService
         'block',
         'item',
     ];
+
+    public function __construct(
+        private readonly ?AiSitePageRouteContractService $pageRouteContractService = null
+    ) {
+    }
 
     /**
      * @param array<string, mixed> $scope
@@ -45,6 +55,7 @@ final class AiSiteStageOneContractService
         string $step = 'stage1'
     ): array {
         $pageTypes = $this->normalizePageTypes($pageTypes);
+        $pageRouteContract = $this->getPageRouteContractService()->build($pageTypes, $scope, $contentLocale);
         $pageContracts = [];
         foreach ($pageTypes as $pageType) {
             $budget = $this->resolveBlockBudget($pageType, $scope);
@@ -52,9 +63,12 @@ final class AiSiteStageOneContractService
                 'page_type' => $pageType,
                 'min_blocks' => $budget['min'],
                 'max_blocks' => $budget['max'],
+                'target_blocks' => $budget['target'],
                 'required_block_keys' => $budget['required'],
+                'recommended_optional_block_keys' => $budget['optional'],
                 'field_plan_count' => self::FIELD_PLAN_COUNT,
                 'required_design_tag_keys' => self::DESIGN_TAG_KEYS,
+                'recommended_design_tag_keys' => self::RECOMMENDED_DESIGN_TAG_KEYS,
                 'forbidden_block_keys' => self::GENERIC_BLOCK_KEYS,
                 'requires_page_goal' => true,
                 'requires_theme_alignment_summary' => true,
@@ -115,12 +129,49 @@ final class AiSiteStageOneContractService
                 'footer_plan.featured',
                 'footer_plan.policies',
             ],
+            'page_route_contract' => $pageRouteContract,
+            'navigation_address_rules' => [
+                'header_and_footer_href_must_use_page_route_contract' => true,
+                'forbid_invented_internal_paths' => true,
+                'home_page_path' => '/',
+                'allowed_internal_paths' => $pageRouteContract['allowed_internal_paths'] ?? [],
+            ],
             'copy_rules' => [
                 'visible_copy_must_use_content_locale' => true,
                 'visitor_copy_only' => true,
                 'forbid_prompt_like_copy' => true,
                 'forbid_schema_placeholders' => true,
                 'must_reuse_brief_nouns' => true,
+            ],
+            'field_plan_rules' => [
+                'rows_per_block' => self::FIELD_PLAN_COUNT,
+                'required_row_slots' => [
+                    ['index' => 0, 'field' => 'headline', 'sample_kind' => 'visitor_visible_heading'],
+                    ['index' => 1, 'field' => 'supporting_copy', 'sample_kind' => 'visitor_visible_sentence'],
+                    ['index' => 2, 'field' => 'context_detail', 'sample_kind' => 'cta_label_or_proof_or_asset_brief'],
+                ],
+                'field_key_examples' => [
+                    'headline',
+                    'supporting_copy',
+                    'cta_label',
+                    'proof_detail',
+                    'image_brief',
+                    'form_label',
+                    'policy_summary',
+                ],
+                'field_key_format' => 'short_snake_case_semantic_key',
+                'forbid_empty_field_key' => true,
+                'sample_acceptance_examples' => [
+                    'headline' => 'Aster Route Contract 为每个页面预先锁定可访问地址',
+                    'supporting_copy' => '访客点击导航时只进入已规划页面，不会落到无效路径。',
+                    'context_detail' => '查看博客更新',
+                ],
+                'sample_rejection_examples' => [
+                    '标题围绕核心价值展开',
+                    '说明页面亮点',
+                    '突出品牌优势',
+                    'Describe the main benefit',
+                ],
             ],
             'image_planning_rules' => [
                 'cache_grain' => 'session:block:planning_signature',
@@ -169,13 +220,15 @@ final class AiSiteStageOneContractService
             return $base;
         }
 
+        $isCurrentVersion = (string)($contract['contract_version'] ?? '') === self::CONTRACT_VERSION;
+        $contractForMerge = $isCurrentVersion ? $contract : [];
         $targetPageTypes = $this->normalizePageTypes($pageTypes);
         if ($targetPageTypes === []) {
-            $targetPageTypes = $this->normalizePageTypes(\is_array($contract['page_types'] ?? null) ? $contract['page_types'] : $base['page_types']);
+            $targetPageTypes = $this->normalizePageTypes(\is_array($contractForMerge['page_types'] ?? null) ? $contractForMerge['page_types'] : $base['page_types']);
         }
         $sourcePageContracts = \array_replace(
             \is_array($base['page_contracts'] ?? null) ? $base['page_contracts'] : [],
-            \is_array($contract['page_contracts'] ?? null) ? $contract['page_contracts'] : []
+            \is_array($contractForMerge['page_contracts'] ?? null) ? $contractForMerge['page_contracts'] : []
         );
         $pageContracts = [];
         foreach ($targetPageTypes as $pageType) {
@@ -184,18 +237,30 @@ final class AiSiteStageOneContractService
             }
         }
 
-        $normalized = \array_replace($base, $contract, [
-            'contract_version' => (string)($contract['contract_version'] ?? $base['contract_version']),
+        $normalized = \array_replace($base, $contractForMerge, [
+            'contract_version' => self::CONTRACT_VERSION,
             'page_types' => $targetPageTypes,
             'page_contracts' => $pageContracts,
-            'theme_required_sections' => \is_array($contract['theme_required_sections'] ?? null) ? $contract['theme_required_sections'] : $base['theme_required_sections'],
-            'theme_required_fields' => \is_array($contract['theme_required_fields'] ?? null) ? $contract['theme_required_fields'] : $base['theme_required_fields'],
-            'shared_link_requirements' => \is_array($contract['shared_link_requirements'] ?? null) ? $contract['shared_link_requirements'] : $base['shared_link_requirements'],
-            'copy_rules' => \is_array($contract['copy_rules'] ?? null) ? $contract['copy_rules'] : $base['copy_rules'],
-            'image_planning_rules' => \is_array($contract['image_planning_rules'] ?? null) ? $contract['image_planning_rules'] : $base['image_planning_rules'],
-            'visual_quality_rules' => \is_array($contract['visual_quality_rules'] ?? null) ? $contract['visual_quality_rules'] : $base['visual_quality_rules'],
-            'retry_policy' => \is_array($contract['retry_policy'] ?? null) ? $contract['retry_policy'] : $base['retry_policy'],
+            'theme_required_sections' => \is_array($contractForMerge['theme_required_sections'] ?? null) ? $contractForMerge['theme_required_sections'] : $base['theme_required_sections'],
+            'theme_required_fields' => \is_array($contractForMerge['theme_required_fields'] ?? null) ? $contractForMerge['theme_required_fields'] : $base['theme_required_fields'],
+            'shared_link_requirements' => \is_array($contractForMerge['shared_link_requirements'] ?? null) ? $contractForMerge['shared_link_requirements'] : $base['shared_link_requirements'],
+            'page_route_contract' => $this->getPageRouteContractService()->normalize(
+                \is_array($contractForMerge['page_route_contract'] ?? null) ? $contractForMerge['page_route_contract'] : [],
+                $targetPageTypes,
+                $scope,
+                $contentLocale
+            ),
+            'navigation_address_rules' => \is_array($contractForMerge['navigation_address_rules'] ?? null) ? $contractForMerge['navigation_address_rules'] : $base['navigation_address_rules'],
+            'copy_rules' => \is_array($contractForMerge['copy_rules'] ?? null) ? $contractForMerge['copy_rules'] : $base['copy_rules'],
+            'field_plan_rules' => \is_array($contractForMerge['field_plan_rules'] ?? null) ? $contractForMerge['field_plan_rules'] : $base['field_plan_rules'],
+            'image_planning_rules' => \is_array($contractForMerge['image_planning_rules'] ?? null) ? $contractForMerge['image_planning_rules'] : $base['image_planning_rules'],
+            'visual_quality_rules' => \is_array($contractForMerge['visual_quality_rules'] ?? null) ? $contractForMerge['visual_quality_rules'] : $base['visual_quality_rules'],
+            'retry_policy' => \is_array($contractForMerge['retry_policy'] ?? null) ? $contractForMerge['retry_policy'] : $base['retry_policy'],
         ]);
+        $normalized['navigation_address_rules'] = \is_array($normalized['navigation_address_rules'] ?? null) ? $normalized['navigation_address_rules'] : [];
+        $normalized['navigation_address_rules']['allowed_internal_paths'] = \is_array($normalized['page_route_contract']['allowed_internal_paths'] ?? null)
+            ? $normalized['page_route_contract']['allowed_internal_paths']
+            : [];
         $normalized['contract_hash'] = $this->hashStablePayload($normalized);
 
         return $normalized;
@@ -203,45 +268,65 @@ final class AiSiteStageOneContractService
 
     /**
      * @param array<string, mixed> $scope
-     * @return array{min:int, max:int, required:list<string>}
+     * @return array{min:int, max:int, target:int, required:list<string>, optional:list<string>}
      */
     public function resolveBlockBudget(string $pageType, array $scope): array
     {
         $required = [];
+        $optional = [];
         if ($pageType === Page::TYPE_HOME || $pageType === 'home_page') {
             $sourceRequired = \is_array($scope['source_truth_contract']['required_home_blocks'] ?? null)
                 ? \array_values(\array_filter(\array_map('strval', $scope['source_truth_contract']['required_home_blocks'])))
                 : [];
             $required = \array_values(\array_unique(\array_merge(['hero', 'final_cta'], $sourceRequired)));
+            $optional = ['brand_promise', 'featured_offers', 'trust_proof', 'resource_preview', 'experience_highlights'];
         } elseif ($pageType === Page::TYPE_ABOUT) {
             $required = ['origin_story', 'mission_values', 'trust_proof', 'about_cta'];
+            $optional = ['team_principles', 'quality_process', 'community_signal'];
         } elseif ($pageType === Page::TYPE_CONTACT) {
             $required = ['contact_methods', 'support_form_guidance', 'support_faq', 'contact_cta'];
+            $optional = ['service_area', 'response_expectations', 'map_guidance'];
         } elseif ($pageType === Page::TYPE_PRIVACY_POLICY) {
             $required = ['privacy_overview', 'data_use', 'user_rights', 'privacy_contact'];
+            $optional = ['data_security', 'third_party_services'];
         } elseif ($pageType === Page::TYPE_TERMS_OF_SERVICE) {
             $required = ['terms_overview', 'service_rules', 'customer_responsibilities', 'terms_contact'];
+            $optional = ['account_terms', 'limitations'];
         } elseif ($pageType === Page::TYPE_REFUND_POLICY) {
             $required = ['refund_overview', 'eligibility_rules', 'refund_steps', 'refund_contact'];
+            $optional = ['refund_timing', 'exception_notes'];
         } elseif ($pageType === Page::TYPE_SHIPPING_POLICY) {
             $required = ['fulfillment_overview', 'delivery_options', 'pickup_timing', 'shipping_contact'];
+            $optional = ['tracking_updates', 'delivery_exceptions'];
         } elseif ($pageType === Page::TYPE_COOKIE_POLICY) {
             $required = ['cookie_overview', 'cookie_types', 'preference_controls', 'cookie_contact'];
+            $optional = ['analytics_notice', 'consent_updates'];
         } elseif ($pageType === Page::TYPE_BLOG) {
             $required = ['article_hero', 'article_body', 'related_resources', 'article_cta'];
+            $optional = ['author_note', 'topic_summary'];
         } elseif ($pageType === Page::TYPE_BLOG_CATEGORY) {
             $required = ['category_hero', 'topic_filters', 'article_collection', 'category_cta'];
+            $optional = ['editorial_promise', 'featured_series'];
         } elseif ($pageType === Page::TYPE_BLOG_LIST) {
             $required = ['resource_hero', 'article_grid', 'learning_path', 'newsletter_cta'];
+            $optional = ['featured_article', 'topic_filters'];
+        } elseif ($pageType === Page::TYPE_CUSTOM) {
+            $required = ['page_intro', 'primary_story', 'proof_or_details', 'page_cta'];
+            $optional = ['feature_highlights', 'supporting_gallery', 'faq_band'];
         }
 
-        $min = \max(($pageType === Page::TYPE_HOME || $pageType === 'home_page') ? 4 : 3, \count($required));
-        $max = ($pageType === Page::TYPE_HOME || $pageType === 'home_page') ? \max($min, \count($required) + 2) : \max($min, 5);
+        $isHome = $pageType === Page::TYPE_HOME || $pageType === 'home_page';
+        $min = \max($isHome ? 5 : 3, \count($required));
+        $max = $isHome ? \max($min, 7) : \max($min, 5);
+        $target = $isHome ? \min(\max(6, $min), $max) : \min(\max(\count($required), $min), $max);
+        $optional = \array_values(\array_filter(\array_unique(\array_map('strval', $optional)), static fn(string $value): bool => \trim($value) !== ''));
 
         return [
             'min' => $min,
             'max' => $max,
+            'target' => $target,
             'required' => \array_values($required),
+            'optional' => $optional,
         ];
     }
 
@@ -257,7 +342,9 @@ final class AiSiteStageOneContractService
                 'page_type' => $pageType,
                 'min_blocks' => 3,
                 'max_blocks' => 5,
+                'target_blocks' => 4,
                 'required_block_keys' => [],
+                'recommended_optional_block_keys' => [],
                 'field_plan_count' => self::FIELD_PLAN_COUNT,
                 'required_design_tag_keys' => self::DESIGN_TAG_KEYS,
                 'forbidden_block_keys' => self::GENERIC_BLOCK_KEYS,
@@ -270,6 +357,11 @@ final class AiSiteStageOneContractService
     public function stableHash(array $contract): string
     {
         return $this->hashStablePayload($contract);
+    }
+
+    private function getPageRouteContractService(): AiSitePageRouteContractService
+    {
+        return $this->pageRouteContractService ?? new AiSitePageRouteContractService();
     }
 
     /**
@@ -301,7 +393,10 @@ final class AiSiteStageOneContractService
             'theme_required_sections' => \is_array($contract['theme_required_sections'] ?? null) ? $contract['theme_required_sections'] : [],
             'theme_required_fields' => \is_array($contract['theme_required_fields'] ?? null) ? $contract['theme_required_fields'] : [],
             'shared_link_requirements' => \is_array($contract['shared_link_requirements'] ?? null) ? $contract['shared_link_requirements'] : [],
+            'page_route_contract' => \is_array($contract['page_route_contract'] ?? null) ? $contract['page_route_contract'] : [],
+            'navigation_address_rules' => \is_array($contract['navigation_address_rules'] ?? null) ? $contract['navigation_address_rules'] : [],
             'copy_rules' => \is_array($contract['copy_rules'] ?? null) ? $contract['copy_rules'] : [],
+            'field_plan_rules' => \is_array($contract['field_plan_rules'] ?? null) ? $contract['field_plan_rules'] : [],
             'image_planning_rules' => \is_array($contract['image_planning_rules'] ?? null) ? $contract['image_planning_rules'] : [],
             'visual_quality_rules' => \is_array($contract['visual_quality_rules'] ?? null) ? $contract['visual_quality_rules'] : [],
             'source_truth_contract_hash' => (string)($contract['source_truth_contract_hash'] ?? ''),
