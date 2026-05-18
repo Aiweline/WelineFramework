@@ -961,10 +961,30 @@ class AiSiteBuildTaskService
                 'source_contracts' => \is_array($contract['source_contracts'] ?? null) ? $contract['source_contracts'] : [],
                 'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
             ],
-            'asset_context' => [
-                'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [],
-                'verified_assets' => \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [],
-            ],
+            'asset_context' => $this->summarizeBuildPlanAssetContext($scope),
+        ];
+    }
+
+    /**
+     * Task-level runtime_context is duplicated for every block. Keep the stable
+     * session-level asset manifest in scope and store only a small reference
+     * summary inside each task; Stage 3 resolves the exact block assets from
+     * scope at prompt time.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function summarizeBuildPlanAssetContext(array $scope): array
+    {
+        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        $verifiedAssets = \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [];
+
+        return [
+            'asset_context_ref' => 'scope.asset_manifest',
+            'asset_manifest_hash' => \trim((string)($scope['asset_manifest_hash'] ?? '')),
+            'slot_count' => \count($slots),
+            'verified_asset_count' => \count($verifiedAssets),
         ];
     }
 
@@ -2640,6 +2660,91 @@ class AiSiteBuildTaskService
             'unfinished' => $unfinished,
             'summary' => $summary,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $gate inspectBuildCompletionGate() 返回值
+     */
+    public function formatBuildCompletionGateFailureDetail(array $gate): string
+    {
+        $reason = \trim((string)($gate['reason'] ?? ''));
+        if ($reason === 'failed_build_tasks') {
+            $failedLines = $this->formatFailedBuildTaskLines(
+                \is_array($gate['summary'] ?? null) ? $gate['summary'] : []
+            );
+            if ($failedLines !== '') {
+                return $failedLines . ' ' . (string)__('请在工作台点击「继续失败任务」后重新调度构建队列。');
+            }
+
+            return (string)__('有构建任务失败，请在工作台点击「继续失败任务」后重新调度构建队列。');
+        }
+        if ($reason === 'invalid_generated_artifacts') {
+            $count = (int)($gate['invalid_artifacts'] ?? 0);
+
+            return (string)__('有 %{count} 项构建产物无效，请继续失败任务或强制重新生成后重试。', ['count' => $count]);
+        }
+        if ($reason === 'cancelled_build_tasks') {
+            return (string)__('有构建任务已取消，请检查工作台任务状态后重试。');
+        }
+        if ($reason === 'unfinished_build_tasks' || $reason === 'missing_build_blueprint_tasks') {
+            $done = (int)($gate['done'] ?? 0);
+            $total = (int)($gate['total'] ?? 0);
+
+            return (string)__('构建任务尚未全部完成（%{done}/%{total}），请等待或继续失败任务。', [
+                'done' => $done,
+                'total' => $total,
+            ]);
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $summary summarize() 返回值
+     */
+    private function formatFailedBuildTaskLines(array $summary): string
+    {
+        $failedTasks = [];
+        foreach (\is_array($summary['groups'] ?? null) ? $summary['groups'] : [] as $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            foreach (\is_array($group['tasks'] ?? null) ? $group['tasks'] : [] as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                if ($this->normalizeTaskStatus((string)($task['status'] ?? self::TASK_STATUS_PENDING)) !== self::TASK_STATUS_FAILED) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $label = \trim((string)($task['label'] ?? ''));
+                $pageType = \trim((string)($task['page_type'] ?? ''));
+                $message = \trim((string)($task['message'] ?? ''));
+                $parts = [$taskKey];
+                if ($pageType !== '') {
+                    $parts[] = $pageType;
+                }
+                if ($label !== '') {
+                    $parts[] = $label;
+                }
+                $line = \implode(' / ', $parts);
+                if ($message !== '') {
+                    $line .= ': ' . $message;
+                }
+                $failedTasks[] = $line;
+            }
+        }
+
+        if ($failedTasks === []) {
+            return '';
+        }
+
+        return (string)__('失败任务：%{tasks}', [
+            'tasks' => \implode('; ', \array_slice($failedTasks, 0, 5)),
+        ]);
     }
 
     /**
