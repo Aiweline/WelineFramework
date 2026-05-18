@@ -57,6 +57,34 @@ $jsText = [
     'submitted' => '售后申请已提交。',
     'submitFailed' => '暂时无法提交售后申请。',
 ];
+
+$rmaReasonIcon = static function (string $reason): string {
+    $key = strtolower(trim($reason));
+    return match ($key) {
+        'wrong size' => '&#128207;',
+        'damaged in transit' => '&#128666;',
+        'defective item' => '&#9888;',
+        'item not as described' => '&#128269;',
+        'changed my mind' => '&#8634;',
+        default => '?',
+    };
+};
+$rmaTypeIcon = static function (string $type): string {
+    return match (strtolower(trim($type))) {
+        'exchange' => '&#8644;',
+        default => '&#8634;',
+    };
+};
+$rmaExtractType = static function (string $description): string {
+    if (preg_match('/^\s*\[(return|exchange)\]/i', $description, $matches)) {
+        return strtolower($matches[1]);
+    }
+
+    return '';
+};
+$rmaCleanDescription = static function (string $description): string {
+    return trim((string) preg_replace('/^(?:\s*\[(?:return|exchange)\])+\s*/i', '', $description));
+};
 ?>
 <section class="account-hook-section account-index__section d-none motor-account-section" id="returns-section" data-account-section="returns" hidden>
     <div class="weshop-account-returns" id="weshop-account-returns">
@@ -191,6 +219,8 @@ $jsText = [
                             $orderIncrementId = trim((string) ($rma['order_increment_id'] ?? ''));
                             $reason = trim((string) ($rma['reason'] ?? ''));
                             $description = trim((string) ($rma['description'] ?? ''));
+                            $requestType = $rmaExtractType($description);
+                            $description = $rmaCleanDescription($description);
                             $status = trim((string) ($rma['status'] ?? RmaService::STATUS_PENDING));
                             $createdAt = trim((string) ($rma['created_at'] ?? ''));
                             $statusLabel = trim((string) ($rma['status_label'] ?? ($statusLabels[$status] ?? $status)));
@@ -209,8 +239,15 @@ $jsText = [
                                     </span>
                                 </div>
                                 <div class="weshop-return-item__meta">
+                                    <?php if ($requestType !== ''): ?>
+                                        <span class="weshop-return-icon-chip" aria-hidden="true">
+                                            <?= $rmaTypeIcon($requestType) ?>
+                                        </span>
+                                    <?php endif; ?>
                                     <?php if ($reason !== ''): ?>
-                                        <span><?= $escape($reason) ?></span>
+                                        <span class="weshop-return-icon-chip" aria-hidden="true">
+                                            <?= $rmaReasonIcon($reason) ?>
+                                        </span>
                                     <?php endif; ?>
                                     <?php if ($createdAt !== ''): ?>
                                         <span><?= $escape($createdAt) ?></span>
@@ -295,6 +332,44 @@ $jsText = [
                 return String(template || '').replace('%{1}', String(value));
             }
 
+            function getReasonIcon(reason) {
+                switch (String(reason || '').trim().toLowerCase()) {
+                    case 'wrong size':
+                        return '&#128207;';
+                    case 'damaged in transit':
+                        return '&#128666;';
+                    case 'defective item':
+                        return '&#9888;';
+                    case 'item not as described':
+                        return '&#128269;';
+                    case 'changed my mind':
+                        return '&#8634;';
+                    default:
+                        return '?';
+                }
+            }
+
+            function getTypeIcon(type) {
+                return String(type || '').trim().toLowerCase() === 'exchange'
+                    ? '&#8644;'
+                    : '&#8634;';
+            }
+
+            function extractRequestType(description) {
+                var match = String(description || '').match(/^\s*\[(return|exchange)\]/i);
+                return match ? match[1].toLowerCase() : '';
+            }
+
+            function cleanDescription(description) {
+                return String(description || '').replace(/^(?:\s*\[(?:return|exchange)\])+\s*/i, '').trim();
+            }
+
+            function buildIconChip(iconClass) {
+                return '<span class="weshop-return-icon-chip" aria-hidden="true">'
+                    + iconClass
+                    + '</span>';
+            }
+
             function setValue(input, value) {
                 if (input) {
                     input.value = value || '';
@@ -360,6 +435,8 @@ $jsText = [
                 var orderIncrementId = String(record.order_increment_id || '');
                 var reason = String(record.reason || '');
                 var description = String(record.description || '');
+                var requestType = extractRequestType(description);
+                description = cleanDescription(description);
                 var status = String(record.status || 'pending');
                 var statusLabel = String(record.status_label || status);
                 var createdAt = String(record.created_at || '');
@@ -374,8 +451,12 @@ $jsText = [
                 html += '</div><span class="weshop-return-status status-' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span></div>';
                 html += '<div class="weshop-return-item__meta">';
 
+                if (requestType) {
+                    html += buildIconChip(getTypeIcon(requestType));
+                }
+
                 if (reason) {
-                    html += '<span>' + escapeHtml(reason) + '</span>';
+                    html += buildIconChip(getReasonIcon(reason));
                 }
 
                 if (createdAt) {
@@ -824,11 +905,24 @@ $jsText = [
         }
 
         .weshop-return-item__meta {
+            align-items: center;
             color: var(--weshop-text-secondary, #6b7280);
             display: flex;
             flex-wrap: wrap;
-            gap: 0.75rem;
+            gap: 0.5rem;
             margin-top: 0.5rem;
+        }
+
+        .weshop-return-icon-chip {
+            align-items: center;
+            background: rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--weshop-border-color, #e5e7eb);
+            border-radius: 999px;
+            color: var(--weshop-primary, #2563eb);
+            display: inline-flex;
+            height: 1.8rem;
+            justify-content: center;
+            width: 1.8rem;
         }
 
         .weshop-return-item__description {
