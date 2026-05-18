@@ -9,6 +9,20 @@ final class SourceTruthCoverageLinter
     private const MIN_COVERAGE = 0.95;
 
     /**
+     * @param array<string,mixed> $sourceTruth
+     * @return list<array<string,mixed>>
+     */
+    public function visibleMustIncludeFacts(array $sourceTruth): array
+    {
+        return $this->filterVisibleMustIncludeFacts($sourceTruth);
+    }
+
+    public function textCoversFact(string $copy, string $fact): bool
+    {
+        return $this->textContainsFact($copy, $fact);
+    }
+
+    /**
      * @param array<string, mixed> $sourceTruth
      * @param array<string, mixed> $pagePlan
      * @param array<string, mixed> $blockPlans
@@ -86,6 +100,7 @@ final class SourceTruthCoverageLinter
             }
             $aggregated['page_goal'] .= ' ' . \trim((string)($page['page_goal'] ?? ''));
             $aggregated['theme_alignment_summary'] .= ' ' . \trim((string)($page['theme_alignment_summary'] ?? ''));
+            $aggregated['theme_alignment_summary'] .= ' ' . $this->collectStructuredPlanCopy($page['page_design_plan'] ?? null);
             foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
                 $allBlocks[] = $block;
             }
@@ -96,7 +111,7 @@ final class SourceTruthCoverageLinter
             }
         }
 
-        $allCopy = $this->extractAllCopy($aggregated, ['blocks' => $allBlocks]);
+        $allCopy = \trim($this->extractAllCopy($aggregated, ['blocks' => $allBlocks]) . ' ' . $this->extractPlanJsonRootCoverageCopy($planJson));
         $facts = $this->filterVisibleMustIncludeFacts($sourceTruth);
         $missedFacts = $this->findMissingFacts($facts, $allCopy);
         $totalFacts = \count($facts);
@@ -156,50 +171,6 @@ final class SourceTruthCoverageLinter
     }
 
     /**
-     * @param array<string, mixed> $sourceTruth
-     * @param array<string, mixed> $contract
-     * @return array{coverage:float, missing_facts:array<string,string>, missing_blocks:list<string>, findings:list<array<string,mixed>>, fallback_used:bool}
-     */
-    public function lintBuildPlanContract(array $sourceTruth, array $contract): array
-    {
-        $contentItems = \is_array($contract['content_manifest']['items'] ?? null) ? $contract['content_manifest']['items'] : [];
-        $pagePlan = [
-            'page_goal' => $this->collectScalarCopy([
-                $contract['site_brief'] ?? [],
-                $contract['source_of_truth']['user_requirements'] ?? [],
-                $contentItems,
-            ]),
-            'theme_alignment_summary' => $this->collectScalarCopy([
-                $contract['design_manifest'] ?? [],
-                $contract['policy_projection'] ?? [],
-            ]),
-        ];
-
-        $blocks = [];
-        foreach (\is_array($contract['blocks'] ?? null) ? $contract['blocks'] : [] as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $blockId = \trim((string)($block['block_id'] ?? ''));
-            $blockKey = $blockId !== '' ? \basename(\str_replace('.', '/', $blockId)) : \trim((string)($block['block_key'] ?? ''));
-            $blockCopy = [];
-            foreach (\is_array($block['content_keys'] ?? null) ? $block['content_keys'] : [] as $contentKey) {
-                $contentKey = \trim((string)$contentKey);
-                if ($contentKey !== '' && \array_key_exists($contentKey, $contentItems)) {
-                    $blockCopy[] = $this->scalarToText($contentItems[$contentKey]);
-                }
-            }
-            $blocks[] = [
-                'block_key' => $blockKey,
-                'content' => \implode(' ', \array_filter($blockCopy, static fn(string $text): bool => $text !== '')),
-                'goal' => \trim((string)($block['goal'] ?? $block['block_type'] ?? '')),
-            ];
-        }
-
-        return $this->lint($sourceTruth, $pagePlan, ['blocks' => $blocks]);
-    }
-
-    /**
      * @param array<string, mixed> $pagePlan
      * @param array<string, mixed> $blockPlans
      */
@@ -237,9 +208,45 @@ final class SourceTruthCoverageLinter
             if ($text !== '') {
                 $parts[] = $text;
             }
+            $parts[] = $this->collectStructuredPlanCopy($block['design_tags'] ?? null);
         }
 
         return \implode(' ', $parts);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     */
+    private function extractPlanJsonRootCoverageCopy(array $planJson): string
+    {
+        $parts = [];
+        foreach (['requirement_expansion', 'site_strategy', 'theme_design', 'navigation_plan', 'footer_plan'] as $key) {
+            if (!\array_key_exists($key, $planJson)) {
+                continue;
+            }
+            $parts[] = $this->collectStructuredPlanCopy($planJson[$key]);
+        }
+
+        return \trim(\implode(' ', \array_filter($parts, static fn(string $text): bool => $text !== '')));
+    }
+
+    private function collectStructuredPlanCopy(mixed $value): string
+    {
+        if (\is_scalar($value) || (\is_object($value) && \method_exists($value, '__toString'))) {
+            $text = \trim((string)$value);
+
+            return $text !== '' ? $text : '';
+        }
+        if (!\is_array($value)) {
+            return '';
+        }
+
+        $json = \json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+        if (!\is_string($json) || $json === '' || $json === 'null' || $json === '[]' || $json === '{}') {
+            return '';
+        }
+
+        return $json;
     }
 
     /**
@@ -368,7 +375,7 @@ final class SourceTruthCoverageLinter
                 continue;
             }
             $text = \trim((string)($fact['text'] ?? ''));
-            if ($text === '' || $this->isInternalPlanningFact($text)) {
+            if ($text === '' || $this->isInternalPlanningFact($text) || $this->isDesignOnlyFact($text)) {
                 continue;
             }
             $facts[] = $fact;
@@ -393,6 +400,37 @@ final class SourceTruthCoverageLinter
         return false;
     }
 
+    private function isDesignOnlyFact(string $text): bool
+    {
+        $normalized = \mb_strtolower(\trim($text));
+        if ($normalized === '') {
+            return true;
+        }
+
+        $designSignal = \preg_match('/\b(?:hero|immersive|responsive|section|sections|typography|font|layout|visual|aesthetic|palette|color|colour|tone|tones|warm|editorial|premium|polished|website|create|include|strictly|gradient|shadow|spacing|motion|animation|composition|style)\b/iu', $normalized) === 1;
+        if (!$designSignal) {
+            return false;
+        }
+
+        if ($this->hasGenericBusinessFactSignal($normalized)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function hasGenericBusinessFactSignal(string $text): bool
+    {
+        if (\preg_match('/(?:\d|https?:\/\/|www\.|@|[$€£¥₹]|#[a-z0-9_-]{2,})/iu', $text) === 1) {
+            return true;
+        }
+        if (\preg_match('/\b(?:brand|product|products|service|services|menu|price|pricing|offer|offers|customer|client|team|story|location|address|phone|email|hours|contact|support|book|booking|order|preorder|pre-order|reservation|download|install|app|shop|store|restaurant|hotel|clinic|course|program|membership|portfolio|case|testimonial|review|delivery|shipping|warranty)\b/iu', $text) === 1) {
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * @return list<string>
      */
@@ -411,8 +449,55 @@ final class SourceTruthCoverageLinter
                 $candidates[] = $candidate;
             }
         }
+        foreach ($this->genericFactAliases($fact) as $alias) {
+            if ($alias !== '' && !$this->isLowSignalFactToken($alias)) {
+                $candidates[] = $alias;
+            }
+        }
 
         return \array_values(\array_unique($candidates));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function genericFactAliases(string $fact): array
+    {
+        $fact = \mb_strtolower(\trim($fact));
+        if ($fact === '') {
+            return [];
+        }
+
+        $aliases = [];
+        $normalizedPhrase = \trim((string)\preg_replace('/[_-]+/u', ' ', $fact));
+        if ($normalizedPhrase !== '' && $normalizedPhrase !== $fact) {
+            $aliases[] = $normalizedPhrase;
+        }
+        foreach ($this->factSignalTokens($fact) as $token) {
+            $token = \mb_strtolower(\trim($token));
+            if ($token === '' || \mb_strlen($token) < 4 || $this->isLowSignalFactToken($token)) {
+                continue;
+            }
+            $aliases[] = $token;
+            if (\preg_match('/^[a-z][a-z-]+$/iu', $token) !== 1) {
+                continue;
+            }
+            if (\str_ends_with($token, 'ies') && \mb_strlen($token) > 4) {
+                $aliases[] = \mb_substr($token, 0, -3) . 'y';
+                continue;
+            }
+            if (\str_ends_with($token, 'es') && \mb_strlen($token) > 4) {
+                $aliases[] = \mb_substr($token, 0, -2);
+                continue;
+            }
+            if (\str_ends_with($token, 's') && !\str_ends_with($token, 'ss') && \mb_strlen($token) > 4) {
+                $aliases[] = \mb_substr($token, 0, -1);
+                continue;
+            }
+            $aliases[] = $token . 's';
+        }
+
+        return \array_values(\array_unique($aliases));
     }
 
     /**
