@@ -199,7 +199,7 @@ final class BuildPlanContentManifestLinter
         return false;
     }
 
-    private function looksLikePlanningOrImplementationCopy(string $value): bool
+    public static function isPlanningOrImplementationCopy(string $value): bool
     {
         $normalized = \strtolower(\trim($value));
         if ($normalized === '') {
@@ -220,6 +220,11 @@ final class BuildPlanContentManifestLinter
         }
 
         return false;
+    }
+
+    private function looksLikePlanningOrImplementationCopy(string $value): bool
+    {
+        return self::isPlanningOrImplementationCopy($value);
     }
 
     private function looksLikeLocaleLeak(string $value, string $locale, string $key): bool

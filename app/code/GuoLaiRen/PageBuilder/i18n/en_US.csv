@@ -957,7 +957,7 @@ Footer,Footer
 本次方案生成将使用：默认技能,"This solution generation will use: Default Skills"
 建站方案：空闲,"Site building plan: Idle"
 暂停显示日志,"Pause Log Display"
-重试方案生成,"Retry Plan Generation"
+继续失败任务,"Continue Failed Tasks"
 保存草稿,"Save draft"
 方案重建,"Plan Rebuild"
 确认方案并开始生成,"Confirm plan and start generation"
@@ -971,6 +971,8 @@ Footer,Footer
 确认后会发布到同一个草稿站点，不会额外创建第二个网站实体。,"After confirmation, it will be published to the same draft site; no second website entity will be created."
 失败项明细,失败项明细
 失败项,失败项
+"阶段一失败项，确认方案已暂停","Stage 1 has AI failures; plan confirmation is paused"
+"请先重试或重建失败项；失败详情如下。","Retry or rebuild failed items first; details are listed below."
 运行发布检查,"Run release checks"
 "AI 生成失败","AI 生成失败"
 可视化编辑,"Visual Editing"

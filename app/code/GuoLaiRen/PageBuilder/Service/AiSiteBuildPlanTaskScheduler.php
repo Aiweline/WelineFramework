@@ -23,7 +23,7 @@ final class AiSiteBuildPlanTaskScheduler
         $service = $this->buildPlanService();
         $contract = $service->confirm($service->buildFromScope($scope, $websiteProfile));
         $validation = $service->validate($contract);
-        $validation = $this->mergeValidation($validation, $this->validateSourceTruthCoverage($scope, $contract));
+        $validation = $this->mergeValidation($validation, $this->validateSourceTruthCoverage($scope));
         if (!($validation['valid'] ?? false)) {
             return [
                 'build_plan_v2_validation' => $validation,
@@ -79,25 +79,45 @@ final class AiSiteBuildPlanTaskScheduler
     }
 
     /**
+     * SourceTruth 必含事实仅对照阶段一 plan_json（与 AiSiteBuildTaskService 一致），
+     * 不再从 BuildPlan content_manifest 派生文案回退校验。
+     *
      * @param array<string, mixed> $scope
      * @return array{valid:bool,errors:list<string>,warnings:list<string>,findings:list<array<string,mixed>>}
      */
-    private function validateSourceTruthCoverage(array $scope, array $contract = []): array
+    private function validateSourceTruthCoverage(array $scope): array
     {
         $sourceTruth = $this->sanitizeSourceTruthContract(
             \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : []
         );
-        if ($sourceTruth !== [] && $contract !== []) {
-            $lint = (new SourceTruthCoverageLinter())->lintBuildPlanContract($sourceTruth, $contract);
-            return $this->coverageLintResultToValidation($lint);
-        }
-
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        if ($sourceTruth === [] || $planJson === []) {
+        if ($sourceTruth === []) {
             return ['valid' => true, 'errors' => [], 'warnings' => [], 'findings' => []];
         }
 
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if ($planJson === []) {
+            $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+            if ($planStructured !== []) {
+                $planJson = $planStructured;
+            }
+        }
+        if ($planJson === []) {
+            return [
+                'valid' => false,
+                'errors' => [(string)__('存在 source_truth 合同但缺少 plan_json，无法校验必含事实覆盖。')],
+                'warnings' => [],
+                'findings' => [[
+                    'severity' => 'error',
+                    'category' => 'content_quality',
+                    'contract_type' => 'source_truth',
+                    'message' => 'plan_json is required for source_truth coverage validation',
+                    'path' => 'content_quality.missing_plan_json',
+                ]],
+            ];
+        }
+
         $lint = (new SourceTruthCoverageLinter())->lintPlanJson($sourceTruth, $planJson);
+
         return $this->coverageLintResultToValidation($lint);
     }
 
