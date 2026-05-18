@@ -522,8 +522,14 @@ $jsText = [
             submit.addEventListener('click', function () {
                 var payload = {};
                 new FormData(form).forEach(function (value, key) {
+                    if (key === 'form_key' || key === 'csrf_token' || key === '_token') {
+                        return;
+                    }
                     payload[key] = value;
                 });
+                if (payload.order_id) {
+                    payload.order_id = parseInt(payload.order_id, 10) || 0;
+                }
 
                 if (!payload.return_url) {
                     payload.return_url = buildDefaultReturnUrl();
@@ -556,8 +562,11 @@ $jsText = [
                     }
 
                     setFeedback((result && result.message) ? result.message : text.submitFailed, 'is-error');
-                }).catch(function () {
-                    setFeedback(text.submitFailed, 'is-error');
+                }).catch(function (error) {
+                    var errorMessage = error && error.response && error.response.data
+                        ? (error.response.data.message || error.response.data.msg || '')
+                        : '';
+                    setFeedback(errorMessage || (error && error.message) || text.submitFailed, 'is-error');
                 });
             });
         })();
