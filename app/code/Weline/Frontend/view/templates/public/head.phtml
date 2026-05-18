@@ -55,6 +55,10 @@ if ($isDev) {
 }
 
 // 閰嶇疆涓婚閰嶇疆
+$apiFallbackUrl = $isDev
+    ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js?v=20260517-api-loader-2'
+    : '/static/Weline/Frontend/js/weline-api-fallback.js';
+
 $themeConfigPayload = [
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
@@ -73,7 +77,7 @@ $themeConfigPayload = [
     })();
 </script>
 <!-- Weline.Api 鍚屾鍥為€€锛堢‘淇?request 绔嬪嵆鍙敤锛?-->
-<script src="<?= $isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js' : '/static/Weline/Frontend/js/weline-api-fallback.js' ?>"></script>
+<script src="<?= htmlspecialchars($apiFallbackUrl) ?>"></script>
 <!-- 娉ㄦ剰锛歍heme JS 鍜屽垵濮嬪寲鐢?Theme 妯″潡鐨?head partial 璐熻矗锛屼笉鍦ㄦ澶勫姞杞?-->
 <!--鍔犺浇閰嶇疆椤靛ご-->
 <?php

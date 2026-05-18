@@ -5,7 +5,7 @@
     .dt-demo-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
 </style>
 
-<?= $frontend_api_bootstrap ?? '' ?>
+<?= $worker_bootstrap ?? '' ?>
 
 <div class="dt-demo-page" data-demo-page="<?= $page_key ?>" data-testid="dt-performance-page">
     <div class="dt-demo-top">
@@ -35,9 +35,7 @@
                show-pagination="true"
                show-toolbar="true"
                show-config="true"
-               allow-frontend="true"
-               api-url="datatable/rest/v1/demo-table"
-               field-api-url="datatable/rest/v1/demo-form/fields">
+               allow-frontend="true">
     </w:d-table>
 </div>
 

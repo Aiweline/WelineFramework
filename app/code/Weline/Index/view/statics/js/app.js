@@ -151,20 +151,37 @@ function validateForm() {
       return false;
   }
 
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function () {
-      if (this.readyState == 4 && this.status == 200) {
-          document.getElementById("simple-msg").innerHTML = this.responseText;
-          document.forms["myForm"]["name"].value = "";
-          document.forms["myForm"]["email"].value = "";
-          document.forms["myForm"]["subject"].value = "";
-          document.forms["myForm"]["comments"].value = "";
-      }
-  };
-  // xhttp.open("POST", "php/contact.php", true);
-  xhttp.open("POST", window.url('*/contact'), true);
-  xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-  xhttp.send("name=" + name + "&email=" + email + "&subject=" + subject + "&comments=" + comments);
+  if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+      document.getElementById('error-msg').innerHTML = "<div class='alert alert-danger'>Contact service is unavailable.</div>";
+      fadeIn();
+      return false;
+  }
+
+  Promise.resolve(window.Weline.Api.resource('contact'))
+      .then(function (ContactApi) {
+          return ContactApi.submit({
+              name: name,
+              email: email,
+              subject: subject,
+              comments: comments
+          }, { silent: true });
+      })
+      .then(function (data) {
+          if (data && data.success) {
+              document.getElementById("simple-msg").innerHTML = data.message || "Message sent.";
+              document.forms["myForm"]["name"].value = "";
+              document.forms["myForm"]["email"].value = "";
+              document.forms["myForm"]["subject"].value = "";
+              document.forms["myForm"]["comments"].value = "";
+              return;
+          }
+          document.getElementById('error-msg').innerHTML = "<div class='alert alert-danger'>" + ((data && data.message) || "Message send failed.") + "</div>";
+          fadeIn();
+      })
+      .catch(function (error) {
+          document.getElementById('error-msg').innerHTML = "<div class='alert alert-danger'>" + (error && error.message ? error.message : "Message send failed.") + "</div>";
+          fadeIn();
+      });
   return false;
 }
 

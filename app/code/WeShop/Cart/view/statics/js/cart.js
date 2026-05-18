@@ -44,12 +44,21 @@
 
     function getCartApi() {
         if (!cartApiPromise) {
-            if (!window.Weline?.Api?.resource) {
-                return Promise.reject(new Error('Weline.Api.resource is not available'));
-            }
-            cartApiPromise = Promise.resolve(window.Weline.Api.resource('cart'));
+            cartApiPromise = resolveApiResource('cart');
         }
         return cartApiPromise;
+    }
+
+    async function resolveApiResource(provider) {
+        if (window.WelineApiModule?.__full === true && typeof window.WelineApiModule?.resource === 'function') {
+            return window.WelineApiModule.resource(provider);
+        }
+
+        if (typeof window.Weline?.Api?.resource === 'function') {
+            return await window.Weline.Api.resource(provider);
+        }
+
+        throw new Error('Weline.Api.resource is not available');
     }
 
     /**
@@ -154,9 +163,9 @@
 
         // 监听自定义事件
         document.addEventListener('weshop:addToCart', function (e) {
-            const { productId, qty } = e.detail || {};
+            const { productId, qty, selectedOptions } = e.detail || {};
             if (productId) {
-                addToCart(productId, qty || 1);
+                addToCart(productId, qty || 1, Array.isArray(selectedOptions) ? selectedOptions : []);
             }
         });
     }
@@ -676,12 +685,14 @@
     }
 
     /**
-     * 格式化价格
+     * 格式化价格 - 使用全局货币配置，与 PHP CurrencyFormatter 保持一致
      */
     function formatPrice(price) {
-        const currency = window.Weline?.Config?.currency || 'CNY';
-        const currencySymbol = { CNY: '¥', USD: '$', EUR: '€', GBP: '£' }[currency] || '¥';
-        return currencySymbol + parseFloat(price).toFixed(2);
+        if (typeof window.formatConvertedCurrency === 'function') {
+            return window.formatConvertedCurrency(price);
+        }
+        // 降级：仅在全局函数不可用时使用
+        return parseFloat(price).toFixed(2);
     }
 
     /**
@@ -702,7 +713,7 @@
     }
 
     // 导出公共API
-    window.WeShopCart = {
+    const publicApi = {
         init,
         addToCart,
         showOptionsPopup,
@@ -710,6 +721,11 @@
         updateCartCount,
         getState: () => ({ ...state }),
     };
+    try {
+        window.WeShopCart = publicApi;
+    } catch (error) {
+        // Embedded browser sandboxes can make window non-extensible; listeners still initialize below.
+    }
 
     // 自动初始化
     if (document.readyState === 'loading') {
@@ -718,4 +734,441 @@
         init();
     }
 
+})(window, document);
+
+(function (window, document) {
+    'use strict';
+
+    const API_READY_TIMEOUT_MS = 3500;
+    const API_CALL_TIMEOUT_MS = 9000;
+    const workerApiPromises = Object.create(null);
+    let apiModuleScriptPromise = null;
+
+    function initCartPageInteractions() {
+        const page = document.querySelector('[data-cart-page]');
+        if (!page || page.dataset.cartInteractionsBound === '1') {
+            return;
+        }
+
+        page.dataset.cartInteractionsBound = '1';
+        bindImageFallbacks(page);
+
+        document.addEventListener('weshop:cart:added', () => {
+            window.location.reload();
+        });
+
+        page.addEventListener('click', (event) => {
+            const trashToggle = event.target.closest('[data-action="toggle-cart-trash"]');
+            if (trashToggle && page.contains(trashToggle)) {
+                event.preventDefault();
+                toggleCartTrash(trashToggle);
+                return;
+            }
+
+            const restoreBtn = event.target.closest('[data-action="restore-cart-item"]');
+            if (restoreBtn && page.contains(restoreBtn)) {
+                event.preventDefault();
+                restoreCartItem(restoreBtn.dataset.itemId, restoreBtn);
+                return;
+            }
+
+            const increaseBtn = event.target.closest('.qty-increase');
+            if (increaseBtn && page.contains(increaseBtn)) {
+                event.preventDefault();
+                const itemId = increaseBtn.dataset.itemId;
+                const input = findCartQtyInput(itemId);
+                updateCartItem(itemId, (parseInt(input?.value, 10) || 1) + 1);
+                return;
+            }
+
+            const decreaseBtn = event.target.closest('.qty-decrease');
+            if (decreaseBtn && page.contains(decreaseBtn)) {
+                event.preventDefault();
+                const itemId = decreaseBtn.dataset.itemId;
+                const input = findCartQtyInput(itemId);
+                const qty = parseInt(input?.value, 10) || 1;
+                if (qty > 1) {
+                    updateCartItem(itemId, qty - 1);
+                }
+                return;
+            }
+
+            const deleteBtn = event.target.closest('.delete-item');
+            if (deleteBtn && page.contains(deleteBtn)) {
+                event.preventDefault();
+                deleteCartItem(deleteBtn.dataset.itemId);
+                return;
+            }
+
+            const saveBtn = event.target.closest('.save-for-later');
+            if (saveBtn && page.contains(saveBtn)) {
+                event.preventDefault();
+                saveForLater(saveBtn.dataset.itemId);
+                return;
+            }
+
+            const promoBtn = event.target.closest('#apply-promo');
+            if (promoBtn && page.contains(promoBtn)) {
+                event.preventDefault();
+                const code = (document.getElementById('promo-code')?.value || '').trim();
+                if (code !== '') {
+                    applyPromoCode(code);
+                } else {
+                    showCartPageMessage('请输入优惠码', 'warning');
+                }
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            const trash = page.querySelector('[data-cart-trash]');
+            if (!trash || trash.contains(event.target)) {
+                return;
+            }
+
+            closeCartTrash(trash);
+        });
+
+        page.addEventListener('change', (event) => {
+            const input = event.target.closest('.qty-input');
+            if (!input || !page.contains(input)) {
+                return;
+            }
+
+            let qty = parseInt(input.value, 10) || 1;
+            if (qty < 1) {
+                qty = 1;
+                input.value = '1';
+            }
+
+            updateCartItem(input.dataset.itemId, qty);
+        });
+    }
+
+    function bindImageFallbacks(page) {
+        page.querySelectorAll('.cart-product-img, .cart-related-image img').forEach((img) => {
+            img.addEventListener('error', function () {
+                const holder = document.createElement('div');
+                holder.className = 'cart-product-placeholder';
+                holder.textContent = '暂无图片';
+                this.replaceWith(holder);
+            }, { once: true });
+        });
+    }
+
+    function findCartQtyInput(itemId) {
+        return Array.from(document.querySelectorAll('.qty-input')).find((input) => {
+            return input.dataset.itemId === String(itemId);
+        }) || null;
+    }
+
+    function toggleCartTrash(trigger) {
+        const wrapper = trigger.closest('[data-cart-trash]');
+        if (!wrapper) {
+            return;
+        }
+
+        const panel = wrapper.querySelector('[data-cart-trash-panel]');
+        if (!panel) {
+            return;
+        }
+
+        const shouldOpen = panel.hidden;
+        panel.hidden = !shouldOpen;
+        wrapper.classList.toggle('is-open', shouldOpen);
+        trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    }
+
+    function closeCartTrash(wrapper) {
+        const panel = wrapper.querySelector('[data-cart-trash-panel]');
+        const trigger = wrapper.querySelector('[data-action="toggle-cart-trash"]');
+        if (!panel || panel.hidden) {
+            return;
+        }
+
+        panel.hidden = true;
+        wrapper.classList.remove('is-open');
+        if (trigger) {
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    function getWorkerApi(provider) {
+        if (!workerApiPromises[provider]) {
+            workerApiPromises[provider] = waitForWorkerApi(provider);
+        }
+        return workerApiPromises[provider];
+    }
+
+    function waitForWorkerApi(provider) {
+        const startedAt = Date.now();
+
+        return new Promise((resolve, reject) => {
+            const attempt = async () => {
+                try {
+                    const resolved = await resolveWorkerApi(provider);
+                    if (resolved) {
+                        resolve(resolved);
+                        return;
+                    }
+                } catch (error) {
+                    reject(error);
+                    return;
+                }
+
+                if (Date.now() - startedAt >= API_READY_TIMEOUT_MS) {
+                    reject(new Error('前端 API 尚未加载，请刷新后重试'));
+                    return;
+                }
+
+                window.setTimeout(attempt, 50);
+            };
+
+            attempt();
+        });
+    }
+
+    async function resolveWorkerApi(provider) {
+        if (window.WelineApiModule?.__full === true && typeof window.WelineApiModule?.resource === 'function') {
+            return window.WelineApiModule.resource(provider);
+        }
+
+        await loadApiModuleScript();
+        if (window.WelineApiModule?.__full === true && typeof window.WelineApiModule?.resource === 'function') {
+            return window.WelineApiModule.resource(provider);
+        }
+
+        if (typeof window.Weline?.Api?.resource === 'function') {
+            return await withTimeout(
+                window.Weline.Api.resource(provider),
+                API_READY_TIMEOUT_MS,
+                '前端 API 加载超时，请刷新后重试'
+            );
+        }
+
+        return null;
+    }
+
+    function loadApiModuleScript() {
+        if (window.WelineApiModule?.__full === true && typeof window.WelineApiModule?.resource === 'function') {
+            return Promise.resolve();
+        }
+
+        if (!apiModuleScriptPromise) {
+            apiModuleScriptPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = '/Weline/Frontend/view/statics/js/weline-api.js?v=20260517-cart-page';
+                script.async = true;
+                script.onload = () => window.setTimeout(resolve, 30);
+                script.onerror = () => reject(new Error('前端 API 模块加载失败，请刷新后重试'));
+                document.head.appendChild(script);
+            });
+        }
+
+        return withTimeout(apiModuleScriptPromise, API_READY_TIMEOUT_MS, '前端 API 模块加载超时，请刷新后重试');
+    }
+
+    async function updateCartItem(itemId, qty) {
+        setCartItemBusy(itemId, true);
+        try {
+            const CartApi = await getWorkerApi('cart');
+            const data = normalizeCartApiPayload(await withTimeout(
+                CartApi.update({
+                    item_id: parseInt(itemId, 10),
+                    quantity: qty,
+                }),
+                API_CALL_TIMEOUT_MS,
+                '更新购物车超时，请稍后重试'
+            ));
+
+            if (data.success !== false) {
+                window.location.reload();
+            } else {
+                showCartPageMessage(data.message || '更新购物车失败', 'error');
+            }
+        } catch (error) {
+            showCartPageMessage(error.message || '更新购物车失败', 'error');
+        } finally {
+            setCartItemBusy(itemId, false);
+        }
+    }
+
+    async function deleteCartItem(itemId) {
+        setCartItemBusy(itemId, true);
+        try {
+            const CartApi = await getWorkerApi('cart');
+            const data = normalizeCartApiPayload(await withTimeout(
+                CartApi.remove({ item_id: parseInt(itemId, 10) }),
+                API_CALL_TIMEOUT_MS,
+                '移除商品超时，请稍后重试'
+            ));
+
+            if (data.success !== false) {
+                window.location.reload();
+            } else {
+                showCartPageMessage(data.message || '移除商品失败', 'error');
+            }
+        } catch (error) {
+            showCartPageMessage(error.message || '移除商品失败', 'error');
+        } finally {
+            setCartItemBusy(itemId, false);
+        }
+    }
+
+    async function restoreCartItem(itemId, triggerBtn) {
+        if (triggerBtn) {
+            triggerBtn.disabled = true;
+        }
+
+        try {
+            const CartApi = await getWorkerApi('cart');
+            const data = normalizeCartApiPayload(await withTimeout(
+                CartApi.restore({ item_id: parseInt(itemId, 10) }),
+                API_CALL_TIMEOUT_MS,
+                '恢复商品超时，请稍后重试'
+            ));
+
+            if (data.success !== false) {
+                window.location.reload();
+            } else {
+                showCartPageMessage(data.message || '恢复商品失败', 'error');
+            }
+        } catch (error) {
+            showCartPageMessage(error.message || '恢复商品失败', 'error');
+        } finally {
+            if (triggerBtn) {
+                triggerBtn.disabled = false;
+            }
+        }
+    }
+
+    async function saveForLater(itemId) {
+        setCartItemBusy(itemId, true);
+        try {
+            const WishlistApi = await getWorkerApi('wishlist');
+            const data = normalizeCartApiPayload(await withTimeout(
+                WishlistApi.addFromCart({ item_id: parseInt(itemId, 10) }),
+                API_CALL_TIMEOUT_MS,
+                '加入稍后再买超时，请稍后重试'
+            ));
+
+            if (data.success) {
+                window.location.reload();
+                return;
+            }
+
+            if (data.data && data.data.redirect_url) {
+                window.location.href = data.data.redirect_url;
+                return;
+            }
+
+            showCartPageMessage(data.message || '暂时无法加入稍后再买', 'error');
+        } catch (error) {
+            showCartPageMessage(error.message || '暂时无法加入稍后再买', 'error');
+        } finally {
+            setCartItemBusy(itemId, false);
+        }
+    }
+
+    async function applyPromoCode(code) {
+        try {
+            const page = document.querySelector('[data-cart-page]');
+            const orderTotal = parseFloat(page?.dataset.orderTotal || '0') || 0;
+            const PromotionApi = await getWorkerApi('promotion');
+            const data = normalizeCartApiPayload(await withTimeout(
+                PromotionApi.applyCoupon({ code, order_total: orderTotal }),
+                API_CALL_TIMEOUT_MS,
+                '应用优惠码超时，请稍后重试'
+            ));
+
+            if (data.success) {
+                window.location.reload();
+            } else {
+                showCartPageMessage(data.message || '优惠码不可用', 'warning');
+            }
+        } catch (error) {
+            showCartPageMessage(error.message || '优惠码不可用', 'warning');
+        }
+    }
+
+    function normalizeCartApiPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return payload || {};
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(payload, 'code') || typeof payload.data !== 'object' || !payload.data) {
+            return payload;
+        }
+
+        const code = Number(payload.code || 0);
+        return Object.assign({
+            code,
+            message: payload.msg || payload.data.message || '',
+            success: code >= 200 && code < 300 && payload.data.success !== false,
+        }, payload.data);
+    }
+
+    function withTimeout(promise, timeoutMs, message) {
+        let timer = null;
+        const timeout = new Promise((_, reject) => {
+            timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+        });
+
+        return Promise.race([Promise.resolve(promise), timeout]).finally(() => {
+            if (timer !== null) {
+                window.clearTimeout(timer);
+            }
+        });
+    }
+
+    function setCartItemBusy(itemId, busy) {
+        const item = Array.from(document.querySelectorAll('.cart-item')).find((candidate) => {
+            return candidate.dataset.itemId === String(itemId);
+        });
+        if (!item) {
+            return;
+        }
+
+        item.style.opacity = busy ? '.66' : '';
+        item.querySelectorAll('button, input').forEach((control) => {
+            control.disabled = !!busy;
+        });
+    }
+
+    function showCartPageMessage(message, type) {
+        if (window.WeShop && typeof window.WeShop.showNotification === 'function') {
+            window.WeShop.showNotification(message, type || 'info');
+            return;
+        }
+
+        let container = document.getElementById('cart-message-stack');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'cart-message-stack';
+            container.style.cssText = 'position:fixed;right:24px;bottom:24px;z-index:10000;display:grid;gap:10px;max-width:min(360px,calc(100vw - 48px));';
+            document.body.appendChild(container);
+        }
+
+        const item = document.createElement('div');
+        item.className = `cart-message cart-message--${type || 'info'}`;
+        item.textContent = message;
+        item.style.cssText = [
+            'border-radius:14px',
+            'padding:12px 14px',
+            `background:${type === 'error' ? '#b42318' : '#171717'}`,
+            'color:#fff',
+            'box-shadow:0 14px 36px rgba(18,24,38,.18)',
+            'font-weight:800',
+            'font-size:13px',
+        ].join(';');
+        container.appendChild(item);
+        window.setTimeout(() => item.remove(), 3200);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCartPageInteractions, { once: true });
+    } else {
+        initCartPageInteractions();
+    }
+
+    window.addEventListener('weline:theme:initialized', initCartPageInteractions);
 })(window, document);

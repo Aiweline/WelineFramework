@@ -139,9 +139,18 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
             var form = document.getElementById('review-form');
             var submit = document.getElementById('review-submit');
             var feedback = document.getElementById('review-feedback');
+            var apiPromise = null;
 
             if (!form || !submit) {
                 return;
+            }
+
+            function getReviewApi() {
+                if (!apiPromise) {
+                    apiPromise = Promise.resolve(window.Weline.Api.resource('review'));
+                }
+
+                return apiPromise;
             }
 
             submit.addEventListener('click', function () {
@@ -150,15 +159,8 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                     payload[key] = value;
                 });
 
-                fetch(form.action, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(payload)
-                }).then(function (response) {
-                    return response.json();
+                getReviewApi().then(function (ReviewApi) {
+                    return ReviewApi.create(payload, {silent: true});
                 }).then(function (result) {
                     if (result && result.success) {
                         feedback.textContent = result.message || '<?= __('Thank you for your review.') ?>';

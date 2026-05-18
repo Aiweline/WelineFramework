@@ -10,6 +10,7 @@ Register::register(
     'WeShop购物车模块',
     [
         'Weline_Framework',
+        'Weline_Cart',
         'WeShop_Customer',
         'WeShop_Product',
     ]

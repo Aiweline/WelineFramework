@@ -517,6 +517,58 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
         return null;
     }
 
+    var accountApiPromise = null;
+
+    function getAccountApi() {
+        if (!accountApiPromise) {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                accountApiPromise = window.Weline.Api.resource('account');
+            } else if (window.Weline && typeof window.Weline.load === 'function') {
+                accountApiPromise = window.Weline.load('api').then(function() {
+                    if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api is unavailable.');
+                    }
+                    return window.Weline.Api.resource('account');
+                });
+            } else {
+                accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+        }
+        return accountApiPromise;
+    }
+
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function(value, key) {
+            payload[key] = value;
+        });
+        delete payload.form_key;
+        payload.agree_terms = Object.prototype.hasOwnProperty.call(payload, 'agree_terms')
+            && ['1', 'true', 'yes', 'on'].indexOf(String(payload.agree_terms).toLowerCase()) !== -1;
+        return payload;
+    }
+
+    function showRegisterError(clientError, message, focusEl) {
+        clientError.innerHTML = message;
+        clientError.hidden = false;
+        clientError.classList.add('auth-form__error--shake');
+        if (focusEl && typeof focusEl.focus === 'function') {
+            focusEl.focus();
+        }
+        setTimeout(function() {
+            clientError.classList.remove('auth-form__error--shake');
+        }, 500);
+    }
+
+    function setRegisterLoading(form, loading) {
+        var submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton) {
+            submitButton.disabled = loading;
+            submitButton.classList.toggle('auth-form__submit--busy', loading);
+            submitButton.setAttribute('aria-busy', loading ? 'true' : 'false');
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         var form = document.querySelector('form[action="/customer/account/register"]');
         var passwordEl = document.getElementById('password');
@@ -574,6 +626,7 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
         });
 
         form.addEventListener('submit', function(e) {
+            e.preventDefault();
             var password = passwordEl.value;
             var confirmPassword = confirmPasswordEl.value;
 
@@ -602,7 +655,32 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                 setTimeout(function() {
                     clientError.classList.remove('auth-form__error--shake');
                 }, 500);
+                return;
             }
+
+            setRegisterLoading(form, true);
+            getAccountApi()
+                .then(function(AccountApi) {
+                    return AccountApi.register(formDataToObject(new FormData(form)), {silent: true});
+                })
+                .then(function(data) {
+                    if (data && data.success !== false) {
+                        window.location.href = data.redirect || '/customer/account';
+                        return;
+                    }
+                    setRegisterLoading(form, false);
+                    if (!data || !data.message) {
+                        data = Object.assign({}, data || {}, { message: 'Registration failed, please try again later.' });
+                    }
+                    showRegisterError(clientError, (data && data.message) || '<lang>娉ㄥ唽澶辫触锛岃绋嶅悗閲嶈瘯</lang>', null);
+                })
+                .catch(function(error) {
+                    setRegisterLoading(form, false);
+                    if (!error || !error.message) {
+                        error = new Error('Registration request failed, please try again later.');
+                    }
+                    showRegisterError(clientError, (error && error.message) || '<lang>娉ㄥ唽璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯</lang>', null);
+                });
         });
     });
 })();

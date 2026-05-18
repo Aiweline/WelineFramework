@@ -83,9 +83,10 @@ class AccountService
      * 获取指定供应商的可用账户
      * 
      * @param string $providerCode
+     * @param bool $allowZeroBalance When true, active and connected accounts are usable even if balance is recorded as zero.
      * @return Account|null
      */
-    public function getAvailableAccount(string $providerCode): ?Account
+    public function getAvailableAccount(string $providerCode, bool $allowZeroBalance = false): ?Account
     {
         /** @var Account $accountModel */
         $accountModel = $this->objectManager->make(Account::class);
@@ -95,10 +96,11 @@ class AccountService
             ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
             ->where(Account::schema_fields_IS_DEFAULT, 1)
             ->where(Account::schema_fields_IS_ACTIVE, 1)
-            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
-            ->where(Account::schema_fields_BALANCE, 0, '>')
-            ->find()
-            ->fetch();
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
+        if (!$allowZeroBalance) {
+            $defaultAccount->where(Account::schema_fields_BALANCE, 0, '>');
+        }
+        $defaultAccount = $defaultAccount->find()->fetch();
             
         if ($defaultAccount->getId()) {
             return $defaultAccount;
@@ -108,8 +110,11 @@ class AccountService
         $availableAccount = $accountModel->clear()
             ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
             ->where(Account::schema_fields_IS_ACTIVE, 1)
-            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
-            ->where(Account::schema_fields_BALANCE, 0, '>')
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
+        if (!$allowZeroBalance) {
+            $availableAccount->where(Account::schema_fields_BALANCE, 0, '>');
+        }
+        $availableAccount = $availableAccount
             ->order(Account::schema_fields_BALANCE, 'DESC')
             ->find()
             ->fetch();

@@ -24,6 +24,7 @@
         this.searchCategorySelect = null;
         this.searchCategoryLabel = null;
         this.searchCategoryFacade = null;
+        this.searchApiPromise = null;
     }
 
     SearchManager.prototype = {
@@ -194,26 +195,14 @@
         },
 
         fetchSearchSuggestions: function (query, container) {
-            const searchApiUrl = (window.Weline && window.Weline.config && window.Weline.config.searchSuggestionsApi)
-                || (window.welineConfig && window.welineConfig.searchSuggestionsApi)
-                || this.searchWrapper.dataset.searchSuggestionsUrl
-                || '/search/suggest';
-
-            fetch(searchApiUrl + '?q=' + encodeURIComponent(query), {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-                .then((response) => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
+            this.getSearchApi()
+                .then((SearchApi) => {
+                    return SearchApi.suggest({ keyword: query, limit: 8 });
                 })
                 .then((data) => {
-                    const suggestions = Array.isArray(data && data.suggestions) ? data.suggestions : [];
+                    const suggestions = Array.isArray(data && data.suggestions)
+                        ? data.suggestions
+                        : (Array.isArray(data) ? data : []);
                     if (suggestions.length > 0) {
                         this.renderSuggestions(suggestions, container, query);
                         return;
@@ -224,6 +213,16 @@
                 .catch(() => {
                     this.renderDefaultSuggestions(query, container);
                 });
+        },
+
+        getSearchApi: function () {
+            if (!this.searchApiPromise) {
+                if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                    return Promise.reject(new Error('Weline.Api.resource is not available'));
+                }
+                this.searchApiPromise = Promise.resolve(window.Weline.Api.resource('search'));
+            }
+            return this.searchApiPromise;
         },
 
         renderSuggestions: function (suggestions, container, query) {

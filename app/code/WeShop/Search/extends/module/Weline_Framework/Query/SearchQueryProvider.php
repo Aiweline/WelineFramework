@@ -72,11 +72,18 @@ class SearchQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'suggest',
                     'description' => __('Get search suggestions.'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 2,
+                    'cache_ttl' => 10,
                     'params' => [
-                        ['name' => 'keyword', 'type' => 'string', 'required' => true],
-                        ['name' => 'limit', 'type' => 'int', 'required' => false],
-                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'keyword', 'type' => 'string', 'required' => true, 'max_length' => 120],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 20],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Search suggestions',
                 ],
                 [
                     'name' => 'rebuildIndex',

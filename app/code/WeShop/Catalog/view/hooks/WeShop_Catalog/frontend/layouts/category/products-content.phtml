@@ -456,6 +456,16 @@ if ($__productsHtmlCacheKey !== null) {
 
 <script>
 (function() {
+    var cartApiPromise = null;
+
+    function getCartApi() {
+        if (!cartApiPromise) {
+            cartApiPromise = Promise.resolve(window.Weline.Api.resource('cart'));
+        }
+
+        return cartApiPromise;
+    }
+
     function updateCartCount(count) {
         document.querySelectorAll('.cart-count, [data-cart-count]').forEach(function(el) {
             el.textContent = count;
@@ -464,19 +474,12 @@ if ($__productsHtmlCacheKey !== null) {
     }
 
     function addToCart(productId, qty, btn) {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/cart/frontend/api/add', true);
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-        xhr.onload = function() {
-            var payload = {};
-            try {
-                payload = JSON.parse(xhr.responseText || '{}');
-            } catch (e) {
-                payload = {};
-            }
+        getCartApi().then(function (CartApi) {
+            return CartApi.add({product_id: parseInt(productId, 10), qty: parseInt(qty || 1, 10)}, {silent: true});
+        }).then(function(response) {
+            var payload = response && response.data ? response.data : (response || {});
 
-            if (xhr.status >= 200 && xhr.status < 300 && payload.success) {
+            if (payload.success) {
                 updateCartCount(parseInt(payload.cart_count || 0, 10));
                 btn.classList.add('added');
                 var text = btn.querySelector('.btn-text') || btn.querySelector('span');
@@ -489,16 +492,12 @@ if ($__productsHtmlCacheKey !== null) {
             } else {
                 document.dispatchEvent(new CustomEvent('weshop:cart:error', { detail: payload }));
             }
-        };
-        xhr.onloadend = function() {
+        }).catch(function(error) {
+            document.dispatchEvent(new CustomEvent('weshop:cart:error', { detail: {message: error && error.message ? error.message : String(error)} }));
+        }).finally(function() {
             btn.disabled = false;
             btn.classList.remove('loading');
-        };
-        xhr.onerror = function() {
-            btn.disabled = false;
-            btn.classList.remove('loading');
-        };
-        xhr.send('product_id=' + encodeURIComponent(productId) + '&qty=' + encodeURIComponent(qty || 1));
+        });
     }
 
     document.querySelectorAll('.btn-add-to-cart').forEach(function(btn) {

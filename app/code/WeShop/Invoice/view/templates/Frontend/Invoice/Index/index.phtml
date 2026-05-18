@@ -17,24 +17,27 @@ $buildPaginationUrl = function (int $targetPage) use ($invoiceUrl, $pageSize): s
     ]);
     return $invoiceUrl . ($query !== '' ? '?' . $query : '');
 };
+$formatPrice = static function (float $amount): string {
+    return \Weline\Currency\Helper\CurrencyFormatter::formatConverted($amount);
+};
 ?>
 <main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
     <section class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
         <div class="grid gap-6 p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
             <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Billing Documents') ?></p>
-                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('My Invoices') ?></h1>
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('账单文档') ?></p>
+                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('我的发票') ?></h1>
                 <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Review issued invoices, pending requests, and billing references for your recent orders.') ?>
+                    <?= __('查看已开具的发票、待处理申请和近期订单的账单参考信息。') ?>
                 </p>
             </div>
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                 <div class="rounded-3xl border border-border-light bg-background-light p-6 dark:border-border-dark dark:bg-background-dark">
-                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Total invoices') ?></p>
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('发票总数') ?></p>
                     <p class="mt-2 text-4xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $invoiceCount ?></p>
                 </div>
                 <div class="rounded-3xl border border-border-light bg-background-light p-6 dark:border-border-dark dark:bg-background-dark">
-                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Pending issue') ?></p>
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('待开具') ?></p>
                     <p class="mt-2 text-4xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $pendingCount ?></p>
                 </div>
             </div>
@@ -49,11 +52,11 @@ $buildPaginationUrl = function (int $targetPage) use ($invoiceUrl, $pageSize): s
                 <table class="min-w-full divide-y divide-border-light dark:divide-border-dark">
                     <thead>
                     <tr class="text-left text-xs font-semibold uppercase tracking-[0.2em] text-text-secondary-light dark:text-text-secondary-dark">
-                        <th class="px-4 py-3"><?= __('Invoice') ?></th>
-                        <th class="px-4 py-3"><?= __('Order') ?></th>
-                        <th class="px-4 py-3"><?= __('Amount') ?></th>
-                        <th class="px-4 py-3"><?= __('Status') ?></th>
-                        <th class="px-4 py-3"><?= __('Created At') ?></th>
+                        <th class="px-4 py-3"><?= __('发票号') ?></th>
+                        <th class="px-4 py-3"><?= __('订单') ?></th>
+                        <th class="px-4 py-3"><?= __('金额') ?></th>
+                        <th class="px-4 py-3"><?= __('状态') ?></th>
+                        <th class="px-4 py-3"><?= __('创建时间') ?></th>
                     </tr>
                     </thead>
                     <tbody class="divide-y divide-border-light dark:divide-border-dark">
@@ -61,7 +64,7 @@ $buildPaginationUrl = function (int $targetPage) use ($invoiceUrl, $pageSize): s
                         <tr>
                             <td class="px-4 py-4 text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($invoice['invoice_number'] ?? ''), ENT_QUOTES) ?></td>
                             <td class="px-4 py-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($invoice['order_increment_id'] ?? ''), ENT_QUOTES) ?></td>
-                            <td class="px-4 py-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= number_format((float) ($invoice['amount'] ?? 0), 2) ?></td>
+                            <td class="px-4 py-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= $formatPrice((float) ($invoice['amount'] ?? 0)) ?></td>
                             <td class="px-4 py-4 text-sm text-text-secondary-light dark:text-text-secondary-dark">
                                 <?php $statusLabel = (string) ($invoice['status_label'] ?? ucfirst((string) ($invoice['status'] ?? 'pending'))); ?>
                                 <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= ($invoice['status'] ?? 'pending') === 'issued' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' ?>">
@@ -82,20 +85,20 @@ $buildPaginationUrl = function (int $targetPage) use ($invoiceUrl, $pageSize): s
         <?php else: ?>
             <div class="rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark">
                 <span class="material-symbols-outlined text-5xl text-primary">receipt_long</span>
-                <h2 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No invoices yet') ?></h2>
-                <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Your issued billing documents will appear here once order invoicing is complete.') ?></p>
+                <h2 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('暂无发票') ?></h2>
+                <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('订单开票完成后，已开具的账单文档会显示在这里。') ?></p>
             </div>
         <?php endif; ?>
 
         <div class="mt-6 flex flex-col gap-3 text-sm text-text-secondary-light dark:text-text-secondary-dark sm:flex-row sm:items-center sm:justify-between">
             <div class="flex flex-wrap items-center gap-3">
-                <span><?= __('Issued: %1', $issuedCount) ?></span>
-                <span><?= __('Page %1 of %2', $page, $pageCount) ?></span>
+                <span><?= __('已开具：%{1}', [$issuedCount]) ?></span>
+                <span><?= __('第 %{1} 页 / 共 %{2} 页', [$page, $pageCount]) ?></span>
             </div>
             <?php if ($pageCount > 1): ?>
                 <div class="flex flex-wrap gap-3">
-                    <a href="<?= $hasPrevious ? htmlspecialchars($buildPaginationUrl($page - 1), ENT_QUOTES) : '#' ?>" class="rounded-full border border-border-light bg-background-light px-4 py-2 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark <?= $hasPrevious ? '' : 'pointer-events-none opacity-40' ?>" aria-disabled="<?= $hasPrevious ? 'false' : 'true' ?>"><?= __('Previous page') ?></a>
-                    <a href="<?= $hasNext ? htmlspecialchars($buildPaginationUrl($page + 1), ENT_QUOTES) : '#' ?>" class="rounded-full border border-border-light bg-background-light px-4 py-2 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark <?= $hasNext ? '' : 'pointer-events-none opacity-40' ?>" aria-disabled="<?= $hasNext ? 'false' : 'true' ?>"><?= __('Next page') ?></a>
+                    <a href="<?= $hasPrevious ? htmlspecialchars($buildPaginationUrl($page - 1), ENT_QUOTES) : '#' ?>" class="rounded-full border border-border-light bg-background-light px-4 py-2 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark <?= $hasPrevious ? '' : 'pointer-events-none opacity-40' ?>" aria-disabled="<?= $hasPrevious ? 'false' : 'true' ?>"><?= __('上一页') ?></a>
+                    <a href="<?= $hasNext ? htmlspecialchars($buildPaginationUrl($page + 1), ENT_QUOTES) : '#' ?>" class="rounded-full border border-border-light bg-background-light px-4 py-2 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark <?= $hasNext ? '' : 'pointer-events-none opacity-40' ?>" aria-disabled="<?= $hasNext ? 'false' : 'true' ?>"><?= __('下一页') ?></a>
                 </div>
             <?php endif; ?>
         </div>

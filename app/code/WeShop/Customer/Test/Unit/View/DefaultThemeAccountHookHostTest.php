@@ -31,7 +31,7 @@ class DefaultThemeAccountHookHostTest extends TestCase
 
         $this->assertStringContainsString("getUrl('compare')", $template);
         $this->assertStringContainsString("getUrl('recently-viewed')", $template);
-        $this->assertStringContainsString("getUrl('rma')", $template);
+        $this->assertStringContainsString('/customer/account/index#returns', $template);
         $this->assertStringContainsString("$this->getData('compare_preview')", $template);
         $this->assertStringContainsString("$this->getData('subscription_count')", $template);
         $this->assertStringContainsString("$this->getData('rma_count')", $template);
@@ -41,8 +41,8 @@ class DefaultThemeAccountHookHostTest extends TestCase
         $this->assertStringContainsString('My Orders', $template);
         $this->assertStringContainsString('Returns & Exchanges', $template);
         $this->assertStringContainsString('After-Sales Center', $template);
-        $this->assertStringContainsString("getUrl('weshop/order/view'", $template);
-        $this->assertStringContainsString("getUrl('rma', ['order_id'", $template);
+        $this->assertStringContainsString('/customer/account/index#orders', $template);
+        $this->assertStringContainsString('/customer/account/index?order_id=', $template);
     }
 
     public function testAccountPageHostsQuickLinksAndRecommendationsHooks(): void

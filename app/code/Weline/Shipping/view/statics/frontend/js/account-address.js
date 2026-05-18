@@ -22,6 +22,7 @@
         saving: '\u4fdd\u5b58\u4e2d...',
         requestFailed: '\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5'
     };
+    var apiResources = Object.create(null);
 
     function text(value) {
         return value == null ? '' : String(value);
@@ -192,22 +193,32 @@
         wrap.hidden = true;
     }
 
-    function requestJson(url, formData) {
-        return fetch(url, {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: formData
-        }).then(function (response) {
-            return response.text().then(function (body) {
-                try {
-                    return JSON.parse(body);
-                } catch (error) {
-                    throw new Error('Response is not valid JSON, status: ' + response.status);
-                }
-            });
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function (value, key) {
+            payload[key] = value;
+        });
+        return payload;
+    }
+
+    function getAddressApi(panel) {
+        var provider = panel.dataset.addressPanel === 'shipping' ? 'shippingAddress' : 'deliveryAddress';
+        if (!apiResources[provider]) {
+            if (!window.Weline || !window.Weline.Api) {
+                return Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+            apiResources[provider] = window.Weline.Api.resource(provider);
+        }
+        return apiResources[provider];
+    }
+
+    function requestJson(panel, operation, payload) {
+        var body = payload instanceof FormData ? formDataToObject(payload) : (payload || {});
+        return getAddressApi(panel).then(function (AddressApi) {
+            if (!AddressApi || typeof AddressApi[operation] !== 'function') {
+                throw new Error('Address operation is unavailable: ' + operation);
+            }
+            return AddressApi[operation](body, {silent: true});
         });
     }
 
@@ -246,7 +257,7 @@
                 event.preventDefault();
                 var defaultData = new FormData();
                 defaultData.append('id', setDefault.dataset.id || '');
-                requestJson(panel.dataset.defaultUrl, defaultData).then(function (data) {
+                requestJson(panel, 'setDefault', defaultData).then(function (data) {
                     if (!data.success) {
                         showMessage(panel, data.message || labels.settingFailed, 'danger');
                         return;
@@ -268,7 +279,7 @@
                 event.preventDefault();
                 var deleteData = new FormData();
                 deleteData.append('id', remove.dataset.id || '');
-                requestJson(panel.dataset.deleteUrl, deleteData).then(function (data) {
+                requestJson(panel, 'delete', deleteData).then(function (data) {
                     if (!data.success) {
                         showMessage(panel, data.message || labels.deleteFailed, 'danger');
                         return;
@@ -293,7 +304,7 @@
             submit.disabled = true;
             submit.textContent = labels.saving;
 
-            requestJson(panel.dataset.saveUrl, new FormData(form)).then(function (data) {
+            requestJson(panel, 'save', new FormData(form)).then(function (data) {
                 if (!data.success) {
                     showMessage(panel, data.message || labels.saveFailed, 'danger');
                     return;

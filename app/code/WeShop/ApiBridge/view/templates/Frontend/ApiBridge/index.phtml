@@ -296,6 +296,38 @@ document.addEventListener('DOMContentLoaded', function() {
     const testResponseCode = document.getElementById('test-response-code');
     const docsContent = document.getElementById('docs-content');
     const docsEndpointName = document.getElementById('docs-endpoint-name');
+    let apiBridgeApiPromise = null;
+
+    function getApiBridgeApi() {
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+            apiBridgeApiPromise = Promise.resolve(window.Weline.Api.resource('apiBridge'));
+            return apiBridgeApiPromise;
+        }
+        if (apiBridgeApiPromise) {
+            return apiBridgeApiPromise;
+        }
+
+        apiBridgeApiPromise = new Promise(function(resolve, reject) {
+            let attempts = 0;
+            const waitForApi = function() {
+                attempts += 1;
+                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                    resolve(window.Weline.Api.resource('apiBridge'));
+                    return;
+                }
+                if (attempts >= 40) {
+                    reject(new Error('Weline.Api.resource is not available'));
+                    return;
+                }
+                window.setTimeout(waitForApi, 50);
+            };
+            waitForApi();
+        });
+        apiBridgeApiPromise.catch(function() {
+            apiBridgeApiPromise = null;
+        });
+        return apiBridgeApiPromise;
+    }
 
     // Test endpoint buttons
     document.querySelectorAll('.test-endpoint-btn').forEach(function(btn) {
@@ -345,20 +377,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         testResponseCode.textContent = '<?= __('Loading...') ?>';
 
-        // Make AJAX request
-        fetch('<?= $this->getUrl('weshop/apibridge/test') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
+        getApiBridgeApi()
+        .then(function(ApiBridgeApi) {
+            return ApiBridgeApi.test({
                 endpoint: endpoint,
                 method: method,
                 params: params
-            })
-        })
-        .then(function(response) {
-            return response.json();
+            });
         })
         .then(function(data) {
             testResponseCode.textContent = JSON.stringify(data, null, 2);

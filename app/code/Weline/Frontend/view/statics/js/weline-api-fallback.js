@@ -15,12 +15,14 @@
 
     window.WelineApiModule = {
         __full: false,
+        __fallback: true,
         request: disabled,
         get: disabled,
         post: disabled,
         call: disabled,
         graph: disabled,
         stream: disabled,
+        upload: disabled,
         resource: disabled,
         markCartActive: function () {},
         markCartEmpty: function () {},

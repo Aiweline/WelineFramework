@@ -96,4 +96,20 @@ final class FiberOutputBufferTest extends TestCase
 
         self::assertSame('request-boundary', FiberOutputBuffer::endCapture());
     }
+
+    public function testOversizedCaptureThrowsBeforeOutputHandlerExhaustsMemory(): void
+    {
+        $fiber = new \Fiber(static function (): void {
+            FiberOutputBuffer::beginCapture();
+            for ($i = 0; $i < 18; $i++) {
+                echo \str_repeat('x', 1024 * 1024);
+            }
+            FiberOutputBuffer::endCapture();
+        });
+
+        $this->expectException(\OverflowException::class);
+        $this->expectExceptionMessage('WLS output capture exceeded safe memory limits');
+
+        $fiber->start();
+    }
 }
