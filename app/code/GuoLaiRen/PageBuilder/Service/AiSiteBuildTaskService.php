@@ -474,9 +474,10 @@ class AiSiteBuildTaskService
 
         $identityDefaults = [
             'site_title' => $this->firstNonEmptyBuildPlanText([
+                $scope['site_title'] ?? null,
+                $profile['site_title'] ?? null,
                 $siteBrief['site_name'] ?? null,
                 $requirements['site_name'] ?? null,
-                $profile['site_title'] ?? null,
             ]),
             'site_tagline' => $this->firstNonEmptyBuildPlanText([
                 $requirements['site_goal'] ?? null,
@@ -799,6 +800,12 @@ class AiSiteBuildTaskService
                     ? \ucfirst($region)
                     : ($sectionKey !== '' ? \ucfirst(\str_replace(['_', '-'], ' ', $sectionKey)) : $taskId);
             }
+            $stylePlan = \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [];
+            foreach (['design_tags', 'visual_signature', 'image_intent'] as $planKey) {
+                if (\is_array($block[$planKey] ?? null) && $block[$planKey] !== []) {
+                    $stylePlan[$planKey] = $block[$planKey];
+                }
+            }
 
             $tasks[] = [
                 'task_key' => $taskId,
@@ -854,7 +861,7 @@ class AiSiteBuildTaskService
                 'block_task' => [
                     'task_goal' => $this->contentValueForBuildPlanKey($contentItems, $contentKeys[1] ?? ''),
                     'content_plan' => $this->sliceBuildPlanContentItems($contentItems, $contentKeys),
-                    'style_plan' => \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [],
+                    'style_plan' => $stylePlan,
                 ],
                 'implementation_contract' => [
                     'source' => 'build_plan_v2',
@@ -1000,11 +1007,14 @@ class AiSiteBuildTaskService
         $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
         $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
 
+        $profile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+
         return [
             'site_display_name' => $this->firstNonEmptyBuildPlanText([
+                $scope['site_title'] ?? null,
+                $profile['site_title'] ?? null,
                 $contract['site_brief']['site_name'] ?? null,
                 $requirements['site_name'] ?? null,
-                $scope['site_title'] ?? null,
             ]),
             'theme_design' => \is_array($designManifest['visual_contract'] ?? null)
                 ? $designManifest['visual_contract']
@@ -1032,10 +1042,12 @@ class AiSiteBuildTaskService
         $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
         $contentManifest = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
         $contentItems = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
+        $profile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $siteDisplayName = $this->firstNonEmptyBuildPlanText([
+            $scope['site_title'] ?? null,
+            $profile['site_title'] ?? null,
             $siteBrief['site_name'] ?? null,
             $requirements['site_name'] ?? null,
-            $scope['site_title'] ?? null,
         ]);
         $primaryCta = $this->normalizeBuildPlanPrimaryCta((string)($requirements['primary_cta'] ?? ''));
         $navigationItems = $this->buildSharedNavigationItemsFromBuildPlanContract($contract, $contentItems);
@@ -1317,7 +1329,7 @@ class AiSiteBuildTaskService
     private function buildBlueprintFromStageOneExecutionBlueprint(array $pageTypes, array $scope, string $workspaceTrack): array
     {
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $pages = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
+        $pages = $this->resolveStageOneExecutionBlueprintPagesForBuild($executionBlueprint, $scope, $pageTypes);
         if ($pages === []) {
             return [];
         }
@@ -1347,7 +1359,7 @@ class AiSiteBuildTaskService
         $pageBlueprints = [];
         foreach ($pageTypes as $pageIndex => $pageType) {
             $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            $blocks = $this->collectStageOnePageBlocksForBuild($page);
             if ($blocks === []) {
                 continue;
             }
@@ -1434,6 +1446,8 @@ class AiSiteBuildTaskService
                         'page_flow_role' => $this->firstStageBlockTitle($block, $blockKey),
                         'page_goal' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),
                         'block_goal' => $blockGoal,
+                        'stage1_visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
+                        'stage1_image_intent' => \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [],
                     ],
                     'task_script' => [
                         'component_type' => 'section',
@@ -1452,6 +1466,8 @@ class AiSiteBuildTaskService
                         'style_plan' => $this->extractStylePlanFromStageOneBlock($block),
                         'implementation_detail' => (string)($block['implementation_detail'] ?? $block['implementation_note'] ?? ''),
                         'design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
+                        'visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
+                        'image_intent' => \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [],
                         'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
                     ],
                     'runtime_context' => [
@@ -1497,6 +1513,80 @@ class AiSiteBuildTaskService
                 'tasks' => $tasks,
             ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $executionBlueprint
+     * @param array<string, mixed> $scope
+     * @param list<string> $pageTypes
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveStageOneExecutionBlueprintPagesForBuild(array $executionBlueprint, array $scope, array $pageTypes): array
+    {
+        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : [];
+        $pages = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
+        if ($pages === [] && $pagePlans !== []) {
+            $pages = $pagePlans;
+        }
+
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if ($pages === [] && \is_array($planJson['pages'] ?? null)) {
+            $pages = $planJson['pages'];
+        }
+        if ($pages === [] && \is_array($planJson['page_plans'] ?? null)) {
+            $pages = $planJson['page_plans'];
+        }
+
+        $pageTypes = \array_values(\array_filter(\array_map(
+            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            $pageTypes
+        ), static fn(string $value): bool => $value !== ''));
+        if ($pageTypes === []) {
+            $pageTypes = \array_values(\array_unique(\array_merge(
+                \array_keys($pages),
+                \array_keys($pagePlans)
+            )));
+        }
+
+        $resolved = [];
+        foreach ($pageTypes as $pageType) {
+            $page = \is_array($pages[$pageType] ?? null)
+                ? $pages[$pageType]
+                : (\is_array($pagePlans[$pageType] ?? null) ? $pagePlans[$pageType] : []);
+            if ($page !== []) {
+                $resolved[$pageType] = $page;
+            }
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return list<array<string, mixed>>
+     */
+    private function collectStageOnePageBlocksForBuild(array $page): array
+    {
+        $blocks = \is_array($page['blocks'] ?? null) ? \array_values($page['blocks']) : [];
+        $blocks = \array_values(\array_filter($blocks, static fn(mixed $block): bool => \is_array($block)));
+        if ($blocks !== []) {
+            return $blocks;
+        }
+
+        $displayBlocks = \is_array($page['display_blocks'] ?? null) ? \array_values($page['display_blocks']) : [];
+        $pageBlocks = [];
+        foreach ($displayBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $displayRole = \trim((string)($block['display_role'] ?? ''));
+            if ($displayRole !== '' && $displayRole !== 'page_block') {
+                continue;
+            }
+            $pageBlocks[] = $block;
+        }
+
+        return $pageBlocks;
     }
 
     /**
@@ -1669,6 +1759,14 @@ class AiSiteBuildTaskService
         $designTags = \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [];
         if ($designTags !== []) {
             $plan['design_tags'] = $designTags;
+        }
+        $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+        if ($visualSignature !== []) {
+            $plan['visual_signature'] = $visualSignature;
+        }
+        $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+        if ($imageIntent !== []) {
+            $plan['image_intent'] = $imageIntent;
         }
         $pageDesignPlan = \is_array($block['page_design_plan'] ?? null) ? $block['page_design_plan'] : [];
         if ($pageDesignPlan !== []) {
@@ -2624,6 +2722,7 @@ class AiSiteBuildTaskService
         $failed = (int)($summary['failed'] ?? 0);
         $cancelled = (int)($summary['cancelled'] ?? 0);
         $invalidArtifacts = $this->countInvalidCompletedTaskArtifacts($scope);
+        $duplicateArtifacts = $this->countDuplicateCompletedPageSectionArtifacts($scope);
         $unfinished = \max(0, $total - $done, $pending + $running + $failed + $cancelled);
         $hasIncompleteTasks = $total <= 0
             || $this->hasUnfinishedBlueprintTasks($scope)
@@ -2632,6 +2731,7 @@ class AiSiteBuildTaskService
             || $failed > 0
             || $cancelled > 0
             || $invalidArtifacts > 0
+            || $duplicateArtifacts > 0
             || $done < $total;
 
         $reason = '';
@@ -2643,6 +2743,8 @@ class AiSiteBuildTaskService
             $reason = 'cancelled_build_tasks';
         } elseif ($invalidArtifacts > 0) {
             $reason = 'invalid_generated_artifacts';
+        } elseif ($duplicateArtifacts > 0) {
+            $reason = 'duplicate_generated_artifacts';
         } elseif ($unfinished > 0) {
             $reason = 'unfinished_build_tasks';
         }
@@ -2657,6 +2759,7 @@ class AiSiteBuildTaskService
             'failed' => $failed,
             'cancelled' => $cancelled,
             'invalid_artifacts' => $invalidArtifacts,
+            'duplicate_artifacts' => $duplicateArtifacts,
             'unfinished' => $unfinished,
             'summary' => $summary,
         ];
@@ -2682,6 +2785,11 @@ class AiSiteBuildTaskService
             $count = (int)($gate['invalid_artifacts'] ?? 0);
 
             return (string)__('有 %{count} 项构建产物无效，请继续失败任务或强制重新生成后重试。', ['count' => $count]);
+        }
+        if ($reason === 'duplicate_generated_artifacts') {
+            $count = (int)($gate['duplicate_artifacts'] ?? 0);
+
+            return 'Build produced ' . $count . ' duplicated page-section artifact(s). Regenerate from the Stage-1 visual_signature contract instead of reusing another block.';
         }
         if ($reason === 'cancelled_build_tasks') {
             return (string)__('有构建任务已取消，请检查工作台任务状态后重试。');
@@ -2769,6 +2877,145 @@ class AiSiteBuildTaskService
         }
 
         return $count;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function countDuplicateCompletedPageSectionArtifacts(array $scope): int
+    {
+        $taskState = $this->extractTaskState($scope);
+        $eligibleSections = [];
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            if (!\is_array($task) || \trim((string)($task['task_type'] ?? '')) !== 'page_section') {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            $sectionCode = \trim((string)($task['section_code'] ?? ''));
+            if ($taskKey === '' || $pageType === '' || $sectionCode === '') {
+                continue;
+            }
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            if ($this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING)) !== self::TASK_STATUS_DONE) {
+                continue;
+            }
+            if (!$this->isGeneratedArtifactAvailableForTask($scope, $task)) {
+                continue;
+            }
+            $eligibleSections[$pageType][$sectionCode] = [
+                'task_key' => $taskKey,
+                'block_key' => \trim((string)($task['block_key'] ?? $task['section_key'] ?? '')),
+            ];
+        }
+        if ($eligibleSections === []) {
+            return 0;
+        }
+
+        $duplicates = 0;
+        $seenByPage = [];
+        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        foreach ($layouts as $pageType => $layout) {
+            $pageType = (string)$pageType;
+            if (!\is_array($layout) || !\is_array($eligibleSections[$pageType] ?? null)) {
+                continue;
+            }
+            foreach (\is_array($layout['content'] ?? null) ? $layout['content'] : [] as $section) {
+                if (!\is_array($section)) {
+                    continue;
+                }
+                $sectionCode = $this->resolveLayoutSectionCode($section);
+                if ($sectionCode === '' || !\is_array($eligibleSections[$pageType][$sectionCode] ?? null)) {
+                    continue;
+                }
+                $text = $this->normalizeGeneratedArtifactVisibleText($section);
+                if (\mb_strlen($text) < 80) {
+                    continue;
+                }
+                $fingerprints = ['exact:' . \sha1(\mb_substr($text, 0, 500))];
+                $leadFingerprint = $this->buildGeneratedArtifactLeadFingerprint($text);
+                if ($leadFingerprint !== '') {
+                    $fingerprints[] = 'lead:' . $leadFingerprint;
+                }
+                $isDuplicate = false;
+                foreach ($fingerprints as $fingerprint) {
+                    if (isset($seenByPage[$pageType][$fingerprint]) && $seenByPage[$pageType][$fingerprint] !== $sectionCode) {
+                        $isDuplicate = true;
+                        break;
+                    }
+                }
+                if ($isDuplicate) {
+                    ++$duplicates;
+                    continue;
+                }
+                foreach ($fingerprints as $fingerprint) {
+                    $seenByPage[$pageType][$fingerprint] = $sectionCode;
+                }
+            }
+        }
+
+        return $duplicates;
+    }
+
+    /**
+     * @param array<string, mixed> $section
+     */
+    private function resolveLayoutSectionCode(array $section): string
+    {
+        foreach (['code', 'component', 'section_code'] as $key) {
+            $value = \trim((string)($section[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $section
+     */
+    private function normalizeGeneratedArtifactVisibleText(array $section): string
+    {
+        $parts = [];
+        foreach (['html', 'html_content', 'template', 'template_content'] as $key) {
+            $value = $section[$key] ?? null;
+            if (\is_scalar($value) && \trim((string)$value) !== '') {
+                $parts[] = (string)$value;
+            }
+        }
+        if ($parts === [] && \is_array($section['config'] ?? null)) {
+            $parts[] = (string)\json_encode($section['config'], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+        }
+        if ($parts === []) {
+            return '';
+        }
+
+        $text = \html_entity_decode(\strip_tags(\implode(' ', $parts)), \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+        $text = (string)\preg_replace('/https?:\/\/\S+|\/pub\/media\/\S+/iu', ' ', $text);
+        $text = (string)\preg_replace('/\bcontent\/[a-z0-9_-]+-[a-z0-9_-]+\b/iu', ' ', $text);
+        $text = (string)\preg_replace('/\s+/', ' ', $text);
+
+        return \mb_strtolower(\trim($text));
+    }
+
+    private function buildGeneratedArtifactLeadFingerprint(string $text): string
+    {
+        $text = \trim($text);
+        if ($text === '') {
+            return '';
+        }
+        $words = \preg_split('/[^\p{L}\p{N}]+/u', $text, -1, \PREG_SPLIT_NO_EMPTY);
+        if (!\is_array($words) || \count($words) < 5) {
+            return '';
+        }
+        $lead = \array_slice($words, 0, 9);
+        $leadText = \implode(' ', $lead);
+        if (\mb_strlen($leadText) < 24) {
+            return '';
+        }
+
+        return \sha1($leadText);
     }
 
     /**
@@ -3322,7 +3569,7 @@ class AiSiteBuildTaskService
             $region = \trim((string)($task['region'] ?? ''));
             $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
             $sharedComponent = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
-            if ($region === '' || $sharedComponent === []) {
+            if ($region === '' || !$this->isBuiltSharedComponentArtifact($sharedComponent)) {
                 return false;
             }
 
@@ -3558,6 +3805,33 @@ class AiSiteBuildTaskService
         $encoded = \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
 
         return \is_string($encoded) && $this->containsGeneratedArtifactPromptTrace($encoded);
+    }
+
+    /**
+     * Stage-1 plan_json.shared_components only carries goals/contracts; stage-2 must ship html/phtml.
+     *
+     * @param array<string, mixed> $sharedComponent
+     */
+    private function isBuiltSharedComponentArtifact(array $sharedComponent): bool
+    {
+        if ($sharedComponent === []) {
+            return false;
+        }
+
+        $html = \trim((string)($sharedComponent['html'] ?? ''));
+        $phtml = \trim((string)($sharedComponent['phtml'] ?? ''));
+        if ($html === '' && $phtml === '') {
+            return false;
+        }
+
+        $code = \trim((string)($sharedComponent['code'] ?? $sharedComponent['component_code'] ?? ''));
+        if ($code === '') {
+            return false;
+        }
+
+        $rendered = $html !== '' ? $html : $phtml;
+
+        return !$this->containsGeneratedArtifactPromptTrace($rendered);
     }
 
     /**

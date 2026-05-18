@@ -26,7 +26,7 @@ class AiSitePageBlueprintServiceTest extends TestCase
             ],
         ];
         $websiteProfile = [
-            'site_title' => 'AI Site',
+            'site_title' => '印度棋牌 APK 平台',
             'site_tagline' => '',
             'brief_description' => '我想做一个印度市场的棋牌网站，推广apk。',
             'target_domain' => '',
@@ -43,6 +43,48 @@ class AiSitePageBlueprintServiceTest extends TestCase
             $aboutBlueprint['sections'][1]['code'] ?? ''
         );
         self::assertSame('印度棋牌 APK 平台', $homeBlueprint['site_display_name']);
+    }
+
+    public function testResolveSiteDisplayNameUsesCustomerSiteTitleNotDescription(): void
+    {
+        $service = new AiSitePageBlueprintService();
+        $scope = [
+            'site_title' => 'Teenipiya',
+            'user_description' => '# ROLE You are a senior web designer building a gaming entertainment site.',
+            'brief_description' => '# ROLE You are a senior web designer building a gaming entertainment site.',
+            'build_plan_v2' => [
+                'site_brief' => [
+                    'site_name' => '# ROLE You are a senior web designer',
+                ],
+                'source_of_truth' => [
+                    'user_requirements' => [
+                        'site_name' => '# ROLE You are a senior web designer',
+                    ],
+                ],
+            ],
+        ];
+        $websiteProfile = [
+            'site_title' => 'Teenipiya',
+            'brief_description' => '# ROLE You are a senior web designer building a gaming entertainment site.',
+        ];
+
+        self::assertSame('Teenipiya', $service->resolveUserSiteTitle($websiteProfile, $scope));
+        self::assertSame('Teenipiya', $service->resolveSiteDisplayName($websiteProfile, $scope));
+    }
+
+    public function testResolveSiteDisplayNameDoesNotDeriveTitleFromUserDescription(): void
+    {
+        $service = new AiSitePageBlueprintService();
+        $scope = [
+            'user_description' => '# ROLE You are a senior web designer building a gaming entertainment site.',
+            'brief_description' => '# ROLE You are a senior web designer building a gaming entertainment site.',
+        ];
+        $websiteProfile = [
+            'brief_description' => '# ROLE You are a senior web designer building a gaming entertainment site.',
+        ];
+
+        self::assertSame('', $service->resolveUserSiteTitle($websiteProfile, $scope));
+        self::assertSame('', $service->resolveSiteDisplayName($websiteProfile, $scope));
     }
 
     public function testBuildPageBlueprintCarriesSectionRefinementIntoResult(): void
