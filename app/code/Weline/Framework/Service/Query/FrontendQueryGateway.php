@@ -239,6 +239,7 @@ final class FrontendQueryGateway
                 continue;
             }
 
+            $params[$name] = $this->normalizeParamValue($name, $params[$name], $rule);
             $this->validateParamValue($name, $params[$name], $rule);
         }
 
@@ -271,6 +272,39 @@ final class FrontendQueryGateway
         }
 
         return $rules;
+    }
+
+    /**
+     * @param array<string, mixed> $rule
+     */
+    private function normalizeParamValue(string $name, mixed $value, array $rule): mixed
+    {
+        if (!\is_string($value)) {
+            return $value;
+        }
+
+        $type = \strtolower((string)($rule['type'] ?? 'mixed'));
+        $trimmed = \trim($value);
+
+        if (($type === 'int' || $type === 'integer') && \preg_match('/^-?\d+$/', $trimmed) === 1) {
+            return (int)$trimmed;
+        }
+
+        if (($type === 'float' || $type === 'double' || $type === 'number') && \is_numeric($trimmed)) {
+            return (float)$trimmed;
+        }
+
+        if ($type === 'bool' || $type === 'boolean') {
+            $normalized = \strtolower($trimmed);
+            if (\in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+            if (\in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+                return false;
+            }
+        }
+
+        return $value;
     }
 
     /**
