@@ -250,42 +250,6 @@ final class SourceTruthCoverageLinter
     }
 
     /**
-     * @param list<mixed> $values
-     */
-    private function collectScalarCopy(array $values): string
-    {
-        $parts = [];
-        foreach ($values as $value) {
-            $text = $this->scalarToText($value);
-            if ($text !== '') {
-                $parts[] = $text;
-            }
-        }
-
-        return \implode(' ', $parts);
-    }
-
-    private function scalarToText(mixed $value): string
-    {
-        if (\is_scalar($value)) {
-            return \trim((string)$value);
-        }
-        if (!\is_array($value)) {
-            return '';
-        }
-
-        $parts = [];
-        foreach ($value as $item) {
-            $text = $this->scalarToText($item);
-            if ($text !== '') {
-                $parts[] = $text;
-            }
-        }
-
-        return \implode(' ', $parts);
-    }
-
-    /**
      * @param list<array<string,mixed>> $facts
      * @return array<string, string>
      */
