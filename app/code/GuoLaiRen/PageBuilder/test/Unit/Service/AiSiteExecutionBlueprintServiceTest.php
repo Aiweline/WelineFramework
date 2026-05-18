@@ -11,9 +11,12 @@ use GuoLaiRen\PageBuilder\Service\AI\Skill\BuiltinSkillProvider;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillProvider;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSelectionResolver;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSnapshotBuilder;
+use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
+use GuoLaiRen\PageBuilder\Service\AiSiteStageOneContractService;
+use GuoLaiRen\PageBuilder\Service\AiSiteStageOneContractValidator;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
 
@@ -1980,6 +1983,89 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertNotEmpty($resumeCalls, 'only the invalid checkpoint page should be regenerated');
     }
 
+    public function testResolveStageOneCheckpointAcceptsStoredCheckpointOnResumePlanDespiteSignatureDrift(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $resolveCheckpoint = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'resolveStageOneCheckpoint');
+        $resolveCheckpoint->setAccessible(true);
+
+        $storedSignature = 'stored-checkpoint-signature';
+        $checkpoint = [
+            'signature' => $storedSignature,
+            'step' => 'page_fanout',
+            'plan_json' => [
+                'requirement_expansion' => ['expanded_brief' => 'seed'],
+                'theme_design' => ['theme_purpose' => 'resume checkpoint theme'],
+                'pages' => [
+                    Page::TYPE_HOME => ['blocks' => [['block_key' => 'hero']]],
+                    Page::TYPE_ABOUT => ['blocks' => [['block_key' => 'intro']]],
+                ],
+            ],
+        ];
+        $scope = [
+            'plan_last_prompt_mode' => 'resume_plan',
+            '_plan_sse_request' => ['prompt_mode' => 'resume_plan'],
+            '_plan_generation_checkpoint' => $checkpoint,
+        ];
+        $payload = [
+            'prompt_mode' => 'resume_plan',
+            'resume_failed_tasks' => 1,
+            'target_scope' => 'resume_generation',
+            'instruction' => 'resume only failed pages',
+            'stage1_checkpoint' => $checkpoint,
+        ];
+
+        $resolved = $resolveCheckpoint->invoke($service, $payload, $scope, 'different-signature');
+        self::assertSame($storedSignature, (string)($resolved['signature'] ?? ''));
+        self::assertSame(
+            'resume checkpoint theme',
+            (string)($resolved['plan_json']['theme_design']['theme_purpose'] ?? '')
+        );
+    }
+
+    public function testResolveStageOneResumePageTypesLimitsFanoutToRetryableFailures(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $resolveResumePages = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'resolveStageOneResumePageTypes');
+        $resolveResumePages->setAccessible(true);
+
+        $scope = [
+            AiSiteBuildTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY => [
+                'plan' => [
+                    'items' => [
+                        Page::TYPE_HOME => [
+                            'operation' => 'plan',
+                            'item_key' => Page::TYPE_HOME,
+                            'page_type' => Page::TYPE_HOME,
+                            'retry_scope' => 'stage1_page',
+                            'message' => 'home failed',
+                        ],
+                        'stage1_plan' => [
+                            'operation' => 'plan',
+                            'item_key' => 'stage1_plan',
+                            'retry_scope' => 'plan',
+                            'message' => 'aggregate failed',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $existingPagePlans = [
+            Page::TYPE_HOME => ['blocks' => []],
+            Page::TYPE_ABOUT => ['blocks' => [['block_key' => 'intro']]],
+        ];
+
+        $resumePageTypes = $resolveResumePages->invoke(
+            $service,
+            $scope,
+            [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            $existingPagePlans,
+            []
+        );
+
+        self::assertSame([Page::TYPE_HOME], $resumePageTypes);
+    }
+
     public function testBuildPlanArtifactsByAiStreamFallsBackToNonStreamWhenProviderReturnsEmptyStream(): void
     {
         $aiService = $this->createAiServiceStreamMock();
@@ -3451,5 +3537,136 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] = ['Visible headline', 'Primary CTA'];
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    public function testRepairAiStageOneBlocksBeforeValidationBackfillsMissingDesignTags(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $repairMethod = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'repairAiStageOneBlocksBeforeValidation');
+        $repairMethod->setAccessible(true);
+
+        $blocks = [[
+            'block_key' => 'article_body',
+            'content' => '文章正文展示完整阅读体验与下一步引导。',
+            'design_tags' => [],
+            'field_plan' => [
+                ['field' => 'headline', 'sample' => '文章标题', 'implementation_note' => '主标题直接上屏。'],
+                ['field' => 'supporting_copy', 'sample' => '文章摘要', 'implementation_note' => '摘要区文案。'],
+                ['field' => 'context_detail', 'sample' => '阅读提示', 'implementation_note' => '补充说明。'],
+            ],
+            'execution_script' => [
+                'core_copy' => '文章正文帮助访客快速理解主题并继续阅读。',
+                'feature_points' => ['清晰标题', '分段正文', '继续阅读入口'],
+            ],
+        ]];
+
+        $repaired = $repairMethod->invoke(
+            $service,
+            $blocks,
+            Page::TYPE_BLOG,
+            'zh_Hans_CN',
+            ['theme_design' => ['color_scheme' => ['primary' => '#123456', 'accent' => '#abcdef', 'background' => '#ffffff']]],
+            ['color_layering' => '正文区使用浅色底，标题区使用主色强调。']
+        );
+        self::assertIsArray($repaired[0]['design_tags'] ?? null);
+        foreach (AiSiteStageOneContractService::DESIGN_TAG_KEYS as $tagKey) {
+            $value = $repaired[0]['design_tags'][$tagKey] ?? null;
+            if (\in_array($tagKey, ['visual', 'motion', 'interaction', 'texture', 'responsive'], true)) {
+                self::assertIsArray($value);
+                self::assertNotEmpty($value, $tagKey);
+                continue;
+            }
+            self::assertIsString($value);
+            self::assertNotSame('', \trim($value), $tagKey);
+        }
+
+        $contract = (new AiSiteStageOneContractService())->build(
+            ['theme_design' => ['color_scheme' => ['primary' => '#123456']]],
+            [Page::TYPE_BLOG],
+            'zh_Hans_CN',
+            'zh_Hans_CN'
+        );
+        $pagePlan = [
+            'page_goal' => '帮助访客阅读博客文章并继续浏览相关内容。',
+            'theme_alignment_summary' => '延续站点主题色与排版节奏，突出文章可读性。',
+            'page_design_plan' => [
+                'color_layering' => '正文区使用浅色底，标题区使用主色强调。',
+                'section_flow' => ['标题区', '正文区', '相关推荐'],
+            ],
+            'blocks' => $repaired,
+        ];
+        $report = (new AiSiteStageOneContractValidator())->validatePagePlan(Page::TYPE_BLOG, $pagePlan, $contract);
+        $missingDesignTagIssues = \array_values(\array_filter(
+            \is_array($report['issues'] ?? null) ? $report['issues'] : [],
+            static fn(array $issue): bool => (string)($issue['code'] ?? '') === 'missing_design_tag'
+        ));
+        self::assertSame([], $missingDesignTagIssues, \json_encode($report['issues'] ?? [], \JSON_UNESCAPED_UNICODE));
+    }
+
+    public function testPrepareStageOnePlanScopeForConfirmationRepairsMissingDesignTags(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $scope = [
+            'page_types' => [Page::TYPE_BLOG],
+            'plan_locale' => 'zh_Hans_CN',
+            'brief_description' => '面向年轻读者的博客站点。',
+            'plan_json' => [
+                'theme_design' => [
+                    'color_scheme' => [
+                        'primary' => '#123456',
+                        'accent' => '#abcdef',
+                        'background' => '#ffffff',
+                    ],
+                ],
+                'pages' => [
+                    Page::TYPE_BLOG => [
+                        'page_goal' => '帮助访客阅读博客文章并继续浏览相关内容。',
+                        'theme_alignment_summary' => '延续站点主题色与排版节奏，突出文章可读性。',
+                        'page_design_plan' => [
+                            'color_layering' => '正文区使用浅色底，标题区使用主色强调。',
+                            'section_flow' => ['标题区', '正文区', '相关推荐'],
+                        ],
+                        'blocks' => [[
+                            'block_key' => 'article_body',
+                            'content' => '文章正文展示完整阅读体验与下一步引导。',
+                            'design_tags' => [],
+                            'field_plan' => [
+                                ['field' => 'headline', 'sample' => '文章标题', 'implementation_note' => '主标题直接上屏。'],
+                                ['field' => 'supporting_copy', 'sample' => '文章摘要', 'implementation_note' => '摘要区文案。'],
+                                ['field' => 'context_detail', 'sample' => '阅读提示', 'implementation_note' => '补充说明。'],
+                            ],
+                            'execution_script' => [
+                                'core_copy' => '文章正文帮助访客快速理解主题并继续阅读。',
+                                'feature_points' => ['清晰标题', '分段正文', '继续阅读入口'],
+                            ],
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $prepared = $service->prepareStageOnePlanScopeForConfirmation($scope);
+        $repairedScope = \is_array($prepared['scope'] ?? null) ? $prepared['scope'] : [];
+        $repairedPlanJson = \is_array($repairedScope['plan_json'] ?? null) ? $repairedScope['plan_json'] : [];
+        $blocks = \is_array($repairedPlanJson['pages'][Page::TYPE_BLOG]['blocks'] ?? null)
+            ? $repairedPlanJson['pages'][Page::TYPE_BLOG]['blocks']
+            : [];
+        self::assertNotSame([], $blocks);
+        foreach (AiSiteStageOneContractService::DESIGN_TAG_KEYS as $tagKey) {
+            $value = $blocks[0]['design_tags'][$tagKey] ?? null;
+            if (\in_array($tagKey, ['visual', 'motion', 'interaction', 'texture', 'responsive'], true)) {
+                self::assertIsArray($value);
+                self::assertNotEmpty($value, $tagKey);
+                continue;
+            }
+            self::assertIsString($value);
+            self::assertNotSame('', \trim($value), $tagKey);
+        }
+
+        $missingDesignTagIssues = \array_values(\array_filter(
+            \is_array($prepared['stage1_validation']['issues'] ?? null) ? $prepared['stage1_validation']['issues'] : [],
+            static fn(array $issue): bool => (string)($issue['code'] ?? '') === 'missing_design_tag'
+        ));
+        self::assertSame([], $missingDesignTagIssues, \json_encode($prepared['stage1_validation'] ?? [], \JSON_UNESCAPED_UNICODE));
     }
 }
