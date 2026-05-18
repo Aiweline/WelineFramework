@@ -298,9 +298,14 @@ class OrderService
     public function getOrderByIncrementId(string $incrementId): ?Order
     {
         $order = $this->newOrderModel();
-        $order->load($incrementId, Order::schema_fields_increment_id);
+        $result = $order->clear()
+            ->where(Order::schema_fields_increment_id, $incrementId)
+            ->select()
+            ->fetch();
 
-        return $order->getId() ? $order : null;
+        $matched = $result->getItems()[0] ?? null;
+
+        return $matched instanceof Order && $matched->getId() ? $matched : null;
     }
 
     public function getCustomerOrders(int $customerId, int $page = 1, int $pageSize = 20, array $filters = []): array
