@@ -32,11 +32,25 @@ $rmaPageDataService = ObjectManager::getInstance(RmaPageDataService::class);
 $data = $rmaPageDataService->build((int) $customer->getId(), $selectedOrderId, $selectedOrderIncrementId);
 
 $order = is_array($data['order'] ?? null) ? $data['order'] : null;
+$orderOptions = (array) ($data['order_options'] ?? []);
 $rmaList = (array) ($data['rma_list'] ?? []);
 $requestTypes = (array) ($data['request_types'] ?? []);
 $reasonOptions = (array) ($data['reason_options'] ?? []);
 $selectedOrderItems = is_array($order['items'] ?? null) ? (array) $order['items'] : [];
 $selectedOrderItemCount = max(0, (int) ($order['item_count'] ?? count($selectedOrderItems)));
+$selectedOrderEligible = false;
+if ($order) {
+    foreach ($orderOptions as $option) {
+        if ((int) ($option['order_id'] ?? 0) === (int) ($order['order_id'] ?? 0)) {
+            $selectedOrderEligible = (bool) ($option['eligible'] ?? false);
+            break;
+        }
+    }
+}
+if (!$selectedOrderEligible) {
+    $selectedOrderItems = [];
+    $selectedOrderItemCount = 0;
+}
 $feedbackDefault = '提交后会停留在当前个人中心，并自动刷新售后记录。';
 
 $statusLabels = [
@@ -56,6 +70,9 @@ $jsText = [
     'submitting' => '正在提交售后申请...',
     'submitted' => '售后申请已提交。',
     'submitFailed' => '暂时无法提交售后申请。',
+    'selectOrder' => '请选择可售后订单',
+    'selectedOrderItems' => '已选订单商品',
+    'itemCountTemplate' => '共 %{1} 件',
 ];
 
 $rmaReasonIcon = static function (string $reason): string {
@@ -94,7 +111,7 @@ $rmaCleanDescription = static function (string $description): string {
                 <p class="weshop-returns-subtitle">提交和跟踪售后申请，不离开当前个人中心。</p>
             </div>
             <div class="weshop-returns-selected-order" data-rma-selected-order>
-                <?php if ($order && !empty($order['increment_id'])): ?>
+                <?php if ($order && $selectedOrderEligible && !empty($order['increment_id'])): ?>
                     已选择订单 #<?= $escape($order['increment_id']) ?>
                 <?php else: ?>
                     从订单列表选择需要售后的订单
@@ -115,18 +132,30 @@ $rmaCleanDescription = static function (string $description): string {
                     <?= $this->getFormKey($this->getUrl('rma/create')) ?>
 
                     <label class="weshop-returns-form__field">
-                        <span>订单 ID</span>
-                        <input
-                            type="text"
-                            inputmode="numeric"
-                            name="order_id"
-                            value="<?= $escape($order['order_id'] ?? '') ?>"
-                            data-rma-order-id-input
-                            required
-                        >
+                        <span>选择订单</span>
+                        <select data-rma-order-select required>
+                            <option value=""><?= $escape('请选择可售后订单') ?></option>
+                            <?php foreach ($orderOptions as $option): ?>
+                                <?php
+                                $optionOrderId = (int) ($option['order_id'] ?? 0);
+                                $optionIncrementId = trim((string) ($option['increment_id'] ?? ''));
+                                $optionEligible = (bool) ($option['eligible'] ?? false);
+                                $optionReason = trim((string) ($option['reason'] ?? ''));
+                                $optionSelected = $order && $optionEligible && $optionOrderId === (int) ($order['order_id'] ?? 0);
+                                $optionLabel = '#' . ($optionIncrementId !== '' ? $optionIncrementId : (string) $optionOrderId);
+                                if (!$optionEligible && $optionReason !== '') {
+                                    $optionLabel .= ' - ' . $optionReason;
+                                }
+                                ?>
+                                <option value="<?= $escape($optionOrderId) ?>" <?= $optionSelected ? 'selected' : '' ?> <?= $optionEligible ? '' : 'disabled' ?>>
+                                    <?= $escape($optionLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </label>
 
-                    <input type="hidden" name="order_increment_id" value="<?= $escape($selectedOrderIncrementId !== '' ? $selectedOrderIncrementId : (string) ($order['increment_id'] ?? '')) ?>" data-rma-order-increment-input>
+                    <input type="hidden" name="order_id" value="<?= $escape($selectedOrderEligible ? ($order['order_id'] ?? '') : '') ?>" data-rma-order-id-input>
+                    <input type="hidden" name="order_increment_id" value="<?= $escape($selectedOrderEligible ? ($selectedOrderIncrementId !== '' ? $selectedOrderIncrementId : (string) ($order['increment_id'] ?? '')) : '') ?>" data-rma-order-increment-input>
                     <input type="hidden" name="return_anchor" value="<?= $escape($selectedReturnAnchor) ?>" data-rma-return-anchor-input>
                     <input type="hidden" name="return_url" value="<?= $escape($selectedReturnUrl) ?>" data-rma-return-url-input>
 
@@ -158,13 +187,12 @@ $rmaCleanDescription = static function (string $description): string {
                         <textarea name="description" rows="4" placeholder="<?= $escape('请补充问题描述、尺寸或损坏情况') ?>"></textarea>
                     </label>
 
-                    <?php if ($selectedOrderItems !== []): ?>
-                        <div class="weshop-returns-order-preview" data-rma-order-preview>
+                    <div class="weshop-returns-order-preview<?= $selectedOrderItems === [] ? ' is-empty' : '' ?>" data-rma-order-preview>
                             <div class="weshop-returns-order-preview__header">
-                                <strong>已选订单商品</strong>
-                                <span><?= $escape('共 ' . $selectedOrderItemCount . ' 件') ?></span>
+                                <strong data-rma-order-preview-title>已选订单商品</strong>
+                                <span data-rma-order-preview-count><?= $escape('共 ' . $selectedOrderItemCount . ' 件') ?></span>
                             </div>
-                            <div class="weshop-returns-order-preview__list">
+                            <div class="weshop-returns-order-preview__list" data-rma-order-preview-list>
                                 <?php foreach ($selectedOrderItems as $orderItem): ?>
                                     <?php $orderItemQuantity = max(1, (int) ($orderItem['quantity'] ?? 1)); ?>
                                     <div class="weshop-returns-order-preview__item">
@@ -185,8 +213,7 @@ $rmaCleanDescription = static function (string $description): string {
                                     </div>
                                 <?php endforeach; ?>
                             </div>
-                        </div>
-                    <?php endif; ?>
+                    </div>
 
                     <button type="button" id="account-rma-submit" class="weshop-returns-submit">
                         提交售后申请
@@ -293,14 +320,19 @@ $rmaCleanDescription = static function (string $description): string {
     <script>
         (function () {
             var text = <?= json_encode($jsText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+            var orderOptions = <?= json_encode($orderOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
             var form = document.getElementById('account-rma-request-form');
             var submit = document.getElementById('account-rma-submit');
             var feedback = document.getElementById('account-rma-feedback');
+            var orderSelect = document.querySelector('[data-rma-order-select]');
             var orderIdInput = document.querySelector('[data-rma-order-id-input]');
             var orderIncrementInput = document.querySelector('[data-rma-order-increment-input]');
             var returnAnchorInput = document.querySelector('[data-rma-return-anchor-input]');
             var returnUrlInput = document.querySelector('[data-rma-return-url-input]');
             var selectedOrder = document.querySelector('[data-rma-selected-order]');
+            var orderPreview = document.querySelector('[data-rma-order-preview]');
+            var orderPreviewCount = document.querySelector('[data-rma-order-preview-count]');
+            var orderPreviewList = document.querySelector('[data-rma-order-preview-list]');
             var returnsSection = document.getElementById('returns-section');
             var returnsCards = document.querySelectorAll('.weshop-returns-card');
             var recordsCard = returnsCards.length > 1 ? returnsCards[1] : null;
@@ -368,6 +400,65 @@ $rmaCleanDescription = static function (string $description): string {
                 return '<span class="weshop-return-icon-chip" aria-hidden="true">'
                     + iconClass
                     + '</span>';
+            }
+
+            function getOrderOption(orderId) {
+                var targetId = parseInt(orderId || 0, 10) || 0;
+                for (var index = 0; index < orderOptions.length; index++) {
+                    if ((parseInt(orderOptions[index].order_id || 0, 10) || 0) === targetId) {
+                        return orderOptions[index];
+                    }
+                }
+
+                return null;
+            }
+
+            function buildOrderItemHtml(item) {
+                var itemName = String(item.product_name || '');
+                var itemSku = String(item.product_sku || '');
+                var itemImage = String(item.product_image || item.image || '');
+                var itemQty = parseInt(item.quantity || 1, 10) || 1;
+                var html = '';
+
+                html += '<div class="weshop-returns-order-preview__item">';
+                html += '<div class="weshop-returns-order-preview__image">';
+                if (itemImage) {
+                    html += '<img src="' + escapeHtml(itemImage) + '" alt="' + escapeHtml(itemName) + '" loading="lazy">';
+                } else {
+                    html += '<span aria-hidden="true">?</span>';
+                }
+                html += '</div>';
+                html += '<div class="weshop-returns-order-preview__content">';
+                html += '<strong>' + escapeHtml(itemName) + '</strong>';
+                if (itemSku) {
+                    html += '<span>SKU: ' + escapeHtml(itemSku) + '</span>';
+                }
+                html += '</div>';
+                html += '<span>' + escapeHtml(formatTemplate(text.quantityTemplate, itemQty)) + '</span>';
+                html += '</div>';
+
+                return html;
+            }
+
+            function updateOrderPreview(option) {
+                var items = option && Array.isArray(option.items) ? option.items : [];
+                if (orderPreview) {
+                    orderPreview.classList.toggle('is-empty', items.length === 0);
+                }
+                if (orderPreviewCount) {
+                    orderPreviewCount.textContent = formatTemplate(text.itemCountTemplate, items.length);
+                }
+                if (orderPreviewList) {
+                    orderPreviewList.innerHTML = items.map(buildOrderItemHtml).join('');
+                }
+            }
+
+            function applySelectedOrder(option) {
+                var orderId = option ? parseInt(option.order_id || 0, 10) || 0 : 0;
+                var incrementId = option ? String(option.increment_id || '') : '';
+
+                fillSelectedOrder(orderId || '', incrementId, returnAnchorInput ? returnAnchorInput.value : '', returnUrlInput ? returnUrlInput.value : '');
+                updateOrderPreview(option);
             }
 
             function setValue(input, value) {
@@ -560,6 +651,14 @@ $rmaCleanDescription = static function (string $description): string {
                 }
             }
 
+            if (orderSelect) {
+                orderSelect.addEventListener('change', function () {
+                    var option = getOrderOption(orderSelect.value);
+                    applySelectedOrder(option && option.eligible ? option : null);
+                });
+                applySelectedOrder(getOrderOption(orderSelect.value));
+            }
+
             function normalizeOrderPayload(payload) {
                 var rawOrderId = String(payload.order_id || '').trim();
                 if (!rawOrderId) {
@@ -624,6 +723,10 @@ $rmaCleanDescription = static function (string $description): string {
             }
 
             submit.addEventListener('click', function () {
+                if (typeof form.reportValidity === 'function' && !form.reportValidity()) {
+                    return;
+                }
+
                 var payload = {};
                 new FormData(form).forEach(function (value, key) {
                     if (key === 'form_key' || key === 'csrf_token' || key === '_token') {
@@ -794,6 +897,10 @@ $rmaCleanDescription = static function (string $description): string {
             border: 1px solid var(--weshop-border-color, #e5e7eb);
             border-radius: 1rem;
             padding: 0.95rem;
+        }
+
+        .weshop-returns-order-preview.is-empty {
+            display: none;
         }
 
         .weshop-returns-order-preview__header {

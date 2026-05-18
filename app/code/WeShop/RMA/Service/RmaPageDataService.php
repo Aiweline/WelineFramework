@@ -26,9 +26,11 @@ class RmaPageDataService
     {
         $rmaList = $this->normalizeRmas($this->rmaService->getCustomerRmas($customerId));
         $selectedOrder = $this->loadOwnedOrder($customerId, $orderId, $orderIncrementId);
+        $orderOptions = $this->buildOrderOptions($customerId);
 
         return [
             'order' => $selectedOrder,
+            'order_options' => $orderOptions,
             'rma_list' => $rmaList,
             'rma_count' => count($rmaList),
             'request_types' => [
@@ -44,6 +46,71 @@ class RmaPageDataService
                 (string) __('Other'),
             ],
         ];
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function buildOrderOptions(int $customerId): array
+    {
+        $orders = (array) ($this->orderService->getCustomerOrders($customerId, 1, 50)['items'] ?? []);
+        $options = [];
+        foreach ($orders as $orderData) {
+            if (!is_array($orderData)) {
+                continue;
+            }
+
+            $orderId = (int) ($orderData[Order::schema_fields_ID] ?? $orderData['order_id'] ?? $orderData['id'] ?? 0);
+            if ($orderId <= 0) {
+                continue;
+            }
+
+            $ownerId = (int) ($orderData[Order::schema_fields_customer_id] ?? $orderData['customer_id'] ?? 0);
+            if ($ownerId !== $customerId) {
+                continue;
+            }
+
+            $items = $this->normalizeOrderItems($this->orderService->getOrderItems($orderId));
+            $eligibility = $this->getReturnEligibility($orderData, count($items));
+            $options[] = [
+                'order_id' => $orderId,
+                'increment_id' => (string) ($orderData[Order::schema_fields_increment_id] ?? ''),
+                'status' => (string) ($orderData[Order::schema_fields_status] ?? ''),
+                'payment_status' => (string) ($orderData[Order::schema_fields_payment_status] ?? ''),
+                'total' => (float) ($orderData[Order::schema_fields_total] ?? 0),
+                'created_at' => (string) ($orderData[Order::schema_fields_created_at] ?? ''),
+                'eligible' => $eligibility['eligible'],
+                'reason' => $eligibility['reason'],
+                'items' => $items,
+                'item_count' => count($items),
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return array{eligible:bool,reason:string}
+     */
+    protected function getReturnEligibility(array $orderData, int $itemCount): array
+    {
+        if ($itemCount <= 0) {
+            return ['eligible' => false, 'reason' => (string) __('订单没有可售后商品')];
+        }
+
+        $status = (string) ($orderData[Order::schema_fields_status] ?? '');
+        $paymentStatus = (string) ($orderData[Order::schema_fields_payment_status] ?? '');
+        if (in_array($status, [OrderService::STATUS_CANCELLED, OrderService::STATUS_REFUNDED], true)) {
+            return ['eligible' => false, 'reason' => (string) __('订单已取消或已退款')];
+        }
+
+        if ($paymentStatus !== OrderService::PAYMENT_STATUS_PAID
+            && !in_array($status, [OrderService::STATUS_PAID, OrderService::STATUS_FULFILLED, OrderService::STATUS_COMPLETED], true)
+        ) {
+            return ['eligible' => false, 'reason' => (string) __('订单尚未完成支付')];
+        }
+
+        return ['eligible' => true, 'reason' => ''];
     }
 
     /**
@@ -88,14 +155,14 @@ class RmaPageDataService
     protected function loadOwnedOrder(int $customerId, int $orderId, string $orderIncrementId): ?array
     {
         $order = null;
-        if ($orderId > 0) {
-            $order = $this->getOrderById($orderId);
-        } elseif ($orderIncrementId !== '') {
+        if ($orderIncrementId !== '') {
             $order = $this->getOrderByIncrementId($orderIncrementId);
+        } elseif ($orderId > 0) {
+            $order = $this->getOrderById($orderId);
         }
 
-        if (!$order && $orderIncrementId !== '' && $orderId > 0) {
-            $order = $this->getOrderByIncrementId($orderIncrementId);
+        if (!$order && $orderId > 0) {
+            $order = $this->getOrderById($orderId);
         }
 
         if (!$order) {
