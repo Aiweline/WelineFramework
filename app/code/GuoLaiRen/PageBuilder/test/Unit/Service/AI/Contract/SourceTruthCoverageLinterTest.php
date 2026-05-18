@@ -64,4 +64,32 @@ final class SourceTruthCoverageLinterTest extends TestCase
         $lint = (new SourceTruthCoverageLinter())->lintPlanJson($sourceTruth, $planJson);
         self::assertSame([], $lint['missing_blocks']);
     }
+
+    public function testLintPlanJsonIncludesThemeDesignAndRequirementExpansionCopy(): void
+    {
+        $sourceTruth = [
+            'must_include_facts' => [
+                ['id' => 'f61', 'text' => 'Gold accents', 'weight' => 10],
+                ['id' => 'f62', 'text' => 'Dark luxury background', 'weight' => 10],
+            ],
+            'required_home_blocks' => [],
+            'must_not_do' => [],
+        ];
+        $planJson = [
+            'theme_design' => [
+                'style_keywords' => ['gold accents', 'dark luxury background'],
+            ],
+            'pages' => [
+                'home_page' => [
+                    'page_goal' => 'Welcome visitors.',
+                    'blocks' => [
+                        ['block_key' => 'hero', 'content' => 'Welcome visitors.'],
+                    ],
+                ],
+            ],
+        ];
+
+        $lint = (new SourceTruthCoverageLinter())->lintPlanJson($sourceTruth, $planJson);
+        self::assertSame([], $lint['missing_facts']);
+    }
 }

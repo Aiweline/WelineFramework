@@ -1309,7 +1309,9 @@ class AiSiteAgent extends BaseController
         }
         $stage = AiSiteAgentSession::STAGE_PLAN;
         if ($hasRetryablePlanFailures) {
-            $effectivePlanPromptMode = 'rebuild';
+            $effectivePlanPromptMode = $requestedPromptMode === 'rebuild'
+                ? 'rebuild'
+                : 'resume_plan';
         } elseif (\in_array($requestedPromptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
             $effectivePlanPromptMode = $requestedPromptMode;
         } elseif ((string)($planStartDecision['action'] ?? '') === 'reuse' && $this->scopeHasPersistedStageOnePlan($currentScope)) {
@@ -1329,6 +1331,9 @@ class AiSiteAgent extends BaseController
             'target_scope' => $requestedTargetScope,
             'round' => $requestedRound,
         ];
+        if ($hasRetryablePlanFailures && $effectivePlanPromptMode === 'resume_plan') {
+            $planOperationDetails['resume_failed_tasks'] = 1;
+        }
         $result = $this->startOperation($session, $adminId, 'plan', $stage, \array_replace($planRebuildResetPatch, [
             'plan_locale' => (string)$scope['plan_locale'],
             'plan_confirmed' => 0,
@@ -1463,6 +1468,12 @@ class AiSiteAgent extends BaseController
         }
         $scope = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $scope);
         $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
+        $planConfirmationPrepared = $this->executionBlueprintService->prepareStageOnePlanScopeForConfirmation($scope);
+        $scope = \is_array($planConfirmationPrepared['scope'] ?? null) ? $planConfirmationPrepared['scope'] : $scope;
+        $planConfirmationStage1Validation = \is_array($planConfirmationPrepared['stage1_validation'] ?? null)
+            ? $planConfirmationPrepared['stage1_validation']
+            : [];
+        $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
         $hasStageOnePayload = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
             || (\is_array($scope['plan_structured'] ?? null) && $scope['plan_structured'] !== [])
             || \trim((string)($scope['plan_markdown'] ?? '')) !== '';
@@ -1483,6 +1494,12 @@ class AiSiteAgent extends BaseController
                     $scope = $this->scopeCompatibilityService->normalizeScope(
                         $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
                     );
+                    $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
+                    $planConfirmationPrepared = $this->executionBlueprintService->prepareStageOnePlanScopeForConfirmation($scope);
+                    $scope = \is_array($planConfirmationPrepared['scope'] ?? null) ? $planConfirmationPrepared['scope'] : $scope;
+                    $planConfirmationStage1Validation = \is_array($planConfirmationPrepared['stage1_validation'] ?? null)
+                        ? $planConfirmationPrepared['stage1_validation']
+                        : [];
                     $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
                     $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null)
                         ? $scope['execution_blueprint_draft']
@@ -1537,11 +1554,27 @@ class AiSiteAgent extends BaseController
         $buildPlanPatch = $this->buildPlanV2ConfirmationScopePatch($buildPlanSourceScope);
         unset($buildPlanSourceScope);
         if ((int)($buildPlanPatch['build_plan_confirmed'] ?? 0) !== 1) {
+            $buildPlanValidation = \is_array($buildPlanPatch['build_plan_v2_validation'] ?? null)
+                ? $buildPlanPatch['build_plan_v2_validation']
+                : [];
+            $buildPlanErrors = \is_array($buildPlanValidation['errors'] ?? null)
+                ? \array_values(\array_filter(\array_map('strval', $buildPlanValidation['errors']), static fn(string $error): bool => \trim($error) !== ''))
+                : [];
+            $detail = $buildPlanErrors !== []
+                ? \implode('; ', \array_slice($buildPlanErrors, 0, 6))
+                : '';
+            $message = $detail !== ''
+                ? (string)__('方案合同校验失败：%{detail}', ['detail' => $detail])
+                : (string)__('方案合同校验失败，请重新生成建站方案。');
+
             return $this->jsonError(
                 'BUILD_PLAN_V2_INVALID',
-                (string)__('方案合同校验失败，请重新生成建站方案。'),
+                $message,
                 ['public_id'],
-                ['build_plan_v2_validation' => \is_array($buildPlanPatch['build_plan_v2_validation'] ?? null) ? $buildPlanPatch['build_plan_v2_validation'] : []]
+                [
+                    'build_plan_v2_validation' => $buildPlanValidation,
+                    'stage1_validation' => $planConfirmationStage1Validation,
+                ]
             );
         }
         $scopePatch = \array_replace($scopePatch, $buildPlanPatch);
@@ -2315,7 +2348,7 @@ class AiSiteAgent extends BaseController
             'status' => 'queued',
         ]);
         $bizKey = $this->buildAiSiteAssetQueueBizKey((int)$session->getId(), $normalizedSlotId);
-        $queueName = 'PageBuilder image asset #' . \substr($normalizedSlotId, 0, 80);
+        $queueName = 'PageBuilder image asset ' . \substr($safeSlot, 0, 96);
         $queueResult = $this->createOrReuseAiSiteAssetQueue($bizKey, $queueName, $content);
         $queueId = (int)($queueResult['queue_id'] ?? 0);
         $effectiveExecutionToken = (string)($queueResult['execution_token'] ?? $executionToken);
@@ -2389,7 +2422,13 @@ class AiSiteAgent extends BaseController
             $queueId = (int)($existing['queue_id'] ?? $existing['id'] ?? 0);
             if ($queueId > 0) {
                 $status = \trim((string)($existing['status'] ?? ''));
-                if (\in_array($status, ['pending', 'queued', 'running'], true)) {
+                $normalizedStatus = \strtolower($status);
+                $isStaleRunning = false;
+                if ($normalizedStatus === 'running') {
+                    $pid = (int)($existing['pid'] ?? 0);
+                    $isStaleRunning = $pid <= 0 || !\Weline\Framework\System\Process\Processer::isRunningByPid($pid);
+                }
+                if (\in_array($normalizedStatus, ['pending', 'queued', 'running'], true) && !$isStaleRunning) {
                     $existingContent = $existing['content'] ?? [];
                     if (\is_string($existingContent)) {
                         $decoded = \json_decode($existingContent, true);
@@ -2400,9 +2439,37 @@ class AiSiteAgent extends BaseController
                         : '';
                     $nextSignature = \trim((string)($content['planning_signature'] ?? ''));
                     if ($nextSignature === '' || $existingSignature === '' || \hash_equals($existingSignature, $nextSignature)) {
+                        $effectiveExecutionToken = (string)(\is_array($existingContent)
+                            ? ($existingContent['execution_token'] ?? $content['execution_token'] ?? '')
+                            : ($content['execution_token'] ?? ''));
+                        if (\in_array($normalizedStatus, ['pending', 'queued'], true)) {
+                            $existingName = \trim((string)($existing['name'] ?? ''));
+                            if ($existingName !== $queueName) {
+                                $refreshed = w_query('queue', 'update', [
+                                    'queue_id' => $queueId,
+                                    'patch' => [
+                                        'name' => $queueName,
+                                        'module' => 'GuoLaiRen_PageBuilder',
+                                        'type_id' => $this->resolveAiSiteQueueTypeId($queueClass),
+                                        'content' => $content,
+                                        'status' => 'pending',
+                                        'auto' => true,
+                                        'biz_key' => $bizKey,
+                                        'result' => '',
+                                        'process' => '',
+                                        'pid' => 0,
+                                        'finished' => 0,
+                                    ],
+                                ]);
+                                if (\is_array($refreshed) && !empty($refreshed['success'])) {
+                                    $effectiveExecutionToken = (string)($content['execution_token'] ?? $effectiveExecutionToken);
+                                    $status = 'pending';
+                                }
+                            }
+                        }
                         return [
                             'queue_id' => $queueId,
-                            'execution_token' => (string)(\is_array($existingContent) ? ($existingContent['execution_token'] ?? $content['execution_token'] ?? '') : ($content['execution_token'] ?? '')),
+                            'execution_token' => $effectiveExecutionToken,
                             'queue_status' => $status,
                             'reused' => true,
                         ];
@@ -2419,7 +2486,9 @@ class AiSiteAgent extends BaseController
                         'auto' => true,
                         'biz_key' => $bizKey,
                         'result' => '',
-                        'process' => '',
+                        'process' => $isStaleRunning
+                            ? 'Recovered stale image asset queue runtime; waiting for system scheduler.'
+                            : '',
                         'pid' => 0,
                         'finished' => 0,
                     ],
@@ -3034,6 +3103,9 @@ class AiSiteAgent extends BaseController
             unset($details['fresh_repair_failed_tasks']);
             $details['resume_failed_tasks'] = 1;
             $scopePatch = [];
+        } elseif ($operation === 'plan') {
+            $details['prompt_mode'] = 'resume_plan';
+            $details['resume_failed_tasks'] = 1;
         }
         $stage = $operation === 'plan'
             ? AiSiteAgentSession::STAGE_PLAN
@@ -5739,6 +5811,7 @@ class AiSiteAgent extends BaseController
                                 $buildPayload['instruction'] = (string)__('请基于当前阶段一上下文与已保存的工作台信息继续补齐中断内容，优先复用已完成部分，不要从零抛弃已有进度。');
                                 $buildPayload['target_scope'] = 'resume_generation';
                                 $buildPayload['prompt_mode'] = 'resume_plan';
+                                $buildPayload['resume_failed_tasks'] = 1;
                             }
                             if ($requestedInstruction !== '') {
                                 $buildPayload['instruction'] = isset($buildPayload['instruction'])
@@ -6646,16 +6719,53 @@ class AiSiteAgent extends BaseController
                     'biz_key' => (string)($queueRow['biz_key'] ?? ''),
                 ]);
             }
+            $observeCheckpointOnly = !$this->shouldKeepQueuedObserverStreamOpen($operation);
             $observed = $this->observeDuplicateOperationStream(
                 $sse,
                 $session,
                 $adminId,
                 $operation,
                 $executionToken,
-                !$this->shouldKeepQueuedObserverStreamOpen($operation)
+                $observeCheckpointOnly
             );
-            if ($queueWaitingForScheduler && (bool)($observed['deferred_queue_progress'] ?? false)) {
-                return;
+            if (
+                !$observeCheckpointOnly
+                && $this->shouldKeepQueuedObserverStreamOpen($operation)
+                && $sse->isAlive()
+            ) {
+                $maxObserveResumeCycles = 720;
+                $observeResumeCycles = 0;
+                while ($sse->isAlive() && $observeResumeCycles < $maxObserveResumeCycles) {
+                    $freshObserveSession = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                    $queueRowForResume = $this->findAiSiteOperationQueueRow(
+                        $freshObserveSession,
+                        $operation,
+                        (int)($queueRow['queue_id'] ?? 0)
+                    );
+                    if (!$this->isObservedQueueInProgress($queueRowForResume)) {
+                        break;
+                    }
+                    if (!(bool)($observed['deferred_queue_progress'] ?? false)) {
+                        break;
+                    }
+                    $observeResumeCycles++;
+                    $observed = $this->observeDuplicateOperationStream(
+                        $sse,
+                        $session,
+                        $adminId,
+                        $operation,
+                        $executionToken,
+                        false
+                    );
+                }
+                $freshObserveSession = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                $queueRow = $this->findAiSiteOperationQueueRow(
+                    $freshObserveSession,
+                    $operation,
+                    (int)($queueRow['queue_id'] ?? 0)
+                );
+                $queueStatusForObserver = \trim((string)($queueRow['status'] ?? ''));
+                $queueWaitingForScheduler = \in_array($queueStatusForObserver, ['pending', 'queued'], true);
             }
             if (!(bool)($observed['success'] ?? true)) {
                 $sse->sendError(
@@ -6663,16 +6773,19 @@ class AiSiteAgent extends BaseController
                     (int)($observed['http_code'] ?? 500)
                 );
             }
+            $queueStillInProgress = $this->isObservedQueueInProgress($queueRow);
+            $emitDeferredQueueHandoff = (bool)($observed['deferred_queue_progress'] ?? false) && $queueStillInProgress;
             $sse->complete([
                 'success' => (bool)($observed['success'] ?? true),
                 'message' => (string)($observed['message'] ?? 'Operation completed.'),
                 'operation' => $operation,
                 'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
                 'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
-                'deferred_queue_progress' => (bool)($observed['deferred_queue_progress'] ?? false),
-                'queue_waiting_for_scheduler' => $queueWaitingForScheduler,
-                'can_close_stream' => $queueWaitingForScheduler,
-                'continue_other_operations' => $queueWaitingForScheduler,
+                'deferred_queue_progress' => $emitDeferredQueueHandoff,
+                'queue_waiting_for_scheduler' => $emitDeferredQueueHandoff && $queueWaitingForScheduler,
+                'can_close_stream' => $emitDeferredQueueHandoff,
+                'continue_other_operations' => $emitDeferredQueueHandoff,
+                'queue_status' => $queueStatusForObserver,
             ]);
             return;
         }
@@ -12298,6 +12411,10 @@ class AiSiteAgent extends BaseController
         $bizKey = \trim((string)($row['biz_key'] ?? ''));
         if ($bizKey === '') {
             return null;
+        }
+
+        if (\preg_match('/(?:^|:)asset:/', $bizKey) === 1) {
+            return $operation === 'image_asset';
         }
 
         if (\preg_match('/(?:^|:)queue_slot:([^:]+)/', $bizKey, $slotMatch) === 1) {
