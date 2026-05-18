@@ -76,7 +76,7 @@
         return isRuntimePublishBlockingAiOperation(op) || op === 'image_asset';
     }
     function resolveRuntimeQueueInfoKey(operation) {
-        var op = String(operation || '').trim().toLowerCase();
+        var op = String(operation || '').trim().toLowerCase();
         if (isRuntimePublishBlockingAiOperation(op)) {
             return 'build_queue_info';
         }
@@ -215,6 +215,49 @@
         return '';
     }
 
+    function isQueueStatusInProgressForWatch(status) {
+        return ['pending', 'queued', 'running', 'processing'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
+    }
+
+    function isQueueStatusTerminalForWatch(status) {
+        return ['done', 'complete', 'completed', 'error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
+    }
+
+    function workspaceStateHasBlockingPlanFailures(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return false;
+        }
+        if (parseInt(String(workspaceState.partial_retry_required || 0), 10) === 1) {
+            return true;
+        }
+        return collectRetryableFailureItemsFromPayload('plan', { state: workspaceState }).length > 0;
+    }
+
+    function resumeOperationStreamForQueueWatch(operation, payload, sourceTag) {
+        var normalized = normalizeOperationStreamStartPayload(payload || {}, operation);
+        var queueStatus = readQueueStatusFromPayload(operation, payload || {});
+        if (isQueueStatusTerminalForWatch(queueStatus)) {
+            return false;
+        }
+        var streamUrl = String(normalized.streamUrl || '');
+        var executionToken = String(normalized.executionToken || '');
+        if (!executionToken) {
+            return false;
+        }
+        if (!streamUrl) {
+            streamUrl = buildOperationUrl(executionToken);
+        }
+        if (!streamUrl) {
+            return false;
+        }
+        return startOperationStream(
+            streamUrl,
+            String(normalized.operation || operation || ''),
+            executionToken,
+            sourceTag || 'queue-watch-resume'
+        );
+    }
+
     function readQueueStatusForDeferredState(workspaceState, operation) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return '';
@@ -342,6 +385,33 @@
                 previewBridge.resumeWorkspaceStream();
             }
             refreshEmbeddedPreviewFrame(650);
+            return;
+        }
+        if (op === 'plan') {
+            if (status === 'error' || status === 'stop') {
+                if (message && typeof setPlanModalProgress === 'function') {
+                    setPlanModalProgress(message, 100, false, 'error');
+                }
+                if (typeof setPlanModeStatus === 'function' && message) {
+                    setPlanModeStatus(message);
+                }
+                resetOperationUiOnFailure('plan');
+                offerRetryForFailedOperation('plan', {
+                    operation: 'plan',
+                    state: workspaceState,
+                    message: message
+                });
+                return;
+            }
+            if (status === 'done') {
+                finishOperation({ operation: 'plan', state: workspaceState });
+                if (typeof setPlanGenerationActionLock === 'function') {
+                    setPlanGenerationActionLock(false);
+                }
+                if (typeof setPlanRetryButtonVisible === 'function') {
+                    setPlanRetryButtonVisible(true);
+                }
+            }
         }
     }
     function getWorkspaceFlagState(getterName, fallback) {
@@ -697,6 +767,26 @@
         updateTaskSummaryFromState(workspaceState);
         updateStageStatusSummary(workspaceState);
 
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        if (normalizedOperation === 'plan' && workspaceStateHasBlockingPlanFailures(workspaceState)) {
+            stopDeferredQueueStatePoll();
+            var planFailureItems = collectRetryableFailureItemsFromPayload('plan', { state: workspaceState });
+            var planFailureMessage = planFailureItems.length > 0
+                ? String(planFailureItems[0].message || planFailureItems[0].error_message || '').trim()
+                : '';
+            if (planFailureMessage === '') {
+                planFailureMessage = readQueueMessageForDeferredState(workspaceState, 'plan');
+            }
+            resetOperationUiOnFailure('plan');
+            if (planFailureMessage && typeof setPlanModalProgress === 'function') {
+                setPlanModalProgress(planFailureMessage, 100, false, 'error');
+            }
+            if (planFailureMessage && typeof setPlanModeStatus === 'function') {
+                setPlanModeStatus(planFailureMessage);
+            }
+            return true;
+        }
+
         var terminalActive = resolveDeferredQueueTerminalOperation(workspaceState, operation);
         if (!terminalActive) {
             return false;
@@ -771,6 +861,28 @@
         if (!status) {
             return;
         }
+        if (operation === 'plan') {
+            if (typeof window.planSseRunning !== 'undefined') {
+                window.planSseRunning = false;
+            }
+            if (typeof setPlanGenerationActionLock === 'function') {
+                setPlanGenerationActionLock(false);
+            }
+            if (typeof setPlanModeRunButtonLoading === 'function') {
+                setPlanModeRunButtonLoading(false);
+            }
+            if (typeof setPlanRetryButtonVisible === 'function' && (status === 'error' || status === 'stop')) {
+                setPlanRetryButtonVisible(true);
+            }
+            if (typeof renderQueueUiState === 'function') {
+                renderQueueUiState('plan', {
+                    state: status === 'done' ? 'completed' : 'failed',
+                    message: String(active.message || ''),
+                    percent: status === 'done' ? 100 : 100
+                }, { updateStatus: false });
+            }
+            return;
+        }
         if (operation !== 'build' && operation !== 'visual_edit') {
             return;
         }
@@ -842,7 +954,7 @@
             case 'plan_saved':
             case 'plan_generated':
             case 'plan_refined':
-            case 'plan_rebuilt':
+            case 'plan_rebuilt':
                 mirroredKind = 'done';
                 break;
             case 'total':
@@ -1522,6 +1634,28 @@
     }
 
     function resetOperationUiOnFailure(operation) {
+        if (String(operation || '').trim().toLowerCase() === 'plan') {
+            if (typeof window.planSseRunning !== 'undefined') {
+                window.planSseRunning = false;
+            }
+            if (typeof setPlanGenerationActionLock === 'function') {
+                setPlanGenerationActionLock(false);
+            }
+            if (typeof setPlanModeRunButtonLoading === 'function') {
+                setPlanModeRunButtonLoading(false);
+            }
+            if (typeof setPlanRetryButtonVisible === 'function') {
+                setPlanRetryButtonVisible(true);
+            }
+            if (typeof syncPlanFailureListFromWorkspaceState === 'function') {
+                syncPlanFailureListFromWorkspaceState(
+                    (window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object')
+                        ? window.__pbLastWorkspaceState
+                        : null
+                );
+            }
+            return;
+        }
         if (isRuntimePublishBlockingAiOperation(operation)) {
             buildStartupPending = false;
             if (typeof previewBridge.hideBuildGuard === 'function') {
@@ -3032,7 +3166,10 @@
                 if (continueTerminal) {
                     startObserverSyncTerminalPulse(continueTerminal);
                 }
-                startDeferredQueueStatePoll(operation);
+                var streamResumed = resumeOperationStreamForQueueWatch(operation, payload, 'deferred-queue-handoff');
+                if (!streamResumed) {
+                    startDeferredQueueStatePoll(operation);
+                }
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
