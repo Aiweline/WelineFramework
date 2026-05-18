@@ -77,7 +77,11 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
                     <select name="reason" class="form-select rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" required>
                         <option value=""><?= __('Select a reason') ?></option>
                         <?php foreach ($reasonOptions as $reason): ?>
-                            <option value="<?= htmlspecialchars((string) $reason, ENT_QUOTES) ?>"><?= htmlspecialchars((string) $reason, ENT_QUOTES) ?></option>
+                            <?php
+                            $reasonValue = is_array($reason) ? (string) ($reason['value'] ?? '') : (string) $reason;
+                            $reasonLabel = is_array($reason) ? (string) ($reason['label'] ?? $reasonValue) : (string) __($reasonValue);
+                            ?>
+                            <option value="<?= htmlspecialchars($reasonValue, ENT_QUOTES) ?>"><?= htmlspecialchars($reasonLabel, ENT_QUOTES) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </label>
