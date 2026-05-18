@@ -157,8 +157,14 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
         submit.addEventListener('click', function () {
             var payload = {};
             new FormData(form).forEach(function (value, key) {
+                if (key === 'form_key' || key === 'csrf_token' || key === '_token') {
+                    return;
+                }
                 payload[key] = value;
             });
+            if (payload.order_id) {
+                payload.order_id = parseInt(payload.order_id, 10) || 0;
+            }
 
             getRmaApi().then(function (RmaApi) {
                 return RmaApi.create(payload, {silent: true});
@@ -181,8 +187,11 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
                 feedback.textContent = (result && result.message) ? result.message : '<?= __('Unable to submit your request right now.') ?>';
                 feedback.classList.remove('text-emerald-500');
                 feedback.classList.add('text-red-500');
-            }).catch(function () {
-                feedback.textContent = '<?= __('Unable to submit your request right now.') ?>';
+            }).catch(function (error) {
+                var errorMessage = error && error.response && error.response.data
+                    ? (error.response.data.message || error.response.data.msg || '')
+                    : '';
+                feedback.textContent = errorMessage || (error && error.message) || '<?= __('Unable to submit your request right now.') ?>';
                 feedback.classList.remove('text-emerald-500');
                 feedback.classList.add('text-red-500');
             });
