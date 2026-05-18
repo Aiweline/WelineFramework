@@ -197,7 +197,7 @@ class RmaQueryProvider implements QueryProviderInterface
                     'graph' => false,
                     'cost' => 5,
                     'params' => [
-                        'order_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                        'order_id' => ['type' => 'int', 'required' => false, 'min' => 1],
                         'order_increment_id' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'type' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                         'reason' => ['type' => 'string', 'required' => true, 'max_length' => 160],

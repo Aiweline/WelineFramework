@@ -55,8 +55,8 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
                     <?= __('Order ID') ?>
                     <input
-                        type="number"
-                        min="1"
+                        type="text"
+                        inputmode="numeric"
                         name="order_id"
                         value="<?= htmlspecialchars((string) ($order['order_id'] ?? ''), ENT_QUOTES) ?>"
                         class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary"
@@ -154,6 +154,29 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
             return apiPromise;
         }
 
+        function normalizeOrderPayload(payload) {
+            var rawOrderId = String(payload.order_id || '').trim();
+            if (!rawOrderId) {
+                delete payload.order_id;
+                return payload;
+            }
+
+            if (!/^\d+$/.test(rawOrderId)) {
+                delete payload.order_id;
+                return payload;
+            }
+
+            var numericOrderId = Number(rawOrderId);
+            if (!Number.isSafeInteger(numericOrderId)) {
+                payload.order_increment_id = payload.order_increment_id || rawOrderId;
+                delete payload.order_id;
+                return payload;
+            }
+
+            payload.order_id = numericOrderId;
+            return payload;
+        }
+
         submit.addEventListener('click', function () {
             var payload = {};
             new FormData(form).forEach(function (value, key) {
@@ -162,9 +185,7 @@ $reasonOptions = (array) ($this->getData('reason_options') ?? []);
                 }
                 payload[key] = value;
             });
-            if (payload.order_id) {
-                payload.order_id = parseInt(payload.order_id, 10) || 0;
-            }
+            payload = normalizeOrderPayload(payload);
 
             getRmaApi().then(function (RmaApi) {
                 return RmaApi.create(payload, {silent: true});
