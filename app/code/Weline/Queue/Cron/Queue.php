@@ -112,6 +112,18 @@ QUEUETIP;
             return;
         }
 
+        $freshQueue = clone $this->queue;
+        $freshQueue->clear()->load((int)$queue->getId());
+        if ($freshQueue->getId()) {
+            $queue = $freshQueue;
+        }
+        if (
+            $queue->isFinished()
+            || \in_array($queue->getStatus(), [$queue::status_done, $queue::status_error, $queue::status_stop], true)
+        ) {
+            return;
+        }
+
         $queue->setStatus($queue::status_running)
             ->setPid($pid)
             ->setStartAt(date('Y-m-d H:i:s'))

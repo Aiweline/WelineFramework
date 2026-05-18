@@ -59,6 +59,7 @@
                             <block class='Weline\Component\Block\Form\Search'
                                    id='entity-product-search' action='*/backend/product' method='get'
                                    keyword='search' value=''
+                                   vars='filterSearch'
                                    placeholder='请输入产品关键词回车搜索'></block>
                         </div>
                         <div class='col-9'>
@@ -96,6 +97,9 @@
                                 </th>
                                 <th data-priority='1'>
                                     <?= __('SKU') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('状态') ?>
                                 </th>
                                 <th data-priority='3'>
                                     <?= __('创建时间') ?>

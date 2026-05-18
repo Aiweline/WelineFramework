@@ -8,20 +8,15 @@ $shippingAddress = $this->getData('shipping_address') ?? [];
 $paymentMethod = $this->getData('payment_method') ?? [];
 $recommendations = $this->getData('recommendations') ?? [];
 
-$formatSuccessPrice = function (mixed $amount): string {
-    $amount = (float) $amount;
-    if (method_exists($this, 'formatPrice')) {
-        $formatted = trim((string) $this->formatPrice($amount));
-        if ($formatted !== '') {
-            return $formatted;
-        }
-    }
-
-    return '¥' . number_format($amount, 2);
+$formatSuccessPrice = static function (float $amount): string {
+    return \Weline\Currency\Helper\CurrencyFormatter::formatConverted($amount);
 };
 
 $createdAt = (string) ($order['created_at'] ?? '');
-$placedAt = $createdAt !== '' ? date('Y年n月j日', strtotime($createdAt)) : date('Y年n月j日');
+$placedAtTs = $createdAt !== '' ? strtotime($createdAt) : time();
+$placedAt = $placedAtTs !== false
+    ? __('%{1}年%{2}月%{3}日', [(int) date('Y', $placedAtTs), (int) date('n', $placedAtTs), (int) date('j', $placedAtTs)])
+    : '';
 $orderNumber = (string) ($order['increment_id'] ?? '');
 ?>
 <main class="weshop-success-page">

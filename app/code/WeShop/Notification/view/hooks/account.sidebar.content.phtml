@@ -1,0 +1,671 @@
+<?php
+/**
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 185
+ * @hook-sort-order 18
+ * @hook-solo false
+ */
+
+use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Notification\Model\CustomerNotificationContact;
+use WeShop\Notification\Service\CustomerNotificationPreferenceService;
+use WeShop\Notification\Service\NotificationPageDataService;
+use Weline\Framework\Manager\ObjectManager;
+
+$customerContext = ObjectManager::getInstance(CustomerContextInterface::class);
+$preferenceService = ObjectManager::getInstance(CustomerNotificationPreferenceService::class);
+$notificationPageDataService = ObjectManager::getInstance(NotificationPageDataService::class);
+$customerId = (int) ($customerContext->getUserId() ?? 0);
+$channels = $preferenceService->getAvailableChannels();
+$contactsGrouped = $preferenceService->getContactsGrouped($customerId);
+$preferredChannels = $preferenceService->getPreferredChannels($customerId);
+$saveUrl = (string) $this->getUrl('notification/frontend/notification/preference/save');
+$externalChannels = array_filter($channels, static fn(array $channel): bool => !empty($channel['requires_contact']));
+$notificationData = $customerId > 0 ? $notificationPageDataService->build($customerId) : [];
+$notifications = (array) ($notificationData['notifications'] ?? []);
+$notificationCount = (int) ($notificationData['notification_count'] ?? 0);
+$unreadCount = (int) ($notificationData['notification_unread_count'] ?? 0);
+?>
+<style>
+    #notification-preferences-section.motor-notification-preferences {
+        gap: 1.1rem;
+    }
+
+    #notification-preferences-section .motor-account-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.75fr);
+        gap: 1rem;
+        align-items: start;
+    }
+
+    #notification-preferences-section .motor-account-card {
+        border: 1px solid rgba(17, 17, 17, 0.08);
+        border-radius: 1.25rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 248, 248, 0.96));
+        box-shadow: 0 16px 34px rgba(17, 17, 17, 0.07);
+        overflow: hidden;
+    }
+
+    #notification-preferences-section .motor-account-card__header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.2rem 1.25rem 0.35rem;
+    }
+
+    #notification-preferences-section .motor-account-card__body {
+        padding: 1rem 1.25rem 1.25rem;
+    }
+
+    #notification-preferences-section .motor-account-card__title {
+        margin: 0;
+        color: #171717;
+        font-size: 1.08rem;
+        font-weight: 800;
+        line-height: 1.35;
+    }
+
+    #notification-preferences-section .motor-account-card__description,
+    #notification-preferences-section .motor-account-form__hint,
+    #notification-preferences-section .motor-account-form__label-hint {
+        color: #666;
+        font-size: 0.84rem;
+        line-height: 1.65;
+    }
+
+    #notification-preferences-section .motor-account-card__description {
+        margin: 0.35rem 0 0;
+    }
+
+    #notification-preferences-section .motor-account-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        width: max-content;
+        padding: 0.38rem 0.72rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    #notification-preferences-section .motor-account-badge--warning {
+        background: rgba(242, 189, 65, 0.18);
+        color: #8a5c00;
+    }
+
+    #notification-preferences-section .motor-account-badge--success {
+        background: rgba(34, 163, 94, 0.14);
+        color: #167544;
+    }
+
+    #notification-preferences-section .motor-account-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__channel-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.8rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__channel-card,
+    #notification-preferences-section .motor-notification-preferences__contact-box,
+    #notification-preferences-section .motor-notification-preferences__summary-item,
+    #notification-preferences-section .motor-notification-preferences__message-item,
+    #notification-preferences-section .motor-notification-preferences__empty,
+    #notification-preferences-section .motor-account-profile-preview {
+        border: 1px solid rgba(17, 17, 17, 0.08);
+        border-radius: 1rem;
+        background: rgba(17, 17, 17, 0.025);
+    }
+
+    #notification-preferences-section .motor-notification-preferences__channel-card {
+        display: block;
+        padding: 0.9rem;
+        cursor: pointer;
+        transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__channel-card:hover {
+        transform: translateY(-1px);
+        border-color: rgba(227, 24, 55, 0.22);
+        background: rgba(227, 24, 55, 0.04);
+    }
+
+    #notification-preferences-section .motor-notification-preferences__channel-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.72rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__checkbox input {
+        width: 1rem;
+        height: 1rem;
+        margin-top: 0.24rem;
+        accent-color: #e31837;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__channel-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        min-width: 0;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__channel-copy strong,
+    #notification-preferences-section .motor-account-form__label-main,
+    #notification-preferences-section .motor-notification-preferences__summary-item strong {
+        color: #171717;
+        font-size: 0.92rem;
+        font-weight: 800;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__channel-copy span,
+    #notification-preferences-section .motor-notification-preferences__summary-item span,
+    #notification-preferences-section .motor-account-helper-list {
+        color: #5f5f5f;
+        font-size: 0.82rem;
+        line-height: 1.65;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__contact-box,
+    #notification-preferences-section .motor-account-profile-preview,
+    #notification-preferences-section .motor-notification-preferences__contact-summary {
+        padding: 1rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__contact-head {
+        margin-bottom: 0.9rem;
+    }
+
+    #notification-preferences-section .motor-account-form__row {
+        display: grid;
+        grid-template-columns: minmax(160px, 0.75fr) minmax(0, 1.25fr);
+        gap: 0.85rem;
+    }
+
+    #notification-preferences-section .motor-account-form__group,
+    #notification-preferences-section .motor-account-form__label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    #notification-preferences-section .motor-account-form__label {
+        margin: 0 0 0.45rem;
+    }
+
+    #notification-preferences-section .motor-account-form__input-wrap {
+        position: relative;
+    }
+
+    #notification-preferences-section .motor-account-form__input-icon {
+        position: absolute;
+        left: 0.9rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: rgba(17, 17, 17, 0.38);
+        pointer-events: none;
+    }
+
+    #notification-preferences-section .motor-account-form__input {
+        width: 100%;
+        min-height: 3rem;
+        padding: 0.78rem 0.95rem 0.78rem 2.55rem;
+        border: 1px solid rgba(17, 17, 17, 0.1);
+        border-radius: 0.9rem;
+        background: rgba(255, 255, 255, 0.86);
+        color: #171717;
+        font-size: 0.9rem;
+        outline: none;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    #notification-preferences-section .motor-account-form__input:focus {
+        border-color: rgba(227, 24, 55, 0.46);
+        background: #fff;
+        box-shadow: 0 0 0 4px rgba(227, 24, 55, 0.1);
+    }
+
+    #notification-preferences-section .motor-notification-preferences__select {
+        appearance: none;
+        padding-right: 2.4rem;
+    }
+
+    #notification-preferences-section .motor-account-form__actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    #notification-preferences-section .motor-account-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        min-height: 3rem;
+        padding: 0.78rem 1.15rem;
+        border: 0;
+        border-radius: 0.9rem;
+        background: linear-gradient(135deg, #e31837, #c41429);
+        color: #fff;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 14px 26px rgba(227, 24, 55, 0.18);
+    }
+
+    #notification-preferences-section .motor-account-helper-list {
+        margin: 0.75rem 0 0;
+        padding-left: 1rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__summary-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+        margin-top: 0.85rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__summary-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.82rem 0.9rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__message-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        margin-bottom: 0.9rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__stat {
+        min-width: 6.2rem;
+        padding: 0.7rem 0.85rem;
+        border: 1px solid rgba(17, 17, 17, 0.08);
+        border-radius: 0.9rem;
+        background: rgba(227, 24, 55, 0.04);
+    }
+
+    #notification-preferences-section .motor-notification-preferences__stat span {
+        display: block;
+        color: #666;
+        font-size: 0.74rem;
+        line-height: 1.3;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__stat strong {
+        display: block;
+        margin-top: 0.25rem;
+        color: #171717;
+        font-size: 1.35rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__message-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__message-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.9rem;
+        padding: 0.95rem 1rem;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__message-item[data-notification-read="0"] {
+        border-color: rgba(227, 24, 55, 0.24);
+        background: rgba(227, 24, 55, 0.045);
+    }
+
+    #notification-preferences-section .motor-notification-preferences__message-type {
+        display: inline-flex;
+        width: max-content;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.28rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(17, 17, 17, 0.06);
+        color: #555;
+        font-size: 0.72rem;
+        font-weight: 800;
+        line-height: 1.2;
+        text-transform: uppercase;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__message-title {
+        margin: 0.55rem 0 0;
+        color: #171717;
+        font-size: 0.98rem;
+        font-weight: 850;
+        line-height: 1.35;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__message-content {
+        margin: 0.35rem 0 0;
+        color: #5d5d5d;
+        font-size: 0.84rem;
+        line-height: 1.65;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__message-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.55rem;
+        min-width: 8rem;
+        color: #777;
+        font-size: 0.78rem;
+        text-align: right;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__read-button {
+        min-height: 2.35rem;
+        padding: 0.52rem 0.78rem;
+        border: 0;
+        border-radius: 0.75rem;
+        background: #171717;
+        color: #fff;
+        font-size: 0.8rem;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    #notification-preferences-section .motor-notification-preferences__empty {
+        padding: 1.2rem;
+        color: #666;
+        font-size: 0.88rem;
+        line-height: 1.65;
+        text-align: center;
+    }
+
+    @media (max-width: 900px) {
+        #notification-preferences-section .motor-account-grid,
+        #notification-preferences-section .motor-notification-preferences__channel-grid,
+        #notification-preferences-section .motor-account-form__row {
+            grid-template-columns: 1fr;
+        }
+
+        #notification-preferences-section .motor-notification-preferences__message-item {
+            grid-template-columns: 1fr;
+        }
+
+        #notification-preferences-section .motor-notification-preferences__message-meta {
+            align-items: flex-start;
+            min-width: 0;
+            text-align: left;
+        }
+    }
+</style>
+<section class="account-hook-section account-index__section d-none motor-account-section motor-notification-preferences" id="notification-preferences-section" data-account-section="notification-preferences" hidden>
+    <article class="motor-account-card">
+        <header class="motor-account-card__header">
+            <div>
+                <h2 class="motor-account-card__title"><?= __('消息通知') ?></h2>
+                <p class="motor-account-card__description"><?= __('订单进度、支付结果、售后提醒和账户消息都会出现在这里。') ?></p>
+            </div>
+            <div class="motor-notification-preferences__stats">
+                <div class="motor-notification-preferences__stat">
+                    <span><?= __('全部消息') ?></span>
+                    <strong><?= $notificationCount ?></strong>
+                </div>
+                <div class="motor-notification-preferences__stat">
+                    <span><?= __('未读') ?></span>
+                    <strong data-notification-unread-count><?= $unreadCount ?></strong>
+                </div>
+            </div>
+        </header>
+
+        <div class="motor-account-card__body">
+            <?php if ($notifications): ?>
+                <div class="motor-notification-preferences__message-list">
+                    <?php foreach ($notifications as $item): ?>
+                        <?php
+                        $notificationId = (int) ($item['notification_id'] ?? 0);
+                        $isRead = (int) ($item['is_read'] ?? 0) === 1;
+                        ?>
+                        <article class="motor-notification-preferences__message-item" data-notification-item="<?= $notificationId ?>" data-notification-read="<?= $isRead ? '1' : '0' ?>">
+                            <div>
+                                <span class="motor-notification-preferences__message-type"><?= htmlspecialchars((string) ($item['type'] ?? 'info'), ENT_QUOTES, 'UTF-8') ?></span>
+                                <h3 class="motor-notification-preferences__message-title"><?= htmlspecialchars((string) ($item['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+                                <p class="motor-notification-preferences__message-content"><?= nl2br(htmlspecialchars((string) ($item['content'] ?? ''), ENT_QUOTES, 'UTF-8')) ?></p>
+                            </div>
+                            <div class="motor-notification-preferences__message-meta">
+                                <span><?= htmlspecialchars((string) ($item['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php if (!$isRead && $notificationId > 0): ?>
+                                    <button type="button" class="motor-notification-preferences__read-button" data-notification-mark-read="<?= $notificationId ?>">
+                                        <?= __('标记已读') ?>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="motor-notification-preferences__empty">
+                    <?= __('当前还没有消息。后续订单、支付、配送和售后事件产生后，会自动出现在这里。') ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </article>
+
+    <div class="motor-account-grid">
+        <article class="motor-account-card">
+            <header class="motor-account-card__header">
+                <div>
+                    <h2 class="motor-account-card__title"><?= __('通知渠道设置') ?></h2>
+                    <p class="motor-account-card__description">
+                        <?= __('配置订单、支付、配送和售后通知的接收方式，结账页会优先使用这里保存的偏好。') ?>
+                    </p>
+                </div>
+                <div class="motor-account-badge motor-account-badge--warning">
+                    <i class="fa fa-bell-o"></i>
+                    <?= __('消息通知') ?>
+                </div>
+            </header>
+
+            <div class="motor-account-card__body">
+                <form method="post" action="<?= htmlspecialchars($saveUrl, ENT_QUOTES, 'UTF-8') ?>" class="motor-account-form">
+                    <div class="motor-notification-preferences__channel-grid">
+                        <?php foreach ($channels as $code => $channel): ?>
+                            <?php
+                            $code = (string) $code;
+                            $checked = in_array($code, $preferredChannels, true);
+                            $configured = $code === CustomerNotificationPreferenceService::CHANNEL_INBOX || !empty($contactsGrouped[$code]);
+                            ?>
+                            <label class="motor-notification-preferences__channel-card">
+                                <span class="motor-notification-preferences__channel-top">
+                                    <span class="motor-notification-preferences__checkbox">
+                                        <input type="checkbox" name="notification_channels[]" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>" <?= $checked ? 'checked' : '' ?> <?= $configured ? '' : 'disabled' ?>>
+                                    </span>
+                                    <span class="motor-notification-preferences__channel-copy">
+                                        <strong><?= htmlspecialchars((string) ($channel['name'] ?? $code), ENT_QUOTES, 'UTF-8') ?></strong>
+                                        <span>
+                                            <?= $configured ? __('已可用于订单通知。') : __('请先在下方添加该渠道的联系方式。') ?>
+                                        </span>
+                                    </span>
+                                </span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <?php if ($externalChannels): ?>
+                        <div class="motor-notification-preferences__contact-box">
+                            <div class="motor-notification-preferences__contact-head">
+                                <h3 class="motor-account-card__title"><?= __('添加通知联系方式') ?></h3>
+                                <p class="motor-account-card__description"><?= __('外部渠道需要先绑定联系方式，才能参与提醒投递。') ?></p>
+                            </div>
+                            <div class="motor-account-form__row">
+                                <label class="motor-account-form__group" for="notification_channel_code">
+                                    <span class="motor-account-form__label">
+                                        <span class="motor-account-form__label-main"><i class="fa fa-random"></i><?= __('渠道') ?></span>
+                                    </span>
+                                    <div class="motor-account-form__input-wrap">
+                                        <select id="notification_channel_code" name="channel_code" class="motor-account-form__input motor-notification-preferences__select">
+                                            <option value=""><?= __('选择渠道') ?></option>
+                                            <?php foreach ($externalChannels as $code => $channel): ?>
+                                                <option value="<?= htmlspecialchars((string) $code, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) ($channel['name'] ?? $code), ENT_QUOTES, 'UTF-8') ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <i class="motor-account-form__input-icon fa fa-chevron-down"></i>
+                                    </div>
+                                </label>
+                                <label class="motor-account-form__group" for="notification_contact_value">
+                                    <span class="motor-account-form__label">
+                                        <span class="motor-account-form__label-main"><i class="fa fa-address-card-o"></i><?= __('联系方式') ?></span>
+                                        <span class="motor-account-form__label-hint"><?= __('邮箱、手机号或渠道地址') ?></span>
+                                    </span>
+                                    <div class="motor-account-form__input-wrap">
+                                        <input id="notification_contact_value" name="contact_value" type="text" class="motor-account-form__input" placeholder="<?= htmlspecialchars((string) __('邮箱、手机号或渠道地址'), ENT_QUOTES, 'UTF-8') ?>">
+                                        <i class="motor-account-form__input-icon fa fa-link"></i>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="motor-account-form__actions">
+                        <span class="motor-account-form__hint"><?= __('保存后，结账与订单相关流程会优先使用这里启用的通知渠道。') ?></span>
+                        <button type="submit" class="motor-account-button motor-account-button--primary">
+                            <i class="fa fa-save"></i>
+                            <?= __('保存通知设置') ?>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </article>
+
+        <aside class="motor-account-card">
+            <header class="motor-account-card__header">
+                <div>
+                    <h2 class="motor-account-card__title"><?= __('投递说明') ?></h2>
+                    <p class="motor-account-card__description"><?= __('先启用渠道，再补齐联系人，避免订单消息只能停留在站内。') ?></p>
+                </div>
+            </header>
+
+            <div class="motor-account-card__body">
+                <div class="motor-account-profile-preview motor-notification-preferences__tips">
+                    <div class="motor-account-badge motor-account-badge--success">
+                        <i class="fa fa-check-circle"></i>
+                        <?= __('推荐组合') ?>
+                    </div>
+                    <ul class="motor-account-helper-list">
+                        <li><?= __('站内通知适合保底留痕，建议默认开启。') ?></li>
+                        <li><?= __('邮件适合订单确认、支付结果和售后进度提醒。') ?></li>
+                        <li><?= __('Telegram、Webhook 等外部渠道需要先配置联系人才能启用。') ?></li>
+                    </ul>
+                </div>
+
+                <?php if (!empty($contactsGrouped)): ?>
+                    <div class="motor-notification-preferences__contact-summary">
+                        <h3><?= __('已保存联系人') ?></h3>
+                        <div class="motor-notification-preferences__summary-list">
+                            <?php foreach ($contactsGrouped as $code => $contactValues): ?>
+                                <?php
+                                $contactLabels = [];
+                                foreach ($contactValues as $contactRow) {
+                                    if (!is_array($contactRow)) {
+                                        continue;
+                                    }
+                                    $contactValue = trim((string) ($contactRow[CustomerNotificationContact::schema_fields_CONTACT_VALUE] ?? ''));
+                                    if ($contactValue !== '') {
+                                        $contactLabels[] = $contactValue;
+                                    }
+                                }
+                                ?>
+                                <div class="motor-notification-preferences__summary-item">
+                                    <strong><?= htmlspecialchars((string) ($channels[$code]['name'] ?? $code), ENT_QUOTES, 'UTF-8') ?></strong>
+                                    <span><?= htmlspecialchars(implode(' / ', $contactLabels), ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </aside>
+    </div>
+</section>
+<script>
+    (function () {
+        var notificationApiPromise = null;
+
+        function getNotificationApi() {
+            if (!notificationApiPromise) {
+                notificationApiPromise = window.Weline && window.Weline.Api
+                    ? Promise.resolve(window.Weline.Api.resource('notification'))
+                    : Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+
+            return notificationApiPromise;
+        }
+
+        function updateUnreadCount(nextCount) {
+            var normalizedCount = Math.max(0, nextCount || 0);
+            var displayCount = normalizedCount > 99 ? '99+' : String(normalizedCount);
+
+            document.querySelectorAll('[data-notification-unread-count]').forEach(function (element) {
+                element.textContent = displayCount;
+            });
+
+            document.querySelectorAll('[data-notification-unread-badge]').forEach(function (badge) {
+                badge.hidden = normalizedCount <= 0;
+                if (badge.style) {
+                    badge.style.display = normalizedCount > 0 ? '' : 'none';
+                }
+            });
+        }
+
+        document.querySelectorAll('[data-notification-mark-read]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var notificationId = parseInt(button.getAttribute('data-notification-mark-read') || '0', 10);
+                if (!notificationId) {
+                    return;
+                }
+
+                button.disabled = true;
+                getNotificationApi()
+                    .then(function (NotificationApi) {
+                        return NotificationApi.markRead({ notification_id: notificationId }, { silent: true });
+                    })
+                    .then(function (payload) {
+                        if (!payload || !payload.success) {
+                            button.disabled = false;
+                            return;
+                        }
+
+                        if (payload.data && typeof payload.data.unread_count !== 'undefined') {
+                            updateUnreadCount(parseInt(payload.data.unread_count, 10));
+                        }
+
+                        var item = button.closest('[data-notification-item]');
+                        if (item) {
+                            item.setAttribute('data-notification-read', '1');
+                        }
+                        button.remove();
+                    })
+                    .catch(function () {
+                        button.disabled = false;
+                    });
+            });
+        });
+    })();
+</script>

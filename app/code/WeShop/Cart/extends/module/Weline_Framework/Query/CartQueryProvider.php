@@ -5,6 +5,7 @@ namespace WeShop\Cart\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use WeShop\Cart\Controller\Frontend\Cart\Index as CartPageController;
 use WeShop\Cart\Service\CartApiPayloadService;
 use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Cart\Service\CartService;
@@ -26,12 +27,15 @@ class CartQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
+            'renderPage' => $this->renderPage(),
             'add' => $this->add($params),
             'options' => $this->options($params),
             'miniItems' => $this->miniItems($params),
             'count' => $this->count(),
             'update' => $this->update($params),
             'remove' => $this->remove($params),
+            'trash' => $this->trash($params),
+            'restore' => $this->restore($params),
             'getCartItems' => $this->getCartItems($params),
             'calculateTotals' => $this->calculateTotals($params),
             'clearCart' => $this->clearCart($params),
@@ -39,6 +43,13 @@ class CartQueryProvider implements QueryProviderInterface
                 (string) __('Cart 查询器不支持的操作：%{1}', $operation)
             ),
         };
+    }
+
+    private function renderPage(): string
+    {
+        /** @var CartPageController $controller */
+        $controller = ObjectManager::getInstance(CartPageController::class, [], false);
+        return $controller->index();
     }
 
     private function add(array $params): array
@@ -104,6 +115,22 @@ class CartQueryProvider implements QueryProviderInterface
         );
     }
 
+    private function trash(array $params): array
+    {
+        return $this->getCartApiPayloadService()->buildTrashResponse(
+            $this->getFrontendCustomerId(),
+            (int)($params['limit'] ?? 6)
+        );
+    }
+
+    private function restore(array $params): array
+    {
+        return $this->getCartApiPayloadService()->buildRestoreResponse(
+            $this->getFrontendCustomerId(),
+            (int)($params['item_id'] ?? $params['cart_id'] ?? 0)
+        );
+    }
+
     private function getFrontendCustomerId(bool $createGuest = true): int
     {
         return $this->getCartIdentityService()->getCartCustomerId($createGuest);
@@ -163,6 +190,17 @@ class CartQueryProvider implements QueryProviderInterface
             'description' => __('提供购物车读取与总额计算能力'),
             'module' => 'WeShop_Cart',
             'operations' => [
+                [
+                    'name' => 'renderPage',
+                    'description' => __('Render frontend cart page through Weline_Cart root route'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [],
+                    'returns' => ['type' => 'string'],
+                    'summary' => 'Render cart page',
+                ],
                 [
                     'name' => 'add',
                     'description' => __('Frontend cart add operation'),
@@ -234,7 +272,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'remove',
-                    'description' => __('Frontend cart remove operation'),
+                    'description' => __('Frontend cart remove operation, moves item to cart trash'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -243,7 +281,34 @@ class CartQueryProvider implements QueryProviderInterface
                         'item_id' => ['type' => 'int', 'required' => true, 'min' => 1],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Remove cart item',
+                    'summary' => 'Move cart item to trash',
+                ],
+                [
+                    'name' => 'trash',
+                    'description' => __('Frontend cart trash operation'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'cache_ttl' => 5,
+                    'params' => [
+                        'limit' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 20],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Cart trash items',
+                ],
+                [
+                    'name' => 'restore',
+                    'description' => __('Frontend cart trash restore operation'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'item_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Restore cart item from trash',
                 ],
                 [
                     'name' => 'getCartItems',

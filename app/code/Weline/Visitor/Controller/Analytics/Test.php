@@ -18,7 +18,7 @@ class Test extends FrontendController
      */
     public function index(): string
     {
-        return $this->fetch('Weline_Visitor::analytics/test.phtml');
+        return $this->fetch('Weline_Visitor::templates/analytics/test.phtml');
     }
 }
 

@@ -266,6 +266,39 @@ $this->assign('meta', $meta);
         padding: 0 var(--spacing-4, 1.5rem);
     }
 
+    .product-detail-layout__related .widget-products,
+    .product-detail-layout__related .widget-wrapper > .widget-products,
+    .product-detail-layout__main ~ .widget-products,
+    .weline-main-content > .widget-products {
+        width: 100%;
+        max-width: var(--layout-max-width, 1600px);
+        margin: 0 auto;
+        padding: var(--spacing-6, 2rem) var(--spacing-4, 1.5rem);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__related .widget-products .products-grid,
+    .product-detail-layout__main ~ .widget-products .products-grid,
+    .weline-main-content > .widget-products .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: var(--spacing-4, 1rem);
+        width: 100%;
+    }
+
+    .product-detail-layout__related .widget-products .product-card,
+    .product-detail-layout__main ~ .widget-products .product-card,
+    .weline-main-content > .widget-products .product-card {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--color-border-light, #e5e7eb);
+        border-radius: var(--radius-lg, 12px);
+        background: var(--color-bg-primary, #fff);
+        box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, .04));
+    }
+
     /*
      * Some product-detail render paths currently nest the global footer
      * under the detail container in the final DOM. When that happens,

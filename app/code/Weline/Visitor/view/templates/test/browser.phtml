@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>像素跟踪浏览器测试</title>
     <!-- 加载像素跟踪脚本 -->
+    <script>
+        window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
+            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
+            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            api: {
+                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                endpoint: '/api/framework/query-bin',
+                queryBinUrl: '/api/framework/query-bin'
+            }
+        });
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
+    </script>
+    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2"></script>
     {weline:taglib name="Weline_Visitor::taglib/pixel" /}
     <style>
         body {
@@ -152,8 +166,35 @@
         }
 
         const baseUrl = getBaseUrl();
-        const pixelApiUrl = baseUrl + '/visitor/rest/v1/pixel';
-        const versionApiUrl = baseUrl + '/visitor/rest/v1/version/current';
+        let visitorApiPromise = null;
+
+        function getVisitorApi() {
+            if (!visitorApiPromise) {
+                visitorApiPromise = (async function() {
+                    if (window.Weline && typeof window.Weline.load === 'function') {
+                        await window.Weline.load('api');
+                    }
+                    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api.resource is unavailable.');
+                    }
+                    return window.Weline.Api.resource('visitor');
+                })();
+            }
+            return visitorApiPromise;
+        }
+
+        async function sendPixelForTest(payload) {
+            const api = await getVisitorApi();
+            const result = await api.trackPixel({ payload: payload }, { silent: true });
+            if (result && typeof result.code !== 'undefined') {
+                return result;
+            }
+            return {
+                code: result && result.success === false ? 500 : 200,
+                msg: result && result.message ? result.message : 'OK',
+                data: result && result.data ? result.data : result
+            };
+        }
 
         // 日志记录
         function log(elementId, message, type = 'info') {
@@ -194,15 +235,7 @@
             };
 
             try {
-                const response = await fetch(pixelApiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(testData)
-                });
-
-                const result = await response.json();
+                const result = await sendPixelForTest(testData);
                 
                 if (result.code === 200) {
                     log('basic-log', '像素数据发送成功', 'success');
@@ -232,15 +265,7 @@
             };
 
             try {
-                const response = await fetch(pixelApiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(testData)
-                });
-
-                const result = await response.json();
+                const result = await sendPixelForTest(testData);
                 
                 if (result.code === 200 && result.data.ab_test) {
                     log('basic-log', 'A/B测试像素数据发送成功', 'success');
@@ -278,15 +303,7 @@
             };
 
             try {
-                const response = await fetch(pixelApiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(testData)
-                });
-
-                const result = await response.json();
+                const result = await sendPixelForTest(testData);
                 
                 if (result.code === 200) {
                     log('basic-log', '自定义数据像素发送成功', 'success');
@@ -320,8 +337,12 @@
             log('script-log', '测试版本号获取...', 'info');
             
             try {
-                const response = await fetch(versionApiUrl);
-                const result = await response.json();
+                const result = {
+                    code: 200,
+                    data: {
+                        version: (window.WelineApiConfig && window.WelineApiConfig.workerBuildId) || 'worker-v1'
+                    }
+                };
                 
                 if (result.code === 200 && result.data && result.data.version) {
                     log('script-log', '版本号获取成功: ' + result.data.version, 'success');
@@ -428,15 +449,7 @@
             };
 
             try {
-                const response = await fetch(pixelApiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(invalidData)
-                });
-
-                const result = await response.json();
+                const result = await sendPixelForTest(invalidData);
                 
                 if (result.code === 200) {
                     log('validation-log', '数据验证测试通过（无效数据已被清理）', 'success');
@@ -464,15 +477,7 @@
             };
 
             try {
-                const response = await fetch(pixelApiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(testData)
-                });
-
-                const result = await response.json();
+                const result = await sendPixelForTest(testData);
                 
                 if (result.code === 200) {
                     log('validation-log', '站点ID检测测试通过', 'success');

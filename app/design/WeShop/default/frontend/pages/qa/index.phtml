@@ -103,6 +103,15 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
         var submit = document.getElementById('qa-submit');
         var feedback = document.getElementById('qa-feedback');
         var removeButtons = document.querySelectorAll('[data-remove-question]');
+        var apiPromise = null;
+
+        function getQaApi() {
+            if (!apiPromise) {
+                apiPromise = Promise.resolve(window.Weline.Api.resource('qa'));
+            }
+
+            return apiPromise;
+        }
 
         function setFeedback(message, ok) {
             if (!feedback) {
@@ -121,15 +130,8 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
                     payload[key] = value;
                 });
 
-                fetch(form.action, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(payload)
-                }).then(function (response) {
-                    return response.json();
+                getQaApi().then(function (QaApi) {
+                    return QaApi.add(payload, {silent: true});
                 }).then(function (result) {
                     if (result && result.success) {
                         setFeedback(result.message || '<?= __('Your question has been submitted and is pending review.') ?>', true);
@@ -156,15 +158,8 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
                     return;
                 }
 
-                fetch('<?= htmlspecialchars($removeAction, ENT_QUOTES) ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({ question_id: questionId })
-                }).then(function (response) {
-                    return response.json();
+                getQaApi().then(function (QaApi) {
+                    return QaApi.remove({question_id: parseInt(questionId, 10)}, {silent: true});
                 }).then(function (result) {
                     if (result && result.success) {
                         var card = document.querySelector('[data-question-card=\"' + questionId + '\"]');

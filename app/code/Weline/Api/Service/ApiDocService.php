@@ -778,7 +778,9 @@ class ApiDocService
                         'graph' => (bool)($operationDescriptor['graph'] ?? false),
                         'cost' => (int)($operationDescriptor['cost'] ?? 1),
                         'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
-                        'code' => "const Api = await Weline.Api.resource('{$provider}');\nawait Api.{$operation}({});",
+                        'auth' => (string)($operationDescriptor['auth'] ?? ''),
+                        'sample_params' => $this->buildFrontendWorkerSampleParams($operationDescriptor['params'] ?? []),
+                        'code' => $this->buildFrontendWorkerExampleCode($provider, $operation, $operationDescriptor['params'] ?? []),
                     ],
                     'frontend_worker' => true,
                     'worker' => [
@@ -788,12 +790,108 @@ class ApiDocService
                         'graph' => (bool)($operationDescriptor['graph'] ?? false),
                         'cost' => (int)($operationDescriptor['cost'] ?? 1),
                         'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
+                        'auth' => (string)($operationDescriptor['auth'] ?? ''),
                     ],
                 ];
             }
         }
 
         return $apis;
+    }
+
+    /**
+     * @param mixed $paramsDescriptor
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildFrontendWorkerExampleCode(string $provider, string $operation, mixed $paramsDescriptor): string
+    {
+        $sampleParams = $this->buildFrontendWorkerSampleParams($paramsDescriptor);
+        $jsonFlags = \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT;
+        $payload = \json_encode($sampleParams, $jsonFlags);
+        if (!\is_string($payload) || $payload === '[]') {
+            $payload = '{}';
+        }
+
+        $providerLiteral = \json_encode($provider, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        $operationAccessor = \preg_match('/^[A-Za-z_$][A-Za-z0-9_$]*$/', $operation) === 1
+            ? '.' . $operation
+            : '[' . \json_encode($operation, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . ']';
+
+        return "const Api = await Weline.Api.resource({$providerLiteral});\nawait Api{$operationAccessor}({$payload});";
+    }
+
+    /**
+     * @param mixed $paramsDescriptor
+     * @return array<string, mixed>
+     */
+    private function buildFrontendWorkerSampleParams(mixed $paramsDescriptor): array
+    {
+        if (!\is_array($paramsDescriptor)) {
+            return [];
+        }
+
+        $params = [];
+        foreach ($paramsDescriptor as $key => $rule) {
+            if (!\is_array($rule)) {
+                continue;
+            }
+            $name = \is_string($key) ? $key : (string)($rule['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $params[$name] = $this->sampleFrontendWorkerParamValue($name, $rule);
+        }
+
+        return $params;
+    }
+
+    /**
+     * @param array<string, mixed> $rule
+     */
+    private function sampleFrontendWorkerParamValue(string $name, array $rule): mixed
+    {
+        $lowerName = \strtolower($name);
+        if (\str_contains($lowerName, 'email')) {
+            return 'customer@example.com';
+        }
+        if (\str_contains($lowerName, 'password')) {
+            return 'password123';
+        }
+        if ($lowerName === 'username' || $lowerName === 'login') {
+            return 'customer@example.com';
+        }
+        if ($lowerName === 'firstname' || $lowerName === 'first_name') {
+            return 'Jane';
+        }
+        if ($lowerName === 'lastname' || $lowerName === 'last_name') {
+            return 'Doe';
+        }
+        if ($lowerName === 'agree_terms') {
+            return true;
+        }
+        if ($lowerName === 'remember_duration') {
+            return 2592000;
+        }
+        if (\str_contains($lowerName, 'challenge_token')) {
+            return 'challenge-token';
+        }
+        if ($lowerName === 'token' || \str_ends_with($lowerName, '_token')) {
+            return 'token-value';
+        }
+        if ($lowerName === 'code') {
+            return '123456';
+        }
+
+        $type = \strtolower((string)($rule['type'] ?? 'mixed'));
+        return match ($type) {
+            'int', 'integer' => isset($rule['min']) ? (int)$rule['min'] : 1,
+            'float', 'double', 'number' => isset($rule['min']) ? (float)$rule['min'] : 1.0,
+            'bool', 'boolean' => true,
+            'list' => [],
+            'map', 'object' => ['key' => 'value'],
+            'array' => [],
+            default => 'value',
+        };
     }
 
     /**

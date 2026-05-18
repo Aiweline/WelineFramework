@@ -8,10 +8,13 @@ use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 use WeShop\QA\Service\QAService;
 use WeShop\Review\Service\ReviewService;
+use Weline\Framework\Manager\ObjectManager;
 
 class ProductViewPageDataService
 {
     private const REVIEW_PAGE_SIZE = 5;
+
+    private ?ConfigurableProductService $configurableProductService;
 
     public function __construct(
         private readonly ProductService $productService,
@@ -19,8 +22,12 @@ class ProductViewPageDataService
         private readonly ProductEavService $productEavService,
         private readonly ProductRecommendationService $productRecommendationService,
         private readonly ReviewService $reviewService,
-        private readonly QAService $qaService
+        private readonly QAService $qaService,
+        mixed $configurableProductService = null
     ) {
+        $this->configurableProductService = $configurableProductService instanceof ConfigurableProductService
+            ? $configurableProductService
+            : null;
     }
 
     /**
@@ -41,11 +48,23 @@ class ProductViewPageDataService
         $reviewsPayload = $this->getReviews($productId);
         $questions = $this->getQuestions($productId);
         $productData = $this->mapProduct($product, $attributes, $reviewsPayload);
+        $configurableOptions = $this->getConfigurableOptions($productId);
+        if (($configurableOptions['attributes'] ?? []) === []) {
+            $configurableOptions = $this->buildConfigurableOptionsFromChildren($product);
+        }
+        if (($configurableOptions['attributes'] ?? []) === []) {
+            $configurableOptions = $this->buildFallbackPurchasableOptions($product);
+        }
+        if (($configurableOptions['attributes'] ?? []) !== []) {
+            $productData['configurable_options'] = $configurableOptions;
+            $productData['is_configurable'] = true;
+        }
 
         return [
             'product' => $productData,
             'product_images' => $this->buildProductImages($productData['images'], $productData['name']),
             'attributes' => $attributes,
+            'configurable_options' => $configurableOptions,
             'related_products' => $this->productRecommendationService->getRecommendations([$productId], 4),
             'reviews' => $reviewsPayload['items'],
             'qa' => $questions,
@@ -147,6 +166,8 @@ class ProductViewPageDataService
             'brand' => (string) ($product->getData('brand') ?? ''),
             'brand_id' => (int) ($product->getData('brand_id') ?? 0),
             'options' => $this->normalizeArrayField($product->getData('options')),
+            'configurable_options' => [],
+            'is_configurable' => false,
             'highlights' => $this->normalizeStringList($product->getData('highlights')),
             'specifications' => $this->flattenSpecifications($attributes),
             'in_stock' => (int) ($product->getData(Product::schema_fields_stock) ?? 0) > 0,
@@ -154,6 +175,160 @@ class ProductViewPageDataService
             'rating' => (float) $reviewsPayload['average'],
             'review_count' => (int) $reviewsPayload['total'],
             'rating_distribution' => $ratingDistribution,
+        ];
+    }
+
+    /**
+     * @return array{attributes: array<int, array<string, mixed>>, variants: array<int, array<string, mixed>>}
+     */
+    protected function getConfigurableOptions(int $productId): array
+    {
+        try {
+            $service = $this->configurableProductService ?? ObjectManager::getInstance(ConfigurableProductService::class);
+            $options = $service->getConfigurableOptions($productId);
+            return [
+                'attributes' => is_array($options['attributes'] ?? null) ? $options['attributes'] : [],
+                'variants' => is_array($options['variants'] ?? null) ? $options['variants'] : [],
+            ];
+        } catch (\Throwable) {
+            return ['attributes' => [], 'variants' => []];
+        }
+    }
+
+    /**
+     * @return array{attributes: array<int, array<string, mixed>>, variants: array<int, array<string, mixed>>}
+     */
+    protected function buildConfigurableOptionsFromChildren(Product $product): array
+    {
+        $productId = (int)$product->getId();
+        if ($productId <= 0) {
+            return ['attributes' => [], 'variants' => []];
+        }
+
+        try {
+            $pdo = $product->getConnection()->getConnector()->getLink();
+            $childrenStmt = $pdo->prepare(
+                'SELECT product_id, sku, name, price, stock, image FROM "m_weshop_product" WHERE parent_id = ? AND status = 1 ORDER BY product_id ASC'
+            );
+            $childrenStmt->execute([$productId]);
+            $children = $childrenStmt->fetchAll(\PDO::FETCH_ASSOC);
+            if ($children === []) {
+                return ['attributes' => [], 'variants' => []];
+            }
+
+            $childIds = array_map(static fn(array $row): int => (int)$row['product_id'], $children);
+            $placeholders = implode(',', array_fill(0, count($childIds), '?'));
+            $optionStmt = $pdo->prepare(
+                'SELECT po.product_id, po.attribute_id, po.option_id, a.code AS attribute_code, a.name AS attribute_name, '
+                . 'o.code AS option_code, o.value AS option_value, o.swatch_color, o.swatch_image, o.swatch_text '
+                . 'FROM "m_weshop_product_option_id" po '
+                . 'JOIN "m_eav_attribute" a ON a.attribute_id = po.attribute_id '
+                . 'JOIN "m_eav_attribute_option" o ON o.option_id = po.option_id '
+                . "WHERE po.product_id IN ({$placeholders}) ORDER BY a.attribute_id, o.option_id"
+            );
+            $optionStmt->execute($childIds);
+            $optionRows = $optionStmt->fetchAll(\PDO::FETCH_ASSOC);
+            if ($optionRows === []) {
+                return ['attributes' => [], 'variants' => []];
+            }
+
+            $childrenById = [];
+            foreach ($children as $child) {
+                $childrenById[(int)$child['product_id']] = $child;
+            }
+
+            $attributes = [];
+            $variantOptionIds = [];
+            foreach ($optionRows as $row) {
+                $attributeId = (int)$row['attribute_id'];
+                $optionId = (int)$row['option_id'];
+                $childId = (int)$row['product_id'];
+                $variantOptionIds[$childId][] = $optionId;
+                $attributes[$attributeId] ??= [
+                    'attribute_id' => $attributeId,
+                    'code' => (string)$row['attribute_code'],
+                    'name' => (string)$row['attribute_name'],
+                    'origin_name' => (string)$row['attribute_name'],
+                    'options' => [],
+                ];
+                $attributes[$attributeId]['options'][$optionId] ??= [
+                    'option_id' => $optionId,
+                    'code' => (string)$row['option_code'],
+                    'value' => (string)$row['option_value'],
+                    'origin_value' => (string)$row['option_value'],
+                    'swatch_type' => $row['swatch_image'] !== '' ? 'image' : ($row['swatch_color'] !== '' ? 'color' : ($row['swatch_text'] !== '' ? 'text' : null)),
+                    'swatch_value' => (string)($row['swatch_image'] ?: ($row['swatch_color'] ?: $row['swatch_text'])),
+                    'option_image' => (string)($childrenById[$childId]['image'] ?? ''),
+                    'available_product_ids' => [],
+                ];
+                $attributes[$attributeId]['options'][$optionId]['available_product_ids'][] = $childId;
+            }
+
+            $variants = [];
+            foreach ($children as $child) {
+                $childId = (int)$child['product_id'];
+                $variants[] = [
+                    'product_id' => $childId,
+                    'sku' => (string)$child['sku'],
+                    'name' => (string)$child['name'],
+                    'price' => (float)$child['price'],
+                    'stock' => (int)$child['stock'],
+                    'image' => (string)$child['image'],
+                    'option_ids' => $variantOptionIds[$childId] ?? [],
+                ];
+            }
+
+            foreach ($attributes as &$attribute) {
+                $attribute['options'] = array_values($attribute['options']);
+            }
+            unset($attribute);
+
+            return ['attributes' => array_values($attributes), 'variants' => $variants];
+        } catch (\Throwable) {
+            return ['attributes' => [], 'variants' => []];
+        }
+    }
+
+    /**
+     * Demo/category sample products may not have generated child variants yet.
+     * Keep the storefront purchasable by exposing EAV-like option selectors that
+     * are submitted with the cart request but do not require variant resolution.
+     *
+     * @return array{attributes: array<int, array<string, mixed>>, variants: array<int, array<string, mixed>>}
+     */
+    protected function buildFallbackPurchasableOptions(Product $product): array
+    {
+        $sku = (string) ($product->getData(Product::schema_fields_sku) ?? '');
+        if (!str_starts_with($sku, 'DEMO-CAT-')) {
+            return ['attributes' => [], 'variants' => []];
+        }
+
+        return [
+            'attributes' => [
+                [
+                    'attribute_id' => 900001,
+                    'code' => 'color',
+                    'name' => (string) __('颜色'),
+                    'origin_name' => 'Color',
+                    'options' => [
+                        ['option_id' => 900101, 'code' => 'black', 'value' => (string) __('黑色'), 'origin_value' => 'Black', 'swatch_type' => 'color', 'swatch_value' => '#111827', 'available_product_ids' => [(int) $product->getId()]],
+                        ['option_id' => 900102, 'code' => 'navy', 'value' => (string) __('藏青'), 'origin_value' => 'Navy', 'swatch_type' => 'color', 'swatch_value' => '#1e3a8a', 'available_product_ids' => [(int) $product->getId()]],
+                        ['option_id' => 900103, 'code' => 'beige', 'value' => (string) __('米色'), 'origin_value' => 'Beige', 'swatch_type' => 'color', 'swatch_value' => '#d6b98c', 'available_product_ids' => [(int) $product->getId()]],
+                    ],
+                ],
+                [
+                    'attribute_id' => 900002,
+                    'code' => 'size',
+                    'name' => (string) __('尺码'),
+                    'origin_name' => 'Size',
+                    'options' => [
+                        ['option_id' => 900201, 'code' => 'm', 'value' => 'M', 'origin_value' => 'M', 'swatch_type' => 'text', 'swatch_value' => 'M', 'available_product_ids' => [(int) $product->getId()]],
+                        ['option_id' => 900202, 'code' => 'l', 'value' => 'L', 'origin_value' => 'L', 'swatch_type' => 'text', 'swatch_value' => 'L', 'available_product_ids' => [(int) $product->getId()]],
+                        ['option_id' => 900203, 'code' => 'xl', 'value' => 'XL', 'origin_value' => 'XL', 'swatch_type' => 'text', 'swatch_value' => 'XL', 'available_product_ids' => [(int) $product->getId()]],
+                    ],
+                ],
+            ],
+            'variants' => [],
         ];
     }
 

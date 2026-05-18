@@ -48,7 +48,7 @@ class ElasticsearchEngine implements SearchEngineInterface, SearchWritableEngine
 
             return $this->normalizeBrowseResult($response['body'] ?? [], $normalizedRequest);
         } catch (\Throwable $throwable) {
-            w_log_error('Elasticsearch browse failed: ' . $throwable->getMessage());
+            w_log_warning('Elasticsearch browse failed: ' . $throwable->getMessage());
 
             return $this->fallbackBrowse($normalizedRequest);
         }
@@ -84,7 +84,7 @@ class ElasticsearchEngine implements SearchEngineInterface, SearchWritableEngine
 
             return $this->extractSuggestionItems($response['body']['hits']['hits'] ?? [], $limit, '_source');
         } catch (\Throwable $throwable) {
-            w_log_error('Elasticsearch suggestions failed: ' . $throwable->getMessage());
+            w_log_warning('Elasticsearch suggestions failed: ' . $throwable->getMessage());
 
             return $this->fallbackSuggestions($keyword, $limit);
         }
@@ -115,9 +115,7 @@ class ElasticsearchEngine implements SearchEngineInterface, SearchWritableEngine
             $response = $this->requestJson('GET', $this->buildBaseUrl(), [], $this->buildHeaders());
 
             return ($response['status'] ?? 0) >= 200 && ($response['status'] ?? 0) < 300;
-        } catch (\Throwable $throwable) {
-            w_log_error('Elasticsearch connection test failed: ' . $throwable->getMessage());
-
+        } catch (\Throwable) {
             return false;
         }
     }

@@ -60,9 +60,9 @@ class PriceService
         return array_merge($productData, $this->resolvePricePayload($productData, $customerId, $quantity, $context));
     }
 
-    public function formatPrice(float $price, string $currency = 'CNY'): string
+    public function formatPrice(float $price, ?string $currency = null): string
     {
-        $targetCurrency = trim($currency) !== '' ? strtoupper($currency) : null;
+        $targetCurrency = trim((string) $currency) !== '' ? strtoupper((string) $currency) : null;
         return $this->getCurrencyRateService()->format($price, null, $targetCurrency);
     }
 

@@ -18,7 +18,7 @@ class Dashboard extends FrontendController
      */
     public function index(): string
     {
-        return $this->fetch('Weline_Visitor::analytics/dashboard.phtml');
+        return $this->fetch('Weline_Visitor::templates/analytics/dashboard.phtml');
     }
 }
 

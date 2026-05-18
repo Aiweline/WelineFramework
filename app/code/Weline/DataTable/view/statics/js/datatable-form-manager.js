@@ -1,48 +1,40 @@
-/**
- * DataTable 表单管理器
- * 处理表单的初始化、字段生成、提交等功能
+﻿/**
+ * DataTable 琛ㄥ崟绠＄悊鍣?
+ * 澶勭悊琛ㄥ崟鐨勫垵濮嬪寲銆佸瓧娈电敓鎴愩€佹彁浜ょ瓑鍔熻兘
  *
  * @version 2.0.0
  * @author Weline Framework
- * @description 增强版表单管理器，支持字段验证、自动保存、文件上传等功能
+ * @description 澧炲己鐗堣〃鍗曠鐞嗗櫒锛屾敮鎸佸瓧娈甸獙璇併€佽嚜鍔ㄤ繚瀛樸€佹枃浠朵笂浼犵瓑鍔熻兘
  */
 
-// 如果没有__函数，则定义一个
+// 濡傛灉娌℃湁__鍑芥暟锛屽垯瀹氫箟涓€涓?
 if (typeof __ === 'undefined') {
     function __(text) {
         return text;
     }
 }
 
-// DataTableFormManager 单例模式
+// DataTableFormManager 鍗曚緥妯″紡
 (function () {
     'use strict';
 
-    // 如果已经存在实例，直接返回
+    // 濡傛灉宸茬粡瀛樺湪瀹炰緥锛岀洿鎺ヨ繑鍥?
     if (window.DataTableFormManager && window.DataTableFormManager._instance) {
         return window.DataTableFormManager;
     }
 
-    // 创建单例实例
+    // 鍒涘缓鍗曚緥瀹炰緥
     const DataTableFormManagerInstance = {
-        _instance: true, // 标记为单例实例
+        _instance: true, // 鏍囪涓哄崟渚嬪疄渚?
         _initialized: false,
 
-        // 表单实例存储
+        // 琛ㄥ崟瀹炰緥瀛樺偍
         instances: {},
 
-        // 配置选项
+        // 閰嶇疆閫夐」
         config: {
-            apiUrl: (typeof window !== 'undefined' && typeof window.api === 'function')
-                ? window.api('datatable/rest/v1')
-                : (typeof window !== 'undefined' && window.site && window.site.api_host)
-                    ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/rest/v1'
-                    : '/api/rest/v1/datatable',
-            fieldApiUrl: (typeof window !== 'undefined' && typeof window.api === 'function')
-                ? window.api('datatable/rest/v1/form/fields')
-                : (typeof window !== 'undefined' && window.site && window.site.api_host)
-                    ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/rest/v1/form/fields'
-                    : '/api/rest/v1/datatable/form/fields',
+            apiUrl: '',
+            fieldApiUrl: '',
             validateOnChange: true,
             autoSave: false,
             showValidationErrors: true,
@@ -50,12 +42,12 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 初始化表单
+         * 鍒濆鍖栬〃鍗?
          */
         initForm: function (formId, options) {
-            console.log('初始化表单:', formId, options);
+            console.log('鍒濆鍖栬〃鍗?', formId, options);
 
-            // 存储表单实例
+            // 瀛樺偍琛ㄥ崟瀹炰緥
             this.instances[formId] = {
                 id: formId,
                 options: options,
@@ -64,27 +56,27 @@ if (typeof __ === 'undefined') {
                 manualFields: []
             };
 
-            // 提取手动设置的字段
+            // 鎻愬彇鎵嬪姩璁剧疆鐨勫瓧娈?
             this.extractManualFields(formId);
 
-            // 如果需要自动生成字段
+            // 濡傛灉闇€瑕佽嚜鍔ㄧ敓鎴愬瓧娈?
             if (options.autoFields) {
                 this.loadAutoFields(formId);
             } else {
                 this.hideLoadingFields(formId);
             }
 
-            // 如果是编辑模式，加载记录数据
+            // 濡傛灉鏄紪杈戞ā寮忥紝鍔犺浇璁板綍鏁版嵁
             if (options.mode === 'edit' && options.recordId) {
                 this.loadRecordData(formId, options.recordId);
             }
 
-            // 绑定表单事件
+            // 缁戝畾琛ㄥ崟浜嬩欢
             this.bindFormEvents(formId);
         },
 
         /**
-         * 提取手动设置的字段
+         * 鎻愬彇鎵嬪姩璁剧疆鐨勫瓧娈?
          */
         extractManualFields: function (formId) {
             const form = document.getElementById(formId);
@@ -100,11 +92,11 @@ if (typeof __ === 'undefined') {
                 }
             });
 
-            console.log('手动设置的字段:', instance.manualFields);
+            console.log('鎵嬪姩璁剧疆鐨勫瓧娈?', instance.manualFields);
         },
 
         /**
-         * 加载自动生成的字段
+         * 鍔犺浇鑷姩鐢熸垚鐨勫瓧娈?
          */
         loadAutoFields: function (formId) {
             const instance = this.instances[formId];
@@ -113,7 +105,7 @@ if (typeof __ === 'undefined') {
             const autoFieldsContainer = document.getElementById('w-auto-fields-' + formId);
             if (!autoFieldsContainer) return;
 
-            // 构建请求参数
+            // 鏋勫缓璇锋眰鍙傛暟
             const requestData = {
                 form_id: formId,
                 model: instance.options.model,
@@ -123,34 +115,24 @@ if (typeof __ === 'undefined') {
                 manual_fields: instance.manualFields
             };
 
-            // 发送请求获取字段信息
-            const apiUrl = (typeof window !== 'undefined' && typeof window.api === 'function')
-                ? window.api('datatable/rest/v1/form/fields')
-                : this.config.fieldApiUrl;
-            fetch(apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestData)
-            })
-                .then(response => response.json())
+            // 鍙戦€佽姹傝幏鍙栧瓧娈典俊鎭?
+            Promise.reject(new Error('DataTable form worker API is not initialized.'))
                 .then(response => {
-                    // 兼容两种响应格式：{success, data, message} 和 {msg, data, code}
+                    // 鍏煎涓ょ鍝嶅簲鏍煎紡锛歿success, data, message} 鍜?{msg, data, code}
                     const isSuccess = response.success || response.code === 200 || response.code === '200';
                     if (isSuccess) {
                         this.renderAutoFields(formId, response.data);
                     } else {
-                        this.showError(formId, response.message || response.msg || __('加载字段失败'));
+                        this.showError(formId, response.message || response.msg || __('鍔犺浇瀛楁澶辫触'));
                     }
                 })
                 .catch(error => {
-                    this.showError(formId, error.message || __('网络错误'));
+                    this.showError(formId, error.message || __('缃戠粶閿欒'));
                 });
         },
 
         /**
-         * 渲染自动生成的字段
+         * 娓叉煋鑷姩鐢熸垚鐨勫瓧娈?
          */
         renderAutoFields: function (formId, fieldsData) {
             const instance = this.instances[formId];
@@ -158,45 +140,45 @@ if (typeof __ === 'undefined') {
 
             if (!autoFieldsContainer) return;
 
-            // 清空加载提示
+            // 娓呯┖鍔犺浇鎻愮ず
             autoFieldsContainer.innerHTML = '';
 
-            // 过滤字段
+            // 杩囨护瀛楁
             let fields = fieldsData.fields || [];
 
-            // 排除手动设置的字段
+            // 鎺掗櫎鎵嬪姩璁剧疆鐨勫瓧娈?
             fields = fields.filter(field => !instance.manualFields.includes(field.name));
 
-            // 排除指定字段
+            // 鎺掗櫎鎸囧畾瀛楁
             if (instance.options.excludeFields && instance.options.excludeFields.length > 0) {
                 fields = fields.filter(field => !instance.options.excludeFields.includes(field.name));
             }
 
-            // 只包含指定字段
+            // 鍙寘鍚寚瀹氬瓧娈?
             if (instance.options.includeFields && instance.options.includeFields.length > 0) {
                 fields = fields.filter(field => instance.options.includeFields.includes(field.name));
             }
 
-            // 渲染字段
+            // 娓叉煋瀛楁
             fields.forEach(field => {
                 const fieldHtml = this.generateFieldHtml(formId, field);
                 autoFieldsContainer.insertAdjacentHTML('beforeend', fieldHtml);
             });
 
-            // 存储自动字段信息
+            // 瀛樺偍鑷姩瀛楁淇℃伅
             instance.autoFields = fields;
 
-            // 字段渲染完成后调整布局
+            // 瀛楁娓叉煋瀹屾垚鍚庤皟鏁村竷灞€
             const modal = document.getElementById('w-form-modal-' + formId);
             if (modal) {
                 this.adjustModalLayout(formId, modal);
             }
 
-            console.log('自动生成的字段:', fields);
+            console.log('鑷姩鐢熸垚鐨勫瓧娈?', fields);
         },
 
         /**
-         * 生成字段HTML
+         * 鐢熸垚瀛楁HTML
          */
         buildFieldDomId: function (formId, fieldName) {
             const normalize = function (value) {
@@ -220,12 +202,12 @@ if (typeof __ === 'undefined') {
             const readonlyAttr = field.readonly ? 'readonly' : '';
             const disabledAttr = field.disabled ? 'disabled' : '';
             const maxlengthAttr = field.maxlength > 0 ? 'maxlength="' + field.maxlength + '"' : '';
-            const placeholder = field.placeholder || __('请输入%{1}', [field.label || field.name]);
+            const placeholder = field.placeholder || __('璇疯緭鍏?{1}', [field.label || field.name]);
 
-            // 构建字段 CSS 类
+            // 鏋勫缓瀛楁 CSS 绫?
             let fieldClasses = ['w-form-field', 'w-field-type-' + field.type];
             
-            // 占满整行的字段类型
+            // 鍗犳弧鏁磋鐨勫瓧娈电被鍨?
             const fullWidthTypes = ['textarea', 'file', 'image'];
             if (fullWidthTypes.includes(field.type)) {
                 fieldClasses.push('w-field-full-width');
@@ -233,13 +215,13 @@ if (typeof __ === 'undefined') {
 
             let fieldHtml = '<div class="' + fieldClasses.join(' ') + '" data-type="' + field.type + '" data-field="' + field.name + '">';
 
-            // 字段标签
+            // 瀛楁鏍囩
             if (field.label) {
                 const requiredMark = field.required ? '<span class="w-required-mark">*</span>' : '';
                 fieldHtml += '<label for="' + fieldId + '" class="w-field-label">' + field.label + requiredMark + '</label>';
             }
 
-            // 字段控件
+            // 瀛楁鎺т欢
             fieldHtml += '<div class="w-field-control">';
 
             switch (field.type) {
@@ -249,7 +231,7 @@ if (typeof __ === 'undefined') {
 
                 case 'select':
                     fieldHtml += '<select id="' + fieldId + '" name="' + field.name + '" class="w-form-control" ' + requiredAttr + ' ' + disabledAttr + '>';
-                    fieldHtml += '<option value="">' + __('请选择') + '</option>';
+                    fieldHtml += '<option value="">' + __('璇烽€夋嫨') + '</option>';
                     if (field.options && field.options.length > 0) {
                         field.options.forEach(option => {
                             fieldHtml += '<option value="' + option.value + '">' + option.label + '</option>';
@@ -327,7 +309,7 @@ if (typeof __ === 'undefined') {
 
             fieldHtml += '</div>';
 
-            // 帮助文本
+            // 甯姪鏂囨湰
             if (field.help) {
                 fieldHtml += '<div class="w-field-help">' + field.help + '</div>';
             }
@@ -338,7 +320,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 隐藏加载字段提示
+         * 闅愯棌鍔犺浇瀛楁鎻愮ず
          */
         hideLoadingFields: function (formId) {
             const autoFieldsContainer = document.getElementById('w-auto-fields-' + formId);
@@ -348,58 +330,42 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 加载记录数据（编辑模式）
+         * 鍔犺浇璁板綍鏁版嵁锛堢紪杈戞ā寮忥級
          */
         loadRecordData: function (formId, recordId) {
             const instance = this.instances[formId];
             if (!instance) return;
 
-            const recordApiUrl = (typeof window !== 'undefined' && typeof window.api === 'function')
-                ? window.api('datatable/rest/v1/form/record')
-                : (typeof window !== 'undefined' && window.site && window.site.api_host)
-                    ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/rest/v1/form/record'
-                    : '/api/rest/v1/datatable/form/record';
-            fetch(recordApiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    form_id: formId,
-                    model: instance.options.model,
-                    record_id: recordId
-                })
-            })
-                .then(response => response.json())
+            Promise.reject(new Error('DataTable form worker API is not initialized.'))
                 .then(response => {
                     if (response.success) {
                         this.fillFormData(formId, response.data);
                     } else {
-                        this.showError(formId, response.message || __('加载记录失败'));
+                        this.showError(formId, response.message || __('鍔犺浇璁板綍澶辫触'));
                     }
                 })
                 .catch(error => {
-                    this.showError(formId, error.message || __('网络错误'));
+                    this.showError(formId, error.message || __('缃戠粶閿欒'));
                 });
         },
 
         /**
-         * 填充表单数据
+         * 濉厖琛ㄥ崟鏁版嵁
          */
         fillFormData: function (formId, data) {
             const form = document.getElementById(formId);
             if (!form) return;
 
-            // 填充所有表单字段
+            // 濉厖鎵€鏈夎〃鍗曞瓧娈?
             Object.keys(data).forEach(fieldName => {
                 const field = form.querySelector('[name="' + fieldName + '"]');
                 if (field) {
                     if (field.type === 'checkbox') {
                         if (Array.isArray(data[fieldName])) {
-                            // 多选复选框
+                            // 澶氶€夊閫夋
                             field.checked = data[fieldName].includes(field.value);
                         } else {
-                            // 单选复选框
+                            // 鍗曢€夊閫夋
                             field.checked = data[fieldName] == field.value;
                         }
                     } else if (field.type === 'radio') {
@@ -410,30 +376,30 @@ if (typeof __ === 'undefined') {
                 }
             });
 
-            console.log('表单数据已填充:', data);
+            console.log('琛ㄥ崟鏁版嵁宸插～鍏?', data);
         },
 
         /**
-         * 绑定表单事件
+         * 缁戝畾琛ㄥ崟浜嬩欢
          */
         bindFormEvents: function (formId) {
             const form = document.getElementById(formId);
             if (!form) return;
 
-            // 表单提交事件
+            // 琛ㄥ崟鎻愪氦浜嬩欢
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
                 DataTableFormManager.submitForm(formId);
             });
 
-            // 字段验证事件
+            // 瀛楁楠岃瘉浜嬩欢
             form.addEventListener('blur', function (e) {
                 if (e.target.matches('.w-form-control')) {
                     DataTableFormManager.validateField(e.target);
                 }
             }, true);
 
-            // 实时验证
+            // 瀹炴椂楠岃瘉
             form.addEventListener('input', function (e) {
                 if (e.target.matches('.w-form-control')) {
                     DataTableFormManager.validateField(e.target);
@@ -442,54 +408,54 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 验证字段
+         * 楠岃瘉瀛楁
          */
         validateField: function (field) {
             const fieldContainer = field.closest('.w-form-field');
             if (!fieldContainer) return;
 
-            // 清除之前的验证信息
+            // 娓呴櫎涔嬪墠鐨勯獙璇佷俊鎭?
             const validationElement = fieldContainer.querySelector('.w-field-validation');
             if (validationElement) {
                 validationElement.innerHTML = '';
                 validationElement.className = 'w-field-validation';
             }
 
-            // 基本验证
+            // 鍩烘湰楠岃瘉
             let isValid = true;
             let errorMessage = '';
 
-            // 必填验证
+            // 蹇呭～楠岃瘉
             if (field.required && !field.value.trim()) {
                 isValid = false;
-                errorMessage = '此字段为必填项';
+                errorMessage = 'This field is required.';
             }
 
-            // 邮箱验证
+            // 閭楠岃瘉
             if (field.type === 'email' && field.value && !this.isValidEmail(field.value)) {
                 isValid = false;
-                errorMessage = '请输入有效的邮箱地址';
+                errorMessage = '璇疯緭鍏ユ湁鏁堢殑閭鍦板潃';
             }
 
-            // 数字验证
+            // 鏁板瓧楠岃瘉
             if (field.type === 'number' && field.value) {
                 const numValue = parseFloat(field.value);
                 if (isNaN(numValue)) {
                     isValid = false;
-                    errorMessage = '请输入有效的数字';
+                    errorMessage = '璇疯緭鍏ユ湁鏁堢殑鏁板瓧';
                 } else {
                     if (field.min && numValue < parseFloat(field.min)) {
                         isValid = false;
-                        errorMessage = '数值不能小于 ' + field.min;
+                        errorMessage = '鏁板€间笉鑳藉皬浜?' + field.min;
                     }
                     if (field.max && numValue > parseFloat(field.max)) {
                         isValid = false;
-                        errorMessage = '数值不能大于 ' + field.max;
+                        errorMessage = '鏁板€间笉鑳藉ぇ浜?' + field.max;
                     }
                 }
             }
 
-            // 显示验证结果
+            // 鏄剧ず楠岃瘉缁撴灉
             if (!isValid && validationElement) {
                 validationElement.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + errorMessage;
                 validationElement.className = 'w-field-validation w-field-error';
@@ -502,7 +468,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 验证邮箱格式
+         * 楠岃瘉閭鏍煎紡
          */
         isValidEmail: function (email) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -510,14 +476,14 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 提交表单
+         * 鎻愪氦琛ㄥ崟
          */
         submitForm: function (formId) {
             const instance = this.instances[formId];
             const form = document.getElementById(formId);
             if (!instance || !form) return;
 
-            // 验证所有字段
+            // 楠岃瘉鎵€鏈夊瓧娈?
             const fields = form.querySelectorAll('.w-form-control');
             let isValid = true;
 
@@ -528,17 +494,17 @@ if (typeof __ === 'undefined') {
             });
 
             if (!isValid) {
-                this.showError(formId, __('请检查表单中的错误'));
+                this.showError(formId, __('璇锋鏌ヨ〃鍗曚腑鐨勯敊璇?'));
                 return;
             }
 
-            // 收集表单数据
+            // 鏀堕泦琛ㄥ崟鏁版嵁
             const formData = new FormData(form);
             const data = {};
 
             for (let [key, value] of formData.entries()) {
                 if (data[key]) {
-                    // 处理多选字段
+                    // 澶勭悊澶氶€夊瓧娈?
                     if (Array.isArray(data[key])) {
                         data[key].push(value);
                     } else {
@@ -549,68 +515,37 @@ if (typeof __ === 'undefined') {
                 }
             }
 
-            // 显示提交状态
+            // 鏄剧ず鎻愪氦鐘舵€?
             this.showSubmitting(formId);
 
-            // 确定API操作类型和URL
+            // 纭畾API鎿嶄綔绫诲瀷鍜孶RL
             const isEdit = instance.options.mode === 'edit' && instance.options.recordId;
             const operation = isEdit ? 'update' : 'create';
             
-            // 生成正确的API URL
-            let apiUrl = form.action;
-            if (typeof window.api === 'function') {
-                apiUrl = window.api('datatable/rest/v1/data-table/' + operation);
-            } else if (window.site && window.site.api_host) {
-                apiUrl = (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') 
-                       + 'datatable/rest/v1/data-table/' + operation;
-            } else if (!apiUrl.includes('/datatable/rest/')) {
-                // 如果action不是REST API路径，使用默认路径
-                apiUrl = '/datatable/rest/v1/data-table/' + operation;
-            }
-
-            // 构建请求数据
-            const requestData = {
-                model: instance.options.model,
-                data: data
-            };
-            
-            // 编辑模式添加ID
-            if (isEdit) {
-                requestData.id = instance.options.recordId;
-            }
-            
-            // 发送请求
-            fetch(apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestData)
-            })
-                .then(response => response.json())
+            Promise.reject(new Error('DataTable form worker API is not initialized.'))
                 .then(response => {
-                    // 兼容两种响应格式：{success, data, message} 和 {msg, data, code}
+                    // 鍏煎涓ょ鍝嶅簲鏍煎紡锛歿success, data, message} 鍜?{msg, data, code}
                     const isSuccess = response.success || response.code === 200 || response.code === '200';
                     const message = response.message || response.msg;
                     
                     if (isSuccess) {
-                        this.showSuccess(formId, message || __('保存成功'));
-                        // 关闭模态框
+                        this.showSuccess(formId, message || __('淇濆瓨鎴愬姛'));
+                        // 鍏抽棴妯℃€佹
                         this.closeModal(formId);
-                        // 触发成功回调
+                        // 瑙﹀彂鎴愬姛鍥炶皟
                         if (typeof window.onFormSuccess === 'function') {
                             window.onFormSuccess(formId, response.data);
                         }
-                        // 刷新DataTable（如果存在）
+                        // 鍒锋柊DataTable锛堝鏋滃瓨鍦級
                         if (typeof window.DataTableManager !== 'undefined') {
                             window.DataTableManager.refreshAllTables && window.DataTableManager.refreshAllTables();
                         }
                     } else {
-                        this.showError(formId, message || __('保存失败'));
+                        this.showError(formId, message || __('淇濆瓨澶辫触'));
                     }
                 })
                 .catch(error => {
-                    this.showError(formId, error.message || __('网络错误'));
+                    this.showError(formId, error.message || __('缃戠粶閿欒'));
                 })
                 .finally(() => {
                     this.hideSubmitting(formId);
@@ -618,13 +553,13 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 打开模态框
+         * 鎵撳紑妯℃€佹
          */
         openModal: function (formId, mode, recordId) {
             const modal = document.getElementById('w-form-modal-' + formId);
             if (!modal) return;
 
-            // 如果是编辑模式，加载记录数据
+            // 濡傛灉鏄紪杈戞ā寮忥紝鍔犺浇璁板綍鏁版嵁
             if (mode === 'edit' && recordId) {
                 const instance = this.instances[formId];
                 if (instance) {
@@ -634,14 +569,14 @@ if (typeof __ === 'undefined') {
                 }
             }
 
-            // 显示模态框
+            // 鏄剧ず妯℃€佹
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
 
-            // 根据字段数量自动调整布局
+            // 鏍规嵁瀛楁鏁伴噺鑷姩璋冩暣甯冨眬
             this.adjustModalLayout(formId, modal);
 
-            // 聚焦到第一个输入框
+            // 鑱氱劍鍒扮涓€涓緭鍏ユ
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, select, textarea');
                 if (firstInput) {
@@ -651,7 +586,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 根据字段数量调整弹窗宽度（字段使用流式布局自动排列）
+         * 鏍规嵁瀛楁鏁伴噺璋冩暣寮圭獥瀹藉害锛堝瓧娈典娇鐢ㄦ祦寮忓竷灞€鑷姩鎺掑垪锛?
          */
         adjustModalLayout: function (formId, modal) {
             const container = modal.querySelector('.w-form-modal-container');
@@ -659,14 +594,14 @@ if (typeof __ === 'undefined') {
             
             if (!container || !fieldsContainer) return;
 
-            // 计算可见字段数量
+            // 璁＄畻鍙瀛楁鏁伴噺
             const fields = fieldsContainer.querySelectorAll('.w-form-field');
             const fieldCount = fields.length;
 
-            // 重置弹窗宽度类
+            // 閲嶇疆寮圭獥瀹藉害绫?
             container.classList.remove('w-form-modal-wide', 'w-form-modal-extra-wide');
 
-            // 根据字段数量调整弹窗宽度，流式布局会自动排列字段
+            // 鏍规嵁瀛楁鏁伴噺璋冩暣寮圭獥瀹藉害锛屾祦寮忓竷灞€浼氳嚜鍔ㄦ帓鍒楀瓧娈?
             if (fieldCount > 2) {
                 container.classList.add('w-form-modal-wide');
             }
@@ -676,69 +611,69 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 关闭模态框
+         * 鍏抽棴妯℃€佹
          */
         /**
-         * 重置表单
+         * 閲嶇疆琛ㄥ崟
          */
         resetForm: function (formId) {
             const form = document.getElementById(formId);
             if (!form) return;
 
-            // 重置表单数据
+            // 閲嶇疆琛ㄥ崟鏁版嵁
             form.reset();
 
-            // 清除验证错误
+            // 娓呴櫎楠岃瘉閿欒
             const validationElements = form.querySelectorAll('.w-field-validation');
             validationElements.forEach(function (element) {
                 element.innerHTML = '';
                 element.className = 'w-field-validation';
             });
 
-            // 清除字段错误状态
+            // 娓呴櫎瀛楁閿欒鐘舵€?
             const errorFields = form.querySelectorAll('.w-form-field.w-field-error');
             errorFields.forEach(function (field) {
                 field.classList.remove('w-field-error');
             });
 
-            // 清除表单消息
+            // 娓呴櫎琛ㄥ崟娑堟伅
             const messages = form.querySelectorAll('.w-form-message');
             messages.forEach(function (message) {
                 message.remove();
             });
 
-            console.log('表单已重置:', formId);
+            console.log('琛ㄥ崟宸查噸缃?', formId);
         },
 
         closeModal: function (formId) {
             const modal = document.getElementById('w-form-modal-' + formId);
             if (!modal) return;
 
-            // 隐藏模态框
+            // 闅愯棌妯℃€佹
             modal.classList.remove('show');
             document.body.style.overflow = '';
 
-            // 重置表单
+            // 閲嶇疆琛ㄥ崟
             const form = document.getElementById(formId);
             if (form) {
                 form.reset();
             }
 
-            // 触发取消回调
+            // 瑙﹀彂鍙栨秷鍥炶皟
             if (typeof window.onFormCancel === 'function') {
                 window.onFormCancel(formId);
             }
         },
 
         /**
-         * 取消表单
+         * 鍙栨秷琛ㄥ崟
          */
         cancelForm: function (formId) {
             this.closeModal(formId);
         },
 
         /**
-         * 显示提交状态
+         * 鏄剧ず鎻愪氦鐘舵€?
          */
         showSubmitting: function (formId) {
             const form = document.getElementById(formId);
@@ -747,12 +682,12 @@ if (typeof __ === 'undefined') {
             const submitBtn = form.querySelector('.w-btn-primary');
             if (submitBtn) {
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + __('保存中...');
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + __('淇濆瓨涓?..');
             }
         },
 
         /**
-         * 隐藏提交状态
+         * 闅愯棌鎻愪氦鐘舵€?
          */
         hideSubmitting: function (formId) {
             const form = document.getElementById(formId);
@@ -761,49 +696,49 @@ if (typeof __ === 'undefined') {
             const submitBtn = form.querySelector('.w-btn-primary');
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-save"></i> 保存';
+                submitBtn.innerHTML = '<i class="fas fa-save"></i> 淇濆瓨';
             }
         },
 
         /**
-         * 显示成功消息
+         * 鏄剧ず鎴愬姛娑堟伅
          */
         showSuccess: function (formId, message) {
             this.showMessage(formId, message, 'success');
         },
 
         /**
-         * 显示错误消息
+         * 鏄剧ず閿欒娑堟伅
          */
         showError: function (formId, message) {
             this.showMessage(formId, message, 'error');
         },
 
         /**
-         * 显示消息
+         * 鏄剧ず娑堟伅
          */
         showMessage: function (formId, message, type) {
             const container = document.getElementById('w-form-container-' + formId);
             if (!container) return;
 
-            // 移除之前的消息
+            // 绉婚櫎涔嬪墠鐨勬秷鎭?
             const existingMessage = container.querySelector('.w-form-message');
             if (existingMessage) {
                 existingMessage.remove();
             }
 
-            // 创建消息元素
+            // 鍒涘缓娑堟伅鍏冪礌
             const messageElement = document.createElement('div');
             messageElement.className = 'w-form-message w-form-message-' + type;
             messageElement.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'exclamation-circle') + '"></i> ' + message;
 
-            // 插入到表单头部
+            // 鎻掑叆鍒拌〃鍗曞ご閮?
             const header = container.querySelector('.w-form-header');
             if (header) {
                 header.insertAdjacentElement('afterend', messageElement);
             }
 
-            // 自动隐藏成功消息
+            // 鑷姩闅愯棌鎴愬姛娑堟伅
             if (type === 'success') {
                 setTimeout(() => {
                     if (messageElement.parentNode) {
@@ -814,25 +749,25 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 为表格行添加编辑按钮
+         * 涓鸿〃鏍艰娣诲姞缂栬緫鎸夐挳
          */
         addEditButtons: function (tableId, formId) {
             const table = document.getElementById(tableId);
             if (!table) return;
 
-            // 查找操作列或添加操作列
+            // 鏌ユ壘鎿嶄綔鍒楁垨娣诲姞鎿嶄綔鍒?
             let actionColumn = table.querySelector('.w-table-actions');
             if (!actionColumn) {
-                // 如果没有操作列，在表头添加
+                // 濡傛灉娌℃湁鎿嶄綔鍒楋紝鍦ㄨ〃澶存坊鍔?
                 const thead = table.querySelector('thead tr');
                 if (thead) {
                     const th = document.createElement('th');
                     th.className = 'w-table-actions';
-                    th.textContent = __('操作');
+                    th.textContent = __('鎿嶄綔');
                     thead.appendChild(th);
                 }
 
-                // 为每一行添加操作列
+                // 涓烘瘡涓€琛屾坊鍔犳搷浣滃垪
                 const tbody = table.querySelector('tbody');
                 if (tbody) {
                     const rows = tbody.querySelectorAll('tr');
@@ -844,18 +779,18 @@ if (typeof __ === 'undefined') {
                 }
             }
 
-            // 为每一行添加编辑按钮
+            // 涓烘瘡涓€琛屾坊鍔犵紪杈戞寜閽?
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
                 const actionCell = row.querySelector('.w-table-actions');
                 if (actionCell) {
-                    // 检查是否已经有编辑按钮
+                    // 妫€鏌ユ槸鍚﹀凡缁忔湁缂栬緫鎸夐挳
                     if (!actionCell.querySelector('.w-edit-btn')) {
                         const editBtn = document.createElement('button');
                         editBtn.className = 'w-btn w-btn-sm w-btn-secondary w-edit-btn';
-                        editBtn.innerHTML = '<i class="fas fa-edit"></i> ' + __('编辑');
+                        editBtn.innerHTML = '<i class="fas fa-edit"></i> ' + __('缂栬緫');
                         editBtn.onclick = function () {
-                            // 获取行数据ID
+                            // 鑾峰彇琛屾暟鎹甀D
                             const rowId = row.getAttribute('data-id') || row.querySelector('[data-id]')?.getAttribute('data-id');
                             if (rowId) {
                                 DataTableFormManager.openModal(formId, 'edit', rowId);
@@ -868,11 +803,11 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 字段验证
-         * @param {string} formId 表单ID
-         * @param {string} fieldName 字段名
-         * @param {*} value 字段值
-         * @returns {boolean} 验证结果
+         * 瀛楁楠岃瘉
+         * @param {string} formId 琛ㄥ崟ID
+         * @param {string} fieldName 瀛楁鍚?
+         * @param {*} value 瀛楁鍊?
+         * @returns {boolean} 楠岃瘉缁撴灉
          */
         validateField: function (formId, fieldName, value) {
             const instance = this.instances[formId];
@@ -884,7 +819,7 @@ if (typeof __ === 'undefined') {
             const fieldElement = document.querySelector(`#${formId} [name="${fieldName}"]`);
             const feedbackElement = fieldElement ? fieldElement.parentElement.querySelector('.invalid-feedback') : null;
 
-            // 清除之前的错误状态
+            // 娓呴櫎涔嬪墠鐨勯敊璇姸鎬?
             if (fieldElement) {
                 fieldElement.classList.remove('is-invalid');
             }
@@ -892,32 +827,32 @@ if (typeof __ === 'undefined') {
                 feedbackElement.textContent = '';
             }
 
-            // 必填验证
+            // 蹇呭～楠岃瘉
             if (field.required && (!value || value.toString().trim() === '')) {
-                this.showFieldError(fieldElement, feedbackElement, __('此字段为必填项'));
+                this.showFieldError(fieldElement, feedbackElement, __('姝ゅ瓧娈典负蹇呭～椤?'));
                 return false;
             }
 
-            // 类型验证
+            // 绫诲瀷楠岃瘉
             if (value && value.toString().trim() !== '') {
                 switch (field.type) {
                     case 'email':
                         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-                            this.showFieldError(fieldElement, feedbackElement, __('请输入有效的邮箱地址'));
+                            this.showFieldError(fieldElement, feedbackElement, __('璇疯緭鍏ユ湁鏁堢殑閭鍦板潃'));
                             return false;
                         }
                         break;
 
                     case 'number':
                         if (isNaN(value)) {
-                            this.showFieldError(fieldElement, feedbackElement, __('请输入有效的数字'));
+                            this.showFieldError(fieldElement, feedbackElement, __('璇疯緭鍏ユ湁鏁堢殑鏁板瓧'));
                             return false;
                         }
                         break;
 
                     case 'tel':
                         if (!/^[\d\-\+\(\)\s]+$/.test(value)) {
-                            this.showFieldError(fieldElement, feedbackElement, __('请输入有效的电话号码'));
+                            this.showFieldError(fieldElement, feedbackElement, __('璇疯緭鍏ユ湁鏁堢殑鐢佃瘽鍙风爜'));
                             return false;
                         }
                         break;
@@ -928,10 +863,10 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 显示字段错误
-         * @param {Element} fieldElement 字段元素
-         * @param {Element} feedbackElement 反馈元素
-         * @param {string} message 错误消息
+         * 鏄剧ず瀛楁閿欒
+         * @param {Element} fieldElement 瀛楁鍏冪礌
+         * @param {Element} feedbackElement 鍙嶉鍏冪礌
+         * @param {string} message 閿欒娑堟伅
          */
         showFieldError: function (fieldElement, feedbackElement, message) {
             if (fieldElement) {
@@ -943,9 +878,9 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 验证整个表单
-         * @param {string} formId 表单ID
-         * @returns {boolean} 验证结果
+         * 楠岃瘉鏁翠釜琛ㄥ崟
+         * @param {string} formId 琛ㄥ崟ID
+         * @returns {boolean} 楠岃瘉缁撴灉
          */
         validateForm: function (formId) {
             const form = document.getElementById(formId);
@@ -954,7 +889,7 @@ if (typeof __ === 'undefined') {
             const formData = new FormData(form);
             let isValid = true;
 
-            // 验证所有字段
+            // 楠岃瘉鎵€鏈夊瓧娈?
             for (let [name, value] of formData.entries()) {
                 if (!this.validateField(formId, name, value)) {
                     isValid = false;
@@ -964,7 +899,7 @@ if (typeof __ === 'undefined') {
             return isValid;
         },
 
-        // 初始化多表分组
+        // 鍒濆鍖栧琛ㄥ垎缁?
         initMultiTableGroups: function () {
             const multiTableGroups = document.querySelectorAll('.multi-table-group');
 
@@ -972,10 +907,10 @@ if (typeof __ === 'undefined') {
                 const tableAlias = group.getAttribute('data-table-alias');
                 const modelClass = group.getAttribute('data-model-class');
 
-                // 添加分组样式
+                // 娣诲姞鍒嗙粍鏍峰紡
                 group.classList.add('table-group-container');
 
-                // 为分组添加展开/折叠功能
+                // 涓哄垎缁勬坊鍔犲睍寮€/鎶樺彔鍔熻兘
                 const legend = group.querySelector('legend');
                 if (legend) {
                     legend.style.cursor = 'pointer';
@@ -997,7 +932,7 @@ if (typeof __ === 'undefined') {
                     });
                 }
 
-                // 为字段添加表别名前缀
+                // 涓哄瓧娈垫坊鍔犺〃鍒悕鍓嶇紑
                 const fields = group.querySelectorAll('input, select, textarea');
                 fields.forEach(field => {
                     const fieldName = field.getAttribute('name');
@@ -1009,13 +944,13 @@ if (typeof __ === 'undefined') {
             });
         },
 
-        // 收集多表表单数据
+        // 鏀堕泦澶氳〃琛ㄥ崟鏁版嵁
         collectMultiTableData: function (formElement) {
             const data = {};
             const multiTableGroups = formElement.querySelectorAll('.multi-table-group');
 
             if (multiTableGroups.length === 0) {
-                // 单表表单，使用原有逻辑
+                // 鍗曡〃琛ㄥ崟锛屼娇鐢ㄥ師鏈夐€昏緫
                 const formData = new FormData(formElement);
                 for (let [key, value] of formData.entries()) {
                     data[key] = value;
@@ -1023,7 +958,7 @@ if (typeof __ === 'undefined') {
                 return data;
             }
 
-            // 多表表单，按表别名分组收集数据
+            // 澶氳〃琛ㄥ崟锛屾寜琛ㄥ埆鍚嶅垎缁勬敹闆嗘暟鎹?
             multiTableGroups.forEach(group => {
                 const tableAlias = group.getAttribute('data-table-alias');
                 if (!tableAlias) return;
@@ -1034,7 +969,7 @@ if (typeof __ === 'undefined') {
                 fields.forEach(field => {
                     const fieldName = field.getAttribute('data-original-name') || field.getAttribute('name');
                     if (fieldName) {
-                        // 移除表别名前缀
+                        // 绉婚櫎琛ㄥ埆鍚嶅墠缂€
                         const cleanFieldName = fieldName.replace(tableAlias + '.', '');
                         data[tableAlias][cleanFieldName] = this.getFieldValue(field);
                     }
@@ -1044,7 +979,7 @@ if (typeof __ === 'undefined') {
             return data;
         },
 
-        // 获取字段值
+        // 鑾峰彇瀛楁鍊?
         getFieldValue: function (field) {
             if (field.type === 'checkbox') {
                 return field.checked ? field.value : '';
@@ -1055,7 +990,7 @@ if (typeof __ === 'undefined') {
             }
         },
 
-        // 设置字段值
+        // 璁剧疆瀛楁鍊?
         setFieldValue: function (field, value) {
             if (field.type === 'checkbox') {
                 field.checked = value == field.value;
@@ -1066,12 +1001,12 @@ if (typeof __ === 'undefined') {
             }
         },
 
-        // 填充多表表单数据
+        // 濉厖澶氳〃琛ㄥ崟鏁版嵁
         populateMultiTableForm: function (formElement, data) {
             const multiTableGroups = formElement.querySelectorAll('.multi-table-group');
 
             if (multiTableGroups.length === 0) {
-                // 单表表单，使用原有逻辑
+                // 鍗曡〃琛ㄥ崟锛屼娇鐢ㄥ師鏈夐€昏緫
                 Object.keys(data).forEach(fieldName => {
                     const field = formElement.querySelector('[name="' + fieldName + '"]');
                     if (field) {
@@ -1081,7 +1016,7 @@ if (typeof __ === 'undefined') {
                 return;
             }
 
-            // 多表表单，按表别名分组填充数据
+            // 澶氳〃琛ㄥ崟锛屾寜琛ㄥ埆鍚嶅垎缁勫～鍏呮暟鎹?
             multiTableGroups.forEach(group => {
                 const tableAlias = group.getAttribute('data-table-alias');
                 if (!tableAlias || !data[tableAlias]) return;
@@ -1101,12 +1036,12 @@ if (typeof __ === 'undefined') {
             });
         },
 
-        // 验证多表表单
+        // 楠岃瘉澶氳〃琛ㄥ崟
         validateMultiTableForm: function (formElement) {
             const multiTableGroups = formElement.querySelectorAll('.multi-table-group');
 
             if (multiTableGroups.length === 0) {
-                // 单表表单，使用原有逻辑
+                // 鍗曡〃琛ㄥ崟锛屼娇鐢ㄥ師鏈夐€昏緫
                 return this.validateForm(formElement.id);
             }
 
@@ -1129,7 +1064,7 @@ if (typeof __ === 'undefined') {
                             if (!errors[tableAlias]) {
                                 errors[tableAlias] = {};
                             }
-                            errors[tableAlias][cleanFieldName] = '字段验证失败';
+                            errors[tableAlias][cleanFieldName] = '瀛楁楠岃瘉澶辫触';
                         }
                     }
                 });
@@ -1139,7 +1074,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 生成文件字段HTML
+         * 鐢熸垚鏂囦欢瀛楁HTML
          */
         generateFileField: function (fieldId, field, requiredAttr, disabledAttr) {
             const accept = field.accept || '*/*';
@@ -1148,23 +1083,23 @@ if (typeof __ === 'undefined') {
 
             let fieldHtml = '<div class="w-file-field">';
 
-            // 文件输入框
+            // 鏂囦欢杈撳叆妗?
             fieldHtml += '<input type="file" id="' + fieldId + '" name="' + field.name + '" class="w-file-input" accept="' + accept + '" ' + multiple + ' ' + requiredAttr + ' ' + disabledAttr + ' style="display: none;">';
 
-            // 文件选择按钮
+            // 鏂囦欢閫夋嫨鎸夐挳
             fieldHtml += '<div class="w-file-selector">';
             fieldHtml += '<button type="button" class="w-btn w-btn-outline-primary w-file-btn" onclick="DataTableFormManager.triggerFileSelect(\'' + fieldId + '\')">';
-            fieldHtml += '<i class="fas fa-upload"></i> 选择文件';
+            fieldHtml += '<i class="fas fa-upload"></i> 閫夋嫨鏂囦欢';
             fieldHtml += '</button>';
-            fieldHtml += '<span class="w-file-info">支持格式：' + accept + '，最大：' + maxSize + '</span>';
+            fieldHtml += '<span class="w-file-info">鏀寔鏍煎紡锛? ' + accept + '锛屾渶澶э細' + maxSize + '</span>';
             fieldHtml += '</div>';
 
-            // 文件列表
+            // 鏂囦欢鍒楄〃
             fieldHtml += '<div class="w-file-list" id="w-file-list-' + fieldId + '">';
-            fieldHtml += '<div class="w-file-placeholder">未选择文件</div>';
+            fieldHtml += '<div class="w-file-placeholder">鏈€夋嫨鏂囦欢</div>';
             fieldHtml += '</div>';
 
-            // 上传进度
+            // 涓婁紶杩涘害
             fieldHtml += '<div class="w-upload-progress" id="w-upload-progress-' + fieldId + '" style="display: none;">';
             fieldHtml += '<div class="w-progress-bar">';
             fieldHtml += '<div class="w-progress-fill" style="width: 0%"></div>';
@@ -1174,7 +1109,7 @@ if (typeof __ === 'undefined') {
 
             fieldHtml += '</div>';
 
-            // 绑定文件选择事件
+            // 缁戝畾鏂囦欢閫夋嫨浜嬩欢
             setTimeout(() => {
                 this.bindFileEvents(fieldId, field);
             }, 100);
@@ -1183,7 +1118,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 生成图片字段HTML
+         * 鐢熸垚鍥剧墖瀛楁HTML
          */
         generateImageField: function (fieldId, field, requiredAttr, disabledAttr) {
             const accept = field.accept || 'image/*';
@@ -1192,29 +1127,29 @@ if (typeof __ === 'undefined') {
 
             let fieldHtml = '<div class="w-image-field">';
 
-            // 图片输入框
+            // 鍥剧墖杈撳叆妗?
             fieldHtml += '<input type="file" id="' + fieldId + '" name="' + field.name + '" class="w-image-input" accept="' + accept + '" ' + multiple + ' ' + requiredAttr + ' ' + disabledAttr + ' style="display: none;">';
 
-            // 图片预览区域
+            // 鍥剧墖棰勮鍖哄煙
             fieldHtml += '<div class="w-image-preview" id="w-image-preview-' + fieldId + '">';
             fieldHtml += '<div class="w-image-placeholder" onclick="DataTableFormManager.triggerFileSelect(\'' + fieldId + '\')">';
             fieldHtml += '<i class="fas fa-image"></i>';
-            fieldHtml += '<div class="w-placeholder-text">点击选择图片</div>';
-            fieldHtml += '<div class="w-placeholder-info">支持格式：JPG、PNG、GIF，最大：' + maxSize + '</div>';
+            fieldHtml += '<div class="w-placeholder-text">鐐瑰嚮閫夋嫨鍥剧墖</div>';
+            fieldHtml += '<div class="w-placeholder-info">鏀寔鏍煎紡锛欽PG銆丳NG銆丟IF锛屾渶澶э細' + maxSize + '</div>';
             fieldHtml += '</div>';
             fieldHtml += '</div>';
 
-            // 图片操作按钮
+            // 鍥剧墖鎿嶄綔鎸夐挳
             fieldHtml += '<div class="w-image-actions" style="display: none;">';
             fieldHtml += '<button type="button" class="w-btn w-btn-sm w-btn-outline-primary" onclick="DataTableFormManager.triggerFileSelect(\'' + fieldId + '\')">';
-            fieldHtml += '<i class="fas fa-edit"></i> 更换';
+            fieldHtml += '<i class="fas fa-edit"></i> 鏇存崲';
             fieldHtml += '</button>';
             fieldHtml += '<button type="button" class="w-btn w-btn-sm w-btn-outline-danger" onclick="DataTableFormManager.clearImageField(\'' + fieldId + '\')">';
-            fieldHtml += '<i class="fas fa-trash"></i> 删除';
+            fieldHtml += '<i class="fas fa-trash"></i> 鍒犻櫎';
             fieldHtml += '</button>';
             fieldHtml += '</div>';
 
-            // 上传进度
+            // 涓婁紶杩涘害
             fieldHtml += '<div class="w-upload-progress" id="w-upload-progress-' + fieldId + '" style="display: none;">';
             fieldHtml += '<div class="w-progress-bar">';
             fieldHtml += '<div class="w-progress-fill" style="width: 0%"></div>';
@@ -1224,7 +1159,7 @@ if (typeof __ === 'undefined') {
 
             fieldHtml += '</div>';
 
-            // 绑定图片选择事件
+            // 缁戝畾鍥剧墖閫夋嫨浜嬩欢
             setTimeout(() => {
                 this.bindImageEvents(fieldId, field);
             }, 100);
@@ -1233,7 +1168,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 触发文件选择
+         * 瑙﹀彂鏂囦欢閫夋嫨
          */
         triggerFileSelect: function (fieldId) {
             const fileInput = document.getElementById(fieldId);
@@ -1243,7 +1178,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 清空图片字段
+         * 娓呯┖鍥剧墖瀛楁
          */
         clearImageField: function (fieldId) {
             const fileInput = document.getElementById(fieldId);
@@ -1257,8 +1192,8 @@ if (typeof __ === 'undefined') {
             if (preview) {
                 preview.innerHTML = '<div class="w-image-placeholder" onclick="DataTableFormManager.triggerFileSelect(\'' + fieldId + '\')">' +
                     '<i class="fas fa-image"></i>' +
-                    '<div class="w-placeholder-text">点击选择图片</div>' +
-                    '<div class="w-placeholder-info">支持格式：JPG、PNG、GIF，最大：5MB</div>' +
+                    '<div class="w-placeholder-text">鐐瑰嚮閫夋嫨鍥剧墖</div>' +
+                    '<div class="w-placeholder-info">鏀寔鏍煎紡锛欽PG銆丳NG銆丟IF锛屾渶澶э細5MB</div>' +
                     '</div>';
             }
 
@@ -1268,7 +1203,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 绑定文件事件
+         * 缁戝畾鏂囦欢浜嬩欢
          */
         bindFileEvents: function (fieldId, field) {
             const fileInput = document.getElementById(fieldId);
@@ -1279,7 +1214,7 @@ if (typeof __ === 'undefined') {
             fileInput.addEventListener('change', (e) => {
                 const files = e.target.files;
                 if (files.length === 0) {
-                    fileList.innerHTML = '<div class="w-file-placeholder">未选择文件</div>';
+                    fileList.innerHTML = '<div class="w-file-placeholder">鏈€夋嫨鏂囦欢</div>';
                     return;
                 }
 
@@ -1302,7 +1237,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 绑定图片事件
+         * 缁戝畾鍥剧墖浜嬩欢
          */
         bindImageEvents: function (fieldId, field) {
             const imageInput = document.getElementById(fieldId);
@@ -1315,14 +1250,14 @@ if (typeof __ === 'undefined') {
                 const file = e.target.files[0];
                 if (!file) return;
 
-                // 验证文件类型
+                // 楠岃瘉鏂囦欢绫诲瀷
                 if (!file.type.startsWith('image/')) {
-                    // 使用 toast 提示替代 alert
+                    // 浣跨敤 toast 鎻愮ず鏇夸唬 alert
                     const toastHtml = `<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11000;">
                         <div class="toast show bg-danger text-white" role="alert">
                             <div class="toast-body d-flex align-items-center">
                                 <i class="fas fa-exclamation-circle me-2"></i>
-                                ${__('请选择图片文件')}
+                                ${__('璇烽€夋嫨鍥剧墖鏂囦欢')}
                                 <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="toast"></button>
                             </div>
                         </div>
@@ -1335,10 +1270,10 @@ if (typeof __ === 'undefined') {
                     return;
                 }
 
-                // 读取并显示图片预览
+                // 璇诲彇骞舵樉绀哄浘鐗囬瑙?
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    preview.innerHTML = '<img src="' + e.target.result + '" alt="' + __('预览图片') + '" class="w-image-preview-img">';
+                    preview.innerHTML = '<img src="' + e.target.result + '" alt="' + __('棰勮鍥剧墖') + '" class="w-image-preview-img">';
                     if (actions) {
                         actions.style.display = 'block';
                     }
@@ -1348,18 +1283,18 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 移除文件项
+         * 绉婚櫎鏂囦欢椤?
          */
         removeFileItem: function (button, fieldId) {
             const fileInput = document.getElementById(fieldId);
             const fileList = document.getElementById('w-file-list-' + fieldId);
 
-            // 移除DOM元素
+            // 绉婚櫎DOM鍏冪礌
             button.parentElement.remove();
 
-            // 检查是否还有文件
+            // 妫€鏌ユ槸鍚﹁繕鏈夋枃浠?
             if (fileList.children.length === 0) {
-                fileList.innerHTML = '<div class="w-file-placeholder">未选择文件</div>';
+                fileList.innerHTML = '<div class="w-file-placeholder">鏈€夋嫨鏂囦欢</div>';
                 if (fileInput) {
                     fileInput.value = '';
                 }
@@ -1367,7 +1302,7 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 格式化文件大小
+         * 鏍煎紡鍖栨枃浠跺ぇ灏?
          */
         formatFileSize: function (bytes) {
             if (bytes === 0) return '0 Bytes';
@@ -1380,37 +1315,37 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 全局编辑记录方法
-         * 可以从表格行或其他地方调用
+         * 鍏ㄥ眬缂栬緫璁板綍鏂规硶
+         * 鍙互浠庤〃鏍艰鎴栧叾浠栧湴鏂硅皟鐢?
          */
         editRecord: function (formId, recordId) {
             this.openModal(formId, 'edit', recordId);
         },
 
         /**
-         * 全局添加记录方法
+         * 鍏ㄥ眬娣诲姞璁板綍鏂规硶
          */
         addRecord: function (formId) {
             this.openModal(formId, 'add');
         },
 
         /**
-         * 为表格行添加编辑按钮
+         * 涓鸿〃鏍艰娣诲姞缂栬緫鎸夐挳
          */
         addEditButtonToTable: function (tableSelector, formId) {
             const table = document.querySelector(tableSelector);
             if (!table) return;
 
-            // 查找所有数据行
+            // 鏌ユ壘鎵€鏈夋暟鎹
             const rows = table.querySelectorAll('tbody tr[data-id]');
             rows.forEach(row => {
                 const recordId = row.getAttribute('data-id');
                 if (!recordId) return;
 
-                // 检查是否已经有编辑按钮
+                // 妫€鏌ユ槸鍚﹀凡缁忔湁缂栬緫鎸夐挳
                 if (row.querySelector('.w-edit-btn')) return;
 
-                // 查找操作列或创建操作列
+                // 鏌ユ壘鎿嶄綔鍒楁垨鍒涘缓鎿嶄綔鍒?
                 let actionCell = row.querySelector('.w-actions, .actions, td:last-child');
                 if (!actionCell) {
                     actionCell = document.createElement('td');
@@ -1418,11 +1353,11 @@ if (typeof __ === 'undefined') {
                     row.appendChild(actionCell);
                 }
 
-                // 创建编辑按钮
+                // 鍒涘缓缂栬緫鎸夐挳
                 const editBtn = document.createElement('button');
                 editBtn.type = 'button';
                 editBtn.className = 'w-btn w-btn-sm w-btn-outline-primary w-edit-btn';
-                editBtn.innerHTML = '<i class="fas fa-edit"></i> 编辑';
+                editBtn.innerHTML = '<i class="fas fa-edit"></i> 缂栬緫';
                 editBtn.onclick = function () {
                     DataTableFormManager.editRecord(formId, recordId);
                 };
@@ -1432,10 +1367,10 @@ if (typeof __ === 'undefined') {
         },
 
         /**
-         * 自动为页面上的所有表格添加编辑功能
+         * 鑷姩涓洪〉闈笂鐨勬墍鏈夎〃鏍兼坊鍔犵紪杈戝姛鑳?
          */
         autoAddEditButtons: function () {
-            // 查找所有带有data-form-id属性的表格
+            // 鏌ユ壘鎵€鏈夊甫鏈塪ata-form-id灞炴€х殑琛ㄦ牸
             const tables = document.querySelectorAll('table[data-form-id]');
             tables.forEach(table => {
                 const formId = table.getAttribute('data-form-id');
@@ -1444,7 +1379,7 @@ if (typeof __ === 'undefined') {
                 }
             });
 
-            // 也可以通过约定查找表格和表单
+            // 涔熷彲浠ラ€氳繃绾﹀畾鏌ユ壘琛ㄦ牸鍜岃〃鍗?
             const forms = document.querySelectorAll('.w-form-modal');
             forms.forEach(modal => {
                 const formId = modal.id.replace('w-form-modal-', '');
@@ -1454,16 +1389,16 @@ if (typeof __ === 'undefined') {
         }
     };
 
-    // 将实例暴露到全局
+    // 灏嗗疄渚嬫毚闇插埌鍏ㄥ眬
     window.DataTableFormManager = DataTableFormManagerInstance;
 
-    // 页面加载完成后初始化
+    // 椤甸潰鍔犺浇瀹屾垚鍚庡垵濮嬪寲
     if (!DataTableFormManagerInstance._initialized) {
         DataTableFormManagerInstance._initialized = true;
         document.addEventListener('DOMContentLoaded', function () {
-            console.log('DataTableFormManager 已加载');
+            console.log('DataTableFormManager 宸插姞杞?');
 
-            // 自动初始化页面上的所有表单
+            // 鑷姩鍒濆鍖栭〉闈笂鐨勬墍鏈夎〃鍗?
             const forms = document.querySelectorAll('.w-form-modal');
             forms.forEach(modal => {
                 const formId = modal.id.replace('w-form-modal-', '');
@@ -1488,12 +1423,12 @@ if (typeof __ === 'undefined') {
                 }
             });
 
-            // 自动为表格添加编辑按钮
+            // 鑷姩涓鸿〃鏍兼坊鍔犵紪杈戞寜閽?
             setTimeout(() => {
                 DataTableFormManager.autoAddEditButtons();
             }, 500);
 
-            // 监听表格内容变化，自动添加编辑按钮
+            // 鐩戝惉琛ㄦ牸鍐呭鍙樺寲锛岃嚜鍔ㄦ坊鍔犵紪杈戞寜閽?
             if (typeof MutationObserver !== 'undefined') {
                 const observer = new MutationObserver(function (mutations) {
                     let shouldUpdate = false;
@@ -1516,7 +1451,7 @@ if (typeof __ === 'undefined') {
                     }
                 });
 
-                // 观察表格容器的变化
+                // 瑙傚療琛ㄦ牸瀹瑰櫒鐨勫彉鍖?
                 setTimeout(() => {
                     const tableContainers = document.querySelectorAll('.w-datatable, .datatable-container, table');
                     tableContainers.forEach(container => {
@@ -1551,14 +1486,6 @@ if (typeof __ === 'undefined') {
             return raw;
         }
 
-        if (typeof window.api === 'function') {
-            return window.api(raw);
-        }
-
-        if (window.site && window.site.api_host) {
-            const apiHost = window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/';
-            return apiHost + raw.replace(/^\/+/, '');
-        }
 
         return '/' + raw.replace(/^\/+/, '');
     }
@@ -1606,6 +1533,26 @@ if (typeof __ === 'undefined') {
 
     function isSuccessfulResponse(response) {
         return !!(response && (response.success || response.code == 200 || response.code === '200'));
+    }
+
+
+    async function requestFormJson(instance, endpoint, payload, requestOptions) {
+        if (!instance || !instance.options || !instance.options.workerApi) {
+            throw new Error('DataTable form frontend requests require Weline.Api worker mode.');
+        }
+
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            throw new Error('Weline.Api.resource is not available');
+        }
+
+        const provider = instance.options.apiProvider || 'datatable';
+        const api = await window.Weline.Api.resource(provider);
+        const method = operationName(instance, endpoint);
+        if (!api || typeof api[method] !== 'function') {
+            throw new Error('Weline.Api operation is not available: ' + provider + '.' + method);
+        }
+
+        return api[method](payload || {}, Object.assign({silent: true}, requestOptions || {}));
     }
 
     function parseFieldConfig(container, field) {
@@ -1670,8 +1617,8 @@ if (typeof __ === 'undefined') {
 
     manager.initForm = function (formId, options) {
         const normalizedOptions = Object.assign({}, options || {});
-        normalizedOptions.apiUrl = resolveApiUrl(normalizedOptions.apiUrl, this.config.apiUrl);
-        normalizedOptions.fieldApiUrl = resolveApiUrl(normalizedOptions.fieldApiUrl, this.config.fieldApiUrl);
+        normalizedOptions.apiUrl = normalizedOptions.workerApi ? '' : resolveApiUrl(normalizedOptions.apiUrl, this.config.apiUrl);
+        normalizedOptions.fieldApiUrl = normalizedOptions.workerApi ? '' : resolveApiUrl(normalizedOptions.fieldApiUrl, this.config.fieldApiUrl);
         normalizedOptions.recordApiUrl = resolveApiUrl(
             normalizedOptions.recordApiUrl,
             deriveRecordApiUrl(normalizedOptions.fieldApiUrl)
@@ -1748,25 +1695,18 @@ if (typeof __ === 'undefined') {
             return;
         }
 
-        fetch(resolveApiUrl(instance.options.fieldApiUrl, this.config.fieldApiUrl), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                form_id: formId,
-                model: instance.options.model,
-                scope: instance.options.scope,
-                exclude_fields: instance.options.excludeFields || [],
-                include_fields: instance.options.includeFields || [],
-                manual_fields: instance.manualFields || [],
-                model_config: instance.options.modelConfig || {}
-            })
+        requestFormJson(instance, 'formFields', {
+            form_id: formId,
+            model: instance.options.model,
+            scope: instance.options.scope,
+            exclude_fields: instance.options.excludeFields || [],
+            include_fields: instance.options.includeFields || [],
+            manual_fields: instance.manualFields || [],
+            model_config: instance.options.modelConfig || {}
         })
-            .then(response => response.json())
             .then(response => {
                 if (!isSuccessfulResponse(response)) {
-                    this.showError(formId, response.message || response.msg || __('加载字段失败'));
+                    this.showError(formId, response.message || response.msg || __('鍔犺浇瀛楁澶辫触'));
                     return;
                 }
 
@@ -1776,7 +1716,7 @@ if (typeof __ === 'undefined') {
             })
             .catch(error => {
                 console.error('[DataTableFormManager] loadAutoFields failed', error);
-                this.showError(formId, error.message || __('网络错误'));
+                this.showError(formId, error.message || __('缃戠粶閿欒'));
             });
     };
 
@@ -1819,24 +1759,17 @@ if (typeof __ === 'undefined') {
             return;
         }
 
-        fetch(resolveApiUrl(instance.options.recordApiUrl, deriveRecordApiUrl(instance.options.fieldApiUrl)), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                form_id: formId,
-                model: instance.options.model,
-                scope: instance.options.scope,
-                record_id: recordId,
-                model_config: instance.options.modelConfig || {},
-                dependencies: instance.options.dependencies || ''
-            })
+        requestFormJson(instance, 'formRecord', {
+            form_id: formId,
+            model: instance.options.model,
+            scope: instance.options.scope,
+            record_id: recordId,
+            model_config: instance.options.modelConfig || {},
+            dependencies: instance.options.dependencies || ''
         })
-            .then(response => response.json())
             .then(response => {
                 if (!isSuccessfulResponse(response)) {
-                    this.showError(formId, response.message || response.msg || __('加载记录失败'));
+                    this.showError(formId, response.message || response.msg || __('鍔犺浇璁板綍澶辫触'));
                     return;
                 }
 
@@ -1851,7 +1784,7 @@ if (typeof __ === 'undefined') {
             })
             .catch(error => {
                 console.error('[DataTableFormManager] loadRecordData failed', error);
-                this.showError(formId, error.message || __('网络错误'));
+                this.showError(formId, error.message || __('缃戠粶閿欒'));
             });
     };
 
@@ -1870,42 +1803,42 @@ if (typeof __ === 'undefined') {
         if (config.required) {
             if (field.type === 'checkbox' && !field.checked) {
                 isValid = false;
-                message = __('此字段为必填项');
+                message = __('姝ゅ瓧娈典负蹇呭～椤?');
             } else if (field.type === 'radio') {
                 const sameNameFields = field.form ? field.form.querySelectorAll('[name="' + field.name + '"]') : [];
                 const checked = Array.from(sameNameFields).some(item => item.checked);
                 if (!checked) {
                     isValid = false;
-                    message = __('此字段为必填项');
+                    message = __('姝ゅ瓧娈典负蹇呭～椤?');
                 }
             } else if (!value) {
                 isValid = false;
-                message = __('此字段为必填项');
+                message = __('姝ゅ瓧娈典负蹇呭～椤?');
             }
         }
 
         if (isValid && value) {
             if ((config.type === 'email' || field.type === 'email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
                 isValid = false;
-                message = __('请输入有效的邮箱地址');
+                message = __('璇疯緭鍏ユ湁鏁堢殑閭鍦板潃');
             } else if ((config.type === 'number' || field.type === 'number') && Number.isNaN(Number(value))) {
                 isValid = false;
-                message = __('请输入有效的数字');
+                message = __('璇疯緭鍏ユ湁鏁堢殑鏁板瓧');
             } else if (config.min !== null && config.min !== '' && !Number.isNaN(Number(value)) && Number(value) < Number(config.min)) {
                 isValid = false;
-                message = __('数值不能小于 %{1}', [config.min]);
+                message = __('鏁板€间笉鑳藉皬浜?%{1}', [config.min]);
             } else if (config.max !== null && config.max !== '' && !Number.isNaN(Number(value)) && Number(value) > Number(config.max)) {
                 isValid = false;
-                message = __('数值不能大于 %{1}', [config.max]);
+                message = __('鏁板€间笉鑳藉ぇ浜?%{1}', [config.max]);
             } else if (config.maxlength && String(value).length > Number(config.maxlength)) {
                 isValid = false;
-                message = __('输入长度不能超过 %{1}', [config.maxlength]);
+                message = __('杈撳叆闀垮害涓嶈兘瓒呰繃 %{1}', [config.maxlength]);
             } else if (config.pattern) {
                 try {
                     const regex = new RegExp(config.pattern);
                     if (!regex.test(String(value))) {
                         isValid = false;
-                        message = __('字段格式不正确');
+                        message = __('瀛楁鏍煎紡涓嶆纭?');
                     }
                 } catch (error) {
                     console.warn('[DataTableFormManager] invalid validation pattern', config.pattern, error);
@@ -2072,7 +2005,7 @@ if (typeof __ === 'undefined') {
                     isValid = false;
                     errors[alias] = errors[alias] || {};
                     const originalName = field.getAttribute('data-original-name') || field.name;
-                    errors[alias][originalName] = __('字段验证失败');
+                    errors[alias][originalName] = __('瀛楁楠岃瘉澶辫触');
                 }
             });
         });
@@ -2119,7 +2052,7 @@ if (typeof __ === 'undefined') {
         const validationResult = hasMultiTableGroups ? this.validateMultiTableForm(form) : { isValid: this.validateForm(formId) };
 
         if (!validationResult.isValid) {
-            this.showError(formId, __('请检查表单中的错误'));
+            this.showError(formId, __('璇锋鏌ヨ〃鍗曚腑鐨勯敊璇?'));
             return;
         }
 
@@ -2144,21 +2077,14 @@ if (typeof __ === 'undefined') {
 
         this.showSubmitting(formId);
 
-        fetch(buildApiUrl(instance.options.apiUrl || this.config.apiUrl, isEdit ? 'save-data' : 'create'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestData)
-        })
-            .then(response => response.json())
+        requestFormJson(instance, isEdit ? 'saveData' : 'create', requestData)
             .then(response => {
                 if (!isSuccessfulResponse(response)) {
-                    this.showError(formId, response.message || response.msg || __('保存失败'));
+                    this.showError(formId, response.message || response.msg || __('淇濆瓨澶辫触'));
                     return;
                 }
 
-                this.showSuccess(formId, response.message || response.msg || __('保存成功'));
+                this.showSuccess(formId, response.message || response.msg || __('淇濆瓨鎴愬姛'));
 
                 if (typeof window.onFormSuccess === 'function') {
                     window.onFormSuccess(formId, response.data || {});
@@ -2184,7 +2110,7 @@ if (typeof __ === 'undefined') {
             })
             .catch(error => {
                 console.error('[DataTableFormManager] submitForm failed', error);
-                this.showError(formId, error.message || __('网络错误'));
+                this.showError(formId, error.message || __('缃戠粶閿欒'));
             })
             .finally(() => {
                 this.hideSubmitting(formId);

@@ -163,6 +163,13 @@ $themeConfigPayload = [
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
+    'api' => [
+        'workerUrl' => $isDev
+            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+            : '/static/Weline/Frontend/js/weline-api-worker.js',
+        'endpoint' => '/api/framework/query-bin',
+        'queryBinUrl' => '/api/framework/query-bin',
+    ],
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'debug' => DEV,
@@ -211,7 +218,7 @@ $this->setData('envConfig', $envConfig);
 <!-- 注意：内联JS已移除，配置初始化由theme.js处理 -->
 <!-- 注意：Token存储管理器、Switcher组件等 Frontend 资源由 Frontend 模块负责加载 -->
 <!-- 主题JS -->
-<theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
+<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260518-api-worker-5"></script>
 <!-- Hook: 允许其他模块在 head 中注入 JS 模块声明 -->
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>
 <!-- 注意：getHeader()->getHtml() 由 Frontend 模块的 head.phtml 负责 -->

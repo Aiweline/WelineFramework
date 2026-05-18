@@ -89,7 +89,7 @@ class ConfigResolver
             $account = $this->getAccountById($accountId);
         }
         if (!$account || !$account->getId()) {
-            $account = $this->getDefaultProviderAccount($providerCode);
+            $account = $this->getDefaultProviderAccount($providerCode, (bool)($userConfig['allow_zero_balance_provider'] ?? false));
         }
         if ($account && $account->getId()) {
             $config = array_merge($config, $this->extractAccountConfig($account));
@@ -133,7 +133,7 @@ class ConfigResolver
         $accountId = isset($modelProviderConfig['account_id']) ? (int)$modelProviderConfig['account_id'] : 0;
         $account = ($accountId > 0) ? $this->getAccountById($accountId) : null;
         if (!$account || !$account->getId()) {
-            $account = $this->getDefaultProviderAccount($providerCode);
+            $account = $this->getDefaultProviderAccount($providerCode, (bool)($userConfig['allow_zero_balance_provider'] ?? false));
         }
         if ($account && $account->getId()) {
             $config = array_merge($config, $this->extractAccountConfig($account));
@@ -193,9 +193,9 @@ class ConfigResolver
      * 获取默认供应商账户
      * 
      * 首先尝试获取默认账户，如果没有则获取任意可用账户
-     * 可用条件：激活 + 连接成功 + 余额 > 0
+     * 可用条件：激活 + 连接成功；默认要求余额 > 0，显式 allowZeroBalance 时放宽余额门禁。
      */
-    private function getDefaultProviderAccount(string $providerCode): ?Account
+    private function getDefaultProviderAccount(string $providerCode, bool $allowZeroBalance = false): ?Account
     {
         /** @var Account $account */
         $account = ObjectManager::getInstance(Account::class);
@@ -205,10 +205,11 @@ class ConfigResolver
             ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
             ->where(Account::schema_fields_IS_DEFAULT, 1)
             ->where(Account::schema_fields_IS_ACTIVE, 1)
-            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
-            ->where(Account::schema_fields_BALANCE, 0, '>')
-            ->find()
-            ->fetch();
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
+        if (!$allowZeroBalance) {
+            $defaultAccount->where(Account::schema_fields_BALANCE, 0, '>');
+        }
+        $defaultAccount = $defaultAccount->find()->fetch();
         
         if ($defaultAccount && $defaultAccount->getId()) {
             return $defaultAccount;
@@ -218,8 +219,11 @@ class ConfigResolver
         $availableAccount = $account->reset()
             ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
             ->where(Account::schema_fields_IS_ACTIVE, 1)
-            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
-            ->where(Account::schema_fields_BALANCE, 0, '>')
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
+        if (!$allowZeroBalance) {
+            $availableAccount->where(Account::schema_fields_BALANCE, 0, '>');
+        }
+        $availableAccount = $availableAccount
             ->order(Account::schema_fields_BALANCE, 'DESC')
             ->find()
             ->fetch();

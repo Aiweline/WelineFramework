@@ -9,6 +9,10 @@ $pagination = (array) ($this->getData('pagination') ?? []);
 $currentPage = max(1, (int) ($pagination['current_page'] ?? $pagination['page'] ?? 1));
 $pageSize = max(1, (int) ($pagination['page_size'] ?? $pagination['per_page'] ?? $this->getData('page_size') ?? 20));
 $totalPages = max(1, (int) ($pagination['total_pages'] ?? $pagination['last_page'] ?? $this->getData('page_count') ?? 1));
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+$formatPrice = static function (float $amount): string {
+    return \Weline\Currency\Helper\CurrencyFormatter::formatConverted($amount);
+};
 
 $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
     return (string) $this->getUrl('weshop/order/list', [
@@ -22,28 +26,28 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
 
     <header class="order-list__header">
         <div class="order-list__header-content">
-            <p class="order-list__subtitle"><?= __('Order Center') ?></p>
-            <h1 class="order-list__title"><?= __('My Orders') ?></h1>
+            <p class="order-list__subtitle"><?= __('订单中心') ?></p>
+            <h1 class="order-list__title"><?= __('我的订单') ?></h1>
             <p class="order-list__desc">
-                <?= __('Track your purchases, complete unpaid orders, and review delivery progress in one place.') ?>
+                <?= __('在这里追踪购买记录、完成待支付订单、查看配送进度。') ?>
             </p>
             <div class="order-list__actions">
                 <a href="<?= $this->getUrl('weshop') ?>" class="order-list__btn order-list__btn--primary">
-                    <?= __('Continue Shopping') ?>
+                    <?= __('继续购物') ?>
                 </a>
                 <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="order-list__btn order-list__btn--secondary">
-                    <?= __('Back to Account') ?>
+                    <?= __('返回账户') ?>
                 </a>
             </div>
         </div>
 
         <div class="order-list__stats">
             <article class="order-list__stat-card">
-                <p class="order-list__stat-label"><?= __('Total Orders') ?></p>
+                <p class="order-list__stat-label"><?= __('订单总数') ?></p>
                 <p class="order-list__stat-value"><?= $orderCount ?></p>
             </article>
             <article class="order-list__stat-card order-list__stat-card--highlight">
-                <p class="order-list__stat-label"><?= __('Awaiting Payment') ?></p>
+                <p class="order-list__stat-label"><?= __('待支付') ?></p>
                 <p class="order-list__stat-value"><?= $unpaidCount ?></p>
             </article>
         </div>
@@ -52,12 +56,12 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
     <?php if ($orders === []): ?>
         <section class="order-list__empty">
             <span class="material-symbols-outlined order-list__empty-icon">package_2</span>
-            <h2 class="order-list__empty-title"><?= __('No orders yet') ?></h2>
+            <h2 class="order-list__empty-title"><?= __('您还没有订单') ?></h2>
             <p class="order-list__empty-text">
-                <?= __('Your order history will appear here after you place your first purchase.') ?>
+                <?= __('下单后，您的订单记录将显示在这里。') ?>
             </p>
             <a href="<?= $this->getUrl('weshop') ?>" class="order-list__btn order-list__btn--primary">
-                <?= __('Browse Products') ?>
+                <?= __('去购物') ?>
             </a>
         </section>
     <?php else: ?>
@@ -78,39 +82,39 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
                 <article class="order-card">
                     <div class="order-card__header">
                         <div class="order-card__info">
-                            <p class="order-card__label"><?= __('Order') ?></p>
-                            <h2 class="order-card__id">#<?= htmlspecialchars($incrementId !== '' ? $incrementId : (string) $orderId, ENT_QUOTES) ?></h2>
+                            <p class="order-card__label"><?= __('订单') ?></p>
+                            <h2 class="order-card__id">#<?= $escape($incrementId !== '' ? $incrementId : (string) $orderId) ?></h2>
                             <?php if ($createdAt !== ''): ?>
-                                <p class="order-card__date"><?= htmlspecialchars($createdAt, ENT_QUOTES) ?></p>
+                                <p class="order-card__date"><?= $escape($createdAt) ?></p>
                             <?php endif; ?>
                         </div>
 
                         <div class="order-card__badges">
                             <span class="order-card__badge order-card__badge--status">
-                                <?= htmlspecialchars($statusLabel, ENT_QUOTES) ?>
+                                <?= $escape($statusLabel) ?>
                             </span>
                             <span class="order-card__badge order-card__badge--payment <?= $requiresPayment ? 'order-card__badge--pending' : 'order-card__badge--paid' ?>">
-                                <?= htmlspecialchars($paymentStatusLabel, ENT_QUOTES) ?>
+                                <?= $escape($paymentStatusLabel) ?>
                             </span>
                         </div>
                     </div>
 
                     <div class="order-card__footer">
                         <p class="order-card__total">
-                            <?= __('Grand Total') ?>:
+                            <?= __('订单金额：') ?>
                             <span class="order-card__price">
-                                <?= $this->formatPrice((float) ($order['total'] ?? 0)) ?>
+                                <?= $formatPrice((float) ($order['total'] ?? 0)) ?>
                             </span>
                         </p>
 
                         <div class="order-card__actions">
                             <a href="<?= $this->getUrl('weshop/order/view', ['id' => $orderId]) ?>" class="order-card__btn order-card__btn--secondary">
-                                <?= __('View Details') ?>
+                                <?= __('查看详情') ?>
                             </a>
 
                             <?php if ($canRetry): ?>
                                 <a href="<?= $this->getUrl('weshop/order/retry-payment', ['order_id' => $orderId]) ?>" class="order-card__btn order-card__btn--primary">
-                                    <?= __('Pay Now') ?>
+                                    <?= __('继续支付') ?>
                                 </a>
                             <?php endif; ?>
 
@@ -118,17 +122,21 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
                                 <form class="order-card__form" method="post" action="<?= $this->getUrl('weshop/order/cancel') ?>">
                                     <?= $this->getFormKey($this->getUrl('weshop/order/cancel')) ?>
                                     <input type="hidden" name="order_id" value="<?= $orderId ?>">
-                                    <button type="submit" class="order-card__btn order-card__btn--danger" data-confirm="<?= htmlspecialchars((string) __('Cancel this order?'), ENT_QUOTES) ?>">
-                                        <?= __('Cancel Order') ?>
+                                    <button type="submit" class="order-card__btn order-card__btn--danger"
+                                        data-confirm="<?= $escape((string) __('确定要取消此订单吗？取消后将自动退款。')) ?>">
+                                        <?= __('取消订单') ?>
                                     </button>
                                 </form>
                             <?php elseif ($requireReturn): ?>
-                                <a href="<?= $this->getUrl('rma/create', ['order_id' => $orderId]) ?>" class="order-card__btn order-card__btn--secondary" title="<?= htmlspecialchars($cancelReason, ENT_QUOTES) ?>">
-                                    <?= __('Request Return') ?>
+                                <a href="<?= $this->getUrl('rma/create', ['order_id' => $orderId]) ?>"
+                                   class="order-card__btn order-card__btn--secondary"
+                                   title="<?= $escape($cancelReason) ?>">
+                                    <?= __('申请退货') ?>
                                 </a>
                             <?php elseif ($cancelReason !== ''): ?>
-                                <span class="order-card__badge order-card__badge--disabled" title="<?= htmlspecialchars($cancelReason, ENT_QUOTES) ?>">
-                                    <?= __('Not Cancellable') ?>
+                                <span class="order-card__badge order-card__badge--disabled"
+                                      title="<?= $escape($cancelReason) ?>">
+                                    <?= __('不可取消') ?>
                                 </span>
                             <?php endif; ?>
                         </div>
@@ -144,7 +152,7 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
                 <?php if ($page === $currentPage): ?>
                     <span class="order-list__page order-list__page--active"><?= $page ?></span>
                 <?php else: ?>
-                    <a href="<?= htmlspecialchars($buildPaginationUrl($page), ENT_QUOTES) ?>" class="order-list__page">
+                    <a href="<?= $escape($buildPaginationUrl($page)) ?>" class="order-list__page">
                         <?= $page ?>
                     </a>
                 <?php endif; ?>
@@ -218,6 +226,8 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
     border-radius: var(--border-radius-lg, 0.75rem);
     transition: var(--ol-transition);
     text-decoration: none;
+    border: none;
+    cursor: pointer;
 }
 
 .order-list__btn--primary {
@@ -258,7 +268,7 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
 }
 
 .order-list__stat-card--highlight {
-    background: linear-gradient(135deg, var(--color-warning) 0%, #f59e0b 100%);
+    background: linear-gradient(135deg, var(--color-warning, #f59e0b) 0%, #d97706 100%);
 }
 
 .order-list__stat-card--highlight .order-list__stat-label,
@@ -396,7 +406,7 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
 }
 
 .order-card__badge--disabled {
-    background: var(--color-bg-tertiary);
+    background: var(--color-bg-tertiary, #f3f4f6);
     color: var(--color-text-secondary);
     font-size: 0.75rem;
 }
@@ -461,7 +471,7 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
 .order-card__btn--secondary {
     background: transparent;
     color: var(--color-text-primary);
-    border: 1px solid var(--color-border-default);
+    border: 1px solid var(--color-border-default, #d1d5db);
 }
 
 .order-card__btn--secondary:hover {
@@ -471,12 +481,12 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
 
 .order-card__btn--danger {
     background: transparent;
-    color: var(--color-error);
-    border: 1px solid var(--color-error);
+    color: var(--color-error, #dc2626);
+    border: 1px solid var(--color-error, #dc2626);
 }
 
 .order-card__btn--danger:hover {
-    background: var(--color-error);
+    background: var(--color-error, #dc2626);
     color: white;
 }
 
@@ -506,7 +516,7 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--color-text-primary);
-    border: 1px solid var(--color-border-default);
+    border: 1px solid var(--color-border-default, #d1d5db);
     border-radius: var(--border-radius-lg, 0.75rem);
     transition: var(--ol-transition);
     text-decoration: none;
@@ -521,6 +531,50 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
     background: var(--color-primary);
     color: var(--color-text-dark);
     border-color: var(--color-primary);
+}
+
+/* Inline confirm dialog */
+.order-list__confirm-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.45);
+    align-items: center;
+    justify-content: center;
+}
+
+.order-list__confirm-overlay.is-open {
+    display: flex;
+}
+
+.order-list__confirm-box {
+    background: var(--color-bg-primary, #fff);
+    border-radius: 1rem;
+    padding: 1.75rem 2rem;
+    max-width: 420px;
+    width: calc(100% - 2rem);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.order-list__confirm-title {
+    margin: 0 0 0.75rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.order-list__confirm-message {
+    margin: 0 0 1.5rem;
+    font-size: 0.925rem;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.order-list__confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
 }
 
 @media (max-width: 640px) {
@@ -554,48 +608,74 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
 }
 </style>
 
-<div class="modal fade" id="order-confirm-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><lang>确认</lang></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="order-confirm-modal-message"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
-                <button type="button" class="btn btn-danger" id="order-confirm-modal-ok"><lang>确认</lang></button>
-            </div>
+<!-- 原生确认对话框 -->
+<div class="order-list__confirm-overlay" id="ol-confirm-overlay" role="dialog" aria-modal="true"
+     aria-labelledby="ol-confirm-title">
+    <div class="order-list__confirm-box">
+        <h5 class="order-list__confirm-title" id="ol-confirm-title"><?= __('确认') ?></h5>
+        <p class="order-list__confirm-message" id="ol-confirm-message"></p>
+        <div class="order-list__confirm-actions">
+            <button type="button" class="order-card__btn order-card__btn--secondary" id="ol-confirm-cancel">
+                <?= __('取消') ?>
+            </button>
+            <button type="button" class="order-card__btn order-card__btn--danger" id="ol-confirm-ok">
+                <?= __('确认') ?>
+            </button>
         </div>
     </div>
 </div>
 
 <script>
 (function() {
-    var modalEl = document.getElementById('order-confirm-modal');
-    var modal = modalEl ? new bootstrap.Modal(modalEl) : null;
-    var okBtn = document.getElementById('order-confirm-modal-ok');
+    var overlay = document.getElementById('ol-confirm-overlay');
+    var msgEl = document.getElementById('ol-confirm-message');
+    var okBtn = document.getElementById('ol-confirm-ok');
+    var cancelBtn = document.getElementById('ol-confirm-cancel');
     var currentForm = null;
 
-    if (okBtn && modal) {
+    function openConfirm(message, form) {
+        if (!overlay) return false;
+        currentForm = form;
+        if (msgEl) msgEl.textContent = message;
+        overlay.classList.add('is-open');
+        if (okBtn) okBtn.focus();
+        return true;
+    }
+
+    function closeConfirm() {
+        if (overlay) overlay.classList.remove('is-open');
+        currentForm = null;
+    }
+
+    if (okBtn) {
         okBtn.addEventListener('click', function() {
             if (!currentForm) return;
-            modal.hide();
+            closeConfirm();
             currentForm.submit();
         });
     }
 
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeConfirm);
+    }
+
+    if (overlay) {
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closeConfirm();
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeConfirm();
+    });
+
     document.querySelectorAll('.order-card__form').forEach(function(form) {
         form.addEventListener('submit', function(e) {
-            var confirmMsg = e.submitter ? e.submitter.dataset.confirm : '<?= htmlspecialchars((string) __('Cancel this order?'), ENT_QUOTES) ?>';
-            if (!modal) return;
+            var confirmMsg = (e.submitter && e.submitter.dataset.confirm)
+                ? e.submitter.dataset.confirm
+                : '<?= $escape((string) __('确定要取消此订单吗？取消后将自动退款。')) ?>';
             e.preventDefault();
-            currentForm = form;
-            var msgEl = document.getElementById('order-confirm-modal-message');
-            if (msgEl) {
-                msgEl.textContent = confirmMsg;
-            }
-            modal.show();
+            openConfirm(confirmMsg, form);
         });
     });
 })();

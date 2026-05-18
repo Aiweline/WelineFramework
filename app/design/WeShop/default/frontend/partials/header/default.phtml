@@ -68,10 +68,6 @@
         <div class="flex items-center gap-3">
             <!-- Account -->
             <w:hook name="WeShop_Frontend::frontend::partials::header::account"/>
-            <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 gap-2 min-w-0 px-3 hover:bg-primary/10 transition-colors">
-                <span class="material-symbols-outlined text-2xl">person_outline</span>
-                <span class="hidden md:inline text-sm font-medium"><?= __('账户') ?></span>
-            </a>
             
             <!-- Mini Cart -->
             <w:hook name="WeShop_Frontend::frontend::partials::header::mini-cart"/>
@@ -110,6 +106,7 @@
                                         <?= __('查看购物车') ?>
                                     </a>
                                     <a href="<?= $this->getUrl('checkout') ?>" class="flex items-center justify-center rounded-lg bg-primary py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 hover:bg-blue-600 transition-colors weline-pixel::begin_checkout">
+                                        <span class="weline-pixel::begin_checkout:value" data-pixel-value="<?= htmlspecialchars((string)(float)$cartTotal, ENT_QUOTES, 'UTF-8') ?>" hidden><?= htmlspecialchars((string)(float)$cartTotal, ENT_QUOTES, 'UTF-8') ?></span>
                                         <?= __('去结算') ?>
                                     </a>
                                 </div>

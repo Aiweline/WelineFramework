@@ -646,6 +646,49 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect
             return payload.status === 'authenticated';
         }
 
+        var accountApiPromise = null;
+
+        function getAccountApi() {
+            if (!accountApiPromise) {
+                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                    accountApiPromise = window.Weline.Api.resource('account');
+                } else if (window.Weline && typeof window.Weline.load === 'function') {
+                    accountApiPromise = window.Weline.load('api').then(function() {
+                        if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                            throw new Error('Weline.Api is unavailable.');
+                        }
+                        return window.Weline.Api.resource('account');
+                    });
+                } else {
+                    accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
+                }
+            }
+            return accountApiPromise;
+        }
+
+        function formDataToObject(formData) {
+            var payload = {};
+            formData.forEach(function(value, key) {
+                payload[key] = value;
+            });
+            delete payload.form_key;
+            if (Object.prototype.hasOwnProperty.call(payload, 'remember_duration')) {
+                payload.remember_duration = Number(payload.remember_duration || 0);
+            }
+            return payload;
+        }
+
+        function postLoginRequest(payload) {
+            return getAccountApi().then(function(AccountApi) {
+                return AccountApi.login(payload, {silent: true});
+            }).then(function(data) {
+                return {
+                    ok: data && data.success !== false,
+                    data: data
+                };
+            });
+        }
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
 
@@ -679,18 +722,9 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect
             loginBtn.classList.add('auth-form__submit--busy');
             loginBtn.setAttribute('aria-busy', 'true');
 
-            var body = new URLSearchParams(new FormData(form)).toString();
+            var body = formDataToObject(new FormData(form));
 
-            window.Weline.Api.request('/customer/account/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json, text/javascript, */*;q=0.01'
-                },
-                body: body,
-                credentials: 'same-origin'
-            })
+            postLoginRequest(body)
             .then(function(response) {
                 var resp = normalizeLoginPayload(response.data);
                 if (response.ok && resp && resp.status === 'challenge_required' && resp.redirect) {
