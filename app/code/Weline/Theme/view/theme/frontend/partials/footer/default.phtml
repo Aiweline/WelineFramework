@@ -235,7 +235,9 @@ $colors = $this->getData('colors') ?? [];
     
     <?php if ($showBackToTop): ?>
         <button class="back-to-top" id="backToTop" title="<?= __('返回顶部') ?>">
-            <i class="fas fa-arrow-up"></i>
+            <svg class="back-to-top__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 4.5 5.5 11l1.4 1.4L11 8.3V20h2V8.3l4.1 4.1 1.4-1.4L12 4.5z"/>
+            </svg>
         </button>
     <?php endif; ?>
     
@@ -419,8 +421,8 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
 /* 返回顶部按钮 - 亚马逊风格（橙色主题） */
 .back-to-top {
     position: fixed;
-    bottom: 2rem;
-    right: 2rem;
+    bottom: 92px;
+    right: 26px;
     width: 48px;
     height: 48px;
     background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
@@ -510,10 +512,17 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     .back-to-top {
         width: 44px;
         height: 44px;
-        bottom: 1.5rem;
-        right: 1.5rem;
+        bottom: 92px;
+        right: 28px;
         font-size: 1.125rem;
     }
+}
+
+.back-to-top__icon {
+    width: 22px;
+    height: 22px;
+    display: block;
+    fill: currentColor;
 }
 
 @media (max-width: 480px) {
@@ -555,8 +564,8 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     .back-to-top {
         width: 40px;
         height: 40px;
-        bottom: 1rem;
-        right: 1rem;
+        bottom: 70px;
+        right: 15px;
         font-size: 1rem;
     }
 }

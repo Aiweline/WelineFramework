@@ -219,9 +219,18 @@ $rmaCleanDescription = static function (string $description): string {
                             </div>
                     </div>
 
+                    <div class="weshop-returns-actions">
                     <button type="button" id="account-rma-submit" class="weshop-returns-submit">
                         提交售后申请
                     </button>
+                        <a
+                            href="<?= $escape($this->getUrl('customer/contact')) ?>"
+                            class="weshop-returns-contact"
+                            data-testid="account-rma-contact-link"
+                        >
+                            <?= __('联系我们') ?>
+                        </a>
+                    </div>
 
                     <p id="account-rma-feedback" class="weshop-returns-feedback"><?= $escape($feedbackDefault) ?></p>
                 </form>
@@ -873,14 +882,43 @@ $rmaCleanDescription = static function (string $description): string {
             width: 100%;
         }
 
-        .weshop-returns-submit {
+        .weshop-returns-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .weshop-returns-submit,
+        .weshop-returns-contact {
+            align-items: center;
             background: var(--weshop-primary, #2563eb);
             border: 0;
             border-radius: 0.9rem;
             color: #fff;
             cursor: pointer;
+            display: inline-flex;
             font-weight: 800;
+            justify-content: center;
             min-height: 3rem;
+            padding: 0.85rem 1.2rem;
+            text-decoration: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .weshop-returns-submit {
+            flex: 1 1 14rem;
+        }
+
+        .weshop-returns-contact {
+            background: #111827;
+            flex: 0 0 auto;
+            min-width: 8.5rem;
+        }
+
+        .weshop-returns-submit:hover,
+        .weshop-returns-contact:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
         }
 
         .weshop-returns-feedback {

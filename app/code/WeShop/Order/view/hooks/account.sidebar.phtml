@@ -1,48 +1,15 @@
 <?php
 /**
- * WeShop_Order module - account sidebar entry.
+ * Compatibility bridge for stale hook caches.
  *
  * Hook: account.sidebar
  *
- * @hook-priority 160
- * @hook-sort-order 10
+ * @hook-priority 5
+ * @hook-sort-order 999
  * @hook-solo false
  */
-$accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
-if (!is_string($accountIndexPath) || $accountIndexPath === '') {
-    $accountIndexPath = '/customer/account/index';
+if (!empty($GLOBALS['__weline_order_account_sidebar_rendered'])) {
+    return;
 }
-$accountIndexPath = rtrim($accountIndexPath, '/');
-?>
-<a class="account-hook-nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#orders" data-section="orders" data-account-nav-link="true">
-    <span class="account-hook-nav-link__label">
-        <i class="ri-shopping-bag-line" aria-hidden="true"></i>
-        <span class="account-hook-nav-link__text">
-            <strong><?= __('我的订单') ?></strong>
-            <span><?= __('查看订单进度与支付状态') ?></span>
-        </span>
-    </span>
-    <span class="account-hook-nav-link__badge" data-order-unpaid-badge data-order-unpaid-count style="display: none;">0</span>
-    <span class="account-hook-nav-link__arrow" aria-hidden="true">
-        <i class="fa fa-angle-right"></i>
-    </span>
-</a>
-<style>
-    .account-hook-nav-link__badge {
-        align-items: center;
-        align-self: center;
-        background: #ef4444;
-        border-radius: 999px;
-        color: #fff;
-        display: inline-flex;
-        flex-shrink: 0;
-        font-size: 0.75rem;
-        font-weight: 700;
-        height: 1.35rem;
-        justify-content: center;
-        line-height: 1;
-        margin-left: auto;
-        min-width: 1.35rem;
-        padding: 0 0.35rem;
-    }
-</style>
+
+include BP . '/app/code/Weline/Order/view/hooks/account.sidebar.phtml';

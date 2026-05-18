@@ -573,11 +573,12 @@ class OrderService
 
         $order->save();
 
-        ObjectManager::getInstance(EventsManager::class)->dispatch('WeShop_Order::cancelled', [
+        $eventData = [
             'order' => $order,
             'order_id' => $orderId,
             'customer_id' => $customerId,
-        ]);
+        ];
+        ObjectManager::getInstance(EventsManager::class)->dispatch('WeShop_Order::cancelled', $eventData);
 
         return true;
     }

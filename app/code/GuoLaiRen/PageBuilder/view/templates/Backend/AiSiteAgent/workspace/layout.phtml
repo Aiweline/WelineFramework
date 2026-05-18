@@ -148,7 +148,9 @@
         white-space: nowrap;
     }
     #pb-ai-retry-plan-failures,
-    #pb-ai-retry-build-failures {
+    #pb-ai-plan-retry-generate,
+    #pb-ai-retry-build-failures,
+    .pb-ai-retry-build-failures-slot {
         position: relative;
         z-index: 20;
         pointer-events: auto !important;
@@ -444,9 +446,26 @@
     }
     /* 资源位预览区跟随主题背景并限制高度。 */
     #pb-ai-asset-slot-list .pb-ai-asset-slot-card {
-        border: 1px solid rgba(148, 163, 184, .35);
+        border: 1px solid color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-border-default, currentColor)) 28%, transparent);
         border-radius: .75rem;
-        background: #fff;
+        background:
+            radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--pb-ai-brand-accent, var(--backend-color-primary, currentColor)) 10%, transparent), transparent 36%),
+            var(--backend-color-card-bg, var(--backend-color-bg-primary, Canvas));
+        color: var(--backend-color-text-primary, inherit);
+    }
+    #pb-ai-asset-slot-list .pb-ai-asset-slot-card[data-asset-slot-id^="identity:"] {
+        border-color: color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-border-default, currentColor)) 46%, transparent);
+        box-shadow: 0 12px 30px color-mix(in srgb, var(--pb-ai-brand-primary, currentColor) 8%, transparent);
+    }
+    #pb-ai-asset-slot-list .pb-ai-asset-preview {
+        border-radius: .65rem;
+        border: 1px solid color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-border-default, currentColor)) 18%, transparent);
+        background:
+            linear-gradient(135deg,
+                color-mix(in srgb, var(--pb-ai-brand-surface, var(--backend-color-bg-secondary, Canvas)) 90%, transparent),
+                color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-primary, currentColor)) 8%, var(--backend-color-bg-secondary, Canvas))
+            );
+        padding: .35rem;
     }
     #pb-ai-asset-slot-list .pb-ai-asset-preview img {
         max-height: 7rem;
@@ -479,15 +498,16 @@
     .pb-ai-brand-asset-card {
         min-width: 9.5rem;
         max-width: 11rem;
-        border: 1px solid rgba(148, 163, 184, .35);
+        border: 1px solid color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-border-default, currentColor)) 32%, transparent);
         border-radius: .9rem;
-        background: #fff;
+        background: var(--backend-color-card-bg, var(--backend-color-bg-primary, Canvas));
+        color: var(--backend-color-text-primary, inherit);
         padding: .75rem;
         transition: box-shadow .24s ease, transform .24s ease, border-color .24s ease;
     }
     .pb-ai-brand-asset-card.loading {
-        border-color: rgba(59, 130, 246, .45);
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, .08);
+        border-color: color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-primary, currentColor)) 55%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-primary, currentColor)) 12%, transparent);
     }
     .pb-ai-brand-asset-card.is-updated {
         animation: pb-ai-brand-asset-flash 1.1s ease;
@@ -498,8 +518,13 @@
         height: 5.75rem;
         border-radius: .75rem;
         overflow: hidden;
-        background: linear-gradient(135deg, rgba(15, 23, 42, .06), rgba(59, 130, 246, .08));
-        border: 1px solid rgba(148, 163, 184, .25);
+        background:
+            radial-gradient(circle at 82% 18%, color-mix(in srgb, var(--pb-ai-brand-accent, var(--backend-color-primary, currentColor)) 16%, transparent), transparent 40%),
+            linear-gradient(135deg,
+                color-mix(in srgb, var(--pb-ai-brand-surface, var(--backend-color-bg-secondary, Canvas)) 92%, transparent),
+                color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-primary, currentColor)) 10%, var(--backend-color-bg-secondary, Canvas))
+            );
+        border: 1px solid color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-border-default, currentColor)) 24%, transparent);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -513,7 +538,7 @@
     .pb-ai-brand-asset-placeholder {
         padding: .5rem;
         text-align: center;
-        color: #64748b;
+        color: color-mix(in srgb, var(--pb-ai-brand-text, var(--backend-color-text-secondary, CanvasText)) 72%, transparent);
         font-size: .78rem;
         line-height: 1.3;
     }
@@ -525,6 +550,9 @@
         justify-content: center;
         background: rgba(255, 255, 255, .68);
         backdrop-filter: blur(1.5px);
+    }
+    .pb-ai-brand-asset-spinner .spinner-border {
+        color: var(--pb-ai-brand-primary, var(--backend-color-primary, currentColor)) !important;
     }
     .pb-ai-brand-asset-card.loading .pb-ai-brand-asset-spinner {
         display: flex;
@@ -539,6 +567,9 @@
     }
     .pb-ai-brand-asset-status {
         min-height: 2.2rem;
+    }
+    .pb-ai-brand-asset-status.text-muted {
+        color: color-mix(in srgb, var(--pb-ai-brand-primary, var(--backend-color-text-secondary, CanvasText)) 54%, var(--backend-color-text-secondary, CanvasText)) !important;
     }
     @keyframes pb-ai-brand-asset-sheen {
         from { transform: translateX(-100%); }
