@@ -9,36 +9,74 @@ const CustomerServiceWidget = (function() {
      * @param {Object|Array} params
      * @returns {string}
      */
+    function interpolateTranslation(text, params) {
+        if (!params) {
+            return text;
+        }
+
+        let result = text;
+        if (typeof params === 'object' && !Array.isArray(params)) {
+            for (const key in params) {
+                result = result.replace(new RegExp('%\\{' + key + '\\}', 'g'), String(params[key]));
+            }
+            return result;
+        }
+
+        if (Array.isArray(params)) {
+            params.forEach((param, index) => {
+                result = result.replace(new RegExp('%\\{' + (index + 1) + '\\}', 'g'), String(param));
+            });
+            return result;
+        }
+
+        return result.replace(/%\{1\}/g, String(params));
+    }
+
+    function getSupportedLocales() {
+        return Array.isArray(config.supportedLocales) ? config.supportedLocales : [];
+    }
+
+    function getLocaleConfig(localeCode) {
+        return getSupportedLocales().find(locale => locale.code === localeCode) || null;
+    }
+
+    function getWidgetTranslations(localeCode) {
+        if (!config.widgetTranslations || typeof config.widgetTranslations !== 'object') {
+            return {};
+        }
+
+        const requestedLocale = config.widgetTranslations[localeCode];
+        if (requestedLocale && typeof requestedLocale === 'object') {
+            return requestedLocale;
+        }
+
+        const fallbackLocale = config.widgetTranslations.zh_Hans_CN;
+        return fallbackLocale && typeof fallbackLocale === 'object' ? fallbackLocale : {};
+    }
+
     function __(text, params) {
+        const widgetTranslations = getWidgetTranslations(state.locale);
+        if (widgetTranslations && typeof widgetTranslations[text] === 'string') {
+            return interpolateTranslation(widgetTranslations[text], params);
+        }
         if (typeof window !== 'undefined' && typeof window.__ === 'function') {
             return window.__(text, params);
         }
         if (typeof window !== 'undefined' && window.Weline && window.Weline.i18n && typeof window.Weline.i18n.__ === 'function') {
             return window.Weline.i18n.__(text, params);
         }
-        if (params) {
-            let result = text;
-            if (typeof params === 'object' && !Array.isArray(params)) {
-                for (const key in params) {
-                    result = result.replace(new RegExp('%\\{' + key + '\\}', 'g'), String(params[key]));
-                }
-            } else if (Array.isArray(params)) {
-                params.forEach((param, index) => {
-                    result = result.replace(new RegExp('%\\{' + (index + 1) + '\\}', 'g'), String(param));
-                });
-            } else {
-                result = result.replace(/%\{1\}/g, String(params));
-            }
-            return result;
-        }
-        return text;
+
+        return interpolateTranslation(text, params);
     }
 
     let config = {
         chatUrl: '',
         bindUrl: '',
         customerId: null,
-        isLoggedIn: false
+        isLoggedIn: false,
+        showGuestBindPrompt: false,
+        supportedLocales: [],
+        widgetTranslations: {}
     };
 
     function getCustomerServiceApi() {
@@ -52,12 +90,14 @@ const CustomerServiceWidget = (function() {
     let sessionInitializationPromise = null;
     let guestBindPromptShown = false;
     let customerServiceApiPromise = null;
+    let miniCartStateObserver = null;
     
     let state = {
         sessionId: null,
         sessionToken: null,
         isOpen: false,
         isPolling: false,
+        isSending: false,
         pollInterval: null,
         statusPollInterval: null,
         lastMessageId: 0,
@@ -88,6 +128,7 @@ const CustomerServiceWidget = (function() {
         
         // 閸掓繂顫愰崠鏈閻樿埖鈧?
         initUIState();
+        bindMiniCartLayerState();
     }
     
     /**
@@ -105,6 +146,40 @@ const CustomerServiceWidget = (function() {
         if (displayModeSelect) {
             displayModeSelect.value = state.displayMode;
         }
+    }
+
+    function syncMiniCartLayerState() {
+        const widget = document.getElementById('customer-service-widget');
+        if (!widget) {
+            return;
+        }
+
+        const drawer = document.getElementById('mini-cart-drawer');
+        const isMiniCartOpen = Boolean(drawer && drawer.classList.contains('is-open'));
+        widget.classList.toggle('customer-service-widget--mini-cart-open', isMiniCartOpen);
+    }
+
+    function bindMiniCartLayerState() {
+        if (miniCartStateObserver) {
+            syncMiniCartLayerState();
+            return;
+        }
+
+        document.addEventListener('weshop:mini-cart:open', syncMiniCartLayerState);
+        document.addEventListener('weshop:mini-cart:close', syncMiniCartLayerState);
+
+        const drawer = document.getElementById('mini-cart-drawer');
+        if (drawer && typeof MutationObserver !== 'undefined') {
+            miniCartStateObserver = new MutationObserver(syncMiniCartLayerState);
+            miniCartStateObserver.observe(drawer, {
+                attributes: true,
+                attributeFilter: ['class']
+            });
+        } else {
+            miniCartStateObserver = true;
+        }
+
+        syncMiniCartLayerState();
     }
     
     /**
@@ -126,7 +201,7 @@ const CustomerServiceWidget = (function() {
         saveState();
         
         // 闁插秵鏌婂〒鍙夌厠濞戝牊浼?
-        loadMessages();
+        rerenderMessageBubbles();
     }
     
     /**
@@ -228,14 +303,20 @@ const CustomerServiceWidget = (function() {
      */
     async function sendMessage() {
         const input = document.getElementById('cs-message-input');
+        if (!input || state.isSending) {
+            return;
+        }
         const content = input.value.trim();
         
         if (!content) {
             return;
         }
 
+        state.isSending = true;
+
         const sessionReady = await ensureSessionReady();
         if (!sessionReady || !state.sessionId) {
+            state.isSending = false;
             alert(__('客服会话初始化失败，请稍后重试'));
             return;
         }
@@ -248,7 +329,8 @@ const CustomerServiceWidget = (function() {
         try {
             const data = await (await getCustomerServiceApi()).sendMessage({
                 session_id: state.sessionId,
-                content: content
+                content: content,
+                locale: state.locale
             }, {silent: true});
             
             if (data.success) {
@@ -259,6 +341,9 @@ const CustomerServiceWidget = (function() {
                     message_id: data.data.message_id,
                     content: data.data.content,
                     translated_content: data.data.translated_content,
+                    display_content: data.data.display_content,
+                    source_locale: data.data.source_locale,
+                    target_locale: data.data.target_locale,
                     sender_type: 'customer',
                     created_at: data.data.created_at
                 });
@@ -275,6 +360,7 @@ const CustomerServiceWidget = (function() {
         } finally {
             input.disabled = false;
             sendButton.disabled = false;
+            state.isSending = false;
         }
     }
     
@@ -289,18 +375,20 @@ const CustomerServiceWidget = (function() {
         try {
             const data = await (await getCustomerServiceApi()).messages({
                 session_id: state.sessionId,
+                locale: state.locale,
                 limit: 50,
                 offset: 0
             }, {silent: true});
             
             if (data.success) {
+                const messages = Array.isArray(data.data) ? data.data : null;
                 const messagesContainer = document.getElementById('cs-chat-messages');
-                if (!messagesContainer) {
+                if (!messagesContainer || messages === null) {
                     return;
                 }
                 messagesContainer.innerHTML = '';
                 
-                if (data.data.length === 0) {
+                if (messages.length === 0) {
                     messagesContainer.innerHTML = `
                         <div class="cs-welcome-message">
                             <p>${__('欢迎使用客服服务')}</p>
@@ -308,13 +396,13 @@ const CustomerServiceWidget = (function() {
                         </div>
                     `;
                 } else {
-                    data.data.forEach(msg => {
+                    messages.forEach(msg => {
                         addMessage(msg, false);
                     });
                     
                     // 閺囧瓨鏌婇張鈧崥搴濈閺夆剝绉烽幁鐤楧
-                    if (data.data.length > 0) {
-                        state.lastMessageId = data.data[data.data.length - 1].message_id;
+                    if (messages.length > 0) {
+                        state.lastMessageId = messages[messages.length - 1].message_id;
                     }
                     
                     scrollToBottom();
@@ -330,6 +418,9 @@ const CustomerServiceWidget = (function() {
      */
     function addMessage(message, scroll = true) {
         const messagesContainer = document.getElementById('cs-chat-messages');
+        if (!messagesContainer) {
+            return;
+        }
         
         // 缁夊娅庡▎銏ｇ箣濞戝牊浼?
         const welcomeMsg = messagesContainer.querySelector('.cs-welcome-message');
@@ -343,6 +434,7 @@ const CustomerServiceWidget = (function() {
         // 鐎涙ê鍋嶉崢鐔奉潗濞戝牊浼呴弫鐗堝祦閻劋绨柌宥嗘煀濞撳弶鐓?
         messageDiv.dataset.content = message.content || '';
         messageDiv.dataset.translatedContent = message.translated_content || '';
+        messageDiv.dataset.displayContent = message.display_content || '';
         messageDiv.dataset.sourceLocale = message.source_locale || '';
         messageDiv.dataset.targetLocale = message.target_locale || '';
         
@@ -371,9 +463,12 @@ const CustomerServiceWidget = (function() {
      */
     function renderMessageContent(bubble, message) {
         const original = message.content || '';
-        const translated = message.translated_content || original;
+        const translated = message.display_content || message.translated_content || original;
         const hasTranslation = translated && translated !== original;
         const sourceLocale = message.source_locale || '';
+        const translatedLocale = message.display_content && translated !== original
+            ? state.locale
+            : (message.target_locale || state.locale);
         
         bubble.innerHTML = '';
         
@@ -395,7 +490,7 @@ const CustomerServiceWidget = (function() {
                     translatedDiv.className = 'cs-message-translated';
                     const translatedLabel = document.createElement('span');
                     translatedLabel.className = 'cs-message-label';
-                    translatedLabel.textContent = getLocaleName(state.locale);
+                    translatedLabel.textContent = getLocaleName(translatedLocale);
                     translatedDiv.appendChild(translatedLabel);
                     translatedDiv.appendChild(document.createTextNode(translated));
                     bubble.appendChild(translatedDiv);
@@ -413,6 +508,28 @@ const CustomerServiceWidget = (function() {
                 bubble.textContent = translated;
                 break;
         }
+    }
+
+    function rerenderMessageBubbles() {
+        const messagesContainer = document.getElementById('cs-chat-messages');
+        if (!messagesContainer) {
+            return;
+        }
+
+        messagesContainer.querySelectorAll('.cs-message').forEach((messageDiv) => {
+            const bubble = messageDiv.querySelector('.cs-message-bubble');
+            if (!bubble) {
+                return;
+            }
+
+            renderMessageContent(bubble, {
+                content: messageDiv.dataset.content || '',
+                translated_content: messageDiv.dataset.translatedContent || '',
+                display_content: messageDiv.dataset.displayContent || '',
+                source_locale: messageDiv.dataset.sourceLocale || '',
+                target_locale: messageDiv.dataset.targetLocale || '',
+            });
+        });
     }
     
     /**
@@ -483,12 +600,16 @@ const CustomerServiceWidget = (function() {
             try {
                 const data = await (await getCustomerServiceApi()).messages({
                     session_id: state.sessionId,
+                    locale: state.locale,
                     limit: 10,
                     offset: 0
                 }, {silent: true});
                 
-                if (data.success && data.data.length > 0) {
+                if (data.success && Array.isArray(data.data) && data.data.length > 0) {
                     const messagesContainer = document.getElementById('cs-chat-messages');
+                    if (!messagesContainer) {
+                        return;
+                    }
                     const existingIds = new Set(
                         Array.from(messagesContainer.querySelectorAll('.cs-message'))
                             .map(el => parseInt(el.dataset.messageId))
@@ -634,7 +755,7 @@ const CustomerServiceWidget = (function() {
             
             if (data.success) {
                 // 闁插秵鏌婇崝鐘烘祰濞戝牊浼呮禒銉ㄥ箯閸欐牜鐐曠拠?
-                loadMessages();
+                await loadMessages();
             }
         } catch (error) {
             console.error('Failed to change language:', error);

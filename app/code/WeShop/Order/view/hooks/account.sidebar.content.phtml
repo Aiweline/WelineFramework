@@ -1,14 +1,19 @@
 <?php
 /**
- * WeShop_Order module - account page content section.
+ * Compatibility bridge for stale hook caches.
  *
  * Hook: account.sidebar.content
  *
- * @hook-priority 160
- * @hook-sort-order 10
+ * @hook-priority 5
+ * @hook-sort-order 999
  * @hook-solo false
  */
+if (!empty($GLOBALS['__weline_order_account_sidebar_content_rendered'])) {
+    return;
+}
+
+$GLOBALS['__weline_order_account_sidebar_content_rendered'] = true;
 ?>
 <section class="account-hook-section account-index__section d-none motor-account-section" id="orders-section" data-account-section="orders" hidden>
-    <w:hook name="Weline_Customer::frontend::account::index::orders"/>
+    <?= $this->getHook('Weline_Order::frontend::account::index::orders') ?>
 </section>

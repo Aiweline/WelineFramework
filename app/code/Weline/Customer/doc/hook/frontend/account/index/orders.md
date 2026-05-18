@@ -1,7 +1,7 @@
-# Account dashboard orders panel
+# 账户首页订单分区
 
-Use `Weline_Customer::frontend::account::index::orders` to inject storefront order UI into the customer account index template (`templates/frontend/account/index.phtml`), inside the `#orders-section` block opened by the sidebar entry「我的订单».
+使用 `Weline_Customer::frontend::account::index::orders` 在顾客账户首页订单区域注入订单列表、订单状态和售后入口内容。
 
-Implementation example:
+实现示例：
 
 - `WeShop_Order/view/hooks/Weline_Customer/frontend/account/index/orders.phtml`

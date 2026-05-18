@@ -1672,7 +1672,6 @@
                 toast('warning', getRetryableAiFailureMessage(getLatestWorkspaceStateForQueuePrompt(), 'build'));
                 return false;
             }
-            toast('info', messages.buildResumeFailedTasks || messages.planResumeFailedTasks);
             var retryPayload = resolveRetryableAiOperationResumePayload(normalized);
             document.documentElement.dataset.pbRetryableAiTriggerPayloadOperation = retryPayload && retryPayload.operation ? String(retryPayload.operation) : '';
             document.documentElement.dataset.pbRetryableAiTriggerHasUrl = retryAiOperationUrl ? '1' : '0';

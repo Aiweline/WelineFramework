@@ -93,7 +93,7 @@ class Console extends BackendController
                 
                 if ($lastMessage->getId()) {
                     $sessionData['last_message'] = $lastMessage->getTranslatedContent() ?: $lastMessage->getContent();
-                    $sessionData['last_message_time'] = $lastMessage->getData('created_at');
+                    $sessionData['last_message_time'] = $this->chatService->formatClientDateTime((string)$lastMessage->getData('created_at'));
                 }
 
                 // 获取未读消息数
@@ -116,7 +116,7 @@ class Console extends BackendController
                 
                 if ($lastMessage->getId()) {
                     $waitingSession['last_message'] = $lastMessage->getTranslatedContent() ?: $lastMessage->getContent();
-                    $waitingSession['last_message_time'] = $lastMessage->getData('created_at');
+                    $waitingSession['last_message_time'] = $this->chatService->formatClientDateTime((string)$lastMessage->getData('created_at'));
                 }
             }
 
@@ -188,7 +188,7 @@ class Console extends BackendController
                 
                 if ($lastMessage->getId()) {
                     $sessionData['last_message'] = $lastMessage->getTranslatedContent() ?: $lastMessage->getContent();
-                    $sessionData['last_message_time'] = $lastMessage->getData('created_at');
+                    $sessionData['last_message_time'] = $this->chatService->formatClientDateTime((string)$lastMessage->getData('created_at'));
                 }
 
                 // 获取未读消息数
@@ -250,7 +250,10 @@ class Console extends BackendController
                 return $this->jsonResponse(false, __('无权访问此会话'));
             }
 
-            $messages = $this->chatService->getMessages($sessionId, $limit, $offset);
+            $messages = array_map(
+                fn(array $message): array => $this->chatService->formatMessageForAgentView($message),
+                $this->chatService->getMessages($sessionId, $limit, $offset)
+            );
 
             return $this->jsonResponse(true, __('获取成功'), $messages);
         } catch (\Exception $e) {
@@ -319,7 +322,7 @@ class Console extends BackendController
                 'message_id' => $message->getId(),
                 'content' => $message->getContent(),
                 'translated_content' => $message->getTranslatedContent(),
-                'created_at' => $message->getData('created_at')
+                'created_at' => $this->chatService->formatClientDateTime((string)$message->getData('created_at'))
             ]);
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('发送消息失败：%{1}', $e->getMessage()));

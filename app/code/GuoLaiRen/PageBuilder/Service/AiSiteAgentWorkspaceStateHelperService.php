@@ -11,6 +11,14 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class AiSiteAgentWorkspaceStateHelperService
 {
+    private const VIEW_TASK_GROUP_LIMIT = 80;
+    private const VIEW_TASK_ITEM_LIMIT = 240;
+    private const VIEW_ASSET_SLOT_LIMIT = 120;
+    private const VIEW_ASSET_VARIANT_LIMIT = 3;
+    private const VIEW_REFERENCE_IMAGE_LIMIT = 24;
+    private const VIEW_LONG_TEXT_BYTES = 12000;
+    private const VIEW_MESSAGE_BYTES = 800;
+
     private ?AiSiteQueueSnapshotService $queueSnapshotService;
 
     public function __construct(?AiSiteQueueSnapshotService $queueSnapshotService = null)
@@ -251,20 +259,24 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['scope'] = $this->pruneScopeForView($state['scope']);
         }
 
-        if (\is_array($state['plan'] ?? null)) {
-            $plan = $state['plan'];
-            $state['plan'] = [
-                'markdown' => (string)($plan['markdown'] ?? ''),
-                'json' => \is_array($plan['json'] ?? null) ? $plan['json'] : [],
-                'structured' => \is_array($plan['structured'] ?? null) ? $plan['structured'] : [],
-                'execution_blueprint' => \is_array($plan['execution_blueprint'] ?? null) ? $plan['execution_blueprint'] : [],
-                'build_plan_v2' => \is_array($plan['build_plan_v2'] ?? null) ? $plan['build_plan_v2'] : [],
-                'projection' => \is_array($plan['projection'] ?? null) ? $plan['projection'] : [],
-                'json_available' => !empty($plan['json']),
-                'structured_available' => !empty($plan['structured']),
-                'execution_blueprint_available' => !empty($plan['execution_blueprint']),
-                'build_plan_v2_available' => !empty($plan['build_plan_v2']),
-            ];
+        $plan = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
+        foreach ([
+            'markdown' => 'plan_markdown',
+            'json' => 'plan_json',
+            'structured' => 'plan_structured',
+            'execution_blueprint' => 'execution_blueprint',
+            'build_plan_v2' => 'build_plan_v2',
+            'projection' => 'plan_projection',
+        ] as $planKey => $stateKey) {
+            if (!\array_key_exists($planKey, $plan) && \array_key_exists($stateKey, $state)) {
+                $plan[$planKey] = $state[$stateKey];
+            }
+        }
+        if ($plan !== []) {
+            $state['plan'] = $this->prunePlanForView($plan);
+        }
+        if (\is_array($state['stage1_contract'] ?? null)) {
+            $state['stage1_contract'] = $this->summarizeStageOneContractForView($state['stage1_contract']);
         }
         if (\is_array($state['virtual_pages_by_type'] ?? null)) {
             $state['virtual_pages_by_type'] = $this->pruneVirtualPagesByTypeForView($state['virtual_pages_by_type']);
@@ -272,10 +284,32 @@ class AiSiteAgentWorkspaceStateHelperService
         if (\is_array($state['page_type_layouts'] ?? null)) {
             $state['page_type_layouts'] = $this->prunePageTypeLayoutsForView($state['page_type_layouts']);
         }
+        if (\is_array($state['build_task_summary'] ?? null)) {
+            $state['build_task_summary'] = $this->pruneTaskSummaryForView($state['build_task_summary']);
+        }
+        if (\is_array($state['asset_manifest'] ?? null)) {
+            $state['asset_manifest'] = $this->pruneAssetManifestForView($state['asset_manifest']);
+        }
+        if (\is_array($state['verified_assets'] ?? null)) {
+            $state['verified_assets'] = $this->pruneVerifiedAssetsForView($state['verified_assets']);
+        }
+        if (\is_array($state['reference_images'] ?? null)) {
+            $state['reference_images'] = $this->pruneReferenceImagesForView($state['reference_images']);
+        }
+        if (\is_array($state['retryable_ai_failures'] ?? null)) {
+            $state['retryable_ai_failures'] = $this->pruneRetryableFailuresForView($state['retryable_ai_failures']);
+        }
+        if (\is_array($state['retryable_ai_failure_summary'] ?? null)) {
+            $state['retryable_ai_failure_summary'] = $this->pruneRetryableFailureSummaryForView($state['retryable_ai_failure_summary']);
+        }
 
         unset(
             $state['events'],
             $state['confirmed_stage1_plan_book'],
+            $state['plan_markdown'],
+            $state['plan_json'],
+            $state['plan_structured'],
+            $state['plan_workbench'],
             $state['task_plan'],
             $state['task_plan_structured'],
             $state['task_plan_directory_tree'],
@@ -284,10 +318,14 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['task_plan_confirmed_at'],
             $state['virtual_theme_plan'],
             $state['execution_blueprint'],
-            $state['execution_blueprint_draft']
+            $state['execution_blueprint_draft'],
+            $state['build_plan_v2'],
+            $state['plan_projection'],
+            $state['raw'],
+            $state['raw_response']
         );
 
-        return $state;
+        return $this->stripInlineImagePayloads($state);
     }
 
     /**
@@ -296,6 +334,11 @@ class AiSiteAgentWorkspaceStateHelperService
      */
     public function pruneScopeForView(array $scope): array
     {
+        $scope = $this->preserveViewMetadataFromHeavyScope($scope);
+        if (\is_array($scope['stage1_contract'] ?? null)) {
+            $scope['stage1_contract'] = $this->summarizeStageOneContractForView($scope['stage1_contract']);
+        }
+
         unset(
             $scope['pagebuilder_pages_by_type'],
             $scope['virtual_pages_by_type'],
@@ -308,6 +351,10 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope['active_operation'],
             $scope['pre_publish_visual_urls'],
             $scope['confirmed_stage1_plan_book'],
+            $scope['plan_markdown'],
+            $scope['plan_json'],
+            $scope['plan_structured'],
+            $scope['plan_workbench'],
             $scope['execution_blueprint'],
             $scope['execution_blueprint_draft'],
             $scope['execution_blueprint_page'],
@@ -330,6 +377,452 @@ class AiSiteAgentWorkspaceStateHelperService
         );
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function preserveViewMetadataFromHeavyScope(array $scope): array
+    {
+        if (!\is_array($scope['selected_skill_codes'] ?? null)) {
+            $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+            $contractContext = \is_array($planWorkbench['contract_context'] ?? null) ? $planWorkbench['contract_context'] : [];
+            if (\is_array($contractContext['selected_skill_codes'] ?? null)) {
+                $scope['selected_skill_codes'] = \array_values(\array_filter(
+                    \array_map('strval', $contractContext['selected_skill_codes']),
+                    static fn(string $code): bool => \trim($code) !== ''
+                ));
+            }
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     * @return array<string, mixed>
+     */
+    private function prunePlanForView(array $plan): array
+    {
+        $json = \is_array($plan['json'] ?? null) ? $plan['json'] : [];
+        $structured = \is_array($plan['structured'] ?? null) ? $plan['structured'] : [];
+        if ($structured === [] && $json !== []) {
+            $structured = $json;
+        }
+
+        return [
+            'markdown' => $this->limitViewText((string)($plan['markdown'] ?? ''), 80000),
+            'json' => [],
+            'structured' => $this->pruneStageOneStructuredPlanForView($structured),
+            'execution_blueprint' => [],
+            'build_plan_v2' => [],
+            'projection' => \is_array($plan['projection'] ?? null) ? $this->pruneRecursiveViewPayload($plan['projection']) : [],
+            'json_available' => $json !== [],
+            'structured_available' => $structured !== [],
+            'execution_blueprint_available' => \is_array($plan['execution_blueprint'] ?? null) && $plan['execution_blueprint'] !== [],
+            'build_plan_v2_available' => \is_array($plan['build_plan_v2'] ?? null) && $plan['build_plan_v2'] !== [],
+            'slimmed' => true,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     * @return array<string, mixed>
+     */
+    private function pruneStageOneStructuredPlanForView(array $plan): array
+    {
+        if ($plan === []) {
+            return [];
+        }
+
+        foreach ([
+            'stage1_queue',
+            'stage1_contract',
+            'queue_jobs',
+            'block_index',
+            'plan_blocks',
+        ] as $heavyRootKey) {
+            unset($plan[$heavyRootKey]);
+        }
+
+        $plan = $this->pruneRecursiveViewPayload($plan);
+        $plan['slimmed_for_view'] = true;
+
+        return $plan;
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @return array<string, mixed>
+     */
+    private function summarizeStageOneContractForView(array $contract): array
+    {
+        $summary = [];
+        foreach ([
+            'contract_version',
+            'version',
+            'stage',
+            'contract_hash',
+            'source_truth_contract_hash',
+            'asset_manifest_hash',
+            'status',
+        ] as $key) {
+            if (\array_key_exists($key, $contract) && !\is_array($contract[$key]) && !\is_object($contract[$key])) {
+                $summary[$key] = $contract[$key];
+            }
+        }
+        foreach (['page_types', 'page_route_contract', 'navigation_address_rules'] as $key) {
+            if (\is_array($contract[$key] ?? null)) {
+                $summary[$key] = $contract[$key];
+            }
+        }
+        $summary['slimmed_for_view'] = true;
+
+        return $summary;
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private function pruneRecursiveViewPayload(mixed $value): mixed
+    {
+        if (!\is_array($value)) {
+            return \is_string($value) ? $this->limitViewText($value, 12000) : $value;
+        }
+
+        $dropKeys = [
+            'rules_contract' => true,
+            'shared_prompt_context' => true,
+            'prompt_context' => true,
+            'prompt_messages' => true,
+            'conversation_messages' => true,
+            'conversation_history' => true,
+            'raw_ai_response' => true,
+            'raw_response' => true,
+            'full_prompt' => true,
+            'system_prompt' => true,
+            'developer_prompt' => true,
+            'user_prompt' => true,
+            'b64_json' => true,
+            'base64' => true,
+            'image_base64' => true,
+            'raw' => true,
+            'raw_response' => true,
+        ];
+
+        $result = [];
+        foreach ($value as $key => $item) {
+            $keyString = \is_int($key) ? (string)$key : (string)$key;
+            if (isset($dropKeys[$keyString])) {
+                continue;
+            }
+            $result[$key] = $this->pruneRecursiveViewPayload($item);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     * @return array<string, mixed>
+     */
+    private function pruneTaskSummaryForView(array $summary): array
+    {
+        $result = [];
+        foreach (['total', 'done', 'completed', 'success', 'pending', 'todo', 'queued', 'running', 'failed', 'cancelled', 'stale'] as $key) {
+            if (\array_key_exists($key, $summary)) {
+                $result[$key] = (int)$summary[$key];
+            }
+        }
+
+        $groups = \is_array($summary['groups'] ?? null) ? $summary['groups'] : [];
+        $result['groups'] = [];
+        $groupCount = 0;
+        $taskCount = 0;
+        foreach ($groups as $groupKey => $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            $groupCount++;
+            if (\count($result['groups']) >= self::VIEW_TASK_GROUP_LIMIT) {
+                continue;
+            }
+
+            $tasks = \is_array($group['tasks'] ?? null) ? $group['tasks'] : [];
+            $taskCount += \count($tasks);
+            $groupOut = [
+                'page_type' => (string)($group['page_type'] ?? ''),
+                'total' => (int)($group['total'] ?? \count($tasks)),
+                'done' => (int)($group['done'] ?? 0),
+                'pending' => (int)($group['pending'] ?? 0),
+                'running' => (int)($group['running'] ?? 0),
+                'failed' => (int)($group['failed'] ?? 0),
+                'cancelled' => (int)($group['cancelled'] ?? 0),
+                'tasks' => [],
+            ];
+            foreach ($tasks as $task) {
+                if (!\is_array($task) || \count($groupOut['tasks']) >= self::VIEW_TASK_ITEM_LIMIT) {
+                    continue;
+                }
+                $groupOut['tasks'][] = $this->pruneTaskSummaryItemForView($task);
+            }
+            if (\count($tasks) > self::VIEW_TASK_ITEM_LIMIT) {
+                $groupOut['tasks_truncated'] = \count($tasks) - self::VIEW_TASK_ITEM_LIMIT;
+            }
+            $result['groups'][(string)$groupKey] = $groupOut;
+        }
+        if ($groupCount > self::VIEW_TASK_GROUP_LIMIT) {
+            $result['groups_truncated'] = $groupCount - self::VIEW_TASK_GROUP_LIMIT;
+        }
+        $result['task_count'] = $taskCount > 0 ? $taskCount : (int)($result['total'] ?? 0);
+        $result['slimmed_for_view'] = true;
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @return array<string, mixed>
+     */
+    private function pruneTaskSummaryItemForView(array $task): array
+    {
+        return [
+            'task_key' => (string)($task['task_key'] ?? ''),
+            'label' => $this->limitViewText((string)($task['label'] ?? $task['task_key'] ?? ''), 240),
+            'section_code' => (string)($task['section_code'] ?? ''),
+            'component' => (string)($task['component'] ?? ''),
+            'task_type' => (string)($task['task_type'] ?? ''),
+            'page_type' => (string)($task['page_type'] ?? ''),
+            'group_key' => (string)($task['group_key'] ?? ''),
+            'status' => (string)($task['status'] ?? ''),
+            'attempt_no' => (int)($task['attempt_no'] ?? 0),
+            'message' => $this->limitViewText((string)($task['message'] ?? ''), self::VIEW_MESSAGE_BYTES),
+            'updated_at' => (string)($task['updated_at'] ?? ''),
+            'finished_at' => (string)($task['finished_at'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @return array<string, mixed>
+     */
+    private function pruneAssetManifestForView(array $manifest): array
+    {
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        $manifest['slot_count'] = \count($slots);
+        $manifest['slots'] = [];
+        foreach ($slots as $slotId => $slot) {
+            if (!\is_array($slot) || \count($manifest['slots']) >= self::VIEW_ASSET_SLOT_LIMIT) {
+                continue;
+            }
+            $manifest['slots'][(string)$slotId] = $this->pruneAssetSlotForView($slot);
+        }
+        if (\count($slots) > self::VIEW_ASSET_SLOT_LIMIT) {
+            $manifest['slots_truncated'] = \count($slots) - self::VIEW_ASSET_SLOT_LIMIT;
+        }
+        $manifest['slimmed_for_view'] = true;
+
+        return $this->stripInlineImagePayloads($manifest);
+    }
+
+    /**
+     * @param array<string, mixed> $slot
+     * @return array<string, mixed>
+     */
+    private function pruneAssetSlotForView(array $slot): array
+    {
+        $result = [];
+        foreach ([
+            'slot_id',
+            'slot_type',
+            'kind',
+            'field',
+            'page_type',
+            'block_id',
+            'component_code',
+            'label',
+            'brief',
+            'prompt_brief',
+            'status',
+            'source',
+            'url',
+            'final_url',
+            'error',
+            'error_message',
+            'last_error',
+            'updated_at',
+            'planning_signature',
+        ] as $key) {
+            if (!\array_key_exists($key, $slot) || \is_array($slot[$key]) || \is_object($slot[$key])) {
+                continue;
+            }
+            $result[$key] = \is_string($slot[$key])
+                ? $this->limitViewText((string)$slot[$key], self::VIEW_MESSAGE_BYTES)
+                : $slot[$key];
+        }
+        $variants = \is_array($slot['variants'] ?? null) ? $slot['variants'] : [];
+        if ($variants !== []) {
+            $result['variants'] = [];
+            foreach ($variants as $variant) {
+                if (!\is_array($variant) || \count($result['variants']) >= self::VIEW_ASSET_VARIANT_LIMIT) {
+                    continue;
+                }
+                $result['variants'][] = $this->pruneAssetVariantForView($variant);
+            }
+            if (\count($variants) > self::VIEW_ASSET_VARIANT_LIMIT) {
+                $result['variants_truncated'] = \count($variants) - self::VIEW_ASSET_VARIANT_LIMIT;
+            }
+        }
+        $result['slimmed_for_view'] = true;
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $variant
+     * @return array<string, mixed>
+     */
+    private function pruneAssetVariantForView(array $variant): array
+    {
+        $result = [];
+        foreach (['url', 'mime_type', 'path', 'mode', 'model', 'revised_prompt', 'placeholder', 'created_at'] as $key) {
+            if (!\array_key_exists($key, $variant) || \is_array($variant[$key]) || \is_object($variant[$key])) {
+                continue;
+            }
+            $result[$key] = \is_string($variant[$key])
+                ? $this->limitViewText((string)$variant[$key], self::VIEW_MESSAGE_BYTES)
+                : $variant[$key];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $assets
+     * @return array<string, mixed>
+     */
+    private function pruneVerifiedAssetsForView(array $assets): array
+    {
+        return $this->stripInlineImagePayloads($this->pruneRecursiveViewPayload($assets));
+    }
+
+    /**
+     * @param array<int|string, mixed> $images
+     * @return list<array<string, mixed>>
+     */
+    private function pruneReferenceImagesForView(array $images): array
+    {
+        $result = [];
+        foreach ($images as $image) {
+            if (!\is_array($image) || \count($result) >= self::VIEW_REFERENCE_IMAGE_LIMIT) {
+                continue;
+            }
+            $item = [];
+            foreach (['id', 'name', 'label', 'url', 'path', 'mime_type', 'width', 'height', 'created_at', 'updated_at'] as $key) {
+                if (!\array_key_exists($key, $image) || \is_array($image[$key]) || \is_object($image[$key])) {
+                    continue;
+                }
+                $item[$key] = \is_string($image[$key])
+                    ? $this->limitViewText((string)$image[$key], self::VIEW_MESSAGE_BYTES)
+                    : $image[$key];
+            }
+            $result[] = $item;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int|string, mixed> $failures
+     * @return list<array<string, mixed>>
+     */
+    private function pruneRetryableFailuresForView(array $failures): array
+    {
+        $result = [];
+        foreach ($failures as $failure) {
+            if (\is_array($failure)) {
+                $result[] = $this->pruneRecursiveFailureForView($failure);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     * @return array<string, mixed>
+     */
+    private function pruneRetryableFailureSummaryForView(array $summary): array
+    {
+        return $this->pruneRecursiveFailureForView($summary);
+    }
+
+    /**
+     * @param array<string, mixed> $failure
+     * @return array<string, mixed>
+     */
+    private function pruneRecursiveFailureForView(array $failure): array
+    {
+        $result = [];
+        foreach ($failure as $key => $value) {
+            $keyString = (string)$key;
+            if (\in_array($keyString, ['raw', 'raw_response', 'prompt', 'response', 'html', 'phtml', 'css', 'payload'], true)) {
+                continue;
+            }
+            if (\is_array($value)) {
+                $result[$key] = $this->pruneRecursiveFailureForView($value);
+                continue;
+            }
+            if (\is_object($value) || \is_resource($value)) {
+                continue;
+            }
+            $result[$key] = \is_string($value) ? $this->limitViewText($value, self::VIEW_MESSAGE_BYTES) : $value;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private function stripInlineImagePayloads(mixed $value): mixed
+    {
+        if (\is_string($value)) {
+            $trimmed = \ltrim($value);
+            if (\str_starts_with(\strtolower($trimmed), 'data:image/')) {
+                return '';
+            }
+            return $value;
+        }
+        if (!\is_array($value)) {
+            return $value;
+        }
+
+        $result = [];
+        foreach ($value as $key => $item) {
+            $keyString = \strtolower((string)$key);
+            if (\in_array($keyString, ['b64_json', 'base64', 'b64', 'image_base64', 'data_url', 'raw', 'raw_response'], true)) {
+                continue;
+            }
+            $result[$key] = $this->stripInlineImagePayloads($item);
+        }
+
+        return $result;
+    }
+
+    private function limitViewText(string $text, int $maxBytes): string
+    {
+        if ($text === '' || $maxBytes <= 0 || \strlen($text) <= $maxBytes) {
+            return $text;
+        }
+        if (\function_exists('mb_strcut')) {
+            return \mb_strcut($text, 0, $maxBytes, 'UTF-8') . "\n...";
+        }
+
+        return \substr($text, 0, $maxBytes) . "\n...";
     }
 
     /**

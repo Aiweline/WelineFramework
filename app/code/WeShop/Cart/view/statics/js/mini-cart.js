@@ -169,6 +169,9 @@
             // 监听添加到购物车事件
             document.addEventListener('weshop:cart:added', (e) => {
                 const detail = e.detail || {};
+                if (this.itemsContainer) {
+                    this.itemsContainer.dataset.needsRefresh = 'true';
+                }
                 
                 // 更新数量徽章
                 if (detail.cart_count !== undefined) {
@@ -198,6 +201,9 @@
             // 监听购物车移除事件
             document.addEventListener('weshop:cart:removed', (e) => {
                 const detail = e.detail || {};
+                if (this.itemsContainer) {
+                    this.itemsContainer.dataset.needsRefresh = 'true';
+                }
                 if (detail.cart_count !== undefined) {
                     this.updateCount(detail.cart_count);
                 }
@@ -235,7 +241,9 @@
             }
             
             // 加载最新数据
-            this.loadItems();
+            if (this.shouldLoadItemsOnOpen()) {
+                this.loadItems();
+            }
             
             // 触发事件
             document.dispatchEvent(new CustomEvent('weshop:mini-cart:open', {
@@ -309,6 +317,7 @@
                     if (response.html) {
                         this.itemsContainer.innerHTML = response.html;
                     }
+                    this.itemsContainer.dataset.needsRefresh = 'false';
                     
                     // 更新小计
                     if (response.totals) {
@@ -350,7 +359,7 @@
             const item = this.itemsContainer.querySelector(`[data-item-id="${itemId}"]`);
             if (!item) return;
             
-            const qtyElement = item.querySelector('.qty-value');
+            const qtyElement = item.querySelector('.mini-cart-item__qty-value');
             const currentQty = parseInt(qtyElement?.textContent || '1', 10);
             const newQty = currentQty + delta;
             
@@ -518,6 +527,18 @@
                     this.footerElement.style.display = '';
                 }
             }
+        },
+
+        shouldLoadItemsOnOpen() {
+            if (!this.itemsContainer) {
+                return false;
+            }
+
+            if (this.itemsContainer.dataset.needsRefresh === 'true') {
+                return true;
+            }
+
+            return !this.itemsContainer.querySelector('.mini-cart-item, #mini-cart-empty');
         },
         
         /**
