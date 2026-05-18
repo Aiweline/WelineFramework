@@ -2854,8 +2854,9 @@ class AiSiteAgent extends BaseController
         $componentCode = \trim((string)$this->getRequestBodyValue('component_code', ''));
         $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
         $componentLabel = \trim((string)$this->getRequestBodyValue('component_label', ''));
+        $componentCodes = $this->resolveRequestedBlockComponentCodes($componentCode);
 
-        if ($adminId <= 0 || $publicId === '' || $pageType === '' || $componentCode === '') {
+        if ($adminId <= 0 || $publicId === '' || $pageType === '' || $componentCodes === []) {
             return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_REFINE_COMPONENT);
         }
 
@@ -2872,8 +2873,36 @@ class AiSiteAgent extends BaseController
             return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_REGENERATE);
         }
 
-        $componentCodes = $this->resolveRequestedBlockComponentCodes($componentCode);
-        $label = $componentLabel !== '' ? $componentLabel : (string)($componentCodes[0] ?? $componentCode);
+        $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+        $ensuredScope = $this->buildTaskService->ensureTaskScope(
+            $scope,
+            \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+            $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+        );
+        if ($ensuredScope !== $scope) {
+            $this->sessionService->replaceScope($session->getId(), $adminId, $ensuredScope);
+            $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $scope = $ensuredScope;
+        }
+
+        try {
+            $targets = $this->resolveBlockRegenerateTargets($scope, $pageType, $componentCodes, $componentLabel);
+        } catch (\Throwable $throwable) {
+            return $this->jsonError(
+                'BLOCK_TASK_NOT_FOUND',
+                $throwable->getMessage(),
+                ['public_id', 'page_type', 'block_id', 'component_code', 'section_code', 'task_key']
+            );
+        }
+        if ($targets === []) {
+            return $this->jsonError('BLOCK_TASK_NOT_FOUND', 'Target block task was not found.', ['public_id', 'page_type', 'block_id']);
+        }
+
+        $componentCodes = \array_values(\array_map(
+            static fn(array $target): string => (string)($target['component_code'] ?? ''),
+            $targets
+        ));
+        $label = $componentLabel !== '' ? $componentLabel : (string)($targets[0]['component_label'] ?? $componentCodes[0] ?? $componentCode);
         $queueAction = $instruction !== '' ? 'refine' : 'regenerate';
         $queueContext = $this->buildBlockRegenerateQueueContext(
             $scope,
@@ -2882,7 +2911,8 @@ class AiSiteAgent extends BaseController
             $componentCodes,
             $instruction,
             $queueAction,
-            $componentLabel
+            $componentLabel,
+            $targets
         );
 
         $this->appendWorkspaceEvent(
@@ -2909,65 +2939,6 @@ class AiSiteAgent extends BaseController
             $queueContext['details']
         ));
 
-        $sharedRegion = $this->resolveSharedComponentRegionForComponentCode($pageType, $componentCode);
-        $scopePatch = [];
-        if ($sharedRegion !== '') {
-            $sharedRefinements = \is_array($scope['shared_component_refinements'] ?? null)
-                ? $scope['shared_component_refinements']
-                : [];
-            $sharedRefinements[$sharedRegion] = $instruction;
-            $scopePatch['shared_component_refinements'] = $sharedRefinements;
-        } else {
-            $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
-            $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-            $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
-            $sectionRefinements[$componentCode] = $instruction;
-            $virtualPage['section_refinements'] = $sectionRefinements;
-            $virtualPages[$pageType] = $virtualPage;
-            $scopePatch['virtual_pages_by_type'] = $virtualPages;
-        }
-
-        $label = $componentLabel !== '' ? $componentLabel : $componentCode;
-        $this->appendWorkspaceEvent(
-            $session->getId(),
-            $adminId,
-            AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'component_refine_requested',
-            (string)__('已记录区块微调：%{component}', ['component' => $label]),
-            [
-                'operation' => 'block_regenerate',
-                'page_type' => $pageType,
-                'details' => [
-                    'component_code' => $componentCode,
-                    'instruction' => $instruction,
-                    'shared_region' => $sharedRegion,
-                ],
-            ]
-        );
-
-        return $this->fetchJson($this->startOperation(
-            $session,
-            $adminId,
-            'block_regenerate',
-            AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            $scopePatch,
-            $pageType,
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
-            [
-                'stage_scope' => 'build',
-                'action' => 'refine',
-                'page_type' => $pageType,
-                'component_code' => $componentCode,
-                'block_key' => $componentCode,
-                'section_code' => $componentCode,
-                'component_label' => $label,
-                'instruction' => $instruction,
-                'shared_region' => $sharedRegion,
-                'target_scope' => $sharedRegion !== ''
-                    ? ('shared_components.' . $sharedRegion)
-                    : ('virtual_pages_by_type.' . $pageType . '.sections.' . $componentCode),
-            ]
-        ));
     }
 
     private function handleStartPatchBlock(): string
@@ -3334,7 +3305,16 @@ class AiSiteAgent extends BaseController
         if ($primaryCode !== '') {
             $componentCodes[] = $primaryCode;
         }
-        foreach (['component_codes', 'block_keys', 'section_codes', 'task_keys'] as $requestKey) {
+        foreach (['component', 'block_id', 'block_key', 'section_code', 'task_key'] as $requestKey) {
+            $rawCandidate = $this->getRequestBodyValue($requestKey, '');
+            $candidate = \is_scalar($rawCandidate) || (\is_object($rawCandidate) && \method_exists($rawCandidate, '__toString'))
+                ? \trim((string)$rawCandidate)
+                : '';
+            if ($candidate !== '' && !\in_array($candidate, $componentCodes, true)) {
+                $componentCodes[] = $candidate;
+            }
+        }
+        foreach (['component_codes', 'block_ids', 'block_keys', 'section_codes', 'task_keys'] as $requestKey) {
             foreach ($this->normalizeStringList($this->getRequestBodyValue($requestKey, [])) as $candidate) {
                 if (!\in_array($candidate, $componentCodes, true)) {
                     $componentCodes[] = $candidate;
@@ -3347,8 +3327,59 @@ class AiSiteAgent extends BaseController
 
     /**
      * @param array<string, mixed> $scope
+     * @param list<string>|array<int, string> $componentCodes
+     * @return list<array<string, mixed>>
+     */
+    private function resolveBlockRegenerateTargets(array $scope, string $pageType, array $componentCodes, string $componentLabel = ''): array
+    {
+        $targets = [];
+        foreach ($this->normalizeStringList($componentCodes) as $index => $requestedCode) {
+            $resolved = $this->resolveSectionTaskKeyForComponent($scope, $pageType, $requestedCode);
+            $taskKey = \trim((string)($resolved['task_key'] ?? ''));
+            $sectionCode = \trim((string)($resolved['section_code'] ?? ''));
+            $sharedRegion = \trim((string)($resolved['shared_region'] ?? ''));
+            $componentCode = $sectionCode !== '' ? $sectionCode : $requestedCode;
+            $blockKey = $this->normalizeBlockQueueIdentity($componentCode);
+            $targetScope = $sharedRegion !== ''
+                ? ('shared_components.' . $sharedRegion)
+                : ('virtual_pages_by_type.' . $pageType . '.sections.' . $componentCode);
+            $label = $index === 0 && \trim($componentLabel) !== '' ? \trim($componentLabel) : $blockKey;
+            $targets[] = [
+                'page_type' => $pageType,
+                'page_key' => $pageType,
+                'requested_component_code' => $requestedCode,
+                'component_code' => $componentCode,
+                'block_id' => $blockKey,
+                'block_key' => $blockKey,
+                'section_code' => $sectionCode !== '' ? $sectionCode : $componentCode,
+                'task_key' => $taskKey !== '' ? $taskKey : ($sectionCode !== '' ? $sectionCode : $componentCode),
+                'component_label' => $label,
+                'shared_region' => $sharedRegion,
+                'target_scope' => $targetScope,
+            ];
+        }
+
+        return $targets;
+    }
+
+    private function normalizeBlockQueueIdentity(string $componentCode): string
+    {
+        $identity = \trim($componentCode);
+        if ($identity === '') {
+            return '';
+        }
+        if (\str_starts_with($identity, 'content/')) {
+            $identity = \substr($identity, \strlen('content/'));
+        }
+
+        return \str_replace('/', '-', $identity);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @param list<string>|array<int, string> $pageTypes
      * @param list<string>|array<int, string> $componentCodes
+     * @param list<array<string, mixed>> $resolvedTargets
      *
      * @return array{scope_patch: array<string, mixed>, details: array<string, mixed>}
      */
@@ -3359,7 +3390,8 @@ class AiSiteAgent extends BaseController
         array $componentCodes,
         string $instruction,
         string $action,
-        string $componentLabel = ''
+        string $componentLabel = '',
+        array $resolvedTargets = []
     ): array {
         $componentCodes = $this->normalizeStringList($componentCodes);
         $pageType = \trim($pageType);
@@ -3374,11 +3406,37 @@ class AiSiteAgent extends BaseController
             : [];
 
         foreach ($componentCodes as $index => $componentCode) {
-            $sharedRegion = $this->resolveSharedComponentRegionForComponentCode($pageType, $componentCode);
-            $targetScope = $sharedRegion !== ''
-                ? ('shared_components.' . $sharedRegion)
-                : ('virtual_pages_by_type.' . $pageType . '.sections.' . $componentCode);
-            $label = $index === 0 && \trim($componentLabel) !== '' ? \trim($componentLabel) : $componentCode;
+            $resolvedTarget = \is_array($resolvedTargets[$index] ?? null) ? $resolvedTargets[$index] : [];
+            $componentCode = \trim((string)($resolvedTarget['component_code'] ?? $componentCode));
+            if ($componentCode === '') {
+                continue;
+            }
+            $sharedRegion = \trim((string)($resolvedTarget['shared_region'] ?? ''));
+            if ($sharedRegion === '') {
+                $sharedRegion = $this->resolveSharedComponentRegionForComponentCode($pageType, $componentCode);
+            }
+            $blockKey = \trim((string)($resolvedTarget['block_key'] ?? ''));
+            if ($blockKey === '') {
+                $blockKey = $this->normalizeBlockQueueIdentity($componentCode);
+            }
+            $sectionCode = \trim((string)($resolvedTarget['section_code'] ?? ''));
+            if ($sectionCode === '') {
+                $sectionCode = $componentCode;
+            }
+            $taskKey = \trim((string)($resolvedTarget['task_key'] ?? ''));
+            if ($taskKey === '') {
+                $taskKey = $sectionCode;
+            }
+            $targetScope = \trim((string)($resolvedTarget['target_scope'] ?? ''));
+            if ($targetScope === '') {
+                $targetScope = $sharedRegion !== ''
+                    ? ('shared_components.' . $sharedRegion)
+                    : ('virtual_pages_by_type.' . $pageType . '.sections.' . $sectionCode);
+            }
+            $label = \trim((string)($resolvedTarget['component_label'] ?? ''));
+            if ($label === '') {
+                $label = $index === 0 && \trim($componentLabel) !== '' ? \trim($componentLabel) : ($blockKey !== '' ? $blockKey : $componentCode);
+            }
 
             if ($instruction !== '') {
                 if ($sharedRegion !== '') {
@@ -3389,7 +3447,7 @@ class AiSiteAgent extends BaseController
                     }
                     $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
                     $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
-                    $sectionRefinements[$componentCode] = $instruction;
+                    $sectionRefinements[$sectionCode] = $instruction;
                     $virtualPage['section_refinements'] = $sectionRefinements;
                     $virtualPages[$pageType] = $virtualPage;
                 }
@@ -3402,9 +3460,10 @@ class AiSiteAgent extends BaseController
                 'page_type' => $pageType,
                 'page_key' => $pageType,
                 'component_code' => $componentCode,
-                'block_key' => $componentCode,
-                'section_code' => $componentCode,
-                'task_key' => $componentCode,
+                'block_id' => $blockKey,
+                'block_key' => $blockKey,
+                'section_code' => $sectionCode,
+                'task_key' => $taskKey,
                 'component_label' => $label,
                 'shared_region' => $sharedRegion,
                 'target_scope' => $targetScope,
@@ -3420,13 +3479,17 @@ class AiSiteAgent extends BaseController
             }
         }
 
-        $firstComponent = (string)($componentCodes[0] ?? '');
+        $firstComponent = (string)($targets[0]['component_code'] ?? $componentCodes[0] ?? '');
         $firstTarget = \is_array($targets[0] ?? null) ? $targets[0] : [];
+        $blockKeys = \array_values(\array_map(static fn(array $target): string => (string)($target['block_key'] ?? ''), $targets));
+        $sectionCodes = \array_values(\array_map(static fn(array $target): string => (string)($target['section_code'] ?? ''), $targets));
+        $taskKeys = \array_values(\array_map(static fn(array $target): string => (string)($target['task_key'] ?? ''), $targets));
 
         return [
             'scope_patch' => $scopePatch,
             'details' => [
                 'stage_scope' => 'build',
+                'operation_scope' => 'single_page_block',
                 'action' => $action,
                 'page_type' => $pageType,
                 'page_types' => $pageType !== '' ? [$pageType] : [],
@@ -3441,14 +3504,16 @@ class AiSiteAgent extends BaseController
                 'shared_regions' => $sharedRegions,
                 'target_scope' => (string)($firstTarget['target_scope'] ?? ''),
                 'target_scopes' => $targetScopes,
-                'block_key' => $firstComponent,
-                'block_keys' => $componentCodes,
-                'section_code' => $firstComponent,
-                'section_codes' => $componentCodes,
-                'task_key' => $firstComponent,
-                'task_keys' => $componentCodes,
-                'selected_blocks' => $componentCodes,
-                'selected_tasks' => $componentCodes,
+                'block_id' => (string)($firstTarget['block_id'] ?? $firstTarget['block_key'] ?? $firstComponent),
+                'block_ids' => $blockKeys,
+                'block_key' => (string)($firstTarget['block_key'] ?? $firstComponent),
+                'block_keys' => $blockKeys,
+                'section_code' => (string)($firstTarget['section_code'] ?? $firstComponent),
+                'section_codes' => $sectionCodes,
+                'task_key' => (string)($firstTarget['task_key'] ?? $firstComponent),
+                'task_keys' => $taskKeys,
+                'selected_blocks' => $blockKeys,
+                'selected_tasks' => $taskKeys,
                 'targets' => $targets,
             ],
         ];
@@ -3649,6 +3714,14 @@ class AiSiteAgent extends BaseController
         $componentCode = \trim($componentCode);
         if ($componentCode === '') {
             return '';
+        }
+
+        $lowerCode = \strtolower($componentCode);
+        if (\in_array($lowerCode, ['shared:header', 'shared_header', 'header'], true)) {
+            return 'header';
+        }
+        if (\in_array($lowerCode, ['shared:footer', 'shared_footer', 'footer'], true)) {
+            return 'footer';
         }
 
         $normalizedBlockId = $componentCode;
@@ -4860,6 +4933,7 @@ class AiSiteAgent extends BaseController
                 $session,
                 $pagesByType,
                 $virtualPages,
+                $snapshot,
                 $previewPageType,
                 $previewPageId,
                 $workspaceTrack
@@ -4876,6 +4950,7 @@ class AiSiteAgent extends BaseController
         AiSiteAgentSession $session,
         array $pagesByType,
         array $virtualPagesByType,
+        array $scope,
         string $previewPageType,
         int $previewPageId,
         string $workspaceTrack
@@ -7661,6 +7736,15 @@ class AiSiteAgent extends BaseController
         if ($currentStage !== AiSiteAgentSession::STAGE_VISUAL_EDIT) {
             return $result;
         }
+        $activeOperationName = \strtolower(\trim((string)($activeOperation['operation'] ?? '')));
+        $activeOperationDetails = \is_array($activeOperation['details'] ?? null) ? $activeOperation['details'] : [];
+        $activeOperationScope = \strtolower(\trim((string)($activeOperation['operation_scope'] ?? $activeOperationDetails['operation_scope'] ?? '')));
+        if (
+            \in_array($activeOperationName, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true)
+            || $activeOperationScope === 'single_page_block'
+        ) {
+            return $result;
+        }
         if (!$this->isBuildPlanReadyForBuild($normalized)) {
             return $result;
         }
@@ -9296,10 +9380,11 @@ class AiSiteAgent extends BaseController
         }
 
         $structured = [];
+        if ($pages !== []) {
+            $structured['pages'] = $pages;
+        }
         if ($pagePlans !== []) {
             $structured['page_plans'] = $pagePlans;
-        } elseif ($pages !== []) {
-            $structured['pages'] = $pages;
         }
         if ($sharedComponents !== []) {
             $structured['shared_components'] = $sharedComponents;

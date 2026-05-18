@@ -62,7 +62,7 @@ class AiSiteBuildQueue implements QueueInterface
         $executionToken = \trim((string)($content['execution_token'] ?? ''));
         $operation = $this->normalizeQueuedOperation((string)($content['operation'] ?? 'build'));
         $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
-        $forceNewExecutionToken = \in_array($operation, ['build', 'regenerate_page'], true)
+        $forceNewExecutionToken = \in_array($operation, ['build', 'regenerate_page', 'block_regenerate', 'block_partial_patch'], true)
             && (int)($content['_force_rebuild'] ?? 0) === 1;
         $forceFullBuildRegeneration = $operation === 'build' && $forceNewExecutionToken;
         $effectiveExecutionToken = $executionToken;
@@ -309,11 +309,12 @@ class AiSiteBuildQueue implements QueueInterface
                 );
             }
 
-            $this->queueTrace($sse, '队列执行成功：构建完成');
-            $this->markQueueDone($queue, '构建完成。');
+            $doneMessage = $this->buildOperationDoneMessage($operation);
+            $this->queueTrace($sse, '队列执行成功：' . $doneMessage);
+            $this->markQueueDone($queue, $doneMessage);
             $sse->complete();
 
-            return '构建完成。';
+            return $doneMessage;
         } catch (\Throwable $throwable) {
             $diagnostic = $this->formatThrowableDiagnostic($throwable);
             if ($sse instanceof QueueDbWriter) {
@@ -353,6 +354,16 @@ class AiSiteBuildQueue implements QueueInterface
         $operation = \trim($operation);
 
         return \in_array($operation, ['build', 'block_regenerate', 'block_partial_patch', 'regenerate_page'], true) ? $operation : 'build';
+    }
+
+    private function buildOperationDoneMessage(string $operation): string
+    {
+        return match ($operation) {
+            'block_regenerate' => '区块重建完成。',
+            'block_partial_patch' => '区块局部修改完成。',
+            'regenerate_page' => '页面重新生成完成。',
+            default => '构建完成。',
+        };
     }
 
     private function resolveQueuedPageType(
@@ -433,19 +444,21 @@ class AiSiteBuildQueue implements QueueInterface
             $pageTypes = [$pageType];
         }
 
+        $instruction = $this->firstNonEmptyString([$content['instruction'] ?? null, $details['instruction'] ?? null, $active['instruction'] ?? null, $activeDetails['instruction'] ?? null]);
+        $targetContexts = $this->buildQueuedTargetOperationContexts([$details, $content], $pageType, $instruction);
+        if ($targetContexts !== []) {
+            return $targetContexts;
+        }
+        $targetContexts = $this->buildQueuedTargetOperationContexts([$activeDetails, $active], $pageType, $instruction);
+        if ($targetContexts !== []) {
+            return $targetContexts;
+        }
+
         $singleComponentCode = $this->firstNonEmptyString([
-            $content['block_id'] ?? null,
-            $details['block_id'] ?? null,
-            $active['block_id'] ?? null,
-            $activeDetails['block_id'] ?? null,
             $content['component_code'] ?? null,
             $details['component_code'] ?? null,
             $active['component_code'] ?? null,
             $activeDetails['component_code'] ?? null,
-            $content['block_key'] ?? null,
-            $details['block_key'] ?? null,
-            $active['block_key'] ?? null,
-            $activeDetails['block_key'] ?? null,
             $content['section_code'] ?? null,
             $details['section_code'] ?? null,
             $active['section_code'] ?? null,
@@ -453,21 +466,36 @@ class AiSiteBuildQueue implements QueueInterface
         ]);
         $componentCodes = $this->mergeStringLists([
             $singleComponentCode,
-            $content['block_ids'] ?? null,
-            $details['block_ids'] ?? null,
-            $active['block_ids'] ?? null,
-            $activeDetails['block_ids'] ?? null,
             $content['component_codes'] ?? null,
             $details['component_codes'] ?? null,
             $active['component_codes'] ?? null,
             $activeDetails['component_codes'] ?? null,
-            $content['block_keys'] ?? null,
-            $details['block_keys'] ?? null,
-            $active['block_keys'] ?? null,
-            $activeDetails['block_keys'] ?? null,
             $content['section_codes'] ?? null,
             $details['section_codes'] ?? null,
         ]);
+        if ($componentCodes === []) {
+            $singleBlockCode = $this->firstNonEmptyString([
+                $content['block_id'] ?? null,
+                $details['block_id'] ?? null,
+                $active['block_id'] ?? null,
+                $activeDetails['block_id'] ?? null,
+                $content['block_key'] ?? null,
+                $details['block_key'] ?? null,
+                $active['block_key'] ?? null,
+                $activeDetails['block_key'] ?? null,
+            ]);
+            $componentCodes = $this->mergeStringLists([
+                $singleBlockCode,
+                $content['block_ids'] ?? null,
+                $details['block_ids'] ?? null,
+                $active['block_ids'] ?? null,
+                $activeDetails['block_ids'] ?? null,
+                $content['block_keys'] ?? null,
+                $details['block_keys'] ?? null,
+                $active['block_keys'] ?? null,
+                $activeDetails['block_keys'] ?? null,
+            ]);
+        }
         if ($componentCodes === []) {
             $componentCodes = $this->mergeStringLists([
                 $content['task_key'] ?? null,
@@ -480,7 +508,6 @@ class AiSiteBuildQueue implements QueueInterface
                 $activeDetails['task_keys'] ?? null,
             ]);
         }
-        $instruction = $this->firstNonEmptyString([$content['instruction'] ?? null, $details['instruction'] ?? null, $active['instruction'] ?? null, $activeDetails['instruction'] ?? null]);
 
         if ($pageTypes === [] || $componentCodes === []) {
             throw new \RuntimeException('Block queue context is missing page_type or component_code.');
@@ -503,7 +530,75 @@ class AiSiteBuildQueue implements QueueInterface
             throw new \RuntimeException('Block queue context is missing page_type or component_code.');
         }
 
-        return $contexts;
+        return $this->uniqueQueuedOperationContexts($contexts);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $targetSources
+     * @return list<array{page_type: string, component_code: string, instruction: string}>
+     */
+    private function buildQueuedTargetOperationContexts(array $targetSources, string $defaultPageType, string $defaultInstruction): array
+    {
+        $contexts = [];
+        foreach ($targetSources as $source) {
+            $targets = \is_array($source['targets'] ?? null) ? $source['targets'] : [];
+            foreach ($targets as $target) {
+                if (!\is_array($target)) {
+                    continue;
+                }
+                $pageType = $this->firstNonEmptyString([
+                    $target['page_type'] ?? null,
+                    $target['page_key'] ?? null,
+                    $defaultPageType,
+                ]);
+                $componentCode = $this->firstNonEmptyString([
+                    $target['section_code'] ?? null,
+                    $target['component_code'] ?? null,
+                    $target['block_id'] ?? null,
+                    $target['block_key'] ?? null,
+                    $target['task_key'] ?? null,
+                ]);
+                if ($pageType === '' || $componentCode === '') {
+                    continue;
+                }
+                $contexts[] = [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'instruction' => $this->firstNonEmptyString([$target['instruction'] ?? null, $defaultInstruction]),
+                ];
+            }
+        }
+
+        return $this->uniqueQueuedOperationContexts($contexts);
+    }
+
+    /**
+     * @param list<array{page_type: string, component_code: string, instruction: string}> $contexts
+     * @return list<array{page_type: string, component_code: string, instruction: string}>
+     */
+    private function uniqueQueuedOperationContexts(array $contexts): array
+    {
+        $unique = [];
+        $seen = [];
+        foreach ($contexts as $context) {
+            $pageType = \trim((string)($context['page_type'] ?? ''));
+            $componentCode = \trim((string)($context['component_code'] ?? ''));
+            if ($pageType === '' || $componentCode === '') {
+                continue;
+            }
+            $key = $pageType . '|' . $componentCode;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $unique[] = [
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
+                'instruction' => \trim((string)($context['instruction'] ?? '')),
+            ];
+        }
+
+        return $unique;
     }
 
     /**
@@ -721,7 +816,8 @@ class AiSiteBuildQueue implements QueueInterface
             throw new \RuntimeException('Build queue returned without any build task summary.');
         }
         if (empty($gate['passed'])) {
-            throw new \RuntimeException(\sprintf(
+            $actionDetail = $buildTaskService->formatBuildCompletionGateFailureDetail($gate);
+            $message = \sprintf(
                 'Build queue operation %s cannot finish while completion gate is blocked: total=%d pending=%d running=%d failed=%d cancelled=%d invalid_artifacts=%d reason=%s.',
                 $operation,
                 $total,
@@ -731,7 +827,12 @@ class AiSiteBuildQueue implements QueueInterface
                 $cancelled,
                 $invalidArtifacts,
                 (string)($gate['reason'] ?? '')
-            ));
+            );
+            if ($actionDetail !== '') {
+                $message .= ' ' . $actionDetail;
+            }
+
+            throw new \RuntimeException($message);
         }
     }
 
@@ -750,12 +851,14 @@ class AiSiteBuildQueue implements QueueInterface
             $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
         $gate = $buildTaskService->inspectBuildCompletionGate($scope);
-        if (empty($gate['passed'])) {
+        $fullBuildGatePassed = !empty($gate['passed']);
+        $isScopedBuildOperation = \in_array($operation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true);
+        if (!$fullBuildGatePassed && !$isScopedBuildOperation) {
             return;
         }
 
         $now = \date('Y-m-d H:i:s');
-        $message = $operation === 'regenerate_page' ? '页面重新生成完成。' : '构建完成。';
+        $message = $this->buildOperationDoneMessage($operation);
         $operationStatePatch = [
             'operation' => $operation,
             'execution_token' => $executionToken,
@@ -795,21 +898,29 @@ class AiSiteBuildQueue implements QueueInterface
             $scope['active_operations'] = $activeOperations;
         }
 
-        $scope = $buildTaskService->clearRetryableAiFailures($scope, 'build');
-        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
-        $scope['can_publish'] = 1;
-        $scope['site_ready'] = 1;
-        $scope['latest_build_failed'] = 0;
-        $scope['latest_build_failure'] = [];
-        $scope['publish_blocked_by_latest_ai_failure'] = 0;
-        $scope['publish_blocked_reason'] = '';
-        $scope['next_stage_blocked_by_ai_failures'] = 0;
-        $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
-        $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
-        $buildSummary['can_publish'] = true;
-        $buildSummary['active_operation'] = $operation;
-        $buildSummary['last_generated_at'] = $now;
-        $scope['build_summary'] = $buildSummary;
+        if ($fullBuildGatePassed) {
+            $scope = $buildTaskService->clearRetryableAiFailures($scope, 'build');
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+            $scope['can_publish'] = 1;
+            $scope['site_ready'] = 1;
+            $scope['latest_build_failed'] = 0;
+            $scope['latest_build_failure'] = [];
+            $scope['publish_blocked_by_latest_ai_failure'] = 0;
+            $scope['publish_blocked_reason'] = '';
+            $scope['next_stage_blocked_by_ai_failures'] = 0;
+            $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
+            $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
+            $buildSummary['can_publish'] = true;
+            $buildSummary['active_operation'] = $operation;
+            $buildSummary['last_generated_at'] = $now;
+            $scope['build_summary'] = $buildSummary;
+        } elseif ($isScopedBuildOperation) {
+            $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
+            $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
+            $buildSummary['active_operation'] = $operation;
+            $buildSummary['last_scoped_operation_at'] = $now;
+            $scope['build_summary'] = $buildSummary;
+        }
 
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
     }
