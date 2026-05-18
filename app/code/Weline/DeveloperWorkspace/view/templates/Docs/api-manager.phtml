@@ -4,6 +4,46 @@ $apis = $this->getData('apis') ?? [];
 $error = $this->getData('error') ?? null;
 $selectedApi = $this->getData('selectedApi') ?? null;
 $apiId = $this->request->getParam('api_id');
+$isDev = defined('DEV') && DEV;
+$apiDocsModulesConfigUrl = $isDev
+    ? '/Weline/Frontend/view/statics/base/weline.modules.js'
+    : '/static/Weline/Frontend/base/weline.modules.js';
+$apiDocsModulesBaseUrl = $isDev
+    ? '/Weline/Frontend/view/statics/js/weline-api'
+    : '/static/Weline/Frontend/js/weline-api';
+$apiDocsWorkerUrl = $isDev
+    ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+    : '/static/Weline/Frontend/js/weline-api-worker.js';
+$apiDocsFallbackUrl = $isDev
+    ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js?v=20260517-api-loader-2'
+    : '/static/Weline/Frontend/js/weline-api-fallback.js';
+$apiDocsApiUrl = $isDev
+    ? '/Weline/Frontend/view/statics/js/weline-api.js?v=20260517-api-loader-2'
+    : '/static/Weline/Frontend/js/weline-api.js';
+$apiDocsThemeJsUrl = $isDev
+    ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2'
+    : '/static/Weline/Theme/theme/frontend/assets/js/theme.js';
+$apiDocsThemeConfigPayload = [
+    'env' => [
+        'WELINE_ENV' => $isDev ? 'DEV' : 'PROD',
+        'DEV' => $isDev,
+        'PROD' => !$isDev,
+    ],
+    'baseUrl' => method_exists($this->request, 'getBaseUrl') ? $this->request->getBaseUrl() : '',
+    'modulesConfigUrl' => $apiDocsModulesConfigUrl,
+    'modulesBaseUrl' => $apiDocsModulesBaseUrl,
+    'api' => [
+        'workerUrl' => $apiDocsWorkerUrl,
+        'endpoint' => '/api/framework/query-bin',
+        'queryBinUrl' => '/api/framework/query-bin',
+    ],
+    'currentLang' => \w_env('user.lang', 'zh_Hans_CN'),
+    'currentCurrency' => \w_env('user.currency', 'CNY'),
+    'debug' => $isDev,
+    'site' => [
+        'name' => 'Weline API Docs',
+    ],
+];
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -26,6 +66,18 @@ $apiId = $this->request->getParam('api_id');
     <css>Weline_Admin::backend/lib/font-awesome-4.7.0/css/font-awesome.min.css</css>
     <!-- Material Design Icons -->
     <css>Weline_Admin::assets/css/icons.min.css</css>
+    <script data-no-extract="true">
+        window.WelineApiConfig = window.WelineApiConfig || {};
+        window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || '<?= htmlspecialchars($apiDocsWorkerUrl, ENT_QUOTES, 'UTF-8') ?>';
+        window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
+        window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
+        window.__WelineThemeConfig = window.__WelineThemeConfig || {};
+        Object.assign(window.__WelineThemeConfig, <?= json_encode($apiDocsThemeConfigPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+    </script>
+    <script src="<?= htmlspecialchars($apiDocsFallbackUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
+    <script src="<?= htmlspecialchars($apiDocsApiUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
+    <script src="<?= htmlspecialchars($apiDocsThemeJsUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
     <style>
         * {
             margin: 0;
@@ -578,6 +630,11 @@ $apiId = $this->request->getParam('api_id');
             color: #50e3c2;
             font-weight: 700;
         }
+
+        #api-tree .api-method-worker {
+            color: #7c3aed;
+            font-weight: 700;
+        }
         
         /* API路径code样式 */
         #api-tree .api-path-code {
@@ -963,6 +1020,10 @@ $apiId = $this->request->getParam('api_id');
         
         .api-method-badge.delete {
             background: #f93e3e;
+        }
+
+        .api-method-badge.worker {
+            background: #7c3aed;
         }
         
         .api-path {
@@ -1849,6 +1910,31 @@ $apiId = $this->request->getParam('api_id');
             font-family: 'Courier New', monospace;
             word-break: break-all;
         }
+
+        .response-header-internal-summary td {
+            background: var(--bg-color);
+            font-family: inherit;
+            color: var(--text-secondary);
+        }
+
+        .response-header-internal-summary summary {
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+        }
+
+        .internal-header-list {
+            margin-top: 8px;
+            display: grid;
+            gap: 6px;
+        }
+
+        .internal-header-line {
+            display: grid;
+            grid-template-columns: minmax(180px, 30%) 1fr;
+            gap: 12px;
+            font-family: 'Courier New', monospace;
+        }
         
         /* 响应体显示 */
         .response-body {
@@ -2300,9 +2386,9 @@ $apiId = $this->request->getParam('api_id');
         // 获取沙盒密钥（从后端获取或使用默认值）
         const sandboxKey = '<?= \Weline\Framework\App\Env::getInstance()->getConfig('sandbox_key') ?? 'dev_sandbox_2024' ?>';
         
-        // 获取API area配置（从后端传递，使用Env::get('api')）
-        const API_AREA = '<?= htmlspecialchars(\Weline\Framework\App\Env::get('api') ?: 'api', ENT_QUOTES, 'UTF-8') ?>';
-        const API_ADMIN_AREA = '<?= htmlspecialchars(\Weline\Framework\App\Env::get('api_admin') ?: 'api_admin', ENT_QUOTES, 'UTF-8') ?>';
+        // 获取API area配置（从后端传递，使用 area_routes）
+        const API_AREA = <?= json_encode((string)($this->getData('apiArea') ?: (\Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: 'api')), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        const API_ADMIN_AREA = <?= json_encode((string)($this->getData('apiAdminArea') ?: (\Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: 'api_admin')), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         
         // 定义 window.api 函数，统一使用它生成 API URL
         // 获取当前货币和语言
@@ -2337,6 +2423,99 @@ $apiId = $this->request->getParam('api_id');
         // 保存 getCurrentCurrency 和 getCurrentLocale 到 window 对象，以便临时替换
         window.getCurrentCurrency = getCurrentCurrency;
         window.getCurrentLocale = getCurrentLocale;
+
+        function isApiDocCurrencySegment(segment) {
+            return /^[A-Z]{3}$/.test(segment || '');
+        }
+
+        function isApiDocLocaleSegment(segment) {
+            segment = segment || '';
+            return /^[a-z]{2}_[A-Z]{2}$/.test(segment) || /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/.test(segment);
+        }
+
+        function normalizeApiDocPathForRequest(path, isBackend = false) {
+            if (!path) {
+                return '';
+            }
+
+            path = String(path).trim();
+            if (/^https?:\/\//i.test(path)) {
+                return path;
+            }
+
+            const segments = path.replace(/^\/+/, '').split('/').filter(Boolean);
+            if (segments.length === 0) {
+                return '';
+            }
+
+            const area = isBackend ? API_ADMIN_AREA : API_AREA;
+            if (segments[0] !== area) {
+                if (!isBackend && isApiDocCurrencySegment(segments[0]) && isApiDocLocaleSegment(segments[1])) {
+                    return segments.slice(2).join('/');
+                }
+                return segments.join('/');
+            }
+
+            if (!isBackend && isApiDocCurrencySegment(segments[1]) && isApiDocLocaleSegment(segments[2])) {
+                return segments.slice(3).join('/');
+            }
+
+            // Preserve module router when it equals the area prefix, e.g. api/rest/v1/auth/login.
+            if (segments[1] === 'rest' || segments.length === 1) {
+                return segments.join('/');
+            }
+
+            return segments.slice(1).join('/');
+        }
+
+        function buildDirectRestDocUrl(path, baseUrl) {
+            const segments = String(path || '').replace(/^\/+/, '').split('/').filter(Boolean);
+            if (segments.length < 2) {
+                return null;
+            }
+
+            if (segments[0] === 'rest') {
+                return baseUrl + '/' + API_AREA + '/' + segments.join('/');
+            }
+
+            if ((segments[0] === 'api' || segments[0] === 'api_admin' || segments[0] === API_AREA || segments[0] === API_ADMIN_AREA) && segments[1] === 'rest') {
+                return baseUrl + '/' + segments.join('/');
+            }
+
+            return null;
+        }
+
+        function buildApiDocUrl(path, isBackend = false, currency = null, locale = null) {
+            if (!path) {
+                return '';
+            }
+
+            path = String(path).trim();
+            if (/^https?:\/\//i.test(path)) {
+                return path;
+            }
+
+            const cleanPath = normalizeApiDocPathForRequest(path, isBackend);
+            if (isBackend) {
+                return window.backend_api(cleanPath);
+            }
+
+            const originalGetCurrency = window.getCurrentCurrency || getCurrentCurrency;
+            const originalGetLocale = window.getCurrentLocale || getCurrentLocale;
+            if (currency !== null) {
+                window.getCurrentCurrency = () => currency;
+            }
+            if (locale !== null) {
+                window.getCurrentLocale = () => locale;
+            }
+
+            try {
+                return window.api(cleanPath);
+            } finally {
+                window.getCurrentCurrency = originalGetCurrency;
+                window.getCurrentLocale = originalGetLocale;
+            }
+        }
         
         // 重写 window.api 函数，支持 i18n
         if (typeof window.api === 'undefined' || !window.api.__custom) {
@@ -2346,8 +2525,12 @@ $apiId = $this->request->getParam('api_id');
                     return '';
                 }
                 // 移除开头的斜杠
-                path = path.replace(/^\//, '');
+                path = normalizeApiDocPathForRequest(path, isBackend);
                 const baseUrl = window.location.origin;
+                const directRestUrl = buildDirectRestDocUrl(path, baseUrl);
+                if (directRestUrl) {
+                    return directRestUrl;
+                }
                 // 使用 window 上的函数，这样可以被临时替换
                 const currency = (window.getCurrentCurrency || getCurrentCurrency)();
                 const locale = (window.getCurrentLocale || getCurrentLocale)();
@@ -2699,6 +2882,154 @@ $apiId = $this->request->getParam('api_id');
             
             return tree;
         }
+
+        function isFrontendWorkerApi(api) {
+            return !!(api && (api.frontend_worker || api.example?.frontend_worker || api.worker));
+        }
+
+        function getFrontendWorkerDescriptor(api) {
+            const example = api?.example || {};
+            const worker = api?.worker || {};
+            return {
+                provider: example.provider || worker.provider || '',
+                operation: example.operation || worker.operation || '',
+                mode: example.mode || worker.mode || '',
+                graph: !!(example.graph || worker.graph),
+                auth: example.auth || worker.auth || ''
+            };
+        }
+
+        function getFrontendWorkerSamplePayload(api) {
+            const sampleParams = api?.example?.sample_params;
+            if (sampleParams && typeof sampleParams === 'object' && !Array.isArray(sampleParams)) {
+                return sampleParams;
+            }
+
+            const payload = {};
+            (api?.parameters || []).forEach(param => {
+                const name = param?.name || '';
+                if (!name) {
+                    return;
+                }
+                const lowerName = name.toLowerCase();
+                if (lowerName.includes('email')) {
+                    payload[name] = 'customer@example.com';
+                } else if (lowerName.includes('password')) {
+                    payload[name] = 'password123';
+                } else if (lowerName === 'username' || lowerName === 'login') {
+                    payload[name] = 'customer@example.com';
+                } else if (lowerName === 'firstname' || lowerName === 'first_name') {
+                    payload[name] = 'Jane';
+                } else if (lowerName === 'lastname' || lowerName === 'last_name') {
+                    payload[name] = 'Doe';
+                } else if (lowerName === 'agree_terms') {
+                    payload[name] = true;
+                } else if (lowerName === 'remember_duration') {
+                    payload[name] = 2592000;
+                } else if (lowerName.includes('token')) {
+                    payload[name] = 'token-value';
+                } else if (lowerName === 'code') {
+                    payload[name] = '123456';
+                } else if (['int', 'integer'].includes(String(param.type || '').toLowerCase())) {
+                    payload[name] = 1;
+                } else if (['bool', 'boolean'].includes(String(param.type || '').toLowerCase())) {
+                    payload[name] = true;
+                } else {
+                    payload[name] = 'value';
+                }
+            });
+
+            return payload;
+        }
+
+        function getFrontendWorkerExampleCode(api, payload = null) {
+            const descriptor = getFrontendWorkerDescriptor(api);
+            const params = payload || getFrontendWorkerSamplePayload(api);
+            const jsonPayload = JSON.stringify(params || {}, null, 2);
+            const methodAccessor = /^[A-Za-z_$][\w$]*$/.test(descriptor.operation)
+                ? '.' + descriptor.operation
+                : '[' + JSON.stringify(descriptor.operation) + ']';
+            return "const Api = await Weline.Api.resource('" + descriptor.provider + "');\nawait Api" + methodAccessor + "(" + (jsonPayload || '{}') + ");";
+        }
+
+        function setTestResponse(statusText, responseData, responseHeaders = {}, ok = true, duration = 0) {
+            const responseSection = document.getElementById('test-response-section');
+            const responseInfo = document.getElementById('response-info');
+            const responseHeadersBody = document.getElementById('response-headers-body');
+            const responseBodyContent = document.getElementById('response-body-content');
+            const statusCodeEl = document.getElementById('request-status-code');
+
+            if (responseSection) {
+                responseSection.style.display = 'block';
+            }
+            if (responseInfo) {
+                responseInfo.innerHTML = `
+                    <div class="response-info-item">
+                        <label><?=__('状态')?>:</label>
+                        <span class="response-status-badge ${ok ? 'success' : 'error'}">${escapeHtml(statusText)}</span>
+                    </div>
+                    <div class="response-info-item">
+                        <label><?=__('请求时间')?>:</label>
+                        <span>${duration}ms</span>
+                    </div>
+                `;
+            }
+            if (responseHeadersBody) {
+                renderResponseHeaders(responseHeadersBody, responseHeaders);
+            }
+            if (responseBodyContent) {
+                responseBodyContent.textContent = typeof responseData === 'string'
+                    ? responseData
+                    : JSON.stringify(responseData, null, 2);
+            }
+            if (statusCodeEl) {
+                statusCodeEl.textContent = statusText;
+                statusCodeEl.className = 'request-status-code ' + (ok ? 'status-200' : 'status-500');
+                statusCodeEl.style.display = 'inline-block';
+            }
+        }
+
+        function isInternalResponseHeaderForDocs(name) {
+            const key = String(name || '').toLowerCase();
+            return key === 'connection'
+                || key === 'server'
+                || key === 'server-timing'
+                || key === 'x-powered-by'
+                || key === 'x-weline-route-hint'
+                || key === 'x-wls-process-time'
+                || key.startsWith('x-wls-performance-');
+        }
+
+        function renderResponseHeaders(target, headers) {
+            if (!target) {
+                return;
+            }
+
+            target.innerHTML = '';
+            const visibleHeaders = [];
+            const internalHeaders = [];
+            Object.entries(headers || {}).forEach(([key, value]) => {
+                (isInternalResponseHeaderForDocs(key) ? internalHeaders : visibleHeaders).push([key, value]);
+            });
+
+            const appendHeaderRow = ([key, value]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${escapeHtml(key)}</td><td>${escapeHtml(String(value))}</td>`;
+                target.appendChild(row);
+            };
+
+            visibleHeaders.forEach(appendHeaderRow);
+
+            if (internalHeaders.length > 0) {
+                const internalHtml = internalHeaders.map(([key, value]) => {
+                    return `<div class="internal-header-line"><span>${escapeHtml(key)}</span><span>${escapeHtml(String(value))}</span></div>`;
+                }).join('');
+                const row = document.createElement('tr');
+                row.className = 'response-header-internal-summary';
+                row.innerHTML = `<td colspan="2"><details><summary><?=__('已隐藏')?> ${internalHeaders.length} <?=__('个 WLS/内部诊断头')?>，<?=__('点击查看')?></summary><div class="internal-header-list">${internalHtml}</div></details></td>`;
+                target.appendChild(row);
+            }
+        }
         
         // 加载API详情到左侧面板
         function loadApiDetail(api) {
@@ -2813,23 +3144,25 @@ $apiId = $this->request->getParam('api_id');
                     
                     // 如果路径已经是完整URL，直接使用；否则构建完整URL
                     let fullPath = path;
-                    if (!path.startsWith('http')) {
+                    if (isFrontendWorkerApi(api)) {
+                        fullPath = api.example.code || getFrontendWorkerExampleCode(api);
+                    } else if (!path.startsWith('http')) {
                         const isBackendApi = api.route?.is_backend || false;
                         
                         if (isBackendApi) {
                             // 后端API: 使用 window.backend_api 函数
-                            fullPath = window.backend_api(path);
+                            fullPath = buildApiDocUrl(path, true);
                         } else {
                             // 前端API: 使用 window.api 函数
-                            fullPath = window.api(path);
+                            fullPath = buildApiDocUrl(path, false);
                         }
                     }
                     
                     // 转义单引号，避免JavaScript错误
-                    const escapedPath = fullPath.replace(/'/g, "\\'").replace(/\n/g, ' ').replace(/\r/g, '');
+                    const escapedPath = fullPath.replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
                     detailHtml += `<button type="button" class="btn-copy-example" onclick="copyExamplePath('${escapedPath}')" title="<?=__('复制路径')?>">`;
                     detailHtml += '<span>📋</span>';
-                    detailHtml += '<span><?=__('复制路径')?></span>';
+                    detailHtml += '<span>' + (isFrontendWorkerApi(api) ? '<?=__('复制调用')?>' : '<?=__('复制路径')?>') + '</span>';
                     detailHtml += '</button>';
                 }
                 
@@ -2862,21 +3195,29 @@ $apiId = $this->request->getParam('api_id');
                     
                     // 如果路径已经是完整URL，直接使用；否则构建完整URL
                     let fullPath = path;
-                    if (!path.startsWith('http')) {
+                    if (isFrontendWorkerApi(api)) {
+                        fullPath = api.example.code || getFrontendWorkerExampleCode(api);
+                    } else if (!path.startsWith('http')) {
                         const isBackendApi = api.route?.is_backend || false;
                         
                         if (isBackendApi) {
                             // 后端API: 使用 window.backend_api 函数
-                            fullPath = window.backend_api(path);
+                            fullPath = buildApiDocUrl(path, true);
                         } else {
                             // 前端API: 使用 window.api 函数
-                            fullPath = window.api(path);
+                            fullPath = buildApiDocUrl(path, false);
                         }
                     }
                     
                     detailHtml += '<div class="example-item">';
-                    detailHtml += '<div class="example-label"><?=__('路径')?>:</div>';
-                    detailHtml += `<div class="example-value code-inline">${escapeHtml(fullPath)}</div>`;
+                    detailHtml += '<div class="example-label">' + (isFrontendWorkerApi(api) ? '<?=__('调用')?>' : '<?=__('路径')?>') + ':</div>';
+                    if (isFrontendWorkerApi(api)) {
+                        detailHtml += '<div class="code-block">';
+                        detailHtml += `<pre><code class="language-javascript">${escapeHtml(fullPath)}</code></pre>`;
+                        detailHtml += '</div>';
+                    } else {
+                        detailHtml += `<div class="example-value code-inline">${escapeHtml(fullPath)}</div>`;
+                    }
                     detailHtml += '</div>';
                 }
                 
@@ -2987,6 +3328,75 @@ $apiId = $this->request->getParam('api_id');
             
             const method = (api.route?.method || 'GET').toUpperCase();
             let path = api.route?.path || '';
+
+            if (isFrontendWorkerApi(api)) {
+                const descriptor = getFrontendWorkerDescriptor(api);
+                const defaultBody = JSON.stringify(getFrontendWorkerSamplePayload(api), null, 2);
+                let testHtml = '<div class="test-panel-header">';
+                testHtml += '<div class="test-panel-header-left">';
+                testHtml += '<h2><?=__('Frontend Worker 试调')?></h2>';
+                testHtml += '<p><?=__('通过 Weline.Api.resource() 调用，不暴露 REST URL 或 query-bin 实现地址')?></p>';
+                testHtml += '</div>';
+                testHtml += '<div style="display: flex; align-items: center; gap: 8px;">';
+                testHtml += '<span id="request-status-code" class="request-status-code" style="display: none;"></span>';
+                testHtml += '<button type="button" class="test-send-btn" onclick="sendTestRequest()">';
+                testHtml += '<span>▶</span>';
+                testHtml += '<span><?=__('发送请求')?></span>';
+                testHtml += '</button>';
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testHtml += '<div class="test-panel-content">';
+                testHtml += '<div class="test-request-section">';
+                testHtml += '<div class="test-section-title"><?=__('Worker Operation')?></div>';
+                testHtml += '<div class="method-select-group">';
+                testHtml += '<div class="form-group">';
+                testHtml += '<label><?=__('Provider')?></label>';
+                testHtml += `<input type="text" id="test-worker-provider" value="${escapeHtml(descriptor.provider)}" readonly>`;
+                testHtml += '</div>';
+                testHtml += '<div class="form-group">';
+                testHtml += '<label><?=__('Operation')?></label>';
+                testHtml += `<input type="text" id="test-worker-operation" value="${escapeHtml(descriptor.operation)}" readonly>`;
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testHtml += '<div class="form-group">';
+                testHtml += '<label><?=__('调用代码')?></label>';
+                testHtml += `<pre><code class="language-javascript">${escapeHtml(api.example?.code || getFrontendWorkerExampleCode(api))}</code></pre>`;
+                testHtml += '</div>';
+                testHtml += '<div class="form-group">';
+                testHtml += '<div class="test-section-title"><?=__('请求参数')?></div>';
+                testHtml += `<textarea id="test-body" placeholder='<?=__('请输入 JSON 格式的请求参数')?>' rows="10">${escapeHtml(defaultBody)}</textarea>`;
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testHtml += '<div class="test-response-section" id="test-response-section" style="display: none;">';
+                testHtml += '<div class="test-section-title"><?=__('响应信息')?></div>';
+                testHtml += '<div class="response-info" id="response-info"></div>';
+                testHtml += '<div class="response-headers">';
+                testHtml += '<div class="test-section-title collapsible" onclick="toggleCollapsible(this)"><?=__('响应头')?></div>';
+                testHtml += '<div class="collapsible-content">';
+                testHtml += '<table class="response-headers-table" id="response-headers-table">';
+                testHtml += '<thead><tr><th><?=__('Header名称')?></th><th><?=__('Header值')?></th></tr></thead>';
+                testHtml += '<tbody id="response-headers-body"></tbody>';
+                testHtml += '</table>';
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testHtml += '<div class="response-body">';
+                testHtml += '<div class="response-body-header">';
+                testHtml += '<h4><?=__('响应体')?></h4>';
+                testHtml += '<div class="response-body-actions">';
+                testHtml += '<button type="button" class="btn-icon" onclick="copyResponseBody()"><?=__('复制')?></button>';
+                testHtml += '<button type="button" class="btn-icon" onclick="formatResponseBody()"><?=__('格式化')?></button>';
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testHtml += '<div class="code-block">';
+                testHtml += '<pre><code class="language-json" id="response-body-content"></code></pre>';
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testPanel.innerHTML = testHtml;
+                initStickyTestPanel();
+                return;
+            }
             
             // 构建完整URL - 使用 window.api 函数
             let fullUrl = '';
@@ -2998,7 +3408,7 @@ $apiId = $this->request->getParam('api_id');
                 const isBackendApi = api.route?.is_backend || false;
                 
                 // 处理路径：移除开头的斜杠
-                let cleanPath = path.replace(/^\//, '');
+                let cleanPath = normalizeApiDocPathForRequest(path, isBackendApi);
                 
                 // 移除路径中可能包含的 area 前缀、货币和语言（因为 window.api 会自动添加）
                 const pathSegments = cleanPath.split('/');
@@ -3006,7 +3416,7 @@ $apiId = $this->request->getParam('api_id');
                 for (let i = 0; i < pathSegments.length; i++) {
                     const segment = pathSegments[i];
                     // 跳过 area 前缀
-                    if (segment === API_AREA || segment === API_ADMIN_AREA) {
+                    if (i === 0 && (segment === API_AREA || segment === API_ADMIN_AREA) && pathSegments[1] !== 'rest') {
                         continue;
                     }
                     // 跳过货币（3位大写字母）
@@ -3081,6 +3491,8 @@ $apiId = $this->request->getParam('api_id');
                 '/auth/exchange',
                 '/weline-api/auth/login',
                 '/weline-api/auth/exchange',
+                '/api/rest/v1/auth/login',
+                '/api/rest/v1/auth/exchange',
                 '/api/rest/v1/weline_api/auth/login',
                 '/api/rest/v1/weline_api/auth/exchange'
             ];
@@ -3219,7 +3631,7 @@ $apiId = $this->request->getParam('api_id');
             if (currentI18nMode === 'path') {
                 // 路径模式：使用 window.api 重新生成 URL（带新的货币和语言）
                 const isBackendApi = api.route?.is_backend || false;
-                let cleanPath = path.replace(/^\//, '');
+                let cleanPath = normalizeApiDocPathForRequest(path, isBackendApi);
                 
                 // 移除路径中可能包含的 area 前缀、货币和语言
                 const pathSegments = cleanPath.split('/');
@@ -3227,7 +3639,7 @@ $apiId = $this->request->getParam('api_id');
                 for (let i = 0; i < pathSegments.length; i++) {
                     const segment = pathSegments[i];
                     // 跳过 area 前缀
-                    if (segment === API_AREA || segment === API_ADMIN_AREA) {
+                    if (i === 0 && (segment === API_AREA || segment === API_ADMIN_AREA) && pathSegments[1] !== 'rest') {
                         continue;
                     }
                     // 跳过货币（3位大写字母）
@@ -3432,6 +3844,81 @@ $apiId = $this->request->getParam('api_id');
             }
             
             // 获取请求配置
+            if (isFrontendWorkerApi(api)) {
+                const descriptor = getFrontendWorkerDescriptor(api);
+                const bodyEl = document.getElementById('test-body');
+                let payload = {};
+                if (bodyEl && bodyEl.value.trim()) {
+                    try {
+                        payload = JSON.parse(bodyEl.value.trim());
+                    } catch (e) {
+                        showToast('<?=__('请求参数格式错误，请输入有效的JSON')?>', 'error');
+                        return;
+                    }
+                }
+
+                const responseSection = document.getElementById('test-response-section');
+                const responseInfo = document.getElementById('response-info');
+                const responseHeadersBody = document.getElementById('response-headers-body');
+                const responseBodyContent = document.getElementById('response-body-content');
+                const statusCodeEl = document.getElementById('request-status-code');
+                const sendBtn = document.querySelector('.test-send-btn');
+                if (responseSection) {
+                    responseSection.style.display = 'block';
+                }
+                if (responseInfo) {
+                    responseInfo.innerHTML = '<div class="response-info-item"><label><?=__('状态')?>:</label><span><?=__('请求中...')?></span></div>';
+                }
+                if (responseHeadersBody) {
+                    responseHeadersBody.innerHTML = '';
+                }
+                if (responseBodyContent) {
+                    responseBodyContent.textContent = '';
+                }
+                if (statusCodeEl) {
+                    statusCodeEl.textContent = 'WORKER ...';
+                    statusCodeEl.className = 'request-status-code loading';
+                    statusCodeEl.style.display = 'inline-block';
+                }
+                if (sendBtn) {
+                    sendBtn.disabled = true;
+                }
+
+                const startTime = Date.now();
+                try {
+                    if ((!window.Weline || !window.Weline.Api) && window.Weline && typeof window.Weline.load === 'function') {
+                        await window.Weline.load('api');
+                    }
+                    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api.resource is unavailable.');
+                    }
+                    const Api = await window.Weline.Api.resource(descriptor.provider);
+                    if (!Api || typeof Api[descriptor.operation] !== 'function') {
+                        throw new Error('Frontend worker operation is unavailable: ' + descriptor.provider + '.' + descriptor.operation);
+                    }
+                    const result = await Api[descriptor.operation](payload, {
+                        silent: true
+                    });
+                    setTestResponse('WORKER 200', result, {
+                        'x-weline-api': 'frontend-worker',
+                        'x-weline-provider': descriptor.provider,
+                        'x-weline-operation': descriptor.operation
+                    }, true, Date.now() - startTime);
+                } catch (error) {
+                    setTestResponse('WORKER ERROR', {
+                        success: false,
+                        message: error && error.message ? error.message : String(error)
+                    }, {
+                        'x-weline-api': 'frontend-worker'
+                    }, false, Date.now() - startTime);
+                } finally {
+                    if (sendBtn) {
+                        sendBtn.disabled = false;
+                    }
+                }
+                return;
+            }
+
             const method = document.getElementById('test-method').value;
             let url = document.getElementById('test-url').value;
             
@@ -3442,6 +3929,8 @@ $apiId = $this->request->getParam('api_id');
                 '/auth/exchange',
                 '/weline-api/auth/login',
                 '/weline-api/auth/exchange',
+                '/api/rest/v1/auth/login',
+                '/api/rest/v1/auth/exchange',
                 '/api/rest/v1/weline_api/auth/login',
                 '/api/rest/v1/weline_api/auth/exchange'
             ];
@@ -3667,12 +4156,7 @@ $apiId = $this->request->getParam('api_id');
                 
                 // 更新响应头
                 if (responseHeadersBody) {
-                    responseHeadersBody.innerHTML = '';
-                    Object.entries(responseHeaders).forEach(([key, value]) => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `<td>${escapeHtml(key)}</td><td>${escapeHtml(value)}</td>`;
-                        responseHeadersBody.appendChild(row);
-                    });
+                    renderResponseHeaders(responseHeadersBody, responseHeaders);
                 }
                 
                 // 更新响应体（美化处理）
@@ -4151,10 +4635,10 @@ $apiId = $this->request->getParam('api_id');
             // 根据当前选中的API类型确定登录接口
             const isBackendApi = window.selectedApi?.route?.is_backend || currentApiType === 'backend';
             // 使用 window.api 函数生成登录URL
-            let loginUrl = window.api('rest/v1/weline_api/auth/login', isBackendApi);
+            let loginUrl = buildApiDocUrl('api/rest/v1/auth/login', false);
             if (isBackendApi) {
                 // 后端API登录接口
-                loginUrl = window.backend_api('rest/v1/weline_api/backend/auth/login');
+                loginUrl = buildApiDocUrl('api/rest/v1/backend/auth/login', true);
             }
             
             try {
@@ -4483,7 +4967,7 @@ $apiId = $this->request->getParam('api_id');
                 const isBackendApi = api.route?.is_backend || false;
                 
                 // 处理路径：移除开头的斜杠
-                let cleanPath = path.replace(/^\//, '');
+                let cleanPath = normalizeApiDocPathForRequest(path, isBackendApi);
                 
                 // 移除路径中可能包含的 area 前缀、货币和语言（因为 window.api 会自动添加）
                 const pathSegments = cleanPath.split('/');
@@ -4491,7 +4975,7 @@ $apiId = $this->request->getParam('api_id');
                 for (let i = 0; i < pathSegments.length; i++) {
                     const segment = pathSegments[i];
                     // 跳过 area 前缀
-                    if (segment === API_AREA || segment === API_ADMIN_AREA) {
+                    if (i === 0 && (segment === API_AREA || segment === API_ADMIN_AREA) && pathSegments[1] !== 'rest') {
                         continue;
                     }
                     // 跳过货币（3位大写字母）
@@ -4518,7 +5002,7 @@ $apiId = $this->request->getParam('api_id');
             if (mode === 'path') {
                 // 路径切换模式：使用 window.api 重新生成 URL（带新的货币和语言）
                 const isBackendApi = api.route?.is_backend || false;
-                let cleanPath = path.replace(/^\//, '');
+                let cleanPath = normalizeApiDocPathForRequest(path, isBackendApi);
                 const pathSegments = cleanPath.split('/');
                 
                 // 移除旧的 area 前缀、货币和语言（如果存在）
@@ -4535,7 +5019,7 @@ $apiId = $this->request->getParam('api_id');
                     for (let i = 0; i < pathSegments.length; i++) {
                         const segment = pathSegments[i];
                         // 跳过 area 前缀
-                        if (segment === API_AREA) {
+                        if (i === 0 && segment === API_AREA && pathSegments[1] !== 'rest') {
                             continue;
                         }
                         // 跳过货币（3位大写字母）

@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace WeShop\Product\Controller\Backend;
 
+use WeShop\Product\Model\Product as ProductModel;
 use WeShop\Product\Model\Product\OptionId;
 use Weline\Backend\Model\BackendUserData;
 use Weline\Eav\Model\EavAttribute;
@@ -41,8 +42,22 @@ class Product extends BaseController
     #[Acl('WeShop_Product::product_index', 'View products', 'mdi mdi-package-search-outline', 'View product management page')]
     public function index(): string
     {
+        $search = trim((string)$this->request->getGet('search', ''));
+        if ($search !== '') {
+            $likeSearch = '%' . $search . '%';
+            $where = [
+                ['main_table.' . ProductModel::schema_fields_sku, $likeSearch, 'LIKE', 'OR'],
+                ['main_table.' . ProductModel::schema_fields_name, $likeSearch, 'LIKE', 'OR'],
+                ['local.' . ProductModel::schema_fields_name, $likeSearch, 'LIKE', 'OR'],
+            ];
+            if (ctype_digit($search)) {
+                array_unshift($where, ['main_table.' . ProductModel::schema_fields_ID, (int)$search, '=', 'OR']);
+            }
+            $this->product->where($where);
+        }
+
         // 明确指定排序字段，使用表别名避免JOIN时的字段歧义
-        $products = $this->product->order('main_table.' . \WeShop\Product\Model\Product::schema_fields_ID, 'DESC')
+        $products = $this->product->order('main_table.' . ProductModel::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -59,7 +74,7 @@ class Product extends BaseController
             // 查询每个产品的子产品数量
             $childrenData = $this->product->reset()
                 ->fields('parent_id, COUNT(*) as children_count')
-                ->where(\WeShop\Product\Model\Product::schema_fields_parent_id, $productIds, 'in')
+                ->where(ProductModel::schema_fields_parent_id, $productIds, 'in')
                 ->group('parent_id')
                 ->select()
                 ->fetchArray();
@@ -82,6 +97,7 @@ class Product extends BaseController
 
         $this->assign('products', $items);
         $this->assign('pagination', $products->getPagination());
+        $this->assign('filterSearch', $search);
         return $this->fetch();
     }
 
@@ -221,7 +237,7 @@ class Product extends BaseController
 
         // 获取子产品数量
         $childrenCount = $this->product->reset()
-            ->where(\WeShop\Product\Model\Product::schema_fields_parent_id, $productId)
+            ->where(ProductModel::schema_fields_parent_id, $productId)
             ->count();
 
         return $this->fetchJson([
@@ -246,8 +262,8 @@ class Product extends BaseController
 
         $children = $this->product->reset()
             ->loadLocalDescription()
-            ->where(\WeShop\Product\Model\Product::schema_fields_parent_id, $productId)
-            ->order('main_table.' . \WeShop\Product\Model\Product::schema_fields_ID, 'ASC')
+            ->where(ProductModel::schema_fields_parent_id, $productId)
+            ->order('main_table.' . ProductModel::schema_fields_ID, 'ASC')
             ->select()
             ->fetchArray();
 

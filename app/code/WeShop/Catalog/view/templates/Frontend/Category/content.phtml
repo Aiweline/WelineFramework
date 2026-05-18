@@ -206,7 +206,7 @@ $resolveCategoryCardImage = static function (array $categoryRow): string {
                             <?php endif; ?>
 
                             <div class="product-card__price">
-                                <span class="product-card__price-current">¥<?= number_format($productPrice, 2) ?></span>
+                                <span class="product-card__price-current"><?= \Weline\Currency\Helper\CurrencyFormatter::formatConverted($productPrice) ?></span>
                             </div>
 
                             <?php if ($productSku !== ''): ?>

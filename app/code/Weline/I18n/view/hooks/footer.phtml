@@ -15,22 +15,22 @@
     <script>
         let success_word = __('成功推送收集词汇！推送消息：%{msg}')
         let error_word = __('推送收集词汇失败！推送消息：%{1}')
-        $.ajax({
-            url: window.frontend_url('i18n/frontend/word/collect'),
-            method: 'post',
-            dataType: 'json',
-            data: window.site.i18n,
-            success: function (res) {
-                if (200 === res.code) {
-                    console.log(__(success_word, res))
-                } else {
-                    console.log(__(error_word, res.msg))
-                }
-            },
-            error: function (res) {
-                console.log(__(error_word, JSON.stringify(res)))
-            }
-        })
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+            Promise.resolve(window.Weline.Api.resource('i18n')).then(function (I18nApi) {
+                return I18nApi.collect({
+                    words: window.site && window.site.i18n ? window.site.i18n : {},
+                    module: window.site && window.site.module ? window.site.module : 'Weline_I18n'
+                }, {
+                    silent: true
+                }).then(function (res) {
+                    console.log(__(success_word, res || {}))
+                });
+            }).catch(function (err) {
+                console.log(__(error_word, err && err.message ? err.message : JSON.stringify(err || {})))
+            });
+        } else {
+            console.warn('[WelineI18n] Weline.Api is not ready; skip online translation collect.');
+        }
     </script>
 </if>
 <!--实时翻译收集 END-->

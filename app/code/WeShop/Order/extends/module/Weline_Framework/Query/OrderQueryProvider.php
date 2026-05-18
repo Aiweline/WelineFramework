@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace WeShop\Order\Extends\Module\Weline_Framework\Query;
 
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Model\OrderItem;
 use WeShop\Order\Service\OrderService;
@@ -13,7 +16,9 @@ class OrderQueryProvider implements QueryProviderInterface
 {
     public function __construct(
         private readonly OrderService $orderService,
-        private readonly OrderItem $orderItemModel
+        private readonly OrderItem $orderItemModel,
+        private readonly ?CustomerContextInterface $customerContext = null,
+        private readonly ?Url $url = null
     ) {
     }
 
@@ -28,6 +33,9 @@ class OrderQueryProvider implements QueryProviderInterface
             'createOrder' => $this->createOrder($params),
             'addOrderItems' => $this->addOrderItems($params),
             'getCustomerDashboardOrders' => $this->getCustomerDashboardOrders($params),
+            'dashboard' => $this->getFrontendDashboardOrders($params),
+            'unpaidSummary' => $this->getFrontendDashboardOrders($params),
+            'cancel' => $this->cancel($params),
             default => throw new \InvalidArgumentException((string) __('Unsupported order provider operation: %{1}', [$operation])),
         };
     }
@@ -55,39 +63,7 @@ class OrderQueryProvider implements QueryProviderInterface
             return [];
         }
 
-        $savedItems = [];
-        foreach ($items as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-
-            $orderItem = clone $this->orderItemModel;
-            $orderItem->clearData()
-                ->setData(OrderItem::schema_fields_ORDER_ID, $orderId)
-                ->setData(OrderItem::schema_fields_PRODUCT_ID, (int) ($item['product_id'] ?? 0))
-                ->setData(OrderItem::schema_fields_PRODUCT_NAME, (string) ($item['product_name'] ?? ''))
-                ->setData(OrderItem::schema_fields_PRODUCT_SKU, (string) ($item['product_sku'] ?? ''))
-                ->setData(OrderItem::schema_fields_QUANTITY, (int) ($item['quantity'] ?? 1))
-                ->setData(OrderItem::schema_fields_PRICE, (float) ($item['price'] ?? 0))
-                ->setData(OrderItem::schema_fields_TOTAL, (float) ($item['total'] ?? 0))
-                ->setData(OrderItem::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
-                ->save();
-
-            if ($orderItem->getId()) {
-                $savedItems[] = [
-                    'item_id' => (int) $orderItem->getId(),
-                    'order_id' => $orderId,
-                    'product_id' => (int) ($item['product_id'] ?? 0),
-                    'product_name' => (string) ($item['product_name'] ?? ''),
-                    'product_sku' => (string) ($item['product_sku'] ?? ''),
-                    'quantity' => (int) ($item['quantity'] ?? 1),
-                    'price' => (float) ($item['price'] ?? 0),
-                    'total' => (float) ($item['total'] ?? 0),
-                ];
-            }
-        }
-
-        return $savedItems;
+        return $this->orderService->addOrderItems($orderId, $items);
     }
 
     /**
@@ -118,6 +94,88 @@ class OrderQueryProvider implements QueryProviderInterface
             'order_count' => (int) ($recentResult['total'] ?? \count($recentOrders)),
             'unpaid_count' => \count($unpaidOrders),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getFrontendDashboardOrders(array $params): array
+    {
+        $customerId = $this->getFrontendCustomerId();
+        if ($customerId <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('Please log in to continue.'),
+                'data' => [
+                    'recent_orders' => [],
+                    'unpaid_orders' => [],
+                    'order_count' => 0,
+                    'unpaid_count' => 0,
+                    'redirect_url' => $this->getUrl()->getUrl('customer/account/login'),
+                ],
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => (string)__('Orders loaded.'),
+            'data' => $this->getCustomerDashboardOrders([
+                'customer_id' => $customerId,
+                'page' => max(1, (int) ($params['page'] ?? 1)),
+                'page_size' => min(20, max(1, (int) ($params['page_size'] ?? 3))),
+            ]),
+        ];
+    }
+
+    private function cancel(array $params): array
+    {
+        $customerId = $this->getFrontendCustomerId();
+        if ($customerId <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('Please log in to continue.'),
+                'data' => ['redirect_url' => $this->getUrl()->getUrl('customer/account/login')],
+            ];
+        }
+
+        $orderId = (int)($params['order_id'] ?? 0);
+        if ($orderId <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('Order ID is required.'),
+            ];
+        }
+
+        $checkResult = $this->orderService->canCancelOrder($orderId, $customerId);
+        if (empty($checkResult['can_cancel'])) {
+            return [
+                'success' => false,
+                'message' => (string)($checkResult['reason'] ?? __('This order cannot be cancelled.')),
+                'data' => $checkResult,
+            ];
+        }
+
+        $this->orderService->cancelOrder($orderId, $customerId);
+
+        return [
+            'success' => true,
+            'message' => !empty($checkResult['require_refund'])
+                ? (string)__('Order cancelled. Refund processing will follow your payment method rules.')
+                : (string)__('Order cancelled.'),
+            'data' => ['order_id' => $orderId],
+        ];
+    }
+
+    private function getFrontendCustomerId(): int
+    {
+        $context = $this->customerContext ?? ObjectManager::getInstance(CustomerContextInterface::class);
+
+        return (int)($context->getUserId() ?? 0);
+    }
+
+    private function getUrl(): Url
+    {
+        return $this->url ?? ObjectManager::getInstance(Url::class);
     }
 
     private function orderToArray(Order $order): array
@@ -166,6 +224,48 @@ class OrderQueryProvider implements QueryProviderInterface
                         ['name' => 'page', 'type' => 'int', 'required' => false],
                         ['name' => 'page_size', 'type' => 'int', 'required' => false],
                     ],
+                ],
+                [
+                    'name' => 'dashboard',
+                    'description' => __('Return current frontend customer order dashboard data.'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 2,
+                    'cache_ttl' => 5,
+                    'params' => [
+                        'page' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 1000],
+                        'page_size' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 20],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Customer order dashboard',
+                ],
+                [
+                    'name' => 'unpaidSummary',
+                    'description' => __('Return current frontend customer unpaid orders summary.'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'cache_ttl' => 5,
+                    'params' => [
+                        'page_size' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 20],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Customer unpaid orders',
+                ],
+                [
+                    'name' => 'cancel',
+                    'description' => __('Cancel an order owned by the current frontend customer.'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'order_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Cancel customer order',
                 ],
             ],
         ];

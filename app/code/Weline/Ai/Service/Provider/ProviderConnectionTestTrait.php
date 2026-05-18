@@ -53,7 +53,7 @@ trait ProviderConnectionTestTrait
                 'duration' => round((microtime(true) - $started) * 1000, 2),
                 'model' => (string)($result['model'] ?? $modelCode),
                 'request_url' => (string)($result['request_url'] ?? ''),
-                'raw' => $result['raw'] ?? $result,
+                'raw_available' => !empty($result['raw_available']) || isset($result['raw']),
             ];
         }
 

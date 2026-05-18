@@ -105,3 +105,9 @@ WeShop,WeShop
 购买该商品的顾客还购买了,"Customers who bought this also bought"
 查看订单详情,"View Order Details"
 继续购物,"Continue Shopping"
+暂时无法刷新结账方式。,"Unable to refresh checkout methods at this time."
+暂时无法提交订单。,"Unable to place the order at this time."
+当前收货地址没有可用配送方式。,"No shipping methods are available for the selected address."
+当前没有可用的匿名支付方式。,"No guest payment methods are available."
+%{1}年%{2}月%{3}日,"%{1}/%{2}/%{3}"
+合计,Total

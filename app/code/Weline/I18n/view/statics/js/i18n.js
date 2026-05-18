@@ -391,20 +391,18 @@
                 }
 
                 try {
-                    const response = await fetch(this.apiUrl, {
-                        method: 'GET',
-                        headers: {
-                            'Accept': 'application/json',
-                        },
-                        credentials: 'include'
-                    });
+                    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        console.warn('[WelineI18n] Weline.Api is not ready; skip frontend worker dictionary load.');
+                        return this.dictionary;
+                    }
 
-                    if (response.ok) {
-                        const result = await response.json();
-                        if (result.success && result.data) {
-                            this.dictionary = result.data.dictionary || result.data || {};
-                            return this.dictionary;
-                        }
+                    const wordKeys = Object.keys(window.site && window.site.i18n ? window.site.i18n : {});
+                    const I18nApi = await window.Weline.Api.resource('i18n');
+                    const result = await I18nApi.getTranslations({words: wordKeys}, {silent: true});
+                    const data = result && result.data ? result.data : result;
+                    if (data && data.dictionary) {
+                        this.dictionary = data.dictionary || {};
+                        return this.dictionary;
                     }
                 } catch (error) {
                     console.warn('[WelineI18n] 加载翻译字典失败:', error);

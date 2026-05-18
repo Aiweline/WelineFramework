@@ -312,6 +312,7 @@ $currency = (string) ($this->getData('currency') ?? 'USD');
     var methodHost = document.querySelector('[data-shipping-methods-host]');
     var submitButton = form ? form.querySelector('button[type="submit"]') : null;
     var toastHost = document.getElementById('weline-notification-container');
+    var shippingApiPromise = null;
 
     if (!form || !methodHost) {
         return;
@@ -343,6 +344,14 @@ $currency = (string) ($this->getData('currency') ?? 'USD');
         window.setTimeout(function () {
             toast.remove();
         }, 3500);
+    }
+
+    function getShippingApi() {
+        if (!shippingApiPromise) {
+            shippingApiPromise = Promise.resolve(window.Weline.Api.resource('shipping'));
+        }
+
+        return shippingApiPromise;
     }
 
     function getSelectedMethod() {
@@ -379,22 +388,12 @@ $currency = (string) ($this->getData('currency') ?? 'USD');
             return;
         }
 
-        var formData = new FormData(form);
-        var calculateUrl = form.action || '<?= $this->getUrl('weshop/shipping/calculate') ?>';
-
         if (submitButton) {
             submitButton.disabled = true;
         }
 
-        fetch(calculateUrl, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        }).then(function (response) {
-            return response.json();
+        getShippingApi().then(function (ShippingApi) {
+            return ShippingApi.calculate({shipping_method: selectedMethod}, {silent: true});
         }).then(function (payload) {
             if (payload && payload.success) {
                 var nextUrl = '<?= $this->getUrl('checkout') ?>';

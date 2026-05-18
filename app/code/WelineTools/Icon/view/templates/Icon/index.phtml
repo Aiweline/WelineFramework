@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>图标工具 - 上传、压缩、格式转换</title>
+    <script>
+        window.__WelineThemeConfig = window.__WelineThemeConfig || {};
+        Object.assign(window.__WelineThemeConfig, {
+            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
+            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            api: {
+                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                endpoint: '/api/framework/query-bin',
+                queryBinUrl: '/api/framework/query-bin'
+            }
+        });
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        window.WelineApiConfig = window.__WelineThemeConfig.api;
+    </script>
+    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260518-icon-worker"></script>
     <style>
         * {
             margin: 0;
@@ -410,8 +425,34 @@
         </div>
     </div>
 
-    <script>
+<script>
         let currentFileData = null;
+        let iconApiPromise = null;
+
+        function getIconApi() {
+            if (iconApiPromise) {
+                return iconApiPromise;
+            }
+
+            iconApiPromise = new Promise((resolve, reject) => {
+                let attempts = 0;
+                const wait = () => {
+                    attempts += 1;
+                    if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                        Promise.resolve(window.Weline.Api.resource('icon')).then(resolve).catch(reject);
+                        return;
+                    }
+                    if (attempts > 80) {
+                        reject(new Error('Weline.Api is not available.'));
+                        return;
+                    }
+                    setTimeout(wait, 50);
+                };
+                wait();
+            });
+
+            return iconApiPromise;
+        }
 
         // 上传区域事件
         const uploadArea = document.getElementById('uploadArea');
@@ -487,11 +528,8 @@
 
             showLoading(true);
 
-            fetch('<?= $this->getUrl("*/icon/upload") ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
+            getIconApi()
+            .then(api => api.upload(formData, { silent: true }))
             .then(data => {
                 showLoading(false);
                 if (data.success) {
@@ -567,11 +605,11 @@
             formData.append('source_path', currentFileData.url);
             formData.append('target_format', format);
 
-            fetch('<?= $this->getUrl("*/icon/convert") ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
+            getIconApi()
+            .then(api => api.convert({
+                source_path: currentFileData.url,
+                target_format: format
+            }, { silent: true }))
             .then(data => {
                 showLoading(false);
                 if (data.success) {
@@ -601,11 +639,11 @@
             formData.append('source_path', currentFileData.url);
             formData.append('quality', quality);
 
-            fetch('<?= $this->getUrl("*/icon/compress") ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
+            getIconApi()
+            .then(api => api.compress({
+                source_path: currentFileData.url,
+                quality: Number(quality)
+            }, { silent: true }))
             .then(data => {
                 showLoading(false);
                 if (data.success) {
@@ -650,11 +688,13 @@
             if (width) formData.append('width', width);
             if (height) formData.append('height', height);
 
-            fetch('<?= $this->getUrl("*/icon/convert") ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
+            getIconApi()
+            .then(api => api.convert({
+                source_path: currentFileData.url,
+                target_format: currentFileData.ext,
+                width: width ? Number(width) : undefined,
+                height: height ? Number(height) : undefined
+            }, { silent: true }))
             .then(data => {
                 showLoading(false);
                 if (data.success) {

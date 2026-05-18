@@ -24,7 +24,7 @@ class CouponService
     {
         /** @var Coupon $coupon */
         $coupon = ObjectManager::getInstance(Coupon::class);
-        $coupon->load($couponCode, 'code');
+        $coupon->load(Coupon::schema_fields_CODE, $couponCode);
         
         if (!$coupon->getId()) {
             throw new \Exception(__('优惠券不存在'));

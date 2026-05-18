@@ -6,6 +6,7 @@ namespace WeShop\Order\Service;
 
 use WeShop\Order\Model\Order;
 use WeShop\Order\Model\OrderItem;
+use WeShop\Product\Model\Product;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -76,7 +77,154 @@ class OrderService
             ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
 
+        $items = $orderData['items'] ?? $orderData['order_items'] ?? [];
+        if (\is_array($items) && $items !== [] && (int)$order->getId() > 0) {
+            $this->addOrderItems((int)$order->getId(), $items);
+        }
+
         return $order;
+    }
+
+    /**
+     * Persist immutable product snapshots for an order.
+     *
+     * @param array<int, array<string, mixed>> $items
+     * @return array<int, array<string, mixed>>
+     */
+    public function addOrderItems(int $orderId, array $items): array
+    {
+        if ($orderId <= 0 || $items === []) {
+            return [];
+        }
+
+        $savedItems = [];
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+
+            $item = $this->hydrateOrderItemSnapshot($item);
+            $quantity = max(1, (int)($item['quantity'] ?? $item['qty'] ?? 1));
+            $price = (float)($item['price'] ?? 0);
+            $total = array_key_exists('total', $item)
+                ? (float)$item['total']
+                : round($price * $quantity, 2);
+            $productName = trim((string)($item['product_name'] ?? $item['name'] ?? ''));
+            $productSku = (string)($item['product_sku'] ?? $item['sku'] ?? '');
+            $productImage = trim((string)($item['product_image'] ?? $item['image'] ?? ''));
+
+            $orderItem = $this->newOrderItemModel();
+            $orderItem->clearData()
+                ->setData(OrderItem::schema_fields_ORDER_ID, $orderId)
+                ->setData(OrderItem::schema_fields_PRODUCT_ID, (int)($item['product_id'] ?? 0))
+                ->setData(OrderItem::schema_fields_PRODUCT_NAME, $productName)
+                ->setData(OrderItem::schema_fields_PRODUCT_SKU, $productSku)
+                ->setData(OrderItem::schema_fields_PRODUCT_IMAGE, $productImage)
+                ->setData(OrderItem::schema_fields_QUANTITY, $quantity)
+                ->setData(OrderItem::schema_fields_PRICE, $price)
+                ->setData(OrderItem::schema_fields_TOTAL, $total)
+                ->setData(OrderItem::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
+                ->save();
+
+            if ($orderItem->getId()) {
+                $savedItems[] = [
+                    'item_id' => (int)$orderItem->getId(),
+                    'order_id' => $orderId,
+                    'product_id' => (int)($item['product_id'] ?? 0),
+                    'product_name' => $productName,
+                    'product_sku' => $productSku,
+                    'product_image' => $productImage,
+                    'quantity' => $quantity,
+                    'price' => $price,
+                    'total' => $total,
+                ];
+            }
+        }
+
+        return $savedItems;
+    }
+
+    private function resolveProductImageBySku(string $sku): string
+    {
+        return (string)($this->loadProductSnapshot(0, $sku)['image'] ?? '');
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array<string, mixed>
+     */
+    protected function hydrateOrderItemSnapshot(array $item): array
+    {
+        $productId = (int)($item['product_id'] ?? 0);
+        $productSku = trim((string)($item['product_sku'] ?? $item['sku'] ?? ''));
+        $productSnapshot = $this->loadProductSnapshot($productId, $productSku);
+
+        $productName = trim((string)($item['product_name'] ?? $item['name'] ?? ''));
+        if ($productName === '') {
+            $productName = (string)($productSnapshot['name'] ?? '');
+        }
+        if ($productName === '') {
+            $productName = $productSku !== ''
+                ? $productSku
+                : (string)__('商品 #%{1}', [$productId > 0 ? $productId : 0]);
+        }
+
+        $productImage = trim((string)($item['product_image'] ?? $item['image'] ?? ''));
+        if ($productImage === '') {
+            $productImage = (string)($productSnapshot['image'] ?? '');
+        }
+
+        if ($productSku === '') {
+            $productSku = (string)($productSnapshot['sku'] ?? '');
+        }
+
+        if (!array_key_exists('price', $item) || (float)$item['price'] <= 0) {
+            $item['price'] = (float)($productSnapshot['price'] ?? $item['price'] ?? 0);
+        }
+
+        $item['product_name'] = $productName;
+        $item['name'] = $productName;
+        $item['product_sku'] = $productSku;
+        $item['sku'] = $productSku;
+        $item['product_image'] = $productImage;
+        $item['image'] = $productImage;
+
+        return $item;
+    }
+
+    /**
+     * @return array{name?: string, sku?: string, image?: string, price?: float}
+     */
+    protected function loadProductSnapshot(int $productId, string $sku = ''): array
+    {
+        $product = ObjectManager::getInstance(Product::class);
+        $matched = null;
+
+        if ($productId > 0) {
+            $product->load($productId);
+            if ($product->getId()) {
+                $matched = $product;
+            }
+        }
+
+        if (!$matched && $sku !== '') {
+            $result = $product->clear()
+                ->where(Product::schema_fields_sku, $sku)
+                ->select()
+                ->fetch();
+            $matched = $result->getItems()[0] ?? null;
+        }
+
+        if (!$matched) {
+            return [];
+        }
+
+        return [
+            'name' => trim((string)$matched->getData(Product::schema_fields_name)),
+            'sku' => trim((string)$matched->getData(Product::schema_fields_sku)),
+            'image' => trim((string)$matched->getData(Product::schema_fields_image)),
+            'price' => (float)($matched->getData(Product::schema_fields_price) ?? 0),
+        ];
     }
 
     public function createShipment(int $orderId, string $carrier, string $trackingNumber): Order
@@ -169,16 +317,44 @@ class OrderService
             $order->where('payment_status', (string) $filters['payment_status']);
         }
 
+        $total = $this->countCustomerOrders($customerId, $filters);
+
         $order->order(Order::schema_fields_created_at, 'DESC')
             ->pagination($page, $pageSize);
 
         $items = $order->select()->fetchArray();
+        $totalPages = max(1, $pageSize > 0 ? (int)ceil($total / $pageSize) : 1);
+        $pagination = [
+            'page' => max(1, $page),
+            'page_size' => max(1, $pageSize),
+            'total' => $total,
+            'total_pages' => $totalPages,
+            'has_previous' => $page > 1,
+            'has_next' => $page < $totalPages,
+        ];
 
         return [
             'items' => $items,
-            'total' => $order->getTotalCount(),
-            'pagination' => $order->getPagination(),
+            'total' => $total,
+            'pagination' => $pagination,
         ];
+    }
+
+    protected function countCustomerOrders(int $customerId, array $filters = []): int
+    {
+        $order = $this->newOrderModel();
+        $order->clear()
+            ->where(Order::schema_fields_customer_id, $customerId);
+
+        if (!empty($filters['status'])) {
+            $order->where(Order::schema_fields_status, (string) $filters['status']);
+        }
+
+        if (!empty($filters['payment_status']) && $order->hasField('payment_status')) {
+            $order->where('payment_status', (string) $filters['payment_status']);
+        }
+
+        return (int)$order->count();
     }
 
     public function getOrders(int $page = 1, int $pageSize = 20, array $filters = []): array
@@ -464,7 +640,20 @@ class OrderService
             ->where('order_id', $orderId)
             ->order('item_id', 'ASC');
 
-        return $orderItem->select()->fetchArray();
+        $items = $orderItem->select()->fetchArray();
+        if ($items === []) {
+            return [];
+        }
+
+        foreach ($items as $index => $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+
+            $items[$index] = $this->hydratePersistedOrderItem($item);
+        }
+
+        return $items;
     }
 
     protected function checkOrderReturn(int $orderId): bool
@@ -609,6 +798,7 @@ class OrderService
     {
         $result = [];
         foreach ($items as $item) {
+            $item = \is_array($item) ? $this->hydratePersistedOrderItem($item) : [];
             $qty = (int) ($item['quantity'] ?? 0);
             $price = (float) ($item['price'] ?? 0);
             $rowTotal = (float) ($item['total'] ?? ($price * $qty));
@@ -616,7 +806,7 @@ class OrderService
                 'item_id' => (int) ($item['item_id'] ?? 0),
                 'product_id' => (int) ($item['product_id'] ?? 0),
                 'name' => (string) ($item['product_name'] ?? ''),
-                'image' => (string) ($item['image'] ?? ''),
+                'image' => (string) ($item['product_image'] ?? $item['image'] ?? ''),
                 'price' => $price,
                 'qty' => $qty,
                 'row_total' => $rowTotal,
@@ -626,6 +816,32 @@ class OrderService
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array<string, mixed>
+     */
+    protected function hydratePersistedOrderItem(array $item): array
+    {
+        $hydrated = $this->hydrateOrderItemSnapshot($item);
+        $quantity = max(1, (int)($hydrated[OrderItem::schema_fields_QUANTITY] ?? $hydrated['quantity'] ?? 1));
+        $price = (float)($hydrated[OrderItem::schema_fields_PRICE] ?? $hydrated['price'] ?? 0);
+        $total = array_key_exists(OrderItem::schema_fields_TOTAL, $hydrated)
+            ? (float)$hydrated[OrderItem::schema_fields_TOTAL]
+            : (float)($hydrated['total'] ?? round($price * $quantity, 2));
+
+        $hydrated[OrderItem::schema_fields_PRODUCT_NAME] = $hydrated['product_name'] ?? $hydrated['name'] ?? '';
+        $hydrated[OrderItem::schema_fields_PRODUCT_SKU] = $hydrated['product_sku'] ?? $hydrated['sku'] ?? '';
+        $hydrated[OrderItem::schema_fields_PRODUCT_IMAGE] = $hydrated['product_image'] ?? $hydrated['image'] ?? '';
+        $hydrated[OrderItem::schema_fields_QUANTITY] = $quantity;
+        $hydrated[OrderItem::schema_fields_PRICE] = $price;
+        $hydrated[OrderItem::schema_fields_TOTAL] = $total;
+        $hydrated['quantity'] = $quantity;
+        $hydrated['price'] = $price;
+        $hydrated['total'] = $total;
+
+        return $hydrated;
     }
 
     protected function generateOrderNumber(): string

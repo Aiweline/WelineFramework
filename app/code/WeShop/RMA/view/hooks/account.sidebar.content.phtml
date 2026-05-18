@@ -9,6 +9,7 @@
  * @hook-solo false
  */
 
+use WeShop\RMA\Service\RmaPageDataService;
 use WeShop\RMA\Service\RmaService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
@@ -20,66 +21,547 @@ if (!$customer || !$customer->getId()) {
     return;
 }
 
-/** @var RmaService $rmaService */
-$rmaService = ObjectManager::getInstance(RmaService::class);
-$rmaList = $rmaService->getCustomerRmas((int) $customer->getId());
+$escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+$selectedOrderId = (int) ($this->request->getParam('order_id') ?? 0);
+$selectedOrderIncrementId = trim((string) ($this->request->getParam('order_increment_id') ?? ''));
+$selectedReturnAnchor = trim((string) ($this->request->getParam('return_anchor') ?? ''));
+$selectedReturnUrl = trim((string) ($this->request->getParam('return_url') ?? ''));
+
+/** @var RmaPageDataService $rmaPageDataService */
+$rmaPageDataService = ObjectManager::getInstance(RmaPageDataService::class);
+$data = $rmaPageDataService->build((int) $customer->getId(), $selectedOrderId, $selectedOrderIncrementId);
+
+$order = is_array($data['order'] ?? null) ? $data['order'] : null;
+$rmaList = (array) ($data['rma_list'] ?? []);
+$requestTypes = (array) ($data['request_types'] ?? []);
+$reasonOptions = (array) ($data['reason_options'] ?? []);
+$selectedOrderItems = is_array($order['items'] ?? null) ? (array) $order['items'] : [];
+$selectedOrderItemCount = max(0, (int) ($order['item_count'] ?? count($selectedOrderItems)));
+$feedbackDefault = '提交后会停留在当前个人中心，并自动刷新售后记录。';
+
+$statusLabels = [
+    RmaService::STATUS_PENDING => '待处理',
+    RmaService::STATUS_APPROVED => '已同意',
+    RmaService::STATUS_REJECTED => '已拒绝',
+];
+
+$jsText = [
+    'recordTitleTemplate' => '售后单 #%{1}',
+    'orderNumberTemplate' => '订单号：%{1}',
+    'quantityTemplate' => 'x%{1}',
+    'moreItemsTemplate' => '还有 %{1} 件商品',
+    'selectedOrder' => '已选择订单',
+    'selectedReturnOrder' => '已选择售后订单',
+    'switchedToReturns' => '已切换到当前页售后区，可直接提交或查看进度。',
+    'submitting' => '正在提交售后申请...',
+    'submitted' => '售后申请已提交。',
+    'submitFailed' => '暂时无法提交售后申请。',
+];
 ?>
 <section class="account-hook-section account-index__section d-none motor-account-section" id="returns-section" data-account-section="returns" hidden>
     <div class="weshop-account-returns" id="weshop-account-returns">
         <div class="weshop-returns-header">
             <div>
-                <h2 class="weshop-returns-title"><?= __('退换货') ?></h2>
-                <p class="weshop-returns-subtitle"><?= __('查看退货、换货和售后申请进度。') ?></p>
+                <h2 class="weshop-returns-title">退换货</h2>
+                <p class="weshop-returns-subtitle">提交和跟踪售后申请，不离开当前个人中心。</p>
             </div>
-            <a href="<?= $this->getUrl('rma') ?>" class="weshop-view-all-link">
-                <?= __('打开售后中心') ?>
-                <i class="ri-arrow-right-s-line weshop-view-all-icon" aria-hidden="true"></i>
-            </a>
+            <div class="weshop-returns-selected-order" data-rma-selected-order>
+                <?php if ($order && !empty($order['increment_id'])): ?>
+                    已选择订单 #<?= $escape($order['increment_id']) ?>
+                <?php else: ?>
+                    从订单列表选择需要售后的订单
+                <?php endif; ?>
+            </div>
         </div>
 
-        <?php if (empty($rmaList)): ?>
-            <div class="weshop-empty-returns">
-                <i class="ri-exchange-line weshop-empty-returns-icon" aria-hidden="true"></i>
-                <h3><?= __('暂无退换货申请') ?></h3>
-                <p><?= __('如果订单需要退货或换货，可以从订单详情或售后中心发起申请。') ?></p>
-                <a href="<?= $this->getUrl('rma') ?>" class="weshop-shopping-button">
-                    <?= __('去售后中心') ?>
-                </a>
-            </div>
-        <?php else: ?>
-            <div class="weshop-returns-list">
-                <?php foreach ($rmaList as $rma): ?>
-                    <?php
-                    $rmaId = (int) ($rma['rma_id'] ?? 0);
-                    $orderId = (int) ($rma['order_id'] ?? 0);
-                    $reason = trim((string) ($rma['reason'] ?? ''));
-                    $status = trim((string) ($rma['status'] ?? RmaService::STATUS_PENDING));
-                    $createdAt = trim((string) ($rma['created_at'] ?? ''));
-                    $statusLabel = [
-                        RmaService::STATUS_PENDING => __('待处理'),
-                        RmaService::STATUS_APPROVED => __('已同意'),
-                        RmaService::STATUS_REJECTED => __('已拒绝'),
-                    ][$status] ?? $status;
-                    ?>
-                    <a href="<?= $this->getUrl('rma', ['order_id' => $orderId]) ?>" class="weshop-return-item">
-                        <div class="weshop-return-item__main">
-                            <strong><?= __('售后单 #%1', $rmaId) ?></strong>
-                            <span><?= __('订单 #%1', $orderId) ?></span>
+        <div class="weshop-returns-grid">
+            <article class="weshop-returns-card">
+                <div class="weshop-returns-card__header">
+                    <div>
+                        <p class="weshop-returns-card__eyebrow">新建申请</p>
+                        <h3 class="weshop-returns-card__title">提交退货 / 换货</h3>
+                    </div>
+                </div>
+
+                <form id="account-rma-request-form" class="weshop-returns-form" method="post" action="<?= $escape($this->getUrl('rma/create')) ?>">
+                    <?= $this->getFormKey($this->getUrl('rma/create')) ?>
+
+                    <label class="weshop-returns-form__field">
+                        <span>订单 ID</span>
+                        <input
+                            type="number"
+                            min="1"
+                            name="order_id"
+                            value="<?= $escape($order['order_id'] ?? '') ?>"
+                            data-rma-order-id-input
+                            required
+                        >
+                    </label>
+
+                    <input type="hidden" name="order_increment_id" value="<?= $escape($selectedOrderIncrementId !== '' ? $selectedOrderIncrementId : (string) ($order['increment_id'] ?? '')) ?>" data-rma-order-increment-input>
+                    <input type="hidden" name="return_anchor" value="<?= $escape($selectedReturnAnchor) ?>" data-rma-return-anchor-input>
+                    <input type="hidden" name="return_url" value="<?= $escape($selectedReturnUrl) ?>" data-rma-return-url-input>
+
+                    <label class="weshop-returns-form__field">
+                        <span>申请类型</span>
+                        <select name="type">
+                            <?php foreach ($requestTypes as $type): ?>
+                                <option value="<?= $escape($type['code'] ?? '') ?>">
+                                    <?= $escape($type['label'] ?? '') ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+
+                    <label class="weshop-returns-form__field">
+                        <span>原因</span>
+                        <select name="reason" required>
+                            <option value="">请选择原因</option>
+                            <?php foreach ($reasonOptions as $reason): ?>
+                                <option value="<?= $escape($reason) ?>">
+                                    <?= $escape($reason) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+
+                    <label class="weshop-returns-form__field">
+                        <span>补充说明</span>
+                        <textarea name="description" rows="4" placeholder="<?= $escape('请补充问题描述、尺寸或损坏情况') ?>"></textarea>
+                    </label>
+
+                    <?php if ($selectedOrderItems !== []): ?>
+                        <div class="weshop-returns-order-preview" data-rma-order-preview>
+                            <div class="weshop-returns-order-preview__header">
+                                <strong>已选订单商品</strong>
+                                <span><?= $escape('共 ' . $selectedOrderItemCount . ' 件') ?></span>
+                            </div>
+                            <div class="weshop-returns-order-preview__list">
+                                <?php foreach ($selectedOrderItems as $orderItem): ?>
+                                    <?php $orderItemQuantity = max(1, (int) ($orderItem['quantity'] ?? 1)); ?>
+                                    <div class="weshop-returns-order-preview__item">
+                                        <div class="weshop-returns-order-preview__image">
+                                            <?php if (!empty($orderItem['product_image'])): ?>
+                                                <img src="<?= $escape($orderItem['product_image']) ?>" alt="<?= $escape($orderItem['product_name'] ?? '') ?>" loading="lazy">
+                                            <?php else: ?>
+                                                <i class="ri-image-line" aria-hidden="true"></i>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="weshop-returns-order-preview__content">
+                                            <strong><?= $escape($orderItem['product_name'] ?? '') ?></strong>
+                                            <?php if (!empty($orderItem['product_sku'])): ?>
+                                                <span>SKU: <?= $escape($orderItem['product_sku']) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <span><?= $escape('x' . $orderItemQuantity) ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
-                        <div class="weshop-return-item__meta">
-                            <span class="weshop-return-status status-<?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) $statusLabel, ENT_QUOTES, 'UTF-8') ?></span>
-                            <?php if ($reason !== ''): ?>
-                                <span><?= htmlspecialchars($reason, ENT_QUOTES, 'UTF-8') ?></span>
-                            <?php endif; ?>
-                            <?php if ($createdAt !== ''): ?>
-                                <span><?= htmlspecialchars($createdAt, ENT_QUOTES, 'UTF-8') ?></span>
-                            <?php endif; ?>
-                        </div>
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <button type="button" id="account-rma-submit" class="weshop-returns-submit">
+                        提交售后申请
+                    </button>
+
+                    <p id="account-rma-feedback" class="weshop-returns-feedback"><?= $escape($feedbackDefault) ?></p>
+                </form>
+            </article>
+
+            <article class="weshop-returns-card">
+                <div class="weshop-returns-card__header">
+                    <div>
+                        <p class="weshop-returns-card__eyebrow">申请记录</p>
+                        <h3 class="weshop-returns-card__title">最近售后进度</h3>
+                    </div>
+                </div>
+
+                <?php if (empty($rmaList)): ?>
+                    <div class="weshop-empty-returns" data-rma-empty-state>
+                        <i class="ri-exchange-line weshop-empty-returns-icon" aria-hidden="true"></i>
+                        <h3>暂无退换货申请</h3>
+                        <p>直接从当前页的订单操作进入售后，提交后会在这里持续显示进度。</p>
+                    </div>
+                <?php else: ?>
+                    <div class="weshop-returns-list" data-rma-list>
+                        <?php foreach ($rmaList as $rma): ?>
+                            <?php
+                            $rmaId = (int) ($rma['rma_id'] ?? 0);
+                            $orderId = (int) ($rma['order_id'] ?? 0);
+                            $orderIncrementId = trim((string) ($rma['order_increment_id'] ?? ''));
+                            $reason = trim((string) ($rma['reason'] ?? ''));
+                            $description = trim((string) ($rma['description'] ?? ''));
+                            $status = trim((string) ($rma['status'] ?? RmaService::STATUS_PENDING));
+                            $createdAt = trim((string) ($rma['created_at'] ?? ''));
+                            $statusLabel = trim((string) ($rma['status_label'] ?? ($statusLabels[$status] ?? $status)));
+                            $recordItems = is_array($rma['items'] ?? null) ? (array) $rma['items'] : [];
+                            $recordItemCount = max(0, (int) ($rma['item_count'] ?? count($recordItems)));
+                            $remainingRecordItems = max(0, $recordItemCount - count($recordItems));
+                            ?>
+                            <article class="weshop-return-item" data-rma-record>
+                                <div class="weshop-return-item__main">
+                                    <div>
+                                        <strong><?= $escape('售后单 #' . $rmaId) ?></strong>
+                                        <span><?= $escape('订单号：' . ($orderIncrementId !== '' ? $orderIncrementId : (string) $orderId)) ?></span>
+                                    </div>
+                                    <span class="weshop-return-status status-<?= $escape($status) ?>">
+                                        <?= $escape($statusLabel) ?>
+                                    </span>
+                                </div>
+                                <div class="weshop-return-item__meta">
+                                    <?php if ($reason !== ''): ?>
+                                        <span><?= $escape($reason) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($createdAt !== ''): ?>
+                                        <span><?= $escape($createdAt) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if ($description !== ''): ?>
+                                    <p class="weshop-return-item__description"><?= $escape($description) ?></p>
+                                <?php endif; ?>
+                                <?php if ($recordItems !== []): ?>
+                                    <div class="weshop-return-item__products">
+                                        <?php foreach ($recordItems as $recordItem): ?>
+                                            <?php $recordItemQuantity = max(1, (int) ($recordItem['quantity'] ?? 1)); ?>
+                                            <div class="weshop-return-item__product">
+                                                <div class="weshop-return-item__product-image">
+                                                    <?php if (!empty($recordItem['product_image'])): ?>
+                                                        <img src="<?= $escape($recordItem['product_image']) ?>" alt="<?= $escape($recordItem['product_name'] ?? '') ?>" loading="lazy">
+                                                    <?php else: ?>
+                                                        <i class="ri-image-line" aria-hidden="true"></i>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="weshop-return-item__product-main">
+                                                    <strong><?= $escape($recordItem['product_name'] ?? '') ?></strong>
+                                                    <?php if (!empty($recordItem['product_sku'])): ?>
+                                                        <span>SKU: <?= $escape($recordItem['product_sku']) ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <span><?= $escape('x' . $recordItemQuantity) ?></span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                        <?php if ($remainingRecordItems > 0): ?>
+                                            <span class="weshop-return-item__more"><?= $escape('还有 ' . $remainingRecordItems . ' 件商品') ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </article>
+        </div>
     </div>
+
+    <script>
+        (function () {
+            var text = <?= json_encode($jsText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+            var form = document.getElementById('account-rma-request-form');
+            var submit = document.getElementById('account-rma-submit');
+            var feedback = document.getElementById('account-rma-feedback');
+            var orderIdInput = document.querySelector('[data-rma-order-id-input]');
+            var orderIncrementInput = document.querySelector('[data-rma-order-increment-input]');
+            var returnAnchorInput = document.querySelector('[data-rma-return-anchor-input]');
+            var returnUrlInput = document.querySelector('[data-rma-return-url-input]');
+            var selectedOrder = document.querySelector('[data-rma-selected-order]');
+            var returnsSection = document.getElementById('returns-section');
+            var returnsCards = document.querySelectorAll('.weshop-returns-card');
+            var recordsCard = returnsCards.length > 1 ? returnsCards[1] : null;
+            var rmaList = document.querySelector('[data-rma-list]');
+            var emptyState = document.querySelector('[data-rma-empty-state]');
+            var apiPromise = null;
+
+            function getRmaApi() {
+                if (!apiPromise) {
+                    apiPromise = Promise.resolve(window.Weline.Api.resource('rma'));
+                }
+
+                return apiPromise;
+            }
+
+            function escapeHtml(value) {
+                return String(value || '').replace(/[&<>\"']/g, function (character) {
+                    return {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;'
+                    }[character] || character;
+                });
+            }
+
+            function formatTemplate(template, value) {
+                return String(template || '').replace('%{1}', String(value));
+            }
+
+            function setValue(input, value) {
+                if (input) {
+                    input.value = value || '';
+                }
+            }
+
+            function setFeedback(message, type) {
+                if (!feedback) {
+                    return;
+                }
+
+                feedback.textContent = message || '';
+                feedback.classList.remove('is-success', 'is-error');
+                if (type) {
+                    feedback.classList.add(type);
+                }
+            }
+
+            function showReturnsSection() {
+                var sectionLink = document.querySelector('[data-account-nav-link][data-section="returns"]');
+                if (sectionLink) {
+                    sectionLink.click();
+                }
+            }
+
+            function fillSelectedOrder(orderId, incrementId, returnAnchor, returnUrl) {
+                setValue(orderIdInput, orderId);
+                setValue(orderIncrementInput, incrementId);
+                setValue(returnAnchorInput, returnAnchor);
+                setValue(returnUrlInput, returnUrl);
+
+                if (selectedOrder) {
+                    selectedOrder.textContent = incrementId
+                        ? (text.selectedOrder + ' #' + incrementId)
+                        : text.selectedReturnOrder;
+                }
+            }
+
+            function ensureRmaList() {
+                if (rmaList) {
+                    return rmaList;
+                }
+
+                if (!recordsCard) {
+                    return null;
+                }
+
+                rmaList = document.createElement('div');
+                rmaList.className = 'weshop-returns-list';
+                rmaList.setAttribute('data-rma-list', '');
+                if (emptyState && emptyState.parentNode) {
+                    emptyState.parentNode.removeChild(emptyState);
+                    emptyState = null;
+                }
+                recordsCard.appendChild(rmaList);
+
+                return rmaList;
+            }
+
+            function buildRecordHtml(record) {
+                var rmaId = parseInt(record.rma_id || 0, 10) || 0;
+                var orderId = parseInt(record.order_id || 0, 10) || 0;
+                var orderIncrementId = String(record.order_increment_id || '');
+                var reason = String(record.reason || '');
+                var description = String(record.description || '');
+                var status = String(record.status || 'pending');
+                var statusLabel = String(record.status_label || status);
+                var createdAt = String(record.created_at || '');
+                var items = Array.isArray(record.items) ? record.items : [];
+                var itemCount = parseInt(record.item_count || items.length || 0, 10) || 0;
+                var html = '';
+
+                html += '<article class="weshop-return-item" data-rma-record>';
+                html += '<div class="weshop-return-item__main"><div>';
+                html += '<strong>' + escapeHtml(formatTemplate(text.recordTitleTemplate, rmaId)) + '</strong>';
+                html += '<span>' + escapeHtml(formatTemplate(text.orderNumberTemplate, orderIncrementId || orderId)) + '</span>';
+                html += '</div><span class="weshop-return-status status-' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span></div>';
+                html += '<div class="weshop-return-item__meta">';
+
+                if (reason) {
+                    html += '<span>' + escapeHtml(reason) + '</span>';
+                }
+
+                if (createdAt) {
+                    html += '<span>' + escapeHtml(createdAt) + '</span>';
+                }
+
+                html += '</div>';
+
+                if (description) {
+                    html += '<p class="weshop-return-item__description">' + escapeHtml(description) + '</p>';
+                }
+
+                if (items.length > 0) {
+                    html += '<div class="weshop-return-item__products">';
+                    items.forEach(function (item) {
+                        var itemName = String(item.product_name || '');
+                        var itemSku = String(item.product_sku || '');
+                        var itemImage = String(item.product_image || item.image || '');
+                        var itemQty = parseInt(item.quantity || 1, 10) || 1;
+
+                        html += '<div class="weshop-return-item__product">';
+                        html += '<div class="weshop-return-item__product-image">';
+                        if (itemImage) {
+                            html += '<img src="' + escapeHtml(itemImage) + '" alt="' + escapeHtml(itemName) + '" loading="lazy">';
+                        } else {
+                            html += '<i class="ri-image-line" aria-hidden="true"></i>';
+                        }
+                        html += '</div>';
+                        html += '<div class="weshop-return-item__product-main">';
+                        html += '<strong>' + escapeHtml(itemName) + '</strong>';
+                        if (itemSku) {
+                            html += '<span>SKU: ' + escapeHtml(itemSku) + '</span>';
+                        }
+                        html += '</div>';
+                        html += '<span>' + escapeHtml(formatTemplate(text.quantityTemplate, itemQty)) + '</span>';
+                        html += '</div>';
+                    });
+
+                    if (itemCount > items.length) {
+                        html += '<span class="weshop-return-item__more">' + escapeHtml(formatTemplate(text.moreItemsTemplate, itemCount - items.length)) + '</span>';
+                    }
+
+                    html += '</div>';
+                }
+
+                html += '</article>';
+
+                return html;
+            }
+
+            function prependRmaRecord(record) {
+                var targetList = ensureRmaList();
+                if (!targetList) {
+                    return;
+                }
+
+                var wrapper = document.createElement('div');
+                wrapper.innerHTML = buildRecordHtml(record);
+                if (wrapper.firstElementChild) {
+                    targetList.insertBefore(wrapper.firstElementChild, targetList.firstChild);
+                }
+            }
+
+            function buildDefaultReturnUrl() {
+                try {
+                    var currentUrl = new URL(window.location.href);
+                    currentUrl.hash = '#orders';
+                    return currentUrl.pathname + currentUrl.search + currentUrl.hash;
+                } catch (error) {
+                    return '/customer/account/index#orders';
+                }
+            }
+
+            function shouldNavigate(redirectUrl) {
+                return redirectUrl.indexOf('/customer/account/login') !== -1;
+            }
+
+            function updateBrowserState(redirectUrl) {
+                if (!redirectUrl || !window.history || typeof window.history.replaceState !== 'function') {
+                    return;
+                }
+
+                try {
+                    var parsedUrl = new URL(redirectUrl, window.location.origin);
+                    if (parsedUrl.origin !== window.location.origin) {
+                        return;
+                    }
+
+                    window.history.replaceState(null, '', parsedUrl.pathname + parsedUrl.search + parsedUrl.hash);
+                } catch (error) {}
+            }
+
+            function resetRequestForm() {
+                var reasonSelect = form ? form.querySelector('select[name="reason"]') : null;
+                var descriptionInput = form ? form.querySelector('textarea[name="description"]') : null;
+                if (reasonSelect) {
+                    reasonSelect.value = '';
+                }
+                if (descriptionInput) {
+                    descriptionInput.value = '';
+                }
+            }
+
+            document.addEventListener('click', function (event) {
+                var trigger = event.target.closest('a[href*="rma/create"], a[href*="rma?order_id="], .js-account-rma-trigger');
+                if (!trigger) {
+                    return;
+                }
+
+                var href = trigger.getAttribute('href') || '';
+                var orderId = trigger.getAttribute('data-order-id') || '';
+                var incrementId = trigger.getAttribute('data-order-increment-id') || '';
+                var returnAnchor = trigger.getAttribute('data-return-anchor') || '';
+                var returnUrl = trigger.getAttribute('data-return-url') || '';
+
+                if (href) {
+                    try {
+                        var url = new URL(href, window.location.origin);
+                        orderId = orderId || url.searchParams.get('order_id') || '';
+                        incrementId = incrementId || url.searchParams.get('order_increment_id') || '';
+                        returnAnchor = returnAnchor || url.searchParams.get('return_anchor') || '';
+                        returnUrl = returnUrl || url.searchParams.get('return_url') || '';
+                    } catch (error) {}
+                }
+
+                if (!orderId && !incrementId) {
+                    return;
+                }
+
+                event.preventDefault();
+                showReturnsSection();
+                fillSelectedOrder(orderId, incrementId, returnAnchor, returnUrl || buildDefaultReturnUrl());
+                setFeedback(text.switchedToReturns, '');
+
+                if (returnsSection && typeof returnsSection.scrollIntoView === 'function') {
+                    returnsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+
+            if (!form || !submit) {
+                return;
+            }
+
+            submit.addEventListener('click', function () {
+                var payload = {};
+                new FormData(form).forEach(function (value, key) {
+                    payload[key] = value;
+                });
+
+                if (!payload.return_url) {
+                    payload.return_url = buildDefaultReturnUrl();
+                    setValue(returnUrlInput, payload.return_url);
+                }
+
+                setFeedback(text.submitting, '');
+
+                getRmaApi().then(function (RmaApi) {
+                    return RmaApi.create(payload, { silent: true });
+                }).then(function (result) {
+                    if (result && result.success) {
+                        var record = result.data || {};
+                        updateBrowserState(record.redirect_url || '');
+                        prependRmaRecord(record);
+                        fillSelectedOrder(
+                            record.order_id || payload.order_id || '',
+                            record.order_increment_id || payload.order_increment_id || '',
+                            payload.return_anchor || '',
+                            payload.return_url || ''
+                        );
+                        resetRequestForm();
+                        setFeedback(result.message || text.submitted, 'is-success');
+                        return;
+                    }
+
+                    if (result && result.data && shouldNavigate(result.data.redirect_url || '')) {
+                        window.location.href = result.data.redirect_url;
+                        return;
+                    }
+
+                    setFeedback((result && result.message) ? result.message : text.submitFailed, 'is-error');
+                }).catch(function () {
+                    setFeedback(text.submitFailed, 'is-error');
+                });
+            });
+        })();
+    </script>
 
     <style>
         .weshop-account-returns {
@@ -91,12 +573,12 @@ $rmaList = $rmaService->getCustomerRmas((int) $customer->getId());
             display: flex;
             gap: 1rem;
             justify-content: space-between;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
         }
 
         .weshop-returns-title {
             color: var(--weshop-text-primary, #111827);
-            font-size: 1.5rem;
+            font-size: 1.75rem;
             font-weight: 800;
             margin: 0;
         }
@@ -106,13 +588,179 @@ $rmaList = $rmaService->getCustomerRmas((int) $customer->getId());
             margin: 0.35rem 0 0;
         }
 
+        .weshop-returns-selected-order {
+            background: rgba(37, 99, 235, 0.08);
+            border-radius: 999px;
+            color: var(--weshop-primary, #2563eb);
+            font-size: 0.85rem;
+            font-weight: 700;
+            padding: 0.55rem 0.9rem;
+            white-space: nowrap;
+        }
+
+        .weshop-returns-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .weshop-returns-card {
+            background: var(--weshop-surface, #fff);
+            border: 1px solid var(--weshop-border-color, #e5e7eb);
+            border-radius: 1rem;
+            padding: 1.25rem;
+        }
+
+        .weshop-returns-card__header {
+            margin-bottom: 1rem;
+        }
+
+        .weshop-returns-card__eyebrow {
+            color: var(--weshop-primary, #2563eb);
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            margin: 0 0 0.35rem;
+            text-transform: uppercase;
+        }
+
+        .weshop-returns-card__title {
+            color: var(--weshop-text-primary, #111827);
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .weshop-returns-form {
+            display: grid;
+            gap: 0.9rem;
+        }
+
+        .weshop-returns-form__field {
+            color: var(--weshop-text-secondary, #6b7280);
+            display: grid;
+            font-size: 0.92rem;
+            font-weight: 700;
+            gap: 0.4rem;
+        }
+
+        .weshop-returns-form__field input,
+        .weshop-returns-form__field select,
+        .weshop-returns-form__field textarea {
+            background: #fff;
+            border: 1px solid var(--weshop-border-color, #d1d5db);
+            border-radius: 0.8rem;
+            color: var(--weshop-text-primary, #111827);
+            padding: 0.8rem 0.9rem;
+            width: 100%;
+        }
+
+        .weshop-returns-submit {
+            background: var(--weshop-primary, #2563eb);
+            border: 0;
+            border-radius: 0.9rem;
+            color: #fff;
+            cursor: pointer;
+            font-weight: 800;
+            min-height: 3rem;
+        }
+
+        .weshop-returns-feedback {
+            color: var(--weshop-text-secondary, #6b7280);
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .weshop-returns-feedback.is-success {
+            color: #047857;
+        }
+
+        .weshop-returns-feedback.is-error {
+            color: #b91c1c;
+        }
+
+        .weshop-returns-order-preview {
+            border: 1px solid var(--weshop-border-color, #e5e7eb);
+            border-radius: 1rem;
+            padding: 0.95rem;
+        }
+
+        .weshop-returns-order-preview__header {
+            align-items: center;
+            color: var(--weshop-text-secondary, #6b7280);
+            display: flex;
+            font-size: 0.85rem;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .weshop-returns-order-preview__list,
+        .weshop-returns-list,
+        .weshop-return-item__products {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .weshop-returns-order-preview__item,
+        .weshop-return-item__product {
+            align-items: center;
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+        }
+
+        .weshop-returns-order-preview__image,
+        .weshop-return-item__product-image {
+            align-items: center;
+            background: rgba(148, 163, 184, 0.12);
+            border-radius: 0.85rem;
+            color: var(--weshop-text-secondary, #6b7280);
+            display: flex;
+            height: 3.5rem;
+            justify-content: center;
+            overflow: hidden;
+            width: 3.5rem;
+        }
+
+        .weshop-returns-order-preview__image img,
+        .weshop-return-item__product-image img {
+            display: block;
+            height: 100%;
+            object-fit: cover;
+            width: 100%;
+        }
+
+        .weshop-returns-order-preview__content,
+        .weshop-return-item__product-main {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            min-width: 0;
+        }
+
+        .weshop-returns-order-preview__content strong,
+        .weshop-return-item__product-main strong {
+            color: var(--weshop-text-primary, #111827);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .weshop-returns-order-preview__content span,
+        .weshop-return-item__product-main span,
+        .weshop-return-item__more {
+            color: var(--weshop-text-secondary, #6b7280);
+            font-size: 0.82rem;
+        }
+
         .weshop-empty-returns {
             align-items: center;
             border: 1px dashed var(--weshop-border-color, #d1d5db);
             border-radius: 1rem;
+            color: var(--weshop-text-secondary, #6b7280);
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.5rem;
             padding: 2rem;
             text-align: center;
         }
@@ -124,34 +772,25 @@ $rmaList = $rmaService->getCustomerRmas((int) $customer->getId());
 
         .weshop-empty-returns-icon {
             color: var(--weshop-primary, #2563eb);
-            font-size: 2.5rem;
-        }
-
-        .weshop-returns-list {
-            display: grid;
-            gap: 0.85rem;
+            font-size: 2rem;
         }
 
         .weshop-return-item {
             border: 1px solid var(--weshop-border-color, #e5e7eb);
             border-radius: 1rem;
-            color: inherit;
-            display: block;
             padding: 1rem;
-            text-decoration: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .weshop-return-item:hover {
-            border-color: var(--weshop-primary, #2563eb);
-            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
         }
 
         .weshop-return-item__main {
-            align-items: center;
+            align-items: flex-start;
             display: flex;
-            gap: 0.75rem;
+            gap: 1rem;
             justify-content: space-between;
+        }
+
+        .weshop-return-item__main strong,
+        .weshop-return-item__main span {
+            display: block;
         }
 
         .weshop-return-item__meta {
@@ -162,13 +801,44 @@ $rmaList = $rmaService->getCustomerRmas((int) $customer->getId());
             margin-top: 0.5rem;
         }
 
+        .weshop-return-item__description {
+            color: var(--weshop-text-secondary, #6b7280);
+            margin: 0.6rem 0 0;
+        }
+
+        .weshop-return-item__products {
+            margin-top: 0.85rem;
+        }
+
         .weshop-return-status {
-            border-radius: 999px;
             background: rgba(37, 99, 235, 0.1);
+            border-radius: 999px;
             color: var(--weshop-primary, #2563eb);
             font-size: 0.78rem;
             font-weight: 700;
             padding: 0.2rem 0.55rem;
+        }
+
+        @media (max-width: 900px) {
+            .weshop-returns-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .weshop-returns-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .weshop-returns-selected-order {
+                white-space: normal;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .weshop-returns-order-preview__item,
+            .weshop-return-item__product {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </section>

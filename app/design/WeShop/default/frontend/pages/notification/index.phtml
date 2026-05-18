@@ -101,6 +101,16 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
 
 <script>
     (function () {
+        var apiPromise = null;
+
+        function getNotificationApi() {
+            if (!apiPromise) {
+                apiPromise = Promise.resolve(window.Weline.Api.resource('notification'));
+            }
+
+            return apiPromise;
+        }
+
         function updateUnreadCount(nextCount) {
             document.querySelectorAll('[data-unread-count]').forEach(function (el) {
                 el.textContent = String(nextCount < 0 ? 0 : nextCount);
@@ -114,15 +124,8 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
                     return;
                 }
 
-                fetch('<?= $this->getUrl('notification/mark-read') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({ notification_id: notificationId })
-                }).then(function (response) {
-                    return response.json();
+                getNotificationApi().then(function (NotificationApi) {
+                    return NotificationApi.markRead({notification_id: parseInt(notificationId, 10)}, {silent: true});
                 }).then(function (payload) {
                     if (!payload) {
                         return;

@@ -341,6 +341,7 @@ $currency = strtoupper((string)\w_env('user.currency', 'USD'));
         var errorBox = document.getElementById('tax-calculator-error');
         var calculateUrl = <?= json_encode($calculate_url) ?>;
         var defaultFailedMessage = <?= json_encode(__('Failed to calculate tax')) ?>;
+        var taxApiPromise = null;
 
         function showError(message) {
             if (!resultContainer || !errorBox) {
@@ -361,6 +362,14 @@ $currency = strtoupper((string)\w_env('user.currency', 'USD'));
             }
             errorBox.textContent = '';
             errorBox.classList.remove('is-visible');
+        }
+
+        function getTaxApi() {
+            if (!taxApiPromise) {
+                taxApiPromise = Promise.resolve(window.Weline.Api.resource('tax'));
+            }
+
+            return taxApiPromise;
         }
 
         function formatPrice(amount) {
@@ -419,27 +428,17 @@ $currency = strtoupper((string)\w_env('user.currency', 'USD'));
                 e.preventDefault();
 
                 var formData = new FormData(form);
-                var params = new URLSearchParams();
+                var params = {};
                 formData.forEach(function (value, key) {
                     if (value !== '' && value !== null && value !== undefined) {
-                        params.append(key, String(value));
+                        params[key] = isNaN(Number(value)) ? String(value) : Number(value);
                     }
                 });
 
-                fetch(calculateUrl + '?' + params.toString(), {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                }).then(function (response) {
-                    return response.json();
+                getTaxApi().then(function (TaxApi) {
+                    return TaxApi.calculateTaxBreakdown(params, {silent: true});
                 }).then(function (payload) {
-                    if (payload && payload.success && payload.data) {
-                        renderBreakdown(payload.data);
-                    } else {
-                        showError((payload && payload.message) || defaultFailedMessage);
-                    }
+                    renderBreakdown(payload || {});
                 }).catch(function (error) {
                     console.error('Tax calculation error:', error);
                     showError(defaultFailedMessage);

@@ -451,15 +451,181 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         button.disabled = loading;
     }
 
-    function request(url, options) {
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
-            return window.Weline.Api.request(url, options);
+    var accountApiPromise = null;
+
+    function getAccountApi() {
+        if (!accountApiPromise) {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                accountApiPromise = window.Weline.Api.resource('account');
+            } else if (window.Weline && typeof window.Weline.load === 'function') {
+                accountApiPromise = window.Weline.load('api').then(function() {
+                    if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api is unavailable.');
+                    }
+                    return window.Weline.Api.resource('account');
+                });
+            } else {
+                accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+        }
+        return accountApiPromise;
+    }
+
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function(value, key) {
+            payload[key] = value;
+        });
+        delete payload.form_key;
+        return payload;
+    }
+
+    function parseQueryString(queryString) {
+        var normalized = String(queryString || '').replace(/^[?#]/, '');
+        var query = {};
+        if (!normalized) {
+            return query;
         }
 
-        return fetch(url, options).then(function(response) {
-            return response.json().then(function(data) {
-                return { ok: response.ok, data: data };
+        try {
+            var parsed = new URLSearchParams(normalized);
+            parsed.forEach(function (value, key) {
+                query[String(key)] = String(value);
             });
+        } catch (error) {}
+
+        return query;
+    }
+
+    function parseHash(inputHash) {
+        var rawHash = String(inputHash || '');
+        if (!rawHash) {
+            return { section: '', query: {} };
+        }
+
+        var trimmed = rawHash.replace(/^.*#/, '');
+        if (!trimmed) {
+            return { section: '', query: {} };
+        }
+
+        var section = trimmed;
+        var query = {};
+        var splitAt = trimmed.indexOf('?');
+
+        if (splitAt !== -1) {
+            section = trimmed.substring(0, splitAt);
+            var queryString = trimmed.substring(splitAt + 1);
+            if (queryString) {
+                try {
+                    var parsed = new URLSearchParams(queryString);
+                    parsed.forEach(function (value, key) {
+                        query[String(key)] = String(value);
+                    });
+                } catch (error) {}
+            }
+        }
+
+        return {
+            section: section,
+            query: query
+        };
+    }
+
+    function parseAccountState() {
+        var hashState = parseHash(window.location.hash || '');
+        var searchQuery = parseQueryString(window.location.search || '');
+        var mergedQuery = {};
+
+        Object.keys(searchQuery).forEach(function (key) {
+            mergedQuery[key] = searchQuery[key];
+        });
+        Object.keys(hashState.query).forEach(function (key) {
+            if (!(key in mergedQuery)) {
+                mergedQuery[key] = hashState.query[key];
+            }
+        });
+
+        return {
+            section: hashState.section,
+            query: mergedQuery
+        };
+    }
+
+    function getNavTarget(link) {
+        var targetId = link.getAttribute('data-section') || '';
+        var query = parseQueryString(window.location.search || '');
+
+        try {
+            var targetUrl = new URL(link.getAttribute('href') || '', window.location.origin);
+            var hashInfo = parseHash(targetUrl.hash || '');
+            if (hashInfo.section) {
+                targetId = hashInfo.section;
+            }
+
+            Object.assign(query, parseQueryString(targetUrl.search || ''), hashInfo.query || {});
+        } catch (error) {
+            var fallbackHashInfo = parseHash(link.getAttribute('href') || '');
+            if (fallbackHashInfo.section) {
+                targetId = fallbackHashInfo.section;
+            }
+            Object.assign(query, fallbackHashInfo.query || {});
+        }
+
+        return {
+            section: targetId,
+            query: query
+        };
+    }
+
+    function hasNavSection(section) {
+        if (!section) {
+            return false;
+        }
+
+        return !!(
+            document.querySelector('[data-account-section="' + section + '"]')
+            || document.getElementById(section + '-section')
+        );
+    }
+
+    function updateHash(section, query) {
+        if (window.history && typeof window.history.replaceState === 'function') {
+            var nextUrl = new URL(window.location.href);
+            nextUrl.pathname = accountSectionUrlBase;
+            if (query && typeof query === 'object') {
+                Object.keys(query).forEach(function (key) {
+                    var value = query[key];
+                    if (value === '' || value === null || value === undefined) {
+                        nextUrl.searchParams.delete(key);
+                        return;
+                    }
+
+                    nextUrl.searchParams.set(key, String(value));
+                });
+            }
+            nextUrl.hash = '#' + section;
+            window.history.replaceState(null, '', nextUrl.pathname + nextUrl.search + nextUrl.hash);
+        }
+    }
+
+    function applyReturnAnchor(query) {
+        if (!query || !query.return_anchor) {
+            return;
+        }
+
+        var anchor = document.getElementById(String(query.return_anchor));
+        if (anchor && typeof anchor.scrollIntoView === 'function') {
+            anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function request(operation, payload) {
+        return getAccountApi().then(function(AccountApi) {
+            return AccountApi[operation](payload, {
+                silent: true
+            });
+        }).then(function(data) {
+            return { ok: data && data.success !== false, data: data };
         });
     }
 
@@ -473,7 +639,13 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         });
     }
 
-    function showSection(sectionName, shouldScroll) {
+    function showSection(sectionName, shouldScroll, query) {
+        sectionName = sectionName || 'overview';
+
+        if (!hasNavSection(sectionName)) {
+            sectionName = 'overview';
+        }
+
         var targetId = sectionName + '-section';
         var targetSection = document.querySelector('[data-account-section="' + sectionName + '"]');
         if (!targetSection) {
@@ -487,9 +659,12 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         });
 
         setActiveNavLink(sectionName);
-
         if (window.history && typeof window.history.replaceState === 'function') {
-            window.history.replaceState(null, '', accountSectionUrlBase + '#' + sectionName);
+            updateHash(sectionName, query);
+        }
+
+        if (sectionName === 'orders') {
+            applyReturnAnchor(query);
         }
 
         if (shouldScroll) {
@@ -500,10 +675,23 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         }
     }
 
+    function syncFromHash() {
+        var parsed = parseAccountState();
+        var targetId = parsed.section || 'overview';
+        if (!hasNavSection(targetId)) {
+            targetId = 'overview';
+        }
+
+        showSection(targetId, false, parsed.query);
+        applyReturnAnchor(parsed.query);
+    }
+
     navLinks.forEach(function(link) {
         link.addEventListener('click', function(event) {
             event.preventDefault();
-            showSection(link.getAttribute('data-section'), true);
+            var navTarget = getNavTarget(link);
+            showSection(navTarget.section, true, navTarget.query);
+            updateHash(navTarget.section, navTarget.query);
         });
     });
 
@@ -513,11 +701,8 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         });
     });
 
-    var initialSection = (window.location.hash || '#overview').replace('#', '');
-    if (!document.querySelector('[data-account-section="' + initialSection + '"]') && !document.getElementById(initialSection + '-section')) {
-        initialSection = 'overview';
-    }
-    showSection(initialSection, false);
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
 
     function updateAvatarPreview() {
         if (!avatarPreview || !avatarFallback) {
@@ -578,12 +763,8 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
             clearMessagePair(successMsg, errorMsg);
             setButtonLoading(profileSubmit, true);
 
-            var serialized = new URLSearchParams(new FormData(profileForm)).toString();
-            request('/customer/account/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: serialized
-            })
+            var serialized = formDataToObject(new FormData(profileForm));
+            request('updateProfile', serialized)
             .then(function(response) {
                 var data = response.data || {};
                 if (response.ok && data.success) {
@@ -634,12 +815,8 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
 
             setButtonLoading(securitySubmit, true);
 
-            var serialized = new URLSearchParams(new FormData(securityForm)).toString();
-            request('/customer/account/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: serialized
-            })
+            var serialized = formDataToObject(new FormData(securityForm));
+            request('updatePassword', serialized)
             .then(function(response) {
                 var data = response.data || {};
                 if (response.ok && data.success) {

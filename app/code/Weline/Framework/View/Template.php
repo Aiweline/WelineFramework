@@ -28,6 +28,7 @@ use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
@@ -78,6 +79,11 @@ class Template extends DataObject
 
     private static ?Template $instance = null;
     private static ?\WeakMap $fiberInstances = null;
+    private static ?\WeakMap $fiberRenderYieldAt = null;
+
+    private const WLS_TEMPLATE_YIELD_MIN_INTERVAL_US = 10000;
+    private const WLS_JSON_YIELD_BYTES = 262144;
+    private const JSON_SCRIPT_FLAGS = \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR;
     /** @var array<string, Template> */
     private static array $scopedInstances = [];
     /** @var array<string, array{compiled_mtime: int, compiled_size: int, template_mtime: int, template_size: int, force: string, result: bool}> */
@@ -998,14 +1004,88 @@ class Template extends DataObject
             if ($this->getData()) {
                 extract($this->getData(), EXTR_SKIP);
             }
+            self::cooperativeTemplateYield();
             include $filename;
-        } catch (\Exception $exception) {
+            self::cooperativeTemplateYield();
+        } catch (\Throwable $exception) {
             FiberOutputBuffer::discardCapture();
             throw $exception;
         }
         /** Get output buffer. */
         $result = FiberOutputBuffer::endCapture();
         return $result;
+    }
+
+    public function writeJsonForScript(mixed $value): void
+    {
+        $bytesSinceYield = 0;
+        self::writeJsonForScriptValue($value, $bytesSinceYield, 0);
+    }
+
+    private static function writeJsonForScriptValue(mixed $value, int &$bytesSinceYield, int $depth): void
+    {
+        if (!\is_array($value) || $depth > 512) {
+            self::writeJsonChunk(self::jsonEncodeForScript($value), $bytesSinceYield);
+            return;
+        }
+
+        $isList = \array_is_list($value);
+        self::writeJsonChunk($isList ? '[' : '{', $bytesSinceYield);
+        $first = true;
+        foreach ($value as $key => $item) {
+            if ($first) {
+                $first = false;
+            } else {
+                self::writeJsonChunk(',', $bytesSinceYield);
+            }
+
+            if (!$isList) {
+                self::writeJsonChunk(self::jsonEncodeForScript((string)$key), $bytesSinceYield);
+                self::writeJsonChunk(':', $bytesSinceYield);
+            }
+
+            self::writeJsonForScriptValue($item, $bytesSinceYield, $depth + 1);
+        }
+        self::writeJsonChunk($isList ? ']' : '}', $bytesSinceYield);
+    }
+
+    private static function writeJsonChunk(string $chunk, int &$bytesSinceYield): void
+    {
+        echo $chunk;
+        $bytesSinceYield += \strlen($chunk);
+        if ($bytesSinceYield < self::WLS_JSON_YIELD_BYTES) {
+            return;
+        }
+
+        $bytesSinceYield = 0;
+        self::cooperativeTemplateYield(true);
+    }
+
+    private static function jsonEncodeForScript(mixed $value): string
+    {
+        return (string)\json_encode($value, self::JSON_SCRIPT_FLAGS);
+    }
+
+    private static function cooperativeTemplateYield(bool $force = false): void
+    {
+        if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive()) {
+            return;
+        }
+
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+
+        $now = \microtime(true);
+        self::$fiberRenderYieldAt ??= new \WeakMap();
+        $lastYieldAt = (float)(self::$fiberRenderYieldAt[$fiber] ?? 0.0);
+        if (!$force && $lastYieldAt > 0.0 && (($now - $lastYieldAt) * 1000000) < self::WLS_TEMPLATE_YIELD_MIN_INTERVAL_US) {
+            return;
+        }
+
+        self::$fiberRenderYieldAt[$fiber] = $now;
+        SchedulerSystem::yield();
     }
 
     /**

@@ -78,6 +78,12 @@ return [
         'description' => __('在默认一页式结账的账户/匿名身份选择区块之后触发，允许模块注入后续上下文或客户端扩展。'),
         'doc' => 'frontend/layouts/checkout/identity-after.md',
     ],
+
+    'Weline_Checkout::frontend::layouts::checkout::notification-preferences' => [
+        'name' => __('结账通知渠道偏好'),
+        'description' => __('在结账身份选择后注入本次订单通知渠道选择，由通知模块通过 Hook 提供具体内容。'),
+        'doc' => 'frontend/layouts/checkout/notification-preferences.md',
+    ],
     
     // 支付方式选择区域之前
     'Weline_Checkout::frontend::layouts::checkout::payment-methods-before' => [

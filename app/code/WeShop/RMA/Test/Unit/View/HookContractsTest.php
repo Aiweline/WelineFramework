@@ -34,7 +34,9 @@ class HookContractsTest extends TestCase
         $this->assertStringContainsString('退换货', $sidebar);
         $this->assertStringNotContainsString("getUrl('rma')", $sidebar);
         $this->assertStringContainsString('data-account-section="returns"', $content);
-        $this->assertStringContainsString('RmaService::class', $content);
-        $this->assertStringContainsString("getUrl('rma')", $content);
+        $this->assertStringContainsString('RmaPageDataService::class', $content);
+        $this->assertStringContainsString('data-rma-list', $content);
+        $this->assertStringContainsString('data-rma-return-url-input', $content);
+        $this->assertStringNotContainsString("getUrl('rma')", $content);
     }
 }

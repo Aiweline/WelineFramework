@@ -63,20 +63,24 @@ $pageSize = $this->getData('page_size') ?: 20;
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var orderApiPromise = null;
+
+    function getOrderApi() {
+        if (!orderApiPromise) {
+            orderApiPromise = Promise.resolve(window.Weline.Api.resource('order'));
+        }
+
+        return orderApiPromise;
+    }
+
     // 取消订单
     document.querySelectorAll('.cancel-order').forEach(function(btn) {
         btn.addEventListener('click', function() {
             const orderId = this.getAttribute('data-order-id');
             if (confirm('<?= __('确定要取消此订单吗？') ?>')) {
                 // 发送取消请求
-                fetch('<?= $this->getUrl('checkout/frontend/order/cancel') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'order_id=' + orderId
-                })
-                .then(response => response.json())
+                getOrderApi()
+                .then(OrderApi => OrderApi.cancel({order_id: parseInt(orderId, 10)}, {silent: true}))
                 .then(data => {
                     if (data.success) {
                         location.reload();
