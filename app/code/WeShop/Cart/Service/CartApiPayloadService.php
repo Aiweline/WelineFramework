@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Cart\Service;
 
+use WeShop\Cart\Model\Cart;
 use WeShop\Price\Service\PriceService;
 use WeShop\Product\Service\ConfigurableProductService;
 use WeShop\Product\Service\ProductService;
@@ -176,10 +177,46 @@ class CartApiPayloadService
             return $this->errorResponse(422, (string) __('Invalid cart item.'));
         }
 
-        $this->cartService->removeFromCart($itemId, $customerId);
+        $this->cartService->moveToTrash($itemId, $customerId);
 
-        return $this->successResponse((string) __('Item removed from cart successfully.'), [
+        return $this->successResponse((string) __('Item moved to cart trash.'), [
             'totals' => $this->buildCompactTotals($customerId),
+            'trash' => $this->buildTrashData($customerId),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function buildRestoreResponse(?int $customerId, int $itemId): array
+    {
+        if (($customerId ?? 0) <= 0) {
+            return $this->unauthorizedResponse();
+        }
+
+        if ($itemId <= 0) {
+            return $this->errorResponse(422, (string) __('Invalid cart item.'));
+        }
+
+        $this->cartService->restoreFromTrash($itemId, $customerId);
+
+        return $this->successResponse((string) __('Item restored to cart.'), [
+            'totals' => $this->buildCompactTotals($customerId),
+            'trash' => $this->buildTrashData($customerId),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function buildTrashResponse(?int $customerId, int $limit = 6): array
+    {
+        if (($customerId ?? 0) <= 0) {
+            return $this->unauthorizedResponse();
+        }
+
+        return $this->successResponse((string) __('Cart trash loaded successfully.'), [
+            'trash' => $this->buildTrashData($customerId, $limit),
         ]);
     }
 
@@ -237,17 +274,18 @@ class CartApiPayloadService
 
             $quantity = (int) ($item['quantity'] ?? 1);
             $price = (float) ($item['price'] ?? 0);
+            $product = \is_array($item['product'] ?? null) ? $item['product'] : [];
             $formattedItems[] = [
                 'cart_id' => (int) ($item['cart_id'] ?? $item['id'] ?? 0),
                 'product_id' => (int) ($item['product_id'] ?? 0),
-                'name' => (string) ($item['product']['name'] ?? ''),
-                'image' => (string) ($item['product']['image'] ?? ''),
+                'name' => (string) ($product['name'] ?? $item[Cart::schema_fields_PRODUCT_NAME] ?? $item['product_name'] ?? ''),
+                'image' => (string) ($product['image'] ?? $item[Cart::schema_fields_PRODUCT_IMAGE] ?? $item['product_image'] ?? ''),
                 'price' => $price,
                 'price_formatted' => $this->priceService->formatPrice($price),
                 'quantity' => $quantity,
                 'subtotal' => $price * $quantity,
                 'subtotal_formatted' => $this->priceService->formatPrice($price * $quantity),
-                'url' => (string) ($item['product']['url'] ?? '#'),
+                'url' => (string) ($product['url'] ?? '#'),
                 'options' => $item['options'] ?? null,
             ];
         }
@@ -311,6 +349,17 @@ class CartApiPayloadService
             'total' => $total,
             'total_formatted' => $this->priceService->formatPrice($total),
             'count' => $customerId > 0 ? $this->cartService->getCartItemCount($customerId) : 0,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildTrashData(int $customerId, int $limit = 6): array
+    {
+        return [
+            'count' => $this->cartService->getTrashItemCount($customerId),
+            'items' => $this->formatMiniItems($this->cartService->getTrashItems($customerId, $limit)),
         ];
     }
 

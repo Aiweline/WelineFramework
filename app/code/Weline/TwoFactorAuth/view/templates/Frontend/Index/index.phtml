@@ -396,15 +396,8 @@
             }
 
             try {
-                const response = await fetch('/two-factor-auth/frontend/setup/disable', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `code=${code}`
-                });
-
-                const result = await response.json();
+                const TwoFactorApi = await Weline.Api.resource('twoFactor');
+                const result = await TwoFactorApi.disable({code: code}, {silent: true});
                 
                 if (result.success) {
                     if (typeof Swal !== 'undefined') {
@@ -462,15 +455,8 @@
             }
 
             try {
-                const response = await fetch('/two-factor-auth/frontend/setup/regenerate-backup-codes', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `code=${code}`
-                });
-
-                const result = await response.json();
+                const TwoFactorApi = await Weline.Api.resource('twoFactor');
+                const result = await TwoFactorApi.regenerateBackupCodes({code: code}, {silent: true});
                 
                 if (result.success) {
                     // 显示新的备份码

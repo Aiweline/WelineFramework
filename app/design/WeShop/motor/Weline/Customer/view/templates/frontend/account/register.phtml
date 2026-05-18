@@ -203,6 +203,7 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
     var passwordInput = document.getElementById('password');
     var confirmPasswordInput = document.getElementById('confirm_password');
     var submitBtn = document.getElementById('registerSubmit');
+    var accountApiPromise = null;
     var showPasswordText = <?= json_encode((string) __('显示密码'), JSON_UNESCAPED_UNICODE) ?>;
     var hidePasswordText = <?= json_encode((string) __('隐藏密码'), JSON_UNESCAPED_UNICODE) ?>;
 
@@ -214,6 +215,40 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
     function clearError() {
         errorText.textContent = '';
         errorBox.hidden = true;
+    }
+
+    function getAccountApi() {
+        if (!accountApiPromise) {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                accountApiPromise = window.Weline.Api.resource('account');
+            } else if (window.Weline && typeof window.Weline.load === 'function') {
+                accountApiPromise = window.Weline.load('api').then(function() {
+                    if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api is unavailable.');
+                    }
+                    return window.Weline.Api.resource('account');
+                });
+            } else {
+                accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+        }
+        return accountApiPromise;
+    }
+
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function(value, key) {
+            payload[key] = value;
+        });
+        delete payload.form_key;
+        payload.agree_terms = Object.prototype.hasOwnProperty.call(payload, 'agree_terms')
+            && ['1', 'true', 'yes', 'on'].indexOf(String(payload.agree_terms).toLowerCase()) !== -1;
+        return payload;
+    }
+
+    function setSubmitLoading(loading) {
+        submitBtn.classList.toggle('is-loading', loading);
+        submitBtn.disabled = loading;
     }
 
     function setToggleState(button, visible) {
@@ -241,6 +276,7 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
     form.addEventListener('input', clearError);
 
     form.addEventListener('submit', function(event) {
+        event.preventDefault();
         clearError();
 
         if (passwordInput.value.length < 8) {
@@ -257,8 +293,25 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
             return;
         }
 
-        submitBtn.classList.add('is-loading');
-        submitBtn.disabled = true;
+        setSubmitLoading(true);
+        getAccountApi()
+            .then(function(AccountApi) {
+                return AccountApi.register(formDataToObject(new FormData(form)), {
+                    silent: true
+                });
+            })
+            .then(function(data) {
+                if (data && data.success !== false) {
+                    window.location.href = data.redirect || '/customer/account';
+                    return;
+                }
+                setSubmitLoading(false);
+                showError((data && data.message) || 'Registration failed, please try again later.');
+            })
+            .catch(function(error) {
+                setSubmitLoading(false);
+                showError((error && error.message) || 'Registration request failed, please try again later.');
+            });
     });
 })();
 </script>

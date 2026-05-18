@@ -6,12 +6,12 @@ namespace WeShop\Promotion\Controller\Frontend\Coupon;
 
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Controller\BaseController;
-use WeShop\Promotion\Service\CouponService;
+use WeShop\Promotion\Service\CartCouponSessionService;
 
 class Apply extends BaseController
 {
     public function __construct(
-        private readonly CouponService $couponService,
+        private readonly CartCouponSessionService $cartCouponSessionService,
         private readonly CustomerContextInterface $customerContext
     ) {
     }
@@ -47,7 +47,7 @@ class Apply extends BaseController
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
 
         try {
-            $result = $this->couponService->applyCoupon($code, $customerId, $orderTotal);
+            $result = $this->cartCouponSessionService->applyCoupon($code, $customerId, $orderTotal);
         } catch (\Throwable $exception) {
             return $this->fetchJson([
                 'success' => false,
@@ -60,7 +60,7 @@ class Apply extends BaseController
             'message' => __('Coupon applied successfully.'),
             'data' => [
                 'discount' => (float) ($result['discount'] ?? 0),
-                'coupon_code' => $code,
+                'coupon_code' => (string) ($result['coupon_code'] ?? $code),
             ],
         ]);
     }

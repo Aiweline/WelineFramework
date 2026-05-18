@@ -58,22 +58,49 @@ $frontendUrl = $this->getUrl('');
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    let deliveryAddressApiPromise = null;
+
+    function getDeliveryAddressApi() {
+        if (!deliveryAddressApiPromise) {
+            deliveryAddressApiPromise = (async function() {
+                if (window.Weline && typeof window.Weline.load === 'function') {
+                    await window.Weline.load('api');
+                }
+                if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                    throw new Error('Weline.Api.resource is unavailable.');
+                }
+                return window.Weline.Api.resource('deliveryAddress');
+            })();
+        }
+        return deliveryAddressApiPromise;
+    }
+
+    function showAddressError(message) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('鎿嶄綔澶辫触') ?>',
+                text: message || '<?= __('鎿嶄綔澶辫触') ?>',
+                confirmButtonText: '<?= __('纭畾') ?>'
+            });
+        } else {
+            console.error(message || 'Address operation failed.');
+        }
+    }
     // 设置默认地址
     document.querySelectorAll('.set-default-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', async function() {
             if (!confirm('<?= __('确定要设置为默认地址吗？') ?>')) {
                 return;
             }
-            const id = this.getAttribute('data-id');
-            var url = '<?= $frontendUrl ?>shipping/delivery/setDefault';
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + id };
-            window.Weline.Api.request(url, opts)
-            .then(function(response) {
-                var data = (response && response.data) || response;
+            const id = Number(this.getAttribute('data-id'));
+            try {
+                const api = await getDeliveryAddressApi();
+                const data = await api.setDefault({ id: id }, { silent: true });
                 if (data.success) {
                     location.reload();
                 } else {
-                    if (typeof Swal !== 'undefined') {
+                    showAddressError(data.message); /*
                         Swal.fire({
                             icon: 'error',
                             title: '<?= __('操作失败') ?>',
@@ -81,29 +108,29 @@ document.addEventListener('DOMContentLoaded', function() {
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     } else {
-                        console.error(data.message);
+                        console.error(data.message); */
                     }
                 }
-            });
+            } catch (error) {
+                showAddressError(error && error.message ? error.message : String(error));
+            }
         });
     });
 
     // 删除地址
     document.querySelectorAll('.delete-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', async function() {
             if (!confirm('<?= __('确定要删除此地址吗？') ?>')) {
                 return;
             }
-            const id = this.getAttribute('data-id');
-            var url = '<?= $frontendUrl ?>shipping/delivery/delete';
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + id };
-            window.Weline.Api.request(url, opts)
-            .then(function(response) {
-                var data = (response && response.data) || response;
+            const id = Number(this.getAttribute('data-id'));
+            try {
+                const api = await getDeliveryAddressApi();
+                const data = await api.delete({ id: id }, { silent: true });
                 if (data.success) {
                     location.reload();
                 } else {
-                    if (typeof Swal !== 'undefined') {
+                    showAddressError(data.message); /*
                         Swal.fire({
                             icon: 'error',
                             title: '<?= __('操作失败') ?>',
@@ -111,10 +138,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     } else {
-                        console.error(data.message);
+                        console.error(data.message); */
                     }
                 }
-            });
+            } catch (error) {
+                showAddressError(error && error.message ? error.message : String(error));
+            }
         });
     });
 });

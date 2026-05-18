@@ -30,7 +30,7 @@ final class ImageGenerationResponseNormalizer
             'finish_reason' => (string)($result['finish_reason'] ?? 'stop'),
             'request_url' => (string)($result['request_url'] ?? ''),
             'request' => is_array($result['request'] ?? null) ? $result['request'] : [],
-            'raw' => $result['raw'] ?? null,
+            'raw_available' => !empty($result['raw_available']) || isset($result['raw']),
         ];
     }
 
@@ -61,7 +61,7 @@ final class ImageGenerationResponseNormalizer
             'finish_reason' => 'stop',
             'request_url' => $requestUrl,
             'request' => $requestData,
-            'raw' => $response,
+            'raw_available' => true,
         ], $modelCode);
     }
 
@@ -131,7 +131,7 @@ final class ImageGenerationResponseNormalizer
             'finish_reason' => $finishReason,
             'request_url' => $requestUrl,
             'request' => $requestData,
-            'raw' => $response,
+            'raw_available' => true,
         ], $modelCode);
     }
 

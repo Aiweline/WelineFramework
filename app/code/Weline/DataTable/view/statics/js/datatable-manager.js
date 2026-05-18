@@ -1,19 +1,19 @@
-// 如果没有__函数，则定义一个
+﻿// 婵″倹鐏夊▽鈩冩箒__閸戣姤鏆熼敍灞藉灟鐎规矮绠熸稉鈧稉?
 if (typeof __ === 'undefined') {
     function __(text) {
         return text;
     }
 }
 /**
- * DataTable Manager - 数据表格管理器
- * 提供数据表格的初始化、配置、数据加载、筛选、排序等功能
+ * DataTable Manager - 閺佺増宓佺悰銊︾壐缁狅紕鎮婇崳?
+ * 閹绘劒绶甸弫鐗堝祦鐞涖劍鐗搁惃鍕灥婵瀵查妴渚€鍘ょ純顔衡偓浣规殶閹诡喖濮炴潪濮愨偓浣虹摣闁鈧焦甯撴惔蹇曠搼閸旂喕鍏?
  *
  * @version 2.0.0
  * @author Weline Framework
- * @description 增强版数据表格管理器，支持多模型、JOIN查询、实时编辑等功能
+ * @description 婢х偛宸遍悧鍫熸殶閹诡喛銆冮弽鑲╊吀閻炲棗娅掗敍灞炬暜閹镐礁顦垮Ο鈥崇€烽妴涓IN閺屻儴顕楅妴浣哥杽閺冨墎绱潏鎴犵搼閸旂喕鍏?
  */
 
-// 添加手风琴式筛选工具栏的CSS样式
+// 濞ｈ濮為幍瀣棑閻炴潙绱＄粵娑⑩偓澶婁紣閸忛攱鐖惃鍑淪S閺嶅嘲绱?
 if (typeof filterToolbarStyles === 'undefined') {
     var filterToolbarStyles = `
 <style>
@@ -100,7 +100,7 @@ if (typeof filterToolbarStyles === 'undefined') {
 `;
 }
 
-// 将样式添加到页面
+// 鐏忓棙鐗卞蹇斿潑閸旂姴鍩屾い鐢告桨
 if (!document.querySelector('#datatable-filter-toolbar-styles')) {
     const styleElement = document.createElement('div');
     styleElement.id = 'datatable-filter-toolbar-styles';
@@ -108,21 +108,17 @@ if (!document.querySelector('#datatable-filter-toolbar-styles')) {
     document.head.appendChild(styleElement);
 }
 
-// 确保 DataTableManager 暴露到 window 上（单例模式）
-// 如果已经存在且完整，直接使用；否则创建新实例
+// 绾喕绻?DataTableManager 閺嗘挳婀堕崚?window 娑撳绱欓崡鏇氱伐濡€崇础閿?
+// 婵″倹鐏夊鑼病鐎涙ê婀稉鏂跨暚閺佽揪绱濋惄瀛樺复娴ｈ法鏁ら敍娑樻儊閸掓瑥鍨卞鐑樻煀鐎圭偘绶?
 if (typeof window === 'undefined' || !window.DataTableManager || typeof window.DataTableManager.initTable !== 'function') {
-    // 创建新的 DataTableManager 实例
+    // 閸掓稑缂撻弬鎵畱 DataTableManager 鐎圭偘绶?
     var DataTableManager = {
-    // 表格实例缓存
+    // 鐞涖劍鐗哥€圭偘绶ョ紓鎾崇摠
     instances: {},
 
-    // 配置选项
+    // 闁板秶鐤嗛柅澶愩€?
     config: {
-        apiUrl: (typeof window !== 'undefined' && typeof window.api === 'function') 
-            ? window.api('datatable/rest/v1/data-table') 
-            : (typeof window !== 'undefined' && window.site && window.site.api_host)
-                ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/data-table'
-                : '/api/rest/v1/datatable/data-table',
+        apiUrl: '',
         defaultPageSize: 20,
         maxPageSize: 100,
         debounceDelay: 300,
@@ -139,19 +135,19 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         return baseUrl.replace(/\/+$/, '') + '/' + String(endpoint).replace(/^\/+/, '');
     },
 
-    // 注意：editingState 已移到每个实例中，确保实例隔离
+    // 濞夈劍鍓伴敍姝焏itingState 瀹歌尙些閸掔増鐦℃稉顏勭杽娓氬鑵戦敍宀€鈥樻穱婵嗙杽娓氬娈х粋?
 
     /**
-     * 初始化下拉菜单功能
+     * 閸掓繂顫愰崠鏍︾瑓閹峰褰嶉崡鏇炲閼?
      */
     initDropdowns: function () {
-        // 防止重复初始化
+        // 闂冨弶顒涢柌宥咁槻閸掓繂顫愰崠?
         if (window._wDropdownInitialized) {
             return;
         }
         window._wDropdownInitialized = true;
 
-        // 使用事件委托处理下拉菜单切换
+        // 娴ｈ法鏁ゆ禍瀣╂婵梹澧径鍕倞娑撳濯洪懣婊冨礋閸掑洦宕?
         document.addEventListener('click', function (e) {
             const toggle = e.target.closest('[data-w-toggle="dropdown"]');
             
@@ -167,18 +163,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     return;
                 }
                 
-                // 关闭其他所有下拉菜单
+                // 閸忔娊妫撮崗鏈电铂閹碘偓閺堝绗呴幏澶庡綅閸?
                 document.querySelectorAll('.w-dropdown-menu.show').forEach(function (menu) {
                     if (menu !== dropdown) {
                         menu.classList.remove('show');
                     }
                 });
                 
-                // 切换当前下拉菜单
+                // 閸掑洦宕茶ぐ鎾冲娑撳濯洪懣婊冨礋
                 const isOpen = dropdown.classList.contains('show');
                 dropdown.classList.toggle('show');
                 
-                // 添加旋转动画到图标（如果有的话）
+                // 濞ｈ濮為弮瀣祮閸斻劎鏁鹃崚鏉挎禈閺嶅浄绱欐俊鍌涚亯閺堝娈戠拠婵撶礆
                 const icon = toggle.querySelector('i.fas.fa-undo, i.fas.fa-chevron-down');
                 if (icon) {
                     icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
@@ -187,7 +183,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 return;
             }
             
-            // 如果点击的不是下拉菜单内部，关闭所有下拉菜单
+            // 婵″倹鐏夐悙鐟板毊閻ㄥ嫪绗夐弰顖欑瑓閹峰褰嶉崡鏇炲敶闁煉绱濋崗鎶芥４閹碘偓閺堝绗呴幏澶庡綅閸?
             if (!e.target.closest('.w-dropdown-menu') && !e.target.closest('.w-dropdown-item')) {
                 document.querySelectorAll('.w-dropdown-menu.show').forEach(function (menu) {
                     menu.classList.remove('show');
@@ -198,7 +194,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         }, false);
 
-        // ESC键关闭下拉菜单
+        // ESC闁款喖鍙ч梻顓濈瑓閹峰褰嶉崡?
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 document.querySelectorAll('.w-dropdown-menu.show').forEach(function (menu) {
@@ -212,7 +208,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 获取当前主题
+     * 閼惧嘲褰囪ぐ鎾冲娑撳顣?
      * @returns {string} 'dark' | 'light'
      */
     getCurrentTheme: function () {
@@ -220,12 +216,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const sidebarTheme = body.getAttribute('data-sidebar');
         const topbarTheme = body.getAttribute('data-topbar');
 
-        // 如果sidebar或topbar是dark，则返回dark
+        // 婵″倹鐏塻idebar閹存潰opbar閺勭棛ark閿涘苯鍨潻鏂挎礀dark
         if (sidebarTheme === 'dark' || topbarTheme === 'dark') {
             return 'dark';
         }
 
-        // 检查媒体查询
+        // 濡偓閺屻儱鐛熸担鎾寸叀鐠?
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             return 'dark';
         }
@@ -234,7 +230,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 应用主题
+     * 鎼存梻鏁ゆ稉濠氼暯
      * @param {string} theme - 'dark' | 'light'
      */
     applyTheme: function (theme) {
@@ -249,7 +245,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         });
 
-        // 应用表单主题
+        // 鎼存梻鏁ょ悰銊ュ礋娑撳顣?
         const forms = document.querySelectorAll('.w-form-container, .w-form-inline-container');
         forms.forEach(function (form) {
             if (theme === 'dark') {
@@ -261,15 +257,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 初始化主题
+     * 閸掓繂顫愰崠鏍﹀瘜妫?
      */
     initTheme: function () {
         const currentTheme = this.getCurrentTheme();
         this.applyTheme(currentTheme);
 
-        // 监听主题变化（如果系统有全局主题切换事件）
+        // 閻╂垵鎯夋稉濠氼暯閸欐ê瀵查敍鍫濐洤閺嬫粎閮寸紒鐔告箒閸忋劌鐪稉濠氼暯閸掑洦宕叉禍瀣╂閿?
         if (window.addEventListener && typeof MutationObserver !== 'undefined') {
-            // 监听body属性变化
+            // 閻╂垵鎯塨ody鐏炵偞鈧冨綁閸?
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     if (mutation.type === 'attributes' &&
@@ -285,7 +281,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 attributeFilter: ['data-sidebar', 'data-topbar']
             });
 
-            // 监听媒体查询变化
+            // 閻╂垵鎯夋刊鎺嶇秼閺屻儴顕楅崣妯哄
             if (window.matchMedia) {
                 const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
                 if (mediaQuery.addEventListener) {
@@ -294,7 +290,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         this.applyTheme(theme);
                     });
                 } else {
-                    // 兼容旧版浏览器
+                    // 閸忕厧顔愰弮褏澧楀ù蹇氼潔閸?
                     mediaQuery.addListener((e) => {
                         const theme = e.matches ? 'dark' : 'light';
                         this.applyTheme(theme);
@@ -305,28 +301,28 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 初始化主题配置功能
+     * 閸掓繂顫愰崠鏍﹀瘜妫版﹢鍘ょ純顔煎閼?
      */
     initThemeConfig: function () {
-        // 创建主题配置面板
+        // 閸掓稑缂撴稉濠氼暯闁板秶鐤嗛棃銏℃緲
         if (!document.querySelector('.w-theme-config')) {
-            // 确保翻译函数存在
+            // 绾喕绻氱紙鏄忕槯閸戣姤鏆熺€涙ê婀?
             const translate = window.__ || function (text) { return text; };
 
-            const tableThemeConfig = __('表格主题配置');
-            const displayOptions = __('显示选项');
-            const showZebra = __('显示斑马纹');
-            const showHover = __('显示悬停效果');
-            const showSort = __('显示排序图标');
-            const colorTheme = __('颜色主题');
-            const primaryColor = __('主色调');
-            const headerBackground = __('表头背景');
-            const hoverColor = __('行悬停色');
-            const fontSettings = __('字体设置');
-            const fontSize = __('字体大小');
-            const small = __('小');
-            const medium = __('中');
-            const large = __('大');
+            const tableThemeConfig = __('鐞涖劍鐗告稉濠氼暯闁板秶鐤?');
+            const displayOptions = __('閺勫墽銇氶柅澶愩€?');
+            const showZebra = __('閺勫墽銇氶弬鎴︹攬缁?');
+            const showHover = __('閺勫墽銇氶幃顒€浠犻弫鍫熺亯');
+            const showSort = __('閺勫墽銇氶幒鎺戠碍閸ョ偓鐖?');
+            const colorTheme = __('妫版粏澹婃稉濠氼暯');
+            const primaryColor = __('娑撴槒澹婄拫?');
+            const headerBackground = __('鐞涖劌銇旈懗灞炬珯');
+            const hoverColor = __('鐞涘本鍋撻崑婊嗗');
+            const fontSettings = __('鐎涙ぞ缍嬬拋鍓х枂');
+            const fontSize = __('鐎涙ぞ缍嬫径褍鐨?');
+            const small = __('鐏?');
+            const medium = __('娑?');
+            const large = __('婢?');
 
             const themeConfigHtml = `
                 <div class="w-theme-config">
@@ -382,39 +378,39 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 </div>
             `;
             document.body.insertAdjacentHTML('beforeend', themeConfigHtml);
-            console.log('主题配置面板已创建');
+            console.log('娑撳顣介柊宥囩枂闂堛垺婢樺鎻掑灡瀵?');
         } else {
-            console.log('主题配置面板已存在');
+            console.log('娑撳顣介柊宥囩枂闂堛垺婢樺鎻掔摠閸?');
         }
 
-        // 绑定主题配置事件
+        // 缂佹垵鐣炬稉濠氼暯闁板秶鐤嗘禍瀣╂
         this.bindThemeEvents();
     },
 
     /**
-     * 绑定主题配置事件
+     * 缂佹垵鐣炬稉濠氼暯闁板秶鐤嗘禍瀣╂
      */
     bindThemeEvents: function () {
-        // 主题配置切换
+        // 娑撳顣介柊宥囩枂閸掑洦宕?
         document.removeEventListener('click', window._wThemeToggleHandler, false);
         window._wThemeToggleHandler = function (e) {
             const btn = e.target.closest('[data-w-action="theme-config"]');
             if (btn) {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('主题配置按钮被点击');
+                console.log('娑撳顣介柊宥囩枂閹稿鎸崇悮顐ゅ仯閸?');
                 const themeConfig = document.querySelector('.w-theme-config');
                 if (themeConfig) {
                     themeConfig.classList.toggle('show');
-                    console.log('主题配置面板切换:', themeConfig.classList.contains('show'));
+                    console.log('娑撳顣介柊宥囩枂闂堛垺婢橀崚鍥ㄥ床:', themeConfig.classList.contains('show'));
                 } else {
-                    console.error('主题配置面板未找到');
+                    console.error('娑撳顣介柊宥囩枂闂堛垺婢橀張顏呭閸?');
                 }
             }
         };
         document.addEventListener('click', window._wThemeToggleHandler, false);
 
-        // 点击外部关闭主题配置
+        // 閻愮懓鍤径鏍劥閸忔娊妫存稉濠氼暯闁板秶鐤?
         document.removeEventListener('click', window._wThemeCloseHandler, false);
         window._wThemeCloseHandler = function (e) {
             if (!e.target.closest('.w-theme-config')) {
@@ -423,7 +419,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         };
         document.addEventListener('click', window._wThemeCloseHandler, false);
 
-        // 主题选项变化事件 - 延迟绑定，确保面板已创建
+        // 娑撳顣介柅澶愩€嶉崣妯哄娴滃娆?- 瀵ゆ儼绻滅紒鎴濈暰閿涘瞼鈥樻穱婵嬫桨閺夊灝鍑￠崚娑樼紦
         setTimeout(() => {
             var themeInputs = document.querySelectorAll('.w-theme-config input, .w-theme-config select');
             themeInputs.forEach(function (input) {
@@ -437,7 +433,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 应用主题配置
+     * 鎼存梻鏁ゆ稉濠氼暯闁板秶鐤?
      */
     applyThemeConfig: function () {
         const config = {
@@ -450,9 +446,9 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             fontSize: document.getElementById('theme-font-size') && document.getElementById('theme-font-size').value
         };
 
-        // 应用配置到所有表格
+        // 鎼存梻鏁ら柊宥囩枂閸掔増澧嶉張澶庛€冮弽?
         document.querySelectorAll('.w-datatable').forEach(function (table) {
-            // 斑马纹
+            // 閺傛垿鈹堢痪?
             if (config.zebra) {
                 table.querySelectorAll('tbody tr:nth-child(even)').forEach(function (row) {
                     row.style.display = '';
@@ -463,7 +459,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 });
             }
 
-            // 悬停效果
+            // 閹剙浠犻弫鍫熺亯
             if (config.hover) {
                 table.querySelectorAll('tbody tr').forEach(function (row) {
                     row.style.cursor = 'pointer';
@@ -474,7 +470,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 });
             }
 
-            // 排序图标
+            // 閹烘帒绨崶鐐垼
             if (config.sort) {
                 table.querySelectorAll('th.sortable').forEach(function (th) {
                     th.style.display = '';
@@ -485,25 +481,25 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 });
             }
 
-            // 字体大小
+            // 鐎涙ぞ缍嬫径褍鐨?
             table.querySelectorAll('td, th').forEach(function (cell) {
                 cell.style.fontSize = config.fontSize;
             });
         });
 
-        // 保存配置到本地存储
+        // 娣囨繂鐡ㄩ柊宥囩枂閸掔増婀伴崷鏉跨摠閸?
         localStorage.setItem('weline-datatable-theme', JSON.stringify(config));
     },
 
     /**
-     * 加载主题配置
+     * 閸旂姾娴囨稉濠氼暯闁板秶鐤?
      */
     loadThemeConfig: function () {
         const savedConfig = localStorage.getItem('weline-datatable-theme');
         if (savedConfig) {
             const config = JSON.parse(savedConfig);
 
-            // 设置表单值
+            // 鐠佸墽鐤嗙悰銊ュ礋閸?
             if (document.getElementById('theme-zebra')) document.getElementById('theme-zebra').checked = config.zebra;
             if (document.getElementById('theme-hover')) document.getElementById('theme-hover').checked = config.hover;
             if (document.getElementById('theme-sort')) document.getElementById('theme-sort').checked = config.sort;
@@ -512,16 +508,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             if (document.getElementById('theme-hover-color')) document.getElementById('theme-hover-color').value = config.hoverColor;
             if (document.getElementById('theme-font-size')) document.getElementById('theme-font-size').value = config.fontSize;
 
-            // 应用配置
+            // 鎼存梻鏁ら柊宥囩枂
             this.applyThemeConfig();
         }
     },
 
     /**
-     * 重要列标注功能
+     * 闁插秷顩﹂崚妤佺垼濞夈劌濮涢懗?
      */
     initImportantFlags: function () {
-        // 绑定重要列切换事件
+        // 缂佹垵鐣鹃柌宥堫洣閸掓鍨忛幑顫皑娴?
         document.removeEventListener('click', window._wImportantToggleHandler, false);
         window._wImportantToggleHandler = function (e) {
             const btn = e.target.closest('[data-w-action="important-view"]');
@@ -537,10 +533,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 切换重要列显示
+     * 閸掑洦宕查柌宥堫洣閸掓妯夌粈?
      */
     toggleImportantView: function (tableIdOrElement) {
-        // 支持传入 tableId 字符串或 DOM 元素
+        // 閺€顖涘瘮娴肩姴鍙?tableId 鐎涙顑佹稉鍙夊灗 DOM 閸忓啰绀?
         let table = tableIdOrElement;
         if (typeof tableIdOrElement === 'string') {
             const instance = this.getInstance(tableIdOrElement);
@@ -559,15 +555,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const isImportantView = table.classList.contains('w-important-view');
 
         if (isImportantView) {
-            // 显示所有列
+            // 閺勫墽銇氶幍鈧張澶婂灙
             table.classList.remove('w-important-view');
             table.querySelectorAll('th, td').forEach(function (cell) {
                 cell.style.display = '';
             });
             const btn = table.querySelector('[data-w-action="important-view"]');
-            if (btn) btn.textContent = __('只显示重要数据');
+            if (btn) btn.textContent = __('閸欘亝妯夌粈娲櫢鐟曚焦鏆熼幑?');
         } else {
-            // 只显示重要列
+            // 閸欘亝妯夌粈娲櫢鐟曚礁鍨?
             table.classList.add('w-important-view');
             table.querySelectorAll('th, td').forEach(function (cell) {
                 cell.style.display = 'none';
@@ -576,12 +572,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 cell.style.display = '';
             });
             const btn = table.querySelector('[data-w-action="important-view"]');
-            if (btn) btn.textContent = __('显示所有数据');
+            if (btn) btn.textContent = __('閺勫墽銇氶幍鈧張澶嬫殶閹?');
         }
     },
 
     /**
-     * 保存重要列配?
+     * 娣囨繂鐡ㄩ柌宥堫洣閸掓鍘?
      */
     saveImportantColumns: function (tableId, columnIndex, isImportant) {
         const key = `weline-datatable-important-${tableId}`;
@@ -599,7 +595,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 加载重要列配?
+     * 閸旂姾娴囬柌宥堫洣閸掓鍘?
      */
     loadImportantColumns: function (tableId) {
         const key = `weline-datatable-important-${tableId}`;
@@ -613,7 +609,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 导出数据功能
+     * 鐎电厧鍤弫鐗堝祦閸旂喕鍏?
      */
     exportData: function (tableId, format = 'excel') {
         const instance = this.getInstance(tableId);
@@ -622,15 +618,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
 
-        // 显示导出进度模态框
+        // 閺勫墽銇氱€电厧鍤潻娑樺濡剝鈧焦顢?
         this.showExportModal(tableId, format);
 
-        // 开始导出过?
+        // 瀵偓婵顕遍崙楦跨箖?
         this.startExport(tableId, format);
     },
 
     /**
-     * 显示导出进度模态框
+     * 閺勫墽銇氱€电厧鍤潻娑樺濡剝鈧焦顢?
      */
     showExportModal: function (tableId, format) {
         const instance = this.instances[tableId];
@@ -644,11 +640,11 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     <div class="w-export-header">
                         <h3 class="w-export-title">
                             <i class="fas fa-download me-2"></i>
-                            ${__('正在导出数据')}
+                            ${__('濮濓絽婀€电厧鍤弫鐗堝祦')}
                         </h3>
                         <p class="w-export-subtitle">
-                            ${__('导出格式')}：<span class="format-badge ${format}">${format.toUpperCase()}</span>
-                            <br>${__('预计导出')} <strong>${totalRecords}</strong> ${__('条记录')}，${__('共')} <strong>${totalPages}</strong> ${__('页')}
+                            ${__('鐎电厧鍤弽鐓庣础')}閿?span class="format-badge ${format}">${format.toUpperCase()}</span>
+                            <br>${__('妫板嫯顓哥€电厧鍤?')} <strong>${totalRecords}</strong> ${__('閺壜ゎ唶瑜?')}閿?{__('閸?')} <strong>${totalPages}</strong> ${__('妞?')}
                         </p>
                     </div>
                     
@@ -656,19 +652,19 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         <div class="w-progress-info">
                             <div class="progress-stats">
                                 <div class="stat-item">
-                                    <span class="stat-label">${__('当前页')}：</span>
+                                    <span class="stat-label">${__('瑜版挸澧犳い?')}閿?/span>
                                     <span class="stat-value current-page">0</span>
                                     <span class="stat-separator">/</span>
                                     <span class="stat-value total-pages">${totalPages}</span>
                                 </div>
                                 <div class="stat-item">
-                                    <span class="stat-label">${__('已导出')}：</span>
+                                    <span class="stat-label">${__('瀹告彃顕遍崙?')}閿?/span>
                                     <span class="stat-value exported-records">0</span>
                                     <span class="stat-separator">/</span>
                                     <span class="stat-value total-records">${totalRecords}</span>
                                 </div>
                                 <div class="stat-item">
-                                    <span class="stat-label">${__('进度')}：</span>
+                                    <span class="stat-label">${__('鏉╂稑瀹?')}閿?/span>
                                     <span class="stat-value progress-percentage">0%</span>
                                 </div>
                             </div>
@@ -683,34 +679,34 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         
                         <div class="w-export-status">
                             <i class="fas fa-spinner fa-spin loading"></i>
-                            <span class="w-export-status-text">${__('正在初始化导出...')}</span>
+                            <span class="w-export-status-text">${__('濮濓絽婀崚婵嗩潗閸栨牕顕遍崙?..')}</span>
                         </div>
                         
                         <div class="w-export-time-info">
                             <div class="time-item">
-                                <span class="time-label">${__('已用时间')}：</span>
+                                <span class="time-label">${__('瀹歌尙鏁ら弮鍫曟？')}閿?/span>
                                 <span class="time-value elapsed-time">00:00</span>
                             </div>
                             <div class="time-item">
-                                <span class="time-label">${__('预计剩余')}：</span>
-                                <span class="time-value remaining-time">${__('计算中...')}</span>
+                                <span class="time-label">${__('妫板嫯顓搁崜鈺€缍?')}閿?/span>
+                                <span class="time-value remaining-time">${__('鐠侊紕鐣绘稉?..')}</span>
                             </div>
                         </div>
                     </div>
                     
                     <div class="w-export-warning">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <span class="w-export-warning-text">${__('导出过程中请勿关闭此窗口，以免导致数据丢失')}</span>
+                        <span class="w-export-warning-text">${__('鐎电厧鍤潻鍥┾柤娑擃叀顕崟鍨彠闂傤厽顒濈粣妤€褰涢敍灞间簰閸忓秴顕遍懛瀛樻殶閹诡喕娑径?')}</span>
                     </div>
                     
                     <div class="w-export-actions">
                         <button type="button" class="w-export-btn secondary" onclick="DataTableManager.cancelExport()" id="cancel-export-btn">
-                            <i class="fas fa-times me-1"></i>${__('取消导出')}
+                            <i class="fas fa-times me-1"></i>${__('閸欐牗绉风€电厧鍤?')}
                         </button>
                     </div>
                 </div>
                 
-                <!-- 添加导出模态框样式（支持主题适配） -->
+                <!-- 濞ｈ濮炵€电厧鍤Ο鈩冣偓浣诡攱閺嶅嘲绱￠敍鍫熸暜閹镐椒瀵屾０姗€鈧倿鍘ら敍?-->
                 <style>
                     .w-export-modal {
                         position: fixed;
@@ -920,15 +916,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             </div>
         `;
 
-        // 移除现有模态框
+        // 缁夊娅庨悳鐗堟箒濡剝鈧焦顢?
         $('.w-export-modal').remove();
 
-        // 添加新模态框
+        // 濞ｈ濮為弬鐗埬侀幀浣诡攱
         $('body').append(modalHtml);
     },
 
     /**
-     * 开始导出过程
+     * 瀵偓婵顕遍崙楦跨箖缁?
      */
     startExport: function (tableId, format) {
         const instance = this.instances[tableId];
@@ -940,7 +936,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         let isCancelled = false;
         let startTime = Date.now();
 
-        // 计时器
+        // 鐠佲剝妞傞崳?
         const timer = setInterval(() => {
             if (isCancelled) {
                 clearInterval(timer);
@@ -951,7 +947,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const elapsedText = this.formatTime(elapsed);
             $('.elapsed-time').text(elapsedText);
 
-            // 计算剩余时间
+            // 鐠侊紕鐣婚崜鈺€缍戦弮鍫曟？
             if (currentPage > 1) {
                 const avgTimePerPage = elapsed / (currentPage - 1);
                 const remainingPages = totalPages - currentPage + 1;
@@ -961,7 +957,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         }, 1000);
 
-        // 取消导出事件
+        // 閸欐牗绉风€电厧鍤禍瀣╂
         window.DataTableManager.cancelExport = function () {
             isCancelled = true;
             clearInterval(timer);
@@ -974,7 +970,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 return;
             }
 
-            // 更新进度信息
+            // 閺囧瓨鏌婃潻娑樺娣団剝浼?
             const progress = Math.round(((currentPage - 1) / totalPages) * 100);
             const exportedRecords = (currentPage - 1) * pageSize;
 
@@ -983,25 +979,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             $('.current-page').text(currentPage);
             $('.exported-records').text(Math.min(exportedRecords, totalRecords));
             $('.progress-percentage').text(`${progress}%`);
-            $('.w-export-status-text').text(`正在获取第 ${currentPage} 页数据...`);
+            $('.w-export-status-text').text(`濮濓絽婀懢宄板絿缁?${currentPage} 妞ゅ灚鏆熼幑?..`);
 
-            // 使用数据获取API进行分页导出
-            fetch(this.buildApiUrl(instance, 'data'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: instance.options.model,
-                    scope: instance.options.scope,
-                    page: currentPage,
-                    limit: pageSize,
-                    filters: instance.filters || {},
-                    sort: instance.sorts || {},
-                    search: instance.search || ''
-                })
+            // 娴ｈ法鏁ら弫鐗堝祦閼惧嘲褰嘇PI鏉╂稖顢戦崚鍡涖€夌€电厧鍤?
+            this.requestJson(instance, 'data', {
+                model: instance.options.model,
+                scope: instance.options.scope,
+                page: currentPage,
+                limit: pageSize,
+                filters: instance.filters || {},
+                sort: instance.sorts || {},
+                search: instance.search || ''
             })
-                .then(response => response.json())
                 .then(response => {
                     if (isCancelled) {
                         clearInterval(timer);
@@ -1009,7 +998,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     }
 
                     if ((response.code == 200 || response.code === '200' || response.success) && response.data) {
-                        // 添加当前页数据
+                        // 濞ｈ濮炶ぐ鎾冲妞ゅ灚鏆熼幑?
                         if (response.data.data) {
                             allData = allData.concat(response.data.data);
                         }
@@ -1017,30 +1006,30 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         currentPage++;
 
                         if (currentPage <= totalPages) {
-                            // 继续下一页，添加小延时避免服务器压力
+                            // 缂佈呯敾娑撳绔存い纰夌礉濞ｈ濮炵亸蹇撴閺冨爼浼╅崗宥嗘箛閸斺€虫珤閸樺濮?
                             setTimeout(exportNextPage, 200);
                         } else {
-                            // 完成导出
+                            // 鐎瑰本鍨氱€电厧鍤?
                             clearInterval(timer);
                             this.completeExport(allData, format, tableId);
                         }
                     } else {
                         clearInterval(timer);
-                        this.showExportError('获取数据失败：' + (response.msg || '未知错误'));
+                        this.showExportError('閼惧嘲褰囬弫鐗堝祦婢惰精瑙﹂敍? ' + (response.msg || '閺堫亞鐓￠柨娆掝嚖'));
                     }
                 })
                 .catch(error => {
                     clearInterval(timer);
-                    this.showExportError('网络错误：' + error.message);
+                    this.showExportError('缂冩垹绮堕柨娆掝嚖閿? ' + error.message);
                 });
         };
 
-        // 开始导出
+        // 瀵偓婵顕遍崙?
         exportNextPage();
     },
 
     /**
-     * 格式化时间显示
+     * 閺嶇厧绱￠崠鏍ㄦ闂傚瓨妯夌粈?
      */
     formatTime: function (milliseconds) {
         const seconds = Math.floor(milliseconds / 1000);
@@ -1051,12 +1040,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 完成导出
+     * 鐎瑰本鍨氱€电厧鍤?
      */
     completeExport: function (data, format, tableId) {
         document.querySelector('.w-progress-fill').style.width = '100%';
-        document.querySelector('.w-progress-text').textContent = __('正在生成文件...');
-        document.querySelector('.w-export-status-text').textContent = __('导出完成！');
+        document.querySelector('.w-progress-text').textContent = __('濮濓絽婀悽鐔稿灇閺傚洣娆?..');
+        document.querySelector('.w-export-status-text').textContent = __('鐎电厧鍤€瑰本鍨氶敍?');
         let icon = document.querySelector('.w-export-status i');
         icon.classList.remove('fa-spinner', 'fa-spin', 'loading');
         icon.classList.add('fa-check-circle');
@@ -1075,7 +1064,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 filename = `datatable_export_${tableId}_${new Date().getTime()}.json`;
                 mimeType = 'application/json';
             }
-            // 创建下载链接
+            // 閸掓稑缂撴稉瀣祰闁剧偓甯?
             const blob = new Blob([content], { type: mimeType });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1085,25 +1074,25 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            // 更新模态框
+            // 閺囧瓨鏌婂Ο鈩冣偓浣诡攱
             document.querySelector('.w-export-actions').innerHTML = `
-                <button type="button" class="w-export-btn primary" onclick="document.querySelector('.w-export-modal').remove()">完成</button>
+                <button type="button" class="w-export-btn primary" onclick="document.querySelector('.w-export-modal').remove()">鐎瑰本鍨?/button>
             `;
         } catch (error) {
-            this.showExportError('生成文件失败：' + error.message);
+            this.showExportError('閻㈢喐鍨氶弬鍥︽婢惰精瑙﹂敍? ' + error.message);
         }
     },
 
     /**
-     * 生成Excel文件
+     * 閻㈢喐鍨欵xcel閺傚洣娆?
      */
     generateExcel: function (data, tableId) {
-        // 这里使用简单的CSV格式，实际项目中可以使用SheetJS等库
+        // 鏉╂瑩鍣锋担璺ㄦ暏缁犫偓閸楁洜娈慍SV閺嶇厧绱￠敍灞界杽闂勫懘銆嶉惄顔昏厬閸欘垯浜掓担璺ㄦ暏SheetJS缁涘绨?
         return this.generateCSV(data, tableId);
     },
 
     /**
-     * 生成CSV文件
+     * 閻㈢喐鍨欳SV閺傚洣娆?
      */
     generateCSV: function (data, tableId) {
         if (!data || data.length === 0) return '';
@@ -1115,7 +1104,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         data.forEach(row => {
             const values = instance.displayFields.map(field => {
                 let value = row[field.name] || '';
-                // 处理包含逗号的?
+                // 婢跺嫮鎮婇崠鍛儓闁褰块惃?
                 if (typeof value === 'string' && value.includes(',')) {
                     value = `"${value}"`;
                 }
@@ -1128,35 +1117,35 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 显示导出错误
+     * 閺勫墽銇氱€电厧鍤柨娆掝嚖
      */
     showExportError: function (message) {
         let icon = document.querySelector('.w-export-status i');
         icon.classList.remove('fa-spinner', 'fa-spin', 'loading');
         icon.classList.add('fa-exclamation-circle');
-        document.querySelector('.w-export-status-text').textContent = __('导出失败');
+        document.querySelector('.w-export-status-text').textContent = __('鐎电厧鍤径杈Е');
         document.querySelector('.w-export-actions').innerHTML = `
-            <button type="button" class="w-export-btn primary" onclick="document.querySelector('.w-export-modal').remove()">${__('关闭')}</button>
+            <button type="button" class="w-export-btn primary" onclick="document.querySelector('.w-export-modal').remove()">${__('閸忔娊妫?')}</button>
         `;
         console.error('Export error:', message);
     },
 
     /**
-     * 字段类型选项
+     * 鐎涙顔岀猾璇茬€烽柅澶愩€?
      */
     fieldTypeOptions: [
-        { value: 'text', label: '文本' },
-        { value: 'number', label: '数字' },
-        { value: 'date', label: '日期' },
-        { value: 'select', label: '下拉选项' },
-        { value: 'email', label: '邮箱' },
-        { value: 'tel', label: '电话' },
-        { value: 'url', label: '网址' },
-        { value: 'image', label: '图片' }
+        { value: 'text', label: '閺傚洦婀?' },
+        { value: 'number', label: '閺佹澘鐡?' },
+        { value: 'date', label: '閺冦儲婀?' },
+        { value: 'select', label: '娑撳濯洪柅澶愩€?' },
+        { value: 'email', label: '闁喚顔?' },
+        { value: 'tel', label: '閻絻鐦?' },
+        { value: 'url', label: '缂冩垵娼?' },
+        { value: 'image', label: '閸ュ墽澧?' }
     ],
 
     /**
-     * 初始化表格（实例隔离）
+     * 閸掓繂顫愰崠鏍€冮弽纭风礄鐎圭偘绶ラ梾鏃傤瀲閿?
      */
     initTable: function (selector, options) {
         const container = document.querySelector(selector);
@@ -1165,59 +1154,59 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return null;
         }
         
-        // 检查是否设置了隔离标志
+        // 濡偓閺屻儲妲搁崥锕侇啎缂冾喕绨￠梾鏃傤瀲閺嶅洤绻?
         const isolate = options.isolate === true;
         
         let tableId = container.getAttribute('id');
-        let instanceKey = tableId; // 用于存储实例的键
+        let instanceKey = tableId; // 閻劋绨€涙ê鍋嶇€圭偘绶ラ惃鍕暛
         
-        // 如果设置了隔离标志，使用 scope 作为实例标识符
+        // 婵″倹鐏夌拋鍓х枂娴滃棝娈х粋缁樼垼韫囨绱濇担璺ㄦ暏 scope 娴ｆ粈璐熺€圭偘绶ラ弽鍥槕缁?
         if (isolate) {
             if (!options.scope) {
                 console.error('DataTable: isolate flag is set but scope is not provided');
                 return null;
             }
-            // 使用 scope 作为实例标识符
+            // 娴ｈ法鏁?scope 娴ｆ粈璐熺€圭偘绶ラ弽鍥槕缁?
             instanceKey = 'scope-' + options.scope;
             
-            // 如果容器没有 ID，使用 scope 生成 ID
+            // 婵″倹鐏夌€圭懓娅掑▽鈩冩箒 ID閿涘奔濞囬悽?scope 閻㈢喐鍨?ID
             if (!tableId) {
                 tableId = 'datatable-scope-' + options.scope;
                 container.setAttribute('id', tableId);
             } else {
-                // 如果已有 ID，但设置了隔离标志，确保 ID 与 scope 一致
+                // 婵″倹鐏夊鍙夋箒 ID閿涘奔绲剧拋鍓х枂娴滃棝娈х粋缁樼垼韫囨绱濈涵顔荤箽 ID 娑?scope 娑撯偓閼?
                 const expectedId = 'datatable-scope-' + options.scope;
                 if (tableId !== expectedId) {
                     console.warn('DataTable: isolate flag is set, but container ID does not match scope. Expected:', expectedId, 'Got:', tableId);
-                    // 更新容器 ID 以匹配 scope
+                    // 閺囧瓨鏌婄€圭懓娅?ID 娴犮儱灏柊?scope
                     container.setAttribute('id', expectedId);
                     tableId = expectedId;
                 }
             }
             
-            // 检查是否已存在相同 scope 的实例
+            // 濡偓閺屻儲妲搁崥锕€鍑＄€涙ê婀惄绋挎倱 scope 閻ㄥ嫬鐤勬笟?
             if (this.instances[instanceKey]) {
                 console.warn('DataTable instance with scope already exists:', options.scope, 'Reusing existing instance.');
-                // 更新容器的引用（可能同一个 scope 有多个容器）
+                // 閺囧瓨鏌婄€圭懓娅掗惃鍕穿閻㈩煉绱欓崣顖濆厴閸氬奔绔存稉?scope 閺堝顦挎稉顏勵啇閸ｎ煉绱?
                 this.instances[instanceKey].container = container;
                 return this.instances[instanceKey];
             }
         } else {
-            // 未设置隔离标志，使用 tableId 作为实例标识符
+            // 閺堫亣顔曠純顕€娈х粋缁樼垼韫囨绱濇担璺ㄦ暏 tableId 娴ｆ粈璐熺€圭偘绶ラ弽鍥槕缁?
             if (!tableId) {
-                // 如果没有 ID，自动生成一个唯一的 ID
+                // 婵″倹鐏夊▽鈩冩箒 ID閿涘矁鍤滈崝銊ф晸閹存劒绔存稉顏勬暜娑撯偓閻?ID
                 tableId = 'datatable-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
                 container.setAttribute('id', tableId);
             }
             instanceKey = tableId;
             
-            // 如果实例已存在，返回现有实例
+            // 婵″倹鐏夌€圭偘绶ュ鎻掔摠閸︻煉绱濇潻鏂挎礀閻滅増婀佺€圭偘绶?
             if (this.instances[instanceKey]) {
                 console.warn('DataTable instance already exists for:', tableId);
                 return this.instances[instanceKey];
             }
             
-            // 确保 scope 的唯一性（如果未提供或已存在，添加 tableId 后缀）
+            // 绾喕绻?scope 閻ㄥ嫬鏁稉鈧幀褝绱欐俊鍌涚亯閺堫亝褰佹笟娑欏灗瀹告彃鐡ㄩ崷顭掔礉濞ｈ濮?tableId 閸氬海绱戦敍?
             if (options.scope) {
                 const existingScope = this.getInstanceByScope(options.scope);
                 if (existingScope && existingScope.id !== tableId) {
@@ -1226,21 +1215,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 }
             }
         }
-        // 自动推断API基础路径
-        let apiUrl = options.apiUrl;
-        if (!apiUrl && typeof window !== 'undefined' && typeof window.api === 'function') {
-            apiUrl = window.api('datatable/rest/v1/data-table');
-        } else if (!apiUrl && typeof window !== 'undefined' && window.site && window.site.api_host) {
-            const apiHost = window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/';
-            apiUrl = apiHost + 'datatable/rest/v1/data-table';
-        } else if (!apiUrl) {
-            apiUrl = '/api/rest/v1/datatable/data-table';
+        // 閼奉亜濮╅幒銊︽焽API閸╄櫣顢呯捄顖氱窞
+        let apiUrl = options.workerApi ? '' : options.apiUrl;
+        if (!options.workerApi && !apiUrl) {
+            apiUrl = '';
         }
         const instance = {
-            id: tableId, // 容器ID
-            instanceKey: instanceKey, // 实例存储键（可能是 tableId 或 scope）
-            scope: options.scope, // scope 值
-            isolate: isolate, // 隔离标志
+            id: tableId, // 鐎圭懓娅扞D
+            instanceKey: instanceKey, // 鐎圭偘绶ョ€涙ê鍋嶉柨顕嗙礄閸欘垵鍏橀弰?tableId 閹?scope閿?
+            scope: options.scope, // scope 閸?
+            isolate: isolate, // 闂呮梻顬囬弽鍥х箶
             container: container,
             options: options,
             currentPage: 1,
@@ -1257,63 +1241,63 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             allFields: [],
             displayFields: [],
             filterFields: [],
-            // 每个实例独立的编辑状态，确保实例隔离
+            // 濮ｅ繋閲滅€圭偘绶ラ悪顒傜彌閻ㄥ嫮绱潏鎴犲Ц閹緤绱濈涵顔荤箽鐎圭偘绶ラ梾鏃傤瀲
             editingState: {
                 isEditing: false,
                 currentCell: null,
                 originalValue: null,
                 editingRow: null
             },
-            // 事件处理器存储，用于清理
+            // 娴滃娆㈡径鍕倞閸ｃ劌鐡ㄩ崒顭掔礉閻劋绨〒鍛倞
             eventHandlers: {},
-            // 实例特定的命名空间
+            // 鐎圭偘绶ラ悧鐟扮暰閻ㄥ嫬鎳￠崥宥団敄闂?
             namespace: isolate ? 'datatable-scope-' + options.scope : 'datatable-' + tableId
         };
-        // 使用 instanceKey 存储实例（可能是 tableId 或 scope）
+        // 娴ｈ法鏁?instanceKey 鐎涙ê鍋嶇€圭偘绶ラ敍鍫濆讲閼宠姤妲?tableId 閹?scope閿?
         this.instances[instanceKey] = instance;
 
-        // 初始化下拉菜单（确保每次初始化表格时都检查）
+        // 閸掓繂顫愰崠鏍︾瑓閹峰褰嶉崡鏇礄绾喕绻氬В蹇旑偧閸掓繂顫愰崠鏍€冮弽鍏兼闁姤顥呴弻銉礆
         this.initDropdowns();
 
-        // 初始化主题
+        // 閸掓繂顫愰崠鏍﹀瘜妫?
         this.initTheme();
 
-        // 初始化批量操作工具栏
+        // 閸掓繂顫愰崠鏍ㄥ闁插繑鎼锋担婊冧紣閸忛攱鐖?
         this.initBatchActionToolbar(instance);
 
-        // 初始化时加载字段配置
+        // 閸掓繂顫愰崠鏍ㄦ閸旂姾娴囩€涙顔岄柊宥囩枂
         this.loadFieldsOnInit(instance);
         
-        // 在容器上添加实例标记，便于查找
+        // 閸︺劌顔愰崳銊ょ瑐濞ｈ濮炵€圭偘绶ラ弽鍥唶閿涘奔绌舵禍搴㈢叀閹?
         container.setAttribute('data-datatable-instance', tableId);
         
         return instance;
     },
     
     /**
-     * 销毁表格实例（清理所有事件和资源，确保实例隔离）
-     * @param {string} identifier - 实例标识符（tableId 或 scope，取决于是否设置了隔离标志）
+     * 闁库偓濮ｄ浇銆冮弽鐓庣杽娓氬绱欏〒鍛倞閹碘偓閺堝绨ㄦ禒璺烘嫲鐠у嫭绨敍宀€鈥樻穱婵嗙杽娓氬娈х粋浼欑礆
+     * @param {string} identifier - 鐎圭偘绶ラ弽鍥槕缁楋讣绱檛ableId 閹?scope閿涘苯褰囬崘鍏呯艾閺勵垰鎯佺拋鍓х枂娴滃棝娈х粋缁樼垼韫囨绱?
      */
     destroyInstance: function (identifier) {
-        // 尝试直接查找
+        // 鐏忔繆鐦惄瀛樺复閺屻儲澹?
         let instance = this.instances[identifier];
         let instanceKey = identifier;
         
-        // 如果未找到，尝试通过 scope 查找
+        // 婵″倹鐏夐張顏呭閸掑府绱濈亸婵婄槸闁俺绻?scope 閺屻儲澹?
         if (!instance) {
             const scopeKey = 'scope-' + identifier;
             instance = this.instances[scopeKey];
             if (instance) {
-                instanceKey = scopeKey; // 更新为正确的键
+                instanceKey = scopeKey; // 閺囧瓨鏌婃稉鐑橆劀绾喚娈戦柨?
             }
         }
         
-        // 如果仍未找到，尝试通过 tableId 查找
+        // 婵″倹鐏夋禒宥嗘弓閹垫儳鍩岄敍灞界毦鐠囨洟鈧俺绻?tableId 閺屻儲澹?
         if (!instance) {
             for (const key in this.instances) {
                 if (this.instances[key].id === identifier) {
                     instance = this.instances[key];
-                    instanceKey = key; // 更新为正确的键
+                    instanceKey = key; // 閺囧瓨鏌婃稉鐑橆劀绾喚娈戦柨?
                     break;
                 }
             }
@@ -1324,9 +1308,9 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
         
-        // 清理所有事件处理器
+        // 濞撳懐鎮婇幍鈧張澶夌皑娴犺泛顦╅悶鍡楁珤
         if (instance.eventHandlers) {
-            // 清理批量操作事件
+            // 濞撳懐鎮婇幍褰掑櫤閹垮秳缍旀禍瀣╂
             if (instance.eventHandlers.batchActions) {
                 instance.eventHandlers.batchActions.forEach(({ element, event, handler }) => {
                     if (element && handler) {
@@ -1335,7 +1319,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 });
             }
             
-            // 清理其他事件
+            // 濞撳懐鎮婇崗鏈电铂娴滃娆?
             if (instance.eventHandlers.dblclick) {
                 const table = document.getElementById(instance.id);
                 if (table) {
@@ -1348,24 +1332,24 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         }
         
-        // 清理编辑状态
+        // 濞撳懐鎮婄紓鏍帆閻樿埖鈧?
         if (instance.editingState && instance.editingState.isEditing) {
             this.cancelCellEdit(instance.id);
         }
         
-        // 从容器上移除实例标记
+        // 娴犲骸顔愰崳銊ょ瑐缁夊娅庣€圭偘绶ラ弽鍥唶
         if (instance.container) {
             instance.container.removeAttribute('data-datatable-instance');
         }
         
-        // 从实例列表中移除（使用正确的键）
+        // 娴犲骸鐤勬笟瀣灙鐞涖劋鑵戠粔濠氭珟閿涘牅濞囬悽銊︻劀绾喚娈戦柨顕嗙礆
         delete this.instances[instanceKey];
         
         console.log('DataTable instance destroyed:', instanceKey, instance.isolate ? '(isolated by scope: ' + instance.scope + ')' : '');
     },
 
     /**
-     * 初始化批量操作工具栏
+     * 閸掓繂顫愰崠鏍ㄥ闁插繑鎼锋担婊冧紣閸忛攱鐖?
      */
     initBatchActionToolbar: function (instance) {
         if (instance.options.enableBatchActions === false) return;
@@ -1373,36 +1357,36 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const tableId = instance.container.getAttribute('id');
         const container = instance.container[0] || instance.container;
 
-        // 检查是否已存在工具栏
+        // 濡偓閺屻儲妲搁崥锕€鍑＄€涙ê婀銉ュ徔閺?
         let toolbar = container.querySelector('.batch-action-toolbar');
         if (!toolbar) {
-            // 创建批量操作工具栏
+            // 閸掓稑缂撻幍褰掑櫤閹垮秳缍斿銉ュ徔閺?
             const toolbarHtml = `
                 <div class="batch-action-toolbar" style="display: none; margin-bottom: 10px;">
                     <div class="d-flex align-items-center gap-2">
-                        <span class="selected-count">已选中 <strong>0</strong> 项</span>
+                        <span class="selected-count">瀹告煡鈧鑵?<strong>0</strong> 妞?/span>
                         <div class="btn-group">
                             <button type="button" class="btn btn-sm btn-danger batch-delete-btn">
-                                <i class="fas fa-trash me-1"></i>删除选中
+                                <i class="fas fa-trash me-1"></i>閸掔娀娅庨柅澶夎厬
                             </button>
                             <button type="button" class="btn btn-sm btn-warning batch-soft-delete-btn">
-                                <i class="fas fa-archive me-1"></i>移至回收站
+                                <i class="fas fa-archive me-1"></i>缁夋槒鍤﹂崶鐐存暪缁?
                             </button>
                             <button type="button" class="btn btn-sm btn-secondary batch-clear-btn">
-                                <i class="fas fa-times me-1"></i>取消选择
+                                <i class="fas fa-times me-1"></i>閸欐牗绉烽柅澶嬪
                             </button>
                             <div class="btn-group">
                                 <button type="button" class="btn btn-sm btn-info batch-export-btn">
-                                    <i class="fas fa-download me-1"></i>导出选中
+                                    <i class="fas fa-download me-1"></i>鐎电厧鍤柅澶夎厬
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-info dropdown-toggle dropdown-toggle-split"
                                         data-bs-toggle="dropdown">
                                     <span class="visually-hidden">Toggle Dropdown</span>
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item export-excel-btn" href="#"><i class="fas fa-file-excel me-2"></i>导出为Excel</a></li>
-                                    <li><a class="dropdown-item export-csv-btn" href="#"><i class="fas fa-file-csv me-2"></i>导出为CSV</a></li>
-                                    <li><a class="dropdown-item export-json-btn" href="#"><i class="fas fa-file-code me-2"></i>导出为JSON</a></li>
+                                    <li><a class="dropdown-item export-excel-btn" href="#"><i class="fas fa-file-excel me-2"></i>鐎电厧鍤稉绡峹cel</a></li>
+                                    <li><a class="dropdown-item export-csv-btn" href="#"><i class="fas fa-file-csv me-2"></i>鐎电厧鍤稉绡奡V</a></li>
+                                    <li><a class="dropdown-item export-json-btn" href="#"><i class="fas fa-file-code me-2"></i>鐎电厧鍤稉绡擲ON</a></li>
                                 </ul>
                             </div>
                         </div>
@@ -1410,7 +1394,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 </div>
             `;
 
-            // 插入到表格前面
+            // 閹绘帒鍙嗛崚鎷屻€冮弽鐓庡闂?
             const tableElement = container.querySelector('table');
             if (tableElement) {
                 tableElement.insertAdjacentHTML('beforebegin', toolbarHtml);
@@ -1418,25 +1402,25 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         }
 
-        // 绑定工具栏事件
+        // 缂佹垵鐣惧銉ュ徔閺嶅繋绨ㄦ禒?
         this.bindBatchActionEvents(instance, toolbar);
     },
 
     /**
-     * 绑定批量操作事件（实例隔离）
+     * 缂佹垵鐣鹃幍褰掑櫤閹垮秳缍旀禍瀣╂閿涘牆鐤勬笟瀣缁備紮绱?
      */
     bindBatchActionEvents: function (instance, toolbar) {
         if (!toolbar) {
-            console.warn('批量操作工具栏不存在，跳过事件绑定');
+            console.warn('閹靛綊鍣洪幙宥勭稊瀹搞儱鍙块弽蹇庣瑝鐎涙ê婀敍宀冪儲鏉╁洣绨ㄦ禒鍓佺拨鐎?');
             return;
         }
         const tableId = instance.container.getAttribute('id');
         
-        // 初始化事件处理器存储
+        // 閸掓繂顫愰崠鏍︾皑娴犺泛顦╅悶鍡楁珤鐎涙ê鍋?
         if (!instance.eventHandlers) instance.eventHandlers = {};
         if (!instance.eventHandlers.batchActions) instance.eventHandlers.batchActions = [];
 
-        // 删除选中项
+        // 閸掔娀娅庨柅澶夎厬妞?
         const deleteHandler = () => {
             const selectedIds = this.getSelectedRowIds(instance);
             this.batchDelete(instance, selectedIds, { softDelete: false });
@@ -1444,7 +1428,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         toolbar.querySelector('.batch-delete-btn')?.addEventListener('click', deleteHandler);
         instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.batch-delete-btn'), event: 'click', handler: deleteHandler });
 
-        // 软删除选中项
+        // 鏉烆垰鍨归梽銈夆偓澶夎厬妞?
         const softDeleteHandler = () => {
             const selectedIds = this.getSelectedRowIds(instance);
             this.batchDelete(instance, selectedIds, { softDelete: true });
@@ -1452,14 +1436,14 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         toolbar.querySelector('.batch-soft-delete-btn')?.addEventListener('click', softDeleteHandler);
         instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.batch-soft-delete-btn'), event: 'click', handler: softDeleteHandler });
 
-        // 取消选择
+        // 閸欐牗绉烽柅澶嬪
         const clearHandler = () => {
             this.clearSelection(instance);
         };
         toolbar.querySelector('.batch-clear-btn')?.addEventListener('click', clearHandler);
         instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.batch-clear-btn'), event: 'click', handler: clearHandler });
 
-        // 导出功能
+        // 鐎电厧鍤崝鐔诲厴
         const exportHandler = () => {
             const selectedIds = this.getSelectedRowIds(instance);
             this.exportDataBatch(instance, selectedIds, 'excel');
@@ -1491,7 +1475,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         toolbar.querySelector('.export-json-btn')?.addEventListener('click', exportJsonHandler);
         instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.export-json-btn'), event: 'click', handler: exportJsonHandler });
 
-        // 全选/取消全选
+        // 閸忋劑鈧?閸欐牗绉烽崗銊┾偓?
         const selectAllCheckbox = instance.container.querySelector(`#select-all-${tableId}`);
         if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener('change', (e) => {
@@ -1501,7 +1485,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 获取选中行的ID
+     * 閼惧嘲褰囬柅澶夎厬鐞涘瞼娈慖D
      */
     getSelectedRowIds: function (instance) {
         const checkboxes = instance.container.querySelectorAll('.row-checkbox:checked');
@@ -1509,7 +1493,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 切换全选状态
+     * 閸掑洦宕查崗銊┾偓澶屽Ц閹?
      */
     toggleSelectAll: function (instance, checked) {
         const checkboxes = instance.container.querySelectorAll('.row-checkbox');
@@ -1525,7 +1509,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 更新批量操作按钮状态
+     * 閺囧瓨鏌婇幍褰掑櫤閹垮秳缍旈幐澶愭尦閻樿埖鈧?
      */
     updateBatchActionButtons: function (instance) {
         const selectedIds = this.getSelectedRowIds(instance);
@@ -1543,7 +1527,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         }
 
-        // 更新全选复选框状态
+        // 閺囧瓨鏌婇崗銊┾偓澶婎槻闁顢嬮悩鑸碘偓?
         const tableId = instance.container.getAttribute('id');
         const selectAllCheckbox = instance.container.querySelector(`#select-all-${tableId}`);
         const allCheckboxes = instance.container.querySelectorAll('.row-checkbox');
@@ -1556,25 +1540,25 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 批量导出数据（用于批量操作工具栏）
+     * 閹靛綊鍣虹€电厧鍤弫鐗堝祦閿涘牏鏁ゆ禍搴㈠闁插繑鎼锋担婊冧紣閸忛攱鐖敍?
      */
     exportDataBatch: function (instance, selectedIds = null, format = 'excel') {
         const tableId = instance.container.getAttribute('id');
 
-        // 如果没有选中任何行，导出所有数据
+        // 婵″倹鐏夊▽鈩冩箒闁鑵戞禒璁崇秿鐞涘矉绱濈€电厧鍤幍鈧張澶嬫殶閹?
         if (!selectedIds || selectedIds.length === 0) {
             selectedIds = instance.data.map(row => row.id || row.index);
         }
 
         if (selectedIds.length === 0) {
-            this.showWarning(tableId, __('没有可导出的数据'));
+            this.showWarning(tableId, __('濞屸剝婀侀崣顖氼嚤閸戣櫣娈戦弫鐗堝祦'));
             return;
         }
 
-        // 显示加载状态
-        this.showLoading(tableId, __('正在准备导出数据...'));
+        // 閺勫墽銇氶崝鐘烘祰閻樿埖鈧?
+        this.showLoading(tableId, __('濮濓絽婀崙鍡楊槵鐎电厧鍤弫鐗堝祦...'));
 
-        // 准备导出参数
+        // 閸戝棗顦€电厧鍤崣鍌涙殶
         const exportParams = {
             model: instance.options.model,
             ids: selectedIds,
@@ -1585,45 +1569,32 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }))
         };
 
-        // 发送导出请求
-        fetch(this.buildApiUrl(instance, 'export-data'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(exportParams)
-        })
+        // 閸欐垿鈧礁顕遍崙楦款嚞濮?
+        this.requestJson(instance, 'export-data', exportParams)
             .then(response => {
                 this.hideLoading(tableId);
-
-                if (response.ok) {
-                    // 如果是文件下载，直接处理
-                    if (format === 'excel' || format === 'csv') {
-                        return response.blob().then(blob => {
-                            this.downloadFile(blob, `export_${Date.now()}.${format === 'excel' ? 'xlsx' : 'csv'}`);
-                        });
-                    } else {
-                        // JSON格式返回数据
-                        return response.json().then(data => {
-                            this.downloadJsonFile(data, `export_${Date.now()}.json`);
-                        });
-                    }
+                if (response.code == 200 || response.code === '200' || response.success) {
+                    const payload = response.data || {};
+                    const content = payload.body || '';
+                    const contentType = payload.content_type || (format === 'json' ? 'application/json' : 'text/csv');
+                    const filename = payload.filename || `export_${Date.now()}.${format === 'excel' ? 'xlsx' : format}`;
+                    this.downloadFile(new Blob([content], { type: contentType }), filename);
                 } else {
-                    throw new Error('导出失败');
+                    throw new Error('Export failed');
                 }
             })
             .then(() => {
-                this.showSuccess(tableId, __('成功导出 %{1} 条记录', selectedIds.length));
+                this.showSuccess(tableId, __('閹存劕濮涚€电厧鍤?%{1} 閺壜ゎ唶瑜?', selectedIds.length));
             })
             .catch(error => {
                 this.hideLoading(tableId);
                 console.error('Export error:', error);
-                this.showError(tableId, __('导出失败：%{1}', error.message));
+                this.showError(tableId, __('鐎电厧鍤径杈Е閿?{1}', error.message));
             });
     },
 
     /**
-     * 下载文件
+     * 娑撳娴囬弬鍥︽
      */
     downloadFile: function (blob, filename) {
         const url = window.URL.createObjectURL(blob);
@@ -1638,7 +1609,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 下载JSON文件
+     * 娑撳娴嘕SON閺傚洣娆?
      */
     downloadJsonFile: function (data, filename) {
         const jsonStr = JSON.stringify(data, null, 2);
@@ -1647,23 +1618,23 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 客户端导出功能（备用方案）
+     * 鐎广垺鍩涚粩顖氼嚤閸戝搫濮涢懗鏂ょ礄婢跺洨鏁ら弬瑙勵攳閿?
      */
     exportDataClient: function (instance, selectedIds = null, format = 'csv') {
         const tableId = instance.container.getAttribute('id');
 
-        // 获取要导出的数据
+        // 閼惧嘲褰囩憰浣割嚤閸戣櫣娈戦弫鐗堝祦
         let exportData = instance.data;
         if (selectedIds && selectedIds.length > 0) {
             exportData = instance.data.filter(row => selectedIds.includes(row.id || row.index));
         }
 
         if (exportData.length === 0) {
-            this.showWarning(tableId, __('没有可导出的数据'));
+            this.showWarning(tableId, __('濞屸剝婀侀崣顖氼嚤閸戣櫣娈戦弫鐗堝祦'));
             return;
         }
 
-        // 获取可见字段
+        // 閼惧嘲褰囬崣顖濐潌鐎涙顔?
         const visibleFields = instance.displayFields.filter(field => field.visible !== false);
 
         if (format === 'csv') {
@@ -1671,23 +1642,23 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         } else if (format === 'json') {
             this.exportToJson(exportData, visibleFields);
         } else {
-            this.showError(tableId, __('不支持的导出格式'));
+            this.showError(tableId, __('娑撳秵鏁幐浣烘畱鐎电厧鍤弽鐓庣础'));
         }
     },
 
     /**
-     * 导出为CSV
+     * 鐎电厧鍤稉绡奡V
      */
     exportToCsv: function (data, fields) {
-        // 构建CSV头部
+        // 閺嬪嫬缂揅SV婢舵挳鍎?
         const headers = fields.map(field => field.label || field.name);
         let csvContent = headers.join(',') + '\n';
 
-        // 构建CSV数据行
+        // 閺嬪嫬缂揅SV閺佺増宓佺悰?
         data.forEach(row => {
             const values = fields.map(field => {
                 let value = row[field.name] || '';
-                // 处理包含逗号或引号的值
+                // 婢跺嫮鎮婇崠鍛儓闁褰块幋鏍х穿閸欓娈戦崐?
                 if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
                     value = '"' + value.replace(/"/g, '""') + '"';
                 }
@@ -1696,16 +1667,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             csvContent += values.join(',') + '\n';
         });
 
-        // 下载文件
+        // 娑撳娴囬弬鍥︽
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         this.downloadFile(blob, `export_${Date.now()}.csv`);
     },
 
     /**
-     * 导出为JSON
+     * 鐎电厧鍤稉绡擲ON
      */
     exportToJson: function (data, fields) {
-        // 只导出可见字段的数据
+        // 閸欘亜顕遍崙鍝勫讲鐟欎礁鐡у▓鐢垫畱閺佺増宓?
         const exportData = data.map(row => {
             const exportRow = {};
             fields.forEach(field => {
@@ -1718,96 +1689,89 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 初始化时加载字段配置
+     * 閸掓繂顫愰崠鏍ㄦ閸旂姾娴囩€涙顔岄柊宥囩枂
      */
     loadFieldsOnInit: function (instance) {
-        console.log('loadFieldsOnInit: 开始加载字段配置', {
+        console.log('loadFieldsOnInit: 瀵偓婵濮炴潪钘夌摟濞堢敻鍘ょ純?', {
             model: instance.options.model,
             scope: instance.options.scope
         });
-        // 先尝试从HTML中初始化基础配置
+        // 閸忓牆鐨剧拠鏇氱矤HTML娑擃厼鍨垫慨瀣閸╄櫣顢呴柊宥囩枂
         this.initFromHTML(instance);
-        // 然后加载字段配置并渲染表格
+        // 閻掕泛鎮楅崝鐘烘祰鐎涙顔岄柊宥囩枂楠炶埖瑕嗛弻鎾广€冮弽?
         this.loadModelFieldsForInit(instance.container.getAttribute('id'));
     },
 
     /**
-     * 初始化时加载模型字段（会触发表格重新构建）
+     * 閸掓繂顫愰崠鏍ㄦ閸旂姾娴囧Ο鈥崇€风€涙顔岄敍鍫滅窗鐟欙箑褰傜悰銊︾壐闁插秵鏌婇弸鍕紦閿?
      */
     loadModelFieldsForInit: function (tableId) {
         const instance = this.instances[tableId];
         if (!instance) return;
         if (!instance.apiUrl) {
-            console.error('[DataTableManager] apiUrl未设置，无法加载字段配置');
+            console.error('[DataTableManager] apiUrl閺堫亣顔曠純顕嗙礉閺冪姵纭堕崝鐘烘祰鐎涙顔岄柊宥囩枂');
             return;
         }
 
-        // 1. 提取模板字段（field指定字段）
+        // 1. 閹绘劕褰囧Ο鈩冩緲鐎涙顔岄敍鍧抜eld閹稿洤鐣剧€涙顔岄敍?
         const templateFields = this.extractFieldsFromDOM(tableId, 'display');
         const templateFilterFields = this.extractFieldsFromDOM(tableId, 'filter');
-        console.log('loadModelFieldsForInit: 模板字段', templateFields);
-        console.log('loadModelFieldsForInit: 模板筛选字段', templateFilterFields);
+        console.log('loadModelFieldsForInit: 濡剝婢樼€涙顔?', templateFields);
+        console.log('loadModelFieldsForInit: 濡剝婢樼粵娑⑩偓澶婄摟濞?', templateFilterFields);
         instance.templateFields = templateFields;
         instance.templateFilterFields = templateFilterFields;
 
-        console.log('loadModelFieldsForInit: 开始加载字段配置', {
+        console.log('loadModelFieldsForInit: 瀵偓婵濮炴潪钘夌摟濞堢敻鍘ょ純?', {
             tableId,
             model: instance.options.model,
             scope: instance.options.scope
         });
 
-        fetch(instance.apiUrl + '/fields', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                table_id: tableId,
-                model: instance.options.model,
-                scope: instance.options.scope
-            })
+        this.requestJson(instance, 'fields', {
+            table_id: tableId,
+            model: instance.options.model,
+            scope: instance.options.scope
         })
-            .then(response => response.json())
             .then(response => {
-                // 3. 合并模板字段和接口字段（用于"可用字段"列表）
+                // 3. 閸氬牆鑻熷Ο鈩冩緲鐎涙顔岄崪灞惧复閸欙絽鐡у▓纰夌礄閻劋绨?閸欘垳鏁ょ€涙顔?閸掓銆冮敍?
                 let apiFields = (response.data && response.data.all_fields) ? response.data.all_fields : [];
                 let mergedFields = this.mergeTemplateAndApiFields(templateFields, apiFields);
-                // 合并filter字段
+                // 閸氬牆鑻焒ilter鐎涙顔?
                 let apiFilterFields = (response.data && response.data.filter_fields) ? response.data.filter_fields : [];
                 let mergedFilterFields = this.mergeTemplateAndApiFields(templateFilterFields, apiFilterFields);
 
-                // 4. 确定显示字段：优先级为 缓存配置 > 模板字段 > API默认字段
+                // 4. 绾喖鐣鹃弰鍓с仛鐎涙顔岄敍姘喘閸忓牏楠囨稉?缂傛挸鐡ㄩ柊宥囩枂 > 濡剝婢樼€涙顔?> API姒涙顓荤€涙顔?
                 let displayFields;
                 const cachedDisplayFields = response.data.cached_display_fields;
                 const templateFieldNames = new Set(templateFields.map(f => f.name));
 
                 if (cachedDisplayFields && cachedDisplayFields.length > 0) {
-                    // 有缓存配置，使用缓存配置，但确保模板字段属性优先
+                    // 閺堝绱︾€涙﹢鍘ょ純顕嗙礉娴ｈ法鏁ょ紓鎾崇摠闁板秶鐤嗛敍灞肩稻绾喕绻氬Ο鈩冩緲鐎涙顔岀仦鐐粹偓褌绱崗?
                     displayFields = cachedDisplayFields.map(cachedField => {
                         const templateField = templateFields.find(t => t.name === cachedField.name);
                         return templateField ? { ...cachedField, ...templateField } : cachedField;
                     });
-                    console.log('loadModelFieldsForInit: 使用缓存配置', displayFields);
+                    console.log('loadModelFieldsForInit: 娴ｈ法鏁ょ紓鎾崇摠闁板秶鐤?', displayFields);
                 } else if (templateFields.length > 0) {
-                    // 没有缓存配置，但有模板字段，只显示模板字段
+                    // 濞屸剝婀佺紓鎾崇摠闁板秶鐤嗛敍灞肩稻閺堝膩閺夊灝鐡у▓纰夌礉閸欘亝妯夌粈鐑樐侀弶鍨摟濞?
                     displayFields = [...templateFields];
-                    console.log('loadModelFieldsForInit: 使用模板字段（默认只显示模板中指定的字段）', displayFields);
+                    console.log('loadModelFieldsForInit: 娴ｈ法鏁ゅΟ鈩冩緲鐎涙顔岄敍鍫ョ帛鐠併倕褰ч弰鍓с仛濡剝婢樻稉顓熷瘹鐎规氨娈戠€涙顔岄敍?', displayFields);
                 } else {
-                    // 没有缓存配置也没有模板字段，使用API默认字段
+                    // 濞屸剝婀佺紓鎾崇摠闁板秶鐤嗘稊鐔哥梾閺堝膩閺夊灝鐡у▓纰夌礉娴ｈ法鏁PI姒涙顓荤€涙顔?
                     displayFields = response.data.display_fields || [];
-                    console.log('loadModelFieldsForInit: 使用API默认字段', displayFields);
+                    console.log('loadModelFieldsForInit: 娴ｈ法鏁PI姒涙顓荤€涙顔?', displayFields);
                 }
 
-                // 5. 记录用户选择的字段（非模板字段）
+                // 5. 鐠佹澘缍嶉悽銊﹀煕闁瀚ㄩ惃鍕摟濞堢绱欓棃鐐茨侀弶鍨摟濞堢绱?
                 const userSelectedFields = displayFields.filter(field => !templateFieldNames.has(field.name));
-                console.log('loadModelFieldsForInit: 用户选择的字段', userSelectedFields);
+                console.log('loadModelFieldsForInit: 閻劍鍩涢柅澶嬪閻ㄥ嫬鐡у▓?', userSelectedFields);
 
-                // 6. 处理受保护字段的配置
+                // 6. 婢跺嫮鎮婇崣妞剧箽閹躲倕鐡у▓鐢垫畱闁板秶鐤?
                 displayFields = displayFields.map(field => {
                     const isProtected = this.isFieldProtected(field);
                     const isPrimaryOrIndex = field.is_primary === true || field.primary === true || field.primary_key === true || field.pk === true || ['id', 'ID', 'Id', 'primary', 'pk', 'primary_key', 'is_primary'].includes(field.name);
                     if (isProtected) {
-                        // 主键/索引字段不能排序和移动
+                        // 娑撳鏁?缁便垹绱╃€涙顔屾稉宥堝厴閹烘帒绨崪宀€些閸?
                         if (isPrimaryOrIndex) {
                             return {
                                 ...field,
@@ -1819,7 +1783,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                                 display_orderable: false
                             };
                         }
-                        // 其它受保护字段默认可以排序和移动
+                        // 閸忚泛鐣犻崣妞剧箽閹躲倕鐡у▓鐢哥帛鐠併倕褰叉禒銉﹀笓鎼村繐鎷扮粔璇插З
                         return {
                             ...field,
                             sortable: field.sortable !== false && field.sortable !== 'false',
@@ -1833,7 +1797,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     return field;
                 });
 
-                // 7. 确保指定字段排到前面
+                // 7. 绾喕绻氶幐鍥х暰鐎涙顔岄幒鎺戝煂閸撳秹娼?
                 const displayTemplateFields = displayFields.filter(field =>
                     field.template_defined || field.field_defined || field.from_field
                 );
@@ -1841,32 +1805,32 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     !field.template_defined && !field.field_defined && !field.from_field
                 );
 
-                // 重新排序：模板字段在前，用户字段在后
+                // 闁插秵鏌婇幒鎺戠碍閿涙碍膩閺夊灝鐡у▓闈涙躬閸撳稄绱濋悽銊﹀煕鐎涙顔岄崷銊ユ倵
                 displayFields = [...displayTemplateFields, ...userFields];
 
-                // 8. 更新实例中的字段数据
+                // 8. 閺囧瓨鏌婄€圭偘绶ユ稉顓犳畱鐎涙顔岄弫鐗堝祦
                 instance.allFields = mergedFields;
                 instance.displayFields = displayFields;
                 instance.filterFields = mergedFilterFields;
 
-                // 9. 触发表格重新构建
+                // 9. 鐟欙箑褰傜悰銊︾壐闁插秵鏌婇弸鍕紦
                 this.rebuildTableFromConfig(tableId, displayFields, mergedFilterFields);
             })
             .catch(error => {
-                console.error('loadModelFieldsForInit: 加载字段配置失败', error);
-                this.showError(tableId, error || __('获取字段失败'));
+                console.error('loadModelFieldsForInit: 閸旂姾娴囩€涙顔岄柊宥囩枂婢惰精瑙?', error);
+                this.showError(tableId, error || __('閼惧嘲褰囩€涙顔屾径杈Е'));
             });
     },
 
     /**
-     * 从HTML中初始化配置（支持data-w-field属性）
+     * 娴犲订TML娑擃厼鍨垫慨瀣闁板秶鐤嗛敍鍫熸暜閹镐龚ata-w-field鐏炵偞鈧嶇礆
      */
     initFromHTML: function (instance) {
         const container = instance.container[0] || instance.container;
         const thead = container.querySelector('thead');
         const filterContainer = container.querySelector('.datatable-filter');
 
-        // 优先从th[data-w-field]读取字段配置
+        // 娴兼ê鍘涙禒宸榟[data-w-field]鐠囪褰囩€涙顔岄柊宥囩枂
         const fields = [];
         if (thead) {
             const thElements = thead.querySelectorAll('th[data-w-field]');
@@ -1875,14 +1839,14 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     const fieldConfig = JSON.parse(th.getAttribute('data-w-field'));
                     fields.push(fieldConfig);
                 } catch (e) {
-                    // fallback: 兼容旧结构
+                    // fallback: 閸忕厧顔愰弮褏绮ㄩ弸?
                     const fieldName = th.getAttribute('data-field');
                     if (fieldName) fields.push({ name: fieldName, label: th.textContent.trim(), type: 'text', visible: true });
                 }
             });
         }
 
-        // 设置基础配置
+        // 鐠佸墽鐤嗛崺铏诡攨闁板秶鐤?
         instance.config = {
             fields: fields,
             pageSize: instance.pageSize,
@@ -1891,24 +1855,24 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             showConfig: instance.options.showConfig !== false
         };
 
-        // 初始化所有过滤器容器
+        // 閸掓繂顫愰崠鏍ㄥ閺堝绻冨銈呮珤鐎圭懓娅?
         this.initAllFilters(instance);
 
-        console.log('initFromHTML: 基础配置初始化完成', {
+        console.log('initFromHTML: 閸╄櫣顢呴柊宥囩枂閸掓繂顫愰崠鏍х暚閹?', {
             fieldsCount: fields.length,
             config: instance.config
         });
 
-        // 注意：这里不渲染表格，等字段配置加载完成后再渲染
+        // 濞夈劍鍓伴敍姘崇箹闁插奔绗夊〒鍙夌厠鐞涖劍鐗搁敍宀€鐡戠€涙顔岄柊宥囩枂閸旂姾娴囩€瑰本鍨氶崥搴″晙濞撳弶鐓?
     },
 
     /**
-     * 初始化过滤器
+     * 閸掓繂顫愰崠鏍箖濠娿倕娅?
      */
     initFilters: function (instance, filterContainer) {
         if (!filterContainer) return;
 
-        // 绑定过滤器事件
+        // 缂佹垵鐣炬潻鍥ㄦ姢閸ｃ劋绨ㄦ禒?
         const searchButtons = filterContainer.querySelectorAll('button[onclick*="search"]');
         searchButtons.forEach(button => {
             button.removeEventListener('click', this.applyFilters.bind(this, instance));
@@ -1923,24 +1887,24 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 初始化所有筛选器容器
+     * 閸掓繂顫愰崠鏍ㄥ閺堝鐡柅澶婃珤鐎圭懓娅?
      */
     initAllFilters: function (instance) {
         const container = instance.container[0] || instance.container;
 
-        // 初始化主要的筛选器容器
+        // 閸掓繂顫愰崠鏍﹀瘜鐟曚胶娈戠粵娑⑩偓澶婃珤鐎圭懓娅?
         const filterContainer = container.querySelector('.datatable-filter');
         if (filterContainer) {
             this.initFilters(instance, filterContainer);
         }
 
-        // 初始化筛选器工具栏
+        // 閸掓繂顫愰崠鏍摣闁娅掑銉ュ徔閺?
         const filterToolbar = container.querySelector('.datatable-filter-toolbar');
         if (filterToolbar) {
             this.initFilters(instance, filterToolbar);
         }
 
-        // 初始化筛选器表单
+        // 閸掓繂顫愰崠鏍摣闁娅掔悰銊ュ礋
         const filterForm = container.querySelector('.datatable-filter-form');
         if (filterForm) {
             this.initFilters(instance, filterForm);
@@ -1948,13 +1912,13 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 应用过滤器
+     * 鎼存梻鏁ゆ潻鍥ㄦ姢閸?
      */
     applyFilters: function (instance) {
         const container = instance.container[0] || instance.container;
         instance.filters = {};
 
-        // 处理主要的筛选器容器
+        // 婢跺嫮鎮婃稉鏄忣洣閻ㄥ嫮鐡柅澶婃珤鐎圭懓娅?
         const filterContainer = container.querySelector('.datatable-filter');
         if (filterContainer) {
             const filterInputs = filterContainer.querySelectorAll('[data-field]');
@@ -1968,7 +1932,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }
 
-        // 处理筛选器工具栏
+        // 婢跺嫮鎮婄粵娑⑩偓澶婃珤瀹搞儱鍙块弽?
         const filterToolbar = container.querySelector('.datatable-filter-toolbar');
         if (filterToolbar) {
             const filterInputs = filterToolbar.querySelectorAll('[data-field]');
@@ -1982,7 +1946,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }
 
-        // 处理筛选器表单
+        // 婢跺嫮鎮婄粵娑⑩偓澶婃珤鐞涖劌宕?
         const filterForm = container.querySelector('.datatable-filter-form');
         if (filterForm) {
             const filterInputs = filterForm.querySelectorAll('[data-field]');
@@ -2001,12 +1965,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 重置过滤器
+     * 闁插秶鐤嗘潻鍥ㄦ姢閸?
      */
     resetFilters: function (instance) {
         const container = instance.container[0] || instance.container;
 
-        // 重置主要的筛选器容器
+        // 闁插秶鐤嗘稉鏄忣洣閻ㄥ嫮鐡柅澶婃珤鐎圭懓娅?
         const filterContainer = container.querySelector('.datatable-filter');
         if (filterContainer) {
             const filterInputs = filterContainer.querySelectorAll('[data-field]');
@@ -2019,7 +1983,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }
 
-        // 重置筛选器工具栏
+        // 闁插秶鐤嗙粵娑⑩偓澶婃珤瀹搞儱鍙块弽?
         const filterToolbar = container.querySelector('.datatable-filter-toolbar');
         if (filterToolbar) {
             const filterInputs = filterToolbar.querySelectorAll('[data-field]');
@@ -2032,7 +1996,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }
 
-        // 重置筛选器表单
+        // 闁插秶鐤嗙粵娑⑩偓澶婃珤鐞涖劌宕?
         const filterForm = container.querySelector('.datatable-filter-form');
         if (filterForm) {
             const filterInputs = filterForm.querySelectorAll('[data-field]');
@@ -2051,28 +2015,28 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 渲染表格
+     * 濞撳弶鐓嬬悰銊︾壐
      */
     renderTable: function (instance) {
         const container = instance.container[0] || instance.container;
         const tbody = container.querySelector('tbody');
 
-        // 只渲染数据行，不重新渲染表头
+        // 閸欘亝瑕嗛弻鎾存殶閹诡喛顢戦敍灞肩瑝闁插秵鏌婂〒鍙夌厠鐞涖劌銇?
         this.renderBody(instance, tbody);
 
-        // 渲染分页
+        // 濞撳弶鐓嬮崚鍡涖€?
         this.renderPagination(instance);
     },
 
     /**
-     * 解析URL中的排序参数
+     * 鐟欙絾鐎経RL娑擃厾娈戦幒鎺戠碍閸欏倹鏆?
      */
     parseUrlSortParams: function () {
         const urlParams = new URLSearchParams(window.location.search);
         const current = urlParams.get('current');
         const sortParams = {};
 
-        // 解析sort参数，如sort.store_id=desc
+        // 鐟欙絾鐎絪ort閸欏倹鏆熼敍灞筋洤sort.store_id=desc
         for (const [key, value] of urlParams.entries()) {
             if (key.startsWith('sort.')) {
                 const fieldName = key.replace('sort.', '');
@@ -2087,7 +2051,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 渲染表格头部
+     * 濞撳弶鐓嬬悰銊︾壐婢舵挳鍎?
      */
     renderHeader: function (tableId, fields) {
         const instance = this.instances[tableId];
@@ -2097,7 +2061,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const thead = container.querySelector('thead');
         if (!thead) return;
 
-        // 确保字段顺序正确
+        // 绾喕绻氱€涙顔屾い鍝勭碍濮濓絿鈥?
         const templateFields = fields.filter(field =>
             field.template_defined || field.field_defined || field.from_field
         );
@@ -2109,7 +2073,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         let headerHtml = '<tr>';
         let hasSortableFields = false;
 
-        // 添加复选框列（如果启用了批量操作）
+        // 濞ｈ濮炴径宥夆偓澶嬵攱閸掓绱欐俊鍌涚亯閸氼垳鏁ゆ禍鍡樺闁插繑鎼锋担婊愮礆
         if (instance.options.enableBatchActions !== false) {
             headerHtml += `
                 <th class="checkbox-column" style="width: 40px;">
@@ -2128,7 +2092,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const canEdit = isProtected ?
                 (field.editable === true || field.editable === 'true') :
                 (field.editable !== false);
-            // 检查列是否可以拖动排序（默认允许，除非明确禁止）
+            // 濡偓閺屻儱鍨弰顖氭儊閸欘垯浜掗幏鏍уЗ閹烘帒绨敍鍫ョ帛鐠併倕鍘戠拋闈╃礉闂勩倝娼弰搴ｂ€樼粋浣诡剾閿?
             const canDragOrder = field.display_orderable !== false && 
                                  field.display_orderable !== 'false' && 
                                  field.display_orderable !== 0 && 
@@ -2142,9 +2106,9 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 '<i class="fas fa-sort sort-icon" data-field="' + field.name + '"></i>' : '';
             const editIcon = canEdit ?
                 '<i class="fas fa-edit edit-icon" data-field="' + field.name + '"></i>' : '';
-            // 拖动手柄图标（只有可拖动的列才显示）
+            // 閹锋牕濮╅幍瀣労閸ョ偓鐖ｉ敍鍫濆涧閺堝褰查幏鏍уЗ閻ㄥ嫬鍨幍宥嗘▔缁€鐚寸礆
             const dragHandle = canDragOrder ?
-                '<i class="fas fa-grip-vertical column-drag-handle" title="' + __('拖动调整列顺序') + '"></i>' : '';
+                '<i class="fas fa-grip-vertical column-drag-handle" title="' + __('閹锋牕濮╃拫鍐╂殻閸掓銆庢惔?') + '"></i>' : '';
 
             headerHtml += `
                 <th data-field="${field.name}"
@@ -2173,7 +2137,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         thead.innerHTML = headerHtml;
 
-        // 绑定排序事件
+        // 缂佹垵鐣鹃幒鎺戠碍娴滃娆?
         if (hasSortableFields) {
             const sortIcons = thead.querySelectorAll('.sort-icon');
             sortIcons.forEach(icon => {
@@ -2184,16 +2148,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }
 
-        // 重新初始化拖拽排序功能（字段配置弹窗）
+        // 闁插秵鏌婇崚婵嗩潗閸栨牗瀚嬮幏鑺ュ笓鎼村繐濮涢懗鏂ょ礄鐎涙顔岄柊宥囩枂瀵湱鐛ラ敍?
         this.initDragSort(tableId);
         
-        // 初始化列头拖动排序功能
+        // 閸掓繂顫愰崠鏍у灙婢跺瓨瀚嬮崝銊﹀笓鎼村繐濮涢懗?
         this.initColumnDragSort(tableId);
     },
     
     /**
-     * 初始化表格列头拖动排序功能
-     * @param {string} tableId 表格ID
+     * 閸掓繂顫愰崠鏍€冮弽鐓庡灙婢跺瓨瀚嬮崝銊﹀笓鎼村繐濮涢懗?
+     * @param {string} tableId 鐞涖劍鐗窱D
      */
     initColumnDragSort: function (tableId) {
         const instance = this.instances[tableId];
@@ -2210,9 +2174,9 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const fieldName = th.getAttribute('data-field');
             if (!fieldName) return;
 
-            // 拖动开始
+            // 閹锋牕濮╁鈧慨?
             th.addEventListener('dragstart', function (e) {
-                // 检查是否点击的是拖动手柄或非resize-handle区域
+                // 濡偓閺屻儲妲搁崥锔惧仯閸戣崵娈戦弰顖涘珛閸斻劍澧滈弻鍕灗闂堢€漞size-handle閸栧搫鐓?
                 const target = e.target;
                 if (target.classList.contains('resize-handle')) {
                     e.preventDefault();
@@ -2224,46 +2188,46 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 e.dataTransfer.setData('source', 'column-header');
                 th.classList.add('column-dragging');
                 
-                // 添加拖动时的视觉效果
+                // 濞ｈ濮為幏鏍уЗ閺冨墎娈戠憴鍡氼潕閺佸牊鐏?
                 setTimeout(() => {
                     th.style.opacity = '0.5';
                 }, 0);
             });
 
-            // 拖动结束
+            // 閹锋牕濮╃紒鎾存将
             th.addEventListener('dragend', function () {
                 th.classList.remove('column-dragging');
                 th.style.opacity = '';
                 
-                // 清除所有拖放指示器
+                // 濞撳懘娅庨幍鈧張澶嬪珛閺€鐐瘹缁€鍝勬珤
                 thead.querySelectorAll('.column-drop-indicator').forEach(el => el.remove());
                 thead.querySelectorAll('.column-drag-over').forEach(el => el.classList.remove('column-drag-over'));
             });
 
-            // 拖动经过
+            // 閹锋牕濮╃紒蹇氱箖
             th.addEventListener('dragover', function (e) {
                 const source = e.dataTransfer.types.includes('source') ? 'column-header' : '';
-                // 只处理来自列头的拖动
+                // 閸欘亜顦╅悶鍡樻降閼奉亜鍨径瀵告畱閹锋牕濮?
                 if (e.dataTransfer.getData('source') === 'column-header' || e.dataTransfer.types.includes('text/plain')) {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
                     th.classList.add('column-drag-over');
                     
-                    // 显示放置指示器
+                    // 閺勫墽銇氶弨鍓х枂閹稿洨銇氶崳?
                     self.showColumnDropIndicator(th, e);
                 }
             });
 
-            // 拖动离开
+            // 閹锋牕濮╃粋璇茬磻
             th.addEventListener('dragleave', function (e) {
-                // 确保是真正离开而不是进入子元素
+                // 绾喕绻氶弰顖滄埂濮濓絿顬囧鈧懓灞肩瑝閺勵垵绻橀崗銉ョ摍閸忓啰绀?
                 if (!th.contains(e.relatedTarget)) {
                     th.classList.remove('column-drag-over');
                     self.removeColumnDropIndicator(th);
                 }
             });
 
-            // 放置
+            // 閺€鍓х枂
             th.addEventListener('drop', function (e) {
                 e.preventDefault();
                 th.classList.remove('column-drag-over');
@@ -2272,7 +2236,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const draggedFieldName = e.dataTransfer.getData('text/plain');
                 
                 if (draggedFieldName && draggedFieldName !== fieldName) {
-                    // 执行列移动
+                    // 閹笛嗩攽閸掓些閸?
                     self.moveColumnByDrag(tableId, draggedFieldName, fieldName);
                 }
             });
@@ -2280,17 +2244,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
     
     /**
-     * 显示列放置指示器
+     * 閺勫墽銇氶崚妤佹杹缂冾喗瀵氱粈鍝勬珤
      */
     showColumnDropIndicator: function (th, e) {
-        // 移除之前的指示器
+        // 缁夊娅庢稊瀣閻ㄥ嫭瀵氱粈鍝勬珤
         this.removeColumnDropIndicator(th);
         
         const rect = th.getBoundingClientRect();
         const midPoint = rect.left + rect.width / 2;
         const isLeftSide = e.clientX < midPoint;
         
-        // 创建指示器
+        // 閸掓稑缂撻幐鍥┿仛閸?
         const indicator = document.createElement('div');
         indicator.className = 'column-drop-indicator';
         indicator.style.cssText = `
@@ -2310,7 +2274,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
     
     /**
-     * 移除列放置指示器
+     * 缁夊娅庨崚妤佹杹缂冾喗瀵氱粈鍝勬珤
      */
     removeColumnDropIndicator: function (th) {
         const indicator = th.querySelector('.column-drop-indicator');
@@ -2321,10 +2285,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
     
     /**
-     * 通过拖动移动列
-     * @param {string} tableId 表格ID
-     * @param {string} draggedFieldName 被拖动的字段名
-     * @param {string} targetFieldName 目标字段名
+     * 闁俺绻冮幏鏍уЗ缁夎濮╅崚?
+     * @param {string} tableId 鐞涖劍鐗窱D
+     * @param {string} draggedFieldName 鐞氼偅瀚嬮崝銊ф畱鐎涙顔岄崥?
+     * @param {string} targetFieldName 閻╊喗鐖ｇ€涙顔岄崥?
      */
     moveColumnByDrag: function (tableId, draggedFieldName, targetFieldName) {
         const instance = this.instances[tableId];
@@ -2335,14 +2299,14 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const targetIndex = fieldList.findIndex(f => f.name === targetFieldName);
 
         if (draggedIndex === -1 || targetIndex === -1) {
-            console.warn('moveColumnByDrag: 字段未找到', { draggedFieldName, targetFieldName });
+            console.warn('moveColumnByDrag: 鐎涙顔岄張顏呭閸?', { draggedFieldName, targetFieldName });
             return;
         }
 
         const draggedField = fieldList[draggedIndex];
         const targetField = fieldList[targetIndex];
 
-        // 检查字段是否允许移动
+        // 濡偓閺屻儱鐡у▓鍨Ц閸氾箑鍘戠拋鍝バ╅崝?
         const draggedCanMove = draggedField.display_orderable !== false && 
                                draggedField.display_orderable !== 'false' && 
                                draggedField.display_orderable !== 0 && 
@@ -2353,34 +2317,34 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                               targetField.display_orderable !== '0';
 
         if (!draggedCanMove) {
-            console.warn('moveColumnByDrag: 被拖动的字段不允许移动', draggedFieldName);
-            this.showWarning(tableId, __('该列不允许移动'));
+            console.warn('moveColumnByDrag: 鐞氼偅瀚嬮崝銊ф畱鐎涙顔屾稉宥呭帒鐠佸摜些閸?', draggedFieldName);
+            this.showWarning(tableId, __('鐠囥儱鍨稉宥呭帒鐠佸摜些閸?'));
             return;
         }
 
         if (!targetCanMove) {
-            console.warn('moveColumnByDrag: 目标位置字段不允许移动', targetFieldName);
-            this.showWarning(tableId, __('无法放置到该位置'));
+            console.warn('moveColumnByDrag: 閻╊喗鐖ｆ担宥囩枂鐎涙顔屾稉宥呭帒鐠佸摜些閸?', targetFieldName);
+            this.showWarning(tableId, __('閺冪姵纭堕弨鍓х枂閸掓媽顕氭担宥囩枂'));
             return;
         }
 
-        // 执行移动
+        // 閹笛嗩攽缁夎濮?
         const movedField = fieldList.splice(draggedIndex, 1)[0];
-        // 计算新的目标索引（因为删除了一个元素）
+        // 鐠侊紕鐣婚弬鎵畱閻╊喗鐖ｇ槐銏犵穿閿涘牆娲滄稉鍝勫灩闂勩倓绨℃稉鈧稉顏勫帗缁辩媴绱?
         const newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
         fieldList.splice(newTargetIndex, 0, movedField);
 
-        // 保存用户配置到缓存
+        // 娣囨繂鐡ㄩ悽銊﹀煕闁板秶鐤嗛崚鎵处鐎?
         this.saveFieldConfigToCache(tableId);
 
-        // 重新渲染表头和数据
+        // 闁插秵鏌婂〒鍙夌厠鐞涖劌銇旈崪灞炬殶閹?
         this.renderHeader(tableId, fieldList);
         this.renderTable(instance);
 
-        // 显示成功提示
-        this.showSuccess(tableId, __('列顺序已更新'));
+        // 閺勫墽銇氶幋鎰閹绘劗銇?
+        this.showSuccess(tableId, __('閸掓銆庢惔蹇撳嚒閺囧瓨鏌?'));
 
-        console.log('moveColumnByDrag: 列拖动移动完成', {
+        console.log('moveColumnByDrag: 閸掓瀚嬮崝銊╅崝銊ョ暚閹?', {
             dragged: draggedFieldName,
             target: targetFieldName,
             newOrder: fieldList.map(f => f.name)
@@ -2388,15 +2352,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 渲染数据行
+     * 濞撳弶鐓嬮弫鐗堝祦鐞?
      */
     renderBody: function (instance, tbody) {
         if (!instance.data || instance.data.length === 0) {
-            // 计算总列数（包括复选框列和操作列）
+            // 鐠侊紕鐣婚幀璇插灙閺佸府绱欓崠鍛婢跺秹鈧顢嬮崚妤€鎷伴幙宥勭稊閸掓绱?
             let totalColumns = instance.config.fields.length;
-            if (instance.options.enableBatchActions !== false) totalColumns += 1; // 复选框列
-            if (instance.options.editable) totalColumns += 1; // 操作列
-            tbody.innerHTML = `<tr><td colspan="${totalColumns}" class="text-center">暂无数据</td></tr>`;
+            if (instance.options.enableBatchActions !== false) totalColumns += 1; // 婢跺秹鈧顢嬮崚?
+            if (instance.options.editable) totalColumns += 1; // 閹垮秳缍旈崚?
+            tbody.innerHTML = `<tr><td colspan="${totalColumns}" class="text-center">閺嗗倹妫ら弫鐗堝祦</td></tr>`;
             return;
         }
 
@@ -2405,7 +2369,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         instance.data.forEach((row, index) => {
             bodyHtml += '<tr data-row-index="' + index + '" data-id="' + (row.id || row.index || '') + '">';
 
-            // 添加复选框列（如果启用了批量操作）
+            // 濞ｈ濮炴径宥夆偓澶嬵攱閸掓绱欐俊鍌涚亯閸氼垳鏁ゆ禍鍡樺闁插繑鎼锋担婊愮礆
             if (instance.options.enableBatchActions !== false) {
                 bodyHtml += `
                     <td class="checkbox-column">
@@ -2416,12 +2380,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     </td>`;
             }
 
-            // 渲染数据列
+            // 濞撳弶鐓嬮弫鐗堝祦閸?
             instance.config.fields.forEach(field => {
                 if (field.visible) {
                     const value = row[field.name] || '';
 
-                    // 对于受保护的字段，只有在明确指定editable=true时才启用编辑
+                    // 鐎甸€涚艾閸欐ぞ绻氶幎銈囨畱鐎涙顔岄敍灞藉涧閺堝婀弰搴ｂ€橀幐鍥х暰editable=true閺冭埖澧犻崥顖滄暏缂傛牞绶?
                     const isTemplateField = field.template_defined || field.field_defined || field.from_field;
                     const canEdit = isTemplateField ?
                         (field.editable === true || field.editable === 'true') :
@@ -2438,7 +2402,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 }
             });
 
-            // 渲染操作列
+            // 濞撳弶鐓嬮幙宥勭稊閸?
             if (instance.options.editable) {
                 bodyHtml += `
                     <td class="actions-cell">
@@ -2457,12 +2421,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         tbody.innerHTML = bodyHtml;
 
-        // 绑定行事件
+        // 缂佹垵鐣剧悰灞肩皑娴?
         this.bindRowEvents(instance, tbody);
     },
 
     /**
-     * 格式化单元格?
+     * 閺嶇厧绱￠崠鏍у礋閸忓啯鐗?
      */
     formatCellValue: function (value, field) {
         if (field.formatter && typeof window[field.formatter] === 'function') {
@@ -2484,7 +2448,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 渲染分页
+     * 濞撳弶鐓嬮崚鍡涖€?
      */
     renderPagination: function (instance) {
         const container = instance.container[0] || instance.container;
@@ -2500,21 +2464,21 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const pagination = instance.pagination;
         let paginationHtml = `
             <div class="pagination-info">
-                显示第 ${(pagination.page - 1) * pagination.pageSize + 1} 到
-                ${Math.min(pagination.page * pagination.pageSize, pagination.total)} 条，
-                共 ${pagination.total} 条记录
+                閺勫墽銇氱粭?${(pagination.page - 1) * pagination.pageSize + 1} 閸?
+                ${Math.min(pagination.page * pagination.pageSize, pagination.total)} 閺夆槄绱?
+                閸?${pagination.total} 閺壜ゎ唶瑜?
             </div>
             <ul class="pagination">
         `;
 
-        // 上一页
+        // 娑撳﹣绔存い?
         paginationHtml += `
             <li class="page-item ${pagination.hasPrevPage ? '' : 'disabled'}">
-                <a class="page-link" href="#" data-page="${pagination.page - 1}">上一页</a>
+                <a class="page-link" href="#" data-page="${pagination.page - 1}">娑撳﹣绔存い?/a>
             </li>
         `;
 
-        // 页码
+        // 妞ょ數鐖?
         const startPage = Math.max(1, pagination.page - 2);
         const endPage = Math.min(pagination.lastPage, pagination.page + 2);
 
@@ -2526,10 +2490,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             `;
         }
 
-        // 下一页
+        // 娑撳绔存い?
         paginationHtml += `
             <li class="page-item ${pagination.hasNextPage ? '' : 'disabled'}">
-                <a class="page-link" href="#" data-page="${pagination.page + 1}">下一页</a>
+                <a class="page-link" href="#" data-page="${pagination.page + 1}">娑撳绔存い?/a>
             </li>
         `;
 
@@ -2540,18 +2504,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             paginationContainer.style.display = 'block';
         }
 
-        // 绑定分页事件
+        // 缂佹垵鐣鹃崚鍡涖€夋禍瀣╂
         this.bindPaginationEvents(instance, paginationContainer);
     },
 
     /**
-     * 加载数据
+     * 閸旂姾娴囬弫鐗堝祦
      */
     loadData: function (instance) {
         const $loading = instance.container.find('.datatable-loading');
         const $content = instance.container.find('.datatable-content');
 
-        console.log('开始加载数?', {
+        console.log('瀵偓婵濮炴潪鑺ユ殶?', {
             model: instance.options.model,
             scope: instance.options.scope,
             page: instance.currentPage,
@@ -2562,49 +2526,42 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         $loading.show();
         $content.hide();
 
-        fetch(window.api('datatable/rest/v1/data-table/data'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: instance.options.model,
-                scope: instance.options.scope,
-                page: instance.currentPage,
-                pageSize: instance.pageSize,
-                search: instance.search,
-                filters: instance.filters,
-                sorts: instance.sorts
-            })
+        this.requestJson(instance, 'data', {
+            model: instance.options.model,
+            scope: instance.options.scope,
+            page: instance.currentPage,
+            pageSize: instance.pageSize,
+            search: instance.search,
+            filters: instance.filters,
+            sorts: instance.sorts
         })
-            .then(response => response.json())
             .then(response => {
-                console.log('API响应:', response);
+                console.log('API閸濆秴绨?', response);
                 $loading.hide();
                 $content.show();
 
-                // 兼容 code 为字符串或数字
+                // 閸忕厧顔?code 娑撳搫鐡х粭锔胯閹存牗鏆熺€?
                 if (response.code == 200 || response.code === '200' || response.success) {
                     instance.data = response.data.data || [];
                     instance.pagination = response.data.pagination;
-                    // 设置 totalCount 用于导出功能
+                    // 鐠佸墽鐤?totalCount 閻劋绨€电厧鍤崝鐔诲厴
                     instance.totalCount = response.data.total || response.data.pagination?.total || instance.data.length || 0;
                     this.renderTable(instance);
                 } else {
-                    console.error('API错误:', response.msg);
-                    this.showError(response.msg || response.message || __('加载数据失败'));
+                    console.error('API闁挎瑨顕?', response.msg);
+                    this.showError(response.msg || response.message || __('閸旂姾娴囬弫鐗堝祦婢惰精瑙?'));
                 }
             })
             .catch(error => {
-                console.error('AJAX错误:', error);
+                console.error('AJAX闁挎瑨顕?', error);
                 $loading.hide();
                 $content.show();
-                this.showError(__('加载数据失败: %{1}', error));
+                this.showError(__('閸旂姾娴囬弫鐗堝祦婢惰精瑙? %{1}', error));
             });
     },
 
     /**
-     * 搜索
+     * 閹兼粎鍌?
      */
     search: function (scope) {
         const instance = this.getInstanceByScope(scope);
@@ -2616,7 +2573,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 清除搜索
+     * 濞撳懘娅庨幖婊呭偍
      */
     clearSearch: function (scope) {
         const instance = this.getInstanceByScope(scope);
@@ -2629,7 +2586,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 应用过滤?
+     * 鎼存梻鏁ゆ潻鍥ㄦ姢?
      */
     applyFilter: function (scope) {
         const instance = this.getInstanceByScope(scope);
@@ -2651,7 +2608,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 清除过滤?
+     * 濞撳懘娅庢潻鍥ㄦ姢?
      */
     clearFilter: function (scope) {
         const instance = this.getInstanceByScope(scope);
@@ -2664,7 +2621,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 保存过滤?
+     * 娣囨繂鐡ㄦ潻鍥ㄦ姢?
      */
     saveFilter: async function (scope) {
         const instance = this.getInstanceByScope(scope);
@@ -2676,8 +2633,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         }
 
         const filterName = await BackendConfirm.showInput({
-            title: __('输入'),
-            message: __('请输入过滤器名称'),
+            title: __('鏉堟挸鍙?'),
+            message: __('鐠囩柉绶崗銉ㄧ箖濠娿倕娅掗崥宥囆?'),
             type: 'info'
         });
         if (!filterName) return;
@@ -2691,22 +2648,22 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             filterData[field] = value;
         });
 
-        // 保存到本地存?
+        // 娣囨繂鐡ㄩ崚鐗堟拱閸︽澘鐡?
         const savedFilters = JSON.parse(localStorage.getItem('datatable_filters_' + scope) || '{}');
         savedFilters[filterName] = filterData;
         localStorage.setItem('datatable_filters_' + scope, JSON.stringify(savedFilters));
 
-        this.showSuccess(scope, __('过滤器保存成功'));
+        this.showSuccess(scope, __('鏉╁洦鎶ら崳銊ょ箽鐎涙ɑ鍨氶崝?'));
     },
 
     /**
-     * 保存表格配置
+     * 娣囨繂鐡ㄧ悰銊︾壐闁板秶鐤?
      */
     saveTableConfig: function (scope) {
         const instance = this.getInstanceByScope(scope);
         if (!instance) return;
 
-        // 收集配置数据
+        // 閺€鍫曟肠闁板秶鐤嗛弫鐗堝祦
         const config = {
             fields: instance.config.fields,
             pageSize: instance.pageSize,
@@ -2715,21 +2672,14 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             showConfig: instance.options.showConfig
         };
 
-        fetch(this.buildApiUrl(instance, 'save-config'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                scope: scope,
-                config: config
-            })
+        this.requestJson(instance, 'save-config', {
+            scope: scope,
+            config: config
         })
-            .then(response => response.json())
             .then(response => {
-                // 兼容 code 为字符串或数字
+                // 閸忕厧顔?code 娑撳搫鐡х粭锔胯閹存牗鏆熺€?
                 if (response.code == 200 || response.code === '200' || response.success) {
-                    this.showSuccess(scope, __('配置保存成功'));
+                    this.showSuccess(scope, __('闁板秶鐤嗘穱婵嗙摠閹存劕濮?'));
                     const modal = document.getElementById('table-config-modal-' + scope);
                     if (modal && typeof bootstrap !== 'undefined') {
                         const bsModal = bootstrap.Modal.getInstance(modal);
@@ -2738,20 +2688,20 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         }
                     }
                 } else {
-                    this.showError(scope, response.msg || response.message || __('保存失败'));
+                    this.showError(scope, response.msg || response.message || __('娣囨繂鐡ㄦ径杈Е'));
                 }
             })
             .catch(() => {
-                this.showError(scope, __('保存配置失败'));
+                this.showError(scope, __('娣囨繂鐡ㄩ柊宥囩枂婢惰精瑙?'));
             });
     },
 
     /**
-     * 编辑?
+     * 缂傛牞绶?
      */
     editRow: function (instance, rowIndex) {
         if (instance.isEditing) {
-            this.showWarning(instance.container.attr('id'), __('请先保存当前编辑的行'));
+            this.showWarning(instance.container.attr('id'), __('鐠囧嘲鍘涙穱婵嗙摠瑜版挸澧犵紓鏍帆閻ㄥ嫯顢?'));
             return;
         }
 
@@ -2762,16 +2712,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         instance.editingRow = rowIndex;
         instance.editingData = { ...row };
 
-        // 显示编辑模态框
+        // 閺勫墽銇氱紓鏍帆濡剝鈧焦顢?
         this.showEditModal(instance, row);
     },
 
     /**
-     * 显示编辑模态框
+     * 閺勫墽銇氱紓鏍帆濡剝鈧焦顢?
      */
     showEditModal: function (instance, row) {
         const modalId = 'edit-modal-' + instance.container.attr('id');
-        const editTitle = __('编辑数据');
+        const editTitle = __('缂傛牞绶弫鐗堝祦');
         let modalHtml = `
             <div class="modal fade" id="${modalId}" tabindex="-1">
                 <div class="modal-dialog modal-lg">
@@ -2790,8 +2740,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 modalHtml += this.renderEditField(field, value);
             }
         });
-        const saveBtnText = __('保存');
-        const cancelBtnText = __('取消');
+        const saveBtnText = __('娣囨繂鐡?');
+        const cancelBtnText = __('閸欐牗绉?');
         modalHtml += `
                             </form>
                         </div>
@@ -2804,26 +2754,26 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             </div>
         `;
 
-        // 移除已存在的模态框
+        // 缁夊娅庡鎻掔摠閸︺劎娈戝Ο鈩冣偓浣诡攱
         $('#' + modalId).remove();
 
-        // 添加新模态框
+        // 濞ｈ濮為弬鐗埬侀幀浣诡攱
         $('body').append(modalHtml);
 
-        // 显示模态框
+        // 閺勫墽銇氬Ο鈩冣偓浣诡攱
         $('#' + modalId).modal('show');
 
-        // 绑定模态框事件
+        // 缂佹垵鐣惧Ο鈩冣偓浣诡攱娴滃娆?
         this.bindEditModalEvents(instance, modalId);
     },
 
     /**
-     * 渲染编辑字段
+     * 濞撳弶鐓嬬紓鏍帆鐎涙顔?
      */
     renderEditField: function (field, value) {
         const fieldId = 'edit-' + field.name;
 
-        const pleaseSelect = __('请选择');
+        const pleaseSelect = __('鐠囩兘鈧瀚?');
 
         switch (field.type) {
             case 'textarea':
@@ -2865,7 +2815,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 保存行数?
+     * 娣囨繂鐡ㄧ悰灞炬殶?
      */
     saveRow: function (tableId) {
         const instance = this.instances[tableId];
@@ -2886,92 +2836,85 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             formData[name] = value;
         });
 
-        // 添加ID
+        // 濞ｈ濮濱D
         formData.id = instance.data[instance.editingRow].id;
 
-        fetch(this.buildApiUrl(instance, 'save-data'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: instance.options.model,
-                data: formData
-            })
+        this.requestJson(instance, 'save-data', {
+            model: instance.options.model,
+            data: formData
         })
-            .then(response => response.json())
             .then(response => {
-                // 兼容 code 为字符串或数字
+                // 閸忕厧顔?code 娑撳搫鐡х粭锔胯閹存牗鏆熺€?
                 if (response.code == 200 || response.code === '200' || response.success) {
-                    this.showSuccess(tableId, __('保存成功'));
+                    this.showSuccess(tableId, __('娣囨繂鐡ㄩ幋鎰'));
                     $('#' + modalId).modal('hide');
                     instance.isEditing = false;
                     instance.editingRow = null;
                     instance.editingData = {};
                     this.loadData(instance);
                 } else {
-                    this.showError(tableId, response.msg || response.message || __('保存失败'));
+                    this.showError(tableId, response.msg || response.message || __('娣囨繂鐡ㄦ径杈Е'));
                 }
             })
             .catch(() => {
-                this.showError(tableId, __('保存失败'));
+                this.showError(tableId, __('娣囨繂鐡ㄦ径杈Е'));
             });
     },
 
     /**
-     * 删除行（增强版）
+     * 閸掔娀娅庣悰宀嬬礄婢х偛宸遍悧鍫礆
      */
     deleteRow: function (instance, rowIndex, options = {}) {
         const row = instance.data[rowIndex];
         if (!row || !row.id) return;
 
-        // 合并默认选项
+        // 閸氬牆鑻熸妯款吇闁銆?
         const deleteOptions = {
-            confirmMessage: __('确定要删除这条记录吗？'),
+            confirmMessage: __('绾喖鐣剧憰浣稿灩闂勩倛绻栭弶陇顔囪ぐ鏇炴偋閿?'),
             softDelete: false,
             showDetails: true,
             ...options
         };
 
-        // 显示删除确认对话框
+        // 閺勫墽銇氶崚鐘绘珟绾喛顓荤€电鐦藉?
         this.showDeleteConfirmDialog(instance, [row], deleteOptions, () => {
             this.performDelete(instance, [row.id], deleteOptions);
         });
     },
 
     /**
-     * 批量删除
+     * 閹靛綊鍣洪崚鐘绘珟
      */
     batchDelete: function (instance, selectedIds, options = {}) {
         if (!selectedIds || selectedIds.length === 0) {
-            this.showError(instance.container.attr('id'), __('请选择要删除的记录'));
+            this.showError(instance.container.attr('id'), __('鐠囩兘鈧瀚ㄧ憰浣稿灩闂勩倗娈戠拋鏉跨秿'));
             return;
         }
 
-        // 获取选中的行数据
+        // 閼惧嘲褰囬柅澶夎厬閻ㄥ嫯顢戦弫鐗堝祦
         const selectedRows = instance.data.filter(row => selectedIds.includes(row.id));
 
-        // 合并默认选项
+        // 閸氬牆鑻熸妯款吇闁銆?
         const deleteOptions = {
-            confirmMessage: __(`确定要删除选中的 ${selectedIds.length} 条记录吗？`),
+            confirmMessage: __('Confirm deleting selected records: %{1}', selectedIds.length),
             softDelete: false,
             showDetails: true,
             ...options
         };
 
-        // 显示删除确认对话框
+        // 閺勫墽銇氶崚鐘绘珟绾喛顓荤€电鐦藉?
         this.showDeleteConfirmDialog(instance, selectedRows, deleteOptions, () => {
             this.performDelete(instance, selectedIds, deleteOptions);
         });
     },
 
     /**
-     * 显示删除确认对话框
+     * 閺勫墽銇氶崚鐘绘珟绾喛顓荤€电鐦藉?
      */
     showDeleteConfirmDialog: function (instance, rows, options, onConfirm) {
         const tableId = instance.container.attr('id');
 
-        // 创建确认对话框HTML
+        // 閸掓稑缂撶涵顔款吇鐎电鐦藉鍜筎ML
         const dialogHtml = `
             <div class="modal fade" id="delete-confirm-modal-${tableId}" tabindex="-1">
                 <div class="modal-dialog">
@@ -2979,7 +2922,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="fas fa-exclamation-triangle text-warning me-2"></i>
-                                ${__('删除确认')}
+                                ${__('閸掔娀娅庣涵顔款吇')}
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
@@ -2994,17 +2937,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                             <div class="form-check mt-3">
                                 <input class="form-check-input" type="checkbox" id="soft-delete-${tableId}">
                                 <label class="form-check-label" for="soft-delete-${tableId}">
-                                    ${__('软删除（可恢复）')}
+                                    ${__('鏉烆垰鍨归梽銈忕礄閸欘垱浠径宥忕礆')}
                                 </label>
                             </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                ${__('取消')}
+                                ${__('閸欐牗绉?')}
                             </button>
                             <button type="button" class="btn btn-danger" id="confirm-delete-${tableId}">
                                 <i class="fas fa-trash me-2"></i>
-                                ${__('确认删除')}
+                                ${__('绾喛顓婚崚鐘绘珟')}
                             </button>
                         </div>
                     </div>
@@ -3012,17 +2955,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             </div>
         `;
 
-        // 移除已存在的对话框
+        // 缁夊娅庡鎻掔摠閸︺劎娈戠€电鐦藉?
         $(`#delete-confirm-modal-${tableId}`).remove();
 
-        // 添加到页面
+        // 濞ｈ濮為崚浼淬€夐棃?
         $('body').append(dialogHtml);
 
-        // 显示对话框
+        // 閺勫墽銇氱€电鐦藉?
         const modal = new bootstrap.Modal(document.getElementById(`delete-confirm-modal-${tableId}`));
         modal.show();
 
-        // 绑定确认按钮事件
+        // 缂佹垵鐣剧涵顔款吇閹稿鎸虫禍瀣╂
         $(`#confirm-delete-${tableId}`).on('click', () => {
             const softDelete = $(`#soft-delete-${tableId}`).is(':checked');
             options.softDelete = softDelete;
@@ -3030,21 +2973,21 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             onConfirm();
         });
 
-        // 清理事件
+        // 濞撳懐鎮婃禍瀣╂
         $(`#delete-confirm-modal-${tableId}`).on('hidden.bs.modal', function () {
             $(this).remove();
         });
     },
 
     /**
-     * 生成删除详情HTML
+     * 閻㈢喐鍨氶崚鐘绘珟鐠囷附鍎廐TML
      */
     generateDeleteDetailsHtml: function (rows) {
         if (rows.length === 1) {
             const row = rows[0];
             return `
                 <div class="delete-details">
-                    <h6>${__('即将删除的记录：')}</h6>
+                    <h6>${__('閸楀啿鐨㈤崚鐘绘珟閻ㄥ嫯顔囪ぐ鏇窗')}</h6>
                     <div class="card">
                         <div class="card-body p-2">
                             ${this.generateRowDetailsHtml(row)}
@@ -3055,9 +2998,9 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         } else {
             return `
                 <div class="delete-details">
-                    <h6>${__('即将删除的记录：')}</h6>
+                    <h6>${__('閸楀啿鐨㈤崚鐘绘珟閻ㄥ嫯顔囪ぐ鏇窗')}</h6>
                     <div class="alert alert-info">
-                        ${__('共选中')} <strong>${rows.length}</strong> ${__('条记录')}
+                        ${__('閸忛亶鈧鑵?')} <strong>${rows.length}</strong> ${__('閺壜ゎ唶瑜?')}
                     </div>
                     <div class="row-list" style="max-height: 200px; overflow-y: auto;">
                         ${rows.map(row => `
@@ -3074,12 +3017,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 生成行详情HTML
+     * 閻㈢喐鍨氱悰宀冾嚊閹専TML
      */
     generateRowDetailsHtml: function (row) {
         const details = [];
 
-        // 显示主要字段
+        // 閺勫墽銇氭稉鏄忣洣鐎涙顔?
         const mainFields = ['id', 'name', 'title', 'username', 'email'];
         mainFields.forEach(field => {
             if (row[field] !== undefined) {
@@ -3087,7 +3030,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         });
 
-        // 如果没有主要字段，显示前几个字段
+        // 婵″倹鐏夊▽鈩冩箒娑撴槒顩︾€涙顔岄敍灞炬▔缁€鍝勫閸戠姳閲滅€涙顔?
         if (details.length === 0) {
             const keys = Object.keys(row).slice(0, 3);
             keys.forEach(key => {
@@ -3101,76 +3044,69 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 执行删除操作
+     * 閹笛嗩攽閸掔娀娅庨幙宥勭稊
      */
     performDelete: function (instance, ids, options) {
         const tableId = instance.container.attr('id');
 
-        // 显示加载状态
-        this.showLoading(tableId, __('正在删除...'));
+        // 閺勫墽銇氶崝鐘烘祰閻樿埖鈧?
+        this.showLoading(tableId, __('濮濓絽婀崚鐘绘珟...'));
 
-        fetch(this.buildApiUrl(instance, 'delete-data'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: instance.options.model,
-                ids: Array.isArray(ids) ? ids : [ids],
-                soft_delete: options.softDelete || false
-            })
+        this.requestJson(instance, 'delete-data', {
+            model: instance.options.model,
+            ids: Array.isArray(ids) ? ids : [ids],
+            soft_delete: options.softDelete || false
         })
-            .then(response => response.json())
             .then(response => {
                 this.hideLoading(tableId);
 
-                // 兼容 code 为字符串或数字
+                // 閸忕厧顔?code 娑撳搫鐡х粭锔胯閹存牗鏆熺€?
                 if (response.code == 200 || response.code === '200' || response.success) {
                     const message = options.softDelete
-                        ? __('记录已移至回收站')
-                        : __('删除成功');
+                        ? __('鐠佹澘缍嶅鑼╅懛鍐叉礀閺€鍓佺彲')
+                        : __('閸掔娀娅庨幋鎰');
                     this.showSuccess(tableId, message);
 
-                    // 重新加载数据
+                    // 闁插秵鏌婇崝鐘烘祰閺佺増宓?
                     this.loadData(instance);
 
-                    // 清除选中状态
+                    // 濞撳懘娅庨柅澶夎厬閻樿埖鈧?
                     this.clearSelection(instance);
                 } else {
-                    this.showError(tableId, response.msg || response.message || __('删除失败'));
+                    this.showError(tableId, response.msg || response.message || __('閸掔娀娅庢径杈Е'));
                 }
             })
             .catch(error => {
                 this.hideLoading(tableId);
                 console.error('Delete error:', error);
-                this.showError(tableId, __('删除失败'));
+                this.showError(tableId, __('閸掔娀娅庢径杈Е'));
             });
     },
 
     /**
-     * 清除选中状态
+     * 濞撳懘娅庨柅澶夎厬閻樿埖鈧?
      */
     clearSelection: function (instance) {
         const tableId = instance.container.attr('id');
 
-        // 清除复选框选中状态
+        // 濞撳懘娅庢径宥夆偓澶嬵攱闁鑵戦悩鑸碘偓?
         $(`#${tableId} input[type="checkbox"]`).prop('checked', false);
 
-        // 清除选中行样式
+        // 濞撳懘娅庨柅澶夎厬鐞涘本鐗卞?
         $(`#${tableId} tbody tr`).removeClass('selected');
 
-        // 更新批量操作按钮状态
+        // 閺囧瓨鏌婇幍褰掑櫤閹垮秳缍旈幐澶愭尦閻樿埖鈧?
         this.updateBatchActionButtons(instance);
     },
 
     /**
-     * 绑定事件
+     * 缂佹垵鐣炬禍瀣╂
      */
     bindEvents: function (instance) {
-        // 获取容器（支持 DOM 元素和 jQuery 对象）
+        // 閼惧嘲褰囩€圭懓娅掗敍鍫熸暜閹?DOM 閸忓啰绀岄崪?jQuery 鐎电钖勯敍?
         const container = instance.container.jquery ? instance.container[0] : instance.container;
         
-        // 搜索事件
+        // 閹兼粎鍌ㄦ禍瀣╂
         const searchInput = container.querySelector('#search-input-' + instance.options.scope);
         if (searchInput) {
             searchInput.addEventListener('keypress', (e) => {
@@ -3180,7 +3116,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }
 
-        // 过滤器事件
+        // 鏉╁洦鎶ら崳銊ょ皑娴?
         const filterForm = container.querySelector('#filter-form-' + instance.options.scope);
         if (filterForm) {
             filterForm.addEventListener('submit', (e) => {
@@ -3189,52 +3125,52 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }
 
-        // 窗口关闭前提示
+        // 缁愭褰涢崗鎶芥４閸撳秵褰佺粈?
         window.addEventListener('beforeunload', (e) => {
             if (instance.isEditing) {
                 e.preventDefault();
-                e.returnValue = __('您有未保存的编辑内容，确定要离开吗？');
+                e.returnValue = __('閹劍婀侀張顏冪箽鐎涙娈戠紓鏍帆閸愬懎顔愰敍宀€鈥樼€规俺顩︾粋璇茬磻閸氭绱?');
             }
         });
     },
 
     /**
-     * 绑定表头事件
+     * 缂佹垵鐣剧悰銊ャ仈娴滃娆?
      */
     bindHeaderEvents: function (instance, $thead) {
-        // 排序链接点击事件
+        // 閹烘帒绨柧鐐复閻愮懓鍤禍瀣╂
         $thead.on('click', '.sort-link', function (e) {
             e.preventDefault();
             const field = $(this).data('field');
             const currentSort = instance.sorts[field];
             let newSortDirection;
 
-            // 确定新的排序方向
+            // 绾喖鐣鹃弬鎵畱閹烘帒绨弬鐟版倻
             if (currentSort === 'asc') {
                 newSortDirection = 'desc';
             } else if (currentSort === 'desc') {
-                newSortDirection = null; // 取消排序
+                newSortDirection = null; // 閸欐牗绉烽幒鎺戠碍
             } else {
                 newSortDirection = 'asc';
             }
 
-            // 更新实例中的排序状?
+            // 閺囧瓨鏌婄€圭偘绶ユ稉顓犳畱閹烘帒绨悩?
             if (newSortDirection) {
                 instance.sorts[field] = newSortDirection;
             } else {
                 delete instance.sorts[field];
             }
 
-            // 更新URL参数
+            // 閺囧瓨鏌奤RL閸欏倹鏆?
             DataTableManager.updateUrlSortParams(field, newSortDirection);
 
-            // 重新加载数据
+            // 闁插秵鏌婇崝鐘烘祰閺佺増宓?
             DataTableManager.loadData(instance);
         });
 
-        // 兼容旧的排序事件（点击整个th?
+        // 閸忕厧顔愰弮褏娈戦幒鎺戠碍娴滃娆㈤敍鍫㈠仯閸戠粯鏆ｆ稉鐚糷?
         $thead.on('click', '[data-sortable="true"]', function (e) {
-            // 如果点击的是排序链接，不处理（避免重复）
+            // 婵″倹鐏夐悙鐟板毊閻ㄥ嫭妲搁幒鎺戠碍闁剧偓甯撮敍灞肩瑝婢跺嫮鎮婇敍鍫ヤ缉閸忓秹鍣告径宥忕礆
             if ($(e.target).closest('.sort-link').length) {
                 return;
             }
@@ -3253,7 +3189,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             DataTableManager.loadData(instance);
         });
 
-        // 列宽调整事件
+        // 閸掓顔旂拫鍐╂殻娴滃娆?
         $thead.on('mousedown', '.resize-handle', function (e) {
             e.preventDefault();
             const $th = $(this).parent();
@@ -3268,7 +3204,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const onMouseUp = function () {
                 $(document).off('mousemove', onMouseMove).off('mouseup', onMouseUp);
 
-                // 保存列宽配置
+                // 娣囨繂鐡ㄩ崚妤€顔旈柊宥囩枂
                 const field = $th.data('field');
                 const width = $th.width() + 'px';
 
@@ -3284,57 +3220,57 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 更新URL中的排序参数
+     * 閺囧瓨鏌奤RL娑擃厾娈戦幒鎺戠碍閸欏倹鏆?
      */
     updateUrlSortParams: function (field, sortDirection) {
         const url = new URL(window.location);
         const urlParams = url.searchParams;
 
         if (sortDirection) {
-            // 设置排序参数
+            // 鐠佸墽鐤嗛幒鎺戠碍閸欏倹鏆?
             urlParams.set('current', field);
             urlParams.set(`sort.${field}`, sortDirection);
         } else {
-            // 取消排序
+            // 閸欐牗绉烽幒鎺戠碍
             urlParams.delete('current');
             urlParams.delete(`sort.${field}`);
         }
 
-        // 更新URL（不刷新页面）
+        // 閺囧瓨鏌奤RL閿涘牅绗夐崚閿嬫煀妞ょ敻娼伴敍?
         window.history.replaceState({}, '', url.toString());
-        console.log('updateUrlSortParams: URL已更新', url.toString());
+        console.log('updateUrlSortParams: URL瀹稿弶娲块弬?', url.toString());
     },
 
     /**
-     * 绑定行事件
+     * 缂佹垵鐣剧悰灞肩皑娴?
      */
     bindRowEvents: function (instance, $tbody) {
-        // 编辑按钮事件
+        // 缂傛牞绶幐澶愭尦娴滃娆?
         $tbody.on('click', '.edit-row-btn', function () {
             const rowIndex = $(this).data('row-index');
             DataTableManager.editRow(instance, rowIndex);
         });
 
-        // 删除按钮事件
+        // 閸掔娀娅庨幐澶愭尦娴滃娆?
         $tbody.on('click', '.delete-row-btn', function () {
             const rowIndex = $(this).data('row-index');
             DataTableManager.deleteRow(instance, rowIndex);
         });
 
-        // 复选框事件
+        // 婢跺秹鈧顢嬫禍瀣╂
         $tbody.on('change', '.row-checkbox', function () {
             const $row = $(this).closest('tr');
             $row.toggleClass('selected', this.checked);
             DataTableManager.updateBatchActionButtons(instance);
         });
 
-        // 单元格编辑事件
+        // 閸楁洖鍘撻弽鑲╃椽鏉堟垳绨ㄦ禒?
         $tbody.on('click', '.editable-cell', function () {
             const $cell = $(this);
             const field = $cell.data('field');
             const value = $cell.find('.cell-content').text();
 
-            // 创建内联编辑器
+            // 閸掓稑缂撻崘鍛颁粓缂傛牞绶崳?
             const $input = $('<input type="text" class="form-control form-control-sm">').val(value);
             $cell.find('.cell-content').hide();
             $cell.append($input);
@@ -3346,7 +3282,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     $cell.find('.cell-content').text(newValue).show();
                     $(this).remove();
 
-                    // 保存数据
+                    // 娣囨繂鐡ㄩ弫鐗堝祦
                     const rowIndex = $cell.closest('tr').data('row-index');
                     const row = instance.data[rowIndex];
                     if (row) {
@@ -3359,7 +3295,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 绑定分页事件
+     * 缂佹垵鐣鹃崚鍡涖€夋禍瀣╂
      */
     bindPaginationEvents: function (instance, $pagination) {
         $pagination.on('click', '.page-link', function (e) {
@@ -3373,7 +3309,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 绑定编辑模态框事件
+     * 缂佹垵鐣剧紓鏍帆濡剝鈧焦顢嬫禍瀣╂
      */
     bindEditModalEvents: function (instance, modalId) {
         $('#' + modalId).on('hidden.bs.modal', function () {
@@ -3386,22 +3322,22 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 根据任意标识符获取实例（通用查找方法）
-     * 支持: tableId, scope, datatable-scope-xxx 格式
+     * 閺嶈宓佹禒缁樺壈閺嶅洩鐦戠粭锕佸箯閸欐牕鐤勬笟瀣剁礄闁氨鏁ら弻銉﹀閺傝纭堕敍?
+     * 閺€顖涘瘮: tableId, scope, datatable-scope-xxx 閺嶇厧绱?
      */
     getInstance: function (identifier) {
-        // 1. 直接查找
+        // 1. 閻╁瓨甯撮弻銉﹀
         if (this.instances[identifier]) {
             return this.instances[identifier];
         }
         
-        // 2. 尝试 scope- 前缀
+        // 2. 鐏忔繆鐦?scope- 閸撳秶绱?
         const scopeKey = 'scope-' + identifier;
         if (this.instances[scopeKey]) {
             return this.instances[scopeKey];
         }
         
-        // 3. 尝试从 datatable-scope-xxx 格式中提取 scope
+        // 3. 鐏忔繆鐦禒?datatable-scope-xxx 閺嶇厧绱℃稉顓熷絹閸?scope
         if (identifier.startsWith('datatable-scope-')) {
             const extractedScope = identifier.replace('datatable-scope-', '');
             const extractedScopeKey = 'scope-' + extractedScope;
@@ -3410,7 +3346,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         }
         
-        // 4. 遍历所有实例查找匹配的 scope 或 tableId
+        // 4. 闁秴宸婚幍鈧張澶婄杽娓氬鐓￠幍鎯у爱闁板秶娈?scope 閹?tableId
         for (const instanceKey in this.instances) {
             const instance = this.instances[instanceKey];
             if (instance.scope === identifier || 
@@ -3424,42 +3360,35 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 根据scope获取实例
+     * 閺嶈宓乻cope閼惧嘲褰囩€圭偘绶?
      */
     getInstanceByScope: function (scope) {
         return this.getInstance(scope);
     },
 
     /**
-     * 保存行数?
+     * 娣囨繂鐡ㄧ悰灞炬殶?
      */
     saveRowData: function (instance, row) {
-        fetch(this.buildApiUrl(instance, 'save-data'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: instance.options.model,
-                data: row
-            })
+        this.requestJson(instance, 'save-data', {
+            model: instance.options.model,
+            data: row
         })
-            .then(response => response.json())
             .then(response => {
                 if (response.code !== 200) {
                     this.showError(instance.container.attr('id'), response.msg);
                 }
             })
             .catch(() => {
-                this.showError(instance.container.attr('id'), __('保存失败'));
+                this.showError(instance.container.attr('id'), __('娣囨繂鐡ㄦ径杈Е'));
             });
     },
 
     /**
-     * 显示成功信息
+     * 閺勫墽銇氶幋鎰娣団剝浼?
      */
     /**
-     * 显示成功信息（增强版）
+     * 閺勫墽銇氶幋鎰娣団剝浼呴敍鍫濐杻瀵櫣澧楅敍?
      */
     showSuccess: function (tableId, message, options = {}) {
         const {
@@ -3473,13 +3402,13 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
 
-        // 移除已存在的成功消息
+        // 缁夊娅庡鎻掔摠閸︺劎娈戦幋鎰濞戝牊浼?
         const existingSuccess = container.querySelector('.datatable-success-message');
         if (existingSuccess) {
             existingSuccess.remove();
         }
 
-        // 创建成功消息元素
+        // 閸掓稑缂撻幋鎰濞戝牊浼呴崗鍐
         const successHtml = `
             <div class="datatable-success-message">
                 <i class="fas fa-check-circle"></i>
@@ -3487,7 +3416,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             </div>
         `;
 
-        // 在表格容器顶部显示成功消息
+        // 閸︺劏銆冮弽鐓庮啇閸ｃ劑銆婇柈銊︽▔缁€鐑樺灇閸旂喐绉烽幁?
         const toolbar = container.querySelector('.w-datatable-toolbar');
         if (toolbar) {
             toolbar.insertAdjacentHTML('afterend', successHtml);
@@ -3495,7 +3424,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             container.insertAdjacentHTML('afterbegin', successHtml);
         }
 
-        // 自动隐藏
+        // 閼奉亜濮╅梾鎰
         if (autoHide) {
             setTimeout(() => {
                 const successMsg = container.querySelector('.datatable-success-message');
@@ -3509,19 +3438,19 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 显示加载状态
+     * 閺勫墽銇氶崝鐘烘祰閻樿埖鈧?
      */
-    showLoading: function (tableId, message = __('加载中...')) {
+    showLoading: function (tableId, message = __('閸旂姾娴囨稉?..')) {
         const container = document.getElementById(tableId);
         if (!container) return;
 
-        // 移除已存在的加载提示
+        // 缁夊娅庡鎻掔摠閸︺劎娈戦崝鐘烘祰閹绘劗銇?
         const existingLoading = container.querySelector('.loading-overlay');
         if (existingLoading) {
             existingLoading.remove();
         }
 
-        // 创建加载覆盖层
+        // 閸掓稑缂撻崝鐘烘祰鐟曞棛娲婄仦?
         const loadingHtml = `
             <div class="loading-overlay" style="
                 position: absolute;
@@ -3544,7 +3473,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             </div>
         `;
 
-        // 确保容器有相对定位
+        // 绾喕绻氱€圭懓娅掗張澶屾祲鐎电懓鐣炬担?
         if (getComputedStyle(container).position === 'static') {
             container.style.position = 'relative';
         }
@@ -3553,7 +3482,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 隐藏加载状态
+     * 闂呮劘妫岄崝鐘烘祰閻樿埖鈧?
      */
     hideLoading: function (tableId) {
         const container = document.getElementById(tableId);
@@ -3566,18 +3495,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 显示警告信息
+     * 閺勫墽銇氱拃锕€鎲℃穱鈩冧紖
      */
     showWarning: function (tableId, message) {
         const warningHtml = `
             <div class="alert alert-warning alert-dismissible fade show" role="alert">
                 <i class="fas fa-exclamation-triangle"></i>
-                <strong>警告！</strong>${message}
+                <strong>鐠€锕€鎲￠敍?/strong>${message}
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         `;
 
-        // 在表格容器顶部显示警告消息
+        // 閸︺劏銆冮弽鐓庮啇閸ｃ劑銆婇柈銊︽▔缁€楦款劅閸涘﹥绉烽幁?
         const container = document.getElementById(tableId);
         if (container) {
             const existingAlert = container.querySelector('.alert-warning');
@@ -3586,7 +3515,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
             container.insertAdjacentHTML('afterbegin', warningHtml);
 
-            // 3秒后自动隐藏
+            // 3缁夋帒鎮楅懛顏勫З闂呮劘妫?
             setTimeout(() => {
                 const alert = container.querySelector('.alert-warning');
                 if (alert) {
@@ -3597,7 +3526,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 显示错误信息（增强版）
+     * 閺勫墽銇氶柨娆掝嚖娣団剝浼呴敍鍫濐杻瀵櫣澧楅敍?
      */
     showError: function (tableId, message, options = {}) {
         const {
@@ -3613,26 +3542,26 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
 
-        // 移除已存在的错误消息
+        // 缁夊娅庡鎻掔摠閸︺劎娈戦柨娆掝嚖濞戝牊浼?
         const existingError = container.querySelector('.datatable-error-message');
         if (existingError) {
             existingError.remove();
         }
 
-        // 创建错误消息元素
+        // 閸掓稑缂撻柨娆掝嚖濞戝牊浼呴崗鍐
         const errorHtml = `
             <div class="datatable-error-message">
                 <i class="fas fa-exclamation-circle"></i>
                 <span>${message}</span>
                 ${showRetry && retryCallback ? `
                     <button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="${retryCallback}">
-                        <i class="fas fa-redo"></i> ${__('重试')}
+                        <i class="fas fa-redo"></i> ${__('闁插秷鐦?')}
                     </button>
                 ` : ''}
             </div>
         `;
 
-        // 在表格容器顶部显示错误消息
+        // 閸︺劏銆冮弽鐓庮啇閸ｃ劑銆婇柈銊︽▔缁€娲晩鐠囶垱绉烽幁?
         const toolbar = container.querySelector('.w-datatable-toolbar');
         if (toolbar) {
             toolbar.insertAdjacentHTML('afterend', errorHtml);
@@ -3640,7 +3569,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             container.insertAdjacentHTML('afterbegin', errorHtml);
         }
 
-        // 自动隐藏
+        // 閼奉亜濮╅梾鎰
         if (autoHide) {
             setTimeout(() => {
                 const errorMsg = container.querySelector('.datatable-error-message');
@@ -3654,55 +3583,55 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 初始化表格主体
+     * 閸掓繂顫愰崠鏍€冮弽闂村瘜娴?
      */
     initBody: function (scope, options) {
-        console.log('初始化表格主?', scope, options);
+        console.log('閸掓繂顫愰崠鏍€冮弽闂村瘜?', scope, options);
         const instance = this.getInstanceByScope(scope.replace('-body', ''));
         if (instance) {
             instance.bodyConfig = options;
-            // 可以在这里添加表格主体的特定初始化逻辑
+            // 閸欘垯浜掗崷銊ㄧ箹闁插本鍧婇崝鐘恒€冮弽闂村瘜娴ｆ挾娈戦悧鐟扮暰閸掓繂顫愰崠鏍偓鏄忕帆
         }
     },
 
     /**
-     * 初始化表格底?
+     * 閸掓繂顫愰崠鏍€冮弽鐓庣俺?
      */
     initFooter: function (scope, options) {
-        console.log('初始化表格底?', scope, options);
+        console.log('閸掓繂顫愰崠鏍€冮弽鐓庣俺?', scope, options);
         const instance = this.getInstanceByScope(scope.replace('-footer', ''));
         if (instance) {
             instance.footerConfig = options;
-            // 可以在这里添加表格底部的特定初始化逻辑
+            // 閸欘垯浜掗崷銊ㄧ箹闁插本鍧婇崝鐘恒€冮弽鐓庣俺闁劎娈戦悧鐟扮暰閸掓繂顫愰崠鏍偓鏄忕帆
         }
     },
 
     /**
-     * 初始化表?
+     * 閸掓繂顫愰崠鏍€?
      */
     initHeader: function (scope, options) {
-        console.log('初始化表?', scope, options);
+        console.log('閸掓繂顫愰崠鏍€?', scope, options);
         const instance = this.getInstanceByScope(scope.replace('-header', ''));
         if (instance) {
             instance.headerConfig = options;
-            // 可以在这里添加表头的特定初始化逻辑
+            // 閸欘垯浜掗崷銊ㄧ箹闁插本鍧婇崝鐘恒€冩径瀵告畱閻楃懓鐣鹃崚婵嗩潗閸栨牠鈧槒绶?
         }
     },
 
     /**
-     * 初始化过滤器
+     * 閸掓繂顫愰崠鏍箖濠娿倕娅?
      */
     initFilter: function (scope, options) {
-        console.log('初始化过滤器:', scope, options);
+        console.log('閸掓繂顫愰崠鏍箖濠娿倕娅?', scope, options);
         const instance = this.getInstanceByScope(scope.replace('-filter', ''));
         if (instance) {
             instance.filterConfig = options;
-            // 可以在这里添加过滤器的特定初始化逻辑
+            // 閸欘垯浜掗崷銊ㄧ箹闁插本鍧婇崝鐘虹箖濠娿倕娅掗惃鍕鐎规艾鍨垫慨瀣闁槒绶?
         }
     },
 
     /**
-     * 字段配置弹窗tab切换（自定义w-前缀?
+     * 鐎涙顔岄柊宥囩枂瀵湱鐛ab閸掑洦宕查敍鍫ｅ殰鐎规矮绠焪-閸撳秶绱?
      */
     bindFieldConfigTabs: function (tableId) {
         var modal = document.getElementById('w-field-config-modal-' + tableId);
@@ -3710,10 +3639,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         var tabLinks = modal.querySelectorAll('.w-nav-link');
         tabLinks.forEach(function (link) {
             link.onclick = function () {
-                // 取消所有tab激?
+                // 閸欐牗绉烽幍鈧張濉糰b濠碘偓?
                 tabLinks.forEach(function (l) { l.classList.remove('active'); });
                 link.classList.add('active');
-                // 切换内容?
+                // 閸掑洦宕查崘鍛啇?
                 var target = link.getAttribute('data-w-target');
                 var tabPanes = modal.querySelectorAll('.w-tab-pane');
                 tabPanes.forEach(function (pane) {
@@ -3727,7 +3656,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         });
     },
 
-    // 修改openFieldConfig，弹窗打开时绑定tab切换
+    // 娣囶喗鏁紀penFieldConfig閿涘苯鑴婄粣妤佸ⅵ瀵偓閺冨墎绮︾€规ab閸掑洦宕?
     openFieldConfig: function (tableId) {
         document.querySelectorAll('.w-modal').forEach(function (modal) {
             modal.style.display = 'none';
@@ -3736,30 +3665,30 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         if (modal) {
             modal.style.display = 'flex';
 
-            // 检查是否已经有缓存的字段数据
+            // 濡偓閺屻儲妲搁崥锕€鍑＄紒蹇旀箒缂傛挸鐡ㄩ惃鍕摟濞堝灚鏆熼幑?
             const instance = DataTableManager.getInstance(tableId);
             if (instance && instance.allFields && instance.allFields.length > 0) {
-                console.log('openFieldConfig: 使用缓存的字段数据', {
+                console.log('openFieldConfig: 娴ｈ法鏁ょ紓鎾崇摠閻ㄥ嫬鐡у▓鍨殶閹?', {
                     allFields: instance.allFields.length,
                     displayFields: instance.displayFields.length,
                     filterFields: instance.filterFields.length
                 });
 
-                // 直接渲染缓存的字段数据，不触发表格重新构建
+                // 閻╁瓨甯村〒鍙夌厠缂傛挸鐡ㄩ惃鍕摟濞堝灚鏆熼幑顕嗙礉娑撳秷袝閸欐垼銆冮弽濂稿櫢閺傜増鐎?
                 DataTableManager.renderModelFieldsFromData(tableId, {
                     all_fields: instance.allFields,
                     display_fields: instance.displayFields,
                     filter_fields: instance.filterFields
                 });
             } else {
-                // 只在字段设置中没有数据时才加载
-                console.log('openFieldConfig: 字段设置中没有数据，开始加载');
+                // 閸欘亜婀€涙顔岀拋鍓х枂娑擃厽鐥呴張澶嬫殶閹诡喗妞傞幍宥呭鏉?
+                console.log('openFieldConfig: 鐎涙顔岀拋鍓х枂娑擃厽鐥呴張澶嬫殶閹诡噯绱濆鈧慨瀣鏉?');
                 DataTableManager.loadModelFieldsForConfig(tableId);
             }
 
             DataTableManager.bindFieldConfigTabs(tableId);
             
-            // 确保拖拽功能在DOM渲染完成后初始化
+            // 绾喕绻氶幏鏍ㄥ閸旂喕鍏橀崷鈥昈M濞撳弶鐓嬬€瑰本鍨氶崥搴″灥婵瀵?
             setTimeout(function () {
                 DataTableManager.initDragSort(tableId);
                 var firstInput = modal.querySelector('input,select,textarea,button');
@@ -3769,104 +3698,97 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 关闭字段配置自定义弹窗（w-modal）
+     * 閸忔娊妫寸€涙顔岄柊宥囩枂閼奉亜鐣炬稊澶婅剨缁愭绱檞-modal閿?
      */
     closeFieldConfig: function (tableId) {
         var modal = document.getElementById('w-field-config-modal-' + tableId);
         if (modal) {
             modal.style.display = 'none';
-            // 关闭时重置加载标记
+            // 閸忔娊妫撮弮鍫曞櫢缂冾喖濮炴潪鑺ョ垼鐠?
             delete modal.dataset.wFieldsLoaded;
         }
     },
 
     /**
-     * 专门为字段配置加载模型字段（不会触发表格重新构建）
+     * 娑撴捇妫稉鍝勭摟濞堢敻鍘ょ純顔煎鏉炶姤膩閸ㄥ鐡у▓纰夌礄娑撳秳绱扮憴锕€褰傜悰銊︾壐闁插秵鏌婇弸鍕紦閿?
      */
     loadModelFieldsForConfig: function (tableId) {
         const instance = this.instances[tableId];
         if (!instance) return;
         if (!instance.apiUrl) {
-            console.error('[DataTableManager] apiUrl未设置，无法加载字段配置');
+            console.error('[DataTableManager] apiUrl閺堫亣顔曠純顕嗙礉閺冪姵纭堕崝鐘烘祰鐎涙顔岄柊宥囩枂');
             return;
         }
 
-        // 1. 提取模板字段（field指定字段）
+        // 1. 閹绘劕褰囧Ο鈩冩緲鐎涙顔岄敍鍧抜eld閹稿洤鐣剧€涙顔岄敍?
         const templateFields = this.extractFieldsFromDOM(tableId, 'display');
         const templateFilterFields = this.extractFieldsFromDOM(tableId, 'filter');
-        console.log('loadModelFieldsForConfig: 模板字段', templateFields);
-        console.log('loadModelFieldsForConfig: 模板筛选字段', templateFilterFields);
+        console.log('loadModelFieldsForConfig: 濡剝婢樼€涙顔?', templateFields);
+        console.log('loadModelFieldsForConfig: 濡剝婢樼粵娑⑩偓澶婄摟濞?', templateFilterFields);
         instance.templateFields = templateFields;
         instance.templateFilterFields = templateFilterFields;
 
-        console.log('loadModelFieldsForConfig: 开始加载字段配置', {
+        console.log('loadModelFieldsForConfig: 瀵偓婵濮炴潪钘夌摟濞堢敻鍘ょ純?', {
             tableId,
             model: instance.options.model,
             scope: instance.options.scope
         });
 
-        // 显示loading
+        // 閺勫墽銇歭oading
         const availableFields = document.getElementById('w-available-fields-' + tableId);
         const availableFieldsFilter = document.getElementById('w-available-fields-filter-' + tableId);
         if (availableFields) {
-            availableFields.innerHTML = '<div class="w-text-center w-text-muted w-py-4"><i class="fas fa-spinner fa-spin"></i> ' + __("加载中...") + '</div>';
+            availableFields.innerHTML = '<div class="w-text-center w-text-muted w-py-4"><i class="fas fa-spinner fa-spin"></i> ' + __("閸旂姾娴囨稉?..") + '</div>';
         }
         if (availableFieldsFilter) {
-            availableFieldsFilter.innerHTML = '<div class="w-text-center w-text-muted w-py-4"><i class="fas fa-spinner fa-spin"></i> ' + __("加载中...") + '</div>';
+            availableFieldsFilter.innerHTML = '<div class="w-text-center w-text-muted w-py-4"><i class="fas fa-spinner fa-spin"></i> ' + __("閸旂姾娴囨稉?..") + '</div>';
         }
 
-        fetch(instance.apiUrl + '/fields', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                table_id: tableId,
-                model: instance.options.model,
-                scope: instance.options.scope
-            })
+        this.requestJson(instance, 'fields', {
+            table_id: tableId,
+            model: instance.options.model,
+            scope: instance.options.scope
         })
-            .then(response => response.json())
             .then(response => {
-                // 3. 合并模板字段和接口字段（用于"可用字段"列表）
+                // 3. 閸氬牆鑻熷Ο鈩冩緲鐎涙顔岄崪灞惧复閸欙絽鐡у▓纰夌礄閻劋绨?閸欘垳鏁ょ€涙顔?閸掓銆冮敍?
                 let apiFields = (response.data && response.data.all_fields) ? response.data.all_fields : [];
                 let mergedFields = this.mergeTemplateAndApiFields(templateFields, apiFields);
-                // 合并filter字段
+                // 閸氬牆鑻焒ilter鐎涙顔?
                 let apiFilterFields = (response.data && response.data.filter_fields) ? response.data.filter_fields : [];
                 let mergedFilterFields = this.mergeTemplateAndApiFields(templateFilterFields, apiFilterFields);
 
-                // 4. 确定显示字段：优先级为 缓存配置 > 模板字段 > API默认字段
+                // 4. 绾喖鐣鹃弰鍓с仛鐎涙顔岄敍姘喘閸忓牏楠囨稉?缂傛挸鐡ㄩ柊宥囩枂 > 濡剝婢樼€涙顔?> API姒涙顓荤€涙顔?
                 let displayFields;
                 const cachedDisplayFields = response.data.cached_display_fields;
                 const templateFieldNames = new Set(templateFields.map(f => f.name));
 
                 if (cachedDisplayFields && cachedDisplayFields.length > 0) {
-                    // 有缓存配置，使用缓存配置，但确保模板字段属性优先
+                    // 閺堝绱︾€涙﹢鍘ょ純顕嗙礉娴ｈ法鏁ょ紓鎾崇摠闁板秶鐤嗛敍灞肩稻绾喕绻氬Ο鈩冩緲鐎涙顔岀仦鐐粹偓褌绱崗?
                     displayFields = cachedDisplayFields.map(cachedField => {
                         const templateField = templateFields.find(t => t.name === cachedField.name);
                         return templateField ? { ...cachedField, ...templateField } : cachedField;
                     });
-                    console.log('loadModelFieldsForConfig: 使用缓存配置', displayFields);
+                    console.log('loadModelFieldsForConfig: 娴ｈ法鏁ょ紓鎾崇摠闁板秶鐤?', displayFields);
                 } else if (templateFields.length > 0) {
-                    // 没有缓存配置，但有模板字段，只显示模板字段
+                    // 濞屸剝婀佺紓鎾崇摠闁板秶鐤嗛敍灞肩稻閺堝膩閺夊灝鐡у▓纰夌礉閸欘亝妯夌粈鐑樐侀弶鍨摟濞?
                     displayFields = [...templateFields];
-                    console.log('loadModelFieldsForConfig: 使用模板字段（默认只显示模板中指定的字段）', displayFields);
+                    console.log('loadModelFieldsForConfig: 娴ｈ法鏁ゅΟ鈩冩緲鐎涙顔岄敍鍫ョ帛鐠併倕褰ч弰鍓с仛濡剝婢樻稉顓熷瘹鐎规氨娈戠€涙顔岄敍?', displayFields);
                 } else {
-                    // 没有缓存配置也没有模板字段，使用API默认字段
+                    // 濞屸剝婀佺紓鎾崇摠闁板秶鐤嗘稊鐔哥梾閺堝膩閺夊灝鐡у▓纰夌礉娴ｈ法鏁PI姒涙顓荤€涙顔?
                     displayFields = response.data.display_fields || [];
-                    console.log('loadModelFieldsForConfig: 使用API默认字段', displayFields);
+                    console.log('loadModelFieldsForConfig: 娴ｈ法鏁PI姒涙顓荤€涙顔?', displayFields);
                 }
 
-                // 5. 记录用户选择的字段（非模板字段）
+                // 5. 鐠佹澘缍嶉悽銊﹀煕闁瀚ㄩ惃鍕摟濞堢绱欓棃鐐茨侀弶鍨摟濞堢绱?
                 const userSelectedFields = displayFields.filter(field => !templateFieldNames.has(field.name));
-                console.log('loadModelFieldsForConfig: 用户选择的字段', userSelectedFields);
+                console.log('loadModelFieldsForConfig: 閻劍鍩涢柅澶嬪閻ㄥ嫬鐡у▓?', userSelectedFields);
 
-                // 6. 处理受保护字段的配置
+                // 6. 婢跺嫮鎮婇崣妞剧箽閹躲倕鐡у▓鐢垫畱闁板秶鐤?
                 displayFields = displayFields.map(field => {
                     const isProtected = this.isFieldProtected(field);
                     const isPrimaryOrIndex = field.is_primary === true || field.primary === true || field.primary_key === true || field.pk === true || ['id', 'ID', 'Id', 'primary', 'pk', 'primary_key', 'is_primary'].includes(field.name);
                     if (isProtected) {
-                        // 主键/索引字段不能排序和移动
+                        // 娑撳鏁?缁便垹绱╃€涙顔屾稉宥堝厴閹烘帒绨崪宀€些閸?
                         if (isPrimaryOrIndex) {
                             return {
                                 ...field,
@@ -3878,7 +3800,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                                 display_orderable: false
                             };
                         }
-                        // 其它受保护字段默认可以排序和移动
+                        // 閸忚泛鐣犻崣妞剧箽閹躲倕鐡у▓鐢哥帛鐠併倕褰叉禒銉﹀笓鎼村繐鎷扮粔璇插З
                         return {
                             ...field,
                             sortable: field.sortable !== false && field.sortable !== 'false',
@@ -3892,7 +3814,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     return field;
                 });
 
-                // 7. 确保指定字段排到前面
+                // 7. 绾喕绻氶幐鍥х暰鐎涙顔岄幒鎺戝煂閸撳秹娼?
                 const displayTemplateFields = displayFields.filter(field =>
                     field.template_defined || field.field_defined || field.from_field
                 );
@@ -3900,10 +3822,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     !field.template_defined && !field.field_defined && !field.from_field
                 );
 
-                // 重新排序：模板字段在前，用户字段在后
+                // 闁插秵鏌婇幒鎺戠碍閿涙碍膩閺夊灝鐡у▓闈涙躬閸撳稄绱濋悽銊﹀煕鐎涙顔岄崷銊ユ倵
                 displayFields = [...displayTemplateFields, ...userFields];
 
-                // 8. 只渲染字段配置弹窗，不触发表格重新构建
+                // 8. 閸欘亝瑕嗛弻鎾崇摟濞堢敻鍘ょ純顔艰剨缁愭绱濇稉宥埿曢崣鎴ｃ€冮弽濂稿櫢閺傜増鐎?
                 this.renderModelFieldsFromData(tableId, {
                     all_fields: mergedFields,
                     display_fields: displayFields,
@@ -3911,19 +3833,19 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 });
             })
             .catch(error => {
-                console.error('loadModelFieldsForConfig: 加载字段配置失败', error);
+                console.error('loadModelFieldsForConfig: 閸旂姾娴囩€涙顔岄柊宥囩枂婢惰精瑙?', error);
                 const availableFields = document.getElementById('w-available-fields-' + tableId);
                 const availableFieldsFilter = document.getElementById('w-available-fields-filter-' + tableId);
                 if (availableFields) {
-                    availableFields.innerHTML = '<div class="w-text-center w-text-danger w-py-4"><i class="fas fa-exclamation-triangle"></i> ' + __("加载失败") + '</div>';
+                    availableFields.innerHTML = '<div class="w-text-center w-text-danger w-py-4"><i class="fas fa-exclamation-triangle"></i> ' + __("閸旂姾娴囨径杈Е") + '</div>';
                 }
                 if (availableFieldsFilter) {
-                    availableFieldsFilter.innerHTML = '<div class="w-text-center w-text-danger w-py-4"><i class="fas fa-exclamation-triangle"></i> ' + __("加载失败") + '</div>';
+                    availableFieldsFilter.innerHTML = '<div class="w-text-center w-text-danger w-py-4"><i class="fas fa-exclamation-triangle"></i> ' + __("閸旂姾娴囨径杈Е") + '</div>';
                 }
             });
     },
 
-    // 合并模板字段和接口字段，模板字段优先
+    // 閸氬牆鑻熷Ο鈩冩緲鐎涙顔岄崪灞惧复閸欙絽鐡у▓纰夌礉濡剝婢樼€涙顔屾导妯哄帥
     mergeTemplateAndApiFields: function (templateFields, apiFields) {
         const map = {};
         templateFields.forEach(f => map[f.name] = f);
@@ -3934,13 +3856,13 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 应用字段配置到表?
+     * 鎼存梻鏁ょ€涙顔岄柊宥囩枂閸掓媽銆?
      */
     applyFieldsToTable: function (tableId) {
         const instance = this.instances[tableId];
         if (!instance) return;
 
-        // 确保模板字段在前?
+        // 绾喕绻氬Ο鈩冩緲鐎涙顔岄崷銊ュ?
         const templateFields = instance.displayFields.filter(field =>
             field.template_defined || field.field_defined || field.from_field
         );
@@ -3948,24 +3870,24 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             !field.template_defined && !field.field_defined && !field.from_field
         );
 
-        // 重新排序：模板字段在前，用户字段在后
+        // 闁插秵鏌婇幒鎺戠碍閿涙碍膩閺夊灝鐡у▓闈涙躬閸撳稄绱濋悽銊﹀煕鐎涙顔岄崷銊ユ倵
         const orderedDisplayFields = [...templateFields, ...userFields];
 
-        // 应用字段配置到表格头?
+        // 鎼存梻鏁ょ€涙顔岄柊宥囩枂閸掓媽銆冮弽鐓庛仈?
         this.renderHeader(tableId, orderedDisplayFields);
 
-        // 应用字段配置到筛选区?
+        // 鎼存梻鏁ょ€涙顔岄柊宥囩枂閸掓壆鐡柅澶婂隘?
         this.renderFilter(tableId, instance.filterFields);
 
-        // 更新实例中的字段顺序
+        // 閺囧瓨鏌婄€圭偘绶ユ稉顓犳畱鐎涙顔屾い鍝勭碍
         instance.displayFields = orderedDisplayFields;
 
-        // 保存配置到缓?
+        // 娣囨繂鐡ㄩ柊宥囩枂閸掓壆绱?
         this.saveFieldConfigToCache(tableId);
     },
 
     /**
-     * 渲染字段类型下拉
+     * 濞撳弶鐓嬬€涙顔岀猾璇茬€锋稉瀣
      */
     renderFieldTypeSelect: function (tableId, field, type) {
         const options = DataTableManager.fieldTypeOptions;
@@ -3979,12 +3901,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 字段类型下拉变更事件
+     * 鐎涙顔岀猾璇茬€锋稉瀣閸欐ɑ娲挎禍瀣╂
      */
     bindFieldTypeChange: function (tableId) {
-        // 解绑再绑定，防止重复
+        // 鐟欙絿绮﹂崘宥囩拨鐎规熬绱濋梼鍙夘剾闁插秴顦?
         const modal = document.getElementById('w-field-config-modal-' + tableId) || document;
-        // 先移除之前的事件
+        // 閸忓牏些闂勩倓绠ｉ崜宥囨畱娴滃娆?
         if (modal._fieldTypeChangeHandler) {
             modal.removeEventListener('change', modal._fieldTypeChangeHandler, true);
         }
@@ -4001,7 +3923,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const field = fieldList.find(f => f.name === fieldName);
                 if (field) {
                     field.type = value;
-                    // 只更新基本信息显示，不重新渲染整个列
+                    // 閸欘亝娲块弬鏉跨唨閺堫兛淇婇幁顖涙▔缁€鐚寸礉娑撳秹鍣搁弬鐗堣閺屾挻鏆ｆ稉顏勫灙
                     const fieldItem = document.querySelector(`#w-${type}-fields-${tableId} .w-field-item[data-field="${fieldName}"]`);
                     if (fieldItem) {
                         const typeBadge = fieldItem.querySelector('.w-field-basic-info .w-field-type-badge');
@@ -4016,11 +3938,11 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 字段label/placeholder输入变更事件
+     * 鐎涙顔宭abel/placeholder鏉堟挸鍙嗛崣妯绘纯娴滃娆?
      */
     bindFieldLabelInput: function (tableId) {
         const modal = document.getElementById('w-field-config-modal-' + tableId) || document;
-        // 先移除之前的事件
+        // 閸忓牏些闂勩倓绠ｉ崜宥囨畱娴滃娆?
         if (modal._fieldLabelInputHandler) {
             modal.removeEventListener('input', modal._fieldLabelInputHandler, true);
         }
@@ -4037,7 +3959,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const field = fieldList.find(f => f.name === fieldName);
                 if (field) {
                     field.label = value;
-                    // 只更新基本信息显示，不重新渲染整个列
+                    // 閸欘亝娲块弬鏉跨唨閺堫兛淇婇幁顖涙▔缁€鐚寸礉娑撳秹鍣搁弬鐗堣閺屾挻鏆ｆ稉顏勫灙
                     const fieldItem = document.querySelector(`#w-${type}-fields-${tableId} .w-field-item[data-field="${fieldName}"]`);
                     if (fieldItem) {
                         const fieldNameEl = fieldItem.querySelector('.w-field-basic-info .w-field-name');
@@ -4066,7 +3988,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 字段校验输入变更事件
+     * 鐎涙顔岄弽锟犵崣鏉堟挸鍙嗛崣妯绘纯娴滃娆?
      */
     bindFieldValidationInput: function (tableId) {
         const modal = document.getElementById('w-field-config-modal-' + tableId) || document;
@@ -4096,7 +4018,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 从数据渲染模型字段（适配w-前缀class/id?
+     * 娴犲孩鏆熼幑顔借閺屾挻膩閸ㄥ鐡у▓纰夌礄闁倿鍘-閸撳秶绱慶lass/id?
      */
     renderModelFieldsFromData: function (tableId, data) {
         const instance = this.instances[tableId];
@@ -4107,78 +4029,78 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const $displayFields = $('#w-display-fields-' + tableId);
         const $filterFields = $('#w-filter-fields-' + tableId);
 
-        // 处理数据结构
+        // 婢跺嫮鎮婇弫鐗堝祦缂佹挻鐎?
         let allFields = [];
         let displayFields;
         let filterFields;
         if (data && typeof data === 'object') {
             allFields = data.all_fields || data.fields || [];
-            // 优先用接口返回的display_fields/filter_fields（即使为空也用）
+            // 娴兼ê鍘涢悽銊﹀复閸欙綀绻戦崶鐐垫畱display_fields/filter_fields閿涘牆宓嗘担澶歌礋缁岃桨绡冮悽顭掔礆
             if ('display_fields' in data) {
                 displayFields = data.display_fields || [];
-                console.log('renderModelFieldsFromData: 接口返回display_fields', displayFields);
+                console.log('renderModelFieldsFromData: 閹恒儱褰涙潻鏂挎礀display_fields', displayFields);
             }
             if ('filter_fields' in data) {
                 filterFields = data.filter_fields || [];
-                console.log('renderModelFieldsFromData: 接口返回filter_fields', filterFields);
+                console.log('renderModelFieldsFromData: 閹恒儱褰涙潻鏂挎礀filter_fields', filterFields);
             }
         }
 
-        // 如果没有返回，使用默认逻辑
+        // 婵″倹鐏夊▽鈩冩箒鏉╂柨娲栭敍灞煎▏閻劑绮拋銈夆偓鏄忕帆
         if (typeof displayFields === 'undefined') {
             displayFields = this.getDefaultDisplayFields(allFields);
-            console.log('renderModelFieldsFromData: 使用默认displayFields', displayFields);
+            console.log('renderModelFieldsFromData: 娴ｈ法鏁ゆ妯款吇displayFields', displayFields);
         }
         if (typeof filterFields === 'undefined') {
             filterFields = [];
-            console.log('renderModelFieldsFromData: 使用默认filterFields', filterFields);
+            console.log('renderModelFieldsFromData: 娴ｈ法鏁ゆ妯款吇filterFields', filterFields);
         }
 
-        // 保存到实例中，供后续使用
+        // 娣囨繂鐡ㄩ崚鏉跨杽娓氬鑵戦敍灞肩返閸氬海鐢绘担璺ㄦ暏
         instance.allFields = allFields;
         instance.displayFields = displayFields;
         instance.filterFields = filterFields;
 
-        console.log('renderModelFieldsFromData: 最终数据', {
+        console.log('renderModelFieldsFromData: 閺堚偓缂佸牊鏆熼幑?', {
             allFields: allFields.length,
             displayFields: displayFields.length,
             filterFields: filterFields.length
         });
 
-        // 计算可用字段（分别计算两个tab的可用字段）
-        // displayFields: 模板字段+用户配置字段
-        // allFields: 接口返回的所有字段
+        // 鐠侊紕鐣婚崣顖滄暏鐎涙顔岄敍鍫濆瀻閸掝偉顓哥粻妞捐⒈娑撶尲ab閻ㄥ嫬褰查悽銊ョ摟濞堢绱?
+        // displayFields: 濡剝婢樼€涙顔?閻劍鍩涢柊宥囩枂鐎涙顔?
+        // allFields: 閹恒儱褰涙潻鏂挎礀閻ㄥ嫭澧嶉張澶婄摟濞?
         const displayFieldNames = new Set(displayFields.map(f => f.name));
         const availableFieldsForDisplay = allFields.filter(field => !displayFieldNames.has(field.name));
 
-        // 受保护字段定义
+        // 閸欐ぞ绻氶幎銈呯摟濞堥潧鐣炬稊?
         function isProtectedField(field) {
             return DataTableManager.isFieldProtected(field) || DataTableManager.isPrimaryOrIndexField(field);
         }
 
         const filterFieldNames = new Set(filterFields.map(f => f.name));
-        // 可用筛选字段：排除受保护字段
+        // 閸欘垳鏁ょ粵娑⑩偓澶婄摟濞堢绱伴幒鎺楁珟閸欐ぞ绻氶幎銈呯摟濞?
         const availableFieldsForFilter = allFields.filter(field => !filterFieldNames.has(field.name) && !isProtectedField(field));
 
-        // 受保护字段应始终在已选筛选字段中
-        // 过滤出所有受保护字段
+        // 閸欐ぞ绻氶幎銈呯摟濞堥潧绨叉慨瀣矒閸︺劌鍑￠柅澶岀摣闁鐡у▓鍏歌厬
+        // 鏉╁洦鎶ら崙鐑樺閺堝褰堟穱婵囧Б鐎涙顔?
         const protectedFilterFields = allFields.filter(field => isProtectedField(field));
-        // 合并：受保护字段 + 其它已选字段（去重）
+        // 閸氬牆鑻熼敍姘綀娣囨繃濮㈢€涙顔?+ 閸忚泛鐣犲鏌モ偓澶婄摟濞堢绱欓崢濠氬櫢閿?
         const filterFieldsNoProtected = filterFields.filter(f => !isProtectedField(f));
         const finalFilterFields = [...protectedFilterFields, ...filterFieldsNoProtected.filter(f => !protectedFilterFields.some(pf => pf.name === f.name))];
         instance.filterFields = finalFilterFields;
 
-        console.log('renderModelFieldsFromData: 可用字段计算', {
+        console.log('renderModelFieldsFromData: 閸欘垳鏁ょ€涙顔岀拋锛勭暬', {
             availableFieldsForDisplay: availableFieldsForDisplay.length,
             availableFieldsForFilter: availableFieldsForFilter.length
         });
 
-        // 渲染字段条目时，将所有属性设置为data-属?
+        // 濞撳弶鐓嬬€涙顔岄弶锛勬窗閺冭绱濈亸鍡樺閺堝鐫橀幀褑顔曠純顔昏礋data-鐏?
         function getFieldDataAttrs(field) {
             let attrs = '';
             for (const key in field) {
                 if (Object.prototype.hasOwnProperty.call(field, key) && field[key] !== undefined) {
-                    // 将驼峰转为中划线
+                    // 鐏忓棝鈹樺畡鎷屾祮娑撹桨鑵戦崚鎺斿殠
                     const dataKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
                     attrs += ` data-${dataKey}="${String(field[key]).replace(/"/g, '&quot;')}"`;
                 }
@@ -4186,14 +4108,14 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return attrs;
         }
 
-        // 渲染列设置tab的可用字段
+        // 濞撳弶鐓嬮崚妤勵啎缂冪晧ab閻ㄥ嫬褰查悽銊ョ摟濞?
         let availableHtmlForDisplay = '';
         if (availableFieldsForDisplay.length > 0) {
             availableFieldsForDisplay.forEach(field => {
                 const isProtected = this.isFieldProtected(field);
                 const disabledAttr = isProtected ? 'disabled' : '';
                 const disabledClass = isProtected ? 'disabled' : '';
-                const protectionBadge = isProtected ? '<span class="w-badge w-badge-protected">' + __("受保护") + '</span>' : '';
+                const protectionBadge = isProtected ? '<span class="w-badge w-badge-protected">' + __("閸欐ぞ绻氶幎?") + '</span>' : '';
 
                 availableHtmlForDisplay += `
     <div class="w-field-item ${disabledClass}" data-field="${field.name}" ${getFieldDataAttrs(field)}>
@@ -4207,7 +4129,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             <button type="button" class="w-btn w-btn-sm w-btn-outline-primary" 
                     onclick="DataTableManager.addField('${tableId}', '${field.name}', 'display')"
                     ${disabledAttr}>
-                <i class="fas fa-table"></i> ${__("显示")}
+                <i class="fas fa-table"></i> ${__("閺勫墽銇?")}
             </button>
         </div>
     </div>`;
@@ -4215,18 +4137,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         } else {
             availableHtmlForDisplay = `
     <div class="w-text-center w-text-muted w-py-4">
-        <i class="fas fa-info-circle"></i> ${__("所有字段都已配置")}
+        <i class="fas fa-info-circle"></i> ${__("閹碘偓閺堝鐡у▓鐢稿厴瀹告煡鍘ょ純?")}
     </div>`;
         }
 
-        // 渲染筛选设置tab的可用字段
+        // 濞撳弶鐓嬬粵娑⑩偓澶庮啎缂冪晧ab閻ㄥ嫬褰查悽銊ョ摟濞?
         let availableHtmlForFilter = '';
         if (availableFieldsForFilter.length > 0) {
             availableFieldsForFilter.forEach(field => {
                 const isProtected = isProtectedField(field);
                 const disabledAttr = isProtected ? 'disabled' : '';
                 const disabledClass = isProtected ? 'disabled' : '';
-                const protectionBadge = isProtected ? '<span class="w-badge w-badge-protected">' + __("受保护") + '</span>' : '';
+                const protectionBadge = isProtected ? '<span class="w-badge w-badge-protected">' + __("閸欐ぞ绻氶幎?") + '</span>' : '';
 
                 availableHtmlForFilter += `
     <div class="w-field-item ${disabledClass}" data-field="${field.name}" ${getFieldDataAttrs(field)}>
@@ -4240,7 +4162,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             <button type="button" class="w-btn w-btn-sm w-btn-outline-success" 
                     onclick="DataTableManager.addField('${tableId}', '${field.name}', 'filter')"
                     ${disabledAttr}>
-                <i class="fas fa-filter"></i> ${__("筛选")}
+                <i class="fas fa-filter"></i> ${__("缁涙盯鈧?")}
             </button>
         </div>
     </div>`;
@@ -4248,65 +4170,65 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         } else {
             availableHtmlForFilter = `
     <div class="w-text-center w-text-muted w-py-4">
-        <i class="fas fa-info-circle"></i> ${__("所有字段都已配置")}
+        <i class="fas fa-info-circle"></i> ${__("閹碘偓閺堝鐡у▓鐢稿厴瀹告煡鍘ょ純?")}
     </div>`;
         }
 
-        // 分别更新两个可用字段区域
+        // 閸掑棗鍩嗛弴瀛樻煀娑撱倓閲滈崣顖滄暏鐎涙顔岄崠鍝勭厵
         var availableFieldsEl = document.getElementById('w-available-fields-' + tableId);
         if (availableFieldsEl) availableFieldsEl.innerHTML = availableHtmlForDisplay;
         var availableFieldsFilterEl = document.getElementById('w-available-fields-filter-' + tableId);
         if (availableFieldsFilterEl) availableFieldsFilterEl.innerHTML = availableHtmlForFilter;
 
-        // 渲染显示字段
+        // 濞撳弶鐓嬮弰鍓с仛鐎涙顔?
         let displayHtml = '';
         if (displayFields.length > 0) {
-            console.log('renderModelFieldsFromData: 开始渲染显示字段', displayFields);
+            console.log('renderModelFieldsFromData: 瀵偓婵瑕嗛弻鎾存▔缁€鍝勭摟濞?', displayFields);
             displayFields.forEach((field, index) => {
-                console.log('renderModelFieldsFromData: 渲染显示字段', index, field);
+                console.log('renderModelFieldsFromData: 濞撳弶鐓嬮弰鍓с仛鐎涙顔?', index, field);
                 const isProtected = this.isFieldProtected(field);
                 const isFromScope = field.from_scope === true;
                 const isTemplateField = field.field_defined === true || field.template_defined === true || field.from_field === true;
                 const isUserSelected = field.user_selected === true;
                 const disabledAttr = isProtected ? 'disabled' : '';
                 const disabledClass = isProtected ? 'disabled' : '';
-                const protectionBadge = isProtected ? '<span class="w-badge w-badge-protected">' + __("受保护") + '</span>' : '';
-                const scopeBadge = isFromScope ? '<span class="w-badge" style="background:#bbf7d0;color:#166534;">' + __("已保存") + '</span>' : '';
-                const userSelectedBadge = isUserSelected ? '<span class="w-badge" style="background:#dbeafe;color:#1e40af;">' + __("用户选择") + '</span>' : '';
+                const protectionBadge = isProtected ? '<span class="w-badge w-badge-protected">' + __("閸欐ぞ绻氶幎?") + '</span>' : '';
+                const scopeBadge = isFromScope ? '<span class="w-badge" style="background:#bbf7d0;color:#166534;">' + __("瀹歌弓绻氱€?") + '</span>' : '';
+                const userSelectedBadge = isUserSelected ? '<span class="w-badge" style="background:#dbeafe;color:#1e40af;">' + __("閻劍鍩涢柅澶嬪") + '</span>' : '';
                 let validationHtml = '';
 
                 if (field.validation) {
                     const validation = field.validation;
                     validationHtml = `
                     <div class="w-validation-settings">
-                        <input class="w-validation-min w-btn-sm" type="number" value="${validation.min || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("最小长度")}" style="width:80px;" />
-                        <input class="w-validation-max w-btn-sm" type="number" value="${validation.max || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("最大长度")}" style="width:80px;" />
-                        <input class="w-validation-pattern w-btn-sm" type="text" value="${validation.pattern || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("正则表达式")}" style="width:120px;" />
+                        <input class="w-validation-min w-btn-sm" type="number" value="${validation.min || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("閺堚偓鐏忓繘鏆辨惔?")}" style="width:80px;" />
+                        <input class="w-validation-max w-btn-sm" type="number" value="${validation.max || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("閺堚偓婢堆囨毐鎼?")}" style="width:80px;" />
+                        <input class="w-validation-pattern w-btn-sm" type="text" value="${validation.pattern || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("濮濓絽鍨悰銊ㄦ彧瀵?")}" style="width:120px;" />
                     </div>`;
                 }
 
-                // 主键/索引字段不能隐藏
+                // 娑撳鏁?缁便垹绱╃€涙顔屾稉宥堝厴闂呮劘妫?
                 const isPrimaryOrIndex = DataTableManager.isPrimaryOrIndexField(field);
-                // 对于模板字段和主键/索引字段，不显示隐藏按钮
+                // 鐎甸€涚艾濡剝婢樼€涙顔岄崪灞煎瘜闁?缁便垹绱╃€涙顔岄敍灞肩瑝閺勫墽銇氶梾鎰閹稿鎸?
                 const hideButtonHtml = (isTemplateField || isPrimaryOrIndex) ? '' : `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-danger" 
                     onclick="DataTableManager.removeField('${tableId}', '${field.name}', 'display')"
                     ${disabledAttr}>
-                <i class="fas fa-eye-slash"></i> ${__("隐藏")}
+                <i class="fas fa-eye-slash"></i> ${__("闂呮劘妫?")}
             </button>`;
-                // 主键/索引字段不能移动
+                // 娑撳鏁?缁便垹绱╃€涙顔屾稉宥堝厴缁夎濮?
                 const canMove = field.display_orderable !== false && field.display_orderable !== 'false' && field.display_orderable !== 0 && field.display_orderable !== '0';
                 const moveUpButtonHtml = canMove ? `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary" 
                     onclick="DataTableManager.moveField('${tableId}', '${field.name}', 'up', 'display')"
                     ${index === 0 ? 'disabled' : ''}>
-                <i class="fas fa-arrow-up"></i> ${__("上移")}
+                <i class="fas fa-arrow-up"></i> ${__("娑撳﹦些")}
             </button>` : '';
                 const moveDownButtonHtml = canMove ? `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary" 
                     onclick="DataTableManager.moveField('${tableId}', '${field.name}', 'down', 'display')"
                     ${index === displayFields.length - 1 ? 'disabled' : ''}>
-                <i class="fas fa-arrow-down"></i> ${__("下移")}
+                <i class="fas fa-arrow-down"></i> ${__("娑撳些")}
             </button>` : '';
 
                 displayHtml += `
@@ -4323,10 +4245,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 </div>
             </div>
             <div class="w-field-detail-config" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--datatable-border);">
-                <input class="w-field-label-input w-btn-sm" type="text" value="${field.label || field.name}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("字段标题")}" style="margin-bottom:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />
+                <input class="w-field-label-input w-btn-sm" type="text" value="${field.label || field.name}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("鐎涙顔岄弽鍥暯")}" style="margin-bottom:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />
                 <span class="w-field-type-badge">${isProtected ? field.type || 'text' : DataTableManager.renderFieldTypeSelect(tableId, field, 'display')}</span>
-                <input class="w-field-placeholder-input w-btn-sm" type="text" value="${field.placeholder || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("占位符（可选）")}" style="margin-top:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />
-                ${field.type === 'select' ? `<input class="w-field-options-input w-btn-sm" type="text" value="${field.options || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("选项(?:启用,0:禁用)")}" style="margin-top:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />` : ''}
+                <input class="w-field-placeholder-input w-btn-sm" type="text" value="${field.placeholder || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("閸楃姳缍呯粭锔肩礄閸欘垶鈧绱?")}" style="margin-top:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />
+                ${field.type === 'select' ? `<input class="w-field-options-input w-btn-sm" type="text" value="${field.options || ''}" data-table="${tableId}" data-field="${field.name}" data-type="display" placeholder="${__("闁銆??:閸氼垳鏁?0:缁備胶鏁?")}" style="margin-top:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />` : ''}
                 ${validationHtml}
             </div>
         </div>
@@ -4334,7 +4256,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary w-btn-toggle-config" 
                     onclick="DataTableManager.toggleFieldConfig('${tableId}', '${field.name}', 'display')"
                     data-field="${field.name}" data-type="display" ${isProtected ? 'disabled' : ''}>
-                <i class="fas fa-cog"></i> ${__("设置")}
+                <i class="fas fa-cog"></i> ${__("鐠佸墽鐤?")}
             </button>
             ${hideButtonHtml}
             ${moveUpButtonHtml}
@@ -4345,61 +4267,61 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         } else {
             displayHtml = `
     <div class="w-text-center w-text-muted w-py-4">
-        <i class="fas fa-info-circle"></i> ${__("暂无显示字段")}
-        <br><small>${__("您可以在右侧调整字段配置")}</small>
+        <i class="fas fa-info-circle"></i> ${__("閺嗗倹妫ら弰鍓с仛鐎涙顔?")}
+        <br><small>${__("閹劌褰叉禒銉ユ躬閸欏厖鏅剁拫鍐╂殻鐎涙顔岄柊宥囩枂")}</small>
     </div>`;
         }
         var displayFieldsEl = document.getElementById('w-display-fields-' + tableId);
         if (displayFieldsEl) displayFieldsEl.innerHTML = displayHtml;
 
-        // 渲染筛选字段
+        // 濞撳弶鐓嬬粵娑⑩偓澶婄摟濞?
         let filterHtml = '';
         if (finalFilterFields.length > 0) {
-            console.log('renderModelFieldsFromData: 开始渲染筛选字段', finalFilterFields);
+            console.log('renderModelFieldsFromData: 瀵偓婵瑕嗛弻鎾剁摣闁鐡у▓?', finalFilterFields);
             finalFilterFields.forEach((field, index) => {
-                console.log('renderModelFieldsFromData: 渲染筛选字段', index, field);
+                console.log('renderModelFieldsFromData: 濞撳弶鐓嬬粵娑⑩偓澶婄摟濞?', index, field);
                 const isProtected = isProtectedField(field);
                 const isFromScope = field.from_scope === true;
                 const isTemplateField = field.field_defined === true || field.template_defined === true || field.from_field === true;
                 const isUserSelected = field.user_selected === true;
                 const disabledAttr = isProtected ? 'disabled' : '';
                 const disabledClass = isProtected ? 'disabled' : '';
-                const protectionBadge = isProtected ? '<span class="w-badge w-badge-protected">' + __("受保护") + '</span>' : '';
-                const scopeBadge = isFromScope ? '<span class="w-badge" style="background:#bbf7d0;color:#166534;">' + __("已保存") + '</span>' : '';
-                const userSelectedBadge = isUserSelected ? '<span class="w-badge" style="background:#dbeafe;color:#1e40af;">' + __("用户选择") + '</span>' : '';
+                const protectionBadge = isProtected ? '<span class="w-badge w-badge-protected">' + __("閸欐ぞ绻氶幎?") + '</span>' : '';
+                const scopeBadge = isFromScope ? '<span class="w-badge" style="background:#bbf7d0;color:#166534;">' + __("瀹歌弓绻氱€?") + '</span>' : '';
+                const userSelectedBadge = isUserSelected ? '<span class="w-badge" style="background:#dbeafe;color:#1e40af;">' + __("閻劍鍩涢柅澶嬪") + '</span>' : '';
                 let validationHtml = '';
 
                 if (field.validation) {
                     const validation = field.validation;
                     validationHtml = `
                     <div class="w-validation-settings">
-                        <input class="w-validation-min w-btn-sm" type="number" value="${validation.min || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("最小长度")}" style="width:80px;" />
-                        <input class="w-validation-max w-btn-sm" type="number" value="${validation.max || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("最大长度")}" style="width:80px;" />
-                        <input class="w-validation-pattern w-btn-sm" type="text" value="${validation.pattern || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("正则表达式")}" style="width:120px;" />
+                        <input class="w-validation-min w-btn-sm" type="number" value="${validation.min || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("閺堚偓鐏忓繘鏆辨惔?")}" style="width:80px;" />
+                        <input class="w-validation-max w-btn-sm" type="number" value="${validation.max || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("閺堚偓婢堆囨毐鎼?")}" style="width:80px;" />
+                        <input class="w-validation-pattern w-btn-sm" type="text" value="${validation.pattern || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("濮濓絽鍨悰銊ㄦ彧瀵?")}" style="width:120px;" />
                     </div>`;
                 }
 
-                // 受保护字段不显示移除按钮
+                // 閸欐ぞ绻氶幎銈呯摟濞堝吀绗夐弰鍓с仛缁夊娅庨幐澶愭尦
                 const removeButtonHtml = isProtected ? '' : `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-danger" 
                     onclick="DataTableManager.removeField('${tableId}', '${field.name}', 'filter')"
                     ${disabledAttr}>
-                <i class="fas fa-eye-slash"></i> ${__("移除")}
+                <i class="fas fa-eye-slash"></i> ${__("缁夊娅?")}
             </button>`;
 
-                // 筛选字段的移动按钮
+                // 缁涙盯鈧鐡у▓鐢垫畱缁夎濮╅幐澶愭尦
                 const canMove = field.filter_orderable !== false && field.filter_orderable !== 'false' && field.filter_orderable !== 0 && field.filter_orderable !== '0';
                 const moveUpButtonHtml = canMove ? `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary" 
                     onclick="DataTableManager.moveField('${tableId}', '${field.name}', 'up', 'filter')"
                     ${index === 0 ? 'disabled' : ''}>
-                <i class="fas fa-arrow-up"></i> ${__("上移")}
+                <i class="fas fa-arrow-up"></i> ${__("娑撳﹦些")}
             </button>` : '';
                 const moveDownButtonHtml = canMove ? `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary" 
                     onclick="DataTableManager.moveField('${tableId}', '${field.name}', 'down', 'filter')"
                     ${index === finalFilterFields.length - 1 ? 'disabled' : ''}>
-                <i class="fas fa-arrow-down"></i> ${__("下移")}
+                <i class="fas fa-arrow-down"></i> ${__("娑撳些")}
             </button>` : '';
 
                 filterHtml += `
@@ -4416,10 +4338,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 </div>
             </div>
             <div class="w-field-detail-config" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--datatable-border);">
-                <input class="w-field-label-input w-btn-sm" type="text" value="${field.label || field.name}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("字段标题")}" style="margin-bottom:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />
+                <input class="w-field-label-input w-btn-sm" type="text" value="${field.label || field.name}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("鐎涙顔岄弽鍥暯")}" style="margin-bottom:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />
                 <span class="w-field-type-badge">${isProtected ? field.type || 'text' : DataTableManager.renderFieldTypeSelect(tableId, field, 'filter')}</span>
-                <input class="w-field-placeholder-input w-btn-sm" type="text" value="${field.placeholder || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("占位符（可选）")}" style="margin-top:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />
-                ${field.type === 'select' ? `<input class="w-field-options-input w-btn-sm" type="text" value="${field.options || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("选项(值:标签,值:标签)")}" style="margin-top:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />` : ''}
+                <input class="w-field-placeholder-input w-btn-sm" type="text" value="${field.placeholder || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("閸楃姳缍呯粭锔肩礄閸欘垶鈧绱?")}" style="margin-top:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />
+                ${field.type === 'select' ? `<input class="w-field-options-input w-btn-sm" type="text" value="${field.options || ''}" data-table="${tableId}" data-field="${field.name}" data-type="filter" placeholder="${__("闁銆?閸?閺嶅洨顒?閸?閺嶅洨顒?")}" style="margin-top:4px;max-width:120px;" ${isProtected ? 'disabled' : ''} />` : ''}
                 ${validationHtml}
             </div>
         </div>
@@ -4427,7 +4349,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary w-btn-toggle-config" 
                     onclick="DataTableManager.toggleFieldConfig('${tableId}', '${field.name}', 'filter')"
                     data-field="${field.name}" data-type="filter" ${isProtected ? 'disabled' : ''}>
-                <i class="fas fa-cog"></i> ${__("设置")}
+                <i class="fas fa-cog"></i> ${__("鐠佸墽鐤?")}
             </button>
             ${removeButtonHtml}
             ${moveUpButtonHtml}
@@ -4438,22 +4360,22 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         } else {
             filterHtml = `
     <div class="w-text-center w-text-muted w-py-4">
-        <i class="fas fa-info-circle"></i> ${__("暂无筛选字段")}
-        <br><small>${__("您可以在右侧调整字段配置")}</small>
+        <i class="fas fa-info-circle"></i> ${__("閺嗗倹妫ょ粵娑⑩偓澶婄摟濞?")}
+        <br><small>${__("閹劌褰叉禒銉ユ躬閸欏厖鏅剁拫鍐╂殻鐎涙顔岄柊宥囩枂")}</small>
     </div>`;
         }
         var filterFieldsEl = document.getElementById('w-filter-fields-' + tableId);
         if (filterFieldsEl) filterFieldsEl.innerHTML = filterHtml;
 
-        // 绑定事件
+        // 缂佹垵鐣炬禍瀣╂
         this.bindFieldEvents(tableId);
 
-        // 初始化拖拽排序
+        // 閸掓繂顫愰崠鏍ㄥ珛閹疯姤甯撴惔?
         this.initDragSort(tableId);
     },
 
     /**
-     * 重置为默认字段配?
+     * 闁插秶鐤嗘稉娲帛鐠併倕鐡у▓鐢稿帳?
      */
     resetToDefault: async function (tableId) {
         const instance = this.instances[tableId];
@@ -4464,18 +4386,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
 
-        const confirmed = await BackendConfirm.show(__('确定要重置为默认字段配置吗？这将显示所有可用字段？'), { type: 'warning' });
+        const confirmed = await BackendConfirm.show(__('绾喖鐣剧憰渚€鍣哥純顔昏礋姒涙顓荤€涙顔岄柊宥囩枂閸氭绱垫潻娆忕殺閺勫墽銇氶幍鈧張澶婂讲閻劌鐡у▓纰夌吹'), { type: 'warning' });
         if (confirmed) {
-            // 清除缓存
+            // 濞撳懘娅庣紓鎾崇摠
             const cacheKey = `datatable_fields_${tableId}_${instance.options.model}_${instance.options.scope}`;
             localStorage.removeItem(cacheKey);
-            // 重新加载字段数据
+            // 闁插秵鏌婇崝鐘烘祰鐎涙顔岄弫鐗堝祦
             this.loadModelFields(tableId);
         }
     },
 
     /**
-     * 添加字段到显示或筛选列?
+     * 濞ｈ濮炵€涙顔岄崚鐗堟▔缁€鐑樺灗缁涙盯鈧鍨?
      */
     addField: function (tableId, fieldName, type) {
         const instance = this.instances[tableId];
@@ -4488,7 +4410,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const existingIndex = targetList.findIndex(f => f.name === fieldName);
         if (existingIndex !== -1) return;
 
-        // 标记为用户选择的字?
+        // 閺嶅洩顔囨稉铏规暏閹寸兘鈧瀚ㄩ惃鍕摟?
         const fieldToAdd = {
             ...field,
             user_selected: true,
@@ -4500,17 +4422,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         };
 
         if (type === 'display') {
-            // 对于显示字段，用户选择的字段应该插入到模板字段之后
+            // 鐎甸€涚艾閺勫墽銇氱€涙顔岄敍宀€鏁ら幋鐑解偓澶嬪閻ㄥ嫬鐡у▓闈涚安鐠囥儲褰冮崗銉ュ煂濡剝婢樼€涙顔屾稊瀣倵
             const templateFieldCount = instance.displayFields.filter(f =>
                 f.template_defined || f.field_defined || f.from_field
             ).length;
             instance.displayFields.splice(templateFieldCount, 0, fieldToAdd);
         } else {
-            // 对于筛选字段，直接添加到末?
+            // 鐎甸€涚艾缁涙盯鈧鐡у▓纰夌礉閻╁瓨甯村ǎ璇插閸掔増婀?
             instance.filterFields.push(fieldToAdd);
         }
 
-        // 保存配置到缓?
+        // 娣囨繂鐡ㄩ柊宥囩枂閸掓壆绱?
         this.saveFieldConfigToCache(tableId);
 
         this.renderModelFieldsFromData(tableId, {
@@ -4521,7 +4443,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 从显示列表或筛选列表移除字?
+     * 娴犲孩妯夌粈鍝勫灙鐞涖劍鍨ㄧ粵娑⑩偓澶婂灙鐞涖劎些闂勩倕鐡?
      */
     removeField: function (tableId, fieldName, type) {
         const instance = this.instances[tableId];
@@ -4530,15 +4452,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const idx = fieldList.findIndex(f => f.name === fieldName);
         if (idx !== -1) {
             const field = fieldList[idx];
-            // 检查字段是否受保护
+            // 濡偓閺屻儱鐡у▓鍨Ц閸氾箑褰堟穱婵囧Б
             if (this.isFieldProtected(field)) {
-                console.warn('removeField: 尝试删除受保护的字段', fieldName);
+                console.warn('removeField: 鐏忔繆鐦崚鐘绘珟閸欐ぞ绻氶幎銈囨畱鐎涙顔?', fieldName);
                 return;
             }
-            // 额外检查是否为模板字段
+            // 妫版繂顦诲Λ鈧弻銉︽Ц閸氾缚璐熷Ο鈩冩緲鐎涙顔?
             const isTemplateField = field.field_defined === true || field.template_defined === true || field.from_field === true;
             if (isTemplateField) {
-                console.warn('removeField: 尝试删除模板字段', fieldName);
+                console.warn('removeField: 鐏忔繆鐦崚鐘绘珟濡剝婢樼€涙顔?', fieldName);
                 return;
             }
             fieldList.splice(idx, 1);
@@ -4551,7 +4473,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 移动字段位置
+     * 缁夎濮╃€涙顔屾担宥囩枂
      */
     moveField: function (tableId, fieldName, direction, type) {
         const instance = this.instances[tableId];
@@ -4562,33 +4484,33 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         const field = fieldList[idx];
         const isPrimary = DataTableManager.isPrimaryOrIndexField(field);
-        // 只有明确设置display_orderable为false的字段和主键字段才不允许移动
+        // 閸欘亝婀侀弰搴ｂ€樼拋鍓х枂display_orderable娑撶alse閻ㄥ嫬鐡у▓闈涙嫲娑撳鏁€涙顔岄幍宥勭瑝閸忎浇顔忕粔璇插З
         const canMove = !isPrimary && (field.display_orderable !== false && field.display_orderable !== 'false' && field.display_orderable !== 0 && field.display_orderable !== '0');
 
         if (!canMove) {
-            console.warn('moveField: 字段不允许移动', fieldName);
+            console.warn('moveField: 鐎涙顔屾稉宥呭帒鐠佸摜些閸?', fieldName);
             return;
         }
 
         let newIdx = direction === 'up' ? idx - 1 : idx + 1;
         if (newIdx < 0 || newIdx >= fieldList.length) return;
 
-        // 检查目标位置字段是否允许移动
+        // 濡偓閺屻儳娲伴弽鍥︾秴缂冾喖鐡у▓鍨Ц閸氾箑鍘戠拋鍝バ╅崝?
         const targetField = fieldList[newIdx];
         const targetIsPrimary = DataTableManager.isPrimaryOrIndexField(targetField);
         const targetCanMove = !targetIsPrimary && (targetField.display_orderable !== false && targetField.display_orderable !== 'false' && targetField.display_orderable !== 0 && targetField.display_orderable !== '0');
 
         if (!targetCanMove) {
-            console.warn('moveField: 目标位置字段不允许移动', targetField.name);
+            console.warn('moveField: 閻╊喗鐖ｆ担宥囩枂鐎涙顔屾稉宥呭帒鐠佸摜些閸?', targetField.name);
             return;
         }
 
-        // 执行移动
+        // 閹笛嗩攽缁夎濮?
         const temp = fieldList[idx];
         fieldList.splice(idx, 1);
         fieldList.splice(newIdx, 0, temp);
 
-        // 保存配置到缓存
+        // 娣囨繂鐡ㄩ柊宥囩枂閸掓壆绱︾€?
         this.saveFieldConfigToCache(tableId);
 
         this.renderModelFieldsFromData(tableId, {
@@ -4599,12 +4521,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 保存字段配置到缓?
+     * 娣囨繂鐡ㄧ€涙顔岄柊宥囩枂閸掓壆绱?
      */
     saveFieldConfigToCache: function (tableId) {
         const instance = this.instances[tableId];
         if (!instance) return;
-        // 强制主键/索引字段始终存在于显示字段列?
+        // 瀵搫鍩楁稉濠氭暛/缁便垹绱╃€涙顔屾慨瀣矒鐎涙ê婀禍搴㈡▔缁€鍝勭摟濞堥潧鍨?
         const allPrimaryOrIndexFields = (instance.allFields || []).filter(DataTableManager.isPrimaryOrIndexField);
         allPrimaryOrIndexFields.forEach(pkField => {
             if (!instance.displayFields.some(f => f.name === pkField.name)) {
@@ -4619,11 +4541,11 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         };
         localStorage.setItem(cacheKey, JSON.stringify(configData));
 
-        console.log('字段配置已自动保存到缓存:', configData);
+        console.log('鐎涙顔岄柊宥囩枂瀹歌尪鍤滈崝銊ょ箽鐎涙ê鍩岀紓鎾崇摠:', configData);
     },
 
     /**
-     * 刷新数据
+     * 閸掗攱鏌婇弫鐗堝祦
      */
     refreshData: function (tableId) {
         const instance = this.getInstance(tableId);
@@ -4636,7 +4558,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 切换高级过滤?
+     * 閸掑洦宕叉妯奸獓鏉╁洦鎶?
      */
     toggleAdvancedFilter: function (scope) {
         const instance = this.getInstanceByScope(scope);
@@ -4647,7 +4569,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 跳转到指定页?
+     * 鐠哄疇娴嗛崚鐗堝瘹鐎规岸銆?
      */
     goToPage: function (scope, page) {
         const instance = this.getInstanceByScope(scope.replace('-footer', ''));
@@ -4668,7 +4590,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 改变每页显示数量
+     * 閺€鐟板綁濮ｅ繘銆夐弰鍓с仛閺佷即鍣?
      */
     changePageSize: function (scope, pageSize) {
         const instance = this.getInstanceByScope(scope.replace('-footer', ''));
@@ -4680,7 +4602,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 保存字段配置
+     * 娣囨繂鐡ㄧ€涙顔岄柊宥囩枂
      */
     saveFieldConfig: function (tableId) {
         const instance = this.getInstance(tableId);
@@ -4689,7 +4611,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const displayFields = instance.displayFields || [];
         const filterFields = instance.filterFields || [];
 
-        console.log('saveFieldConfig: 保存配置', {
+        console.log('saveFieldConfig: 娣囨繂鐡ㄩ柊宥囩枂', {
             tableId,
             displayFields: displayFields.length,
             filterFields: filterFields.length
@@ -4707,31 +4629,27 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         var $saveBtn = document.querySelector(`#w-field-config-modal-${tableId} .w-btn-primary`);
         if ($saveBtn) {
             var originalText = $saveBtn.innerHTML;
-            $saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 保存?..';
+            $saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 娣囨繂鐡?..';
             $saveBtn.disabled = true;
         }
 
-        fetch(instance.apiUrl + '/save-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scope: instance.options.scope, config: configData })
-        }).then(r => r.json()).then(response => {
-            // 兼容 code 为字符串或数字
+        this.requestJson(instance, 'save-config', { scope: instance.options.scope, config: configData }).then(response => {
+            // 閸忕厧顔?code 娑撳搫鐡х粭锔胯閹存牗鏆熺€?
             if (response.code == 200 || response.code === '200' || response.success) {
-                console.log('saveFieldConfig: 保存成功，开始重新渲染表');
+                console.log('saveFieldConfig: 娣囨繂鐡ㄩ幋鎰閿涘苯绱戞慨瀣櫢閺傜増瑕嗛弻鎾广€?');
 
-                // 关闭配置弹窗
+                // 閸忔娊妫撮柊宥囩枂瀵湱鐛?
                 DataTableManager.closeFieldConfig(tableId);
 
-                // 根据新的字段配置重新渲染表格
+                // 閺嶈宓侀弬鎵畱鐎涙顔岄柊宥囩枂闁插秵鏌婂〒鍙夌厠鐞涖劍鐗?
                 DataTableManager.rebuildTableFromConfig(tableId, displayFields, filterFields);
 
             } else {
-                DataTableManager.showError(tableId, response.msg || response.message || __('保存失败'));
+                DataTableManager.showError(tableId, response.msg || response.message || __('娣囨繂鐡ㄦ径杈Е'));
             }
         }).catch(error => {
-            console.error('saveFieldConfig: 保存失败', error);
-            DataTableManager.showError(tableId, __('保存失败: %{1}', [error.message || '未知错误']));
+            console.error('saveFieldConfig: 娣囨繂鐡ㄦ径杈Е', error);
+            DataTableManager.showError(tableId, __('娣囨繂鐡ㄦ径杈Е: %{1}', [error.message || '閺堫亞鐓￠柨娆掝嚖']));
         }).finally(() => {
             if ($saveBtn) {
                 $saveBtn.innerHTML = originalText;
@@ -4741,25 +4659,25 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 根据配置重新构建表格
+     * 閺嶈宓侀柊宥囩枂闁插秵鏌婇弸鍕紦鐞涖劍鐗?
      */
     rebuildTableFromConfig: function (tableId, displayFields, filterFields) {
         const instance = this.instances[tableId];
         if (!instance) return;
 
-        console.log('rebuildTableFromConfig: 开始重新构建表', {
+        console.log('rebuildTableFromConfig: 瀵偓婵鍣搁弬鐗堢€楦裤€?', {
             displayFields: displayFields.length,
             filterFields: filterFields.length
         });
 
-        // 第一步：清空旧数据和状态
+        // 缁楊兛绔村銉窗濞撳懐鈹栭弮褎鏆熼幑顔兼嫲閻樿埖鈧?
         instance.data = [];
         instance.currentPage = 1;
         instance.filters = {};
         instance.search = '';
         instance.sorts = {};
 
-        // 第二步：更新实例中的字段配置
+        // 缁楊兛绨╁銉窗閺囧瓨鏌婄€圭偘绶ユ稉顓犳畱鐎涙顔岄柊宥囩枂
         instance.config.fields = displayFields.map(field => ({
             name: field.name,
             label: field.label || field.name,
@@ -4776,50 +4694,50 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             options: field.options || ''
         }));
 
-        // 第三步：更新筛选器配置
+        // 缁楊兛绗佸銉窗閺囧瓨鏌婄粵娑⑩偓澶婃珤闁板秶鐤?
         instance.filterConfig = filterFields.map(field => ({
             name: field.name,
             label: field.label || field.name,
             type: field.type || 'text',
             searchable: field.searchable !== false,
-            placeholder: field.placeholder || `请输入${field.label || field.name}`,
+            placeholder: field.placeholder || `鐠囩柉绶崗?{field.label || field.name}`,
             options: field.options || ''
         }));
 
-        // 同时更新实例中的filterFields
+        // 閸氬本妞傞弴瀛樻煀鐎圭偘绶ユ稉顓犳畱filterFields
         instance.filterFields = filterFields;
 
-        console.log('rebuildTableFromConfig: 字段配置已更新', {
+        console.log('rebuildTableFromConfig: 鐎涙顔岄柊宥囩枂瀹稿弶娲块弬?', {
             configFields: instance.config.fields.length,
             filterConfig: instance.filterConfig.length,
             filterFields: instance.filterFields.length
         });
 
-        // 第四步：重新构建表头
-        console.log('rebuildTableFromConfig: 开始重新构建表头');
+        // 缁楊剙娲撳銉窗闁插秵鏌婇弸鍕紦鐞涖劌銇?
+        console.log('rebuildTableFromConfig: 瀵偓婵鍣搁弬鐗堢€楦裤€冩径?');
         const container = instance.container[0] || instance.container;
         const thead = container.querySelector('thead');
         if (thead) {
             this.renderHeader(tableId, displayFields);
-            console.log('rebuildTableFromConfig: 表头重新构建完成');
+            console.log('rebuildTableFromConfig: 鐞涖劌銇旈柌宥嗘煀閺嬪嫬缂撶€瑰本鍨?');
 
-            // 验证表头构建结果
+            // 妤犲矁鐦夌悰銊ャ仈閺嬪嫬缂撶紒鎾寸亯
             const headerCells = thead.querySelectorAll('th');
-            console.log('rebuildTableFromConfig: 表头验证', {
+            console.log('rebuildTableFromConfig: 鐞涖劌銇旀宀冪槈', {
                 expectedFields: instance.config.fields.length,
                 actualCells: headerCells.length,
                 headerTexts: Array.from(headerCells).map(cell => cell.textContent.trim())
             });
         } else {
-            console.error('rebuildTableFromConfig: 未找到表头内容');
+            console.error('rebuildTableFromConfig: 閺堫亝澹橀崚鎷屻€冩径鏉戝敶鐎?');
         }
 
-        // 第五步：重新构建筛选器
-        console.log('rebuildTableFromConfig: 开始重新构建筛选器');
+        // 缁楊兛绨插銉窗闁插秵鏌婇弸鍕紦缁涙盯鈧娅?
+        console.log('rebuildTableFromConfig: 瀵偓婵鍣搁弬鐗堢€铏圭摣闁娅?');
         this.renderFilter(tableId, instance.filterFields);
-        console.log('rebuildTableFromConfig: 筛选器重新构建完成');
+        console.log('rebuildTableFromConfig: 缁涙盯鈧娅掗柌宥嗘煀閺嬪嫬缂撶€瑰本鍨?');
 
-        // 验证筛选器构建结果
+        // 妤犲矁鐦夌粵娑⑩偓澶婃珤閺嬪嫬缂撶紒鎾寸亯
         const filterContainers = [
             '.datatable-filter',
             '.datatable-filter-toolbar',
@@ -4830,44 +4748,44 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const filterContainer = container.querySelector(selector);
             if (filterContainer) {
                 const filterInputs = filterContainer.querySelectorAll('[data-field]');
-                console.log(`rebuildTableFromConfig: 筛选器验证 ${selector}`, {
+                console.log(`rebuildTableFromConfig: 缁涙盯鈧娅掓宀冪槈 ${selector}`, {
                     expectedFilters: instance.filterConfig.length,
                     actualInputs: filterInputs.length,
                     filterFields: Array.from(filterInputs).map(input => input.getAttribute('data-field'))
                 });
             } else {
-                console.warn(`rebuildTableFromConfig: 未找到筛选器容器 ${selector}`);
+                console.warn(`rebuildTableFromConfig: 閺堫亝澹橀崚鎵摣闁娅掔€圭懓娅?${selector}`);
             }
         });
 
-        // 第六步：重新绑定事件
-        console.log('rebuildTableFromConfig: 开始重新绑定事件');
+        // 缁楊剙鍙氬銉窗闁插秵鏌婄紒鎴濈暰娴滃娆?
+        console.log('rebuildTableFromConfig: 瀵偓婵鍣搁弬鎵拨鐎规矮绨ㄦ禒?');
         this.bindEvents(instance);
-        console.log('rebuildTableFromConfig: 事件绑定完成');
+        console.log('rebuildTableFromConfig: 娴滃娆㈢紒鎴濈暰鐎瑰本鍨?');
 
-        // 第七步：重新构建表格主体
-        console.log('rebuildTableFromConfig: 开始重新构建表格主体');
+        // 缁楊兛绔峰銉窗闁插秵鏌婇弸鍕紦鐞涖劍鐗告稉璁崇秼
+        console.log('rebuildTableFromConfig: 瀵偓婵鍣搁弬鐗堢€楦裤€冮弽闂村瘜娴?');
         this.renderTable(instance);
-        console.log('rebuildTableFromConfig: 表格主体重新构建完成');
+        console.log('rebuildTableFromConfig: 鐞涖劍鐗告稉璁崇秼闁插秵鏌婇弸鍕紦鐎瑰本鍨?');
 
-        // 验证表格构建结果
+        // 妤犲矁鐦夌悰銊︾壐閺嬪嫬缂撶紒鎾寸亯
         const tbody = container.querySelector('tbody');
         if (tbody) {
             const tbodyRows = tbody.querySelectorAll('tr');
-            console.log('rebuildTableFromConfig: 表格主体验证', {
+            console.log('rebuildTableFromConfig: 鐞涖劍鐗告稉璁崇秼妤犲矁鐦?', {
                 rows: tbodyRows.length,
-                hasData: tbodyRows.length > 0 && !tbodyRows[0].querySelector('td')?.textContent.includes('暂无数据')
+                hasData: tbodyRows.length > 0 && !tbodyRows[0].querySelector('td')?.textContent.includes('閺嗗倹妫ら弫鐗堝祦')
             });
         }
 
-        // 第八步：重新加载数据
-        console.log('rebuildTableFromConfig: 开始重新加载数据');
+        // 缁楊剙鍙撳銉窗闁插秵鏌婇崝鐘烘祰閺佺増宓?
+        console.log('rebuildTableFromConfig: 瀵偓婵鍣搁弬鏉垮鏉炶姤鏆熼幑?');
         this.loadData(instance);
-        console.log('rebuildTableFromConfig: 数据加载完成');
+        console.log('rebuildTableFromConfig: 閺佺増宓侀崝鐘烘祰鐎瑰本鍨?');
 
-        // 最终验证
+        // 閺堚偓缂佸牓鐛欑拠?
         setTimeout(() => {
-            console.log('rebuildTableFromConfig: 最终验证', {
+            console.log('rebuildTableFromConfig: 閺堚偓缂佸牓鐛欑拠?', {
                 tableId: tableId,
                 configFields: instance.config.fields?.length || 0,
                 filterConfig: instance.filterConfig?.length || 0,
@@ -4879,17 +4797,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }, 100);
 
-        console.log('rebuildTableFromConfig: 表格重新构建完成');
+        console.log('rebuildTableFromConfig: 鐞涖劍鐗搁柌宥嗘煀閺嬪嫬缂撶€瑰本鍨?');
     },
 
     /**
-     * 更新表格字段配置
+     * 閺囧瓨鏌婄悰銊︾壐鐎涙顔岄柊宥囩枂
      */
     updateTableFields: function (tableId, displayFields) {
         const instance = this.instances[tableId];
         if (!instance) return;
 
-        // 更新实例中的表格字段配置
+        // 閺囧瓨鏌婄€圭偘绶ユ稉顓犳畱鐞涖劍鐗哥€涙顔岄柊宥囩枂
         instance.config.fields = displayFields.map(field => ({
             name: field.name,
             label: field.label || field.name,
@@ -4904,39 +4822,39 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             type: field.type || 'text'
         }));
 
-        // 重新渲染表头
+        // 闁插秵鏌婂〒鍙夌厠鐞涖劌銇?
         this.renderHeader(tableId, displayFields);
 
-        // 重新渲染表格数据
+        // 闁插秵鏌婂〒鍙夌厠鐞涖劍鐗搁弫鐗堝祦
         this.renderTable(instance);
 
-        // 重新加载数据
+        // 闁插秵鏌婇崝鐘烘祰閺佺増宓?
         this.loadData(instance);
     },
 
     /**
-     * 更新筛选器字段配置
+     * 閺囧瓨鏌婄粵娑⑩偓澶婃珤鐎涙顔岄柊宥囩枂
      */
     updateFilterFields: function (tableId, filterFields) {
         const instance = this.instances[tableId];
         if (!instance) return;
 
-        // 更新筛选器字段配置
+        // 閺囧瓨鏌婄粵娑⑩偓澶婃珤鐎涙顔岄柊宥囩枂
         instance.filterConfig = filterFields.map(field => ({
             name: field.name,
             label: field.label || field.name,
             type: field.type || 'text',
             searchable: field.searchable !== false,
-            placeholder: field.placeholder || `请输入${field.label || field.name}`,
+            placeholder: field.placeholder || `鐠囩柉绶崗?{field.label || field.name}`,
             options: field.options || ''
         }));
 
-        // 重新渲染筛选器
+        // 闁插秵鏌婂〒鍙夌厠缁涙盯鈧娅?
         this.renderFilter(tableId, filterFields);
     },
 
     /**
-     * 渲染筛选器
+     * 濞撳弶鐓嬬粵娑⑩偓澶婃珤
      */
     renderFilter: function (tableId, fields) {
         const instance = this.instances[tableId];
@@ -4944,26 +4862,26 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         const container = instance.container[0] || instance.container;
 
-        console.log('renderFilter: 开始渲染筛选器', {
+        console.log('renderFilter: 瀵偓婵瑕嗛弻鎾剁摣闁娅?', {
             tableId,
             fieldsCount: fields.length,
             fields: fields.map(f => ({ name: f.name, label: f.label, type: f.type }))
         });
 
-        // 渲染主要的筛选器容器
+        // 濞撳弶鐓嬫稉鏄忣洣閻ㄥ嫮鐡柅澶婃珤鐎圭懓娅?
         this.renderFilterContainer(tableId, fields, '.datatable-filter');
 
-        // 渲染筛选器工具栏
+        // 濞撳弶鐓嬬粵娑⑩偓澶婃珤瀹搞儱鍙块弽?
         this.renderFilterContainer(tableId, fields, '.datatable-filter-toolbar');
 
-        // 渲染筛选器表单
+        // 濞撳弶鐓嬬粵娑⑩偓澶婃珤鐞涖劌宕?
         this.renderFilterContainer(tableId, fields, '.datatable-filter-form');
 
-        console.log('renderFilter: 筛选器渲染完成');
+        console.log('renderFilter: 缁涙盯鈧娅掑〒鍙夌厠鐎瑰本鍨?');
     },
 
     /**
-     * 渲染指定的筛选器容器
+     * 濞撳弶鐓嬮幐鍥х暰閻ㄥ嫮鐡柅澶婃珤鐎圭懓娅?
      */
     renderFilterContainer: function (tableId, fields, selector) {
         const instance = this.instances[tableId];
@@ -4972,17 +4890,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const container = instance.container[0] || instance.container;
         const filterContainer = container.querySelector(selector);
         if (!filterContainer) {
-            console.warn(`renderFilterContainer: 未找到筛选器容器 ${selector}`);
+            console.warn(`renderFilterContainer: 閺堫亝澹橀崚鎵摣闁娅掔€圭懓娅?${selector}`);
             return;
         }
 
-        console.log(`renderFilterContainer: 开始渲染筛选器容器 ${selector}`, {
+        console.log(`renderFilterContainer: 瀵偓婵瑕嗛弻鎾剁摣闁娅掔€圭懓娅?${selector}`, {
             tableId,
             fieldsCount: fields.length,
             fields: fields.map(f => ({ name: f.name, label: f.label, type: f.type }))
         });
 
-        // 确保字段顺序正确
+        // 绾喕绻氱€涙顔屾い鍝勭碍濮濓絿鈥?
         const templateFields = fields.filter(field =>
             field.template_defined || field.field_defined || field.from_field
         );
@@ -4993,27 +4911,28 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         let filterHtml = '';
 
-        // 为不同的容器提供不同的渲染逻辑
+        // 娑撹桨绗夐崥宀€娈戠€圭懓娅掗幓鎰返娑撳秴鎮撻惃鍕閺屾捇鈧槒绶?
         if (selector === '.datatable-filter-form') {
-            // 筛选器表单容器的特殊渲染逻辑
+            // 缁涙盯鈧娅掔悰銊ュ礋鐎圭懓娅掗惃鍕濞堝﹥瑕嗛弻鎾烩偓鏄忕帆
             filterHtml = this.renderFilterFormHtml(tableId, orderedFields);
         } else if (selector === '.datatable-filter-toolbar') {
-            // 筛选器工具栏的手风琴式渲染逻辑
+            // 缁涙盯鈧娅掑銉ュ徔閺嶅繒娈戦幍瀣棑閻炴潙绱″〒鍙夌厠闁槒绶?
             filterHtml = this.renderFilterToolbarHtml(tableId, orderedFields);
         } else {
-            // 其他容器的标准渲染逻辑
+            // 閸忔湹绮€圭懓娅掗惃鍕垼閸戝棙瑕嗛弻鎾烩偓鏄忕帆
             filterHtml = this.renderStandardFilterHtml(tableId, orderedFields);
         }
 
-        // 直接设置容器的HTML内容
+        // 閻╁瓨甯寸拋鍓х枂鐎圭懓娅掗惃鍑ML閸愬懎顔?
         filterContainer.innerHTML = filterHtml;
 
-        console.log(`renderFilterContainer: 筛选器容器 ${selector} 渲染完成`, {
+        console.log('renderFilterContainer', {
+            selector,
             renderedFields: filterContainer.querySelectorAll('[data-field]').length,
             containerHtml: filterContainer.innerHTML.substring(0, 200) + '...'
         });
 
-        // 绑定筛选事件
+        // 缂佹垵鐣剧粵娑⑩偓澶夌皑娴?
         filterContainer.querySelectorAll('.filter-input').forEach(input => {
             input.addEventListener('input', function () {
                 const fieldName = this.getAttribute('data-field');
@@ -5028,14 +4947,14 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         });
 
-        // 初始化手风琴功能（如果是工具栏）
+        // 閸掓繂顫愰崠鏍ㄥ妞嬪海鎯旈崝鐔诲厴閿涘牆顩ч弸婊勬Ц瀹搞儱鍙块弽蹇ョ礆
         if (selector === '.datatable-filter-toolbar') {
             this.initFilterAccordion(tableId);
         }
     },
 
     /**
-     * 渲染标准筛选器HTML
+     * 濞撳弶鐓嬮弽鍥у櫙缁涙盯鈧娅扝TML
      */
     renderStandardFilterHtml: function (tableId, fields) {
         let filterHtml = '';
@@ -5046,7 +4965,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 渲染筛选器表单HTML
+     * 濞撳弶鐓嬬粵娑⑩偓澶婃珤鐞涖劌宕烪TML
      */
     renderFilterFormHtml: function (tableId, fields) {
         let filterHtml = '';
@@ -5058,11 +4977,11 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
             if (canSearch) {
                 const fieldType = field.type || 'text';
-                const placeholder = field.placeholder || `请输入${field.label || field.name}`;
+                const placeholder = field.placeholder || `鐠囩柉绶崗?{field.label || field.name}`;
                 const fieldId = 'filter-form-' + field.name;
 
                 if (fieldType === 'select') {
-                    let optionsHtml = '<option value="">请选择</option>';
+                    let optionsHtml = '<option value="">鐠囩兘鈧瀚?/option>';
                     if (field.options) {
                         const optionPairs = field.options.split(',');
                         optionPairs.forEach(pair => {
@@ -5105,10 +5024,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 渲染筛选器工具栏HTML（手风琴式）
+     * 濞撳弶鐓嬬粵娑⑩偓澶婃珤瀹搞儱鍙块弽寤怲ML閿涘牊澧滄搴ｆ償瀵骏绱?
      */
     renderFilterToolbarHtml: function (tableId, fields) {
-        // 分离指定字段和其他字段
+        // 閸掑棛顬囬幐鍥х暰鐎涙顔岄崪灞藉従娴犳牕鐡у▓?
         const specifiedFields = fields.filter(field =>
             field.field_defined === true || field.template_defined === true || field.from_field === true
         );
@@ -5118,7 +5037,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         let filterHtml = '';
 
-        // 渲染指定字段（直接显示）
+        // 濞撳弶鐓嬮幐鍥х暰鐎涙顔岄敍鍫㈡纯閹恒儲妯夌粈鐚寸礆
         if (specifiedFields.length > 0) {
             filterHtml += '<div class="filter-specified-fields">';
             specifiedFields.forEach(field => {
@@ -5127,13 +5046,13 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             filterHtml += '</div>';
         }
 
-        // 渲染其他字段（手风琴式）
+        // 濞撳弶鐓嬮崗鏈电铂鐎涙顔岄敍鍫熷妞嬪海鎯斿蹇ョ礆
         if (otherFields.length > 0) {
             filterHtml += `
                 <div class="filter-accordion">
                     <div class="filter-accordion-header" onclick="DataTableManager.toggleFilterAccordion('${tableId}')">
                         <i class="fas fa-filter"></i>
-                        <span>更多筛选条件 (${otherFields.length})</span>
+                        <span>閺囨潙顦跨粵娑⑩偓澶嬫蒋娴?(${otherFields.length})</span>
                         <i class="fas fa-chevron-down filter-accordion-icon"></i>
                     </div>
                     <div class="filter-accordion-content" style="display: none;">
@@ -5153,7 +5072,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 渲染单个筛选字段HTML
+     * 濞撳弶鐓嬮崡鏇氶嚋缁涙盯鈧鐡у▓绀朤ML
      */
     renderFilterFieldHtml: function (tableId, field, containerType = 'toolbar') {
         const isProtected = this.isFieldProtected(field);
@@ -5164,10 +5083,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         if (!canSearch) return '';
 
         const fieldType = field.type || 'text';
-        const placeholder = field.placeholder || `请输入${field.label || field.name}`;
+        const placeholder = field.placeholder || `鐠囩柉绶崗?{field.label || field.name}`;
         const fieldId = `filter-${containerType}-${field.name}`;
 
-        // 根据容器类型设置CSS类
+        // 閺嶈宓佺€圭懓娅掔猾璇茬€风拋鍓х枂CSS缁?
         let containerClass;
         switch (containerType) {
             case 'form':
@@ -5181,7 +5100,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         }
 
         if (fieldType === 'select') {
-            let optionsHtml = '<option value="">请选择</option>';
+            let optionsHtml = '<option value="">鐠囩兘鈧瀚?/option>';
             if (field.options) {
                 const optionPairs = field.options.split(',');
                 optionPairs.forEach(pair => {
@@ -5221,7 +5140,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 切换筛选器手风琴
+     * 閸掑洦宕茬粵娑⑩偓澶婃珤閹靛顥撻悶?
      */
     toggleFilterAccordion: function (tableId) {
         const container = this.instances[tableId]?.container[0] || this.instances[tableId]?.container;
@@ -5238,7 +5157,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 初始化筛选器手风琴功能
+     * 閸掓繂顫愰崠鏍摣闁娅掗幍瀣棑閻炴潙濮涢懗?
      */
     initFilterAccordion: function (tableId) {
         const container = this.instances[tableId]?.container[0] || this.instances[tableId]?.container;
@@ -5246,17 +5165,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         const accordionHeader = container.querySelector('.filter-accordion-header');
         if (accordionHeader) {
-            // 移除旧的事件监听器
+            // 缁夊娅庨弮褏娈戞禍瀣╂閻╂垵鎯夐崳?
             accordionHeader.removeEventListener('click', this._accordionClickHandler);
 
-            // 添加新的事件监听器
+            // 濞ｈ濮為弬鎵畱娴滃娆㈤惄鎴濇儔閸?
             this._accordionClickHandler = () => this.toggleFilterAccordion(tableId);
             accordionHeader.addEventListener('click', this._accordionClickHandler);
         }
     },
 
     /**
-     * 字段拖拽排序（w-前缀）
+     * 鐎涙顔岄幏鏍ㄥ閹烘帒绨敍鍧?閸撳秶绱戦敍?
      */
     bindFieldDragSort: function (tableId) {
         ['display', 'filter'].forEach(type => {
@@ -5305,10 +5224,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 绑定options输入事件
+     * 缂佹垵鐣緊ptions鏉堟挸鍙嗘禍瀣╂
      */
     bindFieldOptionsInput: function (tableId) {
-        // 解绑再绑定，防止重复
+        // 鐟欙絿绮﹂崘宥囩拨鐎规熬绱濋梼鍙夘剾闁插秴顦?
         $(document).off('input', '.w-field-options-input');
         $(document).on('input', '.w-field-options-input', function () {
             const tableId = $(this).data('table');
@@ -5321,16 +5240,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const field = fieldList.find(f => f.name === fieldName);
             if (field) {
                 field.options = value;
-                // 不重新渲染，只更新数?
+                // 娑撳秹鍣搁弬鐗堣閺屾搫绱濋崣顏呮纯閺傜増鏆?
             }
         });
     },
 
     /**
-     * 字段只读/必填checkbox变更事件
+     * 鐎涙顔岄崣顏囶嚢/韫囧懎锝瀋heckbox閸欐ɑ娲挎禍瀣╂
      */
     bindFieldCheckboxInput: function (tableId) {
-        // 解绑再绑定，防止重复
+        // 鐟欙絿绮﹂崘宥囩拨鐎规熬绱濋梼鍙夘剾闁插秴顦?
         $(document).off('change', '.w-field-readonly-checkbox');
         $(document).on('change', '.w-field-readonly-checkbox', function () {
             const tableId = $(this).data('table');
@@ -5343,7 +5262,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const field = fieldList.find(f => f.name === fieldName);
             if (field) {
                 field.readonly = checked;
-                // 不重新渲染，只更新数?
+                // 娑撳秹鍣搁弬鐗堣閺屾搫绱濋崣顏呮纯閺傜増鏆?
             }
         });
         $(document).off('change', '.w-field-required-checkbox');
@@ -5358,19 +5277,19 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const field = fieldList.find(f => f.name === fieldName);
             if (field) {
                 field.required = checked;
-                // 不重新渲染，只更新数?
+                // 娑撳秹鍣搁弬鐗堣閺屾搫绱濋崣顏呮纯閺傜増鏆?
             }
         });
     },
 
     /**
-     * 绑定字段配置相关事件
+     * 缂佹垵鐣剧€涙顔岄柊宥囩枂閻╃鍙ф禍瀣╂
      */
     bindFieldEvents: function (tableId) {
         const instance = this.instances[tableId];
         if (!instance) return;
 
-        // 绑定字段标签输入事件
+        // 缂佹垵鐣剧€涙顔岄弽鍥╊劮鏉堟挸鍙嗘禍瀣╂
         $(`#w-field-config-modal-${tableId} .w-field-label-input`).off('input').on('input', function () {
             const fieldName = $(this).data('field');
             const type = $(this).data('type');
@@ -5380,7 +5299,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const field = instance.displayFields.find(f => f.name === fieldName);
                 if (field) {
                     field.label = value;
-                    // 只更新基本信息显示?
+                    // 閸欘亝娲块弬鏉跨唨閺堫兛淇婇幁顖涙▔缁€?
                     const fieldItem = document.querySelector(`#w-display-fields-${tableId} .w-field-item[data-field="${fieldName}"]`);
                     if (fieldItem) {
                         const fieldNameElement = fieldItem.querySelector('.w-field-basic-info .w-field-name');
@@ -5393,7 +5312,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const field = instance.filterFields.find(f => f.name === fieldName);
                 if (field) {
                     field.label = value;
-                    // 只更新基本信息显示?
+                    // 閸欘亝娲块弬鏉跨唨閺堫兛淇婇幁顖涙▔缁€?
                     const fieldItem = document.querySelector(`#w-filter-fields-${tableId} .w-field-item[data-field="${fieldName}"]`);
                     if (fieldItem) {
                         const fieldNameElement = fieldItem.querySelector('.w-field-basic-info .w-field-name');
@@ -5405,7 +5324,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         });
 
-        // 绑定字段占位符输入事?
+        // 缂佹垵鐣剧€涙顔岄崡鐘辩秴缁楋箒绶崗銉ょ皑?
         $(`#w-field-config-modal-${tableId} .w-field-placeholder-input`).off('input').on('input', function () {
             const fieldName = $(this).data('field');
             const type = $(this).data('type');
@@ -5420,7 +5339,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         });
 
-        // 绑定字段选项输入事件
+        // 缂佹垵鐣剧€涙顔岄柅澶愩€嶆潏鎾冲弳娴滃娆?
         $(`#w-field-config-modal-${tableId} .w-field-options-input`).off('input').on('input', function () {
             const fieldName = $(this).data('field');
             const type = $(this).data('type');
@@ -5435,7 +5354,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         });
 
-        // 绑定字段类型选择事件
+        // 缂佹垵鐣剧€涙顔岀猾璇茬€烽柅澶嬪娴滃娆?
         $(`#w-field-config-modal-${tableId} .w-field-type-select`).off('change').on('change', function () {
             const fieldName = $(this).data('field');
             const type = $(this).data('type');
@@ -5445,7 +5364,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const field = instance.displayFields.find(f => f.name === fieldName);
                 if (field) {
                     field.type = value;
-                    // 只更新基本信息显示?
+                    // 閸欘亝娲块弬鏉跨唨閺堫兛淇婇幁顖涙▔缁€?
                     const fieldItem = document.querySelector(`#w-display-fields-${tableId} .w-field-item[data-field="${fieldName}"]`);
                     if (fieldItem) {
                         const typeBadge = fieldItem.querySelector('.w-field-basic-info .w-field-type-badge');
@@ -5458,7 +5377,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const field = instance.filterFields.find(f => f.name === fieldName);
                 if (field) {
                     field.type = value;
-                    // 只更新基本信息显示?
+                    // 閸欘亝娲块弬鏉跨唨閺堫兛淇婇幁顖涙▔缁€?
                     const fieldItem = document.querySelector(`#w-filter-fields-${tableId} .w-field-item[data-field="${fieldName}"]`);
                     if (fieldItem) {
                         const typeBadge = fieldItem.querySelector('.w-field-basic-info .w-field-type-badge');
@@ -5470,7 +5389,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         });
 
-        // 绑定校验规则输入事件
+        // 缂佹垵鐣鹃弽锟犵崣鐟欏嫬鍨潏鎾冲弳娴滃娆?
         $(`#w-field-config-modal-${tableId} .w-validation-min, #w-field-config-modal-${tableId} .w-validation-max, #w-field-config-modal-${tableId} .w-validation-pattern`).off('input').on('input', function () {
             const fieldName = $(this).data('field');
             const type = $(this).data('type');
@@ -5495,13 +5414,13 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 初始化拖拽排?
+     * 閸掓繂顫愰崠鏍ㄥ珛閹疯姤甯?
      */
     initDragSort: function (tableId) {
         const instance = this.instances[tableId];
         if (!instance) return;
 
-        // 为字段配置弹窗中的字段项添加拖拽排序功能
+        // 娑撳搫鐡у▓鐢稿帳缂冾喖鑴婄粣妞捐厬閻ㄥ嫬鐡у▓鐢搞€嶅ǎ璇插閹锋牗瀚块幒鎺戠碍閸旂喕鍏?
         const displayFieldsContainer = document.getElementById('w-display-fields-' + tableId);
         const filterFieldsContainer = document.getElementById('w-filter-fields-' + tableId);
 
@@ -5514,7 +5433,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 为容器初始化拖拽排序
+     * 娑撳搫顔愰崳銊ュ灥婵瀵查幏鏍ㄥ閹烘帒绨?
      */
     initContainerDragSort: function (container, tableId, type) {
         const fieldItems = container.querySelectorAll('.w-field-item');
@@ -5523,7 +5442,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const fieldName = item.getAttribute('data-field');
             if (!fieldName) return;
 
-            // 检查字段是否允许拖动
+            // 濡偓閺屻儱鐡у▓鍨Ц閸氾箑鍘戠拋鍛婂珛閸?
             const instance = this.instances[tableId];
             if (!instance) return;
 
@@ -5531,21 +5450,21 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const field = fieldList.find(f => f.name === fieldName);
             if (!field) return;
 
-            // 只有明确设置display_orderable为false的字段才不允许拖动
+            // 閸欘亝婀侀弰搴ｂ€樼拋鍓х枂display_orderable娑撶alse閻ㄥ嫬鐡у▓鍨娑撳秴鍘戠拋鍛婂珛閸?
             const canDrag = field.display_orderable !== false && field.display_orderable !== 'false' && field.display_orderable !== 0 && field.display_orderable !== '0';
 
             if (!canDrag) {
-                // 不允许拖动的字段，移除拖拽相关样式和属性
+                // 娑撳秴鍘戠拋鍛婂珛閸斻劎娈戠€涙顔岄敍宀€些闂勩倖瀚嬮幏鐣屾祲閸忚櫕鐗卞蹇撴嫲鐏炵偞鈧?
                 item.style.cursor = 'default';
                 item.removeAttribute('draggable');
                 return;
             }
 
-            // 添加拖拽样式
+            // 濞ｈ濮為幏鏍ㄥ閺嶅嘲绱?
             item.style.cursor = 'move';
             item.setAttribute('draggable', 'true');
 
-            // 绑定拖拽事件
+            // 缂佹垵鐣鹃幏鏍ㄥ娴滃娆?
             item.addEventListener('dragstart', function (e) {
                 e.dataTransfer.setData('text/plain', fieldName);
                 e.dataTransfer.setData('type', type);
@@ -5573,7 +5492,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const draggedType = e.dataTransfer.getData('type');
 
                 if (draggedFieldName && draggedFieldName !== fieldName && draggedType === type) {
-                    // 执行字段移动
+                    // 閹笛嗩攽鐎涙顔岀粔璇插З
                     DataTableManager.moveFieldByDrag(tableId, draggedFieldName, fieldName, type);
                 }
             });
@@ -5581,7 +5500,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 通过拖拽移动字段
+     * 闁俺绻冮幏鏍ㄥ缁夎濮╃€涙顔?
      */
     moveFieldByDrag: function (tableId, draggedFieldName, targetFieldName, type) {
         const instance = this.instances[tableId];
@@ -5596,36 +5515,36 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const draggedField = fieldList[draggedIndex];
         const targetField = fieldList[targetIndex];
 
-        // 检查字段是否允许移动 - 只有明确设置display_orderable为false的字段才不允许移动
+        // 濡偓閺屻儱鐡у▓鍨Ц閸氾箑鍘戠拋鍝バ╅崝?- 閸欘亝婀侀弰搴ｂ€樼拋鍓х枂display_orderable娑撶alse閻ㄥ嫬鐡у▓鍨娑撳秴鍘戠拋鍝バ╅崝?
         const draggedCanMove = draggedField.display_orderable !== false && draggedField.display_orderable !== 'false' && draggedField.display_orderable !== 0 && draggedField.display_orderable !== '0';
         const targetCanMove = targetField.display_orderable !== false && targetField.display_orderable !== 'false' && targetField.display_orderable !== 0 && targetField.display_orderable !== '0';
 
         if (!draggedCanMove) {
-            console.warn('moveFieldByDrag: 字段不允许移动', draggedFieldName);
+            console.warn('moveFieldByDrag: 鐎涙顔屾稉宥呭帒鐠佸摜些閸?', draggedFieldName);
             return;
         }
 
         if (!targetCanMove) {
-            console.warn('moveFieldByDrag: 目标位置字段不允许移动', targetFieldName);
+            console.warn('moveFieldByDrag: 閻╊喗鐖ｆ担宥囩枂鐎涙顔屾稉宥呭帒鐠佸摜些閸?', targetFieldName);
             return;
         }
 
-        // 执行移动
+        // 閹笛嗩攽缁夎濮?
         const temp = fieldList[draggedIndex];
         fieldList.splice(draggedIndex, 1);
         fieldList.splice(targetIndex, 0, temp);
 
-        // 立即保存用户配置
+        // 缁斿宓嗘穱婵嗙摠閻劍鍩涢柊宥囩枂
         this.saveFieldConfigToCache(tableId);
 
-        // 重新渲染字段配置弹窗
+        // 闁插秵鏌婂〒鍙夌厠鐎涙顔岄柊宥囩枂瀵湱鐛?
         this.renderModelFieldsFromData(tableId, {
             all_fields: instance.allFields,
             display_fields: instance.displayFields,
             filter_fields: instance.filterFields
         });
 
-        console.log('moveFieldByDrag: 字段拖拽移动完成', {
+        console.log('moveFieldByDrag: 鐎涙顔岄幏鏍ㄥ缁夎濮╃€瑰本鍨?', {
             type: type,
             dragged: draggedFieldName,
             target: targetFieldName,
@@ -5634,8 +5553,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 清理表头字段配置
-     * @param {string} tableId 表格ID
+     * 濞撳懐鎮婄悰銊ャ仈鐎涙顔岄柊宥囩枂
+     * @param {string} tableId 鐞涖劍鐗窱D
      */
     clearHeaderConfig: async function (tableId) {
         const instance = this.getInstance(tableId);
@@ -5649,15 +5568,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
 
-        const confirmed = await BackendConfirm.show(__('确定要重置表头字段配置吗？这将清除所有自定义的显示字段设置'), { type: 'warning' });
+        const confirmed = await BackendConfirm.show(__('绾喖鐣剧憰渚€鍣哥純顔裤€冩径鏉戠摟濞堢敻鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕▔缁€鍝勭摟濞堜絻顔曠純?'), { type: 'warning' });
         if (confirmed) {
             this.clearConfig(tableId, 'header');
         }
     },
 
     /**
-     * 清理筛选字段配?
-     * @param {string} tableId 表格ID
+     * 濞撳懐鎮婄粵娑⑩偓澶婄摟濞堢敻鍘?
+     * @param {string} tableId 鐞涖劍鐗窱D
      */
     clearFilterConfig: async function (tableId) {
         const instance = this.getInstance(tableId);
@@ -5671,15 +5590,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
 
-        const confirmed = await BackendConfirm.show(__('确定要重置筛选字段配置吗？这将清除所有自定义的筛选字段设置'), { type: 'warning' });
+        const confirmed = await BackendConfirm.show(__('绾喖鐣剧憰渚€鍣哥純顔剧摣闁鐡у▓鐢稿帳缂冾喖鎮ч敍鐔荤箹鐏忓棙绔婚梽銈嗗閺堝鍤滅€规矮绠熼惃鍕摣闁鐡у▓浣冾啎缂?'), { type: 'warning' });
         if (confirmed) {
             this.clearConfig(tableId, 'filter');
         }
     },
 
     /**
-     * 清理全部配置
-     * @param {string} tableId 表格ID
+     * 濞撳懐鎮婇崗銊╁劥闁板秶鐤?
+     * @param {string} tableId 鐞涖劍鐗窱D
      */
     clearAllConfig: async function (tableId) {
         const instance = this.getInstance(tableId);
@@ -5693,16 +5612,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
 
-        const confirmed = await BackendConfirm.show(__('确定要重置全部配置吗？这将清除所有自定义的表头字段和筛选字段设置'), { type: 'warning' });
+        const confirmed = await BackendConfirm.show(__('绾喖鐣剧憰渚€鍣哥純顔煎弿闁劑鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕€冩径鏉戠摟濞堥潧鎷扮粵娑⑩偓澶婄摟濞堜絻顔曠純?'), { type: 'warning' });
         if (confirmed) {
             this.clearConfig(tableId, 'all');
         }
     },
 
     /**
-     * 清理配置的核心方法
-     * @param {string} tableId 表格ID
-     * @param {string} type 清理类型：header、filter、all
+     * 濞撳懐鎮婇柊宥囩枂閻ㄥ嫭鐗宠箛鍐╂煙濞?
+     * @param {string} tableId 鐞涖劍鐗窱D
+     * @param {string} type 濞撳懐鎮婄猾璇茬€烽敍姝╡ader閵嗕公ilter閵嗕工ll
      */
     clearConfig: function (tableId, type) {
         const instance = this.instances[tableId];
@@ -5711,25 +5630,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             return;
         }
 
-        // 显示加载状态
-        const container = instance.container[0] || instance.container; // 确保是DOM元素
+        // 閺勫墽銇氶崝鐘烘祰閻樿埖鈧?
+        const container = instance.container[0] || instance.container; // 绾喕绻氶弰鐤峅M閸忓啰绀?
         container.classList.add('loading');
 
-        // 调用后端API清理配置
-        fetch(instance.apiUrl + '/clear-config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                scope: instance.options.scope,
-                type: type
-            })
+        // 鐠嬪啰鏁ら崥搴ｎ伂API濞撳懐鎮婇柊宥囩枂
+        this.requestJson(instance, 'clear-config', {
+            scope: instance.options.scope,
+            type: type
         })
-            .then(response => response.json())
             .then(response => {
                 if (response.success) {
-                    // 更新本地配置
+                    // 閺囧瓨鏌婇張顒€婀撮柊宥囩枂
                     if (type === 'header' || type === 'all') {
                         instance.displayFields = [];
                     }
@@ -5737,18 +5649,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         instance.filterFields = [];
                     }
 
-                    // 重新加载字段配置
+                    // 闁插秵鏌婇崝鐘烘祰鐎涙顔岄柊宥囩枂
                     this.loadModelFields(tableId);
 
-                    // 显示成功消息
-                    this.showMessage(__('配置已重置'), 'success');
+                    // 閺勫墽銇氶幋鎰濞戝牊浼?
+                    this.showMessage(__('闁板秶鐤嗗鏌ュ櫢缂?'), 'success');
                 } else {
-                    this.showMessage(response.message || __('重置失败'), 'error');
+                    this.showMessage(response.message || __('闁插秶鐤嗘径杈Е'), 'error');
                 }
             })
             .catch(error => {
                 console.error('Clear config error:', error);
-                this.showMessage(__('重置配置失败，请稍后重试'), 'error');
+                this.showMessage(__('闁插秶鐤嗛柊宥囩枂婢惰精瑙﹂敍宀冾嚞缁嬪秴鎮楅柌宥堢槸'), 'error');
             })
             .finally(() => {
                 container.classList.remove('loading');
@@ -5756,12 +5668,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 显示消息提示
-     * @param {string} message 消息内容
-     * @param {string} type 消息类型：success、error、warning、info
+     * 閺勫墽銇氬☉鍫熶紖閹绘劗銇?
+     * @param {string} message 濞戝牊浼呴崘鍛啇
+     * @param {string} type 濞戝牊浼呯猾璇茬€烽敍姝磚ccess閵嗕躬rror閵嗕簚arning閵嗕巩nfo
      */
     showMessage: function (message, type = 'info') {
-        // 创建消息元素
+        // 閸掓稑缂撳☉鍫熶紖閸忓啰绀?
         const alertClass = type === 'success' ? 'success' : type === 'error' ? 'danger' : type === 'warning' ? 'warning' : 'info';
         const messageElement = document.createElement('div');
         messageElement.className = `alert alert-${alertClass} alert-dismissible fade show`;
@@ -5771,10 +5683,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
 
-        // 添加到页面顶部
+        // 濞ｈ濮為崚浼淬€夐棃銏ゃ€婇柈?
         document.body.insertBefore(messageElement, document.body.firstChild);
 
-        // 3秒后自动消失
+        // 3缁夋帒鎮楅懛顏勫З濞戝牆銇?
         setTimeout(() => {
             if (messageElement.parentNode) {
                 messageElement.style.opacity = '0';
@@ -5788,7 +5700,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 切换字段配置展开/收起
+     * 閸掑洦宕茬€涙顔岄柊宥囩枂鐏炴洖绱?閺€鎯版崳
      */
     toggleFieldConfig: function (tableId, fieldName, type) {
         const fieldItem = document.querySelector(`#w-${type}-fields-${tableId} .w-field-item[data-field="${fieldName}"]`);
@@ -5799,41 +5711,41 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         if (detailConfig.style.display === 'none') {
             detailConfig.style.display = 'block';
-            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> ' + __("收起");
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> ' + __("閺€鎯版崳");
             toggleBtn.classList.add('active');
         } else {
             detailConfig.style.display = 'none';
-            toggleBtn.innerHTML = '<i class="fas fa-cog"></i> ' + __("设置");
+            toggleBtn.innerHTML = '<i class="fas fa-cog"></i> ' + __("鐠佸墽鐤?");
             toggleBtn.classList.remove('active');
         }
     },
 
     /**
-     * 检查字段是否受保护（不允许配置、删除、更改）
+     * 濡偓閺屻儱鐡у▓鍨Ц閸氾箑褰堟穱婵囧Б閿涘牅绗夐崗浣筋啅闁板秶鐤嗛妴浣稿灩闂勩們鈧焦娲块弨鐧哥礆
      */
     isFieldProtected: function (field) {
-        // 主键字段保护
+        // 娑撳鏁€涙顔屾穱婵囧Б
         if (field.is_primary === true || field.primary === true) {
             return true;
         }
 
-        // 模板定义的字段保?
+        // 濡剝婢樼€规矮绠熼惃鍕摟濞堝吀绻?
         if (field.template_defined === true) {
             return true;
         }
 
-        // field指定的字段保?
+        // field閹稿洤鐣鹃惃鍕摟濞堝吀绻?
         if (field.field_defined === true || field.from_field === true) {
             return true;
         }
 
-        // 检查字段名是否为常见主?
+        // 濡偓閺屻儱鐡у▓闈涙倳閺勵垰鎯佹稉鍝勭埗鐟欎椒瀵?
         const primaryKeyNames = ['id', 'ID', 'Id', 'primary', 'pk', 'primary_key', 'is_primary'];
         if (primaryKeyNames.includes(field.name)) {
             return true;
         }
 
-        // 检查data-属性中的字段定?
+        // 濡偓閺岊櫔ata-鐏炵偞鈧傝厬閻ㄥ嫬鐡у▓闈涚暰?
         if (field.dataset) {
             if (field.dataset.fieldDefined === 'true' ||
                 field.dataset.templateDefined === 'true' ||
@@ -5846,19 +5758,19 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 获取默认显示字段（包含受保护的字段）
+     * 閼惧嘲褰囨妯款吇閺勫墽銇氱€涙顔岄敍鍫濆瘶閸氼偄褰堟穱婵囧Б閻ㄥ嫬鐡у▓纰夌礆
      */
     getDefaultDisplayFields: function (allFields) {
         const defaultFields = [];
 
-        // 首先添加所有受保护的字?
+        // 妫ｆ牕鍘涘ǎ璇插閹碘偓閺堝褰堟穱婵囧Б閻ㄥ嫬鐡?
         allFields.forEach(field => {
             if (this.isFieldProtected(field)) {
                 defaultFields.push({ ...field, template_defined: true });
             }
         });
 
-        // 然后添加其他字段（最?个）
+        // 閻掕泛鎮楀ǎ璇插閸忔湹绮€涙顔岄敍鍫熸付?娑擃亷绱?
         const remainingFields = allFields.filter(field => !this.isFieldProtected(field));
         const maxFields = Math.max(0, 8 - defaultFields.length);
         const additionalFields = remainingFields.slice(0, maxFields);
@@ -5866,16 +5778,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         return [...defaultFields, ...additionalFields];
     },
 
-    // 在字段配置弹窗初始化时提取字段信息
+    // 閸︺劌鐡у▓鐢稿帳缂冾喖鑴婄粣妤€鍨垫慨瀣閺冭埖褰侀崣鏍х摟濞堝吀淇婇幁?
     extractFieldsFromDOM: function (tableId, type) {
         const instance = this.instances[tableId];
         if (!instance) return [];
 
-        const container = instance.container[0] || instance.container; // 确保是DOM元素
+        const container = instance.container[0] || instance.container; // 绾喕绻氶弰鐤峅M閸忓啰绀?
         let fields = [];
 
         if (type === 'display') {
-            // 从表格头部提取字段
+            // 娴犲氦銆冮弽鐓庛仈闁劍褰侀崣鏍х摟濞?
             const thElements = container.querySelectorAll('th[data-field]');
             thElements.forEach(function (th) {
                 const fieldName = th.getAttribute('data-field');
@@ -5905,27 +5817,27 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     from_field: th.getAttribute('data-from-field') === 'true',
                     content: th.getAttribute('data-content') || fieldName,
                     label: th.getAttribute('data-content') || fieldName,
-                    // 指定字段默认可以移动，除非明确设置为false
+                    // 閹稿洤鐣剧€涙顔屾妯款吇閸欘垯浜掔粔璇插З閿涘矂娅庨棃鐐存绾喛顔曠純顔昏礋false
                     display_orderable: th.getAttribute('data-display-orderable') !== 'false' && th.getAttribute('data-display-orderable') !== '0'
                 };
 
-                // 如果有data-w-field属性，解析JSON配置
+                // 婵″倹鐏夐張濉猘ta-w-field鐏炵偞鈧嶇礉鐟欙絾鐎絁SON闁板秶鐤?
                 if (dataWField) {
                     try {
                         const jsonConfig = JSON.parse(dataWField);
                         fieldConfig = { ...fieldConfig, ...jsonConfig };
                     } catch (e) {
-                        console.warn('extractFieldsFromDOM: 解析data-w-field失败', e);
+                        console.warn('extractFieldsFromDOM: 鐟欙絾鐎絛ata-w-field婢惰精瑙?', e);
                     }
                 }
 
-                // 只提取模板定义的字段
+                // 閸欘亝褰侀崣鏍侀弶鍨暰娑斿娈戠€涙顔?
                 if (fieldConfig.template_defined || fieldConfig.field_defined || fieldConfig.from_field) {
                     fields.push(fieldConfig);
                 }
             });
         } else if (type === 'filter') {
-            // 从筛选器提取字段
+            // 娴犲海鐡柅澶婃珤閹绘劕褰囩€涙顔?
             const filterElements = container.querySelectorAll('.filter-field[data-field]');
             filterElements.forEach(function (filter) {
                 const fieldName = filter.getAttribute('data-field');
@@ -5948,76 +5860,76 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     from_field: filter.getAttribute('data-from-field') === 'true',
                     content: filter.getAttribute('data-content') || fieldName,
                     label: filter.getAttribute('data-content') || fieldName,
-                    // 指定字段默认可以移动，除非明确设置为false
+                    // 閹稿洤鐣剧€涙顔屾妯款吇閸欘垯浜掔粔璇插З閿涘矂娅庨棃鐐存绾喛顔曠純顔昏礋false
                     display_orderable: filter.getAttribute('data-display-orderable') !== 'false' && filter.getAttribute('data-display-orderable') !== '0'
                 };
 
-                // 如果有data-w-field属性，解析JSON配置
+                // 婵″倹鐏夐張濉猘ta-w-field鐏炵偞鈧嶇礉鐟欙絾鐎絁SON闁板秶鐤?
                 if (dataWField) {
                     try {
                         const jsonConfig = JSON.parse(dataWField);
                         fieldConfig = { ...fieldConfig, ...jsonConfig };
                     } catch (e) {
-                        console.warn('extractFieldsFromDOM: 解析data-w-field失败', e);
+                        console.warn('extractFieldsFromDOM: 鐟欙絾鐎絛ata-w-field婢惰精瑙?', e);
                     }
                 }
 
-                // 只提取模板定义的字段
+                // 閸欘亝褰侀崣鏍侀弶鍨暰娑斿娈戠€涙顔?
                 if (fieldConfig.template_defined || fieldConfig.field_defined || fieldConfig.from_field) {
                     fields.push(fieldConfig);
                 }
             });
         }
 
-        console.log('extractFieldsFromDOM: 提取到模板字段', type, fields);
+        console.log('extractFieldsFromDOM: 閹绘劕褰囬崚鐗埬侀弶鍨摟濞?', type, fields);
         return fields;
     },
 
-    // 修改渲染逻辑，固化field字段行为
+    // 娣囶喗鏁煎〒鍙夌厠闁槒绶敍灞芥祼閸栨潊ield鐎涙顔岀悰灞艰礋
     isFieldConfigLocked: function (field) {
         return field.field_defined === true || field.field_defined === 'true' || field.template_defined === true || field.template_defined === 'true';
     },
 
-    // 在渲染按钮和输入时：
-    // 例如隐藏按钮?
+    // 閸︺劍瑕嗛弻鎾村瘻闁筋喖鎷版潏鎾冲弳閺冭绱?
+    // 娓氬顩ч梾鎰閹稿鎸?
     // <button ... ${DataTableManager.isFieldConfigLocked(field) ? 'disabled style="display:none"' : ''}>
-    // 例如排序按钮?
+    // 娓氬顩ч幒鎺戠碍閹稿鎸?
     // <button ... ${DataTableManager.isFieldConfigLocked(field) ? 'disabled style="display:none"' : ''}>
-    // 其它输入?
+    // 閸忚泛鐣犳潏鎾冲弳?
     // <input ... ${DataTableManager.isFieldConfigLocked(field) ? 'disabled' : ''}>
-    // 其余功能按配置设?
+    // 閸忔湹缍戦崝鐔诲厴閹稿鍘ょ純顔款啎?
 
-    // 判断字段是否允许隐藏
+    // 閸掋倖鏌囩€涙顔岄弰顖氭儊閸忎浇顔忛梾鎰
     isFieldHideAllowed: function (field) {
-        // field_defined/template_defined字段永远不可隐藏
+        // field_defined/template_defined鐎涙顔屽姝岀箼娑撳秴褰查梾鎰
         if (field.field_defined === true || field.field_defined === 'true' || field.template_defined === true || field.template_defined === 'true') {
             return false;
         }
-        // 其它字段按visible配置
+        // 閸忚泛鐣犵€涙顔岄幐濉縤sible闁板秶鐤?
         return field.visible !== false && field.visible !== 'false';
     },
 
-    // 判断字段是否允许排序
+    // 閸掋倖鏌囩€涙顔岄弰顖氭儊閸忎浇顔忛幒鎺戠碍
     isFieldSortable: function (field) {
         return field.sortable === true || field.sortable === 'true';
     },
 
-    // 判断字段是否允许编辑
+    // 閸掋倖鏌囩€涙顔岄弰顖氭儊閸忎浇顔忕紓鏍帆
     isFieldEditable: function (field) {
         return field.editable === true || field.editable === 'true';
     },
 
-    // 渲染按钮和输入时严格按data-属性控?
-    // 隐藏按钮?
+    // 濞撳弶鐓嬮幐澶愭尦閸滃矁绶崗銉︽娑撱儲鐗搁幐濉猘ta-鐏炵偞鈧勫付?
+    // 闂呮劘妫岄幐澶愭尦?
     // <button ... ${DataTableManager.isFieldHideAllowed(field) ? '' : 'disabled style="display:none"'}>
-    // 排序按钮?
+    // 閹烘帒绨幐澶愭尦?
     // <button ... ${DataTableManager.isFieldSortable(field) ? '' : 'disabled style="display:none"'}>
-    // 编辑输入?
+    // 缂傛牞绶潏鎾冲弳?
     // <input ... ${DataTableManager.isFieldEditable(field) ? '' : 'disabled'}>
-    // 其它操作同理
+    // 閸忚泛鐣犻幙宥勭稊閸氬瞼鎮?
 
     /**
-     * 渲染筛选区域
+     * 濞撳弶鐓嬬粵娑⑩偓澶婂隘閸?
      */
     renderFilter: function (tableId, fields) {
         const instance = this.instances[tableId];
@@ -6026,7 +5938,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const filterContainer = (instance.container[0] || instance.container).querySelector('.datatable-filter');
         if (!filterContainer) return;
 
-        // 确保字段顺序正确
+        // 绾喕绻氱€涙顔屾い鍝勭碍濮濓絿鈥?
         const templateFields = fields.filter(field =>
             field.template_defined || field.field_defined || field.from_field
         );
@@ -6044,7 +5956,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
             if (canSearch) {
                 const inputType = field.type === 'select' ? 'select' : 'text';
-                const placeholder = field.placeholder || `请输入${field.label || field.name}`;
+                const placeholder = field.placeholder || `鐠囩柉绶崗?{field.label || field.name}`;
 
                 if (inputType === 'select') {
                     const options = field.options ? field.options.split(',').map(opt => {
@@ -6072,7 +5984,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         filterContainer.innerHTML = filterHtml;
 
-        // 绑定筛选事件
+        // 缂佹垵鐣剧粵娑⑩偓澶夌皑娴?
         filterContainer.querySelectorAll('.filter-input').forEach(input => {
             input.addEventListener('input', function () {
                 const fieldName = this.getAttribute('data-field');
@@ -6089,7 +6001,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 排序表格
+     * 閹烘帒绨悰銊︾壐
      */
     sortTable: function (tableId, fieldName) {
         const instance = this.instances[tableId];
@@ -6104,24 +6016,24 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             (field.sortable !== false);
 
         if (!canSort) {
-            console.warn('sortTable: 字段不允许排序', fieldName);
+            console.warn('sortTable: 鐎涙顔屾稉宥呭帒鐠佸憡甯撴惔?', fieldName);
             return;
         }
 
-        // 切换排序方向
+        // 閸掑洦宕查幒鎺戠碍閺傜懓鎮?
         const currentSort = instance.sorts[fieldName];
         const newSort = currentSort === 'asc' ? 'desc' : 'asc';
 
-        // 清除其他字段的排?
+        // 濞撳懘娅庨崗鏈电铂鐎涙顔岄惃鍕笓?
         instance.sorts = {};
         instance.sorts[fieldName] = newSort;
 
-        // 重新加载数据
+        // 闁插秵鏌婇崝鐘烘祰閺佺増宓?
         this.loadData(instance);
     },
 
     /**
-     * 应用筛?
+     * 鎼存梻鏁ょ粵?
      */
     applyFilter: function (tableId, fieldName, value) {
         const instance = this.instances[tableId];
@@ -6133,27 +6045,27 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             delete instance.filters[fieldName];
         }
 
-        // 重置到第一?
+        // 闁插秶鐤嗛崚鎵儑娑撯偓?
         instance.currentPage = 1;
 
-        // 重新加载数据
+        // 闁插秵鏌婇崝鐘烘祰閺佺増宓?
         this.loadData(instance);
     },
 
     /**
-     * 加载数据
+     * 閸旂姾娴囬弫鐗堝祦
      */
     loadData: function (instance) {
-        // 这里应该实现数据加载逻辑
-        // 根据instance.filters, instance.sorts, instance.currentPage等参?
-        console.log('loadData: 加载数据', {
+        // 鏉╂瑩鍣锋惔鏃囶嚉鐎圭偟骞囬弫鐗堝祦閸旂姾娴囬柅鏄忕帆
+        // 閺嶈宓乮nstance.filters, instance.sorts, instance.currentPage缁涘寮?
+        console.log('loadData: 閸旂姾娴囬弫鐗堝祦', {
             filters: instance.filters,
             sorts: instance.sorts,
             page: instance.currentPage
         });
     },
 
-    // 检查是否为模板字段
+    // 濡偓閺屻儲妲搁崥锔胯礋濡剝婢樼€涙顔?
     isPrimaryOrIndexField: function (field) {
         return (
             field.is_primary === true ||
@@ -6165,35 +6077,35 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 加载模型字段配置（原始方法，会触发表格重新构建）
+     * 閸旂姾娴囧Ο鈥崇€风€涙顔岄柊宥囩枂閿涘牆甯慨瀣煙濞夋洩绱濇导姘承曢崣鎴ｃ€冮弽濂稿櫢閺傜増鐎鐚寸礆
      */
     loadModelFields: function (tableId) {
         const instance = this.instances[tableId];
         if (!instance) return;
         if (!instance.apiUrl) {
-            console.error('[DataTableManager] apiUrl未设置，无法加载字段配置');
+            console.error('[DataTableManager] apiUrl閺堫亣顔曠純顕嗙礉閺冪姵纭堕崝鐘烘祰鐎涙顔岄柊宥囩枂');
             return;
         }
 
-        // 1. 提取模板字段（field指定字段）
+        // 1. 閹绘劕褰囧Ο鈩冩緲鐎涙顔岄敍鍧抜eld閹稿洤鐣剧€涙顔岄敍?
         const templateFields = this.extractFieldsFromDOM(tableId, 'display');
         const templateFilterFields = this.extractFieldsFromDOM(tableId, 'filter');
-        console.log('loadModelFields: 模板字段', templateFields);
-        console.log('loadModelFields: 模板筛选字段', templateFilterFields);
+        console.log('loadModelFields: 濡剝婢樼€涙顔?', templateFields);
+        console.log('loadModelFields: 濡剝婢樼粵娑⑩偓澶婄摟濞?', templateFilterFields);
         instance.templateFields = templateFields;
         instance.templateFilterFields = templateFilterFields;
 
-        console.log('loadModelFields: 开始加载字段配置', {
+        console.log('loadModelFields: 瀵偓婵濮炴潪钘夌摟濞堢敻鍘ょ純?', {
             tableId,
             model: instance.options.model,
             scope: instance.options.scope
         });
 
-        // 2. 请求接口
+        // 2. 鐠囬攱鐪伴幒銉ュ經
         const isInFieldConfig = document.querySelector('#w-field-config-modal-' + tableId) !== null;
         if (instance.allFields && instance.allFields.length > 0) {
-            // 如果有缓存数据，直接使用
-            console.log('loadModelFields: 使用缓存的字段数据');
+            // 婵″倹鐏夐張澶岀处鐎涙ɑ鏆熼幑顕嗙礉閻╁瓨甯存担璺ㄦ暏
+            console.log('loadModelFields: 娴ｈ法鏁ょ紓鎾崇摠閻ㄥ嫬鐡у▓鍨殶閹?');
             if (isInFieldConfig) {
                 this.renderModelFieldsFromData(tableId, {
                     all_fields: instance.allFields,
@@ -6205,63 +6117,56 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         }
 
         if (isInFieldConfig) {
-            // 在字段配置弹窗中显示loading
+            // 閸︺劌鐡у▓鐢稿帳缂冾喖鑴婄粣妞捐厬閺勫墽銇歭oading
             const availableFields = document.getElementById('w-available-fields-' + tableId);
             const availableFieldsFilter = document.getElementById('w-available-fields-filter-' + tableId);
             if (availableFields) {
-                availableFields.innerHTML = '<div class="w-text-center w-text-muted w-py-4"><i class="fas fa-spinner fa-spin"></i> ' + __("加载中...") + '</div>';
+                availableFields.innerHTML = '<div class="w-text-center w-text-muted w-py-4"><i class="fas fa-spinner fa-spin"></i> ' + __("閸旂姾娴囨稉?..") + '</div>';
             }
             if (availableFieldsFilter) {
-                availableFieldsFilter.innerHTML = '<div class="w-text-center w-text-muted w-py-4"><i class="fas fa-spinner fa-spin"></i> ' + __("加载中...") + '</div>';
+                availableFieldsFilter.innerHTML = '<div class="w-text-center w-text-muted w-py-4"><i class="fas fa-spinner fa-spin"></i> ' + __("閸旂姾娴囨稉?..") + '</div>';
             }
         }
 
-        fetch(instance.apiUrl + '/fields', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                table_id: tableId,
-                model: instance.options.model,
-                scope: instance.options.scope
-            })
+        this.requestJson(instance, 'fields', {
+            table_id: tableId,
+            model: instance.options.model,
+            scope: instance.options.scope
         })
-            .then(response => response.json())
             .then(response => {
-                // 3. 合并模板字段和接口字段
+                // 3. 閸氬牆鑻熷Ο鈩冩緲鐎涙顔岄崪灞惧复閸欙絽鐡у▓?
                 let apiFields = (response.data && response.data.all_fields) ? response.data.all_fields : [];
                 let mergedFields = this.mergeTemplateAndApiFields(templateFields, apiFields);
-                // 合并filter字段
+                // 閸氬牆鑻焒ilter鐎涙顔?
                 let apiFilterFields = (response.data && response.data.filter_fields) ? response.data.filter_fields : [];
                 let mergedFilterFields = this.mergeTemplateAndApiFields(templateFilterFields, apiFilterFields);
 
-                // 4. 保护模板字段，确保它们始终在显示字段中
+                // 4. 娣囨繃濮㈠Ο鈩冩緲鐎涙顔岄敍宀€鈥樻穱婵嗙暊娴狀剙顫愮紒鍫濇躬閺勫墽銇氱€涙顔屾稉?
                 let displayFields = response.data.display_fields || [];
                 const templateFieldNames = new Set(templateFields.map(f => f.name));
 
-                // 确保模板字段始终在显示字段中
+                // 绾喕绻氬Ο鈩冩緲鐎涙顔屾慨瀣矒閸︺劍妯夌粈鍝勭摟濞堝吀鑵?
                 templateFields.forEach(templateField => {
                     const existingIndex = displayFields.findIndex(f => f.name === templateField.name);
                     if (existingIndex === -1) {
-                        // 模板字段不在显示字段中，添加到开头
+                        // 濡剝婢樼€涙顔屾稉宥呮躬閺勫墽銇氱€涙顔屾稉顓ㄧ礉濞ｈ濮為崚鏉跨磻婢?
                         displayFields.unshift(templateField);
                     } else {
-                        // 模板字段已存在，用模板字段替换（保护模板配置）
+                        // 濡剝婢樼€涙顔屽鎻掔摠閸︻煉绱濋悽銊δ侀弶鍨摟濞堝灚娴涢幑顫礄娣囨繃濮㈠Ο鈩冩緲闁板秶鐤嗛敍?
                         displayFields[existingIndex] = templateField;
                     }
                 });
 
-                // 5. 添加用户选择的字段（非模板字段）
+                // 5. 濞ｈ濮為悽銊﹀煕闁瀚ㄩ惃鍕摟濞堢绱欓棃鐐茨侀弶鍨摟濞堢绱?
                 const userSelectedFields = displayFields.filter(field => !templateFieldNames.has(field.name));
-                console.log('loadModelFields: 用户选择的字段', userSelectedFields);
+                console.log('loadModelFields: 閻劍鍩涢柅澶嬪閻ㄥ嫬鐡у▓?', userSelectedFields);
 
-                // 6. 处理受保护字段的配置
+                // 6. 婢跺嫮鎮婇崣妞剧箽閹躲倕鐡у▓鐢垫畱闁板秶鐤?
                 displayFields = displayFields.map(field => {
                     const isProtected = this.isFieldProtected(field);
                     const isPrimaryOrIndex = field.is_primary === true || field.primary === true || field.primary_key === true || field.pk === true || ['id', 'ID', 'Id', 'primary', 'pk', 'primary_key', 'is_primary'].includes(field.name);
                     if (isProtected) {
-                        // 主键/索引字段不能排序和移动
+                        // 娑撳鏁?缁便垹绱╃€涙顔屾稉宥堝厴閹烘帒绨崪宀€些閸?
                         if (isPrimaryOrIndex) {
                             return {
                                 ...field,
@@ -6273,7 +6178,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                                 display_orderable: false
                             };
                         }
-                        // 其它受保护字段默认可以排序和移动
+                        // 閸忚泛鐣犻崣妞剧箽閹躲倕鐡у▓鐢哥帛鐠併倕褰叉禒銉﹀笓鎼村繐鎷扮粔璇插З
                         return {
                             ...field,
                             sortable: field.sortable !== false && field.sortable !== 'false',
@@ -6287,7 +6192,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     return field;
                 });
 
-                // 7. 确保指定字段排到前面
+                // 7. 绾喕绻氶幐鍥х暰鐎涙顔岄幒鎺戝煂閸撳秹娼?
                 const displayTemplateFields = displayFields.filter(field =>
                     field.template_defined || field.field_defined || field.from_field
                 );
@@ -6295,10 +6200,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     !field.template_defined && !field.field_defined && !field.from_field
                 );
 
-                // 重新排序：模板字段在前，用户字段在后
+                // 闁插秵鏌婇幒鎺戠碍閿涙碍膩閺夊灝鐡у▓闈涙躬閸撳稄绱濋悽銊﹀煕鐎涙顔岄崷銊ユ倵
                 displayFields = [...displayTemplateFields, ...userFields];
 
-                // 8. 传递合并后的字段到渲染
+                // 8. 娴肩娀鈧帒鎮庨獮璺烘倵閻ㄥ嫬鐡у▓闈涘煂濞撳弶鐓?
                 if (isInFieldConfig) {
                     this.renderModelFieldsFromData(tableId, {
                         all_fields: mergedFields,
@@ -6310,12 +6215,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 }
             })
             .catch(error => {
-                this.showError(tableId, error || __('获取字段失败'));
+                this.showError(tableId, error || __('閼惧嘲褰囩€涙顔屾径杈Е'));
             });
     },
 
     /**
-     * 初始化实时编辑功能（实例隔离）
+     * 閸掓繂顫愰崠鏍х杽閺冨墎绱潏鎴濆閼虫枻绱欑€圭偘绶ラ梾鏃傤瀲閿?
      */
     initInlineEdit: function (tableId) {
         const instance = this.instances[tableId];
@@ -6324,7 +6229,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const table = document.getElementById(tableId);
         if (!table) return;
 
-        // 绑定单元格双击事件（使用实例命名空间）
+        // 缂佹垵鐣鹃崡鏇炲帗閺嶇厧寮婚崙璁崇皑娴犺绱欐担璺ㄦ暏鐎圭偘绶ラ崨钘夋倳缁屾椽妫块敍?
         const dblClickHandler = (e) => {
             const cell = e.target.closest('td[data-editable="true"]');
             if (cell && !instance.editingState.isEditing) {
@@ -6332,11 +6237,11 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
         };
         table.addEventListener('dblclick', dblClickHandler);
-        // 存储事件处理器，用于清理
+        // 鐎涙ê鍋嶆禍瀣╂婢跺嫮鎮婇崳顭掔礉閻劋绨〒鍛倞
         if (!instance.eventHandlers) instance.eventHandlers = {};
         instance.eventHandlers['dblclick'] = dblClickHandler;
 
-        // 绑定键盘事件（使用实例命名空间，确保只处理当前实例的编辑）
+        // 缂佹垵鐣鹃柨顔炬磸娴滃娆㈤敍鍫滃▏閻劌鐤勬笟瀣嚒閸氬秶鈹栭梻杈剧礉绾喕绻氶崣顏勵槱閻炲棗缍嬮崜宥呯杽娓氬娈戠紓鏍帆閿?
         const keydownHandler = (e) => {
             if (instance.editingState.isEditing) {
                 if (e.key === 'Enter') {
@@ -6351,10 +6256,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 开始单元格编辑（实例隔离）
+     * 瀵偓婵宕熼崗鍐╃壐缂傛牞绶敍鍫濈杽娓氬娈х粋浼欑礆
      */
     startCellEdit: function (cell, tableId) {
-        // 通过 cell 找到 tableId（如果未提供）
+        // 闁俺绻?cell 閹垫儳鍩?tableId閿涘牆顩ч弸婊勬弓閹绘劒绶甸敍?
         if (!tableId) {
             const table = cell.closest('table, .w-datatable');
             if (table) {
@@ -6378,23 +6283,23 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const fieldType = cell.getAttribute('data-field-type') || 'text';
         const fieldName = cell.getAttribute('data-field');
 
-        // 创建编辑器
+        // 閸掓稑缂撶紓鏍帆閸?
         const editor = this.createCellEditor(fieldType, instance.editingState.originalValue);
 
-        // 替换单元格内容
+        // 閺囨寧宕查崡鏇炲帗閺嶇厧鍞寸€?
         cell.innerHTML = '';
         cell.appendChild(editor);
 
-        // 聚焦编辑器
+        // 閼辨氨鍔嶇紓鏍帆閸?
         editor.focus();
         if (editor.select) editor.select();
 
-        // 添加编辑状态样式
+        // 濞ｈ濮炵紓鏍帆閻樿埖鈧焦鐗卞?
         cell.classList.add('editing');
     },
 
     /**
-     * 创建单元格编辑器
+     * 閸掓稑缂撻崡鏇炲帗閺嶈偐绱潏鎴濇珤
      */
     createCellEditor: function (type, value) {
         let editor;
@@ -6403,7 +6308,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             case 'select':
                 editor = document.createElement('select');
                 editor.className = 'form-control form-control-sm';
-                // 这里需要根据字段配置添加选项
+                // 鏉╂瑩鍣烽棁鈧憰浣圭壌閹诡喖鐡у▓鐢稿帳缂冾喗鍧婇崝鐘烩偓澶愩€?
                 break;
 
             case 'textarea':
@@ -6432,7 +6337,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
 
         editor.value = value;
 
-        // 绑定失焦事件
+        // 缂佹垵鐣炬径杈╁妽娴滃娆?
         editor.addEventListener('blur', () => {
             setTimeout(() => this.saveCellEdit(), 100);
         });
@@ -6441,10 +6346,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 保存单元格编辑（实例隔离）
+     * 娣囨繂鐡ㄩ崡鏇炲帗閺嶈偐绱潏鎴礄鐎圭偘绶ラ梾鏃傤瀲閿?
      */
     saveCellEdit: function (tableId) {
-        // 通过当前编辑状态找到 tableId（如果未提供）
+        // 闁俺绻冭ぐ鎾冲缂傛牞绶悩鑸碘偓浣瑰閸?tableId閿涘牆顩ч弸婊勬弓閹绘劒绶甸敍?
         if (!tableId) {
             for (const id in this.instances) {
                 if (this.instances[id].editingState.isEditing) {
@@ -6464,20 +6369,20 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const newValue = editor ? editor.value : '';
 
         if (newValue !== instance.editingState.originalValue) {
-            // 发送保存请求
+            // 閸欐垿鈧椒绻氱€涙顕Ч?
             this.saveCellValue(cell, newValue, tableId);
         } else {
-            // 值未改变，直接恢复
+            // 閸婂吋婀弨鐟板綁閿涘瞼娲块幒銉︿划婢?
             this.restoreCellContent(cell, instance.editingState.originalValue);
         }
         this.resetEditingState(tableId);
     },
 
     /**
-     * 取消单元格编辑（实例隔离）
+     * 閸欐牗绉烽崡鏇炲帗閺嶈偐绱潏鎴礄鐎圭偘绶ラ梾鏃傤瀲閿?
      */
     cancelCellEdit: function (tableId) {
-        // 通过当前编辑状态找到 tableId（如果未提供）
+        // 闁俺绻冭ぐ鎾冲缂傛牞绶悩鑸碘偓浣瑰閸?tableId閿涘牆顩ч弸婊勬弓閹绘劒绶甸敍?
         if (!tableId) {
             for (const id in this.instances) {
                 if (this.instances[id].editingState.isEditing) {
@@ -6498,7 +6403,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 恢复单元格内容
+     * 閹垹顦查崡鏇炲帗閺嶇厧鍞寸€?
      */
     restoreCellContent: function (cell, value) {
         cell.innerHTML = value;
@@ -6506,7 +6411,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 重置编辑状态（实例隔离）
+     * 闁插秶鐤嗙紓鏍帆閻樿埖鈧緤绱欑€圭偘绶ラ梾鏃傤瀲閿?
      */
     resetEditingState: function (tableId) {
         const instance = this.instances[tableId];
@@ -6519,10 +6424,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 保存单元格值到服务器（实例隔离）
+     * 娣囨繂鐡ㄩ崡鏇炲帗閺嶇厧鈧厧鍩岄張宥呭閸ｎ煉绱欑€圭偘绶ラ梾鏃傤瀲閿?
      */
     saveCellValue: function (cell, newValue, tableId) {
-        // 通过 cell 找到 tableId（如果未提供）
+        // 闁俺绻?cell 閹垫儳鍩?tableId閿涘牆顩ч弸婊勬弓閹绘劒绶甸敍?
         if (!tableId) {
             const table = cell.closest('.w-datatable');
             if (table) {
@@ -6541,52 +6446,44 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const fieldName = cell.getAttribute('data-field');
         const model = instance.options.model || instance.container.getAttribute('data-model');
 
-        // 显示保存状态
+        // 閺勫墽銇氭穱婵嗙摠閻樿埖鈧?
         cell.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-        // 发送保存请求（使用实例的 API URL）
-        fetch(instance.apiUrl + '/update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
-                model: model,
-                id: recordId,
-                data: {
-                    [fieldName]: newValue
-                }
-            })
+        // 閸欐垿鈧椒绻氱€涙顕Ч鍌︾礄娴ｈ法鏁ょ€圭偘绶ラ惃?API URL閿?
+        this.requestJson(instance, 'update', {
+            model: model,
+            id: recordId,
+            data: {
+                [fieldName]: newValue
+            }
         })
-            .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // 保存成功
+                    // 娣囨繂鐡ㄩ幋鎰
                     cell.innerHTML = newValue;
                     cell.classList.add('save-success');
                     setTimeout(() => cell.classList.remove('save-success'), 2000);
                 } else {
-                    // 保存失败
+                    // 娣囨繂鐡ㄦ径杈Е
                     this.restoreCellContent(cell, instance.editingState.originalValue);
-                    this.showError(tableId, data.message || __('保存失败'));
+                    this.showError(tableId, data.message || __('娣囨繂鐡ㄦ径杈Е'));
                 }
             })
             .catch(error => {
-                // 网络错误
+                // 缂冩垹绮堕柨娆掝嚖
                 this.restoreCellContent(cell, instance.editingState.originalValue);
-                this.showError(tableId, __('网络错误：%{1}', error.message));
+                this.showError(tableId, __('缂冩垹绮堕柨娆掝嚖閿?{1}', error.message));
             });
     }
     };
     
-    // 将 DataTableManager 暴露到 window 上
+    // 鐏?DataTableManager 閺嗘挳婀堕崚?window 娑?
     if (typeof window !== 'undefined') {
         window.DataTableManager = DataTableManager;
     }
 }
 
-// 全局事件委托，支持动态插入的字段设置按钮
+// 閸忋劌鐪禍瀣╂婵梹澧敍灞炬暜閹镐礁濮╅幀浣瑰絻閸忋儳娈戠€涙顔岀拋鍓х枂閹稿鎸?
 document.addEventListener('click', function (e) {
     const btn = e.target.closest('.w-btn[data-w-action="field-config"]');
     if (btn && window.DataTableManager) {
@@ -6597,11 +6494,11 @@ document.addEventListener('click', function (e) {
     }
 });
 
-// 初始化下拉菜单功能（只在单例模式下执行一次）
+// 閸掓繂顫愰崠鏍︾瑓閹峰褰嶉崡鏇炲閼虫枻绱欓崣顏勬躬閸楁洑绶ュΟ鈥崇础娑撳澧界悰灞肩濞嗏槄绱?
 if (typeof window !== 'undefined' && window.DataTableManager && !window.DataTableManager._initialized) {
     window.DataTableManager._initialized = true;
     
-    // 初始化函数
+    // 閸掓繂顫愰崠鏍у毐閺?
     var initDataTableManager = function () {
         if (window.DataTableManager) {
             window.DataTableManager.initDropdowns();
@@ -6610,23 +6507,23 @@ if (typeof window !== 'undefined' && window.DataTableManager && !window.DataTabl
             window.DataTableManager.initImportantFlags();
             window.DataTableManager.loadThemeConfig();
 
-            // 初始化所有表格的实时编辑功能
+            // 閸掓繂顫愰崠鏍ㄥ閺堝銆冮弽鑲╂畱鐎圭偞妞傜紓鏍帆閸旂喕鍏?
             document.querySelectorAll('.w-datatable[data-editable="true"]').forEach(table => {
                 window.DataTableManager.initInlineEdit(table.id);
             });
         }
     };
     
-    // 根据页面加载状态决定如何初始化
+    // 閺嶈宓佹い鐢告桨閸旂姾娴囬悩鑸碘偓浣稿枀鐎规艾顩ф担鏇炲灥婵瀵?
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initDataTableManager);
     } else {
-        // 页面已加载，直接初始化
+        // 妞ょ敻娼板鎻掑鏉炴枻绱濋惄瀛樺复閸掓繂顫愰崠?
         initDataTableManager();
     }
 }
 
-// 自动翻译所有带data-w-i18n的元素
+// 閼奉亜濮╃紙鏄忕槯閹碘偓閺堝鐢玠ata-w-i18n閻ㄥ嫬鍘撶槐?
 function applyI18n() {
     document.querySelectorAll('[data-w-i18n]').forEach(function (el) {
         var key = el.getAttribute('data-w-i18n');
@@ -6635,7 +6532,7 @@ function applyI18n() {
         }
     });
 }
-// 页面加载和每次弹窗渲染后都调用
+// 妞ょ敻娼伴崝鐘烘祰閸滃本鐦″▎鈥宠剨缁愭瑕嗛弻鎾虫倵闁€熺殶閻?
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', applyI18n);
 } else {
@@ -6657,15 +6554,6 @@ if (document.readyState === 'loading') {
 
         if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) {
             return raw;
-        }
-
-        if (typeof window.api === 'function') {
-            return window.api(raw);
-        }
-
-        if (window.site && window.site.api_host) {
-            const apiHost = window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/';
-            return apiHost + raw.replace(/^\/+/, '');
         }
 
         return '/' + raw.replace(/^\/+/, '');
@@ -6692,7 +6580,33 @@ if (document.readyState === 'loading') {
         }
     }
 
+    function operationName(instance, endpoint) {
+        const normalized = String(endpoint || '').replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        const operations = instance && instance.options && instance.options.operations ? instance.options.operations : {};
+        return operations[normalized] || operations[endpoint] || normalized;
+    }
+
+    async function resourceRequest(instance, endpoint, payload, requestOptions) {
+        if (!instance || !instance.options || !instance.options.workerApi) {
+            throw new Error('DataTable frontend requests require Weline.Api worker mode.');
+        }
+
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            throw new Error('Weline.Api.resource is not available');
+        }
+
+        const provider = instance.options.apiProvider || 'datatable';
+        const api = await window.Weline.Api.resource(provider);
+        const method = operationName(instance, endpoint);
+        if (!api || typeof api[method] !== 'function') {
+            throw new Error('Weline.Api operation is not available: ' + provider + '.' + method);
+        }
+
+        return api[method](payload || {}, Object.assign({silent: true}, requestOptions || {}));
+    }
+
     manager.resolveApiUrl = resolveApiUrl;
+    manager.requestJson = resourceRequest;
     manager.buildApiUrl = function (instance, endpoint = '') {
         const baseUrl = resolveApiUrl(
             instance && instance.apiUrl ? instance.apiUrl : '',
@@ -6773,20 +6687,13 @@ if (document.readyState === 'loading') {
             return;
         }
 
-        fetch(this.buildApiUrl(instance, 'fields'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                table_id: tableId,
-                model: instance.options.model,
-                scope: instance.options.scope,
-                join: instance.options.join || '',
-                model_config: instance.options.modelConfig || {}
-            })
+        this.requestJson(instance, 'fields', {
+            table_id: tableId,
+            model: instance.options.model,
+            scope: instance.options.scope,
+            join: instance.options.join || '',
+            model_config: instance.options.modelConfig || {}
         })
-            .then(response => response.json())
             .then(response => {
                 if (response.success || response.code == 200 || response.code === '200') {
                     this.applyFieldResponse(tableId, response);
@@ -6794,11 +6701,11 @@ if (document.readyState === 'loading') {
                     return;
                 }
 
-                this.showError(tableId, response.msg || response.message || __('加载字段失败'));
+                this.showError(tableId, response.msg || response.message || __('閸旂姾娴囩€涙顔屾径杈Е'));
             })
             .catch(error => {
                 console.error('[DataTableManager] loadModelFieldsForInit failed', error);
-                this.showError(tableId, error.message || __('加载字段失败'));
+                this.showError(tableId, error.message || __('閸旂姾娴囩€涙顔屾径杈Е'));
             });
     };
 
@@ -6819,31 +6726,24 @@ if (document.readyState === 'loading') {
             return;
         }
 
-        fetch(this.buildApiUrl(instance, 'fields'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                table_id: tableId,
-                model: instance.options.model,
-                scope: instance.options.scope,
-                join: instance.options.join || '',
-                model_config: instance.options.modelConfig || {}
-            })
+        this.requestJson(instance, 'fields', {
+            table_id: tableId,
+            model: instance.options.model,
+            scope: instance.options.scope,
+            join: instance.options.join || '',
+            model_config: instance.options.modelConfig || {}
         })
-            .then(response => response.json())
             .then(response => {
                 if (response.success || response.code == 200 || response.code === '200') {
                     this.applyFieldResponse(tableId, response);
                     return;
                 }
 
-                this.showError(tableId, response.msg || response.message || __('加载字段失败'));
+                this.showError(tableId, response.msg || response.message || __('閸旂姾娴囩€涙顔屾径杈Е'));
             })
             .catch(error => {
                 console.error('[DataTableManager] loadModelFields failed', error);
-                this.showError(tableId, error.message || __('加载字段失败'));
+                this.showError(tableId, error.message || __('閸旂姾娴囩€涙顔屾径杈Е'));
             });
     };
 
@@ -6863,37 +6763,30 @@ if (document.readyState === 'loading') {
         const saveButton = document.querySelector('#w-field-config-modal-' + tableId + ' .w-btn-primary');
         const originalText = saveButton ? saveButton.innerHTML : '';
         if (saveButton) {
-            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 保存...';
+            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 娣囨繂鐡?..';
             saveButton.disabled = true;
         }
 
-        fetch(this.buildApiUrl(instance, 'save-config'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                scope: instance.options.scope,
-                table_id: tableId,
-                display_fields: configData.display_fields,
-                filter_fields: configData.filter_fields,
-                config: configData
-            })
+        this.requestJson(instance, 'save-config', {
+            scope: instance.options.scope,
+            table_id: tableId,
+            display_fields: configData.display_fields,
+            filter_fields: configData.filter_fields,
+            config: configData
         })
-            .then(response => response.json())
             .then(response => {
                 if (response.success || response.code == 200 || response.code === '200') {
                     this.closeFieldConfig(tableId);
                     this.renderTable(instance);
-                    this.showSuccess(tableId, response.msg || response.message || __('配置已保存'));
+                    this.showSuccess(tableId, response.msg || response.message || __('闁板秶鐤嗗韫箽鐎?'));
                     return;
                 }
 
-                this.showError(tableId, response.msg || response.message || __('保存失败'));
+                this.showError(tableId, response.msg || response.message || __('娣囨繂鐡ㄦ径杈Е'));
             })
             .catch(error => {
                 console.error('[DataTableManager] saveFieldConfig failed', error);
-                this.showError(tableId, error.message || __('保存失败'));
+                this.showError(tableId, error.message || __('娣囨繂鐡ㄦ径杈Е'));
             })
             .finally(() => {
                 if (saveButton) {
@@ -6909,18 +6802,11 @@ if (document.readyState === 'loading') {
             return;
         }
 
-        fetch(this.buildApiUrl(instance, 'clear-config'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                scope: instance.options.scope,
-                table_id: tableId,
-                type: type || 'all'
-            })
+        this.requestJson(instance, 'clear-config', {
+            scope: instance.options.scope,
+            table_id: tableId,
+            type: type || 'all'
         })
-            .then(response => response.json())
             .then(response => {
                 if (response.success || response.code == 200 || response.code === '200') {
                     if (!type || type === 'all' || type === 'header') {
@@ -6932,15 +6818,15 @@ if (document.readyState === 'loading') {
 
                     instance.allFields = [];
                     this.loadModelFields(tableId);
-                    this.showSuccess(tableId, response.msg || response.message || __('配置已重置'));
+                    this.showSuccess(tableId, response.msg || response.message || __('闁板秶鐤嗗鏌ュ櫢缂?'));
                     return;
                 }
 
-                this.showError(tableId, response.msg || response.message || __('重置失败'));
+                this.showError(tableId, response.msg || response.message || __('闁插秶鐤嗘径杈Е'));
             })
             .catch(error => {
                 console.error('[DataTableManager] clearConfig failed', error);
-                this.showError(tableId, error.message || __('重置失败'));
+                this.showError(tableId, error.message || __('闁插秶鐤嗘径杈Е'));
             });
     };
 
@@ -6951,31 +6837,24 @@ if (document.readyState === 'loading') {
 
         showContainerLoading(instance, true);
 
-        fetch(this.buildApiUrl(instance, 'data'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: instance.options.model,
-                scope: instance.options.scope,
-                page: instance.currentPage || 1,
-                pageSize: instance.pageSize || instance.options.pageSize || this.config.defaultPageSize,
-                limit: instance.pageSize || instance.options.pageSize || this.config.defaultPageSize,
-                search: instance.search || '',
-                filters: instance.filters || {},
-                sorts: instance.sorts || {},
-                sort: instance.sorts || {},
-                join: instance.options.join || '',
-                model_config: instance.options.modelConfig || {}
-            })
+        this.requestJson(instance, 'data', {
+            model: instance.options.model,
+            scope: instance.options.scope,
+            page: instance.currentPage || 1,
+            pageSize: instance.pageSize || instance.options.pageSize || this.config.defaultPageSize,
+            limit: instance.pageSize || instance.options.pageSize || this.config.defaultPageSize,
+            search: instance.search || '',
+            filters: instance.filters || {},
+            sorts: instance.sorts || {},
+            sort: instance.sorts || {},
+            join: instance.options.join || '',
+            model_config: instance.options.modelConfig || {}
         })
-            .then(response => response.json())
             .then(response => {
                 showContainerLoading(instance, false);
 
                 if (!(response.success || response.code == 200 || response.code === '200')) {
-                    this.showError(instance.id, response.msg || response.message || __('加载数据失败'));
+                    this.showError(instance.id, response.msg || response.message || __('閸旂姾娴囬弫鐗堝祦婢惰精瑙?'));
                     return;
                 }
 
@@ -6991,7 +6870,7 @@ if (document.readyState === 'loading') {
             .catch(error => {
                 console.error('[DataTableManager] loadData failed', error);
                 showContainerLoading(instance, false);
-                this.showError(instance.id, error.message || __('加载数据失败'));
+                this.showError(instance.id, error.message || __('閸旂姾娴囬弫鐗堝祦婢惰精瑙?'));
             });
     };
 
@@ -7015,21 +6894,13 @@ if (document.readyState === 'loading') {
 
         cell.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-        fetch(this.buildApiUrl(instance, 'save-data'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
-                model: model,
-                id: recordId,
-                data: {
-                    [fieldName]: newValue
-                }
-            })
+        this.requestJson(instance, 'save-data', {
+            model: model,
+            id: recordId,
+            data: {
+                [fieldName]: newValue
+            }
         })
-            .then(response => response.json())
             .then(data => {
                 if (data.success || data.code == 200 || data.code === '200') {
                     cell.innerHTML = newValue;
@@ -7039,11 +6910,142 @@ if (document.readyState === 'loading') {
                 }
 
                 this.restoreCellContent(cell, instance.editingState.originalValue);
-                this.showError(tableId, data.message || data.msg || __('保存失败'));
+                this.showError(tableId, data.message || data.msg || __('娣囨繂鐡ㄦ径杈Е'));
             })
             .catch(error => {
                 this.restoreCellContent(cell, instance.editingState.originalValue);
-                this.showError(tableId, error.message || __('保存失败'));
+                this.showError(tableId, error.message || __('娣囨繂鐡ㄦ径杈Е'));
+            });
+    };
+
+    manager.exportData = function (tableId, format = 'excel') {
+        const instance = this.getInstance(tableId) || this.instances[tableId];
+        if (!instance) {
+            return;
+        }
+
+        return this.exportDataBatch(instance, null, format);
+    };
+
+    manager.exportDataBatch = function (instance, selectedIds = null, format = 'excel') {
+        if (!instance) {
+            return;
+        }
+
+        const tableId = instance.id || (instance.container && typeof instance.container.attr === 'function' ? instance.container.attr('id') : '');
+        const ids = Array.isArray(selectedIds) ? selectedIds : [];
+        const exportParams = {
+            model: instance.options.model,
+            ids: ids,
+            format: format,
+            fields: (instance.displayFields || []).map(field => ({
+                name: field.name,
+                label: field.label || field.name
+            }))
+        };
+
+        this.showLoading(tableId, __('婵繐绲藉﹢顏堝礄閸℃妲甸悗鐢靛帶閸ゎ參寮悧鍫濈ウ...'));
+        this.requestJson(instance, 'export-data', exportParams)
+            .then(response => {
+                this.hideLoading(tableId);
+                if (!(response.success || response.code == 200 || response.code === '200')) {
+                    this.showError(tableId, response.msg || response.message || __('閻庣數鍘ч崵顓熷緞鏉堫偉袝'));
+                    return;
+                }
+
+                const payload = response.data || {};
+                const content = payload.body || '';
+                const contentType = payload.content_type || (format === 'json' ? 'application/json' : 'text/csv');
+                const filename = payload.filename || ('export_' + Date.now() + (format === 'json' ? '.json' : '.csv'));
+                this.downloadFile(new Blob([content], {type: contentType}), filename);
+                this.showSuccess(tableId, response.msg || response.message || __('閻庣數鍘ч崵顓㈠箣閹邦剙顫?'));
+            })
+            .catch(error => {
+                this.hideLoading(tableId);
+                console.error('Export error:', error);
+                this.showError(tableId, error.message || __('閻庣數鍘ч崵顓熷緞鏉堫偉袝'));
+            });
+    };
+
+    manager.performDelete = function (instance, ids, options) {
+        const tableId = instance.id || (instance.container && typeof instance.container.attr === 'function' ? instance.container.attr('id') : '');
+        this.showLoading(tableId, __('婵繐绲藉﹢顏堝礆閻樼粯鐝?..'));
+
+        this.requestJson(instance, 'delete-data', {
+            model: instance.options.model,
+            ids: Array.isArray(ids) ? ids : [ids],
+            soft_delete: !!(options && options.softDelete)
+        })
+            .then(response => {
+                this.hideLoading(tableId);
+                if (response.code == 200 || response.code === '200' || response.success) {
+                    this.showSuccess(tableId, options && options.softDelete ? __('Record moved to recycle bin') : __('Delete succeeded'));
+                    this.loadData(instance);
+                    this.clearSelection(instance);
+                    return;
+                }
+                this.showError(tableId, response.msg || response.message || __('闁告帞濞€濞呭孩寰勬潏顐バ?'));
+            })
+            .catch(error => {
+                this.hideLoading(tableId);
+                console.error('Delete error:', error);
+                this.showError(tableId, error.message || __('闁告帞濞€濞呭孩寰勬潏顐バ?'));
+            });
+    };
+
+    manager.saveRowData = function (instance, row) {
+        const tableId = instance.id || (instance.container && typeof instance.container.attr === 'function' ? instance.container.attr('id') : '');
+        this.requestJson(instance, 'save-data', {
+            model: instance.options.model,
+            data: row
+        })
+            .then(response => {
+                if (!(response.code == 200 || response.code === '200' || response.success)) {
+                    this.showError(tableId, response.msg || response.message || __('濞ｅ洦绻傞悺銊﹀緞鏉堫偉袝'));
+                }
+            })
+            .catch(error => {
+                this.showError(tableId, error.message || __('濞ｅ洦绻傞悺銊﹀緞鏉堫偉袝'));
+            });
+    };
+
+    manager.saveRow = function (tableId) {
+        const instance = this.instances[tableId];
+        if (!instance || !instance.isEditing) {
+            return;
+        }
+
+        const modalId = 'edit-modal-' + tableId;
+        const form = document.querySelector('#' + modalId + ' form');
+        const formData = {};
+        if (form) {
+            form.querySelectorAll('[name]').forEach(control => {
+                const name = control.getAttribute('name');
+                formData[name] = control.type === 'checkbox' ? (control.checked ? 1 : 0) : control.value;
+            });
+        }
+        formData.id = instance.data[instance.editingRow].id;
+
+        this.requestJson(instance, 'save-data', {
+            model: instance.options.model,
+            data: formData
+        })
+            .then(response => {
+                if (response.code == 200 || response.code === '200' || response.success) {
+                    this.showSuccess(tableId, __('濞ｅ洦绻傞悺銊╁箣閹邦剙顫?'));
+                    if (typeof $ === 'function') {
+                        $('#' + modalId).modal('hide');
+                    }
+                    instance.isEditing = false;
+                    instance.editingRow = null;
+                    instance.editingData = {};
+                    this.loadData(instance);
+                    return;
+                }
+                this.showError(tableId, response.msg || response.message || __('濞ｅ洦绻傞悺銊﹀緞鏉堫偉袝'));
+            })
+            .catch(error => {
+                this.showError(tableId, error.message || __('濞ｅ洦绻傞悺銊﹀緞鏉堫偉袝'));
             });
     };
 })();

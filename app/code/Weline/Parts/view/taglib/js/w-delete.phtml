@@ -196,6 +196,21 @@
         };
 
         // 执行删除请求
+        const welineRequestJson = async (url, requestOptions) => {
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.request !== 'function') {
+                throw new Error('Weline.Api.request is unavailable.');
+            }
+            requestOptions = requestOptions || {};
+            const response = await window.Weline.Api.request(url, Object.assign({}, requestOptions, {
+                headers: Object.assign({'Accept': 'application/json'}, requestOptions.headers || {}),
+                silent: true
+            }));
+            if (response && typeof response.json === 'function') {
+                return response.json();
+            }
+            return response;
+        };
+
         const performDelete = async (element) => {
             const form = element.closest('form');
             const url = element.getAttribute('w-url') || element.getAttribute('w-ajax') || element.getAttribute('href');
@@ -228,8 +243,7 @@
                     return performDeleteWithUrl(urlObj.toString(), fetchOptions, element);
                 }
 
-                const response = await fetch(url, fetchOptions);
-                const data = await response.json();
+                const data = await welineRequestJson(url, fetchOptions);
 
                 if (data.success) {
                     showMessage(element, __('删除成功'), 'success');
@@ -248,8 +262,7 @@
         // 辅助函数：GET/DELETE等方式带参数
         const performDeleteWithUrl = async (url, fetchOptions, element) => {
             try {
-                const response = await fetch(url, fetchOptions);
-                const data = await response.json();
+                const data = await welineRequestJson(url, fetchOptions);
                 if (data.success) {
                     showMessage(element, __('删除成功'), 'success');
                     if (element.closest('tr')) {

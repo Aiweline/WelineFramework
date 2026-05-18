@@ -7,13 +7,15 @@ namespace Weline\Ai\Extends\Module\Weline_Framework\Query;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Session\SessionFactory;
 
 class AiQueryProvider implements QueryProviderInterface
 {
     private const DEFAULT_CONCURRENCY_CAP = 8;
 
     public function __construct(
-        private readonly AiService $aiService
+        private readonly AiService $aiService,
+        private readonly SessionFactory $sessionFactory
     ) {
     }
 
@@ -30,6 +32,7 @@ class AiQueryProvider implements QueryProviderInterface
             'resolveModel' => $this->resolveModel($params),
             'listModels' => $this->listModels($params),
             'getAdapterModelBindings' => $this->getAdapterModelBindings($params),
+            'chat' => $this->chat($params),
             'generateStream' => $this->generateStream($params),
             'generateStreamBatch' => $this->generateStreamBatch($params),
             default => throw new \InvalidArgumentException(
@@ -49,6 +52,41 @@ class AiQueryProvider implements QueryProviderInterface
             $this->optionalInt($params, 'user_id'),
             (bool)($params['is_backend'] ?? false)
         );
+    }
+
+    private function chat(array $params): array
+    {
+        $session = $this->sessionFactory->createFrontendSession();
+        if (!$session->isLoggedIn() && (int)($session->getUserId() ?? 0) <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('璇峰厛鐧诲綍'),
+            ];
+        }
+
+        $message = $this->requireNonEmptyString($params, 'message');
+        $modelCode = $this->optionalString($params, 'model_code');
+        $scenarioCode = $this->optionalString($params, 'scenario_code');
+        $locale = $this->optionalString($params, 'locale');
+
+        try {
+            $response = $this->aiService->generate($message, $modelCode, $scenarioCode, $locale);
+            return [
+                'success' => true,
+                'data' => [
+                    'message' => $message,
+                    'response' => $response,
+                    'model_code' => $modelCode,
+                    'scenario_code' => $scenarioCode,
+                    'timestamp' => time(),
+                ],
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => (string)__('鐢熸垚澶辫触锛?1', $throwable->getMessage()),
+            ];
+        }
     }
 
     private function generateImage(array $params): array
@@ -196,6 +234,24 @@ class AiQueryProvider implements QueryProviderInterface
             'name' => __('AI 模型查询'),
             'description' => __('对外暴露 AiService 的统一调用入口'),
             'module' => 'Weline_Ai',
+            'operations' => [
+                [
+                    'name' => 'chat',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 10,
+                    'auth' => 'customer',
+                    'params' => [
+                        'message' => ['type' => 'string', 'max_length' => 4000],
+                        'model_code' => ['type' => 'string', 'max_length' => 100],
+                        'scenario_code' => ['type' => 'string', 'max_length' => 100],
+                        'locale' => ['type' => 'string', 'max_length' => 20],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Send storefront AI chat message',
+                ],
+            ],
         ];
     }
 

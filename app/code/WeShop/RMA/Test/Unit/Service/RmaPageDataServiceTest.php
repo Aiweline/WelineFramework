@@ -54,4 +54,35 @@ class RmaPageDataServiceTest extends TestCase
         $this->assertNotEmpty($result['request_types']);
         $this->assertNotEmpty($result['reason_options']);
     }
+
+    public function testBuildUsesIncrementIdWhenOrderIdMissing(): void
+    {
+        $rmaService = $this->createMock(RmaService::class);
+        $rmaService->expects($this->once())
+            ->method('getCustomerRmas')
+            ->with(8)
+            ->willReturn([]);
+
+        $order = $this->createMock(Order::class);
+        $order->method('getData')->willReturnMap([
+            [Order::schema_fields_customer_id, null, 8],
+            [Order::schema_fields_increment_id, null, '100000109'],
+            [Order::schema_fields_status, null, 'completed'],
+            [Order::schema_fields_total, null, 99.5],
+            [Order::schema_fields_created_at, null, '2026-03-22 09:00:00'],
+        ]);
+        $order->method('getId')->willReturn(109);
+
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->once())
+            ->method('getOrderByIncrementId')
+            ->with('100000109')
+            ->willReturn($order);
+
+        $service = new RmaPageDataService($rmaService, $orderService);
+        $result = $service->build(8, 0, '100000109');
+
+        $this->assertSame('100000109', $result['order']['increment_id']);
+        $this->assertSame(109, $result['order']['order_id']);
+    }
 }

@@ -3,11 +3,15 @@
 namespace WelineTools\FontSubLetter\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Session;
 use WelineTools\FontSubLetter\Service\FontProcessor;
 
 class Upload extends FrontendController
 {
+    private const UPLOAD_TICKETS_SESSION_KEY = 'font_sub_letter_upload_tickets';
+
     /**
      * 上传字体文件
      */
@@ -19,6 +23,7 @@ class Upload extends FrontendController
             }
             
             // 设置PHP环境变量以允许更大的文件上传
+            $this->consumeUploadTicket();
             $this->configureUploadSettings();
             
             // 检查是否有文件上传
@@ -150,6 +155,30 @@ class Upload extends FrontendController
     /**
      * 解析multipart数据
      */
+    private function consumeUploadTicket(): void
+    {
+        $token = \trim((string)WelineEnv::server('HTTP_X_WELINE_UPLOAD_TICKET', ''));
+        if ($token === '') {
+            throw new \Exception('Missing Weline upload ticket.');
+        }
+
+        /** @var Session $session */
+        $session = ObjectManager::getInstance(Session::class);
+        $stored = $session->getData(self::UPLOAD_TICKETS_SESSION_KEY);
+        $tickets = \is_array($stored) ? $stored : [];
+        $hash = \hash('sha256', $token);
+        $expiresAt = (int)($tickets[$hash] ?? 0);
+        unset($tickets[$hash]);
+        $session->setData(self::UPLOAD_TICKETS_SESSION_KEY, \array_filter(
+            $tickets,
+            static fn(mixed $expires): bool => \is_int($expires) && $expires > \time()
+        ));
+
+        if ($expiresAt <= \time()) {
+            throw new \Exception('Invalid or expired Weline upload ticket.');
+        }
+    }
+
     private function parseMultipartData(string $input, string $boundary): ?array
     {
         $parts = explode('--' . $boundary, $input);

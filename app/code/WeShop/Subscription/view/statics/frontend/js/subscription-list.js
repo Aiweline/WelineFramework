@@ -1,4 +1,6 @@
 (function () {
+    var subscriptionApiPromise = null;
+
     function findPage(element) {
         return element.closest('[data-subscription-page]');
     }
@@ -16,47 +18,33 @@
         }
     }
 
-    function endpoint(page, action) {
-        if (action === 'pause') {
-            return page.getAttribute('data-pause-url');
+    function getSubscriptionApi() {
+        if (!subscriptionApiPromise) {
+            subscriptionApiPromise = Promise.resolve(window.Weline.Api.resource('subscription'));
         }
-        if (action === 'resume') {
-            return page.getAttribute('data-resume-url');
-        }
-        if (action === 'cancel') {
-            return page.getAttribute('data-cancel-url');
-        }
-        return '';
+
+        return subscriptionApiPromise;
     }
 
     async function postAction(page, action, payload) {
-        var url = endpoint(page, action);
-        if (!url) {
-            message(page, '操作地址不存在。', 'error');
+        if (!action) {
+            message(page, 'Operation is missing.', 'error');
             return;
         }
 
         try {
-            var response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: payload
-            });
-            var result = await response.json();
+            var SubscriptionApi = await getSubscriptionApi();
+            var result = await SubscriptionApi[action](payload, {silent: true});
             if (result.code === 200 || result.success === true) {
-                message(page, result.msg || result.message || '操作成功。', 'success');
+                message(page, result.msg || result.message || 'Operation succeeded.', 'success');
                 window.setTimeout(function () {
                     window.location.reload();
                 }, 650);
                 return;
             }
-            message(page, result.msg || result.message || '操作失败，请稍后重试。', 'error');
+            message(page, result.msg || result.message || 'Operation failed. Please try again.', 'error');
         } catch (error) {
-            message(page, '操作失败，请稍后重试。', 'error');
+            message(page, 'Operation failed. Please try again.', 'error');
         }
     }
 
@@ -67,7 +55,7 @@
             var action = actionButton.getAttribute('data-subscription-action');
             var id = actionButton.getAttribute('data-id');
             if (page && id) {
-                postAction(page, action, new URLSearchParams({ id: id }));
+                postAction(page, action, {id: parseInt(id, 10) || 0});
             }
             return;
         }
@@ -104,9 +92,9 @@
             return;
         }
 
-        postAction(page, 'cancel', new URLSearchParams({
-            id: id,
+        postAction(page, 'cancel', {
+            id: parseInt(id, 10) || 0,
             reason: reason ? reason.value : ''
-        }));
+        });
     });
 })();

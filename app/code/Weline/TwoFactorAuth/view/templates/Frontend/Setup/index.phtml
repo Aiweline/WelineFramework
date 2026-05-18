@@ -676,15 +676,13 @@ ${translations.finalNote}`;
 
             try {
                 const referer = document.getElementById('referer').value;
-                const response = await fetch('/two-factor-auth/frontend/setup/enable', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `secret=${encodeURIComponent(secret)}&code=${code}&backup_codes=${encodeURIComponent(backupCodes)}&referer=${encodeURIComponent(referer)}`
-                });
-
-                const result = await response.json();
+                const TwoFactorApi = await Weline.Api.resource('twoFactor');
+                const result = await TwoFactorApi.enable({
+                    secret: secret,
+                    code: code,
+                    backup_codes: backupCodes,
+                    referer: referer
+                }, {silent: true});
                 
                 if (result.success) {
                     if (typeof Swal !== 'undefined') {

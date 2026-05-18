@@ -5,17 +5,33 @@
     $(function () {
         let can_run = true
         if (!window.debounce) {
-            console.error('@lang{w-auto-complete: debounce方法不存在，请自行引入debounce.js 标签引入：<\js:part name=\"debounce\"\/>}')
+            console.error('@lang{w-auto-complete: debounce method is missing.}')
             can_run = false;
         }
         if ($ && !$.fn.autocomplete) {
-            console.error('@lang{w-auto-complete: jQueryUI组件未引入，请自行引入jquery-ui.min.js}')
+            console.error('@lang{w-auto-complete: jQuery UI autocomplete is missing.}')
             can_run = false;
         }
         if (!can_run) {
-            console.error('@lang{w-auto-complete: 标签需要上面提到的依赖：请引入依赖！}')
             return
         }
+
+        const welineJsonRequest = function (url) {
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.request !== 'function') {
+                return Promise.reject(new Error('Weline.Api.request is unavailable.'));
+            }
+            return Promise.resolve(window.Weline.Api.request(url, {
+                method: 'GET',
+                headers: {'Accept': 'application/json'},
+                silent: true
+            })).then(function (res) {
+                if (res && typeof res.json === 'function') {
+                    return res.json();
+                }
+                return res;
+            });
+        };
+
         $('[w-auto-complete="true"]').each(function () {
             let autocompleteInput = $(this)
             let url = autocompleteInput.attr('w-url')
@@ -25,65 +41,52 @@
             let invalid_class = autocompleteInput.attr('w-invalid-class') ?? 'is-invalid';
             let valid_class = autocompleteInput.attr('w-valid-class') ?? 'is-valid';
             if (!url) {
-                confirm('w-auto-complete @lang{元素上w-url属性找不到！}')
+                confirm('w-auto-complete @lang{element w-url is missing.}')
                 return
             }
+            const requestSuggestions = function (term) {
+                return welineJsonRequest(url + "?q=" + encodeURIComponent(term || '')).then(function (data) {
+                    return Array.isArray(data) ? data : [];
+                });
+            };
+
             autocompleteInput.on('click', debounce(function () {
-                // 检查，如果存在则验证通过，不存在则验证失败
-                $.ajax({
-                    url: url + "?q=" + autocompleteInput.val(), // 替换为你的搜索API端点
-                    dataType: "json",
-                    success: function (data) {
-                        for (let i = 0; i < data.length; i++) {
-                            if (data[i][value] === autocompleteInput.val()) {
-                                autocompleteInput.removeClass(invalid_class).addClass(valid_class);
-                                return
-                            }
+                requestSuggestions(autocompleteInput.val()).then(function (data) {
+                    for (let i = 0; i < data.length; i++) {
+                        if (data[i][value] === autocompleteInput.val()) {
+                            autocompleteInput.removeClass(invalid_class).addClass(valid_class);
+                            return
                         }
-                        autocompleteInput.removeClass(valid_class).addClass(invalid_class);
-                    },
-                    error: function () {
-                        // 处理AJAX请求失败的情况
-                        autocompleteInput.removeClass(valid_class).addClass(invalid_class);
                     }
+                    autocompleteInput.removeClass(valid_class).addClass(invalid_class);
+                }).catch(function () {
+                    autocompleteInput.removeClass(valid_class).addClass(invalid_class);
                 });
             }, 500))
-            // 查询信息，
-            const autocompleteInputFunc = {
+
+            autocompleteInput.autocomplete({
                 minChars: 0,
                 source: debounce(function (request, response) {
-                    $.ajax({
-                        url: url + "?q=" + request.term, // 替换为你的搜索API端点
-                        dataType: "json",
-                        success: function (data) {
-                            // 假设服务器返回的数据格式为 [{ value: '建议1' }, { value: '建议2' }, ...]
-                            response($.map(data, function (item) {
-                                return {
-                                    label: item[label], // 显示在下拉列表中的文本
-                                    value: item[value]  // 选中后插入到输入框中的值
-                                };
-                            }));
-                        },
-                        focus: function (event, ui) {
-                            // 阻止默认行为，防止光标跳转到第一个选项
-                            event.preventDefault();
-                        },
-                        error: function () {
-                            // 处理AJAX请求失败的情况
-                            response([]); // 返回空数组，不显示任何建议
-                            autocompleteInput.removeClass(valid_class).addClass(invalid_class);
-                        }
+                    requestSuggestions(request.term).then(function (data) {
+                        response($.map(data, function (item) {
+                            return Object.assign({}, item, {
+                                label: item[label],
+                                value: item[value]
+                            });
+                        }));
+                    }).catch(function () {
+                        response([]);
+                        autocompleteInput.removeClass(valid_class).addClass(invalid_class);
                     });
                 }, 500),
+                focus: function (event) {
+                    event.preventDefault();
+                },
                 select: function (event, ui) {
-                    // 当用户选择一个建议时，可以在这里执行额外操作
-                    // 例如，将选择的值发送到服务器或更新页面上的其他元素
                     autocompleteInput.val(ui.item[selected_field]).attr('value', ui.item[selected_field])
                     autocompleteInput.removeClass(invalid_class).addClass(valid_class);
                 }
-            };
-            autocompleteInput.autocomplete(autocompleteInputFunc);
-            // 可选：自定义autocomplete样式以匹配Bootstrap
+            });
             autocompleteInput.autocomplete("widget").addClass("ui-widget ui-widget-content ui-corner-all");
             autocompleteInput.autocomplete("widget").find("li").addClass("ui-menu-item").addClass("ui-corner-all");
             autocompleteInput.autocomplete("widget").find("li a").addClass("ui-state-default");

@@ -14,6 +14,7 @@
     var autoCode = 0;
     var groups = {};
     var regionSources = {};
+    var regionApiPromise = null;
     var defaultSourceUrl = frontendRoute('/shipping/frontend/region/list');
     var defaultLabels = {
         country: '\u56fd\u5bb6/\u5730\u533a',
@@ -197,28 +198,25 @@
         return [];
     }
 
+    function getRegionApi() {
+        if (!regionApiPromise) {
+            regionApiPromise = Promise.resolve(window.Weline.Api.resource('region'));
+        }
+
+        return regionApiPromise;
+    }
+
     function loadRegions(sourceUrl) {
         sourceUrl = text(sourceUrl || defaultSourceUrl);
         if (Array.isArray(window.WelineShippingRegions)) {
             return Promise.resolve(normalizeRegions(window.WelineShippingRegions));
         }
-        if (!window.fetch) {
+        if (!window.Weline || !window.Weline.Api) {
             return Promise.resolve(fallbackRegions());
         }
         if (!regionSources[sourceUrl]) {
-            regionSources[sourceUrl] = fetch(sourceUrl, {
-                credentials: 'same-origin',
-                headers: {
-                    Accept: 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }).then(function (response) {
-                return response.text().then(function (body) {
-                    if (!response.ok) {
-                        throw new Error('Region response status ' + response.status);
-                    }
-                    return body ? JSON.parse(body) : {};
-                });
+            regionSources[sourceUrl] = getRegionApi().then(function (RegionApi) {
+                return RegionApi.list({}, {silent: true});
             }).then(function (payload) {
                 return normalizeRegions(regionsFromPayload(payload));
             }).catch(function () {

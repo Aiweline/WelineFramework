@@ -214,10 +214,10 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                     $hasDiscount = $originalPrice > $currentPrice;
                                     ?>
                                     <?php if ($hasDiscount): ?>
-                                        <span class="text-lg font-bold text-red-500"><?= $this->formatPrice($currentPrice) ?></span>
+                                        <span class="text-lg font-bold text-red-500 weline-pixel::add_to_cart:value" data-pixel-value="<?= htmlspecialchars((string)$currentPrice, ENT_QUOTES, 'UTF-8') ?>"><?= $this->formatPrice($currentPrice) ?></span>
                                         <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark line-through"><?= $this->formatPrice($originalPrice) ?></span>
                                     <?php else: ?>
-                                        <span class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($currentPrice) ?></span>
+                                        <span class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark weline-pixel::add_to_cart:value" data-pixel-value="<?= htmlspecialchars((string)$currentPrice, ENT_QUOTES, 'UTF-8') ?>"><?= $this->formatPrice($currentPrice) ?></span>
                                     <?php endif; ?>
                                 </div>
                                 

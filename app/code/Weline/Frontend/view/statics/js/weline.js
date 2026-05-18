@@ -3,7 +3,8 @@
  * 
  * 所有功能模块按需加载，页面只需引入此文件
  * 使用方式：
- *   Weline.Api.request(url, options)
+ *   const CartApi = await Weline.Api.resource('cart')
+ *   await CartApi.add({ product_id, qty })
  *   Weline.Account.frontendLogin(username, password)
  */
 (function (window, document) {
@@ -34,15 +35,6 @@
             maintenanceHandler: null,
         },
         account: {
-            frontendLoginUrl: '/frontend/account/login',
-            frontendLogoutUrl: '/frontend/account/logout',
-            frontendCheckLoginUrl: '/frontend/account/check-login',
-            apiLoginUrl: '/api/rest/v1/weline_api/auth/login',
-            apiLogoutUrl: '/api/rest/v1/weline_api/auth/logout',
-            apiCheckLoginUrl: '/api/rest/v1/weline_api/auth/check',
-            backendApiLoginUrl: '/api_admin/rest/v1/weline_backend/api/auth/login',
-            backendApiLogoutUrl: '/api_admin/rest/v1/weline_backend/api/auth/logout',
-            backendApiCheckLoginUrl: '/api_admin/rest/v1/weline_backend/api/auth/check',
             frontendTokenKey: 'weline_frontend_session',
             apiTokenKey: 'weline_api_access_token',
             apiRefreshTokenKey: 'weline_api_refresh_token',
@@ -67,6 +59,35 @@
         constructor() {
             this.loadedModules = new Map();
             this.loadingModules = new Map();
+        }
+
+        getScriptUrl(url) {
+            const isDev = runtimeConfig.debug ||
+                window.DEV ||
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1';
+            if (!isDev) {
+                return url;
+            }
+            const separator = url.indexOf('?') === -1 ? '?' : '&';
+            return `${url}${separator}_weline_dev=${Date.now()}`;
+        }
+
+        isGlobalModuleReady(globalVarName, requireFullGlobal = false) {
+            if (!globalVarName || !window[globalVarName]) {
+                return false;
+            }
+            if (!requireFullGlobal) {
+                return true;
+            }
+            if (window[globalVarName].__full !== true) {
+                return false;
+            }
+            if (globalVarName === 'WelineApiModule') {
+                const requiredMethods = ['request', 'get', 'post', 'call', 'graph', 'stream', 'resource'];
+                return requiredMethods.every(method => typeof window[globalVarName][method] === 'function');
+            }
+            return true;
         }
 
         /**
@@ -103,7 +124,10 @@
 
                 // 检查是否已经通过script标签加载（通过检查全局变量）
                 const globalVarName = this.getGlobalVarName(moduleName);
-                if (window[globalVarName]) {
+                const requiresFullGlobal = globalVarName === 'WelineApiModule'
+                    || globalVarName === 'WelineAccountModule'
+                    || globalVarName === 'WelineTokenStorage';
+                if (this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
                     const module = window[globalVarName];
                     this.loadedModules.set(moduleName, module);
                     this.loadingModules.delete(moduleName);
@@ -113,13 +137,13 @@
 
                 // 动态加载脚本
                 const script = document.createElement('script');
-                script.src = path;
+                script.src = this.getScriptUrl(path);
                 script.async = true;
                 script.crossOrigin = 'anonymous';
 
                 script.onload = () => {
                     // 检查是否成功加载
-                    if (window[globalVarName]) {
+                    if (this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
                         const module = window[globalVarName];
                         this.loadedModules.set(moduleName, module);
                         this.loadingModules.delete(moduleName);
@@ -240,6 +264,22 @@
          * Api 模块代理
          */
         Api: {
+            call: async (provider, operation, params, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.call(provider, operation, params, options);
+            },
+            graph: async (graph, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.graph(graph, options);
+            },
+            stream: async (channel, params, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.stream(channel, params, options);
+            },
+            resource: async (provider, optionalMap) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.resource(provider, optionalMap);
+            },
             /**
              * 发送请求
              */
@@ -467,7 +507,11 @@
     // 兼容旧版本（可选）
     if (!window.WelineApi) {
         window.WelineApi = {
-            request: (url, options) => Weline.Api.request(url, options),
+            call: (provider, operation, params, options) => Weline.Api.call(provider, operation, params, options),
+            graph: (graph, options) => Weline.Api.graph(graph, options),
+            stream: (channel, params, options) => Weline.Api.stream(channel, params, options),
+            resource: (provider, optionalMap) => Weline.Api.resource(provider, optionalMap),
+            request: () => Promise.reject(new Error('[WelineApi] direct request(url) is disabled. Use Weline.Api.resource()/call()/graph()/stream().')),
             account: Weline.Account,
         };
     }

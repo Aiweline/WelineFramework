@@ -118,7 +118,18 @@ $uniqueId = 'ai-translate-' . uniqid();
     window.AITranslateTagInitialized = true;
     
     // 翻译API地址
-    const translateApiUrl = '<?= $this->getUrl("translation-service/api/translate") ?>';
+    let translationServiceApiPromise = null;
+
+    function getTranslationServiceApi() {
+        if (translationServiceApiPromise) {
+            return translationServiceApiPromise;
+        }
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            return Promise.reject(new Error('Weline.Api.resource is not available'));
+        }
+        translationServiceApiPromise = Promise.resolve(window.Weline.Api.resource('translationService'));
+        return translationServiceApiPromise;
+    }
     
     /**
      * 初始化所有AI翻译按钮
@@ -212,37 +223,30 @@ $uniqueId = 'ai-translate-' . uniqid();
         
         if (loadingEl) loadingEl.style.display = 'inline';
         if (iconEl) iconEl.style.display = 'none';
-        if (textEl) textEl.textContent = '<?= __('翻译中...") ?>';
+        if (textEl) textEl.textContent = '<?= __('Translating...') ?>';
         button.disabled = true;
         
         // 准备请求数据
-        const formData = new FormData();
-        formData.append('text', text);
+        const payload = { text: text };
         
         const targetLanguage = button.getAttribute('data-target-language');
         if (targetLanguage) {
-            formData.append('target_language', targetLanguage);
+            payload.target_language = targetLanguage;
         }
         
         const sourceLanguage = button.getAttribute('data-source-language');
         if (sourceLanguage) {
-            formData.append('source_language', sourceLanguage);
+            payload.source_language = sourceLanguage;
         }
         
         const providerCode = button.getAttribute('data-provider-code');
         if (providerCode) {
-            formData.append('provider_code', providerCode);
+            payload.provider_code = providerCode;
         }
         
         // 发送翻译请求
-        fetch(translateApiUrl, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => response.json())
+        getTranslationServiceApi()
+        .then(api => api.translate(payload, { silent: true }))
         .then(data => {
             // 恢复按钮状态
             if (loadingEl) loadingEl.style.display = 'none';
@@ -262,9 +266,9 @@ $uniqueId = 'ai-translate-' . uniqid();
                 }
                 
                 // 显示成功提示
-                showMessage('<?= __('翻译成功") ?>', 'success');
+                showMessage('<?= __('Translation success') ?>', 'success');
             } else {
-                showMessage(data.message || '<?= __('翻译失败") ?>', 'error');
+                showMessage(data.message || '<?= __('Translation failed') ?>', 'error');
             }
         })
         .catch(error => {
@@ -275,7 +279,7 @@ $uniqueId = 'ai-translate-' . uniqid();
             button.disabled = false;
             
             console.error('Translation error:', error);
-            showMessage('<?= __('翻译请求失败，请稍后重试") ?>', 'error');
+            showMessage('<?= __('Translation request failed, please try again later.') ?>', 'error');
         });
     }
     

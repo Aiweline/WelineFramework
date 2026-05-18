@@ -37,6 +37,7 @@
      * @returns {string} 完整的 API URL
      */
     function __getPixelApiUrl(path) {
+        return 'worker:visitor.trackPixel';
         // 使用 Weline.Url.frontendApi
         if (window.Weline && window.Weline.Url && typeof window.Weline.Url.frontendApi === 'function') {
             return window.Weline.Url.frontendApi(path);
@@ -50,6 +51,9 @@
         var baseUrl = (config.baseUrl || window.location.origin).replace(/\/$/, '');
         if (!path.startsWith('/')) {
             path = '/' + path;
+        }
+        if (__welinePixelFrontendApiPrefix && path.indexOf('/' + __welinePixelFrontendApiPrefix + '/') !== 0) {
+            path = '/' + __welinePixelFrontendApiPrefix + path;
         }
         return baseUrl + path;
     }
@@ -330,9 +334,371 @@
             text: (element.innerText || element.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 180)
         };
     }
+
+    function __pixelText(element) {
+        return element ? String(element.innerText || element.textContent || '').trim().replace(/\s+/g, ' ') : '';
+    }
+
+    function __pixelNumber(value) {
+        if (typeof value === 'number') {
+            return isFinite(value) ? value : null;
+        }
+        var cleaned = String(value || '').replace(/,/g, '').replace(/[^0-9.\-]+/g, '');
+        if (cleaned === '') {
+            return null;
+        }
+        var parsed = Number(cleaned);
+        return isFinite(parsed) ? parsed : null;
+    }
+
+    function __firstAttr(element, names) {
+        if (!element || !element.getAttribute) {
+            return '';
+        }
+        for (var i = 0; i < names.length; i++) {
+            var value = element.getAttribute(names[i]);
+            if (value !== null && String(value).trim() !== '') {
+                return String(value).trim();
+            }
+        }
+        return '';
+    }
+
+    function __closestAttr(element, names) {
+        var current = element;
+        while (current && current !== document) {
+            var value = __firstAttr(current, names);
+            if (value !== '') {
+                return value;
+            }
+            current = current.parentElement;
+        }
+        return '';
+    }
+
+    function __firstText(root, selectors) {
+        if (!root || !root.querySelector) {
+            return '';
+        }
+        for (var i = 0; i < selectors.length; i++) {
+            var node = root.querySelector(selectors[i]);
+            var text = __pixelText(node);
+            if (text !== '') {
+                return text;
+            }
+        }
+        return '';
+    }
+
+    function __firstNumber(root, selectors) {
+        if (!root || !root.querySelector) {
+            return null;
+        }
+        for (var i = 0; i < selectors.length; i++) {
+            var node = root.querySelector(selectors[i]);
+            if (!node) {
+                continue;
+            }
+            var number = __pixelNumber(node.getAttribute('data-pixel-value') || node.getAttribute('data-price') || node.value || __pixelText(node));
+            if (number !== null) {
+                return number;
+            }
+        }
+        return null;
+    }
+
+    function __getPixelContext(element) {
+        if (!element || !element.closest) {
+            return element || document;
+        }
+        return element.closest('.product-detail-view, .product-detail, .product-main, .product-info, .product-info-section, .product-card, .cart-item, .cart-summary, .cart-summary-card, .mini-cart-drawer, .checkout-summary, .weshop-checkout-summary, .weshop-checkout-card, form')
+            || element.closest('[data-product-id], [data-item-id]')
+            || element.closest('main, article, section, body')
+            || document;
+    }
+
+    function __resolvePixelValue(eventName, element) {
+        var valueClassName = 'weline-pixel::' + eventName + ':value';
+        var context = __getPixelContext(element);
+        var valueElement = null;
+        var current = element;
+        while (!valueElement && current && current !== document) {
+            if (current.getElementsByClassName) {
+                valueElement = current.getElementsByClassName(valueClassName)[0] || null;
+            }
+            if (!valueElement && current.getAttribute && current.hasAttribute('data-pixel-value')) {
+                valueElement = current;
+            }
+            current = current.parentElement;
+        }
+        if (!valueElement && context && context.getElementsByClassName) {
+            valueElement = context.getElementsByClassName(valueClassName)[0] || null;
+        }
+        if (!valueElement && context && context.querySelector) {
+            valueElement = context.querySelector('[data-pixel-value], .price-current, .price-amount, [data-summary-total], [data-mini-cart-subtotal], [data-weshop-summary-grand-total], .cart-summary-total strong, .cart-summary-card__row--total .cart-summary-card__value, .weshop-checkout-summary-total span:last-child');
+        }
+        if (!valueElement && document && document.querySelector) {
+            valueElement = document.querySelector('[data-summary-total], [data-mini-cart-subtotal], [data-weshop-summary-grand-total], .cart-summary-total strong, .cart-summary-card__row--total .cart-summary-card__value, .weshop-checkout-summary-total span:last-child');
+        }
+
+        if (!valueElement) {
+            return null;
+        }
+        return __pixelNumber(valueElement.value || valueElement.getAttribute('data-pixel-value') || valueElement.textContent || '');
+    }
+
+    function __getQuantity(element) {
+        var context = __getPixelContext(element);
+        var qtyNode = context && context.querySelector ? context.querySelector('input[name="qty"], input[name="quantity"], [data-qty], [data-quantity]') : null;
+        var value = qtyNode ? (qtyNode.value || qtyNode.getAttribute('data-qty') || qtyNode.getAttribute('data-quantity')) : '';
+        var qty = __pixelNumber(value);
+        return qty !== null && qty > 0 ? qty : 1;
+    }
+
+    function __getSelectedOptions(element) {
+        var context = __getPixelContext(element);
+        if (!context || !context.querySelectorAll) {
+            return {};
+        }
+        var options = {};
+        var controls = context.querySelectorAll('select, input[type="radio"]:checked, input[type="checkbox"]:checked, [data-option-label][aria-pressed="true"], [data-option-label].active, [data-option-label].selected');
+        for (var i = 0; i < controls.length; i++) {
+            var control = controls[i];
+            var label = __firstAttr(control, ['data-option-label', 'name', 'aria-label']);
+            if (label === '') {
+                continue;
+            }
+            var value = control.value || __firstAttr(control, ['data-option-value', 'data-value']) || __pixelText(control);
+            if (value !== '') {
+                options[label] = String(value).trim();
+            }
+        }
+        return options;
+    }
+
+    function __getProductMeta(eventName, element) {
+        var context = __getPixelContext(element);
+        var productId = __closestAttr(element, ['data-product-id', 'data-item-id', 'data-id'])
+            || __firstAttr(context, ['data-product-id', 'data-item-id', 'data-id']);
+        var sku = __closestAttr(element, ['data-sku', 'data-product-sku'])
+            || __firstAttr(context, ['data-sku', 'data-product-sku']);
+        var name = __firstAttr(element, ['data-product-name', 'data-name'])
+            || __firstAttr(context, ['data-product-name', 'data-name'])
+            || __firstText(context, ['h1', '[data-product-name]', '.product-title', '.product-name', '.card-title', '.font-bold']);
+        var price = __resolvePixelValue(eventName, element);
+        if (price === null) {
+            price = __firstNumber(context, ['[data-price]', '[data-pixel-value]', '.price-current', '.price-amount', '.text-red-500', '.font-bold']);
+        }
+        var qty = __getQuantity(element);
+        var item = {
+            product_id: productId,
+            item_id: productId || sku,
+            sku: sku,
+            name: name,
+            item_name: name,
+            price: price,
+            quantity: qty,
+            qty: qty,
+            selected_options: __getSelectedOptions(element),
+            product_url: window.location.pathname.indexOf('/product/') === 0 ? window.location.href : (__firstAttr(context, ['href']) || '')
+        };
+        return {
+            product_id: productId,
+            item_id: productId || sku,
+            sku: sku,
+            name: name,
+            content_name: name,
+            price: price,
+            quantity: qty,
+            qty: qty,
+            value: price !== null ? price * qty : null,
+            items: [item],
+            selected_options: item.selected_options,
+            product_url: item.product_url
+        };
+    }
+
+    function __getCartItems() {
+        var nodes = document.querySelectorAll ? document.querySelectorAll('.cart-item, [data-cart-item], [data-product-id].cart-item') : [];
+        var items = [];
+        for (var i = 0; i < nodes.length && i < 20; i++) {
+            var node = nodes[i];
+            var productId = __firstAttr(node, ['data-product-id', 'data-item-id', 'data-id']);
+            var name = __firstAttr(node, ['data-product-name', 'data-name']) || __firstText(node, ['.cart-item-title', '.product-title', '.product-name', 'h3', 'a']);
+            var price = __firstNumber(node, ['[data-price]', '[data-pixel-value]', '.price-current', '.price-amount', '.cart-item-price']);
+            var qtyNode = node.querySelector ? node.querySelector('input[name="qty"], input[name="quantity"], [data-qty], [data-quantity]') : null;
+            var quantity = qtyNode ? __pixelNumber(qtyNode.value || qtyNode.getAttribute('data-qty') || qtyNode.getAttribute('data-quantity')) : null;
+            if (!productId && !name && price === null) {
+                continue;
+            }
+            items.push({
+                product_id: productId,
+                item_id: productId,
+                name: name,
+                item_name: name,
+                price: price,
+                quantity: quantity !== null && quantity > 0 ? quantity : 1,
+                qty: quantity !== null && quantity > 0 ? quantity : 1
+            });
+        }
+        return items;
+    }
+
+    function __getCartMeta(eventName, element) {
+        var value = __resolvePixelValue(eventName, element);
+        if (value === null) {
+            value = __firstNumber(document, ['[data-summary-total], [data-mini-cart-subtotal], [data-weshop-summary-grand-total], .cart-summary-total strong, .cart-summary-card__row--total .cart-summary-card__value, .weshop-checkout-summary-total span:last-child']);
+        }
+        var items = __getCartItems();
+        return {
+            value: value,
+            total: value,
+            grand_total: value,
+            cart_total: value,
+            cart_items_count: items.length,
+            items: items
+        };
+    }
+
+    function __getCheckoutMeta(eventName, element) {
+        var meta = __getCartMeta(eventName, element);
+        var shipping = __firstText(document, ['input[name*="shipping"]:checked + label', '[data-selected-shipping]', '.shipping-method.active', '.shipping-method.selected']);
+        var payment = __firstText(document, ['input[name*="payment"]:checked + label', '[data-selected-payment]', '.payment-method.active', '.payment-method.selected']);
+        var orderId = __firstText(document, ['[data-order-id]', '[data-order-number]', '.order-number', '.order-id']);
+        if (shipping !== '') {
+            meta.shipping_method = shipping;
+        }
+        if (payment !== '') {
+            meta.payment_method = payment;
+        }
+        if (orderId !== '') {
+            meta.order_id = orderId;
+            meta.transaction_id = orderId;
+        }
+        return meta;
+    }
+
+    function __getSearchResultMeta() {
+        var resultNodes = document.querySelectorAll ? document.querySelectorAll('[data-search-result], .search-result-item, .product-card, [data-product-id]') : [];
+        var category = '';
+        try {
+            category = new URLSearchParams(window.location.search || '').get('category') || '';
+        } catch (e) {
+        }
+        return {
+            result_count: resultNodes.length,
+            category: category,
+            search_url: window.location.href
+        };
+    }
+
+    function __missingFields(schema, meta) {
+        var missing = [];
+        for (var i = 0; i < schema.length; i++) {
+            var key = schema[i];
+            var value = meta[key];
+            if (value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
+                missing.push(key);
+            }
+        }
+        return missing;
+    }
+
+    function __getEventSpecificMeta(eventName, element, domEvent, baseMeta) {
+        var normalized = __normalizePixelEventName(eventName);
+        var meta = {};
+        var required = [];
+        if (normalized.indexOf('search_') === 0) {
+            meta = Object.assign({}, __getSearchMeta(__findSearchInput(document), normalized), __getSearchResultMeta());
+            required = normalized === 'search_result_view' ? ['query', 'result_count'] : ['query'];
+        } else if (['view_item', 'add_to_cart', 'buy_now', 'add_to_wishlist'].indexOf(normalized) > -1) {
+            meta = __getProductMeta(normalized, element);
+            required = ['product_id', 'name', 'price', 'value', 'items'];
+        } else if (['view_cart'].indexOf(normalized) > -1) {
+            meta = __getCartMeta(normalized, element);
+            required = ['cart_total', 'items'];
+        } else if (['begin_checkout', 'place_order', 'checkout_success', 'checkout_failure'].indexOf(normalized) > -1) {
+            meta = __getCheckoutMeta(normalized, element);
+            required = ['grand_total', 'items'];
+        } else if (['route_click', 'page_transition'].indexOf(normalized) > -1) {
+            var link = element && element.closest ? element.closest('a[href]') : null;
+            var href = link ? (link.href || link.getAttribute('href') || '') : '';
+            meta = {
+                href: href,
+                link_text: link ? __pixelText(link).slice(0, 180) : '',
+                from_url: window.location.href,
+                from_path: window.location.pathname,
+                same_origin: href ? (new URL(href, window.location.href).origin === window.location.origin) : false
+            };
+            required = ['href', 'from_url'];
+        }
+
+        meta = Object.assign({}, meta, baseMeta || {});
+        var missing = __missingFields(required, meta);
+        meta.event_schema = {
+            name: normalized,
+            required_fields: required,
+            missing_fields: missing
+        };
+        return meta;
+    }
+
+    function __applyEventMetaToPayload(payload, meta) {
+        var allowed = [
+            'query', 'query_length', 'url_query', 'input_name', 'input_id', 'form_action', 'form_method', 'result_count', 'category', 'search_url', 'suggestion_text', 'suggestion_url', 'suggestion_position',
+            'product_id', 'item_id', 'sku', 'name', 'content_name', 'price', 'quantity', 'qty', 'value', 'items', 'selected_options', 'product_url',
+            'total', 'grand_total', 'cart_total', 'cart_items_count',
+            'shipping_method', 'payment_method', 'order_id', 'transaction_id',
+            'href', 'link_text', 'from_url', 'from_path', 'to_url', 'to_path', 'same_origin'
+        ];
+        for (var i = 0; i < allowed.length; i++) {
+            var key = allowed[i];
+            if (meta && meta[key] !== undefined && meta[key] !== null && meta[key] !== '') {
+                payload[key] = meta[key];
+            }
+        }
+        if (payload.value !== undefined && payload.value !== null && payload.value !== '') {
+            var value = __pixelNumber(payload.value);
+            if (value !== null) {
+                payload.value = value;
+            }
+        }
+    }
     
+    var __visitorWorkerApiPromise = null;
+    function __getVisitorWorkerApi() {
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+            __visitorWorkerApiPromise = Promise.resolve(window.Weline.Api.resource('visitor'));
+            return __visitorWorkerApiPromise;
+        }
+        if (__visitorWorkerApiPromise) {
+            return __visitorWorkerApiPromise;
+        }
+
+        __visitorWorkerApiPromise = new Promise(function (resolve, reject) {
+            var attempts = 0;
+            var waitForApi = function () {
+                attempts += 1;
+                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                    resolve(window.Weline.Api.resource('visitor'));
+                    return;
+                }
+                if (attempts >= 40) {
+                    reject(new Error('Weline.Api.resource is not available'));
+                    return;
+                }
+                window.setTimeout(waitForApi, 50);
+            };
+            waitForApi();
+        });
+        __visitorWorkerApiPromise.catch(function () {
+            __visitorWorkerApiPromise = null;
+        });
+        return __visitorWorkerApiPromise;
+    }
+
     window.WelinePixel = {
-        url: __getPixelApiUrl('visitor/rest/v1/pixel'),
+        endpoint: 'worker:visitor.trackPixel',
         env_model: __getPixelConfig('env_model', 'prod'),
         init: {
             url: window.location.href,
@@ -365,56 +731,30 @@
             additionalInfo: null
         },
         // 发送数据的函数
-        send: function (data, url) {
+        send: function (data) {
             data = data || this.initData;
-            url = url || this.url;
             var payloadData = Object.assign({}, data);
-            var keepalive = !!payloadData.__keepalive;
             delete payloadData.__keepalive;
-            var payload = JSON.stringify(payloadData);
 
-            if (keepalive && navigator.sendBeacon) {
-                try {
-                    var blob = new Blob([payload], { type: 'application/json' });
-                    if (navigator.sendBeacon(url, blob)) {
-                        return;
+            __getVisitorWorkerApi()
+                .then(function (VisitorApi) {
+                    return VisitorApi.trackPixel({ payload: payloadData }, { silent: true });
+                })
+                .catch(function (error) {
+                    if (window.DEV) {
+                        console.debug('Weline Pixel worker send skipped:', error && error.message ? error.message : error);
                     }
-                } catch (e) {
-                }
-            }
-
-            if (keepalive && window.fetch) {
-                try {
-                    fetch(url, {
-                        method: 'POST',
-                        body: payload,
-                        keepalive: true,
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    return;
-                } catch (e) {
-                }
-            }
-
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', url, true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState === 4 && xhr.status === 200) {
-                    console.log('Data sent successfully:', xhr.responseText);
-                } else if (xhr.readyState === 4) {
-                    console.error('Error sending data:', xhr.statusText);
-                }
-            };
-
-            xhr.send(payload);
+                });
         },
         track: function (eventName, meta, options) {
             options = options || {};
             var normalizedEventName = __normalizePixelEventName(eventName || 'behavior_event');
             var payload = JSON.parse(JSON.stringify(this.init));
             var now = new Date();
+            var domElement = options.element || (meta && meta.domElement) || null;
+            var eventMeta = __getEventSpecificMeta(normalizedEventName, domElement, options.domEvent || null, meta || {});
+            var mergedMeta = Object.assign({}, eventMeta, meta || {});
+            delete mergedMeta.domElement;
 
             payload.url = window.location.href;
             payload.eventName = normalizedEventName;
@@ -426,8 +766,9 @@
                 width: window.screen.width,
                 height: window.screen.height
             };
-            payload.elementInfo = meta && meta.element ? meta.element : null;
-            payload.additionalInfo = __buildPixelBehaviorInfo(normalizedEventName, meta || {}, options.startedAt);
+            payload.elementInfo = mergedMeta.element ? mergedMeta.element : null;
+            __applyEventMetaToPayload(payload, mergedMeta);
+            payload.additionalInfo = __buildPixelBehaviorInfo(normalizedEventName, mergedMeta, options.startedAt);
 
             if (options.keepalive) {
                 payload.__keepalive = true;
@@ -438,6 +779,7 @@
         },
         target: function (event) {
             var eventStartedAt = Date.now();
+            this.initData = JSON.parse(JSON.stringify(this.init));
             var elementSnapshot = __getElementSnapshot(event.target);
             this.initData.elementInfo = elementSnapshot ? Object.assign({}, elementSnapshot, {
                 eventType: event.type
@@ -509,11 +851,18 @@
             }
 
             this.initData.eventName = __normalizePixelEventName(this.initData.eventName);
+            var targetEventMeta = __getEventSpecificMeta(this.initData.eventName, event.target, event, {
+                trigger: event.type,
+                source: 'pixel_target',
+                element: elementSnapshot
+            });
+            __applyEventMetaToPayload(this.initData, targetEventMeta);
             this.initData.additionalInfo = Object.assign({}, baseAdditionalInfo, __buildPixelBehaviorInfo(this.initData.eventName, {
                 trigger: event.type,
                 source: 'pixel_target',
                 element: elementSnapshot
             }, eventStartedAt));
+            this.initData.additionalInfo.meta = targetEventMeta;
 
             // 需要值的事件类型
             if ([
@@ -527,16 +876,8 @@
                 'checkout_failure',
             ].indexOf(this.initData.eventName) > -1) {
                 if (!this.initData.value) {
-                    try {
-                        let ele = event.target.getElementsByClassName('weline-pixel::' + this.initData.eventName + ':value')[0];
-                        if (ele.value) {
-                            this.initData.value = ele.value;
-                        } else {
-                            this.initData.value = ele.innerText;
-                        }
-                    } catch (e) {
-                        throw new Error(__('事件{eventName}需要指定value值所在位置，请用weline-pixel::{eventName}:value类名指定值所在的元素').replace(/{eventName}/g, this.initData.eventName));
-                    }
+                    var resolvedValue = __resolvePixelValue(this.initData.eventName, event.target);
+                    this.initData.value = resolvedValue !== null ? resolvedValue : this.initData.value;
                 }
             }
         }
@@ -698,18 +1039,31 @@
                 window.WelinePixel.track(pixelEventName, {
                     trigger: 'click',
                     source: 'behavior_monitor',
-                    element: __getElementSnapshot(element)
-                }, { startedAt: startedAt });
+                    element: __getElementSnapshot(element),
+                    domElement: element
+                }, { startedAt: startedAt, element: element, domEvent: event });
             }
 
             var suggestion = element && element.closest ? element.closest('[data-search-suggestion], .search-suggestion, .search-suggestions a, [role="option"]') : null;
             if (suggestion) {
-                window.WelinePixel.track('search_suggestion_click', {
+                var suggestionMeta = __getSearchMeta(__findSearchInput(document), 'suggestion_click');
+                suggestionMeta.suggestion_text = __pixelText(suggestion).slice(0, 180);
+                suggestionMeta.suggestion_url = suggestion.href || suggestion.getAttribute('href') || '';
+                suggestionMeta.suggestion_position = 0;
+                if (suggestion.parentNode && suggestion.parentNode.children) {
+                    for (var suggestionIndex = 0; suggestionIndex < suggestion.parentNode.children.length; suggestionIndex++) {
+                        if (suggestion.parentNode.children[suggestionIndex] === suggestion) {
+                            suggestionMeta.suggestion_position = suggestionIndex + 1;
+                            break;
+                        }
+                    }
+                }
+                window.WelinePixel.track('search_suggestion_click', Object.assign(suggestionMeta, {
                     trigger: 'click',
                     source: 'behavior_monitor',
                     element: __getElementSnapshot(suggestion),
-                    query: (suggestion.innerText || suggestion.textContent || '').trim().slice(0, 180)
-                }, { startedAt: startedAt });
+                    domElement: suggestion
+                }), { startedAt: startedAt, element: suggestion, domEvent: event });
             }
 
             var link = element && element.closest ? element.closest('a[href]') : null;
@@ -719,6 +1073,7 @@
                     trigger: 'click',
                     source: 'behavior_monitor',
                     element: __getElementSnapshot(link),
+                    domElement: link,
                     href: href,
                     same_origin: href ? (new URL(href, window.location.href).origin === window.location.origin) : false,
                     button: event.button,
@@ -726,7 +1081,7 @@
                     ctrl_key: event.ctrlKey,
                     meta_key: event.metaKey,
                     shift_key: event.shiftKey
-                }, { startedAt: startedAt, keepalive: true });
+                }, { startedAt: startedAt, keepalive: true, element: link, domEvent: event });
             }
         }, true);
 

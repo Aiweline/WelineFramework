@@ -154,7 +154,7 @@ class ShippingAddressService
             throw new \Exception(__('地址不存在'));
         }
         
-        $model->delete();
+        $model->delete()->fetch();
         return true;
     }
 

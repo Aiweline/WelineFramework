@@ -486,7 +486,9 @@ class ObjectManager implements ManagerInterface
             if (self::$compiledFactories !== null && isset(self::$compiledFactories[$new_class])) {
                 $new_object = (self::$compiledFactories[$new_class])();
                 $new_object = self::initClassInstance($class, $new_object);
-                self::setScopedInstance($class, $new_object);
+                if ($shared) {
+                    self::setScopedInstance($class, $new_object);
+                }
                 if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {
                     self::getCache()->set($class, $new_object);
                 }
@@ -545,7 +547,9 @@ class ObjectManager implements ManagerInterface
         $new_object = self::initClassInstance($class, $new_object);
         
         // 存储到共享实例缓存
-        self::setScopedInstance($class, $new_object);
+        if ($shared) {
+            self::setScopedInstance($class, $new_object);
+        }
         
         // 缓存到文件（如果需要）
         if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {

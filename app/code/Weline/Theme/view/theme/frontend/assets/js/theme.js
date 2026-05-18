@@ -558,10 +558,10 @@
             return `${url}${separator}_weline_dev=${Date.now()}`;
         }
 
-        loadScript(url) {
+        loadScript(url, forceFresh = false) {
             return new Promise((resolve, reject) => {
                 const existingScript = document.querySelector(`script[src="${url}"]`);
-                if (existingScript) {
+                if (existingScript && !forceFresh) {
                     resolve();
                     return;
                 }
@@ -579,7 +579,21 @@
             });
         }
 
-        async loadWithFallback(paths, globalVarName = null) {
+        isGlobalModuleReady(globalVarName, requireFullGlobal = false) {
+            if (!globalVarName || !window[globalVarName]) {
+                return false;
+            }
+            if (requireFullGlobal && window[globalVarName].__full !== true) {
+                return false;
+            }
+            if (requireFullGlobal && globalVarName === 'WelineApiModule') {
+                const requiredMethods = ['request', 'get', 'post', 'call', 'graph', 'stream', 'resource'];
+                return requiredMethods.every(method => typeof window[globalVarName][method] === 'function');
+            }
+            return true;
+        }
+
+        async loadWithFallback(paths, globalVarName = null, requireFullGlobal = false) {
             if (!paths || paths.length === 0) {
                 throw new Error('[Weline] 没有可用的路径');
             }
@@ -587,10 +601,11 @@
             let lastError = null;
             for (const path of paths) {
                 try {
-                    await this.loadScript(path);
+                    const forceFresh = !!(globalVarName && window[globalVarName] && !this.isGlobalModuleReady(globalVarName, requireFullGlobal));
+                    await this.loadScript(path, forceFresh);
                     if (globalVarName) {
                         await new Promise(resolve => setTimeout(resolve, 50));
-                        if (window[globalVarName]) {
+                        if (this.isGlobalModuleReady(globalVarName, requireFullGlobal)) {
                             return;
                         }
                     } else {
@@ -646,12 +661,16 @@
                         globalVarName = moduleConfig?.globalVar || this.getGlobalVarName(moduleName);
                     }
 
+                    const requiresFullGlobal = globalVarName === 'WelineApiModule'
+                        || globalVarName === 'WelineAccountModule'
+                        || globalVarName === 'WelineTokenStorage';
+
                     // 检查是否已加载
                     const existingModule = globalVarName ? window[globalVarName] : null;
                     const isLoaderProxy = globalVarName
                         && typeof moduleDeclarer !== 'undefined'
                         && moduleDeclarer.isProxyGlobal(globalVarName, existingModule);
-                    if (globalVarName && existingModule && !isLoaderProxy && existingModule.__full !== false) {
+                    if (globalVarName && existingModule && !isLoaderProxy && (!requiresFullGlobal || existingModule.__full === true)) {
                         const module = existingModule;
                         this.loadedModules.set(moduleName, module);
                         this.loadingModules.delete(moduleName);
@@ -659,12 +678,12 @@
                     }
 
                     // 加载脚本
-                    await this.loadWithFallback(paths, globalVarName);
+                    await this.loadWithFallback(paths, globalVarName, requiresFullGlobal);
 
                     // 验证加载结果
                     if (globalVarName) {
                         await new Promise(resolve => setTimeout(resolve, 100));
-                        if (window[globalVarName]) {
+                        if (this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
                             const module = window[globalVarName];
                             this.loadedModules.set(moduleName, module);
                             this.loadingModules.delete(moduleName);
@@ -807,6 +826,10 @@
                         if (realObj && typeof realObj[prop] !== 'undefined') {
                             return realObj[prop];
                         }
+                    }
+
+                    if (prop === '__full') {
+                        return false;
                     }
 
                     if (loadingPromise) {
@@ -1510,9 +1533,8 @@
          * Api 模块代理（按需加载）
          */
         Api: {
-            request: async (url, options) => {
-                const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.request(url, options);
+            request: async () => {
+                throw new Error('[Weline.Api] direct request(url) is disabled. Use Weline.Api.resource()/call()/graph()/stream().');
             },
             call: async (provider, operation, params = {}, options = {}) => {
                 const ApiModule = await moduleLoader.loadModule('api');
@@ -1525,6 +1547,10 @@
             stream: async (channel, params = {}, options = {}) => {
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.stream(channel, params, options);
+            },
+            upload: async (provider, operation, formData, options = {}) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.upload(provider, operation, formData, options);
             },
             resource: async (provider, optionalMap) => {
                 const ApiModule = await moduleLoader.loadModule('api');
@@ -1957,7 +1983,74 @@
         });
     })();
 
+    function installPixelValueBridge() {
+        if (window.__WelinePixelValueBridgeInstalled) {
+            return;
+        }
+        window.__WelinePixelValueBridgeInstalled = true;
+
+        document.addEventListener('click', function (event) {
+            const target = event.target && event.target.nodeType === 1 ? event.target : null;
+            if (!target || !target.getElementsByClassName) {
+                return;
+            }
+
+            let node = target;
+            let eventName = '';
+            while (node && node !== document) {
+                const pixelClass = Array.from(node.classList || []).find(className => {
+                    return className.indexOf('weline-pixel::') === 0 && className.indexOf(':value') === -1;
+                });
+                if (pixelClass) {
+                    eventName = pixelClass.replace('weline-pixel::', '');
+                    break;
+                }
+                node = node.parentElement;
+            }
+            if (!eventName) {
+                return;
+            }
+
+            const valueClassName = 'weline-pixel::' + eventName + ':value';
+            if (target.getElementsByClassName(valueClassName).length > 0) {
+                return;
+            }
+
+            const containerSelector = '[data-pixel-value], .product-actions, .product-info, .product-info-section, .product-card, .product-main, .product-detail, .product-detail-view, .cart-item, .cart-summary, .cart-summary-card, .mini-cart-drawer__footer, .checkout-summary, .weshop-checkout-summary, .weshop-checkout-card';
+            let container = (node && node.closest)
+                ? (node.closest(containerSelector) || (node.parentElement && node.parentElement.closest(containerSelector)))
+                : null;
+            let valueSource = null;
+            while (!valueSource && container) {
+                valueSource = container.querySelector('[data-pixel-value], .product-price-box .price-amount, .price-current, .cart-item-price, .summary-total, [data-summary-total], [data-mini-cart-subtotal], [data-weshop-summary-grand-total]');
+                container = !valueSource && container.parentElement && container.parentElement.closest
+                    ? container.parentElement.closest(containerSelector)
+                    : null;
+            }
+            if (!valueSource) {
+                return;
+            }
+
+            const value = valueSource.getAttribute('data-pixel-value') || valueSource.textContent || '';
+            if (!String(value).trim()) {
+                return;
+            }
+
+            const valueElement = document.createElement('span');
+            valueElement.className = valueClassName;
+            valueElement.setAttribute('data-pixel-value', String(value).trim());
+            valueElement.textContent = String(value).trim();
+            valueElement.hidden = true;
+            target.appendChild(valueElement);
+        }, true);
+    }
+
+    installPixelValueBridge();
+
     window.Weline = Weline;
+    if (window.WelineApiModule && window.WelineApiModule.__full === true) {
+        window.Weline.Api = window.WelineApiModule;
+    }
     window.Theme = Weline.Theme;
     window.w_query = function (provider, operation, params = {}, options = {}) {
         return Weline.Query.request(provider, operation, params, options);

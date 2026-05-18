@@ -76,6 +76,7 @@ class CheckoutService
                 'product_id' => (int) ($cartItem['product_id'] ?? 0),
                 'product_name' => (string) ($product['name'] ?? $cartItem['product_name'] ?? ''),
                 'product_sku' => (string) ($product['sku'] ?? $cartItem['product_sku'] ?? ''),
+                'product_image' => (string) ($product['image'] ?? $cartItem['product_image'] ?? $cartItem['image'] ?? ''),
                 'quantity' => $quantity,
                 'price' => $price,
                 'total' => $price * $quantity,
@@ -106,6 +107,10 @@ class CheckoutService
             'cart_customer_id' => $cartCustomerId,
             'is_guest_checkout' => !empty($checkoutData['is_guest_checkout']),
             'checkout_mode' => (string) ($checkoutData['checkout_mode'] ?? ''),
+            'guest_email' => (string) ($checkoutData['guest_email'] ?? ''),
+            'notification_channels' => is_array($checkoutData['notification_channels'] ?? null)
+                ? $checkoutData['notification_channels']
+                : [],
         ];
         $this->getEventsManager()->dispatch('WeShop_Checkout::order_created', $eventData);
 
@@ -120,6 +125,10 @@ class CheckoutService
     {
         $checkoutData = $this->normalizeCheckoutData($checkoutData);
         $checkoutData['customer_id'] = $customerId;
+        $cartCustomerId = max(0, (int) ($checkoutData['cart_customer_id'] ?? $customerId));
+        if ($cartCustomerId <= 0) {
+            $cartCustomerId = $customerId;
+        }
 
         $retryOrderId = (int) ($checkoutData['order_id'] ?? $checkoutData['retry_order_id'] ?? 0);
         if ($retryOrderId > 0) {
@@ -130,12 +139,12 @@ class CheckoutService
         }
 
         $cartItems = $this->query('cart', 'getCartItems', [
-            'customer_id' => $customerId,
+            'customer_id' => $cartCustomerId,
         ]);
         $cartItems = \is_array($cartItems) ? $cartItems : [];
 
         $totals = $this->query('cart', 'calculateTotals', [
-            'customer_id' => $customerId,
+            'customer_id' => $cartCustomerId,
         ]);
         $totals = \is_array($totals) ? $totals : [];
 
@@ -287,8 +296,30 @@ class CheckoutService
         $checkoutData['checkout_mode'] = (string) ($checkoutData['checkout_mode'] ?? (!empty($checkoutData['is_guest_checkout']) ? CheckoutIdentityService::MODE_GUEST : CheckoutIdentityService::MODE_CUSTOMER));
         $checkoutData['is_guest_checkout'] = $this->getCheckoutIdentityService()->normalizeMode($checkoutData['checkout_mode']) === CheckoutIdentityService::MODE_GUEST
             || !empty($checkoutData['is_guest_checkout']);
+        $checkoutData['notification_channels'] = $this->normalizeNotificationChannels($checkoutData['notification_channels'] ?? []);
 
         return $checkoutData;
+    }
+
+    /**
+     * @param mixed $channels
+     * @return array<int, string>
+     */
+    protected function normalizeNotificationChannels(mixed $channels): array
+    {
+        if (!\is_array($channels)) {
+            $channels = $channels === null || $channels === '' ? [] : [$channels];
+        }
+
+        $normalized = [];
+        foreach ($channels as $channel) {
+            $channel = strtolower(trim((string) $channel));
+            if ($channel !== '') {
+                $normalized[] = $channel;
+            }
+        }
+
+        return array_values(array_unique($normalized));
     }
 
     /**

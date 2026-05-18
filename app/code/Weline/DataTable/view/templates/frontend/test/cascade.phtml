@@ -9,7 +9,7 @@
     @media (max-width: 960px){.dt-demo-layout{grid-template-columns:1fr}}
 </style>
 
-<?= $frontend_api_bootstrap ?? '' ?>
+<?= $worker_bootstrap ?? '' ?>
 
 <div class="dt-demo-page" data-demo-page="<?= $page_key ?>" data-testid="dt-cascade-page">
     <div class="dt-demo-top">
@@ -42,9 +42,7 @@
                        sortable="true"
                        page-size="5"
                        show-pagination="true"
-                       allow-frontend="true"
-                       api-url="datatable/rest/v1/demo-table"
-                       field-api-url="datatable/rest/v1/demo-form/fields">
+                       allow-frontend="true">
                 <thead>
                     <tr>
                         <th data-field="id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="ID">ID</th>
@@ -66,9 +64,7 @@
                        sortable="true"
                        page-size="6"
                        show-pagination="true"
-                       allow-frontend="true"
-                       api-url="datatable/rest/v1/demo-table"
-                       field-api-url="datatable/rest/v1/demo-form/fields">
+                       allow-frontend="true">
                 <thead>
                     <tr>
                         <th data-field="id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="ID">ID</th>

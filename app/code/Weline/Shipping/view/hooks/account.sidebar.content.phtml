@@ -172,7 +172,7 @@ $renderAddressForm = static function (string $idField, string $typeLabel, string
 };
 ?>
 <section class="account-hook-section account-index__section d-none motor-account-section" id="shipping-address-section" data-account-section="shipping-address" hidden>
-    <div class="account-card account-address-panel" data-address-panel="shipping" data-save-url="/shipping/frontend/shipping-address/save" data-delete-url="/shipping/frontend/shipping-address/delete" data-default-url="/shipping/frontend/shipping-address/set-default" data-id-field="shipping_address_id">
+    <div class="account-card account-address-panel" data-address-panel="shipping" data-id-field="shipping_address_id">
         <textarea hidden readonly data-address-seed><?= $json($shippingPayloads) ?></textarea>
         <header class="account-card__header account-address-panel__header">
             <div>
@@ -201,7 +201,7 @@ $renderAddressForm = static function (string $idField, string $typeLabel, string
 </section>
 
 <section class="account-hook-section account-index__section d-none motor-account-section" id="delivery-address-section" data-account-section="delivery-address" hidden>
-    <div class="account-card account-address-panel" data-address-panel="delivery" data-save-url="/shipping/frontend/delivery/save" data-delete-url="/shipping/frontend/delivery/delete" data-default-url="/shipping/frontend/delivery/set-default" data-id-field="delivery_address_id">
+    <div class="account-card account-address-panel" data-address-panel="delivery" data-id-field="delivery_address_id">
         <textarea hidden readonly data-address-seed><?= $json($deliveryPayloads) ?></textarea>
         <header class="account-card__header account-address-panel__header">
             <div>

@@ -24,6 +24,10 @@ use Weline\Framework\Manager\ObjectManager;
 #[Index(name: 'idx_scope_module', columns: ['scope', 'module'])]
 class SeoSubject extends Model
 {
+    public array $_unit_unique_fields = [
+        self::schema_fields_SUBJECT_TYPE,
+        self::schema_fields_SUBJECT_ID,
+    ];
 
     public const schema_table = 'weline_seo_subject';
     public const schema_primary_key = 'subject_id';
@@ -85,8 +89,7 @@ class SeoSubject extends Model
      */
     public function findOrCreate(string $subjectType, int $subjectId): self
     {
-        $this->reset()
-            ->clearData()
+        $this->clear()
             ->where(self::schema_fields_SUBJECT_TYPE, $subjectType)
             ->where(self::schema_fields_SUBJECT_ID, $subjectId)
             ->find()

@@ -7,10 +7,6 @@ $cartItems = $this->getData('cart_items') ?? [];
 $cartSummary = $this->getData('cart_summary') ?? [];
 $relatedProducts = $this->getData('related_products') ?? [];
 ?>
-<script>
-    window.WeShop = window.WeShop || {};
-    window.WeShop.cartAddUrl = '<?= $this->getUrl('cart/frontend/api/add') ?>';
-</script>
 <script src="/WeShop/Cart/view/statics/js/cart.js"></script>
 <style>
     .weshop-cart-page {
@@ -434,6 +430,7 @@ $relatedProducts = $this->getData('related_products') ?? [];
                         <w:hook name="WeShop_Cart::frontend::partials::cart::security-badges"/>
                         
                         <a href="<?= $this->getUrl('checkout') ?>" class="w-full block text-center bg-primary hover:bg-primary/90 text-white font-bold py-3 px-4 rounded-lg shadow-sm transition-colors weline-pixel::begin_checkout">
+                            <span class="weline-pixel::begin_checkout:value" data-pixel-value="<?= htmlspecialchars((string)(float)($cartSummary['grand_total'] ?? 0), ENT_QUOTES, 'UTF-8') ?>" hidden><?= htmlspecialchars((string)(float)($cartSummary['grand_total'] ?? 0), ENT_QUOTES, 'UTF-8') ?></span>
                             <?= __('Proceed to Checkout') ?>
                         </a>
                         <w:hook name="WeShop_Cart::frontend::partials::cart::summary-after"/>
@@ -543,74 +540,102 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function updateCartItem(itemId, qty) {
-    fetch('<?= $this->getUrl('cart/frontend/api/update') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-        body: JSON.stringify({item_id: itemId, quantity: qty})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
+var workerApiPromises = Object.create(null);
+
+function getWorkerApi(provider) {
+    if (!workerApiPromises[provider]) {
+        if (!window.Weline?.Api?.resource) {
+            return Promise.reject(new Error('Weline.Api.resource is not available'));
+        }
+        workerApiPromises[provider] = Promise.resolve(window.Weline.Api.resource(provider));
+    }
+    return workerApiPromises[provider];
+}
+
+function normalizeWorkerPayload(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return payload || {};
+    }
+    if (!Object.prototype.hasOwnProperty.call(payload, 'code') || typeof payload.data !== 'object' || !payload.data) {
+        return payload;
+    }
+
+    var code = Number(payload.code || 0);
+    return Object.assign({
+        code: code,
+        message: payload.msg || payload.data.message || '',
+        success: code >= 200 && code < 300 && payload.data.success !== false,
+    }, payload.data);
+}
+
+async function updateCartItem(itemId, qty) {
+    try {
+        var CartApi = await getWorkerApi('cart');
+        var data = normalizeWorkerPayload(await CartApi.update({
+            item_id: parseInt(itemId, 10),
+            quantity: qty,
+        }));
+        if (data.success !== false) {
             window.location.reload();
         } else {
             showCartMessage(data.message || '<?= __('Error updating cart') ?>', 'error');
         }
-    }).catch(function () {
-        showCartMessage('<?= __('Error updating cart') ?>', 'error');
-    });
+    } catch (error) {
+        showCartMessage(error.message || '<?= __('Error updating cart') ?>', 'error');
+    }
 }
 
-function deleteCartItem(itemId) {
-    fetch('<?= $this->getUrl('cart/frontend/api/remove') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-        body: JSON.stringify({item_id: itemId})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
+async function deleteCartItem(itemId) {
+    try {
+        var CartApi = await getWorkerApi('cart');
+        var data = normalizeWorkerPayload(await CartApi.remove({
+            item_id: parseInt(itemId, 10),
+        }));
+        if (data.success !== false) {
             window.location.reload();
         } else {
             showCartMessage(data.message || '<?= __('Error removing item') ?>', 'error');
         }
-    }).catch(function () {
-        showCartMessage('<?= __('Error removing item') ?>', 'error');
-    });
+    } catch (error) {
+        showCartMessage(error.message || '<?= __('Error removing item') ?>', 'error');
+    }
 }
 
-function saveForLater(itemId) {
-    fetch('<?= $this->getUrl('wishlist/add-from-cart') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({item_id: itemId})
-    })
-    .then(response => response.json())
-    .then(data => {
+async function saveForLater(itemId) {
+    try {
+        var WishlistApi = await getWorkerApi('wishlist');
+        var data = normalizeWorkerPayload(await WishlistApi.addFromCart({
+            item_id: parseInt(itemId, 10),
+        }));
         if (data.success) {
             window.location.reload();
+            return;
         }
-    }).catch(function () {
-        showCartMessage('<?= __('Unable to save this item for later right now.') ?>', 'error');
-    });
+        if (data.data && data.data.redirect_url) {
+            window.location.href = data.data.redirect_url;
+            return;
+        }
+        showCartMessage(data.message || '<?= __('Unable to save this item for later right now.') ?>', 'error');
+    } catch (error) {
+        showCartMessage(error.message || '<?= __('Unable to save this item for later right now.') ?>', 'error');
+    }
 }
 
-function applyPromoCode(code) {
-    fetch('<?= $this->getUrl('cart/apply-coupon') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({code: code})
-    })
-    .then(response => response.json())
-    .then(data => {
+async function applyPromoCode(code) {
+    try {
+        var PromotionApi = await getWorkerApi('promotion');
+        var data = normalizeWorkerPayload(await PromotionApi.applyCoupon({
+            code: code,
+            order_total: <?= (float) ($cartSummary['grand_total'] ?? $cartSummary['total'] ?? 0) ?>,
+        }));
         if (data.success) {
             window.location.reload();
         } else {
             showCartMessage(data.message || '<?= __('Invalid promo code') ?>', 'warning');
         }
-    }).catch(function () {
-        showCartMessage('<?= __('Invalid promo code') ?>', 'warning');
-    });
+    } catch (error) {
+        showCartMessage(error.message || '<?= __('Invalid promo code') ?>', 'warning');
+    }
 }
 
 function showCartMessage(message, type) {

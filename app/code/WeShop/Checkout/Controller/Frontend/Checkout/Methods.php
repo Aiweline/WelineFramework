@@ -9,6 +9,7 @@ use WeShop\Checkout\Service\CheckoutPageDataService;
 use WeShop\Customer\Session\CustomerSession;
 use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
 class Methods extends FrontendController
@@ -47,6 +48,8 @@ class Methods extends FrontendController
                 'message' => __('结账方式刷新成功。'),
                 'data' => $data,
             ]);
+        } catch (ResponseTerminateException $exception) {
+            throw $exception;
         } catch (\Throwable $throwable) {
             if (isset($this->request)) {
                 $this->request->getResponse()->setHttpResponseCode(500);

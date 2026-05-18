@@ -31,7 +31,8 @@ class Index extends BaseController
         }
 
         $orderId = (int) ($this->request->getParam('order_id') ?? 0);
-        foreach ($this->rmaPageDataService->build($customerId, $orderId) as $key => $value) {
+        $orderIncrementId = trim((string) ($this->request->getParam('order_increment_id') ?? ''));
+        foreach ($this->rmaPageDataService->build($customerId, $orderId, $orderIncrementId) as $key => $value) {
             $this->assign($key, $value);
         }
 

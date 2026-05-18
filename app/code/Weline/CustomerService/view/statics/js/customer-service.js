@@ -41,8 +41,17 @@ const CustomerServiceWidget = (function() {
         isLoggedIn: false
     };
 
+    function getCustomerServiceApi() {
+        if (!customerServiceApiPromise) {
+            customerServiceApiPromise = Promise.resolve(window.Weline.Api.resource('customerService'));
+        }
+
+        return customerServiceApiPromise;
+    }
+
     let sessionInitializationPromise = null;
     let guestBindPromptShown = false;
+    let customerServiceApiPromise = null;
     
     let state = {
         sessionId: null,
@@ -125,36 +134,12 @@ const CustomerServiceWidget = (function() {
      */
     async function initSession() {
         try {
-            if (!config.chatUrl) {
-                console.warn('CustomerService: chatUrl not configured, skip init session');
-                return false;
-            }
-            const params = new URLSearchParams({
+            const params = {
                 session_token: state.sessionToken || '',
                 locale: state.locale
-            });
-            const response = await fetch(config.chatUrl + '/session?' + params.toString(), {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                }
-            });
-            
-            const contentType = response.headers.get('Content-Type') || '';
-            const isJson = contentType.indexOf('application/json') !== -1;
-            
-            if (!response.ok) {
-                const text = await response.text();
-                console.warn('CustomerService: getSession failed', response.status, isJson ? (function() { try { return JSON.parse(text); } catch (e) { return text.slice(0, 200); } })() : text.slice(0, 200));
-                return false;
-            }
-            
-            if (!isJson) {
-                console.warn('CustomerService: getSession returned non-JSON (e.g. HTML page). Check chatUrl and backend route.');
-                return false;
-            }
-            
-            const data = await response.json();
+            };
+
+            const data = await (await getCustomerServiceApi()).session(params, {silent: true});
             
             if (data.success) {
                 state.sessionId = data.data.session_id;
@@ -261,18 +246,10 @@ const CustomerServiceWidget = (function() {
         sendButton.disabled = true;
         
         try {
-            const response = await fetch(config.chatUrl + '/send-message', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    session_id: state.sessionId,
-                    content: content
-                })
-            });
-            
-            const data = await response.json();
+            const data = await (await getCustomerServiceApi()).sendMessage({
+                session_id: state.sessionId,
+                content: content
+            }, {silent: true});
             
             if (data.success) {
                 input.value = '';
@@ -310,13 +287,11 @@ const CustomerServiceWidget = (function() {
         }
         
         try {
-            const response = await fetch(config.chatUrl + '/messages?' + new URLSearchParams({
-                    session_id: state.sessionId,
-                    limit: 50,
-                    offset: 0
-                }));
-            
-            const data = await response.json();
+            const data = await (await getCustomerServiceApi()).messages({
+                session_id: state.sessionId,
+                limit: 50,
+                offset: 0
+            }, {silent: true});
             
             if (data.success) {
                 const messagesContainer = document.getElementById('cs-chat-messages');
@@ -506,13 +481,11 @@ const CustomerServiceWidget = (function() {
         
         state.pollInterval = setInterval(async () => {
             try {
-                const response = await fetch(config.chatUrl + '/messages?' + new URLSearchParams({
+                const data = await (await getCustomerServiceApi()).messages({
                     session_id: state.sessionId,
                     limit: 10,
                     offset: 0
-                }));
-                
-                const data = await response.json();
+                }, {silent: true});
                 
                 if (data.success && data.data.length > 0) {
                     const messagesContainer = document.getElementById('cs-chat-messages');
@@ -564,14 +537,8 @@ const CustomerServiceWidget = (function() {
      * 濡偓閺屻儱顓归張宥呮躬缁捐法濮搁幀?
      */
     async function checkServiceStatus() {
-        if (!config.chatUrl) return;
         try {
-            const resp = await fetch(config.chatUrl + '/service-status', {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' }
-            });
-            if (!resp.ok) return;
-            const data = await resp.json();
+            const data = await (await getCustomerServiceApi()).serviceStatus({}, {silent: true});
             if (data.success) {
                 state.serviceStatus = data.data.status;
                 updateStatusIndicator();
@@ -660,18 +627,10 @@ const CustomerServiceWidget = (function() {
         }
         
         try {
-            const response = await fetch(config.chatUrl + '/set-language', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    locale: locale,
-                    session_token: state.sessionToken
-                })
-            });
-            
-            const data = await response.json();
+            const data = await (await getCustomerServiceApi()).setLanguage({
+                locale: locale,
+                session_token: state.sessionToken
+            }, {silent: true});
             
             if (data.success) {
                 // 闁插秵鏌婇崝鐘烘祰濞戝牊浼呮禒銉ㄥ箯閸欐牜鐐曠拠?
@@ -779,18 +738,10 @@ const CustomerServiceWidget = (function() {
         }
         
         try {
-            const response = await fetch(config.bindUrl + '/send-verification', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    email: email,
-                    session_token: state.sessionToken
-                })
-            });
-            
-            const data = await response.json();
+            const data = await (await getCustomerServiceApi()).sendVerification({
+                email: email,
+                session_token: state.sessionToken
+            }, {silent: true});
             
             if (data.success) {
                 alert(__('验证邮件已发送，请查收您的邮箱'));

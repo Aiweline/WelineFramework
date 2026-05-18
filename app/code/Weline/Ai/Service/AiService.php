@@ -622,10 +622,9 @@ class AiService
         // 5. 如果找不到默认模型，使用任意一个已激活的默认标记模型
         if (!$model || !$model->getId()) {
             $query = $this->aiModel->reset()
-                ->where(AiModel::schema_fields_IS_ACTIVE, 1);
-            if ($primaryModality !== AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT) {
-                $query->where(AiModel::schema_fields_PRIMARY_MODALITY, $primaryModality);
-            } else {
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                ->where(AiModel::schema_fields_PRIMARY_MODALITY, $primaryModality);
+            if ($primaryModality === AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT) {
                 $query->where(AiModel::schema_fields_IS_DEFAULT, 1);
             }
             $model = $query->find()->fetch();
@@ -913,21 +912,27 @@ class AiService
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
 
-            // 测试模式放宽筛选：仅要求激活；非测试模式要求激活+连通成功+余额>0
+            // 测试模式放宽筛选：仅要求激活；PageBuilder 等后台任务可显式允许零余额账户。
             $isTestMode = (bool)($params['test_mode'] ?? false);
-            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode) {
+            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? ($params['resolved_config']['allow_zero_balance_provider'] ?? false));
+            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode, $allowZeroBalanceProvider) {
                 if ((int)($acc['is_active'] ?? 0) !== 1) {
                     return false;
                 }
                 if ($isTestMode) {
                     return true;
                 }
-                return (($acc['connection_status'] ?? '') === 'success') && (float)($acc['balance'] ?? 0) > 0;
+                if (($acc['connection_status'] ?? '') !== 'success') {
+                    return false;
+                }
+                return $allowZeroBalanceProvider || (float)($acc['balance'] ?? 0) > 0;
             }));
             if (empty($candidateAccounts)) {
                 $message = $isTestMode 
                     ? __("没有满足条件的%{provider}供应商账户（需激活）", ['provider' => $providerCode])
-                    : __("没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）", ['provider' => $providerCode]);
+                    : ($allowZeroBalanceProvider
+                        ? __("没有满足条件的%{provider}供应商账户（需激活、连通成功）", ['provider' => $providerCode])
+                        : __("没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）", ['provider' => $providerCode]));
                 throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]));
             }
             usort($candidateAccounts, function ($a, $b) {
@@ -1060,7 +1065,10 @@ class AiService
             }
             
             // 2. 获取可用的供应商账户
-            $account = $this->accountService->getAvailableAccount($providerCode);
+            $account = $this->accountService->getAvailableAccount(
+                $providerCode,
+                (bool)($params['allow_zero_balance_provider'] ?? ($params['resolved_config']['allow_zero_balance_provider'] ?? false))
+            );
             if (!$account) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
@@ -1450,10 +1458,12 @@ class AiService
         ), 'DEBUG');
         
         if ($providerCode) {
-            $account = $this->accountService->getAvailableAccount($providerCode);
+            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? false);
+            $account = $this->accountService->getAvailableAccount($providerCode, $allowZeroBalanceProvider);
             Env::log('ai_agent_debug.log', sprintf(
-                '[executeAgent] getAvailableAccount(%s) = %s',
+                '[executeAgent] getAvailableAccount(%s, allowZeroBalance=%s) = %s',
                 $providerCode,
+                $allowZeroBalanceProvider ? 'true' : 'false',
                 $account ? 'ID=' . $account->getId() : 'null'
             ), 'DEBUG');
             

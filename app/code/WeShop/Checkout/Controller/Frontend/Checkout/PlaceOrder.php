@@ -45,6 +45,7 @@ class PlaceOrder extends FrontendController
                 'shipping_address' => $this->readShippingAddress(),
                 'shipping_method' => (string) ($this->readRequestValue('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->readRequestValue('payment_method') ?? ''),
+                'notification_channels' => $this->readNotificationChannels(),
                 'currency' => State::getCurrency(),
                 'client_ip' => (string) ($this->request->getServer('REMOTE_ADDR') ?? ''),
             ];
@@ -62,6 +63,7 @@ class PlaceOrder extends FrontendController
                 'shipping_address' => $checkoutData['shipping_address'],
                 'shipping_method' => $checkoutData['shipping_method'],
                 'payment_method' => \is_array($result['payment_method'] ?? null) ? $result['payment_method'] : [],
+                'notification_channels' => $checkoutData['notification_channels'],
                 'cart_summary' => \is_array($result['order_summary'] ?? null) ? $result['order_summary'] : [],
                 'is_retry_payment' => (bool) ($result['is_retry_payment'] ?? false),
             ]);
@@ -129,6 +131,27 @@ class PlaceOrder extends FrontendController
         }
 
         return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function readNotificationChannels(): array
+    {
+        $channels = $this->readRequestValue('notification_channels');
+        if (!\is_array($channels)) {
+            $channels = $channels === null || $channels === '' ? [] : [$channels];
+        }
+
+        $normalized = [];
+        foreach ($channels as $channel) {
+            $channel = strtolower(trim((string) $channel));
+            if ($channel !== '') {
+                $normalized[] = $channel;
+            }
+        }
+
+        return array_values(array_unique($normalized));
     }
 
     private function getCartIdentityService(): CartIdentityService

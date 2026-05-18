@@ -67,6 +67,8 @@
         {region_id: 120006, parent_region_id: 110001, country_code: 'CN', region_code: 'CY', region_name: '\u671d\u9633\u533a', region_type: 'district'},
         {region_id: 120007, parent_region_id: 110002, country_code: 'CN', region_code: 'PD', region_name: '\u6d66\u4e1c\u65b0\u533a', region_type: 'district'}
     ];
+    var apiResources = Object.create(null);
+    var regionApiPromise = null;
 
     function text(value) {
         return value == null ? '' : String(value);
@@ -301,22 +303,42 @@
         wrap.hidden = true;
     }
 
-    function requestJson(url, formData) {
-        return fetch(url, {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: formData
-        }).then(function (response) {
-            return response.text().then(function (body) {
-                try {
-                    return JSON.parse(body);
-                } catch (error) {
-                    throw new Error('Response is not valid JSON, status: ' + response.status);
-                }
-            });
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function (value, key) {
+            payload[key] = value;
+        });
+        return payload;
+    }
+
+    function getAddressApi(panel) {
+        var provider = panel.dataset.addressPanel === 'shipping' ? 'shippingAddress' : 'deliveryAddress';
+        if (!apiResources[provider]) {
+            if (!window.Weline || !window.Weline.Api) {
+                return Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+            apiResources[provider] = window.Weline.Api.resource(provider);
+        }
+        return apiResources[provider];
+    }
+
+    function getRegionApi() {
+        if (!regionApiPromise) {
+            if (!window.Weline || !window.Weline.Api) {
+                return Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+            regionApiPromise = window.Weline.Api.resource('region');
+        }
+        return regionApiPromise;
+    }
+
+    function requestJson(panel, operation, payload) {
+        var body = payload instanceof FormData ? formDataToObject(payload) : (payload || {});
+        return getAddressApi(panel).then(function (AddressApi) {
+            if (!AddressApi || typeof AddressApi[operation] !== 'function') {
+                throw new Error('Address operation is unavailable: ' + operation);
+            }
+            return AddressApi[operation](body, {silent: true});
         });
     }
 
@@ -325,33 +347,17 @@
         if (Array.isArray(window.WelineShippingRegions)) {
             return Promise.resolve(filterEmbeddedRegions(params));
         }
-        var query = new URLSearchParams();
-        Object.keys(params).forEach(function (key) {
-            if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
-                query.append(key, params[key]);
+        return getRegionApi().then(function (RegionApi) {
+            var operation = params.parent_region_id || params.country_code ? 'children' : 'list';
+            return RegionApi[operation](params, {silent: true});
+        }).then(function (payload) {
+            if (Array.isArray(payload)) {
+                return payload;
             }
-        });
-
-        var url = '/shipping/frontend/region/' + (params.parent_region_id || params.country_code ? 'children' : 'list');
-        var queryText = query.toString();
-        if (queryText) {
-            url += '?' + queryText;
-        }
-
-        return fetch(url, {
-            credentials: 'same-origin',
-            headers: {
-                Accept: 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
+            if (payload && Array.isArray(payload.data)) {
+                return payload.data;
             }
-        }).then(function (response) {
-            return response.text().then(function (body) {
-                var payload = body ? JSON.parse(body) : {};
-                if (!response.ok || payload.success === false) {
-                    throw new Error(payload.message || labels.requestFailed);
-                }
-                return Array.isArray(payload.data) ? payload.data : [];
-            });
+            return [];
         });
     }
 
@@ -565,7 +571,7 @@
             var originalText = button.textContent;
             button.textContent = labels.deleting;
 
-            requestJson(panel.dataset.deleteUrl, deleteData).then(function (data) {
+            requestJson(panel, 'delete', deleteData).then(function (data) {
                 if (!data.success) {
                     showMessage(panel, data.message || labels.deleteFailed, 'danger');
                     return;
@@ -625,7 +631,7 @@
                 event.preventDefault();
                 var defaultData = new FormData();
                 defaultData.append('id', setDefault.dataset.id || '');
-                requestJson(panel.dataset.defaultUrl, defaultData).then(function (data) {
+                requestJson(panel, 'setDefault', defaultData).then(function (data) {
                     if (!data.success) {
                         showMessage(panel, data.message || labels.settingFailed, 'danger');
                         return;
@@ -657,7 +663,7 @@
             submit.disabled = true;
             submit.textContent = labels.saving;
 
-            requestJson(panel.dataset.saveUrl, new FormData(form)).then(function (data) {
+            requestJson(panel, 'save', new FormData(form)).then(function (data) {
                 if (!data.success) {
                     showMessage(panel, data.message || labels.saveFailed, 'danger');
                     return;

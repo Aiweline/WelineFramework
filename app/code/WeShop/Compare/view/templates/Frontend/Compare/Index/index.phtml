@@ -170,23 +170,28 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
 
 <script>
     (function () {
+        var compareApiPromise = null;
+
+        function getCompareApi() {
+            if (!compareApiPromise) {
+                if (!window.Weline?.Api?.resource) {
+                    return Promise.reject(new Error('Weline.Api.resource is not available'));
+                }
+                compareApiPromise = Promise.resolve(window.Weline.Api.resource('compare'));
+            }
+            return compareApiPromise;
+        }
+
         document.querySelectorAll('[data-remove-compare-item]').forEach(function (button) {
-            button.addEventListener('click', function () {
+            button.addEventListener('click', async function () {
                 var compareId = this.getAttribute('data-remove-compare-item');
                 if (!compareId) {
                     return;
                 }
 
-                fetch('<?= $this->getUrl('compare/remove') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({ compare_id: compareId })
-                }).then(function (response) {
-                    return response.json();
-                }).then(function (payload) {
+                try {
+                    var CompareApi = await getCompareApi();
+                    var payload = await CompareApi.remove({ compare_id: parseInt(compareId, 10) });
                     if (payload && payload.success) {
                         window.location.reload();
                         return;
@@ -195,7 +200,9 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
                     if (payload && payload.data && payload.data.redirect_url) {
                         window.location.href = payload.data.redirect_url;
                     }
-                });
+                } catch (error) {
+                    console.error('Compare remove error:', error);
+                }
             });
         });
     })();

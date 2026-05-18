@@ -952,6 +952,7 @@ abstract class AbstractModel extends DataObject
             $this->clearQuery();
         }
         $this->_model_fields_data = [];
+        $this->resetSaveRuntimeState();
         $this->clearDataObject();
         $this->setFetchData([]);
         return $this;
@@ -969,7 +970,7 @@ abstract class AbstractModel extends DataObject
         $this->_model_fields_data = [];
         $this->_bind_model_fields = [];
         $this->_model_fields = [];
-        $this->unique_data = [];
+        $this->resetSaveRuntimeState();
         $this->clearDataObject();
         $this->setFetchData([]);
         $this->getQuery()->clear();
@@ -978,6 +979,17 @@ abstract class AbstractModel extends DataObject
             $this->joinModel(...$joinData);
         }
         return $this;
+    }
+
+    private function resetSaveRuntimeState(): void
+    {
+        $this->force_check_flag = false;
+        $this->force_check_fields = [];
+        $this->remove_force_check_field = false;
+        $this->unique_data = [];
+        $this->is_delete = false;
+        $this->is_insert = false;
+        $this->find_fields = '';
     }
 
     public function recovery(): static

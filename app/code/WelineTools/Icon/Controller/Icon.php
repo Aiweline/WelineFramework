@@ -11,7 +11,9 @@ namespace WelineTools\Icon\Controller;
 
 use WelineTools\Icon\Service\IconProcessor;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Session;
 use Exception;
 
 /**
@@ -20,6 +22,8 @@ use Exception;
  */
 class Icon extends FrontendController
 {
+    private const UPLOAD_TICKETS_SESSION_KEY = 'icon_upload_tickets';
+
     /**
      * 显示图标工具页面
      */
@@ -35,6 +39,8 @@ class Icon extends FrontendController
     public function postUpload()
     {
         try {
+            $this->consumeUploadTicket();
+
             // 检查文件上传
             if (empty($_FILES) || !isset($_FILES['file'])) {
                 return $this->fetchJson([
@@ -259,6 +265,30 @@ class Icon extends FrontendController
                 'success' => false,
                 'message' => '压缩失败: ' . $e->getMessage()
             ]);
+        }
+    }
+
+    private function consumeUploadTicket(): void
+    {
+        $token = \trim((string)WelineEnv::server('HTTP_X_WELINE_UPLOAD_TICKET', ''));
+        if ($token === '') {
+            throw new Exception('Missing Weline upload ticket.');
+        }
+
+        /** @var Session $session */
+        $session = ObjectManager::getInstance(Session::class);
+        $stored = $session->getData(self::UPLOAD_TICKETS_SESSION_KEY);
+        $tickets = \is_array($stored) ? $stored : [];
+        $hash = \hash('sha256', $token);
+        $expiresAt = (int)($tickets[$hash] ?? 0);
+        unset($tickets[$hash]);
+        $session->setData(self::UPLOAD_TICKETS_SESSION_KEY, \array_filter(
+            $tickets,
+            static fn(mixed $expires): bool => \is_int($expires) && $expires > \time()
+        ));
+
+        if ($expiresAt <= \time()) {
+            throw new Exception('Invalid or expired Weline upload ticket.');
         }
     }
 

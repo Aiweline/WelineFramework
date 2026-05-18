@@ -40,7 +40,8 @@ class WorkerSmoke extends FrontendController
             workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
             endpoint: '/api/framework/query-bin',
             deployVersion: 'dev',
-            workerBuildId: 'dev-smoke'
+            workerBuildId: 'dev-smoke',
+            requestTimeoutMs: 4000
         };
         window.__WelineThemeConfig = {
             env: { WELINE_ENV: 'DEV', DEV: true, PROD: false },
@@ -57,8 +58,7 @@ class WorkerSmoke extends FrontendController
             api: window.WelineApiConfig
         };
     </script>
-    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js"></script>
-    <script src="/Weline/Frontend/view/statics/js/weline-api.js"></script>
+    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2"></script>
 </head>
 <body>
     <h1>Weline Frontend Worker API Smoke</h1>
@@ -66,7 +66,7 @@ class WorkerSmoke extends FrontendController
     <script>
         (async function () {
             const result = document.getElementById('result');
-            const report = { ok: false, checks: {}, errors: [] };
+            const report = { ok: false, checks: {}, errors: [], debug: {} };
             const pass = (name, value) => { report.checks[name] = !!value; };
             const fail = (name, error) => {
                 report.checks[name] = false;
@@ -74,6 +74,12 @@ class WorkerSmoke extends FrontendController
             };
 
             try {
+                report.debug.before_resource = {
+                    moduleFull: !!(window.WelineApiModule && window.WelineApiModule.__full),
+                    moduleResourceType: typeof (window.WelineApiModule && window.WelineApiModule.resource),
+                    moduleKeys: window.WelineApiModule ? Object.keys(window.WelineApiModule).slice(0, 20) : [],
+                    welineApiResourceType: typeof (window.Weline && window.Weline.Api && window.Weline.Api.resource)
+                };
                 pass('api_loaded', !!(window.Weline && window.Weline.Api));
 
                 const CartApi = await window.Weline.Api.resource('cart');

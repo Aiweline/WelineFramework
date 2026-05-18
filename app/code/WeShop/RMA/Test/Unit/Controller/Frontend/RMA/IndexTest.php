@@ -64,6 +64,41 @@ class IndexTest extends TestCase
         $this->assertSame('page', $controller->index());
     }
 
+    public function testIndexResolvesIncrementIdFromRequest(): void
+    {
+        $customerContext = $this->createMock(CustomerContextInterface::class);
+        $customerContext->expects($this->once())->method('getUserId')->willReturn(9);
+
+        $pageDataService = $this->createMock(RmaPageDataService::class);
+        $pageDataService->expects($this->once())
+            ->method('build')
+            ->with(9, 0, '100000109')
+            ->willReturn([
+                'rma_list' => [['rma_id' => 11]],
+                'rma_count' => 1,
+            ]);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnCallback(static function (string $key, mixed $default = null) {
+            return $key === 'order_increment_id' ? '100000109' : $default;
+        });
+
+        $controller = $this->getMockBuilder(Index::class)
+            ->setConstructorArgs([$customerContext, $pageDataService])
+            ->onlyMethods(['assign', 'fetch', 'redirect'])
+            ->getMock();
+
+        $controller->expects($this->never())->method('redirect');
+        $controller->expects($this->exactly(3))->method('assign');
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_RMA::templates/Frontend/RMA/Index/index.phtml')
+            ->willReturn('page');
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('page', $controller->index());
+    }
+
     private function setProtectedProperty(object $target, string $property, mixed $value): void
     {
         $reflection = new \ReflectionObject($target);
