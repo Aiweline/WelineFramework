@@ -154,4 +154,26 @@ final class AiSiteBuildPlanTaskSchedulerTest extends TestCase
         self::assertStringNotContainsString('Missing must-include fact', $errors);
         self::assertStringNotContainsString('planning or implementation copy: block.blog_category.article_collection.title', $errors);
     }
+
+    public function testBuildConfirmationScopePatchFailsSourceTruthWhenPlanJsonMissing(): void
+    {
+        $patch = (new AiSiteBuildPlanTaskScheduler())->buildConfirmationScopePatch([
+            'page_types' => ['home_page'],
+            'site_title' => 'Example Site',
+            'brief_description' => 'Explain the service clearly.',
+            'source_truth_contract' => [
+                'must_include_facts' => [
+                    ['id' => 'f01', 'text' => 'Diamond VIP lounge', 'weight' => 10],
+                ],
+                'required_home_blocks' => [],
+                'must_not_do' => [],
+            ],
+        ], [], 'virtual_theme');
+
+        self::assertSame(0, $patch['build_plan_confirmed']);
+        self::assertStringContainsString(
+            'plan_json',
+            \implode("\n", $patch['build_plan_v2_validation']['errors'] ?? [])
+        );
+    }
 }
