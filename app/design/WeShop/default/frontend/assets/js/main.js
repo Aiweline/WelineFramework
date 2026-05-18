@@ -10,6 +10,32 @@
     // Global Namespace
     // ============================================
     window.WeShop = window.WeShop || {};
+    WeShop.apiResources = WeShop.apiResources || {};
+
+    WeShop.getApiResource = function(provider) {
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            return Promise.reject(new Error('Weline.Api.resource is not available'));
+        }
+        if (!WeShop.apiResources[provider]) {
+            WeShop.apiResources[provider] = Promise.resolve(window.Weline.Api.resource(provider));
+        }
+        return WeShop.apiResources[provider];
+    };
+
+    WeShop.normalizeApiPayload = function(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return payload || {};
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'code') && payload.data && typeof payload.data === 'object') {
+            var code = Number(payload.code || 0);
+            return Object.assign({
+                code: code,
+                message: payload.msg || payload.data.message || '',
+                success: code >= 200 && code < 300 && payload.data.success !== false,
+            }, payload.data);
+        }
+        return payload;
+    };
 
     // ============================================
     // DOM Ready
@@ -187,13 +213,26 @@
                 var form = this.closest('form');
                 var qtyInput = form ? form.querySelector('[name="qty"]') : null;
                 var qty = parseInt(this.dataset.qty || (qtyInput ? qtyInput.value : '1'), 10) || 1;
+                var selectedOptions = [];
+                if (this.dataset.selectedOptions) {
+                    try {
+                        selectedOptions = JSON.parse(this.dataset.selectedOptions) || [];
+                    } catch (error) {
+                        selectedOptions = [];
+                    }
+                }
+                if (selectedOptions.length === 0 && form) {
+                    selectedOptions = Array.prototype.slice.call(form.querySelectorAll('[name^="selected_options"]'))
+                        .map(function(input) { return Number(input.value); })
+                        .filter(Boolean);
+                }
 
                 // Show loading state
                 var originalText = this.innerHTML;
                 this.innerHTML = '<span class="material-symbols-outlined animate-spin">sync</span>';
                 this.disabled = true;
 
-                WeShop.addToCart(productId, qty)
+                WeShop.addToCart(productId, qty, selectedOptions)
                     .then(function(data) {
                         if (WeShop.handleRedirectPayload(data)) {
                             return;
@@ -225,18 +264,15 @@
         });
     };
 
-    WeShop.addToCart = function(productId, qty) {
-        var addUrl = window.WeShop.cartAddUrl || '/cart/frontend/api/add';
-
-        return fetch(addUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ product_id: productId, qty: qty })
-        }).then(function(response) {
-            return response.json();
+    WeShop.addToCart = function(productId, qty, selectedOptions) {
+        return WeShop.getApiResource('cart').then(function(CartApi) {
+            return CartApi.add({
+                product_id: Number(productId),
+                qty: Number(qty) || 1,
+                selected_options: Array.isArray(selectedOptions) ? selectedOptions : []
+            });
+        }).then(function(payload) {
+            return WeShop.normalizeApiPayload(payload);
         });
     };
 
@@ -300,14 +336,10 @@
     };
 
     WeShop.addToWishlist = function(productId) {
-        return fetch('/wishlist/add', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ product_id: productId })
-        }).then(function(response) {
-            return response.json();
+        return WeShop.getApiResource('wishlist').then(function(WishlistApi) {
+            return WishlistApi.add({ product_id: Number(productId) });
+        }).then(function(payload) {
+            return WeShop.normalizeApiPayload(payload);
         });
     };
 
@@ -351,14 +383,10 @@
     };
 
     WeShop.addToCompare = function(productId) {
-        return fetch('/compare/add', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ product_id: productId })
-        }).then(function(response) {
-            return response.json();
+        return WeShop.getApiResource('compare').then(function(CompareApi) {
+            return CompareApi.add({ product_id: Number(productId) });
+        }).then(function(payload) {
+            return WeShop.normalizeApiPayload(payload);
         });
     };
 
@@ -385,14 +413,15 @@
     };
 
     WeShop.searchProducts = function(query) {
-        // Implement search suggestions
-        fetch('/search/suggest?q=' + encodeURIComponent(query))
-            .then(function(response) {
-                return response.json();
+        WeShop.getApiResource('search')
+            .then(function(SearchApi) {
+                return SearchApi.suggest({ keyword: query, limit: 10 });
             })
             .then(function(data) {
-                // Display suggestions
-                WeShop.displaySearchSuggestions(data.suggestions);
+                var suggestions = Array.isArray(data && data.suggestions)
+                    ? data.suggestions
+                    : (Array.isArray(data) ? data : []);
+                WeShop.displaySearchSuggestions(suggestions);
             })
             .catch(function(error) {
                 console.error('Search error:', error);

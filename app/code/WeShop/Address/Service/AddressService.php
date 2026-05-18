@@ -42,11 +42,18 @@ class AddressService
 
         $result = [];
         foreach ($addresses as $address) {
-            if (!is_array($address)) {
+            if (is_array($address)) {
+                $row = $address;
+            } elseif (is_object($address) && method_exists($address, 'getData')) {
+                $row = $address->getData();
+                if (!is_array($row)) {
+                    continue;
+                }
+            } else {
                 continue;
             }
 
-            $result[] = $this->normalizeAddressRow($address);
+            $result[] = $this->normalizeAddressRow($row);
         }
 
         return $result;

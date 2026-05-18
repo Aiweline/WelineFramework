@@ -30,14 +30,14 @@ class Create extends BaseController
             return $this->post();
         }
 
-        $orderId = $this->readOrderId();
+        $orderId = $this->resolveOrderId($this->readOrderId(), $this->readOrderIncrementId());
         if ($orderId <= 0) {
             $this->getMessageManager()->addError(__('Order ID is required.'));
-            $this->redirect('rma');
+            $this->redirect($this->buildRmaRoute(0, $this->readOrderIncrementId()));
             return '';
         }
 
-        $this->redirect('rma?order_id=' . $orderId);
+        $this->redirect($this->buildRmaRoute($orderId, $this->readOrderIncrementId()));
         return '';
     }
 
@@ -48,7 +48,8 @@ class Create extends BaseController
             return $this->handleGuestCreate();
         }
 
-        $orderId = $this->readOrderId();
+        $orderIncrementId = $this->readOrderIncrementId();
+        $orderId = $this->resolveOrderId($this->readOrderId(), $orderIncrementId);
         $reason = trim($this->readString('reason'));
         $description = trim($this->readString('description'));
         $type = trim($this->readString('type'));
@@ -63,7 +64,7 @@ class Create extends BaseController
             }
 
             $this->getMessageManager()->addError($message);
-            $this->redirect('rma');
+            $this->redirect($this->buildReturnsRoute($orderId, $orderIncrementId, $this->readReturnAnchor(), $this->readReturnUrl()));
             return '';
         }
 
@@ -75,7 +76,7 @@ class Create extends BaseController
             }
 
             $this->getMessageManager()->addError($message);
-            $this->redirect('rma');
+            $this->redirect($this->buildReturnsRoute($orderId, $orderIncrementId, $this->readReturnAnchor(), $this->readReturnUrl()));
             return '';
         }
 
@@ -88,16 +89,19 @@ class Create extends BaseController
         ]);
 
         $successMessage = (string) __('Your return request has been submitted.');
+        $returnAnchor = $this->readReturnAnchor();
+        $returnUrl = $this->buildReturnsRoute($orderId, $orderIncrementId, $returnAnchor, $this->readReturnUrl());
+
         if ($this->shouldReturnJson()) {
             return $this->fetchJson([
                 'success' => true,
                 'message' => $successMessage,
-                'data' => ['redirect_url' => $this->url->getUrl('rma?order_id=' . $orderId)],
+                'data' => ['redirect_url' => $returnUrl],
             ]);
         }
 
         $this->getMessageManager()->addSuccess($successMessage);
-        $this->redirect('rma?order_id=' . $orderId);
+        $this->redirect($returnUrl);
         return '';
     }
 
@@ -116,13 +120,45 @@ class Create extends BaseController
         );
     }
 
+    protected function readOrderIncrementId(): string
+    {
+        return $this->readScalarString(
+            $this->request->body('order_increment_id')
+            ?? $this->request->getPost('order_increment_id')
+            ?? $this->request->getParam('order_increment_id')
+            ?? null
+        );
+    }
+
+    protected function readReturnAnchor(): string
+    {
+        return $this->readScalarString(
+            $this->request->body('return_anchor')
+            ?? $this->request->getPost('return_anchor')
+            ?? $this->request->getParam('return_anchor')
+            ?? null
+        );
+    }
+
+    protected function readReturnUrl(): string
+    {
+        $returnUrl = $this->readScalarString(
+            $this->request->body('return_url')
+            ?? $this->request->getPost('return_url')
+            ?? $this->request->getParam('return_url')
+            ?? null
+        );
+
+        return $this->normalizeReturnUrl($returnUrl);
+    }
+
     protected function readString(string $key): string
     {
-        return (string) (
+        return $this->readScalarString(
             $this->request->body($key)
             ?? $this->request->getPost($key)
             ?? $this->request->getParam($key)
-            ?? ''
+            ?? null
         );
     }
 
@@ -138,16 +174,108 @@ class Create extends BaseController
     protected function handleGuestCreate(): string
     {
         $message = (string) __('Please log in to continue.');
+        $returnUrl = $this->normalizeReturnUrl(
+            trim((string) ($this->request->body('return_url') ?? $this->request->getPost('return_url') ?? $this->request->getParam('return_url') ?? ''))
+        );
+        $loginUrl = $this->url->getUrl(self::LOGIN_ROUTE);
+        if ($returnUrl !== '') {
+            $loginUrl .= (str_contains($loginUrl, '?') ? '&' : '?') . 'redirect_url=' . rawurlencode($returnUrl);
+        }
+
         if ($this->shouldReturnJson()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => $message,
-                'data' => ['redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE)],
+                'data' => ['redirect_url' => $loginUrl],
             ]);
         }
 
         $this->getMessageManager()->addError($message);
-        $this->redirect(self::LOGIN_ROUTE);
+        $this->redirect($loginUrl);
         return '';
+    }
+
+    protected function resolveOrderId(int $orderId, string $orderIncrementId): int
+    {
+        if ($orderId > 0) {
+            return $orderId;
+        }
+
+        if ($orderIncrementId === '') {
+            return 0;
+        }
+
+        $order = $this->orderService->getOrderByIncrementId($orderIncrementId);
+        return $order ? (int) ($order->getId() ?? 0) : 0;
+    }
+
+    protected function buildRmaRoute(int $orderId, string $orderIncrementId): string
+    {
+        $params = [];
+        if ($orderId > 0) {
+            $params['order_id'] = $orderId;
+        }
+        if ($orderIncrementId !== '') {
+            $params['order_increment_id'] = $orderIncrementId;
+        }
+
+        $query = $params === [] ? '' : '?' . http_build_query($params);
+
+        return 'rma' . $query;
+    }
+
+    protected function buildReturnsRoute(int $orderId, string $orderIncrementId, string $returnAnchor, string $returnUrl = ''): string
+    {
+        $params = [];
+        if ($orderId > 0) {
+            $params['order_id'] = $orderId;
+        }
+        if ($orderIncrementId !== '') {
+            $params['order_increment_id'] = $orderIncrementId;
+        }
+        if ($returnAnchor !== '') {
+            $params['return_anchor'] = $returnAnchor;
+        }
+        $normalizedReturnUrl = $this->normalizeReturnUrl($returnUrl);
+        if ($normalizedReturnUrl !== '') {
+            $params['return_url'] = $normalizedReturnUrl;
+        }
+
+        if ($params === []) {
+            return '/customer/account/index#returns';
+        }
+
+        return '/customer/account/index?' . http_build_query($params) . '#returns';
+    }
+
+    protected function normalizeReturnUrl(string $returnUrl): string
+    {
+        if ($returnUrl === '') {
+            return '';
+        }
+
+        $normalized = trim($returnUrl);
+        if (preg_match('/^https?:\\/\\//i', $normalized) === 1) {
+            return '';
+        }
+
+        if ($normalized[0] !== '/') {
+            $normalized = '/' . $normalized;
+        }
+
+        return $normalized;
+    }
+
+    protected function readScalarString(mixed $value): string
+    {
+        if ($value === null || is_array($value)) {
+            return '';
+        }
+
+        if (!is_scalar($value) && !(is_object($value) && method_exists($value, '__toString'))) {
+            return '';
+        }
+
+        return trim((string) $value);
     }
 }

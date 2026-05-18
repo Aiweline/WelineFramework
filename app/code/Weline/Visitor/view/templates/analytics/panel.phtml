@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>像素数据分析面板</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
+            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
+            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            api: {
+                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                endpoint: '/api/framework/query-bin',
+                queryBinUrl: '/api/framework/query-bin'
+            }
+        });
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
+    </script>
+    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2"></script>
     <style>
         * {
             margin: 0;
@@ -543,7 +557,42 @@
         }
 
         const baseUrl = getBaseUrl();
-        const apiBase = baseUrl + '/visitor/rest/v1/analytics';
+        const apiBase = 'worker:visitor.analytics';
+        let visitorApiPromise = null;
+        function getVisitorApi() {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                visitorApiPromise = Promise.resolve(window.Weline.Api.resource('visitor'));
+                return visitorApiPromise;
+            }
+            if (visitorApiPromise) {
+                return visitorApiPromise;
+            }
+            visitorApiPromise = new Promise((resolve, reject) => {
+                let attempts = 0;
+                const waitForApi = () => {
+                    attempts += 1;
+                    if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                        resolve(window.Weline.Api.resource('visitor'));
+                        return;
+                    }
+                    if (attempts >= 80) {
+                        reject(new Error('Weline.Api.resource is not available'));
+                        return;
+                    }
+                    window.setTimeout(waitForApi, 50);
+                };
+                waitForApi();
+            });
+            visitorApiPromise.catch(() => {
+                visitorApiPromise = null;
+            });
+            return visitorApiPromise;
+        }
+
+        async function requestVisitor(operation, params) {
+            const api = await getVisitorApi();
+            return api[operation](params || {});
+        }
 
         // 切换标签页
         function switchTab(tabName, event) {
@@ -609,14 +658,13 @@
             const startDate = document.getElementById('business-startDate').value;
             const endDate = document.getElementById('business-endDate').value;
 
-            const params = new URLSearchParams({ period });
-            if (websiteId) params.append('websiteId', websiteId);
-            if (startDate) params.append('startDate', startDate);
-            if (endDate) params.append('endDate', endDate);
+            const params = { period };
+            if (websiteId) params.websiteId = websiteId;
+            if (startDate) params.startDate = startDate;
+            if (endDate) params.endDate = endDate;
 
             try {
-                const response = await fetch(apiBase + '/business-value?' + params);
-                const result = await response.json();
+                const result = await requestVisitor('analyticsBusinessValue', params);
 
                 if (result.code === 200) {
                     const data = result.data;
@@ -706,12 +754,11 @@
             const interval = document.getElementById('dashboard-interval').value;
             const hours = document.getElementById('dashboard-hours').value;
 
-            const params = new URLSearchParams({ interval, hours });
-            if (websiteId) params.append('websiteId', websiteId);
+            const params = { interval, hours };
+            if (websiteId) params.websiteId = websiteId;
 
             try {
-                const response = await fetch(apiBase + '/dashboard?' + params);
-                const result = await response.json();
+                const result = await requestVisitor('analyticsDashboard', params);
 
                 if (result.code === 200) {
                     const data = result.data;
@@ -804,12 +851,11 @@
             const websiteId = document.getElementById('comparison-websiteId').value;
             const days = document.getElementById('comparison-days').value;
 
-            const params = new URLSearchParams({ days });
-            if (websiteId) params.append('websiteId', websiteId);
+            const params = { days };
+            if (websiteId) params.websiteId = websiteId;
 
             try {
-                const response = await fetch(apiBase + '/daily-comparison?' + params);
-                const result = await response.json();
+                const result = await requestVisitor('analyticsDailyComparison', params);
 
                 if (result.code === 200) {
                     updateComparisonTable(result.data);
@@ -883,13 +929,12 @@
             const websiteId = document.getElementById('abtest-websiteId').value;
             const status = document.getElementById('abtest-status').value;
 
-            const params = new URLSearchParams();
-            if (websiteId) params.append('websiteId', websiteId);
-            if (status) params.append('status', status);
+            const params = {};
+            if (websiteId) params.websiteId = websiteId;
+            if (status) params.status = status;
 
             try {
-                const response = await fetch(apiBase + '/ab-test/list?' + params);
-                const result = await response.json();
+                const result = await requestVisitor('analyticsAbTestList', params);
 
                 if (result.code === 200) {
                     updateAbTestTable(result.data.tests);
@@ -966,12 +1011,11 @@
                 return;
             }
 
-            const params = new URLSearchParams({ testId });
-            if (websiteId) params.append('websiteId', websiteId);
+            const params = { testId };
+            if (websiteId) params.websiteId = websiteId;
 
             try {
-                const response = await fetch(apiBase + '/ab-test?' + params);
-                const result = await response.json();
+                const result = await requestVisitor('analyticsAbTest', params);
 
                 if (result.code === 200) {
                     displayAbTestData(result.data);
@@ -1149,14 +1193,7 @@
             }
 
             try {
-                const response = await fetch(apiBase + '/ab-test/create', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-                const result = await response.json();
+                const result = await requestVisitor('analyticsAbTestCreate', data);
 
                 if (result.code === 200) {
                     if (typeof Swal !== 'undefined') {
@@ -1204,14 +1241,13 @@
             const startDate = document.getElementById('report-startDate').value;
             const endDate = document.getElementById('report-endDate').value;
 
-            const params = new URLSearchParams();
-            if (websiteId) params.append('websiteId', websiteId);
-            if (startDate) params.append('startDate', startDate);
-            if (endDate) params.append('endDate', endDate);
+            const params = {};
+            if (websiteId) params.websiteId = websiteId;
+            if (startDate) params.startDate = startDate;
+            if (endDate) params.endDate = endDate;
 
             try {
-                const response = await fetch(apiBase + '/report?' + params);
-                const result = await response.json();
+                const result = await requestVisitor('analyticsReport', params);
 
                 if (result.code === 200) {
                     const data = result.data;
@@ -1340,18 +1376,39 @@
         }
 
         // 导出数据
-        function exportData() {
+        async function exportData() {
             const websiteId = document.getElementById('report-websiteId').value;
             const startDate = document.getElementById('report-startDate').value;
             const endDate = document.getElementById('report-endDate').value;
 
-            const params = new URLSearchParams();
-            if (websiteId) params.append('websiteId', websiteId);
-            if (startDate) params.append('startDate', startDate);
-            if (endDate) params.append('endDate', endDate);
-            params.append('format', 'csv');
+            const params = {};
+            if (websiteId) params.websiteId = websiteId;
+            if (startDate) params.startDate = startDate;
+            if (endDate) params.endDate = endDate;
 
-            window.open(apiBase + '/export?' + params, '_blank');
+            try {
+                const result = await requestVisitor('analyticsExport', params);
+                if (result.code !== 200) {
+                    throw new Error(result.msg || 'Export failed');
+                }
+                const blob = new Blob([result.data.content || ''], { type: 'text/csv;charset=utf-8' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = result.data.filename || 'visitor-analytics.csv';
+                link.click();
+                URL.revokeObjectURL(link.href);
+            } catch (error) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('瀵煎嚭澶辫触') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('纭畾') ?>'
+                    });
+                } else {
+                    console.error('瀵煎嚭澶辫触: ' + error.message);
+                }
+            }
         }
 
         // 初始化

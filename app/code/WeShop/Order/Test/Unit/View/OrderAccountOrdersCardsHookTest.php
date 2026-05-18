@@ -14,8 +14,8 @@ class OrderAccountOrdersCardsHookTest extends TestCase
         $this->assertIsString($template);
 
         $this->assertStringContainsString("w_query('order', 'getCustomerDashboardOrders'", $template);
-        $this->assertStringContainsString("getUrl('weshop/order/list')", $template);
-        $this->assertStringContainsString("getUrl('weshop/order/view'", $template);
+        $this->assertStringContainsString('/customer/account/index#orders', $template);
+        $this->assertStringContainsString('return_anchor=', $template);
         $this->assertStringContainsString('orderCount', $template);
         $this->assertStringContainsString('unpaidCount', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::orders::cards', $template);

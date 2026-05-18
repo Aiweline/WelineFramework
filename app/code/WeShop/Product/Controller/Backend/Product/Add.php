@@ -95,10 +95,10 @@ class Add extends BackendController
                         $attributeDataItem->setValue($product_id, $attribute_value);
                     }
                 }
-            } catch (\Exception $exception) {
+            } catch (\Throwable $exception) {
                 $this->getMessageManager()->addError(__('保存失败:') . (DEV ? $exception->getMessage() : ''));
                 $this->request->isGet(true);
-                return $this->add();
+                return $this->index();
             }
 
             # 检测是否有可配置产品f
@@ -128,7 +128,7 @@ class Add extends BackendController
                     } catch (\Throwable $throwable) {
                         $this->getMessageManager()->addError(__('保存失败,请重试!') . (DEV ? $throwable->getMessage() : ''));
                         $this->request->isGet(true);
-                        return $this->add();
+                        return $this->index();
                     }
                     # 可配置属性设置
                     /**@var OptionId $optionModel */

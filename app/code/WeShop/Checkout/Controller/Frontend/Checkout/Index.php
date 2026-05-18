@@ -40,7 +40,12 @@ class Index extends BaseController
 
         $currentStep = max(1, min(3, (int) ($this->request->getParam('step') ?? 1)));
         $retryOrderId = (int) ($this->request->getParam('order_id') ?? 0);
-        $pageData = $this->checkoutPageDataService->build($cartCustomerId, $currentStep, $retryOrderId);
+        $pageData = $this->checkoutPageDataService->build($cartCustomerId, $currentStep, $retryOrderId, [
+            'checkout_mode' => (string) ($checkoutIdentity['checkout_mode'] ?? ''),
+            'is_guest_checkout' => !empty($checkoutIdentity['is_guest_checkout']),
+            'cart_customer_id' => $cartCustomerId,
+            'authenticated_customer_id' => $authenticatedCustomerId,
+        ]);
         $methodData = $this->checkoutPageDataService->buildDynamicMethodData($cartCustomerId, [
             'shipping_address_id' => !empty($checkoutIdentity['is_guest_checkout']) ? 0 : (int) ($pageData['selected_shipping_address_id'] ?? 0),
             'checkout_mode' => (string) ($checkoutIdentity['checkout_mode'] ?? ''),

@@ -579,16 +579,159 @@ $currentYear = date('Y');
         margin-bottom: 0.8rem;
     }
 
-    .weline-admin-login-messages .alert {
+    .weline-admin-login-messages .wflash {
+        position: relative;
         margin-bottom: 0;
-        border: 1px solid rgba(148, 163, 184, 0.18);
+        padding: 0.95rem 1rem 0.95rem 4rem;
+        padding-inline-end: 3rem;
         border-radius: 1rem;
-        background: rgba(255, 255, 255, 0.7);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+        backdrop-filter: blur(14px);
+        text-align: left;
     }
 
-    [data-layout-mode="dark"] .weline-admin-login-messages .alert {
-        background: rgba(15, 23, 42, 0.72);
+    .weline-admin-login-messages .wflash::before {
+        content: '';
+        position: absolute;
+        inset-inline-start: 1rem;
+        top: 1rem;
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 999px;
+        background-color: rgba(220, 38, 38, 0.18);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23dc2626' d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 14.75a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 12 16.75Zm1-4.5a1 1 0 0 1-2 0V7.5a1 1 0 0 1 2 0Z'/%3E%3C/svg%3E");
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: 0.9rem 0.9rem;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+    }
+
+    .weline-admin-login-messages .wflash__title,
+    .weline-admin-login-messages .wflash__body {
+        display: block;
+        font-size: 0.95rem;
+        line-height: 1.55;
+        text-align: left;
+    }
+
+    .weline-admin-login-messages .wflash__title {
+        margin: 0 0 0.2rem;
+        font-weight: 780;
+    }
+
+    .weline-admin-login-messages .wflash__body {
+        margin: 0;
+        font-weight: 560;
+    }
+
+    .weline-admin-login-messages .wflash__close {
+        position: absolute;
+        inset-inline-end: 0.7rem;
+        top: 0.7rem;
+        width: 1.85rem;
+        height: 1.85rem;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='%2394a3b8' d='M3.146 3.146a.5.5 0 0 1 .708 0L8 7.293l4.146-4.147a.5.5 0 0 1 .708.708L8.707 8l4.147 4.146a.5.5 0 0 1-.708.708L8 8.707l-4.146 4.147a.5.5 0 0 1-.708-.708L7.293 8 3.146 3.854a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e") center / 0.82rem auto no-repeat;
+        cursor: pointer;
+        opacity: 0.72;
+        transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .weline-admin-login-messages .wflash__close:hover {
+        opacity: 1;
+        transform: scale(1.03);
+        background-color: rgba(148, 163, 184, 0.08);
+    }
+
+    .weline-admin-login-messages .wflash__close:focus-visible {
+        outline: 2px solid rgba(37, 99, 235, 0.35);
+        outline-offset: 2px;
+        opacity: 1;
+    }
+
+    .weline-admin-login-messages .wflash--danger {
+        border-color: rgba(239, 68, 68, 0.28);
+        background: linear-gradient(180deg, rgba(254, 242, 242, 0.98) 0%, rgba(254, 226, 226, 0.94) 100%);
+        color: #dc2626;
+        box-shadow: 0 18px 38px rgba(239, 68, 68, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    }
+
+    .weline-admin-login-messages .wflash--danger .wflash__title {
+        color: #991b1b;
+    }
+
+    .weline-admin-login-messages .wflash--danger .wflash__body {
+        color: #7f1d1d;
+    }
+
+    .weline-admin-login-messages .wflash--warning {
+        border-color: rgba(245, 158, 11, 0.24);
+        background: linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, rgba(254, 243, 199, 0.95) 100%);
+        color: #d97706;
+        box-shadow: 0 16px 34px rgba(245, 158, 11, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    }
+
+    .weline-admin-login-messages .wflash--warning::before {
+        background-color: rgba(245, 158, 11, 0.18);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23d97706' d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 14.75a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 12 16.75Zm1-4.5a1 1 0 0 1-2 0V7.5a1 1 0 0 1 2 0Z'/%3E%3C/svg%3E");
+    }
+
+    .weline-admin-login-messages .wflash--warning .wflash__title {
+        color: #92400e;
+    }
+
+    .weline-admin-login-messages .wflash--warning .wflash__body {
+        color: #78350f;
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash {
+        background: rgba(15, 23, 42, 0.82);
+        border-color: rgba(148, 163, 184, 0.22);
+        box-shadow: 0 22px 42px rgba(2, 6, 23, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash--danger {
+        background: linear-gradient(180deg, rgba(127, 29, 29, 0.5) 0%, rgba(69, 10, 10, 0.56) 100%);
+        border-color: rgba(248, 113, 113, 0.44);
+        color: #fca5a5;
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash--danger .wflash__title {
+        color: #fee2e2;
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash--danger .wflash__body {
+        color: #fecaca;
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash--danger::before {
+        background-color: rgba(248, 113, 113, 0.2);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fecaca' d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 14.75a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 12 16.75Zm1-4.5a1 1 0 0 1-2 0V7.5a1 1 0 0 1 2 0Z'/%3E%3C/svg%3E");
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash--warning {
+        background: linear-gradient(180deg, rgba(146, 64, 14, 0.48) 0%, rgba(120, 53, 15, 0.52) 100%);
+        border-color: rgba(251, 191, 36, 0.4);
+        color: #fcd34d;
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash--warning .wflash__title,
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash--warning .wflash__body {
+        color: #fde68a;
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash--warning::before {
+        background-color: rgba(251, 191, 36, 0.18);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fde68a' d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 14.75a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 12 16.75Zm1-4.5a1 1 0 0 1-2 0V7.5a1 1 0 0 1 2 0Z'/%3E%3C/svg%3E");
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-messages .wflash__close {
+        filter: brightness(0) invert(1);
     }
 
     .weline-admin-login-provider-slot {

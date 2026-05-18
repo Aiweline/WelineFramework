@@ -17,6 +17,20 @@ $is_logged_in = $this->is_logged_in ?? false;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
+            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
+            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            api: {
+                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                endpoint: '/api/framework/query-bin',
+                queryBinUrl: '/api/framework/query-bin'
+            }
+        });
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
+    </script>
+    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2"></script>
     <title><?= __('AI聊天') ?> - AI助手平台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.5.95/css/materialdesignicons.min.css" rel="stylesheet">
@@ -274,6 +288,22 @@ $is_logged_in = $this->is_logged_in ?? false;
 
 <script>
 let isProcessing = false;
+let aiApiPromise = null;
+
+function getAiApi() {
+    if (!aiApiPromise) {
+        aiApiPromise = (async function() {
+            if (window.Weline && typeof window.Weline.load === 'function') {
+                await window.Weline.load('api');
+            }
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                throw new Error('Weline.Api.resource is unavailable.');
+            }
+            return window.Weline.Api.resource('ai');
+        })();
+    }
+    return aiApiPromise;
+}
 
 function toggleSettings() {
     const panel = document.getElementById('settingsPanel');
@@ -331,10 +361,12 @@ async function sendMessage() {
         const scenarioCode = document.getElementById('scenarioSelect').value;
 
         // 调用API
-        var url = '<?= $this->getFrontendUrl('*/frontend/chat/send') ?>';
-        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `message=${encodeURIComponent(message)}&model_code=${modelCode}&scenario_code=${scenarioCode}` };
-        var res = await window.Weline.Api.request(url, opts);
-        const data = (res && res.data) || res;
+        const aiApi = await getAiApi();
+        const data = await aiApi.chat({
+            message: message,
+            model_code: modelCode,
+            scenario_code: scenarioCode
+        }, { silent: true });
 
         if (data.success) {
             aiContentDiv.textContent = data.data.response;

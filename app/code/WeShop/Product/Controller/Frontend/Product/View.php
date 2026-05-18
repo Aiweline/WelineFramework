@@ -137,7 +137,7 @@ class View extends BaseController
         $host = function_exists('w_env_http_host') ? (string)w_env_http_host() : '';
 
         return sha1((string)json_encode([
-            'v' => 1,
+            'v' => 4,
             'product_id' => $productId,
             'lang' => State::getLang(),
             'lang_local' => State::getLangLocal(),

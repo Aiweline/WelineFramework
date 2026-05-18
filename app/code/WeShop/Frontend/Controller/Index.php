@@ -6,6 +6,7 @@ namespace WeShop\Frontend\Controller;
 
 use WeShop\Catalog\Service\CategoryService;
 use WeShop\Product\Model\Product;
+use WeShop\Product\Service\ProductBestSellerService;
 use WeShop\Product\Service\ProductService;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\State;
@@ -27,7 +28,8 @@ class Index extends BaseController
 
     public function __construct(
         private readonly ProductService $productService,
-        private readonly CategoryService $categoryService
+        private readonly CategoryService $categoryService,
+        private readonly ?ProductBestSellerService $productBestSellerService = null
     ) {
     }
 
@@ -96,14 +98,9 @@ class Index extends BaseController
             ];
         }
 
-        $bestsellersResult = $this->productService->getProducts([
-            'status' => 1,
-            'order_by' => Product::schema_fields_ID,
-            'order_dir' => 'DESC',
-        ], 1, 8);
-
         $bestsellers = [];
-        foreach ($bestsellersResult['items'] as $product) {
+        $productBestSellerService = $this->productBestSellerService ?? ObjectManager::getInstance(ProductBestSellerService::class);
+        foreach ($productBestSellerService->getBestSellers(8) as $product) {
             $bestsellers[] = [
                 'product_id' => $product['product_id'] ?? $product[Product::schema_fields_ID] ?? 0,
                 'name' => $product['name'] ?? $product[Product::schema_fields_name] ?? '',

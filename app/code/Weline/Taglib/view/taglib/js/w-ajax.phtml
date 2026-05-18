@@ -9,51 +9,76 @@
         let success_confirm = target.data('success-confirm')
         let failure_confirm = target.data('failure-confirm')
         let message = target.data('msg')
-        let method = target.data('method')
+        let method = String(target.data('method') || 'POST').toUpperCase()
         if (action.indexOf('?') < 0) {
             action += '?isAjax=true'
         } else {
             action += '&isAjax=true'
         }
+
+        const requestAction = function () {
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.request !== 'function') {
+                return Promise.reject(new Error('Weline.Api.request is unavailable.'));
+            }
+            const data = target.data()
+            const options = {
+                method: method,
+                headers: {'Accept': 'application/json'},
+                silent: true
+            }
+            if (method === 'GET') {
+                const url = new URL(action, window.location.origin)
+                Object.keys(data || {}).forEach(function (key) {
+                    if (data[key] !== undefined && data[key] !== null) {
+                        url.searchParams.set(key, String(data[key]))
+                    }
+                })
+                action = url.toString()
+            } else {
+                options.headers['Content-Type'] = 'application/json'
+                options.body = JSON.stringify(data || {})
+            }
+            return Promise.resolve(window.Weline.Api.request(action, options)).then(function (res) {
+                if (res && typeof res.json === 'function') {
+                    return res.json();
+                }
+                return res;
+            })
+        }
+
         if (message) {
             Swal.fire({
                 title: message,
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonText: confirm??'@lang{好的}',
-                cancelButtonText: cancel??'@lang{算了}'
+                confirmButtonText: confirm??'@lang{濂界殑}',
+                cancelButtonText: cancel??'@lang{绠椾簡}'
             }).then((result) => {
                 if (result.isConfirmed) {
                     showLoading();
-                    let data = target.data()
-                    $.ajax({
-                        url: action,
-                        data: data,
-                        type: method,
-                        success: (res) => {
-                            if (!res.success) {
-                                Swal.fire({
-                                    title: res.title,
-                                    text: res.message,
-                                    icon: 'error',
-                                    confirmButtonText: success_confirm??'@lang{好的}'
-                                })
-                            } else {
-                                Swal.fire({
-                                    title: res.title,
-                                    text: __('操作成功!'),
-                                    icon: 'success',
-                                    confirmButtonText: failure_confirm??'@lang{好的}'
-                                })
-                            }
-                            if (reload) {
-                                location.reload()
-                            }
-                            hideLoading();
-                        }, error: function (res) {
-                            hideLoading();
-                            console.log(res)
+                    requestAction().then((res) => {
+                        if (!res.success) {
+                            Swal.fire({
+                                title: res.title,
+                                text: res.message,
+                                icon: 'error',
+                                confirmButtonText: success_confirm??'@lang{濂界殑}'
+                            })
+                        } else {
+                            Swal.fire({
+                                title: res.title,
+                                text: __('鎿嶄綔鎴愬姛!'),
+                                icon: 'success',
+                                confirmButtonText: failure_confirm??'@lang{濂界殑}'
+                            })
                         }
+                        if (reload) {
+                            location.reload()
+                        }
+                        hideLoading();
+                    }).catch(function (err) {
+                        hideLoading();
+                        console.log(err)
                     })
                 }
             })

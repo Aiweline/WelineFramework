@@ -1,44 +1,37 @@
 <?php
 /**
- * 畅销产品部件
- * 
+ * Bestsellers product widget.
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {bestsellers}
- * @widget.name {畅销产品}
+ * @widget.name {热销产品}
  * @widget.description {展示最受欢迎的热销产品}
  * @widget.type {product}
  * @widget.area {frontend}
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["homepage", "cms_page", "category", "product"]}
  * @widget.compatible {true}
- * 
- * @param title {default="热销产品",type="string",label="标题"}
- * @param subtitle {default="最受欢迎的商品",type="string",label="副标题"}
- * @param limit {default=8,type="number",label="显示数量"}
- * @param period {default="month",type="select",label="统计周期",options={week:"本周",month:"本月",year:"本年",all:"全部"}}
- * @param show_sales_count {default=false,type="bool",label="显示销量"}
- * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
- * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
 $title = $this->getData('title') ?? __('热销产品');
 $subtitle = $this->getData('subtitle') ?? __('最受欢迎的商品');
-$limit = (int)($this->getData('limit') ?? 8);
-$period = $this->getData('period') ?? 'month';
+$limit = max(1, (int)($this->getData('limit') ?? 8));
+$period = (string)($this->getData('period') ?? 'month');
 $showSalesCount = (bool)($this->getData('show_sales_count') ?? false);
-$columns = $this->getData('columns') ?? '4';
-$layout = $this->getData('layout') ?? 'grid';
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
+$columns = (string)($this->getData('columns') ?? '4');
+$layout = (string)($this->getData('layout') ?? 'grid');
+$placeholder = 'data:image/svg+xml;charset=UTF-8,' . rawurlencode(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#fff7ed"/><stop offset="1" stop-color="#fed7aa"/></linearGradient></defs><rect width="640" height="640" fill="url(#g)"/><path d="M334 120c36 74-18 100-18 150 0 35 28 58 62 45 38-15 42-62 16-108 92 54 122 139 86 219-31 69-94 101-160 101s-129-32-160-101c-34-76-6-158 74-211-8 52 14 82 48 82 39 0 62-40 52-177z" fill="#fb923c"/></svg>'
+);
 
-// 示例产品数据
 $products = [];
 for ($i = 1; $i <= $limit; $i++) {
     $price = 49 + ($i * 37);
     $originalPrice = round($price * (1.1 + (($i % 3) * 0.05)), 2);
     $products[] = [
         'id' => $i,
-        'name' => __('热销产品 %d', $i),
+        'name' => '热销产品 ' . $i,
         'url' => '/product/best-' . $i,
         'image' => $placeholder,
         'price' => $price,
@@ -50,168 +43,154 @@ for ($i = 1; $i <= $limit; $i++) {
     ];
 }
 
+$realProducts = [];
+try {
+    $recommendationService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Product\Service\ProductRecommendationService::class);
+    $realProducts = $recommendationService->getRecommendations([], $limit);
+} catch (\Throwable) {
+    $realProducts = [];
+}
+if ($realProducts !== []) {
+    $products = $realProducts;
+    foreach ($products as $index => &$product) {
+        $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
+        $handle = trim((string)($product['handle'] ?? ''));
+        $product['id'] = $productId;
+        $product['rank'] = $index + 1;
+        $product['url'] = $handle !== '' ? '/product/' . rawurlencode($handle) : '/product/view?id=' . $productId;
+        $product['sales_count'] = (int)($product['sales_count'] ?? max(20, (int)($product['review_count'] ?? 0)) * 8 + (($index + 1) * 37));
+    }
+    unset($product);
+}
+
 $widgetKey = (string)($this->getData('_widget_instance_key') ?? ($title . '|' . $limit . '|' . $period . '|' . $columns . '|' . $layout));
 $widgetId = 'bestsellers-' . substr(sha1($widgetKey), 0, 12);
 ?>
 
-<div class="widget-bestsellers widget-products" id="<?= $widgetId ?>">
+<div class="widget-bestsellers widget-products" id="<?= $widgetId ?>" style="width:100%;max-width:var(--layout-max-width,1600px);margin:0 auto;padding:var(--spacing-6,2rem) var(--spacing-4,1.5rem);box-sizing:border-box;">
     <?php if ($title || $subtitle): ?>
         <div class="widget-header">
             <?php if ($title): ?>
                 <h2 class="widget-title">
-                    <i class="ri-fire-fill" style="color: #ff6b6b;"></i>
-                    <?= htmlspecialchars($title) ?>
+                    <i class="ri-fire-fill" aria-hidden="true"></i>
+                    <?= htmlspecialchars((string)$title, ENT_QUOTES, 'UTF-8') ?>
                 </h2>
             <?php endif; ?>
             <?php if ($subtitle): ?>
-                <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+                <p class="widget-subtitle"><?= htmlspecialchars((string)$subtitle, ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
         </div>
     <?php endif; ?>
-    
-    <div class="products-container layout-<?= htmlspecialchars($layout) ?>">
-        <?php if ($layout === 'carousel'): ?>
-            <button class="carousel-arrow carousel-prev" type="button">
-                <i class="ri-arrow-left-s-line"></i>
-            </button>
-        <?php endif; ?>
-        
+
+    <div class="products-container layout-<?= htmlspecialchars($layout, ENT_QUOTES, 'UTF-8') ?>">
         <div class="products-wrapper">
-            <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
-                <?php foreach ($products as $index => $product): ?>
-                    <div class="product-card">
+            <div class="products-grid columns-<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?>" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--spacing-4,1rem);width:100%;box-sizing:border-box;">
+                <?php foreach ($products as $product): ?>
+                    <article class="product-card" style="display:flex;min-width:0;flex-direction:column;overflow:hidden;border:1px solid var(--color-border-light,#e5e7eb);border-radius:var(--radius-lg,12px);background:var(--color-bg-primary,#fff);box-shadow:var(--shadow-sm,0 1px 2px rgba(15,23,42,.04));">
                         <div class="product-image-wrapper">
-                            <?php if ($product['rank'] <= 3): ?>
-                                <span class="rank-badge rank-<?= $product['rank'] ?>">
-                                    <?= $product['rank'] ?>
-                                </span>
+                            <?php if ((int)$product['rank'] <= 3): ?>
+                                <span class="rank-badge rank-<?= (int)$product['rank'] ?>"><?= (int)$product['rank'] ?></span>
                             <?php endif; ?>
-                            
-                            <?php
-                            // 确保所有产品字段都是字符串，避免null值
-                            $productUrl = (string)($product['url'] ?? '');
-                            $productImage = (string)($product['image'] ?? '');
-                            $productName = (string)($product['name'] ?? '');
-                            ?>
-                            <a href="<?= htmlspecialchars($productUrl) ?>" class="product-image-link">
-                                <img src="<?= htmlspecialchars($productImage) ?>" 
-                                     alt="<?= htmlspecialchars($productName) ?>"
+                            <a href="<?= htmlspecialchars((string)$product['url'], ENT_QUOTES, 'UTF-8') ?>" class="product-image-link">
+                                <img src="<?= htmlspecialchars((string)$product['image'], ENT_QUOTES, 'UTF-8') ?>"
+                                     alt="<?= htmlspecialchars((string)$product['name'], ENT_QUOTES, 'UTF-8') ?>"
                                      class="product-image"
                                      loading="lazy">
                             </a>
-                            
                             <div class="product-badges">
-                                <span class="badge badge-hot"><?= __('HOT') ?></span>
+                                <span class="badge badge-hot">HOT</span>
                             </div>
-                            
                             <div class="product-actions">
-                                <button class="action-btn btn-wishlist weline-pixel::add_to_wishlist" title="<?= __('加入收藏') ?>">
+                                <button class="action-btn btn-wishlist weline-pixel::add_to_wishlist" type="button" title="<?= __('加入收藏') ?>">
                                     <i class="ri-heart-line weline-pixel::add_to_wishlist"></i>
                                 </button>
-                                <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
+                                <button class="action-btn btn-quickview" type="button" title="<?= __('快速查看') ?>">
                                     <i class="ri-eye-line"></i>
                                 </button>
                             </div>
                         </div>
-                        
-                        <div class="product-info">
+
+                        <div class="product-info" style="display:flex;width:auto;min-width:0;flex:1;flex-direction:column;gap:.6rem;padding:var(--spacing-4,1rem);box-sizing:border-box;">
                             <h3 class="product-name">
-                                <a href="<?= htmlspecialchars($productUrl) ?>">
-                                    <?= htmlspecialchars($productName) ?>
+                                <a href="<?= htmlspecialchars((string)$product['url'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= htmlspecialchars((string)$product['name'], ENT_QUOTES, 'UTF-8') ?>
                                 </a>
                             </h3>
-                            
                             <?php if ($showSalesCount): ?>
                                 <div class="product-sales">
-                                    <i class="ri-shopping-bag-line"></i>
-                                    <?= number_format($product['sales_count']) ?> <?= __('已售') ?>
+                                    <i class="ri-shopping-bag-line" aria-hidden="true"></i>
+                                    <?= number_format((int)$product['sales_count']) ?> <?= __('已售') ?>
                                 </div>
                             <?php endif; ?>
-                            
                             <div class="product-rating">
-                                <div class="stars">
+                                <div class="stars" aria-label="<?= number_format((float)$product['rating'], 1) ?>">
                                     <?php for ($s = 1; $s <= 5; $s++): ?>
-                                        <i class="ri-star-<?= $s <= floor($product['rating']) ? 'fill' : 'line' ?>"></i>
+                                        <i class="ri-star-<?= $s <= floor((float)$product['rating']) ? 'fill' : 'line' ?>"></i>
                                     <?php endfor; ?>
                                 </div>
-                                <span class="review-count">(<?= $product['review_count'] ?>)</span>
+                                <span class="review-count">(<?= (int)$product['review_count'] ?>)</span>
                             </div>
-                            
                             <div class="product-price">
-                                <?php if ($product['original_price'] > $product['price']): ?>
-                                    <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
+                                <?php if ((float)$product['original_price'] > (float)$product['price']): ?>
+                                    <span class="price-original">¥<?= number_format((float)$product['original_price'], 2) ?></span>
                                 <?php endif; ?>
-                                <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                                <span class="price-current weline-pixel::add_to_cart:value" data-pixel-value="<?= htmlspecialchars((string)(float)$product['price'], ENT_QUOTES, 'UTF-8') ?>">¥<?= number_format((float)$product['price'], 2) ?></span>
                             </div>
-                            
-                            <button class="btn-add-to-cart weline-pixel::add_to_cart" data-product-id="<?= $product['id'] ?>">
+                            <button class="btn-add-to-cart weline-pixel::add_to_cart" type="button" data-product-id="<?= (int)$product['id'] ?>">
                                 <i class="ri-shopping-cart-line weline-pixel::add_to_cart"></i>
                                 <span class="weline-pixel::add_to_cart"><?= __('加入购物车') ?></span>
                             </button>
                         </div>
-                    </div>
+                    </article>
                 <?php endforeach; ?>
             </div>
         </div>
-        
-        <?php if ($layout === 'carousel'): ?>
-            <button class="carousel-arrow carousel-next" type="button">
-                <i class="ri-arrow-right-s-line"></i>
-            </button>
-        <?php endif; ?>
     </div>
 </div>
 
 <style>
-.widget-bestsellers .rank-badge {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    width: 28px;
-    height: 28px;
-    display: flex;
+.widget-bestsellers .widget-header { margin-bottom: var(--spacing-5, 1.5rem); }
+.widget-bestsellers .widget-title { display: flex; align-items: center; gap: .5rem; margin: 0; color: var(--color-text-primary, #111827); font-size: clamp(1.5rem, 2vw, 2rem); font-weight: var(--font-weight-bold, 700); line-height: 1.2; }
+.widget-bestsellers .widget-title i { color: var(--color-primary, #ff6b35); }
+.widget-bestsellers .widget-subtitle { margin: .5rem 0 0; color: var(--color-text-secondary, #64748b); }
+.widget-bestsellers .products-wrapper { width: 100%; overflow: hidden; }
+.widget-bestsellers .product-image-wrapper { position: relative; overflow: hidden; background: var(--color-bg-secondary, #f8fafc); }
+.widget-bestsellers .product-image-link { display: block; aspect-ratio: 1 / 1; }
+.widget-bestsellers .product-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.widget-bestsellers .rank-badge { position: absolute; top: 10px; left: 10px; z-index: 3; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 999px; background: linear-gradient(135deg, #ffd700, #ffb700); color: #8b6914; font-size: 14px; font-weight: 700; }
+.widget-bestsellers .rank-2 { background: linear-gradient(135deg, #e5e7eb, #cbd5e1); color: #475569; }
+.widget-bestsellers .rank-3 { background: linear-gradient(135deg, #d97706, #92400e); color: #fff; }
+.widget-bestsellers .product-badges { position: absolute; left: 10px; bottom: 10px; }
+.widget-bestsellers .badge-hot { display: inline-flex; align-items: center; border-radius: 999px; background: linear-gradient(135deg, #ff6b6b, #ee5253); color: #fff; padding: .25rem .55rem; font-size: .75rem; font-weight: 700; }
+.widget-bestsellers .product-actions { position: absolute; top: .75rem; right: .75rem; display: flex; gap: .5rem; }
+.widget-bestsellers .action-btn { display: inline-flex; width: 2.25rem; height: 2.25rem; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: rgba(255,255,255,.92); color: var(--color-text-primary, #111827); cursor: pointer; box-shadow: 0 8px 20px rgba(15,23,42,.12); }
+.widget-bestsellers .product-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.widget-bestsellers .product-card:hover { transform: translateY(-2px); border-color: var(--color-primary, #2563eb); box-shadow: var(--shadow-md, 0 12px 30px rgba(15,23,42,.10)); }
+.widget-bestsellers .product-name { margin: 0; font-size: var(--font-size-base, 1rem); line-height: 1.35; }
+.widget-bestsellers .product-name a { color: var(--color-text-primary, #111827); text-decoration: none; }
+.widget-bestsellers .product-name a:hover { color: var(--color-primary, #2563eb); }
+.widget-bestsellers .product-rating, .widget-bestsellers .product-sales { display: flex; align-items: center; gap: .45rem; color: var(--color-text-secondary, #64748b); font-size: .875rem; }
+.widget-bestsellers .stars i { color: #ffc107; }
+.widget-bestsellers .product-price { display: flex; align-items: baseline; gap: .5rem; margin-top: auto; }
+.widget-bestsellers .price-original { color: var(--color-text-tertiary, #94a3b8); text-decoration: line-through; }
+.widget-bestsellers .price-current { color: var(--color-primary, #2563eb); font-weight: 800; }
+.widget-bestsellers .btn-add-to-cart {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: .5rem;
+    width: 100%;
+    min-height: 2.75rem;
+    border: 0;
+    border-radius: var(--radius-md, 10px);
+    background: var(--color-primary, #2563eb);
+    color: #fff;
+    cursor: pointer;
     font-weight: 700;
-    font-size: 14px;
-    border-radius: 50%;
-    z-index: 3;
+    transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease;
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(15,23,42,.06));
 }
-
-.widget-bestsellers .rank-1 {
-    background: linear-gradient(135deg, #ffd700, #ffb700);
-    color: #8b6914;
-}
-
-.widget-bestsellers .rank-2 {
-    background: linear-gradient(135deg, #c0c0c0, #a0a0a0);
-    color: #555;
-}
-
-.widget-bestsellers .rank-3 {
-    background: linear-gradient(135deg, #cd7f32, #b06c28);
-    color: #fff;
-}
-
-.widget-bestsellers .badge-hot {
-    background: linear-gradient(135deg, #ff6b6b, #ee5253);
-    color: #fff;
-}
-
-.widget-bestsellers .product-sales {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    color: #ff6b6b;
-    margin-bottom: 8px;
-}
-
-.widget-bestsellers .product-rating .stars i {
-    color: #ffc107;
-}
-
-.widget-bestsellers .product-rating .stars i.ri-star-line {
-    color: #ddd;
-}
+.widget-bestsellers .btn-add-to-cart:hover { opacity: .92; box-shadow: var(--shadow-md, 0 10px 24px rgba(37,99,235,.22)); }
+.widget-bestsellers .btn-add-to-cart:active { transform: translateY(1px); }
+.widget-bestsellers .btn-add-to-cart i { font-size: 1.05rem; }
 </style>

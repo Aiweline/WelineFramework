@@ -188,6 +188,10 @@ class ConfigurableProductService
 
         // 构建选项-产品映射（哪些产品可用于某个选项）
         $optionProductMap = [];
+        $childImageMap = [];
+        foreach ($children as $child) {
+            $childImageMap[(int)$child[Product::schema_fields_ID]] = (string)($child[Product::schema_fields_image] ?? '');
+        }
         foreach ($productOptions as $po) {
             $optId = (int)$po[OptionId::schema_fields_OPTION_ID];
             if (!isset($optionProductMap[$optId])) {
@@ -206,6 +210,7 @@ class ConfigurableProductService
             $attrOptions = [];
             foreach ($options as $optId => $opt) {
                 if ((int)$opt['attribute_id'] === (int)$attrId) {
+                    $optionImage = $this->resolveOptionImage($optionProductMap[$optId] ?? [], $childImageMap);
                     $attrOptions[] = [
                         'option_id' => (int)$optId,
                         'code' => $opt['code'] ?? '',
@@ -213,6 +218,7 @@ class ConfigurableProductService
                         'origin_value' => $opt['origin_value'],
                         'swatch_type' => $opt['swatch_type'],
                         'swatch_value' => $opt['swatch_value'],
+                        'option_image' => $optionImage,
                         'available_product_ids' => $optionProductMap[$optId] ?? [],
                     ];
                 }
@@ -230,6 +236,22 @@ class ConfigurableProductService
         }
 
         return $result;
+    }
+
+    /**
+     * @param int[] $productIds
+     * @param array<int, string> $childImageMap
+     */
+    private function resolveOptionImage(array $productIds, array $childImageMap): string
+    {
+        foreach ($productIds as $productId) {
+            $image = trim((string)($childImageMap[(int)$productId] ?? ''));
+            if ($image !== '') {
+                return $image;
+            }
+        }
+
+        return '';
     }
 
     /**

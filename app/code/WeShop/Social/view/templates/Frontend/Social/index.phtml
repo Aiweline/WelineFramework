@@ -325,15 +325,17 @@ $shareUrls = (array) ($this->getData('share_urls') ?? []);
 
     function recordShare(platform, url) {
         var productId = <?= $productId ?>;
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '<?= $this->getUrl('weshop/social/record') ?>', true);
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-        xhr.send(
-            'platform=' + encodeURIComponent(platform) +
-            '&url=' + encodeURIComponent(url) +
-            '&product_id=' + productId
-        );
+        if (!window.Weline || !window.Weline.Api) {
+            return;
+        }
+
+        Promise.resolve(window.Weline.Api.resource('social')).then(function (SocialApi) {
+            return SocialApi.recordShare({
+                platform: platform || '',
+                url: url || '',
+                product_id: productId || 0
+            }, {silent: true});
+        }).catch(function () {});
     }
 })();
 </script>

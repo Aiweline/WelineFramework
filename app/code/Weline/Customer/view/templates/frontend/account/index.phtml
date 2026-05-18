@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /** @var \Weline\Framework\View\Template $this */
 /**@var \Weline\Customer\Model\Customer $user */
 $avatar = $user->getAvatar();
@@ -52,7 +52,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                     </div>
 
                     <div class="account-form__group account-form__group--wide">
-                        <label for="avatar" class="account-form__label"><lang>头像URL</lang></label>
+                        <label for="avatar" class="account-form__label"><lang>头像 URL</lang></label>
                         <div class="account-form__input-group">
                             <input type="url" class="account-form__input" id="avatar" name="avatar"
                                    value="<?= htmlspecialchars($user->getAvatar() ?: '') ?>"
@@ -93,7 +93,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                     <div class="account-form__group account-form__group--medium">
                         <label for="old_password" class="account-form__label"><lang>原密码</lang></label>
                         <input type="password" class="account-form__input" id="old_password" name="old_password"
-                               placeholder="@lang{'请输入原密码'}" required>
+                                   placeholder="@lang{'请输入原密码'}" required>
                         <span class="account-form__hint"><lang>请输入当前密码以验证身份</lang></span>
                     </div>
 
@@ -123,7 +123,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         </div>
     </div>
 
-    <!-- 扩展分区：其它模块通过 account.sidebar.content 注入 -->
+    <!-- 扩展分区：其他模块通过 account.sidebar.content 注入 -->
     <w:hook name="account.sidebar.content"/>
 
     <div class="account-index__section d-none" id="login-info-section" data-account-section="login-info" hidden>
@@ -596,22 +596,22 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
 <script>
 (function() {
-    // 账户页 AJAX 文案通过 JSON 直接嵌入，避免 script 内再次转义后出现 Unicode/HTML 实体异常。
+    // Account AJAX copy is embedded as JSON to avoid escaping issues in scripts.
     var i18nAccount = {
         saving: <?= json_encode((string) __('保存中...'), JSON_UNESCAPED_UNICODE) ?>,
         changing: <?= json_encode((string) __('修改中...'), JSON_UNESCAPED_UNICODE) ?>,
         profileUpdateFailed: <?= json_encode((string) __('更新失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
         securityUpdateFailed: <?= json_encode((string) __('修改失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
         fillAllFields: <?= json_encode((string) __('请填写所有字段'), JSON_UNESCAPED_UNICODE) ?>,
-        passwordTooShort: <?= json_encode((string) __('新密码长度不能少于6位'), JSON_UNESCAPED_UNICODE) ?>,
+        passwordTooShort: <?= json_encode((string) __('新密码长度不能少于 6 位'), JSON_UNESCAPED_UNICODE) ?>,
         passwordMismatch: <?= json_encode((string) __('两次输入的新密码不一致'), JSON_UNESCAPED_UNICODE) ?>,
         invalidServerResponse: <?= json_encode((string) __('服务器返回了无效响应，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
         endpointNotFound: <?= json_encode((string) __('保存接口不存在，页面脚本或路由需要同步修复'), JSON_UNESCAPED_UNICODE) ?>
     };
 
-    var profileUpdateUrl = <?= json_encode('/customer/account/index/update', JSON_UNESCAPED_UNICODE) ?>;
+    var accountApiPromise = null;
 
-    /** 接口偶发返回 HTML 数字实体文案时进行解码；不使用 textarea，避免部分环境 innerHTML 解码不稳定。 */
+    /** Decode HTML entities returned by occasional HTML error responses. */
     function welineDecodeHtmlEntities(message) {
         var s = String(message || '');
         if (s.indexOf('&') === -1) {
@@ -673,8 +673,115 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         });
     }
 
-    // 仅绑定带 data-section 的侧栏项，避免把退出登录等普通链接也当成分区切换。
+    function getAccountApi() {
+        if (!accountApiPromise) {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                accountApiPromise = window.Weline.Api.resource('account');
+            } else if (window.Weline && typeof window.Weline.load === 'function') {
+                accountApiPromise = window.Weline.load('api').then(function() {
+                    if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api is unavailable.');
+                    }
+                    return window.Weline.Api.resource('account');
+                });
+            } else {
+                accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+        }
+        return accountApiPromise;
+    }
+
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function(value, key) {
+            payload[key] = value;
+        });
+        delete payload.form_key;
+        return payload;
+    }
+
     var navLinks = document.querySelectorAll('[data-account-nav-link][data-section]');
+
+
+    function parseHash(inputHash) {
+        var rawHash = String(inputHash || '');
+        if (!rawHash) {
+            return { section: '', query: {} };
+        }
+
+        var trimmed = rawHash.replace(/^.*#/, '');
+        if (!trimmed) {
+            return { section: '', query: {} };
+        }
+
+        var section = trimmed;
+        var query = {};
+        var splitAt = trimmed.indexOf('?');
+
+        if (splitAt !== -1) {
+            section = trimmed.substring(0, splitAt);
+            var queryString = trimmed.substring(splitAt + 1);
+            if (queryString) {
+                try {
+                    var parsed = new URLSearchParams(queryString);
+                    parsed.forEach(function (value, key) {
+                        query[String(key)] = String(value);
+                    });
+                } catch (err) {}
+            }
+        }
+
+        return {
+            section: section,
+            query: query
+        };
+    }
+
+    function parseAccountHash() {
+        return parseHash(window.location.hash || '');
+    }
+
+    function getNavTarget(link) {
+        var targetId = link.getAttribute('data-section') || '';
+        var hashInfo = parseHash(link.getAttribute('href') || '');
+        if (hashInfo.section) {
+            targetId = hashInfo.section;
+        }
+
+        return {
+            section: targetId,
+            query: hashInfo.query
+        };
+    }
+
+    function hasNavSection(section) {
+        return Array.prototype.some.call(document.querySelectorAll('[data-account-nav-link][data-section]'), function (a) {
+            return a.getAttribute('data-section') === section;
+        });
+    }
+
+    function updateHash(section, query) {
+        var targetHash = '#' + section;
+        if (query && typeof query === 'object' && Object.keys(query).length > 0) {
+            var nextQuery = new URLSearchParams();
+            Object.keys(query).forEach(function (key) {
+                var value = query[key];
+                if (value === '' || value === null || value === undefined) {
+                    return;
+                }
+                nextQuery.set(key, String(value));
+            });
+
+            var nextQueryString = nextQuery.toString();
+            if (nextQueryString) {
+                targetHash += '?' + nextQueryString;
+            }
+        }
+
+        if (window.history && typeof window.history.replaceState === 'function') {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search + targetHash);
+        }
+    }
 
     function setActiveNavLink(targetId) {
         var activeParent = '';
@@ -719,39 +826,48 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             targetSection.classList.remove('d-none');
             targetSection.hidden = false;
         }
+        if (targetId === 'orders') {
+            window.dispatchEvent(new CustomEvent('weshop:orders-viewed'));
+        }
     }
 
-    navLinks.forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            var targetId = link.getAttribute('data-section');
+    function syncFromHash() {
+        var parsed = parseAccountHash();
+        var targetId = parsed.section || 'profile';
+        if (!hasNavSection(targetId)) {
+            targetId = 'profile';
+        }
+
+        setActiveNavLink(targetId);
+        showAccountSection(targetId);
+
+        if (typeof parsed.query.return_anchor === 'string' && parsed.query.return_anchor) {
+            var anchor = document.getElementById(parsed.query.return_anchor);
+            if (anchor && typeof anchor.scrollIntoView === 'function') {
+                anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    }
+
+        navLinks.forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                var navTarget = getNavTarget(link);
+                var targetId = navTarget.section;
             if (!targetId) {
                 return;
             }
 
-            setActiveNavLink(targetId);
-            showAccountSection(targetId);
-            try {
-                // 必须与侧栏 a[href] 保持一致；只写 #id 会在站点根路径下把地址栏改成 /#orders。
-                var hrefAttr = link.getAttribute('href');
-                if (hrefAttr && hrefAttr.indexOf('#') !== -1) {
-                    history.replaceState(null, '', hrefAttr);
-                } else {
-                    history.replaceState(null, '', '#' + targetId);
-                }
-            } catch (err) {}
+                setActiveNavLink(targetId);
+                showAccountSection(targetId);
+                try {
+                    updateHash(targetId, navTarget.query);
+                } catch (err) {}
+            });
         });
-    });
 
-    (function syncInitialHash() {
-        var raw = window.location.hash ? window.location.hash.replace(/^#/, '') : '';
-        var hasNav = Array.prototype.some.call(navLinks, function(a) {
-            return a.getAttribute('data-section') === raw;
-        });
-        var initialSection = raw && hasNav ? raw : 'profile';
-        setActiveNavLink(initialSection);
-        showAccountSection(initialSection);
-    })();
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
 
     var avatarInput = document.getElementById('avatar');
     var avatarTargets = [
@@ -824,11 +940,14 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             errorMsg.textContent = '';
 
             var formData = new FormData(this);
-            fetch(profileUpdateUrl, {
-                method: 'POST',
-                body: formData
+            getAccountApi()
+            .then(function(AccountApi) {
+                return AccountApi.updateProfile(formDataToObject(formData), {
+                    onError: function(_status, error) {
+                        errorMsg.textContent = welineDecodeHtmlEntities(error && error.message ? error.message : '') || i18nAccount.profileUpdateFailed;
+                    }
+                });
             })
-            .then(parseJsonResponse)
             .then(function(data) {
                 if (data.success) {
                     errorMsg.textContent = '';
@@ -884,11 +1003,14 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             btn.innerHTML = '<i class="ri-loader-4-line"></i> ' + i18nAccount.changing;
 
             var formData = new FormData(this);
-            fetch(profileUpdateUrl, {
-                method: 'POST',
-                body: formData
+            getAccountApi()
+            .then(function(AccountApi) {
+                return AccountApi.updatePassword(formDataToObject(formData), {
+                    onError: function(_status, error) {
+                        errorMsg.textContent = welineDecodeHtmlEntities(error && error.message ? error.message : '') || i18nAccount.securityUpdateFailed;
+                    }
+                });
             })
-            .then(parseJsonResponse)
             .then(function(data) {
                 if (data.success) {
                     errorMsg.textContent = '';
@@ -913,4 +1035,3 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     }
 })();
 </script>
-

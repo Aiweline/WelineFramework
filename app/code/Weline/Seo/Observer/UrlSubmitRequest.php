@@ -49,7 +49,7 @@ class UrlSubmitRequest implements ObserverInterface
 
         try {
             /** @var SeoSubject $subjectModel */
-            $subjectModel = $this->objectManager->getInstance(SeoSubject::class);
+            $subjectModel = $this->objectManager->getInstance(SeoSubject::class, [], false);
             $subject = $subjectModel->findOrCreate($subjectType, $subjectEntityId);
             $subject->setUrl($url)
                 ->setData(SeoSubject::schema_fields_SCOPE, $scope)
