@@ -23,13 +23,15 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
                 string $reason = 'shutdown',
                 ?int $progressClientId = null,
                 bool $exclusiveIpc = false,
-                bool $skipDrain = false
+                bool $skipDrain = false,
+                string $msgId = ''
             ): bool {
                 $this->requestStopCalls[] = [
                     'reason' => $reason,
                     'progressClientId' => $progressClientId,
                     'exclusiveIpc' => $exclusiveIpc,
                     'skipDrain' => $skipDrain,
+                    'msgId' => $msgId,
                 ];
 
                 return true;
@@ -45,6 +47,7 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             'progressClientId' => null,
             'exclusiveIpc' => false,
             'skipDrain' => false,
+            'msgId' => '',
         ]], $orchestrator->requestStopCalls);
     }
 
