@@ -503,22 +503,31 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
 .motor-select {
     width: 100%;
     min-height: 3rem;
-    padding: 0.8rem 1rem;
+    padding: 0.8rem 2.75rem 0.8rem 1rem;
     border-radius: 0.95rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.24);
+    background-color: rgba(255, 255, 255, 0.05);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.62)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1rem;
     color: var(--motor-text-main);
     font-family: 'Rajdhani', sans-serif;
     font-size: 0.98rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    line-height: 1.2;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
     cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    box-sizing: border-box;
 }
 
 .motor-select:focus {
     outline: none;
     border-color: rgba(255, 77, 90, 0.65);
     box-shadow: 0 0 0 4px rgba(227, 24, 55, 0.12);
-    background: rgba(0, 0, 0, 0.3);
+    background-color: rgba(255, 255, 255, 0.07);
 }
 
 .motor-form-actions {

@@ -21,7 +21,9 @@
  */
 $meta = $this->getData('meta') ?? [];
 $layout = $this->getData('layout') ?? [];
-$copyright = $meta['copyright'] ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
+$copyright = \Weline\Theme\Helper\FooterCopyrightHelper::resolve(
+    isset($meta['copyright']) ? (string) $meta['copyright'] : null
+);
 // 确保$links是数组
 $links = $meta['links'] ?? [];
 if (!is_array($links)) {
