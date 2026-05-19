@@ -1462,10 +1462,6 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * 鍚姩棰勭疆缁存姢 + 绗竴闃舵 Dispatcher/maintenance 鍚屾壒骞跺彂锛堝崟鍏ュ彛 startProvidersBatch锛?
-     * 鏃犱笟鍔?Worker 鏃?Dispatcher READY 搴旀敹鍒?SET_WORKER_POOL锛堢淮鎶ょ鍙ｏ級锛岃€岄潪 ADD_WORKER銆?
-     */
-    /**
      * Failed slots that still own a live startup PID must keep the slot blocked
      * until the resurrection queue explicitly decides otherwise.
      */
@@ -1840,8 +1836,8 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * 閸氼垰濮╂０鍕枂缂佸瓨濮?+ 缁楊兛绔撮梼鑸殿唽 Dispatcher/maintenance 閸氬本澹掗獮璺哄絺閿涘牆宕熼崗銉ュ經 startProvidersBatch閿?
-     * 閺冪姳绗熼崝?Worker 閺?Dispatcher READY 鎼存梹鏁归崚?SET_WORKER_POOL閿涘牏娣幎銈囶伂閸欙綇绱氶敍宀冣偓宀勬姜 ADD_WORKER閵?
+     * 启动预设维护 + 第一阶段 Dispatcher/maintenance 同批拉起（单入口 startProvidersBatch）。
+     * 无业务 Worker 时 Dispatcher READY 应收到 SET_WORKER_POOL（维护端口），而非 ADD_WORKER。
      */
     public function testStartupMaintenancePresetPhaseOneBatchAndDispatcherMaintenancePool(): void
     {
@@ -2069,7 +2065,8 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * Worker 涓?Dispatcher/缁存姢杩涚▼鍦ㄥ悓涓€娆?startProvidersBatch 涓媺璧凤紝闅忓悗鍦?waitForStartupAcceptance 涓瓑寰呯淮鎶ょ灏辩华闂ㄦ銆?
+     * Worker 与 Dispatcher/维护进程在同一次 startProvidersBatch 中拉起，
+     * 随后在 waitForStartupAcceptance 中等待维护端就绪门槛。
      */
     public function testWorkersLaunchBeforeStartupAcceptanceWaitsForPhaseOneReadiness(): void
     {
@@ -2387,7 +2384,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
             if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
-                self::fail('缁存姢 Worker 灏氭湭 READY 鏃朵笉搴斾笅鍙?SET_WORKER_POOL');
+                self::fail('维护 Worker 尚未 READY 时不应下发 SET_WORKER_POOL');
             }
         }
 
