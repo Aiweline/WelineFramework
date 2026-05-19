@@ -59,8 +59,6 @@
 "DataTable Tag Verification","DataTable Tag Verification"
 "Verification Layout","Verification Layout"
 "Validate the tag verification report inside the same backend layout variants used by the dashboard and demo routes.","Validate the tag verification report inside the same backend layout variants used by the dashboard and demo routes."
-"DataTable Frontend Demo Query","DataTable Frontend Demo Query"
-"Whitelist-only frontend DataTable demo operations through the worker channel.","Whitelist-only frontend DataTable demo operations through the worker channel."
 %{1}标签必须指定%{2}属性或位于d-table标签内！,"The %{1} tag must specify the %{2} attribute or be located within the d-table tag!"
 "Demo form record loading only supports single-model records.","Demo form record loading only supports single-model records."
 "Record does not exist.","Record does not exist."
@@ -135,145 +133,122 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 保存,Save
 添加,Add
 正在加载字段...,"Loading fields..."
-鍔犺浇瀛楁澶辫触,鍔犺浇瀛楁澶辫触
-缃戠粶閿欒,缃戠粶閿欒
-璇疯緭鍏?{1},璇疯緭鍏?{1}
-璇烽€夋嫨,璇烽€夋嫨
-鍔犺浇璁板綍澶辫触,鍔犺浇璁板綍澶辫触
-璇锋鏌ヨ〃鍗曚腑鐨勯敊璇?,璇锋鏌ヨ〃鍗曚腑鐨勯敊璇?
-淇濆瓨鎴愬姛,淇濆瓨鎴愬姛
-淇濆瓨澶辫触,淇濆瓨澶辫触
-淇濆瓨涓?..,淇濆瓨涓?..
-鎿嶄綔,鎿嶄綔
-缂栬緫,缂栬緫
-姝ゅ瓧娈典负蹇呭～椤?,姝ゅ瓧娈典负蹇呭～椤?
-璇疯緭鍏ユ湁鏁堢殑閭鍦板潃,璇疯緭鍏ユ湁鏁堢殑閭鍦板潃
-璇疯緭鍏ユ湁鏁堢殑鏁板瓧,璇疯緭鍏ユ湁鏁堢殑鏁板瓧
-璇疯緭鍏ユ湁鏁堢殑鐢佃瘽鍙风爜,璇疯緭鍏ユ湁鏁堢殑鐢佃瘽鍙风爜
-璇烽€夋嫨鍥剧墖鏂囦欢,璇烽€夋嫨鍥剧墖鏂囦欢
-棰勮鍥剧墖,棰勮鍥剧墖
-鏁板€间笉鑳藉皬浜?%{1},鏁板€间笉鑳藉皬浜?%{1}
-鏁板€间笉鑳藉ぇ浜?%{1},鏁板€间笉鑳藉ぇ浜?%{1}
-"杈撳叆闀垮害涓嶈兘瓒呰繃 %{1}","杈撳叆闀垮害涓嶈兘瓒呰繃 %{1}"
-瀛楁鏍煎紡涓嶆纭?,瀛楁鏍煎紡涓嶆纭?
-瀛楁楠岃瘉澶辫触,瀛楁楠岃瘉澶辫触
-鐞涖劍鐗告稉濠氼暯闁板秶鐤?,鐞涖劍鐗告稉濠氼暯闁板秶鐤?
-閺勫墽銇氶柅澶愩€?,閺勫墽銇氶柅澶愩€?
-閺勫墽銇氶弬鎴︹攬缁?,閺勫墽銇氶弬鎴︹攬缁?
-閺勫墽銇氶幃顒€浠犻弫鍫熺亯,閺勫墽銇氶幃顒€浠犻弫鍫熺亯
-閺勫墽銇氶幒鎺戠碍閸ョ偓鐖?,閺勫墽銇氶幒鎺戠碍閸ョ偓鐖?
-妫版粏澹婃稉濠氼暯,妫版粏澹婃稉濠氼暯
-娑撴槒澹婄拫?,娑撴槒澹婄拫?
-鐞涖劌銇旈懗灞炬珯,鐞涖劌銇旈懗灞炬珯
-鐞涘本鍋撻崑婊嗗,鐞涘本鍋撻崑婊嗗
-鐎涙ぞ缍嬬拋鍓х枂,鐎涙ぞ缍嬬拋鍓х枂
-鐎涙ぞ缍嬫径褍鐨?,鐎涙ぞ缍嬫径褍鐨?
-鐏?,鐏?
-娑?,娑?
-婢?,婢?
-閸欘亝妯夌粈娲櫢鐟曚焦鏆熼幑?,閸欘亝妯夌粈娲櫢鐟曚焦鏆熼幑?
-閺勫墽銇氶幍鈧張澶嬫殶閹?,閺勫墽銇氶幍鈧張澶嬫殶閹?
-濮濓絽婀€电厧鍤弫鐗堝祦,濮濓絽婀€电厧鍤弫鐗堝祦
-鐎电厧鍤弽鐓庣础,鐎电厧鍤弽鐓庣础
-妫板嫯顓哥€电厧鍤?,妫板嫯顓哥€电厧鍤?
-閺壜ゎ唶瑜?,閺壜ゎ唶瑜?
-閸?,閸?
-妞?,妞?
-瑜版挸澧犳い?,瑜版挸澧犳い?
-瀹告彃顕遍崙?,瀹告彃顕遍崙?
-鏉╂稑瀹?,鏉╂稑瀹?
-濮濓絽婀崚婵嗩潗閸栨牕顕遍崙?..,濮濓絽婀崚婵嗩潗閸栨牕顕遍崙?..
-瀹歌尙鏁ら弮鍫曟？,瀹歌尙鏁ら弮鍫曟？
-妫板嫯顓搁崜鈺€缍?,妫板嫯顓搁崜鈺€缍?
-鐠侊紕鐣绘稉?..,鐠侊紕鐣绘稉?..
-鐎电厧鍤潻鍥┾柤娑擃叀顕崟鍨彠闂傤厽顒濈粣妤€褰涢敍灞间簰閸忓秴顕遍懛瀛樻殶閹诡喕娑径?,鐎电厧鍤潻鍥┾柤娑擃叀顕崟鍨彠闂傤厽顒濈粣妤€褰涢敍灞间簰閸忓秴顕遍懛瀛樻殶閹诡喕娑径?
-閸欐牗绉风€电厧鍤?,閸欐牗绉风€电厧鍤?
-濮濓絽婀悽鐔稿灇閺傚洣娆?..,濮濓絽婀悽鐔稿灇閺傚洣娆?..
-鐎电厧鍤€瑰本鍨氶敍?,鐎电厧鍤€瑰本鍨氶敍?
-鐎电厧鍤径杈Е,鐎电厧鍤径杈Е
-閸忔娊妫?,閸忔娊妫?
-濞屸剝婀侀崣顖氼嚤閸戣櫣娈戦弫鐗堝祦,濞屸剝婀侀崣顖氼嚤閸戣櫣娈戦弫鐗堝祦
-濮濓絽婀崙鍡楊槵鐎电厧鍤弫鐗堝祦...,濮濓絽婀崙鍡楊槵鐎电厧鍤弫鐗堝祦...
-"閹存劕濮涚€电厧鍤?%{1} 閺壜ゎ唶瑜?","閹存劕濮涚€电厧鍤?%{1} 閺壜ゎ唶瑜?"
-鐎电厧鍤径杈Е閿?{1},鐎电厧鍤径杈Е閿?{1}
-娑撳秵鏁幐浣烘畱鐎电厧鍤弽鐓庣础,娑撳秵鏁幐浣烘畱鐎电厧鍤弽鐓庣础
-閼惧嘲褰囩€涙顔屾径杈Е,閼惧嘲褰囩€涙顔屾径杈Е
-閹锋牕濮╃拫鍐╂殻閸掓銆庢惔?,閹锋牕濮╃拫鍐╂殻閸掓銆庢惔?
-鐠囥儱鍨稉宥呭帒鐠佸摜些閸?,鐠囥儱鍨稉宥呭帒鐠佸摜些閸?
-閺冪姵纭堕弨鍓х枂閸掓媽顕氭担宥囩枂,閺冪姵纭堕弨鍓х枂閸掓媽顕氭担宥囩枂
-閸掓銆庢惔蹇撳嚒閺囧瓨鏌?,閸掓銆庢惔蹇撳嚒閺囧瓨鏌?
-閸旂姾娴囬弫鐗堝祦婢惰精瑙?,閸旂姾娴囬弫鐗堝祦婢惰精瑙?
-"閸旂姾娴囬弫鐗堝祦婢惰精瑙? %{1}","閸旂姾娴囬弫鐗堝祦婢惰精瑙? %{1}"
-鏉堟挸鍙?,鏉堟挸鍙?
-鐠囩柉绶崗銉ㄧ箖濠娿倕娅掗崥宥囆?,鐠囩柉绶崗銉ㄧ箖濠娿倕娅掗崥宥囆?
-鏉╁洦鎶ら崳銊ょ箽鐎涙ɑ鍨氶崝?,鏉╁洦鎶ら崳銊ょ箽鐎涙ɑ鍨氶崝?
-闁板秶鐤嗘穱婵嗙摠閹存劕濮?,闁板秶鐤嗘穱婵嗙摠閹存劕濮?
-娣囨繂鐡ㄦ径杈Е,娣囨繂鐡ㄦ径杈Е
-娣囨繂鐡ㄩ柊宥囩枂婢惰精瑙?,娣囨繂鐡ㄩ柊宥囩枂婢惰精瑙?
-鐠囧嘲鍘涙穱婵嗙摠瑜版挸澧犵紓鏍帆閻ㄥ嫯顢?,鐠囧嘲鍘涙穱婵嗙摠瑜版挸澧犵紓鏍帆閻ㄥ嫯顢?
-缂傛牞绶弫鐗堝祦,缂傛牞绶弫鐗堝祦
-娣囨繂鐡?,娣囨繂鐡?
-閸欐牗绉?,閸欐牗绉?
-鐠囩兘鈧瀚?,鐠囩兘鈧瀚?
-娣囨繂鐡ㄩ幋鎰,娣囨繂鐡ㄩ幋鎰
-绾喖鐣剧憰浣稿灩闂勩倛绻栭弶陇顔囪ぐ鏇炴偋閿?,绾喖鐣剧憰浣稿灩闂勩倛绻栭弶陇顔囪ぐ鏇炴偋閿?
-鐠囩兘鈧瀚ㄧ憰浣稿灩闂勩倗娈戠拋鏉跨秿,鐠囩兘鈧瀚ㄧ憰浣稿灩闂勩倗娈戠拋鏉跨秿
-"Confirm deleting selected records: %{1}","Confirm deleting selected records: %{1}"
-閸掔娀娅庣涵顔款吇,閸掔娀娅庣涵顔款吇
-鏉烆垰鍨归梽銈忕礄閸欘垱浠径宥忕礆,鏉烆垰鍨归梽銈忕礄閸欘垱浠径宥忕礆
-绾喛顓婚崚鐘绘珟,绾喛顓婚崚鐘绘珟
-閸楀啿鐨㈤崚鐘绘珟閻ㄥ嫯顔囪ぐ鏇窗,閸楀啿鐨㈤崚鐘绘珟閻ㄥ嫯顔囪ぐ鏇窗
-閸忛亶鈧鑵?,閸忛亶鈧鑵?
-濮濓絽婀崚鐘绘珟...,濮濓絽婀崚鐘绘珟...
-鐠佹澘缍嶅鑼╅懛鍐叉礀閺€鍓佺彲,鐠佹澘缍嶅鑼╅懛鍐叉礀閺€鍓佺彲
-閸掔娀娅庨幋鎰,閸掔娀娅庨幋鎰
-閸掔娀娅庢径杈Е,閸掔娀娅庢径杈Е
-閹劍婀侀張顏冪箽鐎涙娈戠紓鏍帆閸愬懎顔愰敍宀€鈥樼€规俺顩︾粋璇茬磻閸氭绱?,閹劍婀侀張顏冪箽鐎涙娈戠紓鏍帆閸愬懎顔愰敍宀€鈥樼€规俺顩︾粋璇茬磻閸氭绱?
-閸旂姾娴囨稉?..,閸旂姾娴囨稉?..
-闁插秷鐦?,闁插秷鐦?
-閸旂姾娴囨径杈Е,閸旂姾娴囨径杈Е
-閸欐ぞ绻氶幎?,閸欐ぞ绻氶幎?
-閺勫墽銇?,閺勫墽銇?
-閹碘偓閺堝鐡у▓鐢稿厴瀹告煡鍘ょ純?,閹碘偓閺堝鐡у▓鐢稿厴瀹告煡鍘ょ純?
-缁涙盯鈧?,缁涙盯鈧?
-瀹歌弓绻氱€?,瀹歌弓绻氱€?
-閻劍鍩涢柅澶嬪,閻劍鍩涢柅澶嬪
-閺堚偓鐏忓繘鏆辨惔?,閺堚偓鐏忓繘鏆辨惔?
-閺堚偓婢堆囨毐鎼?,閺堚偓婢堆囨毐鎼?
-濮濓絽鍨悰銊ㄦ彧瀵?,濮濓絽鍨悰銊ㄦ彧瀵?
-闂呮劘妫?,闂呮劘妫?
-娑撳﹦些,娑撳﹦些
-娑撳些,娑撳些
-鐎涙顔岄弽鍥暯,鐎涙顔岄弽鍥暯
-閸楃姳缍呯粭锔肩礄閸欘垶鈧绱?,閸楃姳缍呯粭锔肩礄閸欘垶鈧绱?
-闁銆??:閸氼垳鏁?0:缁備胶鏁?,闁銆??:閸氼垳鏁?0:缁備胶鏁?
-鐠佸墽鐤?,鐠佸墽鐤?
-閺嗗倹妫ら弰鍓с仛鐎涙顔?,閺嗗倹妫ら弰鍓с仛鐎涙顔?
-閹劌褰叉禒銉ユ躬閸欏厖鏅剁拫鍐╂殻鐎涙顔岄柊宥囩枂,閹劌褰叉禒銉ユ躬閸欏厖鏅剁拫鍐╂殻鐎涙顔岄柊宥囩枂
-缁夊娅?,缁夊娅?
-闁銆?閸?閺嶅洨顒?閸?閺嶅洨顒?,闁銆?閸?閺嶅洨顒?閸?閺嶅洨顒?
-閺嗗倹妫ょ粵娑⑩偓澶婄摟濞?,閺嗗倹妫ょ粵娑⑩偓澶婄摟濞?
-绾喖鐣剧憰渚€鍣哥純顔昏礋姒涙顓荤€涙顔岄柊宥囩枂閸氭绱垫潻娆忕殺閺勫墽銇氶幍鈧張澶婂讲閻劌鐡у▓纰夌吹,绾喖鐣剧憰渚€鍣哥純顔昏礋姒涙顓荤€涙顔岄柊宥囩枂閸氭绱垫潻娆忕殺閺勫墽銇氶幍鈧張澶婂讲閻劌鐡у▓纰夌吹
-"娣囨繂鐡ㄦ径杈Е: %{1}","娣囨繂鐡ㄦ径杈Е: %{1}"
-绾喖鐣剧憰渚€鍣哥純顔裤€冩径鏉戠摟濞堢敻鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕▔缁€鍝勭摟濞堜絻顔曠純?,绾喖鐣剧憰渚€鍣哥純顔裤€冩径鏉戠摟濞堢敻鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕▔缁€鍝勭摟濞堜絻顔曠純?
-绾喖鐣剧憰渚€鍣哥純顔剧摣闁鐡у▓鐢稿帳缂冾喖鎮ч敍鐔荤箹鐏忓棙绔婚梽銈嗗閺堝鍤滅€规矮绠熼惃鍕摣闁鐡у▓浣冾啎缂?,绾喖鐣剧憰渚€鍣哥純顔剧摣闁鐡у▓鐢稿帳缂冾喖鎮ч敍鐔荤箹鐏忓棙绔婚梽銈嗗閺堝鍤滅€规矮绠熼惃鍕摣闁鐡у▓浣冾啎缂?
-绾喖鐣剧憰渚€鍣哥純顔煎弿闁劑鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕€冩径鏉戠摟濞堥潧鎷扮粵娑⑩偓澶婄摟濞堜絻顔曠純?,绾喖鐣剧憰渚€鍣哥純顔煎弿闁劑鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕€冩径鏉戠摟濞堥潧鎷扮粵娑⑩偓澶婄摟濞堜絻顔曠純?
-闁板秶鐤嗗鏌ュ櫢缂?,闁板秶鐤嗗鏌ュ櫢缂?
-闁插秶鐤嗘径杈Е,闁插秶鐤嗘径杈Е
-闁插秶鐤嗛柊宥囩枂婢惰精瑙﹂敍宀冾嚞缁嬪秴鎮楅柌宥堢槸,闁插秶鐤嗛柊宥囩枂婢惰精瑙﹂敍宀冾嚞缁嬪秴鎮楅柌宥堢槸
-閺€鎯版崳,閺€鎯版崳
-缂冩垹绮堕柨娆掝嚖閿?{1},缂冩垹绮堕柨娆掝嚖閿?{1}
-閸旂姾娴囩€涙顔屾径杈Е,閸旂姾娴囩€涙顔屾径杈Е
-闁板秶鐤嗗韫箽鐎?,闁板秶鐤嗗韫箽鐎?
-婵繐绲藉﹢顏堝礄閸℃妲甸悗鐢靛帶閸ゎ參寮悧鍫濈ウ...,婵繐绲藉﹢顏堝礄閸℃妲甸悗鐢靛帶閸ゎ參寮悧鍫濈ウ...
-閻庣數鍘ч崵顓熷緞鏉堫偉袝,閻庣數鍘ч崵顓熷緞鏉堫偉袝
-閻庣數鍘ч崵顓㈠箣閹邦剙顫?,閻庣數鍘ч崵顓㈠箣閹邦剙顫?
-婵繐绲藉﹢顏堝礆閻樼粯鐝?..,婵繐绲藉﹢顏堝礆閻樼粯鐝?..
-"Record moved to recycle bin","Record moved to recycle bin"
-"Delete succeeded","Delete succeeded"
-闁告帞濞€濞呭孩寰勬潏顐バ?,闁告帞濞€濞呭孩寰勬潏顐バ?
-濞ｅ洦绻傞悺銊﹀緞鏉堫偉袝,濞ｅ洦绻傞悺銊﹀緞鏉堫偉袝
-濞ｅ洦绻傞悺銊╁箣閹邦剙顫?,濞ｅ洦绻傞悺銊╁箣閹邦剙顫?
+加载字段失败,"Failed to load fields"
+网络错误,"Network error"
+请选择,"Please Select"
+加载记录失败,"Failed to load record"
+请检查表单中的错误,"Please check form for errors"
+保存成功,"Save Success"
+保存失败,"Save Failed"
+保存中...,Saving...
+操作,Actions
+编辑,Edit
+此字段为必填项,"This field is required"
+请输入有效的邮箱地址,"Please enter a valid email address"
+请输入有效的数字,"Please enter a valid number"
+请输入有效的电话号码,"Please enter a valid phone number"
+请选择图片文件,"Please select an image file"
+预览图片,"Preview Image"
+"数值不能小于 %{1}","Value cannot be less than %{1}"
+"数值不能大于 %{1}","Value cannot exceed %{1}"
+"输入长度不能超过 %{1}","Input length cannot exceed %{1}"
+字段格式不正确,"Incorrect field format"
+字段验证失败,"Field validation failed"
+表格主题配置,"Table Theme Configuration"
+显示选项,"Display Options"
+显示斑马纹,"Show Zebra Stripes"
+显示悬停效果,"Show Hover Effect"
+显示排序图标,"Show Sort Icon"
+颜色主题,"Color Theme"
+主色调,"Primary Color"
+表头背景,"Header Background"
+行悬停色,"Row Hover Color"
+字体设置,"Font Settings"
+字体大小,"Font Size"
+小,Small
+中,Medium
+大,Large
+显示所有数据,"Show All Data"
+正在导出数据,"Exporting data"
+导出格式,"Export Format"
+预计导出,"Expected Export"
+条记录,records
+共,Total
+页,pages
+当前页,"Current Page"
+已导出,Exported
+进度,Progress
+正在初始化导出...,"Initializing export..."
+已用时间,"Elapsed Time"
+预计剩余,"Estimated Remaining"
+计算中...,Calculating...
+导出过程中请勿关闭此窗口，以免导致数据丢失,"Do not close this window during export to avoid data loss"
+取消导出,"Cancel Export"
+正在生成文件...,"Generating file..."
+导出完成！,"Export completed!"
+导出失败,"Export failed"
+关闭,Close
+没有可导出的数据,"No data to export"
+正在准备导出数据...,"Preparing export data..."
+"成功导出 %{1} 条记录","Successfully exported %{1} records"
+导出失败：%{1},"Export failed: %{1}"
+不支持的导出格式,"Unsupported export format"
+获取字段失败,"Failed to get fields"
+拖动调整列顺序,"Drag to reorder columns"
+该列不允许移动,"This column does not allow moving."
+无法放置到该位置,"Unable to place at this location"
+列顺序已更新,"Column Order Updated"
+加载数据失败,"Failed to load data"
+"加载数据失败: %{1}","Failed to load data: %{1}"
+输入,Input
+请输入过滤器名称,"Please enter filter name"
+过滤器保存成功,"Filter saved successfully"
+配置保存成功,"Configuration saved successfully"
+保存配置失败,"Failed to save configuration"
+请先保存当前编辑的行,"Please save the currently editing row first"
+编辑数据,"Edit Data"
+确定要删除这条记录吗？,"Are you sure you want to delete this record?"
+请选择要删除的记录,"Please select records to delete"
+删除确认,"Delete Confirmation"
+软删除（可恢复）,"Soft Delete (Recoverable)"
+确认删除,"Confirm Delete"
+即将删除的记录：,"Records to be deleted:"
+共选中,"Total Selected"
+正在删除...,Deleting...
+删除成功,"Delete Success"
+您有未保存的编辑内容，确定要离开吗？,"You have unsaved changes. Are you sure you want to leave?"
+重试,Retry
+受保护,Protected
+所有字段都已配置,"All fields are configured"
+筛选,Filter
+已保存,Saved
+用户选择,"User Selected"
+最小长度,"Min Length"
+最大长度,"Max Length"
+正则表达式,"Regular Expression"
+隐藏,Hide
+上移,"Move Up"
+下移,"Move Down"
+字段标题,"Field Title"
+占位符（可选）,"Placeholder (Optional)"
+"选项(?:启用,0:禁用)","Options(1:Enable,0:Disable)"
+设置,Settings
+暂无显示字段,"No display fields"
+您可以在右侧调整字段配置,"You can adjust field configuration on the right"
+移除,Remove
+"选项(值:标签,值:标签)","Options(value:label,value:label)"
+暂无筛选字段,"No filter fields"
+确定要重置为默认字段配置吗？这将显示所有可用字段？,"Are you sure you want to reset to default field configuration? This will show all available fields?"
+"保存失败: %{1}","Save failed: %{1}"
+确定要重置表头字段配置吗？这将清除所有自定义的显示字段设置,"Are you sure you want to reset header field configuration? This will clear all custom display field settings"
+确定要重置筛选字段配置吗？这将清除所有自定义的筛选字段设置,"Are you sure you want to reset filter field configuration? This will clear all custom filter field settings"
+确定要重置全部配置吗？这将清除所有自定义的表头字段和筛选字段设置,"Are you sure you want to reset all configurations? This will clear all custom header and filter field settings"
+配置已重置,"Configuration reset"
+重置失败,"Reset failed"
+重置配置失败，请稍后重试,"Failed to reset configuration, please try again later"
+收起,Collapse
+网络错误：%{1},"Network error: %{1}"
+配置已保存,"Configuration saved"
 "Blank-layout backend entry for the repaired DataTable demo suite. Use this page to seed demo data, jump into direct demo routes, and verify compatibility routes that previously returned 404.","Blank-layout backend entry for the repaired DataTable demo suite. Use this page to seed demo data, jump into direct demo routes, and verify compatibility routes that previously returned 404."
 "Back To Dashboard","Back To Dashboard"
 "Open Documentation","Open Documentation"

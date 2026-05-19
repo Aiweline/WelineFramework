@@ -254,16 +254,16 @@ CSV文件为空或格式不正确,CSV文件为空或格式不正确
 "收集成功！一共收集更新词条：%{1} 个","收集成功！一共收集更新词条：%{1} 个"
 收集翻译词,收集翻译词
 "当其他模块需要收集翻译词时触发。事件数据格式：[""translations"" => [[""word"" => ""翻译键"", ""translate"" => ""翻译值""], ...]]。I18n模块的观察者会将翻译词存储到字典表中。","当其他模块需要收集翻译词时触发。事件数据格式：[""translations"" => [[""word"" => ""翻译键"", ""translate"" => ""翻译值""], ...]]。I18n模块的观察者会将翻译词存储到字典表中。"
-"Unsupported i18n operation: %{1}","Unsupported i18n operation: %{1}"
-"No frontend translation words to collect.","No frontend translation words to collect."
-"Collected frontend translation words.","Collected frontend translation words."
-"I18n query provider","I18n query provider"
-"Provides locale and frontend translation operations.","Provides locale and frontend translation operations."
-"Get installed locales.","Get installed locales."
-"Get locale by code.","Get locale by code."
-"Get locale display name.","Get locale display name."
-"Get frontend translation dictionary.","Get frontend translation dictionary."
-"Collect frontend translation words.","Collect frontend translation words."
+"I18n 查询器不支持的 operation：%{1}","I18n 查询器不支持的 operation：%{1}"
+"I18n 国际化查询","I18n 国际化查询"
+提供已安装语言列表等查询能力,提供已安装语言列表等查询能力
+"获取已安装语言列表（含名称与 SVG 国旗）","获取已安装语言列表（含名称与 SVG 国旗）"
+显示名称所用语言代码，默认当前语言,显示名称所用语言代码，默认当前语言
+"国旗宽度，默认 20","国旗宽度，默认 20"
+"国旗高度，默认 15","国旗高度，默认 15"
+"仅已安装语言，默认 true","仅已安装语言，默认 true"
+"根据语言代码获取 Locale 信息","根据语言代码获取 Locale 信息"
+根据语言代码获取显示名称,根据语言代码获取显示名称
 ...,...
 "警告：无法创建翻译文件 %{file}","警告：无法创建翻译文件 %{file}"
 "警告：无法写入翻译文件 %{file}","警告：无法写入翻译文件 %{file}"

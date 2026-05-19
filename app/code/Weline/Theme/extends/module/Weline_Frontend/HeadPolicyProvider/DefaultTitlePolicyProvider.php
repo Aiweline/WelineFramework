@@ -22,7 +22,7 @@ class DefaultTitlePolicyProvider implements HeadPolicyProviderInterface
             'site_name_position' => 'suffix',
             'deduplicate_site_name' => true,
             'home_title_mode' => 'site_only',
-            'pagination_label' => '第 %{page} 页',
+            'pagination_label' => 'Page %{page}',
         ];
 
         $customPolicy = [];

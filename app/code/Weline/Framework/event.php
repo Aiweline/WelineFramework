@@ -229,16 +229,6 @@ return [
         'description' => __('在模板标签配置完成后触发，允许其他模块修改标签配置。'),
         'doc' => 'template/标签配置后.md',
     ],
-    'Weline_Framework_Template::compile_decision' => [
-        'name' => __('模板编译决策'),
-        'description' => __('在模板编译新鲜度判断前触发，允许模块要求本次模板强制重新编译。'),
-        'doc' => 'template/模板编译决策.md',
-    ],
-    'Weline_Framework_Template::before_compile' => [
-        'name' => __('模板编译前'),
-        'description' => __('在模板源内容进入标签编译前触发，允许模块对静态模板内容进行编译前改写。'),
-        'doc' => 'template/模板编译前.md',
-    ],
     'Weline_Framework_Template::after_compile' => [
         'name' => __('模板编译后'),
         'description' => __('在模板编译完成后触发，允许其他模块处理编译后的模板内容。可以修改模板内容、提取信息、注入代码等。'),

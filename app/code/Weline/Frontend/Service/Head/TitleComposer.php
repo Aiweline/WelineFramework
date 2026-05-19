@@ -75,7 +75,7 @@ class TitleComposer
             'deduplicate_site_name' => true,
             'home_title_mode' => 'site_only',
             'home_title' => '',
-            'pagination_label' => '第 %{page} 页',
+            'pagination_label' => 'Page %{page}',
             'max_length' => 0,
         ];
     }
@@ -143,7 +143,7 @@ class TitleComposer
     private function paginationLabel(int $currentPage, string $format): string
     {
         $label = str_replace(['%{page}', '%{1}'], (string)$currentPage, $format);
-        return $label !== '' ? $label : '第 ' . $currentPage . ' 页';
+        return $label !== '' ? $label : 'Page ' . $currentPage;
     }
 
     private function limitTitle(string $title, int $maxLength): string
