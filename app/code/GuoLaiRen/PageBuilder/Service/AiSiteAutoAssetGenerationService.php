@@ -42,6 +42,12 @@ class AiSiteAutoAssetGenerationService
         if ($foreignAssetUrls !== []) {
             $scope = $this->clearIdentityAssetUrlsFromScope($scope, $foreignAssetUrls);
         }
+        $invalidIdentityAssetUrls = [];
+        $manifest = $this->discardInvalidIdentityGeneratedAssets($manifest, $invalidIdentityAssetUrls);
+        if ($invalidIdentityAssetUrls !== []) {
+            $scope = $this->clearIdentityAssetUrlsFromScope($scope, $invalidIdentityAssetUrls);
+        }
+        $scope = $this->clearInvalidIdentityAssetFieldsFromScope($scope);
         $scope = $this->manifestService->rememberGeneratedSlotsInScope($scope, $manifest);
         $scope['asset_manifest'] = $manifest;
         $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
@@ -87,6 +93,7 @@ class AiSiteAutoAssetGenerationService
                 if ($bytes === '') {
                     throw new \RuntimeException('Image generation returned empty image bytes.');
                 }
+                $this->assertIdentityAssetTransparentPng($slotId, $slot, $bytes, $mimeType);
                 $generatedModel = (string)($result['model'] ?? '');
                 $revisedPrompt = (string)($image['revised_prompt'] ?? '');
 
@@ -200,6 +207,18 @@ class AiSiteAutoAssetGenerationService
             $manifest = $this->manifestService->upsert($manifest, $slot);
             $finalUrl = '';
         }
+        if ($finalUrl !== '' && $this->identityAssetFinalUrlNeedsRegeneration($slotId, $slot, $finalUrl)) {
+            $slot['locked_by_user'] = 0;
+            $slot['final_url'] = '';
+            $slot['url'] = '';
+            $slot['variants'] = [];
+            $slot['source'] = 'planned';
+            $slot['status'] = 'pending';
+            $slot['updated_at'] = \date('Y-m-d H:i:s');
+            $manifest['slots'][(string)($slot['slot_id'] ?? $slotId)] = $slot;
+            $manifest['updated_at'] = \date('Y-m-d H:i:s');
+            $finalUrl = '';
+        }
         if ($finalUrl !== '') {
             $scope = $this->manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
             $scope['asset_manifest'] = $manifest;
@@ -267,6 +286,7 @@ class AiSiteAutoAssetGenerationService
             if ($bytes === '') {
                 throw new \RuntimeException('Image generation returned empty image bytes.');
             }
+            $this->assertIdentityAssetTransparentPng($slotId, $slot, $bytes, $mimeType);
             $generatedModel = (string)($result['model'] ?? '');
             $revisedPrompt = (string)($image['revised_prompt'] ?? '');
 
@@ -483,6 +503,7 @@ class AiSiteAutoAssetGenerationService
             }
             $result = ($this->imageGenerator)($prompt, $adminId, $slotId);
         } else {
+            $identityParams = $this->buildIdentityImageGenerationParams($slotId);
             $result = \w_query('ai', 'generateImage', [
                 'prompt' => $prompt,
                 'scenario_code' => 'pagebuilder_ai_site_assets',
@@ -498,7 +519,7 @@ class AiSiteAutoAssetGenerationService
                     'aspect_ratio' => $isHeroImage ? '1920:750' : '1:1',
                     'timeout' => 60,
                     'connect_timeout' => 10,
-                ],
+                ] + $identityParams,
             ]);
         }
 
@@ -673,6 +694,117 @@ class AiSiteAutoAssetGenerationService
     }
 
     /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function clearInvalidIdentityAssetFieldsFromScope(array $scope): array
+    {
+        foreach (['logo' => 'logo', 'icon' => 'icon', 'favicon' => 'icon'] as $key => $role) {
+            if ($this->identityAssetUrlIsInvalidForRole((string)($scope[$key] ?? ''), $role)) {
+                unset($scope[$key]);
+            }
+        }
+
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $hadWebsiteProfile = \is_array($scope['website_profile'] ?? null);
+        foreach (['logo' => 'logo', 'icon' => 'icon', 'favicon' => 'icon'] as $key => $role) {
+            if ($this->identityAssetUrlIsInvalidForRole((string)($websiteProfile[$key] ?? ''), $role)) {
+                unset($websiteProfile[$key]);
+            }
+        }
+        if ($hadWebsiteProfile) {
+            $scope['website_profile'] = $websiteProfile;
+        }
+
+        $scope = $this->clearInvalidIdentityAssetReferences($scope);
+
+        $defaultConfig = \is_array($scope['shared_components']['header']['default_config'] ?? null)
+            ? $scope['shared_components']['header']['default_config']
+            : [];
+        foreach (['logo.image', 'logo.url', 'brand.logo'] as $key) {
+            if ($this->identityAssetUrlIsInvalidForRole((string)($defaultConfig[$key] ?? ''), 'logo')) {
+                unset($defaultConfig[$key]);
+            }
+        }
+        if (\is_array($defaultConfig['logo'] ?? null)) {
+            foreach (['image', 'url'] as $key) {
+                if ($this->identityAssetUrlIsInvalidForRole((string)($defaultConfig['logo'][$key] ?? ''), 'logo')) {
+                    unset($defaultConfig['logo'][$key]);
+                }
+            }
+        }
+        if ($defaultConfig !== []) {
+            $scope['shared_components']['header']['default_config'] = $defaultConfig;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $value
+     * @return array<string,mixed>
+     */
+    private function clearInvalidIdentityAssetReferences(array $value): array
+    {
+        foreach ($value as $key => $item) {
+            $normalizedKey = \strtolower(\trim((string)$key));
+            if (\is_array($item)) {
+                $value[$key] = $this->clearInvalidIdentityAssetReferences($item);
+                continue;
+            }
+            if (!\is_string($item) || \trim($item) === '') {
+                continue;
+            }
+
+            if (
+                \in_array($normalizedKey, ['logo', 'logo.image', 'logo.url', 'brand.logo', 'identity.shared_logo_asset', 'shared_logo_asset'], true)
+                && $this->identityAssetUrlIsInvalidForRole($item, 'logo')
+            ) {
+                unset($value[$key]);
+                continue;
+            }
+
+            if (
+                \in_array($normalizedKey, ['icon', 'favicon', 'site.icon', 'identity.shared_icon_asset', 'shared_icon_asset'], true)
+                && $this->identityAssetUrlIsInvalidForRole($item, 'icon')
+            ) {
+                unset($value[$key]);
+            }
+        }
+
+        return $value;
+    }
+
+    private function identityAssetUrlIsInvalidForRole(string $url, string $role): bool
+    {
+        $url = \trim($url);
+        if ($url === '') {
+            return false;
+        }
+        $path = \parse_url($url, \PHP_URL_PATH);
+        $path = \is_string($path) && $path !== '' ? $path : $url;
+        $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+        $lowerPath = \strtolower($path);
+        if (!\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
+            return false;
+        }
+        $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
+        if (!\str_contains($lowerPath, $expectedToken) || !\str_ends_with($lowerPath, '.png')) {
+            return true;
+        }
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
+        if (!\is_file($absolutePath)) {
+            return true;
+        }
+        $bytes = @\file_get_contents($absolutePath);
+        if (!\is_string($bytes) || $bytes === '') {
+            return true;
+        }
+
+        return !$this->isPngImageBytes($bytes) || !$this->pngAppearsToHaveTransparentBackground($bytes);
+    }
+
+    /**
      * Local preview sessions must not keep AI-generated files under a stale
      * production-domain handle. Reset those slots so normal image generation
      * writes them under the current preview host.
@@ -691,7 +823,7 @@ class AiSiteAutoAssetGenerationService
         $discardedUrls = [];
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
         foreach ($slots as $slot) {
-            if (!\is_array($slot) || (int)($slot['locked_by_user'] ?? 0) === 1) {
+            if (!\is_array($slot)) {
                 continue;
             }
             $slotId = \trim((string)($slot['slot_id'] ?? ''));
@@ -703,6 +835,44 @@ class AiSiteAutoAssetGenerationService
                 continue;
             }
             if ($this->manifestService->isReusableSessionBlockAsset($scope, $slot, $finalUrl)) {
+                continue;
+            }
+
+            $discardedUrls[] = $finalUrl;
+            $slot['locked_by_user'] = 0;
+            $slot['final_url'] = '';
+            $slot['url'] = '';
+            $slot['variants'] = [];
+            $slot['source'] = 'planned';
+            $slot['status'] = 'pending';
+            $slot['error_message'] = '';
+            $slot['last_error'] = '';
+            $slot['error'] = '';
+            $slot['updated_at'] = \date('Y-m-d H:i:s');
+            $manifest['slots'][$slotId] = $slot;
+            $manifest['updated_at'] = \date('Y-m-d H:i:s');
+        }
+
+        $discardedUrls = \array_values(\array_unique($discardedUrls));
+        return $manifest;
+    }
+
+    /**
+     * @param array<string,mixed> $manifest
+     * @param list<string> $discardedUrls
+     * @return array<string,mixed>
+     */
+    private function discardInvalidIdentityGeneratedAssets(array $manifest, array &$discardedUrls): array
+    {
+        $discardedUrls = [];
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        foreach ($slots as $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $slotId = \trim((string)($slot['slot_id'] ?? ''));
+            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($slotId === '' || $finalUrl === '' || !$this->identityAssetFinalUrlNeedsRegeneration($slotId, $slot, $finalUrl)) {
                 continue;
             }
 
@@ -858,23 +1028,26 @@ class AiSiteAutoAssetGenerationService
      */
     private function resolveIdentityAssetRole(array $slot): string
     {
+        $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
         $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+
+        if (\str_contains($slotId, 'identity:website-logo')) {
+            return 'logo';
+        }
+        if (\str_contains($slotId, 'identity:site-title-icon')) {
+            return 'icon';
+        }
         if (\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)) {
             return 'logo';
         }
         if (\in_array($field, ['icon', 'favicon', 'site.icon'], true)) {
             return 'icon';
         }
-
-        $haystack = \strtolower(\implode(' ', [
-            (string)($slot['slot_id'] ?? ''),
-            (string)($slot['label'] ?? ''),
-            (string)($slot['kind'] ?? ''),
-        ]));
-        if (\str_contains($haystack, 'logo')) {
+        if (\in_array($kind, ['website_logo', 'brand_logo'], true)) {
             return 'logo';
         }
-        if (\str_contains($haystack, 'icon') || \str_contains($haystack, 'favicon')) {
+        if (\in_array($kind, ['site_title_icon', 'favicon'], true)) {
             return 'icon';
         }
 
@@ -961,7 +1134,7 @@ class AiSiteAutoAssetGenerationService
                 if ((int)($slot['locked_by_user'] ?? 0) === 1) {
                     return false;
                 }
-                if ($identityOnly && (string)($slot['slot_type'] ?? '') !== 'logo_icon') {
+                if ($identityOnly && !$this->isTransparentIdentityAssetSlot((string)($slot['slot_id'] ?? ''), $slot)) {
                     return false;
                 }
                 $status = \strtolower(\trim((string)($slot['status'] ?? 'pending')));
@@ -1159,6 +1332,128 @@ class AiSiteAutoAssetGenerationService
             'image/webp' => 'webp',
             default => 'png',
         };
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function buildIdentityImageGenerationParams(string $slotId): array
+    {
+        if (!$this->isTransparentIdentityAssetSlot($slotId, [])) {
+            return [];
+        }
+
+        return [
+            'output_format' => 'png',
+            'background' => 'transparent',
+            'identity_transparent_png_required' => true,
+            'transparent_png_required' => true,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function assertIdentityAssetTransparentPng(string $slotId, array $slot, string $bytes, string $mimeType): void
+    {
+        if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
+            return;
+        }
+        if (!$this->isPngImageBytes($bytes) || !\str_contains(\strtolower($mimeType), 'png')) {
+            throw new \RuntimeException('Identity logo/icon generation must return a PNG file with transparent alpha background.');
+        }
+        if (!$this->pngAppearsToHaveTransparentBackground($bytes)) {
+            throw new \RuntimeException('Identity logo/icon generation must use a transparent alpha background; solid, white, card, or screenshot backgrounds are invalid.');
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function identityAssetFinalUrlNeedsRegeneration(string $slotId, array $slot, string $finalUrl): bool
+    {
+        if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
+            return false;
+        }
+        $path = \parse_url($finalUrl, \PHP_URL_PATH);
+        $path = \is_string($path) && $path !== '' ? $path : $finalUrl;
+        $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+        if (!\str_contains($path, '/pub/media/page-build/ai-generated/')) {
+            return false;
+        }
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
+        if (!\is_file($absolutePath)) {
+            return true;
+        }
+        $bytes = @\file_get_contents($absolutePath);
+        if (!\is_string($bytes) || $bytes === '') {
+            return true;
+        }
+
+        return !$this->isPngImageBytes($bytes) || !$this->pngAppearsToHaveTransparentBackground($bytes);
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function isTransparentIdentityAssetSlot(string $slotId, array $slot): bool
+    {
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+        $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
+        $label = \strtolower(\trim((string)($slot['label'] ?? '')));
+        $slotId = \strtolower(\trim($slotId));
+
+        return \str_contains($slotId, 'identity:website-logo')
+            || \str_contains($slotId, 'identity:site-title-icon')
+            || \in_array($field, ['logo', 'logo.image', 'brand.logo', 'icon', 'favicon', 'site.icon'], true)
+            || \in_array($kind, ['website_logo', 'brand_logo', 'site_title_icon', 'favicon'], true)
+            || ($slotType === 'logo_icon' && \str_starts_with($slotId, 'identity:') && (\str_contains($label, 'logo') || \str_contains($label, 'icon') || \str_contains($label, 'favicon')));
+    }
+
+    private function isPngImageBytes(string $bytes): bool
+    {
+        return \strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) === 0;
+    }
+
+    private function pngAppearsToHaveTransparentBackground(string $bytes): bool
+    {
+        if (!$this->isPngImageBytes($bytes)) {
+            return false;
+        }
+        if (\function_exists('imagecreatefromstring')) {
+            $image = @\imagecreatefromstring($bytes);
+            if ($image !== false) {
+                $width = \imagesx($image);
+                $height = \imagesy($image);
+                $points = [
+                    [0, 0],
+                    [\max(0, $width - 1), 0],
+                    [0, \max(0, $height - 1)],
+                    [\max(0, $width - 1), \max(0, $height - 1)],
+                    [(int)\floor($width / 2), 0],
+                    [(int)\floor($width / 2), \max(0, $height - 1)],
+                ];
+                $transparent = 0;
+                foreach ($points as [$x, $y]) {
+                    $color = \imagecolorat($image, $x, $y);
+                    $alpha = ($color >> 24) & 0x7F;
+                    if ($alpha >= 80) {
+                        $transparent++;
+                    }
+                }
+                \imagedestroy($image);
+
+                return $transparent >= 4;
+            }
+        }
+
+        $colorType = \ord($bytes[25] ?? "\0");
+        if (\in_array($colorType, [4, 6], true)) {
+            return true;
+        }
+
+        return \str_contains($bytes, 'tRNS');
     }
 
     /**

@@ -230,6 +230,8 @@ class WlsRuntime implements RuntimeInterface
             'reset_ms' => 0,
             'total_ms' => 0
         ];
+        $memoryProbe = null;
+        $memoryProbeResponseBytes = 0;
         
         // 重置重定向计数器（每个新请求重置）
         if (!isset($_SERVER['WLS_REDIRECT_COUNT'])) {
@@ -267,6 +269,16 @@ class WlsRuntime implements RuntimeInterface
                     'request_count' => $this->requestCount,
                 ];
                 WelineEnv::getInstance()->initFromRequest($request);
+                if (\class_exists(\Weline\Server\Service\WorkerMemoryProbe::class)) {
+                    $memoryProbe = \Weline\Server\Service\WorkerMemoryProbe::begin([
+                        'method' => $requestMeta['method'],
+                        'uri' => (string)($_SERVER['REQUEST_URI'] ?? $request->getUri() ?? ''),
+                        'instance' => $requestMeta['instance'],
+                        'worker_id' => $requestMeta['worker_id'],
+                        'worker_port' => $requestMeta['worker_port'],
+                        'request_count' => $requestMeta['request_count'],
+                    ]);
+                }
             }
             // WLS：请求入口再清一次 URL/ACL 请求级缓存，避免上一 finally 未跑全、fiber 交错或 parser 前
             // 观察者调用 getUrlPath 导致 static $url_paths / Acl 路由判定沿用旧路径，误判无权限跳 admin。
@@ -482,6 +494,7 @@ class WlsRuntime implements RuntimeInterface
             } catch (\Throwable) {
             }
 
+            $memoryProbeResponseBytes = \strlen($resultStr);
             return $resultStr;
             
         } catch (\Weline\Framework\Http\StaticFileException $staticEx) {
@@ -632,6 +645,10 @@ class WlsRuntime implements RuntimeInterface
                 $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', $traceDbTopLimit);
                 $timing['trace_category_totals'] = $this->summarizeTraceCategoryTotals($traceSpans);
             }
+            if (Runtime::isPersistent()) {
+                \Weline\Framework\View\Template::resetInstance();
+                ObjectManager::removeInstance(\Weline\Framework\View\Template::class);
+            }
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
             $this->reset();
             FiberOutputBuffer::ensureInstalled('request_end');
@@ -653,10 +670,14 @@ class WlsRuntime implements RuntimeInterface
             $timing['worker_port'] = $requestMeta['worker_port'];
             $timing['pid'] = $requestMeta['pid'];
             $timing['request_count'] = $requestMeta['request_count'];
+            $timing['response_bytes'] = $memoryProbeResponseBytes;
             // 同步到 WelineEnv
             WelineEnv::set('request.method', $timing['method'], 'WlsRuntime finally');
             WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
             WelineEnv::set('wls.redirect_count', (string) $timing['redirect_count'], 'WlsRuntime finally');
+            if (\class_exists(\Weline\Server\Service\WorkerMemoryProbe::class)) {
+                \Weline\Server\Service\WorkerMemoryProbe::finish($memoryProbe, $timing);
+            }
             $this->recordPerformanceTiming($timing, $isDev);
             if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
                 \Weline\Server\Log\WlsLogger::flush_(true);

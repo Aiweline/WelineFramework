@@ -3034,13 +3034,13 @@ final class AiSiteExecutionBlueprintService
             '- design_tags examples: visual=["premium","card shadow","rounded image","large banner"], motion=["5s fade in/out","subtle parallax","hover lift"], interaction=["primary CTA hover","tabs","accordion"], texture=["soft gradient","glass surface","Indian pattern accent"], responsive=["mobile stacked cards","desktop two-column"].',
             '- These design_tags are source-of-truth for virtual-theme build and publish migration; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
             'Schema:',
-            '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
+            '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"visual_signature":{"composition_pattern":"string","spatial_rhythm":"string","media_strategy":"string","surface_treatment":"string","interaction_pattern":"string"},"image_intent":{"needs_image":true,"image_role":"hero_image|section_image|trust_brand_image|css_motif","image_subject":"specific scene/product/editorial subject","placement":"background_layer|media_panel|inline_visual|none","reuse_policy":"reuse_when_intent_matches","css_motif":"required when needs_image=false"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
             'Schema placeholders are type markers only. Returning literal placeholder values such as "string", "sentence", "how this page obeys", "explaining how", or generic blueprint wording is a contract failure.',
             'Block budget: min=' . $blockBudget['min'] . ', max=' . $blockBudget['max'] . ', target=' . ($blockBudget['target'] ?? $blockBudget['min']) . ', required=' . \json_encode($blockBudget['required'], \JSON_UNESCAPED_UNICODE) . ', recommended_optional=' . \json_encode($blockBudget['optional'] ?? [], \JSON_UNESCAPED_UNICODE) . '.',
             'You MUST include every required_block_key unless SourceTruthContract marks it irrelevant.',
             'Required block key contract: if required is not empty, blocks[].block_key MUST include each required value exactly once. Never omit blocks, never return an empty blocks array, and never replace required block keys with generic names such as details, content, section, or info.',
-            'Hard rules: output blocks according to budget; each block exactly 3 field_plan rows using headline/supporting_copy/context_detail-style slots with non-empty semantic field keys; every block MUST include execution_script.core_copy as one compact final visitor-facing sentence in Website content locale; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block.content must describe the concrete visitor message and proof/action, never a reason for the block and never a UI construction recipe; every block must have complete design_tags including visual/motion/interaction/texture/responsive/color_layering/implementation_note; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow; return a complete JSON object within the token budget.',
-            'Self-check before return: verify blocks is non-empty, every required block_key appears exactly once, every block has content, exactly 3 field_plan rows with sample and implementation_note, and execution_script.core_copy is non-empty final copy. If any field is missing, rewrite shorter content instead of omitting that block or field.',
+            'Hard rules: output blocks according to budget; each block exactly 3 field_plan rows using headline/supporting_copy/context_detail-style slots with non-empty semantic field keys; every block MUST include execution_script.core_copy as one compact final visitor-facing sentence in Website content locale; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block.content must describe the concrete visitor message and proof/action, never a reason for the block and never a UI construction recipe; every block must have complete design_tags including visual/motion/interaction/texture/responsive/color_layering/implementation_note; every block must include visual_signature with composition_pattern/spatial_rhythm/media_strategy/surface_treatment/interaction_pattern and image_intent with needs_image/image_role/image_subject/placement/reuse_policy; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow; return a complete JSON object within the token budget.',
+            'Self-check before return: verify blocks is non-empty, every required block_key appears exactly once, every block has content, visual_signature, image_intent, exactly 3 field_plan rows with sample and implementation_note, and execution_script.core_copy is non-empty final copy. If any field is missing, rewrite shorter content instead of omitting that block or field.',
             'Self-check before return: verify every block has explicit page_flow_role rhythm (opening/proof/details/cta/support) and does not duplicate another page type block purpose.',
             $sourceTruthPromptLine,
         ]);
@@ -4041,7 +4041,7 @@ final class AiSiteExecutionBlueprintService
             'PRIMARY GOAL: Take the user one-line website requirement and EXPAND it into a CONCRETE, READY-TO-BUILD plan. This is NOT a writing tutorial; it is the actual blueprint that Stage-2 will execute.',
             'STAGE ORDER CONTRACT: first decide theme_design (visual concept, palette, typography, spacing/radius, CTA tone, motion/interaction direction), then shared Header/Footer, then page plans and page blocks. Do not design page blocks before the shared theme contract exists.',
             'PRODUCTION SITE CONTRACT: the result must be suitable for an operating website, not a demo, not a proposal page, and not a page that explains the plan to visitors.',
-            'VISUAL RICHNESS CONTRACT: unless the user explicitly asks for minimalism, choose a rich but coherent visual system with layered backgrounds, varied accent colors, card treatments, icon/SVG visual language, button hover/focus states, transition timing, and smooth scroll/reveal motion guidance.',
+            'VISUAL RICHNESS CONTRACT: unless the user explicitly asks for minimalism, choose a rich but coherent visual system with layered backgrounds, varied accent colors, and role-specific compositions (hero stage, proof rail, FAQ rows, form split, CTA band, channel hub, etc.). Do not make every page block the same three-card grid with different copy. Use deliberate typography, surface depth, button hover/focus states, transition timing, and smooth scroll/reveal motion guidance; avoid icon/SVG decoration as the primary visual language.',
             '中文要求：根据下面的【用户一句话需求】拓写出**真实可落地**的建站方案——给出具体导航、栏目、标题、正文、CTA、字段示例与落地说明，禁止通篇“围绕…/突出…/说明…”这类方向性描述。',
             '【用户一句话需求】(authoritative, expand from this): ' . $oneLineRequirement,
             '【站点名】: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
@@ -9923,11 +9923,18 @@ final class AiSiteExecutionBlueprintService
             $sharedPromptContext
         );
         $blocks = [];
+        $usedVisualFingerprints = [];
         foreach (\is_array($assembledPagePlan['blocks'] ?? null) ? $assembledPagePlan['blocks'] : [] as $index => $block) {
             if (!\is_array($block)) {
                 continue;
             }
-            $blocks[] = $this->normalizeStageOnePageBlock($pageType, $assembledPagePlan, $block, (int)$index, $sharedPromptContext);
+            $normalizedBlock = $this->normalizeStageOnePageBlock($pageType, $assembledPagePlan, $block, (int)$index, $sharedPromptContext);
+            $normalizedBlock['visual_signature'] = $this->normalizeStageOneBlockVisualSignature(
+                $normalizedBlock,
+                (int)$index,
+                $usedVisualFingerprints
+            );
+            $blocks[] = $normalizedBlock;
         }
         $assembledPagePlan['blocks'] = $blocks;
         if (\trim((string)($assembledPagePlan['theme_alignment_summary'] ?? '')) === '') {
@@ -10013,6 +10020,147 @@ final class AiSiteExecutionBlueprintService
         $normalized['context_hash'] = $this->buildStageOneBlockContextHash($pageType, $normalized);
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param list<string> $usedFingerprints
+     * @return array<string, string>
+     */
+    private function normalizeStageOneBlockVisualSignature(array $block, int $index, array &$usedFingerprints): array
+    {
+        $signature = [];
+        $raw = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+        foreach (AiSiteStageOneContractService::VISUAL_SIGNATURE_KEYS as $key) {
+            $value = \trim((string)($raw[$key] ?? ''));
+            if ($value !== '') {
+                $signature[$key] = $value;
+            }
+        }
+
+        $fingerprint = $this->stageOneVisualSignatureDiversityFingerprint($signature);
+        if ($fingerprint !== '' && !\in_array($fingerprint, $usedFingerprints, true)) {
+            $usedFingerprints[] = $fingerprint;
+
+            return $signature;
+        }
+
+        $repaired = $this->buildDistinctStageOneVisualSignature($block, $index, $usedFingerprints);
+        $repairedFingerprint = $this->stageOneVisualSignatureDiversityFingerprint($repaired);
+        if ($repairedFingerprint !== '') {
+            $usedFingerprints[] = $repairedFingerprint;
+        }
+
+        return $repaired;
+    }
+
+    /**
+     * @param array<string, string> $signature
+     */
+    private function stageOneVisualSignatureDiversityFingerprint(array $signature): string
+    {
+        $parts = [];
+        foreach (['composition_pattern', 'surface_treatment', 'media_strategy'] as $key) {
+            $value = \mb_strtolower(\trim((string)($signature[$key] ?? '')));
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+
+        return $parts === [] ? '' : \implode('|', $parts);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param list<string> $usedFingerprints
+     * @return array<string, string>
+     */
+    private function buildDistinctStageOneVisualSignature(array $block, int $index, array $usedFingerprints): array
+    {
+        $blockKey = \mb_strtolower(\trim((string)($block['block_key'] ?? '')));
+        $pageFlowRole = \mb_strtolower(\trim((string)($block['page_flow_role'] ?? '')));
+        $identity = $blockKey . ' ' . $pageFlowRole;
+
+        $rolePreferred = match (true) {
+            $index === 0 || $this->looksLikeHeroBlockKey($blockKey) || \in_array($pageFlowRole, ['opening', 'hero', 'banner'], true)
+                => ['full_bleed_hero_stage', 'split_editorial_hero', 'cinematic_opening_band'],
+            \preg_match('/\b(faq|question|support|help)\b/u', $identity) === 1 || $pageFlowRole === 'support'
+                => ['faq_accordion_rows', 'support_guidance_split', 'help_desk_channel_strip'],
+            \preg_match('/\b(form|contact|lead)\b/u', $identity) === 1
+                => ['form_guidance_split', 'channel_hub_console', 'lead_capture_panel'],
+            \preg_match('/\b(cta|download|conversion|final)\b/u', $identity) === 1 || $pageFlowRole === 'cta'
+                => ['cta_conversion_stage', 'cinematic_action_band', 'download_focus_strip'],
+            \preg_match('/\b(trust|proof|review|testimonial|security)\b/u', $identity) === 1 || $pageFlowRole === 'proof'
+                => ['staggered_proof_rail', 'metric_proof_strip', 'credential_badge_wall'],
+            \preg_match('/\b(feature|showcase|product|service|suite)\b/u', $identity) === 1
+                => ['feature_matrix_band', 'asymmetric_media_feature', 'comparison_editorial_split'],
+            \preg_match('/\b(story|about|mission|timeline|journey)\b/u', $identity) === 1
+                => ['timeline_process_rail', 'stacked_editorial_band', 'founder_mission_split'],
+            default => ['stacked_editorial_band', 'split_editorial_panel', 'editorial_detail_rail', 'proof_metric_band', 'feature_matrix_band'],
+        };
+
+        $rotation = [
+            'split_editorial_panel',
+            'stacked_editorial_band',
+            'staggered_proof_rail',
+            'metric_proof_strip',
+            'feature_matrix_band',
+            'timeline_process_rail',
+            'asymmetric_media_feature',
+            'faq_accordion_rows',
+            'form_guidance_split',
+            'channel_hub_console',
+            'cta_conversion_stage',
+            'comparison_editorial_split',
+            'credential_badge_wall',
+        ];
+
+        $composition = '';
+        foreach (\array_merge($rolePreferred, $rotation) as $candidate) {
+            $probe = $this->composeStageOneVisualSignaturePreset($candidate, $block, $index);
+            $fingerprint = $this->stageOneVisualSignatureDiversityFingerprint($probe);
+            if ($fingerprint === '' || \in_array($fingerprint, $usedFingerprints, true)) {
+                continue;
+            }
+            $composition = $candidate;
+            break;
+        }
+        if ($composition === '') {
+            $composition = $rotation[$index % \count($rotation)] ?? 'stacked_editorial_band';
+        }
+
+        return $this->composeStageOneVisualSignaturePreset($composition, $block, $index);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, string>
+     */
+    private function composeStageOneVisualSignaturePreset(string $compositionPattern, array $block, int $index): array
+    {
+        $compositionPattern = \trim($compositionPattern);
+        $surfaceAlternation = ['elevated_soft_cards', 'inset_glass_panels', 'outlined_editorial_slabs', 'layered_contrast_bands'];
+        $mediaAlternation = ['verified_feature_image', 'css_motif_backdrop', 'inline_media_rail', 'background_texture_panel'];
+        $interactionAlternation = ['subtle_hover_lift', 'focus_ring_emphasis', 'scroll_reveal_cadence', 'cta_micro_motion'];
+
+        return [
+            'composition_pattern' => $compositionPattern,
+            'spatial_rhythm' => match ($compositionPattern) {
+                'full_bleed_hero_stage', 'cinematic_opening_band', 'cinematic_action_band' => 'full-bleed opening cadence with overlay copy panel',
+                'faq_accordion_rows', 'support_guidance_split' => 'tight stacked Q/A rhythm with asymmetric help rail',
+                'form_guidance_split', 'channel_hub_console', 'lead_capture_panel' => 'form-first vertical rhythm with grouped field spacing',
+                'staggered_proof_rail', 'metric_proof_strip', 'credential_badge_wall' => 'offset proof cadence with alternating metric emphasis',
+                'timeline_process_rail', 'founder_mission_split' => 'stepped narrative rhythm with milestone spacing',
+                default => $index % 2 === 0 ? 'airy editorial spacing with alternating surface bands' : 'compact proof cadence with deliberate whitespace breaks',
+            },
+            'media_strategy' => match (true) {
+                $index === 0 || $this->looksLikeHeroBlockKey((string)($block['block_key'] ?? '')) => 'hero cover image with text-safe scrim',
+                \preg_match('/\b(faq|form|contact|cta)\b/u', (string)($block['block_key'] ?? '')) === 1 => $mediaAlternation[($index + 1) % \count($mediaAlternation)],
+                default => $mediaAlternation[$index % \count($mediaAlternation)],
+            },
+            'surface_treatment' => $surfaceAlternation[$index % \count($surfaceAlternation)],
+            'interaction_pattern' => $interactionAlternation[$index % \count($interactionAlternation)],
+        ];
     }
 
     /**

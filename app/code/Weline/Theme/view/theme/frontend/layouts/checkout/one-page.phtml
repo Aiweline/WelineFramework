@@ -30,6 +30,53 @@ $this->assign('title', $title);
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <style>
+        .checkout-main.one-page {
+            width: 100%;
+            min-height: 70vh;
+            padding: var(--layout-page-padding-y, 2rem) 0;
+            box-sizing: border-box;
+        }
+
+        .checkout-container {
+            width: 100%;
+            max-width: var(--layout-content-max-width, 1280px);
+            margin: 0 auto;
+            padding: 0 var(--layout-content-padding-x, 1.5rem);
+            box-sizing: border-box;
+        }
+
+        .checkout-content-wrapper {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--layout-grid-gap, 1.5rem);
+            align-items: start;
+        }
+
+        .checkout-content-wrapper.has-summary {
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+        }
+
+        .checkout-form,
+        .checkout-summary {
+            min-width: 0;
+        }
+
+        .checkout-summary.sticky {
+            position: sticky;
+            top: var(--layout-sticky-offset, 1.5rem);
+        }
+
+        @media (max-width: 960px) {
+            .checkout-content-wrapper.has-summary {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .checkout-summary.sticky {
+                position: static;
+            }
+        }
+    </style>
 </head>
 <body>
     @template(Weline_Frontend::templates/public/header.phtml)
@@ -42,7 +89,7 @@ $this->assign('title', $title);
     
     <main class="checkout-main one-page <?= htmlspecialchars($class ?? '') ?>" id="checkout-main" data-layout="checkout_one_page">
         <div class="checkout-container">
-            <div class="checkout-content-wrapper">
+            <div class="checkout-content-wrapper <?= $orderSummary ? 'has-summary' : 'no-summary' ?>">
                 <div class="checkout-form">
                     {{content}}
                 </div>

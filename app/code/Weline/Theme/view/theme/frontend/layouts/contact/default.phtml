@@ -1,8 +1,106 @@
 <?php
 /**
- * Bridge layout for the Weline_Customer contact page.
+ * Layout: contact page default layout.
  *
- * The actual page layout is owned by Weline_Customer. This thin bridge keeps
- * the current Weline_Theme layout resolver able to locate layoutType=contact.
+ * Keeps the page shell aligned with Weline_Theme layouts. Page-specific content
+ * and interaction stay in the content template rendered by the controller.
+ *
+ * @meta.name {default="Contact Page Default Layout",name="Contact Page Default Layout",description="Default layout for customer contact pages"}
+ * @meta.description {default="Includes head, header, breadcrumb, content and footer regions",name="Description",description="Theme-owned contact page layout"}
+ * @preview.login {default=0,option={0:No,1:Yes},name="Login Required",description="Whether preview requires login"}
+ * @param title {default="Contact Us",name="Page Title",description="Page title"}
+ * @param content {default="",name="Main Content",description="Main content HTML"}
+ * @param showHeader {default=true,name="Show Header",description="Whether to show the site header"}
+ * @param showFooter {default=true,name="Show Footer",description="Whether to show the site footer"}
+ * @param showBreadcrumb {default=true,name="Show Breadcrumb",description="Whether to show breadcrumb navigation"}
+ * @param class {default="",name="Extra CSS Class",description="Extra CSS class for the main content"}
  */
-include APP_CODE_PATH . 'Weline' . DS . 'Customer' . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'contact' . DS . 'default.phtml';
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <theme:css>Weline_Theme::theme/frontend/assets/css/contact.css</theme:css>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::contact::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::contact::body-start</w:hook>
+
+    <div class="weline-page-wrapper weline-contact-page">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::contact::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::contact::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <if condition="meta.showBreadcrumb">
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::contact::breadcrumb-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+            <w:hook>Weline_Theme::frontend::layouts::contact::breadcrumb-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::contact::content-before</w:hook>
+
+            <w:hook>Weline_Theme::frontend::layouts::contact::main-before</w:hook>
+            <main class="contact-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="contact-main" data-layout="contact">
+                <div class="container contact-main__container">
+                    <if condition="meta.content">
+                        {{meta.content}}
+                    <elseif condition="content"/>
+                        {{content}}
+                    <elseif condition="meta.contentTemplate"/>
+                        <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                    <else/>
+                        <?= $this->getChildHtml('content') ?>
+                    </if>
+                </div>
+            </main>
+            <w:hook>Weline_Theme::frontend::layouts::contact::main-after</w:hook>
+
+            <w:hook>Weline_Theme::frontend::layouts::contact::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::contact::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::contact::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <theme:js>Weline_Theme::theme/frontend/assets/js/contact.js</theme:js>
+    <w:hook>Weline_Theme::frontend::layouts::contact::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+    <style>
+    .weline-page-wrapper {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+
+    .weline-main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .contact-main {
+        width: 100%;
+        flex: 1;
+    }
+    </style>
+</body>
+</html>

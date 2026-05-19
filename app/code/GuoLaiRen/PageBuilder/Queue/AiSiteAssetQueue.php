@@ -109,6 +109,18 @@ class AiSiteAssetQueue implements QueueInterface
             if ($slot === []) {
                 throw new \RuntimeException('Asset slot does not exist: ' . $slotId);
             }
+            $slotFinalUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($slotFinalUrl !== '' && $this->identityAssetFinalUrlNeedsRegeneration($slotId, $slot, $slotFinalUrl)) {
+                $slot['locked_by_user'] = 0;
+                $slot['final_url'] = '';
+                $slot['url'] = '';
+                $slot['variants'] = [];
+                $slot['source'] = 'planned';
+                $slot['status'] = 'pending';
+                $slot['updated_at'] = \date('Y-m-d H:i:s');
+                $manifest['slots'][(string)($slot['slot_id'] ?? $slotId)] = $slot;
+                $manifest['updated_at'] = \date('Y-m-d H:i:s');
+            }
             if ((int)($slot['locked_by_user'] ?? 0) === 1) {
                 throw new \RuntimeException('Asset slot is locked by user: ' . $slotId);
             }
@@ -154,7 +166,12 @@ class AiSiteAssetQueue implements QueueInterface
                 return 'Image asset generation skipped because planning contract changed: ' . $slotId;
             }
             $previousUrl = \trim((string)($slot['final_url'] ?? ''));
-            if ($mode !== 'regenerate' && $previousUrl !== '' && $manifestService->isReusableSessionBlockAsset($scope, $slot, $previousUrl)) {
+            if (
+                $mode !== 'regenerate'
+                && $previousUrl !== ''
+                && !$this->identityAssetFinalUrlNeedsRegeneration($slotId, $slot, $previousUrl)
+                && $manifestService->isReusableSessionBlockAsset($scope, $slot, $previousUrl)
+            ) {
                 $imagePatch = $this->applyGeneratedImagePatchToScope($scope, $content, $slot, '', $previousUrl);
                 $scope = \is_array($imagePatch['scope'] ?? null) ? $imagePatch['scope'] : $scope;
                 $imageScopePatch = \is_array($imagePatch['patch'] ?? null) ? $imagePatch['patch'] : [];
@@ -217,10 +234,11 @@ class AiSiteAssetQueue implements QueueInterface
                 'slot_id' => $slotId,
                 'message' => 'Calling text-to-image model.',
             ]);
+            $identityParams = $this->buildIdentityImageGenerationParams($slotId, $slot);
             $result = w_query('ai', 'generateImage', [
                 'prompt' => $prompt,
                 'scenario_code' => 'pagebuilder_ai_site_assets',
-                'params' => [
+                'params' => \array_merge([
                     'disable_conversation_history' => true,
                     'disable_conversation_persist' => true,
                     'allow_zero_balance_provider' => true,
@@ -230,7 +248,7 @@ class AiSiteAssetQueue implements QueueInterface
                     'size' => \trim((string)($content['size'] ?? '')) ?: '1024x1024',
                     'response_format' => \trim((string)($content['response_format'] ?? '')),
                     'output_format' => \trim((string)($content['output_format'] ?? '')),
-                ],
+                ], $identityParams),
             ]);
             if (!\is_array($result)) {
                 throw new \RuntimeException('Image generation returned invalid result.');
@@ -241,6 +259,7 @@ class AiSiteAssetQueue implements QueueInterface
             if ($bytes === '') {
                 throw new \RuntimeException('Image generation returned empty image bytes.');
             }
+            $this->assertIdentityAssetTransparentPng($slotId, $slot, $bytes, $mimeType);
             $generatedModel = (string)($result['model'] ?? '');
             $revisedPrompt = (string)($image['revised_prompt'] ?? '');
 
@@ -561,6 +580,129 @@ class AiSiteAssetQueue implements QueueInterface
             'image/webp' => 'webp',
             default => 'png',
         };
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     * @return array<string,string>
+     */
+    private function buildIdentityImageGenerationParams(string $slotId, array $slot): array
+    {
+        if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
+            return [];
+        }
+
+        return [
+            'output_format' => 'png',
+            'background' => 'transparent',
+            'identity_transparent_png_required' => true,
+            'transparent_png_required' => true,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function assertIdentityAssetTransparentPng(string $slotId, array $slot, string $bytes, string $mimeType): void
+    {
+        if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
+            return;
+        }
+        if (!$this->isPngImageBytes($bytes) || !\str_contains(\strtolower($mimeType), 'png')) {
+            throw new \RuntimeException('Identity logo/icon generation must return a PNG file with transparent alpha background.');
+        }
+        if (!$this->pngAppearsToHaveTransparentBackground($bytes)) {
+            throw new \RuntimeException('Identity logo/icon generation must use a transparent alpha background; solid, white, card, or screenshot backgrounds are invalid.');
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function identityAssetFinalUrlNeedsRegeneration(string $slotId, array $slot, string $finalUrl): bool
+    {
+        if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
+            return false;
+        }
+        $path = \parse_url($finalUrl, \PHP_URL_PATH);
+        $path = \is_string($path) && $path !== '' ? $path : $finalUrl;
+        $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+        if (!\str_contains($path, '/pub/media/page-build/ai-generated/')) {
+            return false;
+        }
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
+        if (!\is_file($absolutePath)) {
+            return true;
+        }
+        $bytes = @\file_get_contents($absolutePath);
+        if (!\is_string($bytes) || $bytes === '') {
+            return true;
+        }
+
+        return !$this->isPngImageBytes($bytes) || !$this->pngAppearsToHaveTransparentBackground($bytes);
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function isTransparentIdentityAssetSlot(string $slotId, array $slot): bool
+    {
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+        $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
+        $label = \strtolower(\trim((string)($slot['label'] ?? '')));
+        $slotId = \strtolower(\trim($slotId));
+
+        return \str_contains($slotId, 'identity:website-logo')
+            || \str_contains($slotId, 'identity:site-title-icon')
+            || \in_array($field, ['logo', 'logo.image', 'brand.logo', 'icon', 'favicon', 'site.icon'], true)
+            || \in_array($kind, ['website_logo', 'brand_logo', 'site_title_icon', 'favicon'], true)
+            || ($slotType === 'logo_icon' && \str_starts_with($slotId, 'identity:') && (\str_contains($label, 'logo') || \str_contains($label, 'icon') || \str_contains($label, 'favicon')));
+    }
+
+    private function isPngImageBytes(string $bytes): bool
+    {
+        return \strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) === 0;
+    }
+
+    private function pngAppearsToHaveTransparentBackground(string $bytes): bool
+    {
+        if (!$this->isPngImageBytes($bytes)) {
+            return false;
+        }
+        if (\function_exists('imagecreatefromstring')) {
+            $image = @\imagecreatefromstring($bytes);
+            if ($image !== false) {
+                $width = \imagesx($image);
+                $height = \imagesy($image);
+                $points = [
+                    [0, 0],
+                    [\max(0, $width - 1), 0],
+                    [0, \max(0, $height - 1)],
+                    [\max(0, $width - 1), \max(0, $height - 1)],
+                    [(int)\floor($width / 2), 0],
+                    [(int)\floor($width / 2), \max(0, $height - 1)],
+                ];
+                $transparent = 0;
+                foreach ($points as [$x, $y]) {
+                    $color = \imagecolorat($image, $x, $y);
+                    $alpha = ($color >> 24) & 0x7F;
+                    if ($alpha >= 80) {
+                        $transparent++;
+                    }
+                }
+                \imagedestroy($image);
+
+                return $transparent >= 4;
+            }
+        }
+
+        $colorType = \ord($bytes[25] ?? "\0");
+        if (\in_array($colorType, [4, 6], true)) {
+            return true;
+        }
+
+        return \str_contains($bytes, 'tRNS');
     }
 
     /**
@@ -1659,23 +1801,26 @@ class AiSiteAssetQueue implements QueueInterface
      */
     private function resolveIdentityAssetRole(array $slot): string
     {
+        $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
         $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+
+        if (\str_contains($slotId, 'identity:website-logo')) {
+            return 'logo';
+        }
+        if (\str_contains($slotId, 'identity:site-title-icon')) {
+            return 'icon';
+        }
         if (\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)) {
             return 'logo';
         }
         if (\in_array($field, ['icon', 'favicon', 'site.icon'], true)) {
             return 'icon';
         }
-
-        $haystack = \strtolower(\implode(' ', [
-            (string)($slot['slot_id'] ?? ''),
-            (string)($slot['label'] ?? ''),
-            (string)($slot['kind'] ?? ''),
-        ]));
-        if (\str_contains($haystack, 'logo')) {
+        if (\in_array($kind, ['website_logo', 'brand_logo'], true)) {
             return 'logo';
         }
-        if (\str_contains($haystack, 'icon') || \str_contains($haystack, 'favicon')) {
+        if (\in_array($kind, ['site_title_icon', 'favicon'], true)) {
             return 'icon';
         }
 

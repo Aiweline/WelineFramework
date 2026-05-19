@@ -20,7 +20,7 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Observer\CliCommandExecutedObserver;
-use Weline\Server\Service\Control\BroadcastControlDispatchService;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -74,35 +74,7 @@ class Reload extends CommandAbstract
             $this->printer->note(__('实例 [%{1}] 自动匹配到 [%{2}]', [$requestedInstanceName, $instanceName]));
         }
 
-        $targetInfo = $manager->getPersistedInstanceInfo($instanceName);
-        $targetStats = $targetInfo !== null
-            ? $manager->getRuntimeStatsForInstance($targetInfo, false)
-            : ['workers' => 0];
-        $targetRunningWorkers = (int)($targetStats['workers'] ?? 0);
-        if ($targetRunningWorkers <= 0) {
-            $globalStats = $manager->getRunningStats();
-            if (($globalStats['workers'] ?? 0) > 0) {
-                $this->printer->warning(__('实例 [%{1}] 未检测到运行中的 WLS Worker', [$requestedInstanceName]));
-                if ($manager->hasInstance($instanceName)) {
-                    $this->printer->note(__('可执行 server:listing -r 查看当前运行中的实例'));
-                } else {
-                    $suggestions = $manager->suggestPersistedInstanceNames($requestedInstanceName);
-                    if ($suggestions !== []) {
-                        $this->printer->note(__('你可能想要的实例：%{1}', [\implode(', ', $suggestions)]));
-                        $this->printer->note(__('如需重载最接近的实例，可执行 server:reload %{1}', [$suggestions[0]]));
-                    } else {
-                        $this->printer->note(__('请确认实例名称，或执行 server:listing 查看所有实例'));
-                    }
-                }
-                return;
-            }
-            $this->printer->warning(__('未检测到运行中的 WLS Worker'));
-            $this->printer->note(__('请先启动服务器：php bin/w server:start'));
-            return;
-        }
-
         $this->printer->note(__('当前操作实例：%{1}', [$instanceName]));
-        $totalWorkers = $targetRunningWorkers;
         
         if ($forceMode) {
             $this->printer->warning(__('强制重载模式：批量杀死所有 Worker 后重新启动'));
@@ -110,10 +82,10 @@ class Reload extends CommandAbstract
         } else {
             $this->printer->note(__('执行滚动重启（优雅重载）...'));
         }
-        $this->printer->note(__('Worker 数：%{1}', [$totalWorkers]));
+        $this->printer->note(__('Worker 状态：由 Master IPC / Orchestrator 实时判定'));
         
         if ($waitMode) {
-            $this->executeReloadAndWait($instanceName, $totalWorkers, $reloadType);
+            $this->executeReloadAndWait($instanceName, $reloadType);
         } else {
             $this->executeReloadAsync($instanceName, $reloadType, $forceMode);
         }
@@ -124,11 +96,11 @@ class Reload extends CommandAbstract
     /**
      * 发送 reload_wait 命令并等待完成
      */
-    protected function executeReloadAndWait(string $instanceName, int $totalWorkers, string $reloadType): void
+    protected function executeReloadAndWait(string $instanceName, string $reloadType): void
     {
         $info = MasterProcess::getMasterInfo($instanceName);
         $controlPort = (int)($info['control_port'] ?? 0);
-        $waitTimeout = $this->estimateWaitTimeout($totalWorkers);
+        $waitTimeout = $this->estimateWaitTimeout(null);
         
         if ($controlPort <= 0) {
             $this->printer->warning(__('无法获取控制端口，请检查 Master 是否运行'));
@@ -160,7 +132,7 @@ class Reload extends CommandAbstract
         $this->printer->note(__('等待实例 [%{1}] 的 Orchestrator 完成滚动重启...', [$instanceName]));
         
         // 等待 Master 推送完成/失败事件
-        $this->waitForCompletion($conn, $totalWorkers, $waitTimeout);
+        $this->waitForCompletion($conn, 0, $waitTimeout);
     }
     
     /**
@@ -281,8 +253,11 @@ class Reload extends CommandAbstract
     protected function handleReloadProgress(array $msg, int $totalWorkers, string $lastProgress): string
     {
         $completed = $msg['completed'] ?? $msg['progress'] ?? 0;
-        $total = $msg['total'] ?? $totalWorkers;
         $currentWorkerId = $msg['current_worker_id'] ?? 0;
+        $total = (int)($msg['total'] ?? $totalWorkers);
+        if ($total <= 0) {
+            $total = \max(1, (int)$completed, (int)$currentWorkerId);
+        }
         $stage = $msg['stage'] ?? '';
         $message = (string) ($msg['message'] ?? '');
 
@@ -337,8 +312,12 @@ class Reload extends CommandAbstract
         return $message;
     }
 
-    protected function estimateWaitTimeout(int $totalWorkers): int
+    protected function estimateWaitTimeout(?int $totalWorkers): int
     {
+        if ($totalWorkers === null || $totalWorkers <= 0) {
+            return self::WAIT_MAX_TIMEOUT;
+        }
+
         $workerCount = \max(1, $totalWorkers);
         $minThree = (int) (Env::get('wls.orchestrator.worker_three_batch_min_count', 7) ?? 7);
         if ($minThree < 4) {
@@ -408,38 +387,24 @@ class Reload extends CommandAbstract
      */
     protected function executeReloadAsync(string $instanceName, string $reloadType, bool $forceMode): void
     {
-        /** @var BroadcastControlDispatchService $dispatchService */
-        $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
-        $result = $dispatchService->reloadAsync($instanceName, $reloadType);
-        $attempted = \is_array($result['attempted'] ?? null) ? $result['attempted'] : [];
-        $succeeded = \is_array($result['succeeded'] ?? null) ? $result['succeeded'] : [];
-        $failedByInstance = \is_array($result['failed_by_instance'] ?? null) ? $result['failed_by_instance'] : [];
-        $resultsByInstance = \is_array($result['results_by_instance'] ?? null) ? $result['results_by_instance'] : [];
+        /** @var IpcControlGateway $gateway */
+        $gateway = ObjectManager::getInstance(IpcControlGateway::class);
+        $result = $gateway->reloadAsync($instanceName, $reloadType);
+        $message = (string)($result['message'] ?? '');
+        $data = \is_array($result['data'] ?? null) ? $result['data'] : [];
+        $dataJson = $data !== []
+            ? \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            : '{}';
 
         $this->printer->note(
-            'IPC dispatch: attempted=' . (\implode(',', \array_map('strval', $attempted)) ?: '(none)')
-            . ', succeeded=' . (\implode(',', \array_map('strval', $succeeded)) ?: '(none)')
+            'IPC dispatch: target=' . $instanceName
+            . ', success=' . (!empty($result['success']) ? '1' : '0')
         );
-        foreach ($resultsByInstance as $targetInstance => $ipcResult) {
-            if (!\is_array($ipcResult)) {
-                continue;
-            }
-            $message = (string)($ipcResult['message'] ?? '');
-            $data = \is_array($ipcResult['data'] ?? null) ? $ipcResult['data'] : [];
-            $dataJson = $data !== []
-                ? \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-                : '{}';
-            $this->printer->note(
-                'IPC response[' . (string)$targetInstance . ']: success=' . (!empty($ipcResult['success']) ? '1' : '0')
-                . ', message=' . ($message !== '' ? $message : '(empty)')
-                . ', data=' . ($dataJson !== false ? $dataJson : '{}')
-            );
-        }
-        if ($failedByInstance !== []) {
-            foreach ($failedByInstance as $failedInstance => $reason) {
-                $this->printer->warning('IPC dispatch failed: ' . $failedInstance . ' => ' . (string) $reason);
-            }
-        }
+        $this->printer->note(
+            'IPC response[' . $instanceName . ']: success=' . (!empty($result['success']) ? '1' : '0')
+            . ', message=' . ($message !== '' ? $message : '(empty)')
+            . ', data=' . ($dataJson !== false ? $dataJson : '{}')
+        );
 
         if (empty($result['success'])) {
             $this->printer->warning($result['message']);
@@ -448,7 +413,7 @@ class Reload extends CommandAbstract
         
         echo "\n";
         $this->printer->success(__('✓ 热重载命令已发送'));
-        $this->printer->note($result['message']);
+        $this->printer->note(__('已向 WLS 实例 %{1} 发送重载命令', [$instanceName]));
         
         if ($forceMode) {
             $this->printer->note(__('Orchestrator 将批量杀死所有 Worker 后重新启动'));

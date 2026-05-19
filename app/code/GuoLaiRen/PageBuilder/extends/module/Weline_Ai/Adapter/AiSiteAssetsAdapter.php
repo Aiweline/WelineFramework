@@ -40,11 +40,19 @@ class AiSiteAssetsAdapter implements ScenarioAdapterInterface
             return $prompt;
         }
 
-        return $normalized . "\n\n"
+        $contract = $normalized . "\n\n"
             . "Asset constraints:\n"
             . "1. Generate one production-ready website image for the requested PageBuilder slot.\n"
             . "2. Do not include visible prompt text, UI labels, watermarks, screenshots, or placeholder graphics.\n"
             . "3. Match the target site language, market, block role, and visual direction from the prompt.\n";
+
+        if ($this->requiresTransparentIdentityPng($params)) {
+            $contract .= "4. Identity logo/icon contract (HARD): output a PNG logo asset with real transparent alpha background. The canvas must be transparent; only the brand mark, symbol, or wordmark pixels may be visible.\n"
+                . "5. Identity logo/icon exclusions (HARD): no white box, solid-color tile, rounded square card, gradient backdrop, photo scene, wall mockup, app icon tile, screenshot frame, watermark, or paragraph text.\n"
+                . "6. If the selected image model cannot produce transparent PNG alpha output, the generation must fail contract validation instead of returning a JPEG/WebP or opaque background asset.\n";
+        }
+
+        return $contract;
     }
 
     public function processResponse(string $response, array $params = []): string
@@ -80,5 +88,24 @@ class AiSiteAssetsAdapter implements ScenarioAdapterInterface
     public function supportsModel(string $modelCode): bool
     {
         return $modelCode !== '';
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function requiresTransparentIdentityPng(array $params): bool
+    {
+        if (!empty($params['identity_transparent_png_required']) || !empty($params['transparent_png_required'])) {
+            return true;
+        }
+
+        $slotId = \strtolower(\trim((string)($params['slot_id'] ?? '')));
+        if ($slotId === '') {
+            return false;
+        }
+
+        return \str_starts_with($slotId, 'identity:')
+            || \str_contains($slotId, 'identity:website-logo')
+            || \str_contains($slotId, 'identity:site-title-icon');
     }
 }
