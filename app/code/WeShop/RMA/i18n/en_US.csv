@@ -22,18 +22,14 @@ RMA已批准,"RMA approved"
 请填写退换货原因。,"Return reason is required."
 售后管理,"RMA Management"
 售后详情,"RMA Detail"
-退换货,退换货
-查看退货、换货和售后申请进度。,查看退货、换货和售后申请进度。
-打开售后中心,打开售后中心
-暂无退换货申请,暂无退换货申请
-如果订单需要退货或换货，可以从订单详情或售后中心发起申请。,如果订单需要退货或换货，可以从订单详情或售后中心发起申请。
-去售后中心,去售后中心
-待处理,待处理
-已同意,已同意
-已拒绝,已拒绝
+查看退货、换货和售后申请进度。,"Track return and exchange request progress."
+打开售后中心,"Open Returns Center"
+暂无退换货申请,"No return or exchange requests yet"
+如果订单需要退货或换货，可以从订单详情或售后中心发起申请。,"If you need a return or exchange, start a request from order details or the returns center."
+去售后中心,"Go to Returns Center"
 "售后单 #%{1}","售后单 #%{1}"
 "订单 #%{1}","订单 #%{1}"
-提交和跟踪售后申请,提交和跟踪售后申请
+提交和跟踪售后申请,"Submit and track after-sales requests"
 售后,After-Sales
 打开售后中心,"Open RMA"
 已提交申请,"Requests Submitted"

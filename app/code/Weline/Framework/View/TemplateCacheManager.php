@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\View;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 
 /**
  * Template Cache Manager
@@ -536,7 +537,12 @@ class TemplateCacheManager
             throw new \RuntimeException(__('Failed to hash template source file: %{1}', $sourceFile));
         }
 
-        return $hash . '-' . filesize($sourceFile);
+        $lang = State::getLangLocal();
+        if ($lang === '') {
+            $lang = (string) Env::default_LANGUAGE_CODE;
+        }
+
+        return $hash . '-' . filesize($sourceFile) . '-' . $lang;
     }
 
     /**
