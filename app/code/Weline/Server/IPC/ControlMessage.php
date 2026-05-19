@@ -697,25 +697,6 @@ class ControlMessage
     }
 
     /**
-     * 构建 add_worker 消息
-     */
-    public static function addWorker(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string
-    {
-        $data = [
-            'type'  => self::TYPE_ADD_WORKER,
-            'ports' => $ports,
-            'role' => $role,
-        ];
-        if ($workers !== []) {
-            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
-        }
-        if ($version > 0) {
-            $data['version'] = $version;
-        }
-        return self::encode($data);
-    }
-
-    /**
      * 构建 remove_worker 消息
      */
     public static function removeWorker(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string

@@ -296,6 +296,12 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertTrue((bool) ($ack['in_pool'] ?? false));
     }
 
+    /**
+     * 协议演进后契约：ADD_WORKER 已废弃，Dispatcher 端 switch 不再有对应 case，
+     * 收到此消息时应静默丢弃——既不入池、不发 worker_pool_ack，也不入 deferredWorkerPoolJobs 队列。
+     *
+     * 作为护栏防止未来回退：若有人误加回 `case TYPE_ADD_WORKER` 的入池逻辑，此用例会立即捕获。
+     */
     public function testDuplicateWorkerAddTriggersAuditInsteadOfAddingAgain(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
@@ -350,12 +356,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         ]);
 
         self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
-        self::assertCount(1, $client->sent);
-        $ack = \json_decode(\trim($client->sent[0]), true);
-        self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $ack['type'] ?? null);
-        self::assertSame(ControlMessage::ROLE_WORKER, $ack['role'] ?? null);
-        self::assertSame(19001, $ack['port'] ?? null);
-        self::assertTrue((bool) ($ack['in_pool'] ?? false));
+        self::assertSame([], $client->sent, 'Dispatcher 不应再为已废弃的 ADD_WORKER 发送任何响应');
     }
 
     public function testBusinessSetWorkerPoolTrustsMasterReadyAndAcknowledgesImmediately(): void
