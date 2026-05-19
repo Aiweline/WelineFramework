@@ -2,11 +2,10 @@
 该订单已无法重新支付。,"This order can no longer be retried."
 结账内容为空。,"The checkout is empty."
 结账方式刷新成功。,"Checkout methods refreshed successfully."
+匿名结账需要填写邮箱。,"Email is required for guest checkout."
 订单提交成功。,"Order placed successfully."
 "缺少订单 ID。","Order ID is required."
 未找到请求的订单。,"The requested order could not be found."
-"WeShop checkout order created","WeShop checkout order created"
-"Dispatched after WeShop checkout creates an order. Payload includes order, customer identity, guest email, checkout data, and selected notification channels.","Dispatched after WeShop checkout creates an order. Payload includes order, customer identity, guest email, checkout data, and selected notification channels."
 "Checkout success page before content","Checkout success page before content"
 "Render extension content before the checkout success page body.","Render extension content before the checkout success page body."
 "Checkout success recommendations before","Checkout success recommendations before"
@@ -40,8 +39,6 @@
 请填写收货地址信息。,"Shipping address information is required."
 请选择配送方式。,"Shipping method is required."
 请选择支付方式。,"Payment method is required."
-"优惠券 %{1}","优惠券 %{1}"
-优惠,Discount
 WeShop,WeShop
 一页式结账：联系信息、配送和支付一次完成。,"One-page checkout. Finish contact, delivery, and payment in one flow."
 匿名结账,"Guest checkout"
@@ -49,13 +46,6 @@ WeShop,WeShop
 查看订单摘要,"Show order summary"
 重新支付,"Retry Payment"
 将复用当前订单，不会重复创建订单。,"The existing order will be reused. No duplicate order will be created."
-结账方式,结账方式
-由客户选择是否匿名结账,由客户选择是否匿名结账
-使用账户结账,使用账户结账
-订单、收货地址和售后会关联到当前账户。,订单、收货地址和售后会关联到当前账户。
-登录后可选择账户结账并使用账户地址。,登录后可选择账户结账并使用账户地址。
-不强制登录；本次订单使用邮箱接收通知，支付、配送模块可按匿名上下文处理。,不强制登录；本次订单使用邮箱接收通知，支付、配送模块可按匿名上下文处理。
-"全局结账只负责输出身份选择和上下文，支付、配送、风控等特殊逻辑由各自模块通过 hook 或 event 处理。","全局结账只负责输出身份选择和上下文，支付、配送、风控等特殊逻辑由各自模块通过 hook 或 event 处理。"
 联系信息,Contact
 无需账户,"No account required"
 账户邮箱,"Account email"
@@ -66,8 +56,6 @@ WeShop,WeShop
 收货地址,"Shipping Address"
 使用新地址,"Use a new address"
 在下方填写新的收货地址。,"Enter a different delivery address below."
-添加新的收货地址,添加新的收货地址
-当前账户还没有保存地址，填写下方地址即可完成本次结账。,当前账户还没有保存地址，填写下方地址即可完成本次结账。
 名,"First name"
 姓,"Last name"
 详细地址,Address
@@ -94,14 +82,9 @@ WeShop,WeShop
 小计,Subtotal
 运费,Shipping
 税费,Tax
+优惠,Discount
 合计,Total
-优惠券,优惠券
-暂时无法刷新结账方式。,"Unable to refresh checkout methods at this time."
-当前收货地址没有可用配送方式。,"No shipping methods are available for the selected address."
-当前没有可用的匿名支付方式。,"No guest payment methods are available."
 收起订单摘要,"Hide order summary"
-暂时无法提交订单。,"Unable to place the order at this time."
-%{1}年%{2}月%{3}日,%{1}/%{2}/%{3}
 订单提交成功！,"Order submitted successfully!"
 订单已确认！,"Order Confirmed!"
 感谢购买，我们已收到你的订单，并会持续更新处理进度。,"Thank you for your purchase. We have received your order and will keep you updated."
@@ -122,3 +105,9 @@ WeShop,WeShop
 购买该商品的顾客还购买了,"Customers who bought this also bought"
 查看订单详情,"View Order Details"
 继续购物,"Continue Shopping"
+暂时无法刷新结账方式。,"Unable to refresh checkout methods at this time."
+暂时无法提交订单。,"Unable to place the order at this time."
+当前收货地址没有可用配送方式。,"No shipping methods are available for the selected address."
+当前没有可用的匿名支付方式。,"No guest payment methods are available."
+%{1}年%{2}月%{3}日,"%{1}/%{2}/%{3}"
+合计,Total

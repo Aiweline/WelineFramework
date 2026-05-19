@@ -30,15 +30,15 @@ try {
     <span class="account-hook-nav-link__label">
         <i class="ri-shield-keyhole-line" aria-hidden="true"></i>
         <span class="account-hook-nav-link__text">
-            <strong><?= __('Two-Factor Verification') ?></strong>
-            <span><?= __('Account Login Security Verification') ?></span>
+            <strong><?= __('两步验证') ?></strong>
+            <span><?= __('账户登录安全验证') ?></span>
         </span>
     </span>
     <span class="account-hook-nav-link__arrow" aria-hidden="true">
         <?php if ($isEnabled): ?>
-            <span class="badge badge-success" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;"><?= __('Enabled') ?></span>
+            <span class="badge badge-success" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;"><?= __('已启用') ?></span>
         <?php else: ?>
-            <span class="badge badge-secondary" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;"><?= __('Disabled') ?></span>
+            <span class="badge badge-secondary" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;"><?= __('未启用') ?></span>
         <?php endif; ?>
     </span>
 </a>

@@ -271,6 +271,8 @@ try {
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
     WlsLogger::getInstance()->error("框架初始化失败: " . $e->getMessage());
+    \fwrite(STDERR, "[Dispatcher] WlsRuntime bootstrap failed: {$runtimeError}\n");
+    exit(2);
 }
 
 // 读取 env 配置

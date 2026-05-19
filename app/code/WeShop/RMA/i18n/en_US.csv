@@ -1,4 +1,4 @@
-﻿"RMA ID不能为空","RMA ID不能为空"
+"RMA ID不能为空","RMA ID不能为空"
 RMA已批准,"RMA approved"
 "RMA ID is required.","RMA ID is required."
 "RMA has been rejected.","RMA has been rejected."
@@ -11,20 +11,28 @@ Rejected,Rejected
 "You do not have access to this order.","You do not have access to this order."
 "Please log in to continue.","Please log in to continue."
 "Returns & Exchanges","Returns & Exchanges"
-"Unsupported RMA provider operation: %{1}","Unsupported RMA provider operation: %{1}"
-待处理,待处理
-"RMA Query","RMA Query"
-"Submit a frontend RMA request.","Submit a frontend RMA request."
-订单没有可售后商品,订单没有可售后商品
-订单已取消或已退款,订单已取消或已退款
-订单尚未完成支付,订单尚未完成支付
-已同意,已同意
-已拒绝,已拒绝
+Return,Return
+Exchange,Exchange
+"Wrong size","Wrong size"
+"Damaged in transit","Damaged in transit"
+"Defective item","Defective item"
+"Item not as described","Item not as described"
+"Changed my mind","Changed my mind"
+Other,Other
 "Return reason is required.","Return reason is required."
 "RMA Management","RMA Management"
 "RMA Detail","RMA Detail"
-联系我们,"Contact Us"
 退换货,退换货
+查看退货、换货和售后申请进度。,查看退货、换货和售后申请进度。
+打开售后中心,打开售后中心
+暂无退换货申请,暂无退换货申请
+如果订单需要退货或换货，可以从订单详情或售后中心发起申请。,如果订单需要退货或换货，可以从订单详情或售后中心发起申请。
+去售后中心,去售后中心
+待处理,待处理
+已同意,已同意
+已拒绝,已拒绝
+"售后单 #%{1}","售后单 #%{1}"
+"订单 #%{1}","订单 #%{1}"
 提交和跟踪售后申请,提交和跟踪售后申请
 After-Sales,After-Sales
 "Open RMA","Open RMA"
@@ -77,51 +85,9 @@ Description,Description
 "Select a reason","Select a reason"
 "Tell us more details about your request","Tell us more details about your request"
 "Submit Request","Submit Request"
+"联系我们","Contact Us"
 "Request Timeline","Request Timeline"
 "Your Latest RMA Records","Your Latest RMA Records"
-"Order #%{1}","Order #%{1}"
-"Submitted at: %{1}","Submitted at: %{1}"
+Order,Order
+"Submitted at","Submitted at"
 "Unable to submit your request right now.","Unable to submit your request right now."
-é€€æ¢è´§,"Returns and Exchanges"
-æäº¤å’Œè·Ÿè¸ªå”®åŽç”³è¯·,"Submit and track after-sales requests"
-æäº¤å’Œè·Ÿè¸ªå”®åŽç”³è¯·ï¼Œä¸ç¦»å¼€å½“å‰ä¸ªäººä¸­å¿ƒã€‚,"Submit and track after-sales requests without leaving your account center."
-宸查€夋嫨璁㈠崟,"Selected order"
-浠庤鍗曞垪琛ㄩ€夋嫨闇€瑕佸敭鍚庣殑璁㈠崟,"Choose an eligible order from the order list to start after-sales service."
-鏂板缓鐢宠,"New Request"
-鎻愪氦閫€璐?/ 鎹㈣揣,"Submit Return / Exchange"
-閫夋嫨璁㈠崟,"Select Order"
-璇烽€夋嫨鍙敭鍚庤鍗?,"Select an eligible order"
-鐢宠绫诲瀷,"Request Type"
-鍘熷洜,Reason
-璇烽€夋嫨鍘熷洜,"Select a reason"
-琛ュ厖璇存槑,"Additional Details"
-璇疯ˉ鍏呴棶棰樻弿杩般€佸昂瀵告垨鎹熷潖鎯呭喌,"Describe the issue, size mismatch, or damage details"
-宸查€夎鍗曞晢鍝?,"Selected Order Items"
-鍏?%{1} 浠?,"Total %{1} items"
-退换货,"Returns and Exchanges"
-提交和跟踪售后申请，不离开当前个人中心。,"Submit and track after-sales requests without leaving your account center."
-已选择售后订单,"Selected return order"
-新建申请,"New Request"
-提交退货 / 换货,"Submit Return / Exchange"
-选择订单,"Select Order"
-请选择可售后订单,"Select an eligible order"
-申请类型,"Request Type"
-原因,Reason
-请选择原因,"Select a reason"
-补充说明,"Additional Details"
-已选订单商品,"Selected Order Items"
-共 %{1} 件,"Total %{1} items"
-提交售后申请,"Submit after-sales request"
-申请记录,"Request Records"
-最近售后进度,"Latest after-sales progress"
-暂无退换货申请,"No return or exchange requests yet"
-直接从当前页的订单操作进入售后，提交后会在这里持续显示进度。,"Start after-sales service from the order actions on this page, then track the progress here."
-售后单 #%{1},"After-sales request #%{1}"
-订单号：%{1},"Order #%{1}"
-还有 %{1} 件商品,"and %{1} more items"
-已选择订单,"Selected order"
-已选择售后,"Selected return order"
-已切换到当前页售后区，可直接提交或查看进度。,"Switched to the after-sales section on this page. You can submit a request or track progress here."
-正在提交售后申请...,"Submitting after-sales request..."
-售后申请已提交。,"After-sales request submitted."
-暂时无法提交售后申请。,"Unable to submit the after-sales request right now."

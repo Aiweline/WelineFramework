@@ -173,9 +173,6 @@ class Partials extends Block
         if ($area !== 'frontend' || $this->shouldBypassPartialOutputCache()) {
             return null;
         }
-        if ($type === 'head') {
-            return null;
-        }
 
         try {
             if ($type === 'header') {
@@ -475,9 +472,6 @@ class Partials extends Block
             $themeData = $template->getData('theme') ?? [];
             $colorsData = $template->getData('colors') ?? [];
             $contentTemplate = $template->getData('contentTemplate') ?? null;
-            $layoutTemplate = $template->getData('layoutTemplate') ?? null;
-            $criticalLayoutTemplate = $template->getData('layoutCriticalCurrentLayoutTemplate') ?? null;
-            $criticalLayoutTemplates = $template->getData('layoutCriticalLayoutTemplates') ?? null;
 
             $scope = $this->resolveScope($area);
             $metaIdentify = "partials.{$type}";
@@ -515,15 +509,6 @@ class Partials extends Block
             $data['colors'] = $colorsData;
             if ($contentTemplate) {
                 $data['contentTemplate'] = $contentTemplate;
-            }
-            if ($layoutTemplate) {
-                $data['layoutTemplate'] = $layoutTemplate;
-            }
-            if ($criticalLayoutTemplate) {
-                $data['layoutCriticalCurrentLayoutTemplate'] = $criticalLayoutTemplate;
-            }
-            if (is_array($criticalLayoutTemplates) && $criticalLayoutTemplates !== []) {
-                $data['layoutCriticalLayoutTemplates'] = $criticalLayoutTemplates;
             }
 
             foreach ($data as $key => $value) {

@@ -428,7 +428,6 @@ class Stop extends CommandAbstract
                         return;
                     }
                     $this->releaseSharedStateConsumersForInstance($name);
-                    $this->cleanupZombieProcessesByInstancePrefix($manager, $name);
                     $manager->deleteInstance($name);
                     $this->cleanupPidFiles($name, $instanceInfo);
                     $this->releaseStartLock($name);
@@ -444,7 +443,6 @@ class Stop extends CommandAbstract
                 return;
             }
             $this->releaseSharedStateConsumersForInstance($name);
-            $this->cleanupZombieProcessesByInstancePrefix($manager, $name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
@@ -472,7 +470,6 @@ class Stop extends CommandAbstract
                     $this->collectDirectForceStopCandidatePids($instanceInfo)
                 );
                 $this->releaseSharedStateConsumersForInstance($name);
-                $this->cleanupZombieProcessesByInstancePrefix($manager, $name);
                 $manager->deleteInstance($name);
                 $this->cleanupPidFiles($name, $instanceInfo);
                 $this->releaseStartLock($name);
@@ -492,7 +489,6 @@ class Stop extends CommandAbstract
                 return;
             }
             $this->releaseSharedStateConsumersForInstance($name);
-            $this->cleanupZombieProcessesByInstancePrefix($manager, $name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
@@ -525,7 +521,6 @@ class Stop extends CommandAbstract
                 return;
             }
             $this->releaseSharedStateConsumersForInstance($name);
-            $this->cleanupZombieProcessesByInstancePrefix($manager, $name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
@@ -569,7 +564,6 @@ class Stop extends CommandAbstract
         $this->releaseSharedStateConsumersForInstance($name);
 
         // 标记实例停止；保留实例 JSON 供后续控制面恢复和审计使用。
-        $this->cleanupZombieProcessesByInstancePrefix($manager, $name);
         $manager->deleteInstance($name);
         
         // 清理 PID 文件
@@ -591,14 +585,6 @@ class Stop extends CommandAbstract
     protected function getInstanceManager(): ServerInstanceManager
     {
         return ObjectManager::getInstance(ServerInstanceManager::class);
-    }
-
-    private function cleanupZombieProcessesByInstancePrefix(ServerInstanceManager $manager, string $name): void
-    {
-        $killed = $manager->cleanupZombieProcessesByInstancePrefix($name, true);
-        if ($killed > 0) {
-            $this->printer->success(__('已按实例名前缀清理 %{1} 个僵尸 WLS 进程', [$killed]));
-        }
     }
 
     /**

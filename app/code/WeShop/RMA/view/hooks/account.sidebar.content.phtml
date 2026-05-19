@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * WeShop_RMA module - account returns section.
  *
@@ -107,14 +107,14 @@ $rmaCleanDescription = static function (string $description): string {
     <div class="weshop-account-returns" id="weshop-account-returns">
         <div class="weshop-returns-header">
             <div>
-                <h2 class="weshop-returns-title"><?= __("Returns and Exchanges") ?></h2>
-                <p class="weshop-returns-subtitle"><?= __("Submit and track after-sales requests without leaving your account center.") ?></p>
+                <h2 class="weshop-returns-title">退换货</h2>
+                <p class="weshop-returns-subtitle">提交和跟踪售后申请，不离开当前个人中心。</p>
             </div>
             <div class="weshop-returns-selected-order" data-rma-selected-order>
                 <?php if ($order && $selectedOrderEligible && !empty($order['increment_id'])): ?>
-                    <?= __("Selected order") ?> #<?= $escape($order['increment_id']) ?>
+                    已选择订单 #<?= $escape($order['increment_id']) ?>
                 <?php else: ?>
-                    <?= __("Choose an eligible order from the order list to start after-sales service.") ?>
+                    从订单列表选择需要售后的订单
                 <?php endif; ?>
             </div>
         </div>
@@ -123,8 +123,8 @@ $rmaCleanDescription = static function (string $description): string {
             <article class="weshop-returns-card">
                 <div class="weshop-returns-card__header">
                     <div>
-                        <p class="weshop-returns-card__eyebrow"><?= __("New Request") ?></p>
-                        <h3 class="weshop-returns-card__title"><?= __("Submit Return / Exchange") ?></h3>
+                        <p class="weshop-returns-card__eyebrow">新建申请</p>
+                        <h3 class="weshop-returns-card__title">提交退货 / 换货</h3>
                     </div>
                 </div>
 
@@ -132,9 +132,9 @@ $rmaCleanDescription = static function (string $description): string {
                     <?= $this->getFormKey($this->getUrl('rma/create')) ?>
 
                     <label class="weshop-returns-form__field">
-                        <span><?= __("Select Order") ?></span>
+                        <span>选择订单</span>
                         <select data-rma-order-select required>
-                            <option value=""><?= $escape((string) __("Select an eligible order")) ?></option>
+                            <option value=""><?= $escape('请选择可售后订单') ?></option>
                             <?php foreach ($orderOptions as $option): ?>
                                 <?php
                                 $optionOrderId = (int) ($option['order_id'] ?? 0);
@@ -159,7 +159,7 @@ $rmaCleanDescription = static function (string $description): string {
                     <input type="hidden" name="return_anchor" value="<?= $escape($selectedReturnAnchor) ?>" data-rma-return-anchor-input>
                     <input type="hidden" name="return_url" value="<?= $escape($selectedReturnUrl) ?>" data-rma-return-url-input>
 
-                        <span><?= __("Request Type") ?></span>
+                    <label class="weshop-returns-form__field">
                         <span>申请类型</span>
                         <select name="type">
                             <?php foreach ($requestTypes as $type): ?>
@@ -170,9 +170,9 @@ $rmaCleanDescription = static function (string $description): string {
                         </select>
                     </label>
 
-                        <span><?= __("Reason") ?></span>
+                    <label class="weshop-returns-form__field">
                         <span>原因</span>
-                            <option value=""><?= __("Select a reason") ?></option>
+                        <select name="reason" required>
                             <option value="">请选择原因</option>
                             <?php foreach ($reasonOptions as $reason): ?>
                                 <?php
