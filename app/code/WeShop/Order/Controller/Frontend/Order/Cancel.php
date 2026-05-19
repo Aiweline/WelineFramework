@@ -21,14 +21,14 @@ class Cancel extends BaseController
     {
         $orderId = (int) ($this->request->getPost('order_id') ?? 0);
         if ($orderId <= 0) {
-            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->getMessageManager()->addError(__('缺少订单 ID。'));
             $this->redirect('weshop/order/list');
             return '';
         }
 
         $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
         if ($customerId <= 0) {
-            $this->getMessageManager()->addError(__('Please log in to continue.'));
+            $this->getMessageManager()->addError(__('请先登录。'));
             $this->redirect($this->getStorefrontLoginRoute());
             return '';
         }
@@ -37,10 +37,10 @@ class Cancel extends BaseController
             $checkResult = $this->getOrderService()->canCancelOrder($orderId, $customerId);
 
             if (empty($checkResult['can_cancel'])) {
-                $this->getMessageManager()->addError($checkResult['reason'] ?? __('This order cannot be cancelled.'));
+                $this->getMessageManager()->addError($checkResult['reason'] ?? __('该订单无法取消。'));
 
                 if (!empty($checkResult['require_return'])) {
-                    $this->getMessageManager()->addWarning(__('Please request a return for this order first.'));
+                    $this->getMessageManager()->addWarning(__('请先为该订单提交退换货申请。'));
                     $this->redirect('rma/create', ['order_id' => $orderId]);
                     return '';
                 }
@@ -52,9 +52,9 @@ class Cancel extends BaseController
             $this->getOrderService()->cancelOrder($orderId, $customerId);
 
             if (!empty($checkResult['require_refund'])) {
-                $this->getMessageManager()->addSuccess(__('Order cancelled. Refund processing will follow your payment method rules.'));
+                $this->getMessageManager()->addSuccess(__('订单已取消。退款将按您的支付方式规则处理。'));
             } else {
-                $this->getMessageManager()->addSuccess(__('Order cancelled.'));
+                $this->getMessageManager()->addSuccess(__('订单已取消。'));
             }
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError($throwable->getMessage());

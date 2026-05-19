@@ -38,7 +38,7 @@ class OrderList extends BaseController
             $this->assign($key, $value);
         }
 
-        $this->assign('page_title', (string) __('My Orders'));
+        $this->assign('page_title', (string) __('我的订单'));
 
         return $this->renderPage();
     }

@@ -84,7 +84,7 @@ class OrderSignalsProvider implements FakeDataProviderInterface
         $result = new FakeDataResult();
         $customerId = $this->getTargetCustomerId();
         if ($customerId <= 0) {
-            return $result->addError((string) __('Fake order signals require frontend customer %{1} to exist.', [self::CUSTOMER_LOGIN]));
+            return $result->addError((string) __('假订单信号需要前台客户 %{1} 已存在。', [self::CUSTOMER_LOGIN]));
         }
 
         foreach ($this->getSignalOrders() as $signalOrder) {
@@ -142,7 +142,7 @@ class OrderSignalsProvider implements FakeDataProviderInterface
                 ->fetch();
             $savedOrderId = (int) ($savedOrder->getId() ?? 0);
             if ($savedOrderId <= 0) {
-                $result->addError((string) __('Failed to save fake order %{1}', [$signalOrder['increment_id'] ?? '']));
+                $result->addError((string) __('保存假订单 %{1} 失败。', [$signalOrder['increment_id'] ?? '']));
                 continue;
             }
 
@@ -159,7 +159,7 @@ class OrderSignalsProvider implements FakeDataProviderInterface
                 $sku = (string) ($item['sku'] ?? '');
                 $product = $this->loadProductBySku($sku);
                 if (!$product || !$product->getId()) {
-                    $result->addWarning((string) __('Skipped fake order signal item: missing product %{1}', [$sku]));
+                    $result->addWarning((string) __('已跳过假订单信号商品行：缺少商品 %{1}', [$sku]));
                     continue;
                 }
 
@@ -193,7 +193,7 @@ class OrderSignalsProvider implements FakeDataProviderInterface
                     ->fetch();
                 $itemId = (int) ($savedItem->getId() ?? 0);
                 if ($itemId <= 0) {
-                    $result->addError((string) __('Failed to save fake order signal item for %{1}', [$sku]));
+                    $result->addError((string) __('保存假订单信号商品行 %{1} 失败。', [$sku]));
                     continue;
                 }
 
