@@ -50,7 +50,7 @@ class Remove extends FrontendController
 
         $json = \json_encode([
             'code' => 410,
-            'msg' => (string)__('Direct browser cart API is deprecated. Use the frontend worker API.'),
+            'msg' => (string)__('浏览器直连购物车 API 已弃用，请使用前台 Worker API。'),
             'data' => [
                 'deprecated' => true,
                 'browser_direct' => false,

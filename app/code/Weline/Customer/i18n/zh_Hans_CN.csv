@@ -1,20 +1,20 @@
-﻿"The login challenge token is missing.","The login challenge token is missing."
-"The login challenge is invalid or has expired.",登录验证已失效或已过期。
-"Two-Factor Verification",两步验证
-"Please enter the verification code.",请输入验证码。
-"Two-factor verification succeeded.",两步验证成功。
-"The reset link is invalid or has expired.",重设链接无效或已过期。
-"Reset Password",重设密码
-"Forgot Password",忘记密码
-"Email is required.",邮箱不能为空。
-"Please enter a valid email address.",请输入有效的邮箱地址。
-"The email is not registered.",该邮箱未注册。
-"A reset link has been sent to your email.",重设链接已发送到你的邮箱。
-"Unable to create a password reset request right now.",当前无法创建密码重设请求，请稍后再试。
-"The reset token is required.",重设令牌不能为空。
-"Please enter a new password.",请输入新密码。
-"The password confirmation does not match.",两次输入的密码不一致。
-"Your password has been reset. Please sign in with the new password.",密码已重设，请使用新密码登录。
+﻿缺少登录验证令牌。,缺少登录验证令牌。
+登录验证已失效或已过期。,登录验证已失效或已过期。
+两步验证,两步验证
+请输入验证码。,请输入验证码。
+两步验证成功。,两步验证成功。
+重置链接无效或已过期。,重置链接无效或已过期。
+重置密码,重置密码
+忘记密码,忘记密码
+请填写邮箱。,请填写邮箱。
+请输入有效的邮箱地址。,请输入有效的邮箱地址。
+该邮箱尚未注册。,该邮箱尚未注册。
+重置链接已发送至您的邮箱。,重置链接已发送至您的邮箱。
+暂时无法创建密码重置请求。,暂时无法创建密码重置请求。
+缺少重置令牌。,缺少重置令牌。
+请输入新密码。,请输入新密码。
+两次输入的密码不一致。,两次输入的密码不一致。
+密码已重置，请使用新密码登录。,密码已重置，请使用新密码登录。
 请先登录,请先登录
 请输入原密码,请输入原密码
 原密码错误,原密码错误
@@ -24,21 +24,21 @@
 请稍后重试,请稍后重试
 更新失败，请稍后重试,更新失败，请稍后重试
 更新失败：%{1},更新失败：%{1}
-"Sign In",登录
+登录,登录
 你已经登录了，请先退出登录.,你已经登录了，请先退出登录.
-"Username/email and password are required.",请输入用户名/邮箱和密码。
+请输入用户名/邮箱和密码。,请输入用户名/邮箱和密码。
 用户不存在.,用户不存在.
 登录尝试次数过多，请稍后再试.,登录尝试次数过多，请稍后再试.
 密码错误.,密码错误.
-"Please complete two-factor verification.","Please complete two-factor verification."
+请完成两步验证。,请完成两步验证。
 登录成功.,登录成功.
 "登录失败: %{1}","登录失败: %{1}"
 退出成功,退出成功
-"Create Account",创建账户
+创建账户,创建账户
 你已经登录了，请先退出登录。,你已经登录了，请先退出登录。
-"First name and last name are required.",请输入名字和姓氏。
-"Please accept the terms and privacy policy.",请先同意服务条款和隐私政策。
-"Registration succeeded. Welcome.",注册成功，欢迎。
+请填写名和姓。,请填写名和姓。
+请同意服务条款与隐私政策。,请同意服务条款与隐私政策。
+注册成功，欢迎加入。,注册成功，欢迎加入。
 无法统计令牌数量：%{1},无法统计令牌数量：%{1}
 加载前端客户失败：%{1},加载前端客户失败：%{1}
 无效的用户ID,无效的用户ID
@@ -61,9 +61,9 @@
 在顾客账户首页「订阅」分区注入周期性订阅入口等内容。,在顾客账户首页「订阅」分区注入周期性订阅入口等内容。
 密码必须至少8个字符，并且包含字母和数字.,密码必须至少8个字符，并且包含字母和数字.
 该邮箱已存在，请使用其他邮箱注册.,该邮箱已存在，请使用其他邮箱注册.
-"Two-factor verification is not available.",当前环境未启用两步验证。
-"Reset your password",重设密码
-"Click the link below to reset your password.",请点击下方链接重设密码。
+两步验证暂不可用。,两步验证暂不可用。
+重置您的密码,重置您的密码
+请点击下方链接重置密码。,请点击下方链接重置密码。
 账户,账户
 个人资料,个人资料
 安全设置,安全设置
@@ -143,8 +143,8 @@ Session标识,Session标识
 忘记密码,忘记密码
 输入您的新密码以完成账户访问重置,输入您的新密码以完成账户访问重置
 输入您的账户邮箱，我们将发送重置链接,输入您的账户邮箱，我们将发送重置链接
-"Show password",显示密码
-"Hide password",隐藏密码
+显示密码,显示密码
+隐藏密码,隐藏密码
 欢迎回来！您可以在这里管理您的账户信息,欢迎回来！您可以在这里管理您的账户信息
 账户标识,账户标识
 "用户名和用户 ID 为系统标识，不可修改","用户名和用户 ID 为系统标识，不可修改"

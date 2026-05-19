@@ -23,7 +23,7 @@ class Index extends BaseController
 
         $this->assign(array_merge(
             [
-                'title' => (string) __('Subscription Plan Management'),
+                'title' => (string) __('订阅计划管理'),
             ],
             $this->subscriptionPlanAdminPageDataService->getListData($page, $pageSize)
         ));
@@ -39,7 +39,7 @@ class Index extends BaseController
 
         $this->assign(array_merge(
             [
-                'title' => $plan ? __('Edit Subscription Plan') : __('Create Subscription Plan'),
+                'title' => $plan ? __('编辑订阅计划') : __('新建订阅计划'),
             ],
             $pageData
         ));
@@ -57,7 +57,7 @@ class Index extends BaseController
             if ($id) {
                 $this->subscriptionPlan->load($id);
                 if (!$this->subscriptionPlan->getId()) {
-                    throw new \Exception(__('Subscription plan does not exist.'));
+                    throw new \Exception(__('订阅计划不存在。'));
                 }
             } else {
                 $this->subscriptionPlan->clearData();
@@ -80,13 +80,13 @@ class Index extends BaseController
 
             return $this->fetchJson([
                 'code' => 200,
-                'msg' => __('Saved successfully.'),
+                'msg' => __('保存成功。'),
                 'data' => ['id' => $this->subscriptionPlan->getId()],
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'code' => 400,
-                'msg' => __('Save failed: %{error}', ['error' => $e->getMessage()]),
+                'msg' => __('保存失败：%{error}', ['error' => $e->getMessage()]),
             ]);
         }
     }
@@ -103,12 +103,12 @@ class Index extends BaseController
 
             return $this->fetchJson([
                 'code' => 200,
-                'msg' => __('Deleted successfully.'),
+                'msg' => __('删除成功。'),
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'code' => 400,
-                'msg' => __('Delete failed: %{error}', ['error' => $e->getMessage()]),
+                'msg' => __('删除失败：%{error}', ['error' => $e->getMessage()]),
             ]);
         }
     }

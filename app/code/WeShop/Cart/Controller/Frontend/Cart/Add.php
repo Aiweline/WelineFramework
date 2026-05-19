@@ -57,7 +57,7 @@ class Add extends FrontendController
             }
 
             if ($product->getStock() < $qty) {
-                $this->getMessageManager()->addError(__('Insufficient stock. Current stock: %{1}', $product->getStock()));
+                $this->getMessageManager()->addError(__('库存不足，当前库存：%{1}', $product->getStock()));
                 $this->redirectBack();
                 return;
             }

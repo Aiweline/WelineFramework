@@ -17,9 +17,9 @@ $statusBadgeClassMap = [
 ];
 
 $statusLabelMap = [
-    RmaService::STATUS_PENDING => __('Pending'),
-    RmaService::STATUS_APPROVED => __('Approved'),
-    RmaService::STATUS_REJECTED => __('Rejected'),
+    RmaService::STATUS_PENDING => __('待处理'),
+    RmaService::STATUS_APPROVED => __('已同意'),
+    RmaService::STATUS_REJECTED => __('已拒绝'),
 ];
 
 $rmaId = (int) ($rma['rma_id'] ?? 0);
@@ -69,7 +69,7 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0">
-                <lang>RMA Detail</lang>
+                <lang>售后详情</lang>
             </h4>
 
             <div class="page-title-right">
@@ -78,10 +78,10 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
                             <lang>WeShop</lang>
                         </a></li>
                     <li class="breadcrumb-item"><a href="<?= htmlspecialchars($rmaIndexUrl) ?>">
-                            <lang>RMA Management</lang>
+                            <lang>售后管理</lang>
                         </a></li>
                     <li class="breadcrumb-item active">
-                        <lang>Detail</lang>
+                        <lang>详情</lang>
                     </li>
                 </ol>
             </div>
@@ -105,27 +105,27 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
                     <?= $statusLabel ?>
                 </span>
                 <span class="ms-2 text-muted">
-                    <lang>RMA ID</lang>: #<?= $rmaId ?>
+                    <lang>售后单 ID</lang>: #<?= $rmaId ?>
                 </span>
             </div>
             <div class="d-flex gap-2">
                 <a href="<?= htmlspecialchars($rmaIndexUrl) ?>" class="btn btn-secondary">
-                    <i class="mdi mdi-arrow-left me-1"></i><?= __('Back to List') ?>
+                    <i class="mdi mdi-arrow-left me-1"></i><?= __('返回列表') ?>
                 </a>
                 <?php if ($status === RmaService::STATUS_PENDING): ?>
                     <button class="btn btn-success"
-                            w-confirm="<?= __('Are you sure you want to approve this RMA request?') ?>"
+                            w-confirm="<?= __('确认批准此售后申请？') ?>"
                             w-delete="<?= htmlspecialchars($rmaApproveUrl) ?>"
                             w-params='{"rma_id": <?= $rmaId ?>}'
                             w-method="post">
-                        <i class="mdi mdi-check me-1"></i><?= __('Approve') ?>
+                        <i class="mdi mdi-check me-1"></i><?= __('批准') ?>
                     </button>
                     <button class="btn btn-danger"
-                            w-confirm="<?= __('Are you sure you want to reject this RMA request?') ?>"
+                            w-confirm="<?= __('确认拒绝此售后申请？') ?>"
                             w-delete="<?= htmlspecialchars($rmaRejectUrl) ?>"
                             w-params='{"rma_id": <?= $rmaId ?>}'
                             w-method="post">
-                        <i class="mdi mdi-close me-1"></i><?= __('Reject') ?>
+                        <i class="mdi mdi-close me-1"></i><?= __('拒绝') ?>
                     </button>
                 <?php endif; ?>
             </div>
@@ -140,20 +140,20 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="mdi mdi-information me-2"></i><?= __('RMA Information') ?>
+                    <i class="mdi mdi-information me-2"></i><?= __('售后信息') ?>
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label rma-detail-label"><?= __('RMA ID') ?></label>
+                            <label class="form-label rma-detail-label"><?= __('售后单 ID') ?></label>
                             <div class="rma-detail-value">#<?= $rmaId ?></div>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label rma-detail-label"><?= __('Order ID') ?></label>
+                            <label class="form-label rma-detail-label"><?= __('订单号') ?></label>
                             <div class="rma-detail-value">
                                 <a href="<?= $this->getBackendUrl('*/backend/order/view') ?>?id=<?= $orderId ?>">
                                     #<?= $orderId ?>
@@ -165,7 +165,7 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label rma-detail-label"><?= __('Customer ID') ?></label>
+                            <label class="form-label rma-detail-label"><?= __('客户 ID') ?></label>
                             <div class="rma-detail-value">
                                 <a href="<?= $this->getBackendUrl('*/backend/customer/edit') ?>?id=<?= $customerId ?>">
                                     #<?= $customerId ?>
@@ -175,7 +175,7 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label rma-detail-label"><?= __('Status') ?></label>
+                            <label class="form-label rma-detail-label"><?= __('状态') ?></label>
                             <div class="rma-detail-value">
                                 <span class="rma-status-badge <?= $badgeClass ?>">
                                     <?= $statusLabel ?>
@@ -187,13 +187,13 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label rma-detail-label"><?= __('Created At') ?></label>
+                            <label class="form-label rma-detail-label"><?= __('创建时间') ?></label>
                             <div class="rma-detail-value"><?= $createdAt ?></div>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label rma-detail-label"><?= __('Updated At') ?></label>
+                            <label class="form-label rma-detail-label"><?= __('更新时间') ?></label>
                             <div class="rma-detail-value"><?= $updatedAt ?></div>
                         </div>
                     </div>
@@ -205,19 +205,19 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="mdi mdi-text-box me-2"></i><?= __('Reason & Description') ?>
+                    <i class="mdi mdi-text-box me-2"></i><?= __('原因与说明') ?>
                 </h5>
             </div>
             <div class="card-body">
                 <div class="mb-4">
-                    <label class="form-label rma-detail-label"><?= __('Reason') ?></label>
+                    <label class="form-label rma-detail-label"><?= __('原因') ?></label>
                     <div class="rma-reason-box">
                         <?= $reason ?>
                     </div>
                 </div>
                 <?php if (!empty($description)): ?>
                     <div>
-                        <label class="form-label rma-detail-label"><?= __('Description') ?></label>
+                        <label class="form-label rma-detail-label"><?= __('说明') ?></label>
                         <div class="rma-description-box">
                             <?= $description ?>
                         </div>
@@ -232,7 +232,7 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="mdi mdi-history me-2"></i><?= __('Audit Trail') ?>
+                    <i class="mdi mdi-history me-2"></i><?= __('操作记录') ?>
                 </h5>
             </div>
             <div class="card-body">
@@ -243,7 +243,7 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
                                 <span class="badge bg-primary rounded-circle" style="width: 8px; height: 8px; margin-top: 6px;"></span>
                             </div>
                             <div>
-                                <div class="fw-semibold"><?= __('RMA Request Submitted') ?></div>
+                                <div class="fw-semibold"><?= __('售后申请已提交') ?></div>
                                 <div class="small text-muted"><?= $createdAt ?></div>
                             </div>
                         </div>
@@ -256,7 +256,7 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
                                 </div>
                                 <div>
                                     <div class="fw-semibold">
-                                        <?= $status === RmaService::STATUS_APPROVED ? __('RMA Approved') : __('RMA Rejected') ?>
+                                        <?= $status === RmaService::STATUS_APPROVED ? __('售后已批准') : __('售后已拒绝') ?>
                                     </div>
                                     <div class="small text-muted"><?= $updatedAt ?></div>
                                 </div>
@@ -272,24 +272,24 @@ $updatedAt = htmlspecialchars((string) ($rma['updated_at'] ?? ''));
             <div class="card mt-4">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
-                        <i class="mdi mdi-lightning-bolt me-2"></i><?= __('Quick Actions') ?>
+                        <i class="mdi mdi-lightning-bolt me-2"></i><?= __('快捷操作') ?>
                     </h5>
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
                         <button class="btn btn-success"
-                                w-confirm="<?= __('Are you sure you want to approve this RMA request?') ?>"
+                                w-confirm="<?= __('确认批准此售后申请？') ?>"
                                 w-delete="<?= htmlspecialchars($rmaApproveUrl) ?>"
                                 w-params='{"rma_id": <?= $rmaId ?>}'
                                 w-method="post">
-                            <i class="mdi mdi-check me-1"></i><?= __('Approve RMA') ?>
+                            <i class="mdi mdi-check me-1"></i><?= __('批准售后') ?>
                         </button>
                         <button class="btn btn-danger"
-                                w-confirm="<?= __('Are you sure you want to reject this RMA request?') ?>"
+                                w-confirm="<?= __('确认拒绝此售后申请？') ?>"
                                 w-delete="<?= htmlspecialchars($rmaRejectUrl) ?>"
                                 w-params='{"rma_id": <?= $rmaId ?>}'
                                 w-method="post">
-                            <i class="mdi mdi-close me-1"></i><?= __('Reject RMA') ?>
+                            <i class="mdi mdi-close me-1"></i><?= __('拒绝售后') ?>
                         </button>
                     </div>
                 </div>

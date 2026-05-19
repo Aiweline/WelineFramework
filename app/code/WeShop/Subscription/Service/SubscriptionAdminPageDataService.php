@@ -44,7 +44,7 @@ class SubscriptionAdminPageDataService
     {
         $this->subscription->clear()->load($subscriptionId);
         if (!$this->subscription->getId()) {
-            throw new \InvalidArgumentException((string) __('Subscription does not exist.'));
+            throw new \InvalidArgumentException((string) __('订阅不存在。'));
         }
 
         $planId = (int) ($this->subscription->getData(Subscription::schema_fields_PLAN_ID) ?? 0);

@@ -15,14 +15,14 @@ class Reject extends BackendController
         try {
             $rmaId = (int) ($this->request->getParam('rma_id') ?? 0);
             if ($rmaId <= 0) {
-                return $this->fetchJson(['success' => false, 'message' => __('RMA ID is required.')]);
+                return $this->fetchJson(['success' => false, 'message' => __('售后单 ID 不能为空。')]);
             }
 
             /** @var RmaService $rmaService */
             $rmaService = ObjectManager::getInstance(RmaService::class);
             $rmaService->rejectRma($rmaId);
 
-            return $this->fetchJson(['success' => true, 'message' => __('RMA has been rejected.')]);
+            return $this->fetchJson(['success' => true, 'message' => __('售后单已拒绝。')]);
         } catch (\Throwable $throwable) {
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }

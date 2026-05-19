@@ -6439,10 +6439,20 @@ class ServiceOrchestrator
             $leadWorkerId,
             $batchMeta
         );
-        foreach ($instanceIds as $instanceId) {
-            $readyInst = $this->registry->getInstance('worker', $instanceId);
-            if ($readyInst !== null && $readyInst->port !== null && $readyInst->port > 0 && !$this->maintenanceMode) {
-                $this->notifyDispatcherWorkerReady($readyInst);
+        // 滚动重启批次 READY：用版本化全量路由表一次性广播给所有 Dispatcher，
+        // 替代原来的「foreach 内逐个 notifyDispatcherWorkerReady」（该方法已 dead reference，会触发 fatal）。
+        // 仅在非维护模式下广播；维护模式中业务流量仍走维护 Worker，新 Worker 留到 disableMaintenance 时一次性入池。
+        if (!$this->maintenanceMode) {
+            $anyEligible = false;
+            foreach ($instanceIds as $instanceId) {
+                $readyInst = $this->registry->getInstance('worker', $instanceId);
+                if ($readyInst !== null && $readyInst->port !== null && $readyInst->port > 0) {
+                    $anyEligible = true;
+                    break;
+                }
+            }
+            if ($anyEligible) {
+                $this->syncDispatcherFullWorkerPoolFromRegistry();
             }
         }
         $this->broadcastRoutingPolicyToWorkers();
@@ -8998,7 +9008,8 @@ class ServiceOrchestrator
                 );
             }
             if ($instance->role === ControlMessage::ROLE_WORKER && $instance->port !== null && $instance->port > 0) {
-                $this->recoverDispatcherBusinessPoolAfterWorkerReady($instance, true);
+                // B-iii: 直接走"Registry 单一事实源 + 版本化全量路由表"，替代旧的 recoverDispatcherBusinessPoolAfterWorkerReady 补偿调用栈。
+                $this->convergeDispatcherRouteTableAfterWorkerReady();
             }
             WlsLogger::info_(
                 "[Orchestrator] 重复 READY 已幂等处理: {$instance->role}#{$instance->instanceId} (clientId={$clientId}, port={$instance->port})"
@@ -9073,13 +9084,16 @@ class ServiceOrchestrator
             WlsLogger::info_("[Orchestrator] 服务就绪: {$instance->role}#{$instance->instanceId} (已发送 ACK, port={$instance->port})");
         }
 
-        // 如果是 Worker 就绪，通知 Dispatcher 添加该端口
+        // Worker 就绪：通过 Registry 单一事实源 + 版本化全量路由表向所有 Dispatcher 收敛。
+        // B-iii: 此处替代旧的 recoverDispatcherBusinessPoolAfterWorkerReady($instance, false) 补偿调用栈，
+        // 因为 SET_ROUTE_TABLE 已是默认权威，Master 只需要在 Worker 状态变化时统一广播即可，
+        // 不再需要按"是否重复 READY / 是否首次 READY"分支化处理。
         if ($instance->role === 'worker' && $instance->port !== null) {
-            $this->recoverDispatcherBusinessPoolAfterWorkerReady($instance, false);
+            $this->convergeDispatcherRouteTableAfterWorkerReady();
         }
 
         // 维护 Worker 就绪：必须在维护模式下推送 SET_WORKER_POOL。否则 Dispatcher 若早于维护进程 READY，
-        // sendAllWorkerPortsToDispatcher 会因「尚无 READY maintenance」跳过下发，池永久为空直至其它路径补偿。
+        // 全量下发会因「尚无 READY maintenance」跳过，池永久为空直至其它路径补偿。
         $this->logStartupTiming($instance, 'ready', [
             'client_id' => $clientId,
             'worker_id' => $workerId,
@@ -9094,9 +9108,11 @@ class ServiceOrchestrator
             $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
         }
 
-        // 如果是 Dispatcher 就绪，发送所有已就绪的 Worker 端口列表和 HTTP Redirect 端口
+        // Dispatcher 就绪：用版本化全量路由表广播当前 READY Worker，并下发 HTTP Redirect 端口。
+        // 历史上这里曾调用 sendAllWorkerPortsToDispatcher($instance)，但该方法已被 syncDispatcherFullWorkerPoolFromRegistry 取代
+        // （后者是 Registry 单一事实源 + 版本号去重，多 Dispatcher 场景更稳健；旧调用是 dead reference，会触发 fatal）。
         if ($instance->role === 'dispatcher') {
-            $this->sendAllWorkerPortsToDispatcher($instance);
+            $this->syncDispatcherFullWorkerPoolFromRegistry();
             $this->sendRedirectPortToDispatcher($instance);
         }
         
@@ -9931,25 +9947,24 @@ class ServiceOrchestrator
     /**
      * 发送所有已就绪的 Worker 端口给 Dispatcher
      */
-    private function recoverDispatcherBusinessPoolAfterWorkerReady(ServiceInstance $workerInstance, bool $duplicateReady): void
+    /**
+     * B-iii: Worker 状态变化后，让所有 Dispatcher 通过 Registry 单一事实源
+     * 收敛到最新的版本化路由表（同时下发 SET_WORKER_POOL 兼容信号 + SET_ROUTE_TABLE 权威源）。
+     *
+     * 替代旧的 recoverDispatcherBusinessPoolAfterWorkerReady($instance, bool $duplicateReady) ——
+     * 旧方法按"是否重复 READY"分支化处理，但实际两条分支最终都只是调用 syncDispatcherFullWorkerPoolFromRegistry，
+     * 唯一差异在于"是否要先 try disable maintenance"。SET_ROUTE_TABLE 成为默认权威后，
+     * 这种分支已无业务意义——Dispatcher 的版本号去重 + checksum 校验本身就是幂等的。
+     */
+    private function convergeDispatcherRouteTableAfterWorkerReady(): void
     {
-        if ($workerInstance->port === null || $workerInstance->port <= 0) {
-            return;
-        }
-
-        $maintenanceModeBeforeReady = $this->maintenanceMode;
-        if ($maintenanceModeBeforeReady) {
-            // Maintenance pool switch and REMOVE_WORKER can leave Dispatcher state behind.
-            // Once business workers are READY again, always converge Dispatcher from Registry.
+        if ($this->maintenanceMode) {
+            // 维护模式中：先尝试根据当前 Registry 状态退出维护；若仍在维护中，则保持业务路由不变。
             $this->checkAndDisableMaintenanceIfReady();
             if ($this->maintenanceMode) {
                 return;
             }
-            $this->syncDispatcherFullWorkerPoolFromRegistry();
-            return;
         }
-
-        // Always use full versioned route table (SET_WORKER_POOL), never incremental ADD_WORKER.
         $this->syncDispatcherFullWorkerPoolFromRegistry();
     }
 
