@@ -94,7 +94,7 @@ class CartService implements CartTrashInterface
         $productId = $this->resolveActiveProductId($productId, $price);
         $productSnapshot = $this->loadProductSnapshot($productId);
         if ($productSnapshot === [] || !$this->isProductEnabled($productSnapshot)) {
-            throw new \Exception((string) __('Product does not exist or is unavailable.'));
+            throw new \Exception((string) __('商品不存在或不可用。'));
         }
         if ($price === null) {
             $price = (float) ($productSnapshot['price'] ?? 0);

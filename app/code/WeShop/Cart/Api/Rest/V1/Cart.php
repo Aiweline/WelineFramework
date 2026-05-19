@@ -143,16 +143,16 @@ class Cart extends FrontendRestController
                 . $optionsHtml
                 . '<div class="mini-cart-item__price">' . $priceFormatted . '</div>'
                 . '<div class="mini-cart-item__qty">'
-                . '<button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string) __('Decrease quantity')) . '">'
+                . '<button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string) __('减少数量')) . '">'
                 . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('minus') . '</span>'
                 . '</button>'
                 . '<span class="mini-cart-item__qty-value">' . $quantityText . '</span>'
-                . '<button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string) __('Increase quantity')) . '">'
+                . '<button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string) __('增加数量')) . '">'
                 . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('plus') . '</span>'
                 . '</button>'
                 . '</div>'
                 . '</div>'
-                . '<button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string) __('Remove item')) . '">'
+                . '<button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string) __('删除商品')) . '">'
                 . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('trash') . '</span>'
                 . '</button>'
                 . '</div>';
@@ -207,7 +207,7 @@ class Cart extends FrontendRestController
 
         $json = \json_encode([
             'code' => 410,
-            'msg' => (string) __('Direct browser cart REST API is deprecated. Use the frontend worker API.'),
+            'msg' => (string) __('浏览器直连购物车 REST API 已弃用，请使用前台 Worker API。'),
             'data' => [
                 'deprecated' => true,
                 'browser_direct' => false,

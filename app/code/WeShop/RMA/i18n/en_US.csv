@@ -1,27 +1,27 @@
-"RMA ID不能为空","RMA ID不能为空"
+售后单 ID 不能为空,"RMA ID is required"
 RMA已批准,"RMA approved"
-"RMA ID is required.","RMA ID is required."
-"RMA has been rejected.","RMA has been rejected."
-"RMA record not found.","RMA record not found."
-Pending,Pending
-Approved,Approved
-Rejected,Rejected
-"Order ID is required.","Order ID is required."
-"Order and reason are required.","Order and reason are required."
-"You do not have access to this order.","You do not have access to this order."
-"Please log in to continue.","Please log in to continue."
-"Returns & Exchanges","Returns & Exchanges"
-Return,Return
-Exchange,Exchange
-"Wrong size","Wrong size"
-"Damaged in transit","Damaged in transit"
-"Defective item","Defective item"
-"Item not as described","Item not as described"
-"Changed my mind","Changed my mind"
-Other,Other
-"Return reason is required.","Return reason is required."
-"RMA Management","RMA Management"
-"RMA Detail","RMA Detail"
+售后单 ID 不能为空。,"RMA ID is required."
+售后单已拒绝。,"RMA has been rejected."
+售后单不存在。,"RMA record not found."
+待处理,Pending
+已同意,Approved
+已拒绝,Rejected
+请填写订单号。,"Order ID is required."
+请填写订单与原因。,"Order and reason are required."
+您无权操作该订单。,"You do not have access to this order."
+请先登录。,"Please log in to continue."
+退换货,"Returns & Exchanges"
+退货,Return
+换货,Exchange
+尺码不合适,"Wrong size"
+运输损坏,"Damaged in transit"
+商品有缺陷,"Defective item"
+商品与描述不符,"Item not as described"
+改变主意,"Changed my mind"
+其他,Other
+请填写退换货原因。,"Return reason is required."
+售后管理,"RMA Management"
+售后详情,"RMA Detail"
 退换货,退换货
 查看退货、换货和售后申请进度。,查看退货、换货和售后申请进度。
 打开售后中心,打开售后中心
@@ -34,60 +34,69 @@ Other,Other
 "售后单 #%{1}","售后单 #%{1}"
 "订单 #%{1}","订单 #%{1}"
 提交和跟踪售后申请,提交和跟踪售后申请
-After-Sales,After-Sales
-"Open RMA","Open RMA"
-"Requests Submitted","Requests Submitted"
-"Manage Return Requests","Manage Return Requests"
+售后,After-Sales
+打开售后中心,"Open RMA"
+已提交申请,"Requests Submitted"
+管理退换货申请,"Manage Return Requests"
+跟踪退换货审批进度，并可在账户中心直接提交新申请。,"Track return and exchange approvals, and submit new requests directly from your account center."
 WeShop,WeShop
-"Total RMA Requests","Total RMA Requests"
-"No RMA Requests","No RMA Requests"
+售后申请总数,"Total RMA Requests"
+暂无售后申请,"No RMA Requests"
 ID,ID
-"Order ID","Order ID"
-"Customer ID","Customer ID"
-Reason,Reason
-Status,Status
-"Created At","Created At"
-Actions,Actions
-"Search by Order ID...","Search by Order ID..."
-"All Status","All Status"
-Search,Search
-"Clear Filter","Clear Filter"
-"View Detail","View Detail"
-"Are you sure you want to approve this RMA request?","Are you sure you want to approve this RMA request?"
-Approve,Approve
-"Are you sure you want to reject this RMA request?","Are you sure you want to reject this RMA request?"
-Reject,Reject
-Detail,Detail
-"RMA ID","RMA ID"
-"Back to List","Back to List"
-"RMA Information","RMA Information"
-"Updated At","Updated At"
-"Reason & Description","Reason & Description"
-Description,Description
-"Audit Trail","Audit Trail"
-"RMA Request Submitted","RMA Request Submitted"
-"RMA Approved","RMA Approved"
-"RMA Rejected","RMA Rejected"
-"Quick Actions","Quick Actions"
-"Approve RMA","Approve RMA"
-"Reject RMA","Reject RMA"
-"Returns Center","Returns Center"
-"Back To Orders","Back To Orders"
-"Account Center","Account Center"
-"Total Requests","Total Requests"
-"Selected Order","Selected Order"
-"None selected","None selected"
-"Choose an order from your order list to start a request instantly.","Choose an order from your order list to start a request instantly."
-"New Request","New Request"
-"Submit Return / Exchange","Submit Return / Exchange"
-"Input your order id","Input your order id"
-"Request Type","Request Type"
-"Select a reason","Select a reason"
-"Tell us more details about your request","Tell us more details about your request"
-"Submit Request","Submit Request"
-"联系我们","Contact Us"
-"Request Timeline","Request Timeline"
-"Your Latest RMA Records","Your Latest RMA Records"
-Order,Order
-"Submitted at","Submitted at"
-"Unable to submit your request right now.","Unable to submit your request right now."
+订单号,"Order ID"
+客户 ID,"Customer ID"
+原因,Reason
+状态,Status
+创建时间,"Created At"
+操作,Actions
+按订单号搜索…,"Search by Order ID..."
+全部状态,"All Status"
+搜索,Search
+清除筛选,"Clear Filter"
+查看详情,"View Detail"
+确认批准此售后申请？,"Are you sure you want to approve this RMA request?"
+批准,Approve
+确认拒绝此售后申请？,"Are you sure you want to reject this RMA request?"
+拒绝,Reject
+详情,Detail
+售后单 ID,"RMA ID"
+返回列表,"Back to List"
+售后信息,"RMA Information"
+更新时间,"Updated At"
+原因与说明,"Reason & Description"
+说明,Description
+操作记录,"Audit Trail"
+售后申请已提交,"RMA Request Submitted"
+售后已批准,"RMA Approved"
+售后已拒绝,"RMA Rejected"
+快捷操作,"Quick Actions"
+批准售后,"Approve RMA"
+拒绝售后,"Reject RMA"
+售后中心,"Returns Center"
+返回订单,"Back To Orders"
+账户中心,"Account Center"
+申请总数,"Total Requests"
+所选订单,"Selected Order"
+未选择,"None selected"
+从订单列表选择订单即可立即发起申请。,"Choose an order from your order list to start a request instantly."
+新建申请,"New Request"
+提交退换货,"Submit Return / Exchange"
+请输入订单号,"Input your order id"
+申请类型,"Request Type"
+请选择原因,"Select a reason"
+请补充申请详情,"Tell us more details about your request"
+提交申请,"Submit Request"
+联系我们,"Contact Us"
+申请时间线,"Request Timeline"
+最近售后记录,"Your Latest RMA Records"
+订单,Order
+提交时间：%{1},"Submitted at: %{1}"
+您提交的退换货申请将在此显示，并实时更新状态。,"Your submitted return or exchange requests will appear here with real-time status updates."
+快速提交退换货申请、跟踪审批状态，并在一处完成订单售后。,"Submit return requests quickly, track approval status, and keep order support moving from one place."
+账户历史中的全部退换货申请。,"All return or exchange requests in your account history."
+暂时无法提交申请。,"Unable to submit your request right now."
+退换货申请已提交。,"Your return request has been submitted."
+RMA 查询,"RMA Query"
+通过 Worker API 提供前台退换货申请操作。,"Provides frontend return and exchange request operations through the worker API."
+提交前台退换货申请。,"Submit a frontend RMA request."
+RMA 查询器不支持的操作：%{1},"Unsupported RMA provider operation: %{1}"

@@ -41,12 +41,12 @@ class PasswordResetService
         w_query('smtp', 'send', [
             'module' => 'Weline_Customer',
             'to' => $email,
-            'subject' => (string) __('Reset your password'),
+            'subject' => (string) __('重置您的密码'),
             'content' => sprintf(
                 '<p>%s</p><p><a href="%s">%s</a></p>',
-                __('Click the link below to reset your password.'),
+                __('请点击下方链接重置密码。'),
                 htmlspecialchars($resetUrl . (str_contains($resetUrl, '?') ? '&' : '?') . 'token=' . $token, ENT_QUOTES),
-                __('Reset Password')
+                __('重置密码')
             ),
         ]);
 

@@ -143,7 +143,7 @@ class CartPageDataService
 
         if (is_string($rawOptions) && trim($rawOptions) !== '') {
             return [[
-                'label' => (string) __('Option'),
+                'label' => (string) __('规格'),
                 'value' => trim($rawOptions),
             ]];
         }
