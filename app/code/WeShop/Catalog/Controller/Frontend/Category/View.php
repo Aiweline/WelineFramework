@@ -15,8 +15,10 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\MemoryStateFacade;
 
 class View extends BaseController
@@ -275,7 +277,26 @@ class View extends BaseController
                 $this->request->setData(self::CONTENT_HTML_OVERRIDE_KEY, $contentHtml);
 
                 try {
-                    return (string)$this->fetch(self::CONTENT_TEMPLATE);
+                    $html = (string)$this->fetch(self::CONTENT_TEMPLATE);
+                    $this->setPerfHeader('X-WLS-Category-Layout-Bytes', (string)strlen($html));
+                    if ($html !== '' || $contentHtml === '') {
+                        return $html;
+                    }
+
+                    $this->logEmptyCategoryLayout('initial', $contentHtml);
+
+                    FiberOutputBuffer::ensureInstalled('category_layout_retry');
+                    $retryHtml = (string)$this->fetch(self::CONTENT_TEMPLATE);
+                    $this->setPerfHeader('X-WLS-Category-Layout-Retry', $retryHtml !== '' ? 'ok' : 'empty');
+                    $this->setPerfHeader('X-WLS-Category-Layout-Retry-Bytes', (string)strlen($retryHtml));
+                    if ($retryHtml !== '') {
+                        return $retryHtml;
+                    }
+
+                    $this->logEmptyCategoryLayout('retry_empty_fallback_content', $contentHtml);
+                    $this->setPerfHeader('Content-Type', 'text/html; charset=utf-8');
+                    $this->setPerfHeader('X-WLS-Category-Layout-Fallback', 'content');
+                    return $contentHtml;
                 } finally {
                     $this->request->setData(self::CONTENT_HTML_OVERRIDE_KEY, null);
                 }
@@ -284,6 +305,41 @@ class View extends BaseController
                 'content_bytes' => strlen($contentHtml),
             ]
         );
+    }
+
+    private function logEmptyCategoryLayout(string $stage, string $contentHtml): void
+    {
+        if (!class_exists(WlsLogger::class, false)) {
+            return;
+        }
+
+        try {
+            WlsLogger::warning_(
+                '[CategoryEmptyLayout] '
+                . (string)json_encode(
+                    $this->buildEmptyLayoutDebugContext($stage, $contentHtml),
+                    JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+                )
+            );
+        } catch (\Throwable) {
+            // Diagnostics must never change the frontend response.
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildEmptyLayoutDebugContext(string $stage, string $contentHtml): array
+    {
+        return [
+            'stage' => $stage,
+            'uri' => function_exists('w_env_request_uri') ? (string)w_env_request_uri() : (string)($_SERVER['REQUEST_URI'] ?? ''),
+            'request_id' => RequestLifecycleTrace::ensureRequestId(),
+            'content_bytes' => strlen($contentHtml),
+            'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
+            'peak_memory_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
+            'fiber_output' => FiberOutputBuffer::debugState(),
+        ];
     }
 
     /**

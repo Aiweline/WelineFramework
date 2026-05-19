@@ -56,6 +56,8 @@ class MasterProcess
      * Session Server 进程名
      */
     public const SESSION_SERVER_PROCESS_NAME = 'weline-wls-session';
+
+    private const CONTROL_METADATA_PROBE_SLOT_LIMIT = 64;
     
     /** IPC 消息颜色 ANSI 转义码 */
     private const ANSI_RESET = "\033[0m";
@@ -1168,12 +1170,19 @@ class MasterProcess
      */
     private static function getControlMetadataProbeProcessNames(string $instanceName): array
     {
-        return [
+        $names = [
             self::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
             self::buildScopedProcessName('weline-wls-session', $instanceName),
             self::buildScopedProcessName('weline-wls-memory', $instanceName),
             self::buildScopedProcessName(self::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
         ];
+
+        for ($slot = 1; $slot <= self::CONTROL_METADATA_PROBE_SLOT_LIMIT; $slot++) {
+            $names[] = self::buildScopedProcessName('weline-wls-worker', $instanceName, $slot);
+            $names[] = self::buildScopedProcessName('weline-wls-maintenance', $instanceName, $slot);
+        }
+
+        return $names;
     }
 
     private static function extractIntCommandOption(string $commandLine, string $name): int

@@ -104,6 +104,11 @@ Use one of these shapes when rewriting lessons:
 - Framework-level thinking is a default requirement for all code changes, not a special mode triggered only by the user's wording; trace the shared entry point or root contract before landing a module-local compatibility patch.
 - For command or importer failures that look systemic, start from the owning command implementation and framework discovery path, not only from one missing output file or one module symptom.
 
+## Existing scaffold versus greenfield assumptions
+
+- When the user asks for a broad capability such as "complete e-commerce" in this repo, inspect the existing module matrix, theme pages, and acceptance docs first; default to closing the highest-leverage missing chain instead of proposing a greenfield rebuild.
+- If the repo already contains the major storefront/account/checkout modules, narrow the work to the real visible breakage and keep moving through the next blocker rather than restating the entire platform scope.
+
 ## Hook-shell contract
 
 - When the user says a personal-center feature should behave like addresses or other in-page sections, keep the account page as the host shell and inject feature UI through `account.sidebar` plus `account.sidebar.content` instead of linking out to standalone module pages.
@@ -112,6 +117,15 @@ Use one of these shapes when rewriting lessons:
 ## Visible requirement versus hidden backend success
 
 - If the user points at a visible quote form, captcha block, popup, or page interaction gap, backend-only success is insufficient. The acceptance boundary is the visible frontend behavior, not only token or service correctness.
+
+## Data written but UI unchanged
+
+- When imported or repaired data is present in the database but the storefront still shows placeholders or stale output, inspect the full visible chain: database state, source template fallback, controller/page cache key, and WLS reload state. Do not stop at "DB updated successfully".
+- If the user follows fake/demo data work with "然后导入", treat the import, cache invalidation, and visible-surface verification as one execution chain rather than three separate optional steps.
+
+## Stale reference before template rewrite
+
+- For cart or list rows that lose image, name, or SKU, verify first whether the row points at a stale or deleted product record before rewriting templates. A durable fix may require snapshot fields or rebinding logic in the service layer, not another placeholder branch in the view.
 
 # Output Format
 

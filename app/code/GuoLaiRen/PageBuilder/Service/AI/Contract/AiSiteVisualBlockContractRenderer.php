@@ -34,7 +34,9 @@ final class AiSiteVisualBlockContractRenderer
         array $themePalette,
         array $brief,
         string $contentLocale,
-        bool $hasVerifiedHeroImage = false
+        bool $hasVerifiedHeroImage = false,
+        array $visualSignature = [],
+        array $pageDesignPlan = []
     ): string {
         $contentLocale = \trim($contentLocale);
         $localeLine = $contentLocale !== ''
@@ -44,6 +46,8 @@ final class AiSiteVisualBlockContractRenderer
         $themeLine = $this->renderThemePaletteLine($themePalette);
         $factsLine = $this->renderMustIncludeFactsLine($brief);
         $roleLine = $this->renderCurrentBlockRoleLine($brief);
+        $visualSignatureLine = $this->renderVisualSignatureLine($visualSignature);
+        $pageDesignLine = $this->renderPageDesignPlanLine($pageDesignPlan);
 
         $heroNote = $hasVerifiedHeroImage
             ? "- visual.image：必须保留已验证的 <img>，类名 .pb-c-hero-img / .pb-c-img 不变，src 来自 final_url；不要替换成 background-image 或 svg。"
@@ -56,13 +60,21 @@ final class AiSiteVisualBlockContractRenderer
         $sections[] = $themeLine;
         $sections[] = $factsLine;
         $sections[] = $roleLine;
+        if ($visualSignatureLine !== '') {
+            $sections[] = $visualSignatureLine;
+        }
+        if ($pageDesignLine !== '') {
+            $sections[] = $pageDesignLine;
+        }
         $sections[] = $heroNote;
+        $sections[] = "- hero/opening full-bleed baseline: when current_block_role indicates hero/banner/opening or a verified .pb-c-hero-img is supplied, css_extra includes `#componentId{padding:0;}` and the root shell spans the viewport with width:100vw or min-width:100vw plus margin:0 calc(50% - 50vw); only the inner/text panel may be max-width constrained. A centered 1200px image island or top/bottom theme-color gutters around the hero image are invalid unless the customer's latest instruction explicitly limits the banner width.";
+        $sections[] = "- spacing rhythm baseline: CTA/action groups must have deliberate breathing room. If a CTA follows text, channel rows, form fields, FAQ rows, or dividers, place it in a sibling `.pb-c-action`/`.pb-c-actions` wrapper after the rows/forms/cards and separate it with outer margin-top/padding-top, parent flex/grid gap, or bottom spacing on the preceding row group. The CTA button's own padding is internal button shape and does not count as clearance from a divider line.";
 
         $sections[] = "\n[gate#visual_depth] 视觉层次门禁 — 需在 css_extra / html_content 中至少命中 3 条；建议同时命中 4 条以确保稳定通过：";
         $sections[] = "  1) gradient：至少出现一次 linear-gradient(...) 或 radial-gradient(...)，用于背景层 / 边框装饰。";
         $sections[] = "  2) shadow：box-shadow 至少出现一次，给卡片 / CTA / 浮层添加层级。";
         $sections[] = "  3) visual：保留 <img data-pb-ai-image-role=...> 或 url(...) 背景 / vt-visual 容器 / pseudo-element（::before/::after）以呈现视觉主体。";
-        $sections[] = "  4) layout：display:grid 或 display:flex 至少一次，并搭配 grid-template-columns / gap / align-items 形成结构。";
+        $sections[] = "  4) layout：用 display:grid 或 display:flex 形成清晰结构（分栏、步骤轨、proof 带、FAQ 行、表单区均可）；不要为了凑门禁把每个区块都做成「标题 + 三列卡片」。";
         $sections[] = "  5) motion：transition: 至少一次，覆盖 hover / focus / active 状态。";
         $sections[] = "  6) surface：border-radius 至少一次；可选 backdrop-filter 或 color-mix(...) 增强精致度。";
 
@@ -97,7 +109,7 @@ final class AiSiteVisualBlockContractRenderer
         $sections[] = "\n[gate#block_role_fidelity] Current block role gate:";
         $sections[] = "  - task_key, section_code, block_key, page_flow_role, and block_goal are binding generation constraints. Generate only this block role; never reuse another block's headline, image, CTA, card grid, or contact-method layout to pass quickly.";
         $sections[] = "  - FAQ/support-question roles must render explicit question-answer groups inside `.pb-c-faq-list`: each item uses `<div class='pb-c-faq-item'><div class='pb-c-question'>Question?</div><p class='pb-c-answer'>Answer.</p></div>`. Style `.pb-c-faq-item` as a visible surface with padding, border-radius, and background/border/shadow. Do not use inline strong+span markup that visually glues question?Answer. They must not render requirement/stat cards or contact method grids.";
-        $sections[] = "  - Form-guidance roles must render a real `<form class='pb-c-form'>` with visible labels and input/textarea fields; they must not render email/phone/address cards. CTA roles must render one focused next-step band. Contact-method roles must render at least two visible email/phone/address/hours channel items with `.pb-c-label`/`.pb-c-value` siblings and a distinct channel rail/console/strip; a verified image may support the atmosphere but cannot replace the channel hub.";
+        $sections[] = "  - Form-guidance roles must render a real `<form class='pb-c-form'>` with visible labels and input/textarea fields; they must not render email/phone/address cards. CTA roles must render one focused next-step band and must not output FAQ classes (`pb-c-faq-item`, `pb-c-question`, `pb-c-answer`), question-answer copy, or repeated email/phone/office/hours card grids. Contact-method roles must render at least two visible email/phone/address/hours channel items with `.pb-c-label`/`.pb-c-value` siblings and a distinct channel rail/console/strip; a verified image may support the atmosphere but cannot replace the channel hub. If the contact-method block includes a CTA, wrap it in a sibling `.pb-c-action` after the channel group and separate it with outer margin/padding/gap so it never touches channel dividers.";
         $sections[] = "  - These identifiers are not visitor copy. Use them to choose structure and content, then rewrite everything visible into final customer-facing language.";
 
         $sections[] = "\n[gate#field_readability] Label/value readability gate:";
@@ -105,8 +117,12 @@ final class AiSiteVisualBlockContractRenderer
         $sections[] = "  - Invalid visible output examples: EmailSupport, Email:support, Phone+91, Address42, HoursMonday, Android VersionRequires, Storage SpaceMinimum, PermissionsAllow, Android version required?Android, paragraph text glued directly to CTA text. Rewrite into readable sibling elements before returning JSON.";
 
         $sections[] = "\n[gate#same_page_block_diversity] Same-page diversity gate:";
-        $sections[] = "  - Adjacent blocks on the same page must vary composition according to current_block_context.visual_signature and page_design_plan: split panel, step rail, proof band, FAQ rows, form guidance, CTA band, or media feature as appropriate.";
-        $sections[] = "  - Repeating one dark slab plus the same yellow cards/grid for unrelated roles is invalid, even if colors match the theme.";
+        $sections[] = "  - Treat stage-1 visual_signature (composition_pattern / spatial_rhythm / media_strategy / surface_treatment / interaction_pattern) as the primary layout contract for this block. If CTX_BLOCK_VISUAL_SIGNATURE or current_block_context lists a pattern, implement that pattern instead of a generic split panel or three-card grid.";
+        $sections[] = "  - Adjacent blocks on the same page must vary composition: split panel, stacked editorial, step rail, proof/metric band, FAQ rows, form guidance, CTA band, media feature, or channel hub — not the same shell with swapped copy.";
+        $sections[] = "  - Repeating one dark slab plus the same accent cards/grid for unrelated roles is invalid, even if colors match the theme.";
+        $sections[] = "  - Default role composition baseline: opening/contact-method blocks favor a channel hub, rail, console, or media-backed help desk; form-guidance blocks favor a real form surface plus guidance copy; FAQ blocks favor stacked question-answer rows or accordion surfaces; final CTA blocks favor one distilled action band with compact proof. These role baselines must not collapse into one reused card-grid shell.";
+        $sections[] = "  - Theme-following rule: keep palette, contrast, and typography consistent across the page, but change composition, scale, media placement, and surface rhythm by role. 'Same colors + same panel shell + different text' still counts as monotony and fails.";
+        $sections[] = "  - Gate compliance is not an excuse for template sameness: meeting gradient/shadow/@media signals must not force every block into identical card grids or metric rows.";
 
         $sections[] = "\n[gate#language_consistency] 语言一致门禁：";
         $sections[] = "  - 每段可见文案（含 alt、placeholder、aria-label）必须使用 content_locale；混入其它语种文字会直接判负。";
@@ -121,9 +137,10 @@ final class AiSiteVisualBlockContractRenderer
         $sections[] = "  - 内容区块的 .pb-c-* 类名不要与 header/footer 的 .pb-h-* / .pb-f-* 重名；不要复刻 header logo / 导航。";
 
         $sections[] = "\n[self-check before return] AI 必须在返回 JSON 前自查：";
-        $sections[] = "  - visual_depth 信号 ≥ 3 / responsive 信号 ≥ 4 且含 @media？若不足，请在 css_extra / css_responsive 内补齐。";
+        $sections[] = "  - visual_depth 信号 ≥ 3 / responsive 信号 ≥ 4 且含 @media？若不足，请在 css_extra / css_responsive 内补齐；补齐方式须服从 visual_signature 与 block role，禁止用「标题+三列卡片」模板凑数。";
         $sections[] = "  - 是否使用了 themePalette 的 ≥2 个 hex token？所有 <img src> 是否来自 verified_asset_src_allowlist？";
         $sections[] = "  - 可见文案是否全部 content_locale，且不含元数据 / demo 字样？";
+        $sections[] = "  - 本区块 composition / media / surface 是否与 CTX_BLOCK_VISUAL_SIGNATURE、CTX_SIBLING_BLOCK_COMPOSITIONS 一致且彼此区分？若与相邻区块仍是同一壳层，先改布局再返回。";
 
         return \implode("\n", $sections) . "\n";
     }
@@ -155,6 +172,84 @@ final class AiSiteVisualBlockContractRenderer
             . "- 视觉简约但有质感：使用 themePalette 的中性色/强调色 + 一处微妙渐变或细边框 + 一处 box-shadow；不要重新设计页面板块。\n"
             . "- 不要输出图片标签；logo 由框架配置渲染。\n"
             . "- 不要使用元数据字符串、demo 文案、占位词；不要复刻其它区块的卡片结构。\n";
+    }
+
+    /**
+     * @param array<string,mixed> $visualSignature
+     */
+    private function renderVisualSignatureLine(array $visualSignature): string
+    {
+        if ($visualSignature === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ([
+            'composition_pattern',
+            'spatial_rhythm',
+            'media_strategy',
+            'surface_treatment',
+            'interaction_pattern',
+        ] as $key) {
+            $value = $visualSignature[$key] ?? null;
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $value = $this->compactPromptValue((string)$value);
+            if ($value !== '') {
+                $parts[] = $key . '=' . $value;
+            }
+        }
+
+        if ($parts === []) {
+            return '';
+        }
+
+        return '- visual_signature (HARD layout contract): ' . \implode(' / ', $parts)
+            . '. Implement this exact composition rhythm; do not substitute a generic hero split or three-card grid unless composition_pattern explicitly calls for cards.';
+    }
+
+    /**
+     * @param array<string,mixed> $pageDesignPlan
+     */
+    private function renderPageDesignPlanLine(array $pageDesignPlan): string
+    {
+        if ($pageDesignPlan === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ([
+            'composition_motif',
+            'visual_hierarchy',
+            'color_layering',
+            'anti_monotony_rule',
+            'section_flow',
+        ] as $key) {
+            $value = $pageDesignPlan[$key] ?? null;
+            if (\is_array($value)) {
+                $items = [];
+                foreach ($value as $item) {
+                    if (\is_string($item) && \trim($item) !== '') {
+                        $items[] = \trim($item);
+                    }
+                }
+                $value = $items === [] ? '' : \implode(' > ', \array_slice($items, 0, 5));
+            }
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $value = $this->compactPromptValue((string)$value);
+            if ($value !== '') {
+                $parts[] = $key . '=' . $value;
+            }
+        }
+
+        if ($parts === []) {
+            return '';
+        }
+
+        return '- page_design_plan (page-level design brief): ' . \implode(' / ', \array_slice($parts, 0, 5));
     }
 
     private function renderThemePaletteLine(array $themePalette): string

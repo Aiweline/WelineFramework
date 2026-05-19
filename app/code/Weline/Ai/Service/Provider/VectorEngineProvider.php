@@ -184,6 +184,7 @@ class VectorEngineProvider extends OpenAiProvider
 
         $modelCode = (string)($config['model'] ?? $model->getModelCode());
         if ($this->isGeminiImageModelCode($modelCode)) {
+            $this->assertGeminiCanSatisfyImageRequest($modelCode, $params, $config);
             return $this->generateGeminiImage($config, $modelCode, $prompt, $params, $apiKey);
         }
 
@@ -201,6 +202,8 @@ class VectorEngineProvider extends OpenAiProvider
         }
 
         foreach ([
+            'background' => $params['background'] ?? $config['background'] ?? null,
+            'output_format' => $params['output_format'] ?? $config['output_format'] ?? null,
             'watermark' => $params['watermark'] ?? $config['watermark'] ?? null,
             'prompt_extend' => $params['prompt_extend'] ?? $config['prompt_extend'] ?? null,
             'negative_prompt' => $params['negative_prompt'] ?? $config['negative_prompt'] ?? null,
@@ -222,6 +225,30 @@ class VectorEngineProvider extends OpenAiProvider
         );
 
         return ImageGenerationResponseNormalizer::fromOpenAiImageResponse($response, $modelCode, $payload, $requestUrl);
+    }
+
+    /**
+     * VectorEngine Gemini image endpoints do not expose alpha-channel PNG output controls.
+     *
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $config
+     * @throws Exception
+     */
+    private function assertGeminiCanSatisfyImageRequest(string $modelCode, array $params, array $config): void
+    {
+        $background = \strtolower(\trim((string)($params['background'] ?? $config['background'] ?? '')));
+        $outputFormat = \strtolower(\trim((string)($params['output_format'] ?? $config['output_format'] ?? '')));
+        $requiresTransparentPng = ($background === 'transparent' || !empty($params['transparent_png_required']) || !empty($params['identity_transparent_png_required']))
+            && ($outputFormat === '' || $outputFormat === 'png');
+
+        if (!$requiresTransparentPng) {
+            return;
+        }
+
+        throw new Exception(
+            'Model "' . $modelCode . '" cannot satisfy transparent PNG identity asset output. '
+            . 'Bind PageBuilder identity/logo assets to an image model with transparent PNG alpha output support.'
+        );
     }
 
     /**

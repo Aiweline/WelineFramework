@@ -102,6 +102,11 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 产品详情标签内容,"Product Details Tab Content"
 在产品详情页标签区域渲染产品描述、规格、评价、问答等内容。支持多个标签页切换，包括商品详情、规格参数、用户评价、问答等。,"Render product description, specifications, reviews, Q&A, etc., in the tab area of the product detail page. Supports multiple tab switching, including product details, specifications, user reviews, Q&A, etc."
 "Product Description","Product Description"
+颜色,颜色
+黑色,黑色
+藏青,藏青
+米色,米色
+尺码,尺码
 暂无图片,"No images"
 SKU,SKU
 库存状态,"Inventory Status"
@@ -113,6 +118,7 @@ SKU,SKU
 加入购物车,"Add to Cart"
 立即购买,"Buy Now"
 产品规格,"Product Specifications"
+添加中,添加中
 已添加,Added
 Specifications,Specifications
 Q&A,Q&A
@@ -128,6 +134,7 @@ Reviews,Reviews
 末页,"Last page"
 跳转到,"Jump to"
 页,Page
+"第 %{1} 页，共 %{2} 页","Page %{1} of %{2}"
 确定,OK
 默认排序,"Default Sort Order"
 价格从低到高,"Price: Low to High"
@@ -283,6 +290,6 @@ ID,ID
 产品不存在或已下架,"This product does not exist or has been taken down"
 节日特惠进行中！,"Festival Promotion in Progress!"
 限时特价,"Limited Time Offer"
-原价：,"Original Price: "
-现价：,"Current Price: "
-活动倒计时：,"Countdown: "
+原价：,"Original Price:"
+现价：,"Current Price:"
+活动倒计时：,Countdown:

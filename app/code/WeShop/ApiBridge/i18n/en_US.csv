@@ -15,6 +15,8 @@
 "Health check failed: %1","Health check failed: %1"
 "API documentation retrieved successfully","API documentation retrieved successfully"
 "Failed to retrieve API documentation: %1","Failed to retrieve API documentation: %1"
+"Provides the frontend API Bridge tester through the worker channel.","Provides the frontend API Bridge tester through the worker channel."
+"Run an API Bridge test request through Weline worker.","Run an API Bridge test request through Weline worker."
 "WeShop REST API 桥接模块","WeShop REST API Bridge Module"
 Test,Test
 "View Docs","View Docs"

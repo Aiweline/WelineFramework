@@ -65,6 +65,34 @@ final class FiberOutputBuffer
         return Runtime::isPersistent() && self::isInstalledBufferActive();
     }
 
+    /**
+     * Lightweight diagnostics for intermittent empty-response failures.
+     *
+     * @return array<string, int|float|bool|string>
+     */
+    public static function debugState(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        $fiberCaptureDepth = 0;
+        if ($fiber !== null && self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+            $fiberCaptureDepth = \count(self::$fiberBufferStacks[$fiber]);
+        }
+
+        return [
+            'persistent' => Runtime::isPersistent(),
+            'installed' => self::$installed,
+            'active' => self::isActive(),
+            'installed_level' => self::$installedLevel,
+            'ob_level' => \ob_get_level(),
+            'fiber' => $fiber instanceof \Fiber ? 'yes' : 'no',
+            'fiber_capture_depth' => $fiberCaptureDepth,
+            'main_capture_depth' => \count(self::$mainBufferStack),
+            'memory_mb' => \round(\memory_get_usage(true) / 1048576, 2),
+            'peak_memory_mb' => \round(\memory_get_peak_usage(true) / 1048576, 2),
+            'memory_limit' => (string)\ini_get('memory_limit'),
+        ];
+    }
+
     public static function handleOutputChunk(string $chunk): string
     {
         return self::handleChunk($chunk);
@@ -123,11 +151,13 @@ final class FiberOutputBuffer
         }
 
         if (self::$fiberBufferStacks === null || !isset(self::$fiberBufferStacks[$fiber])) {
+            self::logCaptureAnomaly('end_capture_missing_fiber_stack');
             return '';
         }
 
         $stack = self::$fiberBufferStacks[$fiber];
         if ($stack === []) {
+            self::logCaptureAnomaly('end_capture_empty_fiber_stack');
             unset(self::$fiberBufferStacks[$fiber]);
             return '';
         }
@@ -281,6 +311,23 @@ final class FiberOutputBuffer
         }
 
         return (string)($status['name'] ?? '') === self::handlerName();
+    }
+
+    private static function logCaptureAnomaly(string $reason): void
+    {
+        if (!\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
+            return;
+        }
+
+        try {
+            \Weline\Server\Log\WlsLogger::warning_(
+                '[FiberOutputBufferAnomaly] reason=' . $reason
+                . ' uri=' . (string)($_SERVER['REQUEST_URI'] ?? '(none)')
+                . ' state=' . \json_encode(self::debugState(), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE)
+            );
+        } catch (\Throwable) {
+            // Diagnostics must not break request handling.
+        }
     }
 
     private static function resetInstalledState(): void

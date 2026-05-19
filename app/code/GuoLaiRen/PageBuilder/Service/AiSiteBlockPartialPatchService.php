@@ -7,6 +7,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\AiSiteVisualBlockContractRenderer;
 use GuoLaiRen\PageBuilder\Service\AI\MockPage;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use Weline\Ai\Service\AiService;
@@ -19,6 +20,7 @@ class AiSiteBlockPartialPatchService
     private const META_REGION = '_pb_server_region';
     private const HISTORY_LIMIT = 3;
     private const JSON_REPAIR_MAX_ATTEMPTS = 2;
+    private ?AiSiteVisualBlockContractRenderer $visualBlockContractRenderer = null;
 
     public function __construct(
         private readonly ?AiSiteAgentSessionService $sessionService = null,
@@ -1656,6 +1658,7 @@ class AiSiteBlockPartialPatchService
      */
     private function buildPatchPrompt(array $read, array $scope, string $instruction): string
     {
+        $visualContract = $this->buildPatchVisualContractPrompt($read, $scope);
         $payload = [
             'instruction' => $instruction,
             'target' => [
@@ -1691,6 +1694,7 @@ class AiSiteBlockPartialPatchService
             . "- Do not output raw HTML, CSS, PHTML, Markdown fences, comments, or prose outside JSON.\n"
             . "- Do not include reason, why, or decision_reason fields; use change_summary for the visible change summary.\n"
             . "- If _pb_server_template_phtml is present, keep it renderable.\n\n"
+            . ($visualContract !== '' ? $visualContract . "\n" : '')
             . "Visible copy governance:\n"
             . "- Visitor-facing copy and attributes must use the target website content locale.\n"
             . "- Task labels, component labels, section labels, image-slot labels, queue/build-plan labels, and schema role labels are internal metadata. Never render them verbatim as headings, card titles, badges, CTA text, alt/title/aria text, or body copy.\n"
@@ -1716,6 +1720,282 @@ class AiSiteBlockPartialPatchService
         }
 
         return $block;
+    }
+
+    /**
+     * @param array<string, mixed> $read
+     * @param array<string, mixed> $scope
+     */
+    private function buildPatchVisualContractPrompt(array $read, array $scope): string
+    {
+        $renderer = $this->getVisualBlockContractRenderer();
+        $brief = $this->buildPatchVisualContractBrief($read, $scope);
+        $locale = (string)($brief['content_locale'] ?? '');
+        $hasVerifiedHeroImage = $this->patchHasVerifiedHeroImage($read);
+
+        return "Patch quality contract (same standard as full generation; patch mode must not weaken layout, role fidelity, or visual quality):\n"
+            . $renderer->renderSectionVisualContract(
+                $this->resolvePatchThemePalette($scope),
+                $brief,
+                $locale,
+                $hasVerifiedHeroImage
+            );
+    }
+
+    /**
+     * @param array<string, mixed> $read
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildPatchVisualContractBrief(array $read, array $scope): array
+    {
+        $pageType = \trim((string)($read['page_type'] ?? ''));
+        $blockId = \trim((string)($read['block_id'] ?? ''));
+        $componentCode = \trim((string)($read['component_code'] ?? ''));
+        $pageContext = \is_array($read['page_context'] ?? null) ? $read['page_context'] : [];
+        $layoutContext = \is_array($read['layout_context'] ?? null) ? $read['layout_context'] : [];
+        $task = $this->resolvePatchBuildTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+        $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
+        $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+        $pagePlanBlock = $this->resolvePatchPagePlanBlock($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $blockGoal = $this->firstNonEmptyScalar([
+            $planContext['block_goal'] ?? null,
+            $planContext['stage1_block_goal'] ?? null,
+            $blockTask['task_goal'] ?? null,
+            $pagePlanBlock['block_goal'] ?? null,
+            $pagePlanBlock['execution_script']['core_copy'] ?? null,
+            $pagePlanBlock['execution_script'] ?? null,
+        ]);
+        $pageGoal = $this->firstNonEmptyScalar([
+            $planContext['page_goal'] ?? null,
+            $pageContext['goal'] ?? null,
+            $pageContext['summary'] ?? null,
+        ]);
+        $pageFlowRole = $this->firstNonEmptyScalar([
+            $planContext['page_flow_role'] ?? null,
+            $pagePlanBlock['page_flow_role'] ?? null,
+        ]);
+        $blockKey = $this->firstNonEmptyScalar([
+            $layoutContext['block_key'] ?? null,
+            $task['block_key'] ?? null,
+            $task['section_key'] ?? null,
+            $pagePlanBlock['block_key'] ?? null,
+            $blockId,
+        ]);
+
+        return [
+            'content_locale' => (string)$this->resolveLocale($read, $scope),
+            'task_key' => (string)($task['task_key'] ?? ''),
+            'section_code' => (string)($task['section_code'] ?? $componentCode),
+            'block_key' => $blockKey,
+            'page_type' => $pageType,
+            'page_goal' => $pageGoal,
+            'page_flow_role' => $pageFlowRole,
+            'block_goal' => $blockGoal,
+            'stage1_block_content' => $this->firstNonEmptyScalar([
+                $planContext['stage1_block_content'] ?? null,
+                $pagePlanBlock['content_brief'] ?? null,
+                $taskScript['story_goal'] ?? null,
+            ]),
+            'must_include_facts' => $this->collectPatchFacts($taskScript, $pagePlanBlock),
+            'role_fidelity_hint' => $this->buildPatchRoleFidelityHint($blockKey, $pageFlowRole, $blockGoal),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, string>
+     */
+    private function resolvePatchThemePalette(array $scope): array
+    {
+        $palette = [];
+        foreach ([
+            $scope['theme_context_snapshot']['palette'] ?? null,
+            $scope['theme_context_snapshot']['theme_design']['color_scheme'] ?? null,
+            $scope['theme_design']['color_scheme'] ?? null,
+            $scope['theme_style']['palette'] ?? null,
+            $scope['palette'] ?? null,
+            $scope['plan_json']['theme_design']['color_scheme'] ?? null,
+            $scope['plan_json']['palette'] ?? null,
+        ] as $candidate) {
+            if (!\is_array($candidate)) {
+                continue;
+            }
+            foreach ($candidate as $key => $value) {
+                if (!\is_string($key) || !\is_scalar($value)) {
+                    continue;
+                }
+                $color = \trim((string)$value);
+                if (\preg_match('/^#[0-9a-f]{6,8}$/i', $color) !== 1) {
+                    continue;
+                }
+                $palette[$key] = $color;
+            }
+            if ($palette !== []) {
+                break;
+            }
+        }
+
+        return $palette;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $layoutContext
+     * @return array<string, mixed>
+     */
+    private function resolvePatchBuildTask(
+        array $scope,
+        string $pageType,
+        string $blockId,
+        string $componentCode,
+        array $layoutContext
+    ): array {
+        $buildTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
+        $blockKey = \trim((string)($layoutContext['block_key'] ?? ''));
+        foreach ($buildTasks as $task) {
+            if (!\is_array($task) || \trim((string)($task['page_type'] ?? '')) !== $pageType) {
+                continue;
+            }
+            if ($blockKey !== '' && \trim((string)($task['block_key'] ?? '')) === $blockKey) {
+                return $task;
+            }
+            if ($componentCode !== '' && \trim((string)($task['section_code'] ?? '')) === $componentCode) {
+                return $task;
+            }
+            if ($blockId !== '' && \trim((string)($task['section_key'] ?? '')) === $blockId) {
+                return $task;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $layoutContext
+     * @return array<string, mixed>
+     */
+    private function resolvePatchPagePlanBlock(
+        array $scope,
+        string $pageType,
+        string $blockId,
+        string $componentCode,
+        array $layoutContext
+    ): array {
+        $planBlocks = \is_array($scope['plan_json']['pages'][$pageType]['blocks'] ?? null)
+            ? $scope['plan_json']['pages'][$pageType]['blocks']
+            : [];
+        $blockKey = \trim((string)($layoutContext['block_key'] ?? ''));
+        foreach ($planBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            if ($blockKey !== '' && \trim((string)($block['block_key'] ?? '')) === $blockKey) {
+                return $block;
+            }
+            if ($componentCode !== '' && \trim((string)($block['component_code'] ?? '')) === $componentCode) {
+                return $block;
+            }
+            if ($blockId !== '' && \trim((string)($block['block_id'] ?? '')) === $blockId) {
+                return $block;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $taskScript
+     * @param array<string, mixed> $pagePlanBlock
+     * @return list<string>
+     */
+    private function collectPatchFacts(array $taskScript, array $pagePlanBlock): array
+    {
+        $facts = [];
+        foreach (\is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            foreach ([$row['sample'] ?? null, $row['implementation_note'] ?? null] as $candidate) {
+                if (!\is_scalar($candidate)) {
+                    continue;
+                }
+                $value = \trim((string)$candidate);
+                if ($value !== '') {
+                    $facts[] = $value;
+                }
+            }
+        }
+        foreach (\is_array($pagePlanBlock['required_facts'] ?? null) ? $pagePlanBlock['required_facts'] : [] as $fact) {
+            if (\is_scalar($fact) && \trim((string)$fact) !== '') {
+                $facts[] = \trim((string)$fact);
+            }
+        }
+
+        return \array_values(\array_slice(\array_unique($facts), 0, 8));
+    }
+
+    private function buildPatchRoleFidelityHint(string $blockKey, string $pageFlowRole, string $blockGoal): string
+    {
+        $normalized = \strtolower($blockKey . ' ' . $pageFlowRole . ' ' . $blockGoal);
+        if (\str_contains($normalized, 'contact_cta') || (\str_contains($normalized, 'cta') && \str_contains($normalized, 'contact'))) {
+            return 'This is a final contact/download CTA band. Do not render channel cards, office/email grids, FAQ rows, or a support form.';
+        }
+        if (\str_contains($normalized, 'contact_methods') || \str_contains($normalized, 'support hours')) {
+            return 'This is a contact-method hub. Render visible contact channels with separated labels and values; do not collapse into a generic hero or final CTA strip.';
+        }
+        if (\str_contains($normalized, 'faq')) {
+            return 'This block must render distinct question-answer rows, not cards, not hero copy, and not contact-method tiles.';
+        }
+        if (\str_contains($normalized, 'form')) {
+            return 'This block must render a real guidance form with labels and fields, not contact cards, FAQ rows, or a generic CTA.';
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<int, mixed> $values
+     */
+    private function firstNonEmptyScalar(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $value = \trim((string)$value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $read
+     */
+    private function patchHasVerifiedHeroImage(array $read): bool
+    {
+        $html = (string)($read['html'] ?? '');
+        if ($html === '') {
+            return false;
+        }
+
+        return \str_contains($html, 'pb-c-hero-img')
+            || \str_contains($html, "data-pb-ai-image-role='generated-asset'")
+            || \str_contains($html, 'data-pb-ai-image-role="generated-asset"');
+    }
+
+    private function getVisualBlockContractRenderer(): AiSiteVisualBlockContractRenderer
+    {
+        if ($this->visualBlockContractRenderer === null) {
+            $this->visualBlockContractRenderer = new AiSiteVisualBlockContractRenderer();
+        }
+
+        return $this->visualBlockContractRenderer;
     }
 
     /**

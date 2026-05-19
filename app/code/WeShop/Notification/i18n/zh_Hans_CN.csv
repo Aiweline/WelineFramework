@@ -4,6 +4,22 @@
 "Notification could not be marked as read.",通知标记已读失败。
 "Notification Detail",通知详情
 "Please log in to continue.","Please log in to continue."
+请先登录后再配置通知渠道。,请先登录后再配置通知渠道。
+通知渠道配置已保存。,通知渠道配置已保存。
+"Unsupported notification provider operation: %{1}","Unsupported notification provider operation: %{1}"
+"Notification Query","Notification Query"
+"Provides frontend notification operations through the worker API.","Provides frontend notification operations through the worker API."
+"Mark a notification owned by the current customer as read.","Mark a notification owned by the current customer as read."
+"订单 {1} 已提交","订单 {1} 已提交"
+订单已提交,订单已提交
+我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。,我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。
+站内通知,站内通知
+通知渠道和联系方式不能为空。,通知渠道和联系方式不能为空。
+该通知渠道暂不支持客户配置。,该通知渠道暂不支持客户配置。
+请输入有效的通知邮箱。,请输入有效的通知邮箱。
+邮箱,邮箱
+订单通知,订单通知
+您的订单已提交，我们会继续同步后续状态。,您的订单已提交，我们会继续同步后续状态。
 Unread,未读
 Read,已读
 "Notification not found.",通知不存在。
@@ -40,8 +56,37 @@ View,查看
 "Basic Information",基础信息
 Content,内容
 "Already marked as read.",该通知已标记为已读。
+消息通知,消息通知
+订单进度、支付结果、售后提醒和账户消息都会出现在这里。,订单进度、支付结果、售后提醒和账户消息都会出现在这里。
+全部消息,全部消息
+未读,未读
+标记已读,标记已读
+当前还没有消息。后续订单、支付、配送和售后事件产生后，会自动出现在这里。,当前还没有消息。后续订单、支付、配送和售后事件产生后，会自动出现在这里。
+通知渠道设置,通知渠道设置
+配置订单、支付、配送和售后通知的接收方式，结账页会优先使用这里保存的偏好。,配置订单、支付、配送和售后通知的接收方式，结账页会优先使用这里保存的偏好。
+已可用于订单通知。,已可用于订单通知。
+请先在下方添加该渠道的联系方式。,请先在下方添加该渠道的联系方式。
+添加通知联系方式,添加通知联系方式
+外部渠道需要先绑定联系方式，才能参与提醒投递。,外部渠道需要先绑定联系方式，才能参与提醒投递。
+渠道,渠道
+选择渠道,选择渠道
+联系方式,联系方式
+邮箱、手机号或渠道地址,邮箱、手机号或渠道地址
+保存后，结账与订单相关流程会优先使用这里启用的通知渠道。,保存后，结账与订单相关流程会优先使用这里启用的通知渠道。
+保存通知设置,保存通知设置
+投递说明,投递说明
+先启用渠道，再补齐联系人，避免订单消息只能停留在站内。,先启用渠道，再补齐联系人，避免订单消息只能停留在站内。
+推荐组合,推荐组合
+站内通知适合保底留痕，建议默认开启。,站内通知适合保底留痕，建议默认开启。
+邮件适合订单确认、支付结果和售后进度提醒。,邮件适合订单确认、支付结果和售后进度提醒。
+"Telegram、Webhook 等外部渠道需要先配置联系人才能启用。","Telegram、Webhook 等外部渠道需要先配置联系人才能启用。"
+已保存联系人,已保存联系人
+通知设置,通知设置
+管理订单、支付与售后消息提醒,管理订单、支付与售后消息提醒
 "Stay Updated",实时更新
 "Notification Center",通知中心
 "Open Center",打开中心
 "Alerts and updates in one place",提醒和更新集中在一处
 "Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center.",订单更新、付款跟进和会员通知都可以在通知中心统一查看。
+"Notification Settings",通知设置
+"Manage order, payment, and after-sales alerts",管理订单、支付与售后消息提醒

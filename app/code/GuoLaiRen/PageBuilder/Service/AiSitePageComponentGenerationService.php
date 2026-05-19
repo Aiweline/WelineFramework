@@ -276,8 +276,10 @@ class AiSitePageComponentGenerationService
         $sectionCode = \trim((string)($section['code'] ?? ''));
         $sectionKey = \trim((string)($section['key'] ?? ''));
         $sectionTemplate = \strtolower(\trim((string)($section['template'] ?? '')));
-        $identity = \strtolower($pageType . ' ' . $sectionCode . ' ' . $sectionKey . ' ' . $sectionTemplate . ' ' . (string)($section['name'] ?? ''));
-        $isHero = \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $identity) === 1;
+        $pageFlowRole = \strtolower(\trim((string)($section['page_flow_role'] ?? $section['config']['page_flow_role'] ?? '')));
+        $identity = \strtolower($pageType . ' ' . $sectionCode . ' ' . $sectionKey . ' ' . $sectionTemplate . ' ' . $pageFlowRole . ' ' . (string)($section['name'] ?? ''));
+        $isHero = \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $identity) === 1
+            || \in_array($pageFlowRole, ['opening', 'hero', 'banner', 'above_fold', 'above-fold'], true);
         $wantsImage = $isHero
             || \preg_match('/\b(showcase|feature|product|game|suite|download|cta|conversion|spotlight|trust|security|safe|badge|proof|testimonial|review|story|faq)\b/i', $identity) === 1;
         $slotId = 'page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode !== '' ? $sectionCode : ($sectionKey !== '' ? $sectionKey : 'section'));
@@ -326,6 +328,7 @@ class AiSitePageComponentGenerationService
             'section_code' => $sectionCode,
             'section_key' => $sectionKey,
             'section_template' => $sectionTemplate,
+            'page_flow_role' => $pageFlowRole,
             'usage' => $usage,
             'placement' => $isHero ? 'background_layer' : ($requiresImage ? 'media_panel' : 'none'),
             'aspect_ratio' => $isHero ? '1920:750' : '4:3',
@@ -333,7 +336,9 @@ class AiSitePageComponentGenerationService
             'subject' => $this->clipText($this->sanitizeVisibleCopy($brief), 220),
             'style' => $style,
             'responsive_layout_contract' => [
-                'desktop' => 'Use a centered safe-width inner container. Split layouts are allowed only when every grid/flex child has min-width:0 and no panel exceeds the container.',
+                'desktop' => $isHero
+                    ? 'Hero/opening banner root is full-bleed by default: the root shell spans 100vw even when the PageBuilder wrapper is centered; only the inner text-safe container is max-width constrained. Split layouts are allowed only inside that inner container.'
+                    : 'Use a centered safe-width inner container. Split layouts are allowed only when every grid/flex child has min-width:0 and no panel exceeds the container.',
                 'tablet' => 'At <=900px, stack media/copy/form panels or switch to two safe rows. Do not keep a side card absolutely offset outside the viewport.',
                 'mobile' => 'At <=420px, one column only. Forms, inputs, and media may use width:100%; CTA-looking controls remain compact with width:auto and max-width<=280px, and no width:100%, flex:1, flex-grow:1, or display:block on the actual CTA button selector. Prefer action/actions for wrappers so CTA containers are not confused with the button itself.',
                 'required_parts' => [
@@ -367,7 +372,7 @@ class AiSitePageComponentGenerationService
         if ($requiresImage && $hasVerifiedImage) {
             $contract['required_img_class'] = $isHero ? 'pb-c-hero-img' : 'pb-c-img';
             $contract['required_structure'] = $isHero
-                ? 'Use pb-c-root > img.pb-c-hero-img + pb-c-scrim + pb-c-inner > pb-c-copy. The img selector must be #componentId .pb-c-hero-img and must contain position:absolute, inset:0, width:100%, height:100%, object-fit:cover, object-position:center.'
+                ? 'Use pb-c-root > img.pb-c-hero-img + pb-c-scrim + pb-c-inner > pb-c-copy. css_extra must include #componentId{padding:0;} so the framework wrapper does not create top/bottom gutters. The root selector must be full-bleed with width:100vw or min-width:100vw and no max-width pixel cap; only pb-c-inner may be max-width constrained. The img selector must be #componentId .pb-c-hero-img and must contain position:absolute, inset:0, width:100%, height:100%, object-fit:cover, object-position:center.'
                 : 'Use pb-c-root > pb-c-inner > pb-c-media > img.pb-c-img plus pb-c-copy. The img selector must be #componentId .pb-c-img and must contain width:100%, height:360px, object-fit:cover, object-position:center.';
         }
 
@@ -587,6 +592,7 @@ class AiSitePageComponentGenerationService
             $contentRows = $this->buildExecutionBlueprintContentCopyRows($label, $description, $fieldPlan);
             $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
             $stylePlan = \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [];
+            $blockGoal = $this->resolveExecutionBlueprintBlockGoal($block);
             if ($pageDesignPlan !== []) {
                 $stylePlan['page_design_plan'] = $pageDesignPlan;
             }
@@ -600,15 +606,19 @@ class AiSitePageComponentGenerationService
                 'label' => $label,
                 'sort_order' => 100 + ($index * 10),
                 'plan_context' => [
-                    'block_goal' => (string)($block['goal'] ?? ''),
+                    'block_goal' => $blockGoal,
                     'field_plan' => $fieldPlan,
                     'page_design_plan' => $pageDesignPlan,
                     'source_page_type' => $pageType,
                     'source_block_key' => $blockKey,
                     'page_flow_role' => (string)($block['page_flow_role'] ?? ''),
+                    'stage1_visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
                 ],
                 'block_task' => [
-                    'task_goal' => (string)($block['goal'] ?? ''),
+                    'task_goal' => $blockGoal,
+                    'visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
+                    'image_intent' => \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [],
+                    'design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
                     'content_plan' => [
                         'title' => $label,
                         'body_copy' => \array_values(\array_map(
@@ -622,7 +632,7 @@ class AiSitePageComponentGenerationService
                     'meta_fields' => $fieldPlan,
                 ],
                 'task_script' => [
-                    'story_goal' => (string)($block['goal'] ?? ''),
+                    'story_goal' => $blockGoal,
                     'content_fill_rule' => 'Write finished visitor-facing copy from the approved page plan fields; never render planning observations or block identifiers.',
                     'field_content_requirements' => $fieldPlan,
                 ],
@@ -635,6 +645,31 @@ class AiSitePageComponentGenerationService
         }
 
         return $tasks;
+    }
+
+    /**
+     * @param array<string,mixed> $block
+     */
+    private function resolveExecutionBlueprintBlockGoal(array $block): string
+    {
+        foreach ([
+            $block['block_goal'] ?? null,
+            $block['goal'] ?? null,
+            $block['execution_script']['core_copy'] ?? null,
+            $block['execution_script'] ?? null,
+            $block['content_brief'] ?? null,
+            $block['implementation_detail'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $value = $this->sanitizeVisibleCopy(\trim((string)$value));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -875,8 +910,57 @@ class AiSitePageComponentGenerationService
         if (\preg_match('/\.(?:png|jpe?g|webp|gif|avif|svg)(?:$|\?)/i', $path) !== 1) {
             return '';
         }
+        $normalizedPath = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+        $lowerPath = \strtolower($normalizedPath);
+        if (\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
+            if (
+                !\str_contains($lowerPath, 'identity-website-logo')
+                || !\str_ends_with(\parse_url($lowerPath, \PHP_URL_PATH) ?: $lowerPath, '.png')
+                || !$this->generatedLogoAssetHasTransparentBackground($normalizedPath)
+            ) {
+                return '';
+            }
+        }
 
         return $value;
+    }
+
+    private function generatedLogoAssetHasTransparentBackground(string $path): bool
+    {
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
+        if (!\is_file($absolutePath)) {
+            return false;
+        }
+        $bytes = @\file_get_contents($absolutePath);
+        if (!\is_string($bytes) || $bytes === '' || \strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) !== 0) {
+            return false;
+        }
+        if (\function_exists('imagecreatefromstring')) {
+            $image = @\imagecreatefromstring($bytes);
+            if ($image !== false) {
+                $width = \imagesx($image);
+                $height = \imagesy($image);
+                $points = [
+                    [0, 0],
+                    [\max(0, $width - 1), 0],
+                    [0, \max(0, $height - 1)],
+                    [\max(0, $width - 1), \max(0, $height - 1)],
+                ];
+                $transparent = 0;
+                foreach ($points as [$x, $y]) {
+                    $alpha = (\imagecolorat($image, $x, $y) >> 24) & 0x7F;
+                    if ($alpha >= 80) {
+                        $transparent++;
+                    }
+                }
+                \imagedestroy($image);
+
+                return $transparent >= 3;
+            }
+        }
+
+        $colorType = \ord($bytes[25] ?? "\0");
+        return \in_array($colorType, [4, 6], true) || \str_contains($bytes, 'tRNS');
     }
 
     /**
@@ -1352,10 +1436,16 @@ class AiSitePageComponentGenerationService
                 $spec = $this->prepareInlineImageAssetForComponentSpec($spec);
                 $region = (string)($spec['region'] ?? 'content');
                 $componentCode = (string)($spec['componentCode'] ?? '');
+                $defaultConfig = \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [];
+                $renderContext = \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [];
+                $promptComponentCode = $this->mergeSemanticComponentCode(
+                    $componentCode,
+                    $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext)
+                );
                 $attemptPrompt = $this->appendComponentCssScopeInstruction(
                     (string)($spec['prompt'] ?? ''),
-                    $componentCode,
-                    \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : []
+                    $promptComponentCode,
+                    $renderContext
                 );
                 $guardedPrompt = $this->prependComponentJsonOnlyGuard($attemptPrompt, false);
                 $guardedPrompt = $this->getSkillRegistry()->prependPromptGuide($guardedPrompt, 'stage3');
@@ -1380,8 +1470,8 @@ class AiSitePageComponentGenerationService
                     (string)($spec['name'] ?? ''),
                     $region,
                     (string)($spec['prompt'] ?? ''),
-                    \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
-                    \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [],
+                    $defaultConfig,
+                    $renderContext,
                     $aiData
                 );
                 yield $componentKey => [
@@ -1581,6 +1671,7 @@ class AiSitePageComponentGenerationService
             'description' => $safeDescription !== '' ? $safeDescription : ($name !== '' ? $name : $componentCode),
         ];
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
+        $semanticComponentCode = $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext);
         $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
         $aiData = $this->stripOptionalUnverifiedGeneratedImageReferences($aiData, $renderContext, $defaultConfig);
         $aiData = $this->enforceContractHeroImageUrlsInAiPayload($aiData, $region, $defaultConfig);
@@ -1608,14 +1699,14 @@ class AiSitePageComponentGenerationService
                 }
             }
         }
-        $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets);
+        $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets, $semanticComponentCode);
         $defaultConfig = $this->applyAiPayloadOwnershipToDefaultConfig($defaultConfig, $region, $aiData);
         $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig, $region);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
         if ((bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)) {
             $html = (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? '');
-            $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html);
+            $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html, $semanticComponentCode);
 
             return [
                 'code' => $componentCode,
@@ -1648,7 +1739,7 @@ class AiSitePageComponentGenerationService
         $html = $this->renderTemplateToHtml($phtml, $persistedConfig, $renderContext);
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
-        $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html);
+        $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html, $semanticComponentCode);
 
         return [
             'code' => $componentCode,
@@ -1665,6 +1756,60 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $defaultConfig
      * @param array<string,mixed> $renderContext
      */
+    private function buildSemanticComponentCodeForValidation(string $componentCode, array $defaultConfig, array $renderContext): string
+    {
+        $buildPlanTask = \is_array($renderContext['_build_plan_task'] ?? null) ? $renderContext['_build_plan_task'] : [];
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $visualContract = \is_array($renderContext['_visual_contract'] ?? null) ? $renderContext['_visual_contract'] : [];
+
+        $parts = [
+            $componentCode,
+            $defaultConfig['runtime.section_code'] ?? null,
+            $defaultConfig['runtime.section_key'] ?? null,
+            $defaultConfig['runtime.block_key'] ?? null,
+            $defaultConfig['runtime.section_name'] ?? null,
+            $buildPlanTask['task_key'] ?? null,
+            $buildPlanTask['page_type'] ?? null,
+            $buildPlanTask['section_key'] ?? null,
+            $buildPlanTask['block_key'] ?? null,
+            $buildPlanTask['section_code'] ?? null,
+            $buildPlanTask['label'] ?? null,
+            $planContext['source_block_key'] ?? null,
+            $planContext['page_flow_role'] ?? null,
+            $planContext['block_goal'] ?? null,
+            $blockTask['task_goal'] ?? null,
+            $visualContract['section_code'] ?? null,
+            $visualContract['block_key'] ?? null,
+            $visualContract['page_flow_role'] ?? null,
+        ];
+
+        $tokens = [];
+        foreach ($parts as $part) {
+            $value = \trim((string)$part);
+            if ($value !== '') {
+                $tokens[$value] = true;
+            }
+        }
+
+        return \implode(' ', \array_keys($tokens));
+    }
+
+    private function mergeSemanticComponentCode(string $componentCode, mixed $semanticComponentCode): string
+    {
+        $componentCode = \trim($componentCode);
+        $semanticComponentCode = \trim((string)$semanticComponentCode);
+        if ($semanticComponentCode === '' || $semanticComponentCode === $componentCode) {
+            return $componentCode;
+        }
+
+        return \trim($componentCode . ' ' . $semanticComponentCode);
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
     private function isHeroOrBannerImageContract(array $defaultConfig, array $renderContext = [], string $html = ''): bool
     {
         $template = \strtolower(\trim((string)($defaultConfig['runtime.section_template'] ?? '')));
@@ -1672,10 +1817,12 @@ class AiSitePageComponentGenerationService
             ? $renderContext['_visual_contract']
             : $this->decodeRuntimeVisualContract($defaultConfig);
         $slotType = \strtolower(\trim((string)($visualContract['slot_type'] ?? '')));
+        $pageFlowRole = \strtolower(\trim((string)($visualContract['page_flow_role'] ?? $defaultConfig['runtime.page_flow_role'] ?? '')));
 
         return \in_array($template, ['hero', 'banner'], true)
             || \str_contains($slotType, 'hero')
-            || \str_contains($slotType, 'banner');
+            || \str_contains($slotType, 'banner')
+            || \in_array($pageFlowRole, ['opening', 'hero', 'banner', 'above_fold', 'above-fold'], true);
     }
 
     /**
@@ -1698,12 +1845,17 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): array {
-        $attemptPrompt = $this->appendComponentCssScopeInstruction($prompt, $componentCode, $renderContext);
-        $isHeroComponent = \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $componentCode) === 1;
+        $promptComponentCode = $this->mergeSemanticComponentCode(
+            $componentCode,
+            $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext)
+        );
+        $attemptPrompt = $this->appendComponentCssScopeInstruction($prompt, $promptComponentCode, $renderContext);
+        $isHeroComponent = \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $promptComponentCode) === 1;
         $componentPrefix = $this->normalizeComponentCssPrefix($componentCode);
         $lastThrowable = null;
         for ($attempt = 0; $attempt < 3; $attempt++) {
             $promptForAttempt = $attemptPrompt;
+            $aiData = [];
             if ($attempt > 0) {
                 $promptForAttempt = $this->buildStrictComponentRecoveryPrompt(
                     $componentCode,
@@ -1730,6 +1882,7 @@ class AiSitePageComponentGenerationService
                 );
             } catch (\Throwable $throwable) {
                 $lastThrowable = $throwable;
+                $this->logFastBlockGenerationFailureSample($componentCode, $attempt, $throwable, $aiData);
                 if ($attempt < 2 && $this->shouldRetryAiComponentGeneration($throwable)) {
                     $this->emitComponentFallbackNotice($region, $componentCode, 'retrying contract-guided generation after: ' . $this->summarizeThrowable($throwable));
                     continue;
@@ -1742,6 +1895,28 @@ class AiSitePageComponentGenerationService
         $finalReason = $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown component generation failure'));
         $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
         throw new \RuntimeException('AI component generation failed: ' . $finalReason, 0, $lastThrowable);
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     */
+    private function logFastBlockGenerationFailureSample(string $componentCode, int $attempt, \Throwable $throwable, array $aiData): void
+    {
+        if (!(bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)) {
+            return;
+        }
+
+        try {
+            \w_log_warning('[AI Site Block Failure Sample] ' . \json_encode([
+                'component_code' => $componentCode,
+                'attempt' => $attempt + 1,
+                'error' => $this->summarizeThrowable($throwable),
+                'html_excerpt' => $this->clipText((string)($aiData['html_content'] ?? ''), 1200),
+                'css_excerpt' => $this->clipText((string)($aiData['css_extra'] ?? ''), 1200),
+                'css_responsive_excerpt' => $this->clipText((string)($aiData['css_responsive'] ?? ''), 800),
+            ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE));
+        } catch (\Throwable) {
+        }
     }
 
     /**
@@ -1786,6 +1961,8 @@ class AiSitePageComponentGenerationService
         $themePalette = $this->resolveThemePaletteForContract($buildPlanTask, $scope);
         $artifacts = $this->buildRequiredImagePromptArtifacts($visualContract, $themePalette);
         $strictImageTail = $this->buildStrictRequiredImagePromptTail($componentCode, $renderContext);
+        $semanticComponentCode = $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext);
+        $roleSpecificRecoveryContract = $this->buildRoleSpecificRecoveryContract($semanticComponentCode, $componentPrefix);
 
         $skeletonOutline = (string)($artifacts['skeleton_outline'] ?? '');
         $cssStructuralHints = (string)($artifacts['css_structural_hints'] ?? '');
@@ -1802,14 +1979,17 @@ class AiSitePageComponentGenerationService
                     . "    div.{$componentPrefix}-text-panel\n"
                     . "      h2.{$componentPrefix}-title\n"
                     . "      p.{$componentPrefix}-text\n"
-                    . "      div.{$componentPrefix}-cta";
+                    . "      div.{$componentPrefix}-action\n"
+                    . "        div.{$componentPrefix}-cta";
                 $cssStructuralHints = "结构层 CSS 必填规则（颜色由 palette_role_map 决定）：\n"
-                    . "  .{$componentPrefix}-root: position:relative; overflow:hidden; min-height:520px; padding:88px 24px; box-sizing:border-box; background= palette_role_map.surface 或 linear-gradient(palette_role_map.surface->palette_role_map.surface_alt)\n"
+                    . "  #componentId: padding:0\n"
+                    . "  .{$componentPrefix}-root: position:relative; overflow:hidden; width:100vw; min-height:520px; margin:0 calc(50% - 50vw); padding:88px 24px; box-sizing:border-box; font-family= CTX_CONFIRMED_THEME.font_family or a named brand family before generic fallback; background= palette_role_map.surface 或 linear-gradient(palette_role_map.surface->palette_role_map.surface_alt). Do not put max-width on root; constrain only .{$componentPrefix}-inner\n"
                     . "  .{$componentPrefix}-scrim: position:absolute; inset:0; background= linear-gradient(palette_role_map.scrim, transparent)\n"
                     . "  .{$componentPrefix}-inner: position:relative; z-index:1; max-width:1180px; margin:0 auto; display:flex; align-items:center; min-height:380px\n"
                     . "  .{$componentPrefix}-text-panel: max-width:620px; padding:32px; border-radius:24px; background= palette_role_map.copy_panel_bg; color= palette_role_map.copy_panel_text; box-shadow:0 28px 80px palette_role_map.shadow\n"
-                    . "  .{$componentPrefix}-title: margin:0 0 16px; font-size: clamp(32px, 5vw, 52px); line-height:1.1; color= palette_role_map.copy_panel_text\n"
+                    . "  .{$componentPrefix}-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size: clamp(32px, 5vw, 52px); line-height:1.1; color= palette_role_map.copy_panel_text\n"
                     . "  .{$componentPrefix}-text: margin:0 0 22px; line-height:1.7; color= palette_role_map.muted_text\n"
+                    . "  .{$componentPrefix}-action: margin:22px 0 0; padding:18px 0 0; display:flex; gap:12px; align-items:center\n"
                     . "  .{$componentPrefix}-cta: display:inline-flex; width:auto; max-width:280px; padding:12px 20px; border-radius:999px; background= palette_role_map.cta_bg; color= palette_role_map.cta_text; transition:transform .2s, box-shadow .2s\n"
                     . "  .{$componentPrefix}-cta:hover: transform:translateY(-2px); box-shadow:0 12px 24px palette_role_map.shadow";
             } else {
@@ -1821,11 +2001,12 @@ class AiSitePageComponentGenerationService
                     . "      div.{$componentPrefix}-action\n"
                     . "        div.{$componentPrefix}-cta";
                 $cssStructuralHints = "结构层 CSS 必填规则（颜色由 palette_role_map 决定）：\n"
-                    . "  .{$componentPrefix}-root: position:relative; overflow:hidden; padding:72px 24px; box-sizing:border-box; background= palette_role_map.surface\n"
+                    . "  .{$componentPrefix}-root: position:relative; overflow:hidden; padding:72px 24px; box-sizing:border-box; font-family= CTX_CONFIRMED_THEME.font_family or a named brand family before generic fallback; background= palette_role_map.surface\n"
                     . "  .{$componentPrefix}-inner: max-width:1180px; margin:0 auto; display:flex; flex-wrap:wrap; gap:24px; align-items:center\n"
                     . "  .{$componentPrefix}-copy: flex:1 1 320px; min-width:0\n"
-                    . "  .{$componentPrefix}-title: margin:0 0 16px; font-size: clamp(28px, 4vw, 42px); line-height:1.1; color= palette_role_map.text\n"
+                    . "  .{$componentPrefix}-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size: clamp(28px, 4vw, 42px); line-height:1.1; color= palette_role_map.text\n"
                     . "  .{$componentPrefix}-text: margin:0 0 22px; line-height:1.7; color= palette_role_map.muted_text\n"
+                    . "  .{$componentPrefix}-action: margin:22px 0 0; padding:18px 0 0; display:flex; gap:12px; align-items:center\n"
                     . "  .{$componentPrefix}-cta: display:inline-flex; width:auto; max-width:280px; padding:12px 20px; border-radius:999px; background= palette_role_map.cta_bg; color= palette_role_map.cta_text; transition:transform .2s, box-shadow .2s\n"
                     . "  .{$componentPrefix}-cta:hover: transform:translateY(-2px); box-shadow:0 12px 24px palette_role_map.shadow";
             }
@@ -1850,12 +2031,13 @@ class AiSitePageComponentGenerationService
             . "- Site: {$siteTitle}. " . ($brief !== '' ? "Brief: {$brief}. " : '') . "Visitor copy locale: " . ($locale !== '' ? $locale : 'site default') . ".\n"
             . "- Output exactly one minified JSON object with these string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
             . "- Focus on structural correctness first: valid JSON, balanced HTML tags, balanced CSS braces/parentheses, readable visitor copy, and selectors scoped under #componentId.\n"
-            . "- Keep the CTA and typography usable, but do not treat one exact font stack or one exact button shape as a hard failure condition.\n"
+            . "- Typography is a hard quality signal: css_extra must include non-default brand font-family declarations on both a title selector and a root/body/text selector. Use CTX_CONFIRMED_THEME.font_family when present, otherwise choose a named brand-appropriate family before generic fallback; pure system/Arial/Roboto stacks fail.\n"
             . "- extra_fields, php_variables, and js_content must be empty strings; css_responsive 必须包含至少一段 `@media (max-width: 768px)` 与一段 `@media (max-width: 420px)` 完整规则。\n"
             . "- REQUIRED_ROLE_OUTLINE (required roles/classes, not a byte-for-byte skeleton; keep core roles and exact image binding, but allow refined scoped wrappers when they improve this block):\n{$skeletonOutline}\n"
             . ($requiredImgTemplate !== '' ? "- REQUIRED_HTML_IMG_TO_COPY_VERBATIM (HARD：粘贴到 .{$componentPrefix}-media 或骨架指定位置内，禁止修改 src/data 属性): {$requiredImgTemplate}\n" : '')
             . ($roleMapLine !== '' ? "- REQUIRED_PALETTE_ROLE_MAP (HARD：css_extra 颜色全部来自此字典，禁用所有非本字典色值): {$roleMapLine}\n" : "- 当前 scope 未提供 themePalette，请从 CTX_CONFIRMED_THEME.palette 中提取 hex token；禁止使用任何兜底色 (#111827 / #f59e0b / #f8fafc / #92400e / #cbd5e1 等历史模板色全部已被禁用)。\n")
             . "- REQUIRED_CSS_ROLE_CONTRACT (style required roles with palette role values; layout rhythm and composition remain design-owned by this block):\n{$cssStructuralHints}\n"
+            . $roleSpecificRecoveryContract
             . "- html_content must decode to real HTML tags and must not leak prompt/schema text into visitor-visible copy.\n"
             . "- Prefer {$componentPrefix}-* class names for generated structure, but keep the main goal on valid scoped markup rather than rigid naming ceremony.\n"
             . "- Do not include markdown, prose, comments, raw HTML outside JSON, or a second JSON object.\n"
@@ -1867,14 +2049,18 @@ class AiSitePageComponentGenerationService
     {
         $identity = \mb_strtolower($componentCode);
         if (
-            \preg_match('/(?:contact[-_\/ ]*methods?|contact[-_\/ ]*channels?|support[-_\/ ]*channels?)/u', $identity) === 1
+            ((\str_contains($identity, 'contact') && \str_contains($identity, 'method'))
+                || \preg_match('/(?:contact[-_\/ ]*channels?|support[-_\/ ]*channels?)/u', $identity) === 1)
             && !\str_contains($identity, 'form')
             && !\str_contains($identity, 'faq')
         ) {
-            return "- CONTACT_METHOD_REQUIRED_STRUCTURE (HARD): html_content must contain a visible channel hub, not only hero text or an image. Include at least two repeated channel rows/cards shaped like `<div class='{$componentPrefix}-channel'><span class='pb-c-label'>Email:</span><span class='pb-c-value'>support@example.com</span></div>`. Keep the exact `pb-c-label` and `pb-c-value` classes on the label/value spans; use real visitor contact facts from the plan. A verified image may be a background or side visual, but it cannot replace the channel rows.\n";
+            return "- CONTACT_METHOD_REQUIRED_STRUCTURE (HARD): html_content must contain a visible channel hub, not only hero text or an image. Include at least two repeated channel rows/cards shaped like `<div class='{$componentPrefix}-channel'><span class='pb-c-label'>Email:</span><span class='pb-c-value'>support@example.com</span></div>`. Keep the exact `pb-c-label` and `pb-c-value` classes on the label/value spans; use real visitor contact facts from the plan. A verified image may be a background or side visual, but it cannot replace the channel rows. If a CTA is present, wrap it in `<div class='{$componentPrefix}-action'><div class='{$componentPrefix}-cta'>...</div></div>` and css_extra must include either `#componentId .{$componentPrefix}-action{margin:22px 0 0;padding:18px 0 0;...}` or `#componentId .{$componentPrefix}-channel{margin-bottom:...}` so the CTA does not touch row dividers.\n";
         }
         if (\preg_match('/(?:support[-_\/ ]*form|form[-_\/ ]*guidance|contact[-_\/ ]*form|message)/u', $identity) === 1) {
             return "- FORM_GUIDANCE_REQUIRED_STRUCTURE (HARD): html_content must contain `<form class='pb-c-form'>` with at least two `<label>` elements, at least two `<input>` or `<textarea>` fields, and one message/issue textarea. Do not output email/phone/address cards for this role.\n";
+        }
+        if (\preg_match('/(?:contact[-_\/ ]*cta|final[-_\/ ]*cta|cta[-_\/ ]*band)/u', $identity) === 1) {
+            return "- CTA_REQUIRED_STRUCTURE (HARD): html_content must be one focused next-step band with one primary action and compact supporting proof. Do not reuse contact-method cards, form fields, FAQ rows, or a hero media overlay for this CTA role.\n";
         }
         if (\str_contains($identity, 'faq')) {
             return "- FAQ_REQUIRED_STRUCTURE (HARD): html_content must contain `.pb-c-faq-list` with repeated `.pb-c-faq-item` groups; each group has `.pb-c-question` ending with `?` and a separate `<p class='pb-c-answer'>...</p>` answer. Do not output contact cards for FAQ.\n";
@@ -1993,10 +2179,12 @@ class AiSitePageComponentGenerationService
         array $aiData,
         string $region,
         string $componentCode = '',
-        array $verifiedAssets = []
+        array $verifiedAssets = [],
+        string $semanticComponentCode = ''
     ): array
     {
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
+        $qualityComponentCode = $this->mergeSemanticComponentCode($componentCode, $semanticComponentCode);
         $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region, $componentCode, $verifiedAssets);
         $aiData = $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
 
@@ -2009,8 +2197,8 @@ class AiSitePageComponentGenerationService
         $this->runAssertWithFindingCapture('assert.css_contract', $componentCode, function () use ($aiData, $region, $componentCode): void {
             $this->assertGeneratedComponentCssContract($aiData, $region, $componentCode);
         });
-        $this->runAssertWithFindingCapture('assert.hero_image_cover_css', $componentCode, function () use ($aiData, $region, $componentCode): void {
-            $this->assertHeroGeneratedImageCoverCssContract($aiData, $region, $componentCode);
+        $this->runAssertWithFindingCapture('assert.hero_image_cover_css', $qualityComponentCode, function () use ($aiData, $region, $qualityComponentCode): void {
+            $this->assertHeroGeneratedImageCoverCssContract($aiData, $region, $qualityComponentCode);
         });
 
         $validation = $this->getCodeValidator()->validateAiData($aiData, $region);
@@ -2108,7 +2296,7 @@ class AiSitePageComponentGenerationService
                 . "\n" . (string)($aiData['css_content'] ?? '');
             $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason(
                 $lowQualityInspectionSource,
-                $componentCode,
+                $this->mergeSemanticComponentCode($componentCode, $semanticComponentCode),
                 $lowQualityCssSource
             );
             if ($lowQualityReason !== null) {
@@ -2609,6 +2797,19 @@ class AiSitePageComponentGenerationService
             ['css_extra', 'css_responsive', 'css_content']
         ));
 
+        if (!$this->heroRootProvidesFullBleedViewportCss($html, $css)) {
+            throw new \RuntimeException(
+                'AI hero image full-bleed CSS contract failed: generated hero/banner root must span the viewport '
+                . 'with width:100vw or min-width:100vw and margin:0 calc(50% - 50vw); constrain only the inner content.'
+            );
+        }
+        if (!$this->heroWrapperProvidesFlushCss($css)) {
+            throw new \RuntimeException(
+                'AI hero image cover CSS contract failed: generated hero/banner must reset the framework wrapper '
+                . 'with #componentId{padding:0;} so the image owns the full banner background, including top and bottom.'
+            );
+        }
+
         foreach ($tags as $tag) {
             if ($this->tagHasHeroCoverStyle($tag) || $this->cssProvidesHeroCoverForImageTag($tag, $css)) {
                 continue;
@@ -2696,6 +2897,118 @@ class AiSitePageComponentGenerationService
             || (\str_contains($normalized, 'width:100%') && \str_contains($normalized, 'height:100%'));
 
         return $hasCover && $hasPosition && $hasFullBounds;
+    }
+
+    private function heroRootProvidesFullBleedViewportCss(string $html, string $css): bool
+    {
+        $rootTags = $this->collectHeroRootCandidateTags($html);
+        if ($rootTags === []) {
+            return false;
+        }
+
+        $cssRules = [];
+        if (\preg_match_all('/([^{}]+)\{([^{}]+)\}/s', $css, $matches, \PREG_SET_ORDER) > 0) {
+            foreach ($matches as $match) {
+                $cssRules[] = [
+                    'selector' => (string)($match[1] ?? ''),
+                    'body' => (string)($match[2] ?? ''),
+                ];
+            }
+        }
+
+        foreach ($rootTags as $tag) {
+            $style = $this->extractHtmlAttribute($tag, 'style');
+            if ($style !== '' && $this->cssDeclarationBodyHasHeroFullBleedRootStyle($style)) {
+                return true;
+            }
+
+            foreach ($this->extractHtmlClassTokensFromTag($tag) as $class) {
+                foreach ($cssRules as $rule) {
+                    if (!$this->cssSelectorTargetsClass((string)$rule['selector'], $class)) {
+                        continue;
+                    }
+                    if ($this->cssDeclarationBodyHasHeroFullBleedRootStyle((string)$rule['body'])) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function heroWrapperProvidesFlushCss(string $css): bool
+    {
+        if (\trim($css) === '') {
+            return false;
+        }
+        if (\preg_match_all('/([^{}]+)\{([^{}]+)\}/s', $css, $matches, \PREG_SET_ORDER) <= 0) {
+            return false;
+        }
+
+        foreach ($matches as $match) {
+            $selector = \strtolower(\preg_replace('/\s+/u', '', (string)($match[1] ?? '')) ?? '');
+            if ($selector === '' || !\str_contains($selector, '#componentid')) {
+                continue;
+            }
+            if (\str_contains($selector, ' ') || \str_contains($selector, '.pb-')) {
+                continue;
+            }
+            $body = \strtolower(\preg_replace('/\s+/u', '', (string)($match[2] ?? '')) ?? '');
+            if (\preg_match('/(?:^|;)padding:0(?:px|rem|em)?(?:!important)?(?:;|$)/iu', $body) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectHeroRootCandidateTags(string $html): array
+    {
+        if (\preg_match_all('/<(?:section|div)\b[^>]*>/iu', $html, $matches) <= 0) {
+            return [];
+        }
+
+        $tags = [];
+        foreach ($matches[0] as $tag) {
+            $tag = (string)$tag;
+            $classes = $this->extractHtmlClassTokensFromTag($tag);
+            foreach ($classes as $class) {
+                if (\preg_match('/(?:^|[-_])root$/iu', $class) === 1) {
+                    $tags[] = $tag;
+                    break;
+                }
+            }
+        }
+
+        return $tags;
+    }
+
+    private function cssDeclarationBodyHasHeroFullBleedRootStyle(string $body): bool
+    {
+        $normalized = \strtolower(\preg_replace('/\s+/u', '', $body) ?? $body);
+        if ($normalized === '') {
+            return false;
+        }
+        if (\preg_match('/max-width:(?!none|100vw|unset|initial)(?:\d+(?:\.\d+)?(?:px|rem|em)|[1-9]\d?%)/iu', $normalized) === 1) {
+            return false;
+        }
+
+        $hasViewportWidth = \str_contains($normalized, 'width:100vw')
+            || \str_contains($normalized, 'min-width:100vw');
+        $hasCenteredViewportEscape = \str_contains($normalized, 'margin:0calc(50%-50vw)')
+            || \str_contains($normalized, 'margin:0pxcalc(50%-50vw)')
+            || \str_contains($normalized, 'margin:0remcalc(50%-50vw)');
+
+        return $hasViewportWidth && $hasCenteredViewportEscape;
+    }
+
+    private function cssSelectorTargetsClass(string $selector, string $class): bool
+    {
+        return \preg_match('/\.' . \preg_quote($class, '/') . '\b(?![a-z0-9_-])/i', $selector) === 1;
     }
 
     /**
@@ -3129,11 +3442,22 @@ class AiSitePageComponentGenerationService
     private function appendComponentCssScopeInstruction(string $prompt, string $componentCode, array $renderContext = []): string
     {
         $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $componentIdentity = \mb_strtolower($componentCode);
         $isHero = \preg_match('/\b(hero|banner|cover|opening|above[-_ ]?fold)\b/i', $componentCode) === 1;
+        $isFormGuidanceMode = !$isHero
+            && \preg_match('/(?:support[-_\/ ]*form|form[-_\/ ]*guidance|contact[-_\/ ]*form|message|inquiry[-_\/ ]*form|enquiry[-_\/ ]*form)/iu', $componentIdentity) === 1;
+        $isFaqMode = !$isHero && \str_contains($componentIdentity, 'faq');
+        $isCtaMode = !$isHero && \preg_match('/(?:contact[-_\/ ]*cta|final[-_\/ ]*cta|cta[-_\/ ]*band|call[-_\/ ]*to[-_\/ ]*action)/iu', $componentIdentity) === 1;
         $isContactSupportMode = !$isHero
-            && \preg_match('/\b(contact|support|help|form|inquiry|enquiry|faq)\b/i', $componentCode) === 1;
+            && !$isFormGuidanceMode
+            && !$isFaqMode
+            && !$isCtaMode
+            && \preg_match('/(?:contact|support|help|inquiry|enquiry|channel|method)/iu', $componentIdentity) === 1;
         $isFeatureSafeMode = !$isHero
             && !$isContactSupportMode
+            && !$isFormGuidanceMode
+            && !$isFaqMode
+            && !$isCtaMode
             && \preg_match('/\b(showcase|feature|features|game|games|product|suite|service|reward|promotion|trust|security|proof|faq|newsletter|cta)\b/i', $componentCode) === 1;
         $visualContract = \is_array($renderContext['_visual_contract'] ?? null) ? $renderContext['_visual_contract'] : [];
         $hasRequiredGeneratedImage = (int)($visualContract['required'] ?? 0) === 1
@@ -3151,7 +3475,7 @@ class AiSitePageComponentGenerationService
         $secondaryColor = $safePalette['secondary'];
         $shadowColor = $safePalette['shadow'];
         $featureCssBaseline = "#componentId .{$prefix}-root{padding:64px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}";
-        $contactCssBaseline = "#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:stretch;}#componentId .{$prefix}-copy{flex:1 1 340px;min-width:0;padding:28px;border:1px solid {$accentColor};border-radius:24px;background:{$cardBg};box-shadow:0 20px 52px {$shadowColor};}#componentId .{$prefix}-title{margin:0 0 14px;font-size:40px;line-height:1.18;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;font-size:16px;line-height:1.75;color:{$textColor};max-width:68ch;}#componentId .{$prefix}-cards{flex:1 1 460px;min-width:0;display:flex;flex-wrap:wrap;gap:16px;}#componentId .{$prefix}-card{flex:1 1 180px;min-width:0;padding:20px;border:1px solid {$secondaryColor};border-radius:20px;background:{$cardBg};color:{$textColor};box-shadow:0 14px 36px {$shadowColor};line-height:1.55;}#componentId .{$prefix}-action{width:100%;display:flex;flex-wrap:wrap;gap:12px;align-items:center;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 22px;background:{$accentColor};color:{$textColor};font-weight:700;}#componentId .{$prefix}-note{display:block;max-width:56ch;color:{$textColor};line-height:1.6;}";
+        $contactCssBaseline = "#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:stretch;}#componentId .{$prefix}-copy{flex:1 1 340px;min-width:0;padding:28px;border:1px solid {$accentColor};border-radius:24px;background:{$cardBg};box-shadow:0 20px 52px {$shadowColor};}#componentId .{$prefix}-title{margin:0 0 14px;font-size:40px;line-height:1.18;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;font-size:16px;line-height:1.75;color:{$textColor};max-width:68ch;}#componentId .{$prefix}-cards{flex:1 1 460px;min-width:0;display:flex;flex-wrap:wrap;gap:16px;}#componentId .{$prefix}-channel{flex:1 1 180px;min-width:0;padding:20px;border:1px solid {$secondaryColor};border-radius:20px;background:{$cardBg};color:{$textColor};box-shadow:0 14px 36px {$shadowColor};line-height:1.55;}#componentId .{$prefix}-label{display:block;margin:0 0 6px;color:{$primaryColor};font-weight:700;}#componentId .{$prefix}-value{display:block;color:{$textColor};overflow-wrap:break-word;}#componentId .{$prefix}-action{width:100%;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:22px;padding-top:18px;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 22px;background:{$accentColor};color:{$textColor};font-weight:700;}#componentId .{$prefix}-note{display:block;max-width:56ch;color:{$textColor};line-height:1.6;}";
         $featureSafeModeContract = $isFeatureSafeMode
             ? ($hasRequiredGeneratedImage
                 ? "- THIS TASK IS FEATURE_ROLE_MODE WITH A REQUIRED GENERATED IMAGE. Ignore FEATURE_CSS_BASELINE and generic feature/card recipes. Follow REQUIRED_IMAGE_STRUCTURE_CONTRACT plus REQUIRED_CSS_ROLE_CONTRACT; they already define the required editable <img> binding while leaving composition and visual rhythm design-owned.\n"
@@ -3159,8 +3483,17 @@ class AiSitePageComponentGenerationService
             : '';
         $contactSupportModeContract = $isContactSupportMode
             ? ($hasRequiredGeneratedImage
-                ? "- THIS TASK IS CONTACT_SUPPORT_MODE WITH A REQUIRED GENERATED IMAGE. Do not use the generic contact outline as a fixed skeleton. Follow REQUIRED_IMAGE_STRUCTURE_CONTRACT plus REQUIRED_CSS_ROLE_CONTRACT. If the required role outline includes {$prefix}-cards, keep card-style channel grouping and put one contact/support/FAQ channel into each {$prefix}-card; never compress channels into the paragraph.\n"
-                : "- THIS TASK IS CONTACT_SUPPORT_MODE. Use CONTACT_ROLE_OUTLINE plus CONTACT_CSS_BASELINE as the required role baseline. Split email, phone, office, hours, FAQ, support, or sales details into separate {$prefix}-card items. Never compress multiple contact channels into one long paragraph.\n")
+                ? "- THIS TASK IS CONTACT_CHANNEL_MODE WITH A REQUIRED GENERATED IMAGE. Do not use the generic contact outline as a fixed skeleton. Follow REQUIRED_IMAGE_STRUCTURE_CONTRACT plus REQUIRED_CSS_ROLE_CONTRACT. Keep the required channel hub with repeated {$prefix}-channel rows/cards and exact .pb-c-label/.pb-c-value sibling spans; never compress channels into the paragraph or replace them with the image.\n"
+                : "- THIS TASK IS CONTACT_CHANNEL_MODE. Use CONTACT_ROLE_OUTLINE plus CONTACT_CSS_BASELINE as the required role baseline. Split email, phone, office, hours, support, or sales details into separate {$prefix}-channel rows/cards with exact .pb-c-label/.pb-c-value sibling spans. Never compress multiple contact channels into one long paragraph.\n")
+            : '';
+        $formGuidanceModeContract = $isFormGuidanceMode
+            ? "- THIS TASK IS FORM_GUIDANCE_MODE. Use FORM_ROLE_OUTLINE as the required role baseline. Render a real form with labels, inputs, one textarea, and one separated action wrapper; do not use contact cards or FAQ rows for this role.\n"
+            : '';
+        $faqModeContract = $isFaqMode
+            ? "- THIS TASK IS FAQ_MODE. Use FAQ_ROLE_OUTLINE as the required role baseline. Render repeated question/answer items, not contact cards, form fields, or a generic CTA slab.\n"
+            : '';
+        $ctaModeContract = $isCtaMode
+            ? "- THIS TASK IS CTA_MODE. Use CTA_ROLE_OUTLINE as the required role baseline. Render one focused next-step band with one primary action and compact proof; do not reuse contact cards, forms, FAQ rows, or hero overlays.\n"
             : '';
         $safeCssBraceCountRule = $isFeatureSafeMode
             ? ($hasRequiredGeneratedImage
@@ -3169,8 +3502,15 @@ class AiSitePageComponentGenerationService
             : ($isContactSupportMode
                 ? ($hasRequiredGeneratedImage
                     ? "For required-image tasks, selector coverage is defined by REQUIRED_CSS_ROLE_CONTRACT and the actual role outline; do not apply CONTACT_CSS_BASELINE selector counts."
-                    : "For this CONTACT_SUPPORT_MODE task, css_extra must cover root, inner, copy, title, text, cards, card, action, cta, and note role selectors; additional scoped selectors are allowed only when required by the block intent.")
-                : "For TEXT_CSS_BASELINE cover root, inner, copy, title, text, action, and cta role selectors.");
+                    : "For this CONTACT_CHANNEL_MODE task, css_extra must cover root, inner, copy, title, text, cards, channel, label, value, action, cta, and note role selectors; additional scoped selectors are allowed only when required by the block intent.")
+                : ($isFormGuidanceMode
+                    ? "For this FORM_GUIDANCE_MODE task, css_extra must cover root, inner, copy, title, text, form, field, label, input, action, and cta role selectors."
+                    : ($isFaqMode
+                        ? "For this FAQ_MODE task, css_extra must cover root, inner, title, text, faq-list, faq-item, question, answer, action, and cta role selectors."
+                        : ($isCtaMode
+                            ? "For this CTA_MODE task, css_extra must cover root, inner, copy, title, text, proof, action, and cta role selectors."
+                            : "For TEXT_CSS_BASELINE cover root, inner, copy, title, text, action, and cta role selectors.")))
+            );
         $heroContract = $isHero
             ? "- HERO_ROLE_OUTLINE: every hero/banner needs one root, media layer, motif/orbit/depth layers, overlay/scrim, inner container, text panel, title, body copy, and CTA role. This outline is not a byte-for-byte skeleton; choose composition details from the current block intent while keeping these roles valid: `<section class='{$prefix}-root'><div class='{$prefix}-media'><div class='{$prefix}-media-stage'><div class='{$prefix}-media-subject'></div><div class='{$prefix}-media-detail'></div><div class='{$prefix}-media-label'>Finished visual cue</div></div></div><div class='{$prefix}-motif'></div><div class='{$prefix}-orbit'></div><div class='{$prefix}-overlay'></div><div class='{$prefix}-inner'><div class='{$prefix}-text-panel'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished copy.</p><div class='{$prefix}-cta'>Finished CTA</div></div></div></section>`. If a verified image template exists, use that single copied <img> as the media role and add class='{$prefix}-media'. Do not keep a second empty {$prefix}-media div after the image, because it can cover the real asset.\n"
                 . "- HERO CSS REQUIRED SELECTORS: css_extra must include complete selectors for `#componentId .{$prefix}-root`, `#componentId .{$prefix}-media`, `#componentId .{$prefix}-media-stage`, `#componentId .{$prefix}-media-subject`, `#componentId .{$prefix}-media-detail`, `#componentId .{$prefix}-media-label`, `#componentId .{$prefix}-motif`, `#componentId .{$prefix}-orbit`, `#componentId .{$prefix}-overlay`, `#componentId .{$prefix}-inner`, `#componentId .{$prefix}-text-panel`, and `#componentId .{$prefix}-cta` when no verified image exists. CSS-only hero media must be visibly designed from THEME_ROLE_PALETTE as a brief-specific editorial/product stage, never a plain dark slab or unrelated stock-art substitute. The media-label text must be a short subject phrase from the approved brief, not a generic decoration label. The overlay selector sets position:absolute; inset:0; z-index:2; background:{$primaryColor}; opacity:.36;. The text-panel selector sets position:relative; z-index:3; max-width, padding, border-radius, readable color, and background:{$surfaceBg}. The CTA selector should look like a button, not a desktop bar: display:inline-flex; align-items:center; justify-content:center; width:auto; max-width around 280px; flex:0 0 auto; align-self:flex-start; min-height:48px; box-sizing:border-box; background and color with strong contrast; text-decoration:none.\n"
@@ -3188,16 +3528,22 @@ class AiSitePageComponentGenerationService
             . ($hasRequiredGeneratedImage ? "- REQUIRED IMAGE OVERRIDE: this block has a mandatory generated image slot. REQUIRED_IMAGE_STRUCTURE_CONTRACT and REQUIRED_CSS_ROLE_CONTRACT override generic role outlines, selector-count rules, and any broad layout recipe. Preserve the exact image binding and required roles, but choose the final composition from the current block intent instead of copying a fixed skeleton.\n" : '')
             . $featureSafeModeContract
             . $contactSupportModeContract
+            . $formGuidanceModeContract
+            . $faqModeContract
+            . $ctaModeContract
             . "- SAFE_TEXT_ROLE_OUTLINE: for every non-hero non-form content block without a verified image, include one root, inner, copy, title, text, action, and compact CTA role. This is the minimum role outline, not a byte-for-byte skeleton: `<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-copy'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished copy.</p></div><div class='{$prefix}-action'><div class='{$prefix}-cta'>Finished CTA</div></div></div></section>`.\n"
             . "- MEDIA_ROLE_OUTLINE: for every non-hero content block with a verified image template/final_url, include root, inner, media, copied image, copy, title, text, and compact CTA roles. Paste the real <img> after adding class='{$prefix}-img'. This is a role outline, not a fixed layout: `<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-media'>PASTE_VERIFIED_IMG_HERE</div><div class='{$prefix}-copy'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished copy.</p><div class='{$prefix}-cta'>Finished CTA</div></div></div></section>`.\n"
-            . "- CONTACT_ROLE_OUTLINE: for contact/support/help/form blocks, include root, inner, copy, title, intro text, channel cards, action, compact CTA, and note roles. This is a role outline, not a fixed layout: `<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-copy'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished intro.</p></div><div class='{$prefix}-cards'><div class='{$prefix}-card'><strong>Channel</strong><span>Short detail.</span></div><div class='{$prefix}-card'><strong>Channel</strong><span>Short detail.</span></div><div class='{$prefix}-card'><strong>Channel</strong><span>Short detail.</span></div></div><div class='{$prefix}-action'><div class='{$prefix}-cta'>Finished CTA</div><small class='{$prefix}-note'>Short response-time or support note.</small></div></div></section>`.\n"
+            . "- CONTACT_ROLE_OUTLINE: for contact-channel blocks, include root, inner, copy, title, intro text, channel hub, action, compact CTA, and note roles. This is a role outline, not a fixed layout: `<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-copy'><h2 class='{$prefix}-title'>Finished heading</h2><p class='{$prefix}-text'>Finished intro.</p></div><div class='{$prefix}-cards'><div class='{$prefix}-channel'><span class='pb-c-label'>Email:</span><span class='pb-c-value'>support@example.com</span></div><div class='{$prefix}-channel'><span class='pb-c-label'>Phone:</span><span class='pb-c-value'>+1 000 000 0000</span></div></div><div class='{$prefix}-action'><div class='{$prefix}-cta'>Finished CTA</div><small class='{$prefix}-note'>Short response-time or support note.</small></div></div></section>`. The exact .pb-c-label/.pb-c-value classes are mandatory and must appear at least twice each.\n"
+            . "- FORM_ROLE_OUTLINE: for form-guidance blocks, include root, inner, copy, title, intro text, a real `<form class='{$prefix}-form'>`, at least two `<label class='{$prefix}-label'>` elements, at least two input/textarea fields, one message textarea, and a separated action wrapper. Do not render contact cards for this role.\n"
+            . "- FAQ_ROLE_OUTLINE: for FAQ blocks, include root, inner, title, intro text, `<div class='{$prefix}-faq-list'>`, and at least two `<div class='{$prefix}-faq-item'><div class='{$prefix}-question'>Finished question?</div><p class='{$prefix}-answer'>Finished answer.</p></div>` groups. Do not render contact cards or form fields for this role.\n"
+            . "- CTA_ROLE_OUTLINE: for CTA blocks, include one root, one inner band, copy, title, text, compact proof, sibling action wrapper, and one primary CTA. Do not render contact channel cards, forms, FAQ rows, or another hero overlay for this role.\n"
             . "- TEXT_CSS_BASELINE: include complete scoped selectors for the SAFE_TEXT_ROLE_OUTLINE roles and use this palette-filled baseline as a reference, not a byte-for-byte CSS template: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:64px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:center;}#componentId .{$prefix}-copy{flex:1 1 320px;min-width:0;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-action{display:flex;width:100%;max-width:100%;box-sizing:border-box;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}`.\n"
             . "- MEDIA_CSS_BASELINE: for verified-image non-hero blocks, include complete scoped selectors for MEDIA_ROLE_OUTLINE roles and use this palette-filled baseline as a reference, not a fixed CSS template: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:32px;align-items:center;}#componentId .{$prefix}-media{flex:1 1 360px;min-width:0;overflow:hidden;border-radius:28px;box-shadow:0 24px 64px {$shadowColor};}#componentId .{$prefix}-img{display:block;width:100%;height:360px;object-fit:cover;object-position:center;}#componentId .{$prefix}-copy{flex:1 1 320px;min-width:0;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}`.\n"
-            . "- CONTACT_CSS_BASELINE: for contact/support/help/form blocks, include complete scoped selectors for CONTACT_ROLE_OUTLINE roles and use this palette-filled baseline as a reference, not a fixed CSS template: `{$contactCssBaseline}`.\n"
+            . "- CONTACT_CSS_BASELINE: for contact-channel blocks only, include complete scoped selectors for CONTACT_ROLE_OUTLINE roles and use this palette-filled baseline as a reference, not a fixed CSS template: `{$contactCssBaseline}`.\n"
             . "- CTA FIT BUTTON CONTRACT: CTA-looking divs should look like intentional action buttons, not accidental page-width bars. Wrapper/row/band/group/container classes may be full-width and should use `{$prefix}-action` or `{$prefix}-actions` when practical; keep the actual CTA button compact in the default layout.\n"
             . "- CTA QUALITY CSS BASELINE: css_extra should include a CTA selector equivalent to `#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;flex:0 0 auto;align-self:flex-start;}`. css_responsive may adapt containers and form controls to full width; do not turn the desktop/default CTA button itself into a full-width bar.\n"
-            . "- MARKUP STRICT MODE: when REQUIRED_IMAGE_STRUCTURE_CONTRACT is present, satisfy it instead of every other outline. Otherwise choose CONTACT_ROLE_OUTLINE for CONTACT_SUPPORT_MODE tasks; otherwise choose SAFE_TEXT_ROLE_OUTLINE, MEDIA_ROLE_OUTLINE, or HERO_ROLE_OUTLINE. In no-verified-image hero mode, media-stage/media-subject/media-detail/media-label plus motif/orbit layers are required by HERO_ROLE_OUTLINE; do not leave the media div empty and do not add other optional cards/forms unless the current task explicitly requires a real contact form.\n"
-            . "- CONTACT COPY RHYTHM: contact/support cards use short labels plus short details. If a required-image contact/support skeleton includes `{$prefix}-cards`, keep at least two `{$prefix}-card` items and put one channel in each. A paragraph containing two or more of email, phone, address, business hours, sales, or support is invalid because it reads like raw data instead of a designed contact surface.\n"
+            . "- MARKUP STRICT MODE: when REQUIRED_IMAGE_STRUCTURE_CONTRACT is present, satisfy it instead of every other outline. Otherwise choose CONTACT_ROLE_OUTLINE only for CONTACT_CHANNEL_MODE, FORM_ROLE_OUTLINE only for FORM_GUIDANCE_MODE, FAQ_ROLE_OUTLINE only for FAQ_MODE, and CTA_ROLE_OUTLINE only for CTA_MODE; otherwise choose SAFE_TEXT_ROLE_OUTLINE, MEDIA_ROLE_OUTLINE, or HERO_ROLE_OUTLINE. In no-verified-image hero mode, media-stage/media-subject/media-detail/media-label plus motif/orbit layers are required by HERO_ROLE_OUTLINE; do not leave the media div empty and do not add other optional cards/forms unless the current task explicitly requires a real contact form.\n"
+            . "- CONTACT COPY RHYTHM: contact-channel rows/cards use short labels plus short details. If a required-image contact/support skeleton includes `{$prefix}-cards`, keep at least two `{$prefix}-channel` items with exact .pb-c-label/.pb-c-value sibling spans and put one channel in each. A paragraph containing two or more of email, phone, address, business hours, sales, or support is invalid because it reads like raw data instead of a designed contact surface.\n"
             . "- Showcase/features/trust/reward/FAQ/newsletter/CTA tasks without a required image still use SAFE_TEXT_ROLE_OUTLINE. Compress multiple items into one polished paragraph separated by target-locale punctuation; do not create a card grid, list, table, carousel, accordion, or multiple repeated game cards unless the current block contract explicitly asks for that structure.\n"
             . "- FEATURE_CSS_BASELINE: use this shorter css_extra reference only when no REQUIRED_CSS_ROLE_CONTRACT exists: `{$featureCssBaseline}`. Keep required role selectors complete, but do not treat the example as an exact selector-count rule.\n"
             . "- Verified image priority: if the prompt includes REQUIRED_IMAGE_STRUCTURE_CONTRACT, preserve the copied image tag's src and slot attributes exactly. Do not reconstruct the image tag or URL. If REQUIRED_CSS_ROLE_CONTRACT is present, style those roles and do not write CSS url(...).\n"
@@ -3822,6 +4168,154 @@ class AiSitePageComponentGenerationService
         return \preg_match('/(?:<|&lt;)\s*\/?\s*[a-z0-9][^>\n]{0,120}(?:>|&gt;)|\bclass\s*=\s*(["\']).{1,120}\1/iu', $visibleText) === 1;
     }
 
+    private function detectLabelValueReadabilityViolation(string $html, string $visibleText, string $componentCode = ''): ?string
+    {
+        $visibleText = \trim((string)\preg_replace('/\s+/u', ' ', $visibleText));
+        if ($visibleText === '') {
+            return null;
+        }
+
+        $normalizedHtml = \html_entity_decode($html, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+        $hasStructuredLabelValue = \preg_match('/\bpb-c(?:-[a-z0-9]+)*-label\b/iu', $normalizedHtml) === 1
+            && \preg_match('/\bpb-c(?:-[a-z0-9]+)*-value\b/iu', $normalizedHtml) === 1;
+
+        $labelPattern = '(?:Email(?:\\s*&\\s*Phone)?|Email\\s+Support|Phone\\s+Support|Phone|Office\\s+Address|Office|Business\\s+Hours|Hours|Quick\\s+Help|Android\\s+Version|Storage\\s+Space|Permissions|Internet)';
+        if ($hasStructuredLabelValue) {
+            return null;
+        }
+        if (\preg_match('/\\b' . $labelPattern . '(?=(?:support@|\\+?\\d|[A-Z][a-z]))/u', $visibleText) === 1) {
+            return 'label/value text is concatenated without punctuation or spacing';
+        }
+        if (\preg_match('/\\b' . $labelPattern . '\\s*:(?=\\S)/u', $visibleText) === 1) {
+            return 'label/value text needs spacing and sibling structure after the colon';
+        }
+
+        $normalizedHtml = \html_entity_decode($html, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+        if (\preg_match('/\\b' . $labelPattern . '\\s*<\\/\\s*(?:strong|span|small|div|p)\\s*>\\s*(?:<[^>]+>\\s*)*(?![:：\\-–—])(?:support@|\\+?\\d|[A-Z][a-z])/iu', $normalizedHtml) === 1) {
+            return 'label/value markup lacks visible separator punctuation';
+        }
+
+        $labelCount = \preg_match_all('/\\b' . $labelPattern . '\\s*:/u', $visibleText);
+        $identity = \mb_strtolower($componentCode . ' ' . $visibleText);
+        $isFieldDenseBlock = $labelCount >= 2
+            || \str_contains($identity, 'contact')
+            || \str_contains($identity, 'method')
+            || \str_contains($identity, 'hours')
+            || \str_contains($identity, 'address');
+        if ($isFieldDenseBlock && $labelCount >= 2) {
+            if (\preg_match('/\bpb-c(?:-[a-z0-9]+)*-label\b/iu', $normalizedHtml) !== 1 || \preg_match('/\bpb-c(?:-[a-z0-9]+)*-value\b/iu', $normalizedHtml) !== 1) {
+                return 'label/value markup must use sibling .pb-c-label and .pb-c-value elements';
+            }
+        }
+
+        return null;
+    }
+
+    private function detectBlockRoleFidelityViolation(string $componentCode, string $html, string $visibleText, string $styleCss = ''): ?string
+    {
+        $identity = \mb_strtolower($componentCode . ' ' . $html);
+        $componentIdentity = \mb_strtolower($componentCode);
+        $isContactMethod = (
+            \str_contains($componentIdentity, 'contact') && \str_contains($componentIdentity, 'method')
+        ) || \preg_match('/(?:contact[-_\/ ]*channels?|support[-_\/ ]*channels?)/u', $componentIdentity) === 1;
+        if ($isContactMethod && !\str_contains($componentIdentity, 'form') && !\str_contains($componentIdentity, 'faq')) {
+            $labelNodeCount = \preg_match_all('/\bpb-c(?:-[a-z0-9]+)*-label\b/iu', $html);
+            $valueNodeCount = \preg_match_all('/\bpb-c(?:-[a-z0-9]+)*-value\b/iu', $html);
+            if ($labelNodeCount < 2 || $valueNodeCount < 2) {
+                return 'Contact-method block role fidelity failed: expected at least two contact channels using sibling .pb-c-label and .pb-c-value elements';
+            }
+            if (\preg_match('/<form\b/iu', $html) === 1 || \preg_match('/\bpb-c-faq-item\b/iu', $html) === 1) {
+                return 'Contact-method block role fidelity failed: contact channel hub must not collapse into a form or FAQ block';
+            }
+        }
+
+        $isFormGuidance = (
+            \str_contains($componentIdentity, 'form')
+            || \str_contains($componentIdentity, 'support_form')
+            || \str_contains($componentIdentity, 'form_guidance')
+            || \preg_match('/(?:support[-_\/ ]*form|form[-_\/ ]*guidance|contact[-_\/ ]*form|message[-_\/ ]*form)/u', $componentIdentity) === 1
+        ) && !\str_contains($componentIdentity, 'faq');
+        if ($isFormGuidance) {
+            if (\preg_match('/<form\b/iu', $html) !== 1) {
+                return 'Form-guidance block role fidelity failed: expected a real form structure instead of contact cards';
+            }
+            if (\preg_match_all('/<(?:input|textarea)\b/iu', $html) < 2) {
+                return 'Form-guidance block role fidelity failed: expected at least two editable form fields';
+            }
+            if (\preg_match_all('/<label\b/iu', $html) < 2) {
+                return 'Form-guidance block role fidelity failed: expected visible labels for form fields';
+            }
+        }
+        $isCtaBlock = (\str_contains($componentIdentity, 'cta') || \preg_match('/(?:final[-_\/ ]*action|next[-_\/ ]*step)/u', $componentIdentity) === 1)
+            && !\str_contains($componentIdentity, 'form')
+            && !\str_contains($componentIdentity, 'faq')
+            && !\str_contains($componentIdentity, 'method');
+        if ($isCtaBlock) {
+            if (\preg_match('/<form\b/iu', $html) === 1 || \preg_match('/\bpb-c-faq-item\b/iu', $html) === 1) {
+                return 'CTA block role fidelity failed: CTA must not reuse form or FAQ structure';
+            }
+            $contactLabelCount = \preg_match_all('/\b(?:Email(?:\s+Support)?|Phone(?:\s+Support)?|Office(?:\s+Address)?|Business\s+Hours|Hours)\b/iu', $visibleText);
+            $cardCount = \preg_match_all('/\b(?:pb-c(?:-[a-z0-9]+)*-card|contact[-_ ]?card|method[-_ ]?card)\b/iu', $html);
+            if ($contactLabelCount >= 2 || $cardCount >= 3) {
+                return 'CTA block role fidelity failed: CTA must be a focused next-step band, not repeated contact-method cards';
+            }
+            if (\preg_match('/<(?:a|button)\b|class=(["\'])[^"\']*\b(?:pb-c(?:-[a-z0-9]+)*-cta|pb-c(?:-[a-z0-9]+)*-action)\b/iu', $html) !== 1) {
+                return 'CTA block role fidelity failed: expected one visible primary action';
+            }
+        }
+        if (!\str_contains($componentIdentity, 'faq')) {
+            return null;
+        }
+
+        $questionCount = \preg_match_all('/[?？]/u', $visibleText);
+        if ($questionCount < 2) {
+            return 'FAQ block role fidelity failed: expected at least two explicit visitor questions with separate answers';
+        }
+        if (\preg_match('/[?？]<\/(?:strong|span|div)>\s*<span\b/iu', $html) === 1) {
+            return 'FAQ block role fidelity failed: answer must be a separate paragraph, not an inline span after the question';
+        }
+        if (\preg_match_all('/<p\b[^>]*class=(["\'])[^"\']*\bpb-c-answer\b[^"\']*\1/iu', $html) < 2) {
+            return 'FAQ block role fidelity failed: expected separate answer paragraphs with pb-c-answer';
+        }
+        if (\preg_match_all('/\bpb-c-faq-item\b/iu', $html) < 2) {
+            return 'FAQ block role fidelity failed: expected repeated pb-c-faq-item containers';
+        }
+        $faqItemCss = $this->extractCssRuleBodyForSelector($styleCss, 'pb-c-faq-item');
+        if ($faqItemCss === '') {
+            return 'FAQ block role fidelity failed: expected visible FAQ item surface styling';
+        }
+        foreach (['padding', 'border-radius'] as $requiredProperty) {
+            if (!\str_contains($faqItemCss, $requiredProperty)) {
+                return 'FAQ block role fidelity failed: FAQ item surface styling is too weak';
+            }
+        }
+        if (!\preg_match('/\b(?:background(?:-[a-z-]+)?|border|box-shadow)\s*:/iu', $faqItemCss)) {
+            return 'FAQ block role fidelity failed: FAQ item surface needs background, border, or shadow';
+        }
+
+        return null;
+    }
+
+    private function extractCssRuleBodyForSelector(string $styleCss, string $className): string
+    {
+        if (\trim($styleCss) === '' || \trim($className) === '') {
+            return '';
+        }
+
+        $body = '';
+        if (\preg_match_all('/([^{}]+)\{([^{}]*)\}/u', $styleCss, $matches, \PREG_SET_ORDER) > 0) {
+            foreach ($matches as $match) {
+                $selector = \strtolower((string)($match[1] ?? ''));
+                if (!\str_contains($selector, '.' . \strtolower($className))) {
+                    continue;
+                }
+                $body .= ' ' . \strtolower((string)($match[2] ?? ''));
+            }
+        }
+
+        return \trim((string)\preg_replace('/\s+/u', ' ', $body));
+    }
+
     private function detectInlineSvgGeneratedSectionViolation(string $html): ?string
     {
         if (\preg_match('/<svg\b|data:image\/svg\+xml/iu', $html) === 1) {
@@ -3851,6 +4345,14 @@ class AiSitePageComponentGenerationService
         $visibleText = $this->extractVisibleHtmlText($trimmed);
         if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script/iu', $visibleText) === 1) {
             return 'prompt or placeholder text leaked';
+        }
+        $roleFidelityReason = $this->detectBlockRoleFidelityViolation($componentCode, $trimmed, $visibleText, $styleCss);
+        if ($roleFidelityReason !== null) {
+            return $roleFidelityReason;
+        }
+        $readabilityReason = $this->detectLabelValueReadabilityViolation($trimmed, $visibleText, $componentCode);
+        if ($readabilityReason !== null) {
+            return $readabilityReason;
         }
         if ($this->containsEnglishBoilerplateVisibleCopy($visibleText)) {
             return 'English boilerplate copy leaked into visitor content';
@@ -3910,6 +4412,10 @@ class AiSitePageComponentGenerationService
         }
         if ($this->looksLikeStretchedCtaBar($trimmed)) {
             return 'CTA is rendered as a full-width bar instead of a compact action button';
+        }
+        $ctaSpacingReason = $this->detectCtaSpacingRhythmViolation($trimmed, $styleCss);
+        if ($ctaSpacingReason !== null) {
+            return $ctaSpacingReason;
         }
         if (\preg_match('/\b(hero|banner|opening|above[-_ ]?fold)\b/i', $componentCode) === 1
         ) {
@@ -4316,6 +4822,175 @@ class AiSitePageComponentGenerationService
             if (\preg_match('/^(?:cta|[a-z0-9_-]+-cta)$/iu', $className) === 1) {
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    private function detectCtaSpacingRhythmViolation(string $html, string $styleCss): ?string
+    {
+        if (\preg_match('/class=(["\'])[^"\']*\b(?:cta|[a-z0-9_-]+-cta)\b[^"\']*\1/iu', $html) !== 1) {
+            return null;
+        }
+        if (\preg_match('/class=(["\'])[^"\']*\b(?:channel|row|field|form|faq-item|question|answer|label|value)\b[^"\']*\1/iu', $html) !== 1) {
+            return null;
+        }
+
+        $actionBodies = $this->extractCssRuleBodiesForClassPattern(
+            $styleCss,
+            '/^(?:action|actions|[a-z0-9_-]+-(?:action|actions))$/iu'
+        );
+        foreach ($actionBodies as $body) {
+            if ($this->cssBodyProvidesActionWrapperSeparation($body)) {
+                return null;
+            }
+        }
+
+        $ctaBodies = $this->extractCssRuleBodiesForClassPattern(
+            $styleCss,
+            '/^(?:cta|[a-z0-9_-]+-cta)$/iu'
+        );
+        foreach ($ctaBodies as $body) {
+            if ($this->cssBodyProvidesCtaOuterSeparation($body)) {
+                return null;
+            }
+        }
+
+        $copyBodies = $this->extractCssRuleBodiesForClassPattern(
+            $styleCss,
+            '/^(?:copy|content|panel|[a-z0-9_-]+-(?:copy|content|panel))$/iu'
+        );
+        foreach ($copyBodies as $body) {
+            $normalized = \strtolower(\preg_replace('/\s+/u', '', $body) ?? $body);
+            if ((\str_contains($normalized, 'display:flex') || \str_contains($normalized, 'display:grid'))
+                && $this->cssBodyProvidesFlowGapSeparation($body)
+            ) {
+                return null;
+            }
+        }
+
+        $precedingBodies = $this->extractCssRuleBodiesForClassPattern(
+            $styleCss,
+            '/^(?:channel|row|field|form-row|faq-item|question|answer|[a-z0-9_-]+-(?:channel|row|field|form-row|faq-item|question|answer))$/iu'
+        );
+        foreach ($precedingBodies as $body) {
+            if ($this->cssBodyProvidesTrailingSeparation($body)) {
+                return null;
+            }
+        }
+
+        return 'CTA/action spacing is too tight; separate the action wrapper from dividers, rows, or form lines with outer margin/padding or parent flow gap';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractCssRuleBodiesForClassPattern(string $styleCss, string $classPattern): array
+    {
+        $bodies = [];
+        if (\trim($styleCss) === '' || \preg_match_all('/([^{}]+)\{([^{}]*)\}/u', $styleCss, $matches, \PREG_SET_ORDER) <= 0) {
+            return [];
+        }
+
+        foreach ($matches as $match) {
+            $selector = (string)($match[1] ?? '');
+            if (\preg_match_all('/\.([a-z0-9_-]+)/iu', $selector, $classMatches) <= 0) {
+                continue;
+            }
+            foreach ($classMatches[1] ?? [] as $className) {
+                if (\preg_match($classPattern, (string)$className) !== 1) {
+                    continue;
+                }
+                $bodies[] = (string)($match[2] ?? '');
+                break;
+            }
+        }
+
+        return $bodies;
+    }
+
+    private function cssBodyProvidesActionWrapperSeparation(string $body): bool
+    {
+        $normalized = \strtolower(\preg_replace('/\s+/u', '', $body) ?? $body);
+        if ($normalized === '') {
+            return false;
+        }
+        if (\preg_match('/(?:margin-top|padding-top):(?:clamp|min|max|calc)\(/iu', $normalized) === 1) {
+            return true;
+        }
+        if (\preg_match('/(?:margin-top|padding-top):(\d+(?:\.\d+)?)(px|rem|em)/iu', $normalized, $match) === 1) {
+            $value = (float)($match[1] ?? 0);
+            $unit = \strtolower((string)($match[2] ?? 'px'));
+            return $unit === 'px' ? $value >= 16.0 : $value >= 1.0;
+        }
+        if (\preg_match('/(?:margin|padding):(\d+(?:\.\d+)?)(px|rem|em)(?:[^;]*?)0(?:px|rem|em|%|)?(?:[^;]*?)0(?:px|rem|em|%|)?/iu', $normalized, $match) === 1) {
+            $value = (float)($match[1] ?? 0);
+            $unit = \strtolower((string)($match[2] ?? 'px'));
+            return $unit === 'px' ? $value >= 16.0 : $value >= 1.0;
+        }
+        if (\preg_match('/(?:margin|padding):(\d+(?:\.\d+)?)(px|rem|em)[^;]*/iu', $normalized, $match) === 1) {
+            $value = (float)($match[1] ?? 0);
+            $unit = \strtolower((string)($match[2] ?? 'px'));
+            return $unit === 'px' ? $value >= 16.0 : $value >= 1.0;
+        }
+
+        return false;
+    }
+
+    private function cssBodyProvidesCtaOuterSeparation(string $body): bool
+    {
+        $normalized = \strtolower(\preg_replace('/\s+/u', '', $body) ?? $body);
+        if ($normalized === '') {
+            return false;
+        }
+        if (\preg_match('/margin-top:(?:clamp|min|max|calc)\(/iu', $normalized) === 1) {
+            return true;
+        }
+        if (\preg_match('/margin-top:(\d+(?:\.\d+)?)(px|rem|em)/iu', $normalized, $match) === 1) {
+            $value = (float)($match[1] ?? 0);
+            $unit = \strtolower((string)($match[2] ?? 'px'));
+            return $unit === 'px' ? $value >= 16.0 : $value >= 1.0;
+        }
+        if (\preg_match('/margin:(\d+(?:\.\d+)?)(px|rem|em)(?:[^;]*?)0(?:px|rem|em|%|)?(?:[^;]*?)0(?:px|rem|em|%|)?/iu', $normalized, $match) === 1) {
+            $value = (float)($match[1] ?? 0);
+            $unit = \strtolower((string)($match[2] ?? 'px'));
+            return $unit === 'px' ? $value >= 16.0 : $value >= 1.0;
+        }
+
+        return false;
+    }
+
+    private function cssBodyProvidesFlowGapSeparation(string $body): bool
+    {
+        $normalized = \strtolower(\preg_replace('/\s+/u', '', $body) ?? $body);
+        if ($normalized === '') {
+            return false;
+        }
+        if (\preg_match('/gap:(?:clamp|min|max|calc)\(/iu', $normalized) === 1) {
+            return true;
+        }
+        if (\preg_match('/gap:(\d+(?:\.\d+)?)(px|rem|em)/iu', $normalized, $match) === 1) {
+            $value = (float)($match[1] ?? 0);
+            $unit = \strtolower((string)($match[2] ?? 'px'));
+            return $unit === 'px' ? $value >= 16.0 : $value >= 1.0;
+        }
+
+        return false;
+    }
+
+    private function cssBodyProvidesTrailingSeparation(string $body): bool
+    {
+        $normalized = \strtolower(\preg_replace('/\s+/u', '', $body) ?? $body);
+        if ($normalized === '') {
+            return false;
+        }
+        if (\preg_match('/(?:margin-bottom|padding-bottom|gap):(?:clamp|min|max|calc)\(/iu', $normalized) === 1) {
+            return true;
+        }
+        if (\preg_match('/(?:margin-bottom|padding-bottom|gap):(\d+(?:\.\d+)?)(px|rem|em)/iu', $normalized, $match) === 1) {
+            $value = (float)($match[1] ?? 0);
+            $unit = \strtolower((string)($match[2] ?? 'px'));
+            return $unit === 'px' ? $value >= 12.0 : $value >= 0.75;
         }
 
         return false;
@@ -6507,10 +7182,37 @@ class AiSitePageComponentGenerationService
         $buildPlanPromptAddon = $this->buildBuildPlanTaskPromptAddon($buildPlanTask, 'section', $scope);
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('section');
-        $premiumDesignContract = $this->buildPremiumSectionDesignContractPromptAddon($pageType, $sectionKey, $sectionTemplate);
+        $premiumDesignContract = $this->buildPremiumSectionDesignContractPromptAddon(
+            $pageType,
+            $sectionKey,
+            $sectionTemplate,
+            (string)($planContext['page_flow_role'] ?? $section['page_flow_role'] ?? '')
+        );
         $sectionVisualContract = $this->buildSectionVisualContract($pageType, $section, $blueprint, $websiteProfile, $scope);
+        $blockVisualSignature = $this->resolveBlockVisualSignature($buildPlanTask, $section);
+        if ($blockVisualSignature !== []) {
+            $sectionVisualContract['visual_signature'] = $blockVisualSignature;
+        }
         $sectionThemePalette = $this->resolveThemePaletteForContract($buildPlanTask, $scope);
         $sectionVisualContractPrompt = $this->buildSectionVisualContractPromptAddon($sectionVisualContract, $sectionThemePalette);
+        $blockVisualSignaturePrompt = $this->buildBlockVisualSignaturePromptAddon($buildPlanTask, $section);
+        $siblingDiversityPrompt = $this->buildSiblingBlockDiversityPromptAddon($pageType, $buildPlanTask, $scope);
+        $roleContractIdentity = \implode(' ', \array_filter(\array_map('strval', [
+            $section['code'] ?? '',
+            $sectionKey,
+            $sectionName,
+            $buildPlanTask['task_key'] ?? '',
+            $buildPlanTask['block_key'] ?? '',
+            $buildPlanTask['section_code'] ?? '',
+            $planContext['source_block_key'] ?? '',
+            $planContext['page_flow_role'] ?? '',
+            $planContext['block_goal'] ?? '',
+            $blockTask['task_goal'] ?? '',
+        ]), static fn(string $value): bool => \trim($value) !== ''));
+        $currentBlockRoleContract = $this->buildRoleSpecificRecoveryContract(
+            $roleContractIdentity,
+            $this->normalizeComponentCssPrefix((string)($section['code'] ?? ''))
+        );
         $skillContract = $this->buildWelineSkillContractPromptAddon();
         $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3', $scope);
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
@@ -6535,6 +7237,9 @@ class AiSitePageComponentGenerationService
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . ($brief !== '' ? "Customer brief: {$brief}\n" : '')
             . "Page guidance: {$pageInstruction}\n"
+            . ($currentBlockRoleContract !== '' ? "CTX_CURRENT_BLOCK_ROLE_CONTRACT (HARD; overrides stale suggested config if they conflict):\n" . $currentBlockRoleContract : '')
+            . $blockVisualSignaturePrompt
+            . $siblingDiversityPrompt
             . "Suggested section config: {$sectionConfig}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
             . "CTX_CURRENT_ASSET (highest priority for image URL and slot binding; paste exact strings, never reconstruct paths):\n" . $sectionVisualContractPrompt
@@ -6544,7 +7249,7 @@ class AiSitePageComponentGenerationService
             . "CTX_QUALITY_GATE_CONTRACT (13 强契约门禁反向编码，生成前必须按本清单自检):\n" . $qualityGateContract
             . "CTX_COPY_POLICY:\n" . $this->clipText($visibleCopyRule, 720) . "\n"
             . "CTX_SKILL_GUIDANCE:\n" . $this->clipText($skillContract, 520) . "\n" . $this->clipText($claudeDesignSkill, 820) . "\n"
-            . "CTX_DESIGN_QUALITY:\n" . $this->clipText($visualExcellence, 720) . "\n" . $this->clipText($premiumDesignContract, 900) . "\n"
+            . "CTX_DESIGN_QUALITY:\n" . $visualExcellence . "\n" . $premiumDesignContract . "\n"
             . ($refinement !== '' ? "Latest refine instruction for this section: {$refinement}\n" : '')
             . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
             . "Final execution rule: follow the current task contract and output schema over all generic guidance. If a required image exists, render the editable <img> tag from CTX_CURRENT_ASSET in html_content with exact src/slot strings. Optional visual flourish that risks invalid HTML/CSS must be simplified, not dropped to a flat slab.\n";
@@ -6575,7 +7280,17 @@ class AiSitePageComponentGenerationService
                 || \in_array((string)($visualContract['usage'] ?? ''), ['section_background_cover'], true)
             );
 
-        return $renderer->renderSectionVisualContract($themePalette, $brief, $locale, $hasVerifiedHeroImage);
+        $visualSignature = $this->resolveBlockVisualSignature($buildPlanTask, $section);
+        $pageDesignPlan = $this->resolvePageDesignPlanForBlock($buildPlanTask);
+
+        return $renderer->renderSectionVisualContract(
+            $themePalette,
+            $brief,
+            $locale,
+            $hasVerifiedHeroImage,
+            $visualSignature,
+            $pageDesignPlan
+        );
     }
 
     /**
@@ -6606,6 +7321,7 @@ class AiSitePageComponentGenerationService
     {
         $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
         $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $taskScript = \is_array($buildPlanTask['task_script'] ?? null) ? $buildPlanTask['task_script'] : [];
         $contentContract = \is_array($buildPlanTask['content_contract'] ?? null) ? $buildPlanTask['content_contract'] : [];
 
         $facts = [];
@@ -6624,15 +7340,172 @@ class AiSitePageComponentGenerationService
                 }
             }
         }
+        foreach (\is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [] as $fieldRequirement) {
+            if (!\is_array($fieldRequirement)) {
+                continue;
+            }
+            foreach ([$fieldRequirement['sample'] ?? null, $fieldRequirement['implementation_note'] ?? null] as $candidate) {
+                if (\is_string($candidate) && \trim($candidate) !== '') {
+                    $facts[] = \trim($candidate);
+                }
+            }
+        }
+
+        $blockKey = (string)($buildPlanTask['block_key'] ?? $buildPlanTask['section_key'] ?? $section['source_block_key'] ?? '');
+        $pageFlowRole = (string)($planContext['page_flow_role'] ?? $blockTask['page_flow_role'] ?? '');
+        $blockGoal = (string)($planContext['block_goal'] ?? $blockTask['task_goal'] ?? '');
+
+        $visualSignature = $this->resolveBlockVisualSignature($buildPlanTask, $section);
 
         return [
             'page_goal' => (string)($planContext['page_goal'] ?? $blockTask['page_goal'] ?? ''),
-            'block_goal' => (string)($planContext['block_goal'] ?? $blockTask['task_goal'] ?? ''),
+            'block_goal' => $blockGoal,
             'must_include_facts' => \array_values(\array_unique($facts)),
+            'task_key' => (string)($buildPlanTask['task_key'] ?? ''),
+            'section_code' => (string)($buildPlanTask['section_code'] ?? $section['code'] ?? ''),
+            'block_key' => $blockKey,
+            'page_type' => (string)($buildPlanTask['page_type'] ?? ''),
+            'page_flow_role' => $pageFlowRole,
+            'stage1_block_content' => (string)($planContext['stage1_block_content'] ?? ''),
+            'role_fidelity_hint' => $this->resolveRoleFidelityHint($blockKey, $pageFlowRole, $blockGoal),
+            'visual_signature' => $visualSignature,
             'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
             'site_brand' => (string)($websiteProfile['site_brand'] ?? $scope['site_brand'] ?? ''),
             'brand_name' => (string)($websiteProfile['brand_name'] ?? $scope['brand_name'] ?? ''),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $section
+     * @return array<string,mixed>
+     */
+    private function resolveBlockVisualSignature(array $buildPlanTask, array $section = []): array
+    {
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
+
+        foreach ([
+            $blockTask['visual_signature'] ?? null,
+            $stylePlan['visual_signature'] ?? null,
+            $planContext['stage1_visual_signature'] ?? null,
+            $section['visual_signature'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @return array<string,mixed>
+     */
+    private function resolvePageDesignPlanForBlock(array $buildPlanTask): array
+    {
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
+
+        foreach ([
+            $planContext['page_design_plan'] ?? null,
+            $stylePlan['page_design_plan'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $section
+     */
+    private function buildBlockVisualSignaturePromptAddon(array $buildPlanTask, array $section = []): string
+    {
+        $visualSignature = $this->resolveBlockVisualSignature($buildPlanTask, $section);
+        $pageDesignPlan = $this->resolvePageDesignPlanForBlock($buildPlanTask);
+        if ($visualSignature === [] && $pageDesignPlan === []) {
+            return '';
+        }
+
+        $lines = ["CTX_BLOCK_VISUAL_SIGNATURE (layout contract; overrides generic split-panel/card defaults):"];
+        if ($visualSignature !== []) {
+            $lines[] = '- ' . $this->jsonEncodeForPrompt($visualSignature, 900);
+        }
+        if ($pageDesignPlan !== []) {
+            $lines[] = '- page_design_plan: ' . $this->jsonEncodeForPrompt($pageDesignPlan, 900);
+        }
+        $lines[] = '- Implement composition_pattern and media_strategy from visual_signature before choosing a layout. Do not default every block to media-left copy-right or a three-card grid.';
+
+        return \implode("\n", $lines) . "\n";
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function buildSiblingBlockDiversityPromptAddon(string $pageType, array $buildPlanTask, array $scope): string
+    {
+        $pageType = \trim($pageType);
+        if ($pageType === '') {
+            return '';
+        }
+
+        $currentBlockKey = \trim((string)($buildPlanTask['block_key'] ?? $buildPlanTask['section_key'] ?? ''));
+        $root = $this->resolveBuildPlanTaskRoot($scope);
+        $pageTasks = \is_array($root['page_tasks'][$pageType] ?? null) ? $root['page_tasks'][$pageType] : [];
+        if ($pageTasks === []) {
+            return '';
+        }
+
+        $siblings = [];
+        foreach ($pageTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $blockKey = \trim((string)($task['block_key'] ?? $task['section_key'] ?? ''));
+            if ($blockKey === '' || $blockKey === $currentBlockKey) {
+                continue;
+            }
+            $signature = $this->resolveBlockVisualSignature($task);
+            $composition = \trim((string)($signature['composition_pattern'] ?? ''));
+            if ($composition === '') {
+                continue;
+            }
+            $siblings[] = $blockKey . '=>' . $composition;
+        }
+
+        if ($siblings === []) {
+            return '';
+        }
+
+        return "CTX_SIBLING_BLOCK_COMPOSITIONS (do not reuse these shells for the current block):\n"
+            . '- ' . \implode('; ', \array_slice($siblings, 0, 12)) . "\n";
+    }
+
+    private function resolveRoleFidelityHint(string $blockKey, string $pageFlowRole, string $blockGoal): string
+    {
+        $normalized = \strtolower($blockKey . ' ' . $pageFlowRole . ' ' . $blockGoal);
+        if (\str_contains($normalized, 'contact_cta') || (\str_contains($normalized, 'cta') && \str_contains($normalized, 'contact'))) {
+            return 'Render a focused final contact/download CTA band. Do not repeat contact method cards, FAQ rows, or forms.';
+        }
+        if (\str_contains($normalized, 'contact_methods') || \str_contains($normalized, 'support hours')) {
+            return 'Render a channel hub with visible contact methods and separated labels/values. Do not degrade into a generic hero slab.';
+        }
+        if (\str_contains($normalized, 'faq')) {
+            return 'Render distinct question-answer rows. Do not use card grids, hero shells, or contact channel tiles.';
+        }
+        if (\str_contains($normalized, 'form')) {
+            return 'Render a real form-guidance block with visible labels and fields, not contact cards or a single CTA strip.';
+        }
+
+        return '';
     }
 
     private function getVisualBlockContractRenderer(): \GuoLaiRen\PageBuilder\Service\AI\Contract\AiSiteVisualBlockContractRenderer
@@ -6677,7 +7550,7 @@ class AiSitePageComponentGenerationService
             . "1. Single responsibility: generate only the current block. Do not reinterpret the whole website, do not generate neighboring blocks, and do not print planning/contract/schema text.\n"
             . "2. Return exactly one JSON object. First character `{`, last character `}`. No markdown, no prose, no second object, no raw CSS/HTML outside JSON.\n"
             . "3. Required string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. Set extra_fields, php_variables, and js_content to empty strings.\n"
-            . "4. html_content layout: use one root section / inner container / copy panel / optional media panel / optional CTA panel composition. Hero blocks include scrim + text-panel; non-hero may use 2-column or stacked variants according to the block role. Do not invent decorative wrapper tags that drop the required parts from CTX_CURRENT_ASSET.responsive_layout_contract.\n"
+            . "4. html_content layout: use one root section / inner container / copy panel / optional media panel / optional CTA panel composition. Hero blocks include scrim + text-panel. Non-hero layout must follow CTX_BLOCK_VISUAL_SIGNATURE.composition_pattern when present (stacked editorial, step rail, proof band, FAQ rows, form guidance, CTA band, channel hub, etc.). Split media+copy is only one option, not the default for every block. Do not invent decorative wrapper tags that drop the required parts from CTX_CURRENT_ASSET.responsive_layout_contract.\n"
             . "4a. If REQUIRED_IMAGE_STRUCTURE_CONTRACT is supplied by CTX_CURRENT_ASSET, it overrides this generic composition. Preserve the exact image binding and required semantic roles, then choose a refined layout rhythm for the current block instead of copying a byte-for-byte skeleton.\n"
             . "4b. HTML_IN_JSON rule: html_content must decode to real HTML tags, not displayed source code. Do not put legacy skeleton labels, raw `<section ...>` examples, `</div>`, class='...', CSS declarations, or escaped `&lt;section` inside visitor-visible text. The decoded html_content string should begin with `<section` and all visible text nodes should be final customer copy only.\n"
             . "4c. Nesting rule: use exactly one h2 for the block title and do not use h3. Card subtitles should be `<div>` or `<p>` text. h2 contains plain text only. p/small contain plain text only. If strong/span is used, it must have no attributes and must close immediately around short text. Prefer sibling div/p labels over nested inline tags. Never put div, section, form, card, image, list, link, button, or another heading inside h2/p.\n"
@@ -6691,8 +7564,11 @@ class AiSitePageComponentGenerationService
             . "11. Responsive layout rule: desktop uses fluid grid/flex flow; tablet (<=900px) stacks split layouts; mobile (<=420px) is single column. Apply width:100%; max-width:100%; min-width:0; box-sizing:border-box to layout containers, media, cards, and form fields. Prefer action/actions for CTA wrappers so wrapper CSS is not mistaken for button CSS. Never push forms/cards outside the viewport with negative margins, translateX, fixed side offsets, or absolute side panels.\n"
             . "12. Image slot rule: if a verified image template/final_url is supplied, copy that concrete `<img>` into html_content and keep src, data-pb-ai-image-role, and data-pb-ai-asset-slot exactly. Do not invent image URLs. Do not place image URLs in css_extra via url(...); image assets belong in real <img> tags. If no verified image exists, use CSS surfaces only.\n"
             . "13. Hero/media readability rule: if text sits over media, the html_content skeleton must include a scrim div and a text-panel div using the exact component prefix provided below, and css_extra must include matching scoped scrim/text-panel selectors. If you cannot include those two classes correctly, do not place text over media; use a normal side-by-side layout instead.\n"
+            . "13a. Hero full-bleed rule: if CTX_CURRENT_ASSET marks usage=section_background_cover, placement=background_layer, slot_type=hero_image, or current page_flow_role=opening, css_extra must include `#componentId{padding:0;}` and the root selector must use width:100vw or min-width:100vw plus margin:0 calc(50% - 50vw); do not set a pixel max-width on the root. Constrain only the inner/text panel. A centered 1200px banner or any top/bottom theme-color gutter around the image is invalid unless the latest customer request explicitly limits banner width.\n"
             . "14. Content rule: visible copy must be target-locale visitor copy derived from this block's page_goal/block_goal/content_plan and CTX_BLOCK_QA_CONTRACT.must_include_facts. Do not render why_this_block, page_goal, block_goal, data_contract, visual_contract, runtime_context, selected_skill_codes, template fragments, raw HTML tag source, or CSS source. Visible copy must not contain double quote characters because they often break JSON strings.\n"
             . "14a. CSS brace rule: css_extra must be a series of well-formed selector blocks like `#componentId .pb-c-name{property:value;}`. @media blocks belong in css_responsive ONLY and must be one complete `@media (...) { selector{...} }` body each. No `}}` glued without a `{` between, no comma selectors that span unrelated regions. Count opening and closing braces before returning; counts must match exactly.\n"
+            . "14b. Block-role contract: task_key/block_key/page_flow_role are binding. If this is a contact_methods/contact-method block, render a visible contact-channel hub with at least two repeated channel rows/cards using sibling `<span class='pb-c-label'>Email:</span><span class='pb-c-value'>support@example.com</span>` style elements; a verified image can support the atmosphere but cannot replace the channel list. If this is support_form_guidance/form-guidance/contact-form/message-form, render a real `<form class='pb-c-form'>` with at least two labels, at least two input/textarea fields, and one message textarea; do not output email/phone/address/business-hours cards for this role. If this is contact_cta/final_cta/cta, render one focused next-step CTA band with one primary action and compact proof, not repeated contact cards, a form, FAQ rows, or a reused hero overlay. CTA blocks must not output question-answer copy, `pb-c-faq-item`, `pb-c-question`, `pb-c-answer`, repeated `Email/Phone/Office/Hours` labels, or three-plus contact cards.\n"
+            . "14c. Spacing rhythm contract: CTA/action groups must not touch dividers, channel rows, text rows, or form lines. Put the CTA in a sibling `.pb-c-action`/`.pb-c-actions` wrapper after the rows/forms/cards, not inside a channel/field/FAQ row. Use outer margin-top/padding-top on that wrapper, bottom spacing on the preceding row group, or parent flex/grid row gap; the CTA button's own internal padding does not count as separation.\n"
             . "15. Size budget: html_content <= 2400 chars, css_extra <= 2400 chars, css_responsive <= 900 chars. If close to budget, simplify selector list but never drop visual_depth / responsive_signals required by CTX_BLOCK_QA_CONTRACT; never truncate JSON.\n"
             . "16. Final self-check before output: JSON parses; HTML tags/quotes are balanced; CSS braces and parentheses are balanced; CSS selectors match HTML classes exactly; theme palette hex tokens are used; css_extra includes non-default brand font-family declarations for `#componentId .pb-c-title` and one body/root selector; gradient + @media + clamp signals each appear at least once; no raw text after the JSON object.\n";
     }
@@ -6917,19 +7793,6 @@ class AiSitePageComponentGenerationService
 
         return "Visible copy governance:\n"
             . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
-            . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is internal only; never use it as visitor-facing copy language unless it equals content_locale.\n"
-            . "- Visitor-visible copy includes headings, paragraphs, cards, nav, CTA labels, form labels, placeholders, alt/title/aria, footer text, badges, metrics, and link text. All must be rewritten into content_locale/default_locale.\n"
-            . "- Customer brief, source objective, source truth, brand summary, and build-plan notes are intent sources only. Never render their full sentences verbatim as visible copy; synthesize concise target-locale visitor copy instead.\n"
-            . "- For non-English target locales, long Latin/English prose is invalid visible copy except for short brand/proper nouns such as a site name.\n"
-            . "- Build-plan/task/slot/schema labels are metadata, not copy. Never render page_type, section_code, task_key, runtime_context, shared:, page:, content/, app/code/, var/, content_contract, design_contract, data_contract, visual_contract, page_goal, block_goal, why_this_block, selected_skill_codes, build_blueprint, or build_tasks.\n"
-            . "- Instruction-shaped phrases such as Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, Close, Visitors see, or Visitors can review must be rewritten into finished customer-facing website copy.\n"
-            . "- Do not output raw target_domain as brand text unless it is the intended visible domain. Use the locked site title/brand and localized business copy.\n"
-            . "- Industry-scope gate: do not reuse old app-download, game, casino, reward, APK, install, or generic support-site copy unless the approved brief explicitly asks for that industry. Phrases like safe download, play now, bonus, secure install, 安全下载, 安心畅玩, 立即下载, 开始畅玩, 奖励, or 金币 are invalid for non-app/non-game sites.\n"
-            . "- Number spacing must read naturally: do not glue numbers to words in metrics, badges, steps, or CTAs.\n"
-            . "- Renderer will not repair copy after generation; return final customer-specific copy only.\n";
-
-        return "Visible copy governance:\n"
-            . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
             . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is only an internal planning language hint, never a visitor-facing language source.\n"
             . "- Visitor-visible copy must use content_locale/default_locale. Do not use plan_locale unless it is the same locale.\n"
             . "- Visitor-facing attributes are copy too: alt, title, aria-label, placeholder, value, button labels, nav labels, footer labels, and form labels must be rewritten into content_locale/default_locale before output.\n"
@@ -6942,6 +7805,7 @@ class AiSitePageComponentGenerationService
             . "- Never output blueprint meta-copy: page/current-section highlight headings, planning observations, design instructions, task scripts, or sentences that tell the AI to display hierarchy, trust proof, primary actions, flow, risks, or content grouping. Those are instructions, not website copy.\n"
             . "- Contract-field leak ban: never render content_contract, design_contract, implementation_contract, data_contract, visual_contract, page_goal, block_goal, why_this_block, planning_reason, selected_skill_codes, skill_snapshots, build_blueprint, build_tasks, or qa_report_contract as visible copy. These are build-time context only.\n"
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
+            . "- Industry-scope gate: do not reuse app-download, game, casino, reward, APK, install, or generic support-site copy unless the approved brief explicitly asks for that industry. Phrases like safe download, play now, bonus, secure install, 安全下载, 安心畅玩, 立即下载, 开始畅玩, 奖励, or 金币 are invalid for non-app/non-game sites.\n"
             . "- Renderer will not repair visitor copy after generation; the JSON you return must already contain final customer-specific visible copy.\n"
             . "- Never output internal list labels shaped like schema role + number, for example card/category/badge/step placeholders. Each card/list item needs a customer-specific title and description from the brief, build plan, or verified content data.\n"
             . "- Internal identifier rewrite: if any candidate visible text still contains home_page, about_page, contact_page, page_type, section_code, task_key, plan_locale, runtime_context, shared:, page:, content/, app/code/, or var/, treat it as leaked metadata and rewrite it into natural customer-facing copy before returning.\n"
@@ -7039,15 +7903,22 @@ class AiSitePageComponentGenerationService
             . "- If no real asset is available, create CSS-only visual language that matches the brief; never leave blank media and never use <svg>.\n";
     }
 
-    private function buildPremiumSectionDesignContractPromptAddon(string $pageType, string $sectionKey, string $sectionTemplate): string
+    private function buildPremiumSectionDesignContractPromptAddon(
+        string $pageType,
+        string $sectionKey,
+        string $sectionTemplate,
+        string $pageFlowRole = ''
+    ): string
     {
-        $identity = \strtolower($pageType . ' ' . $sectionKey . ' ' . $sectionTemplate);
-        $isHero = \preg_match('/\b(hero|banner|opening|above[-_ ]?fold)\b/i', $identity) === 1;
+        $pageFlowRole = \strtolower(\trim($pageFlowRole));
+        $identity = \strtolower($pageType . ' ' . $sectionKey . ' ' . $sectionTemplate . ' ' . $pageFlowRole);
+        $isHero = \preg_match('/\b(hero|banner|opening|above[-_ ]?fold)\b/i', $identity) === 1
+            || \in_array($pageFlowRole, ['opening', 'hero', 'banner', 'above_fold', 'above-fold'], true);
         $recipe = 'Use a section-specific composition, not the same card grid used by other blocks.';
         if (\preg_match('/trust|security|safe|license|proof|review|testimonial/i', $identity) === 1) {
             $recipe = 'Trust/security/social-proof recipe: use a badge wall, credential seal, quote rail, metric strip, or verification timeline. Do not use a generic three-card row plus one image.';
         } elseif (\preg_match('/game|feature|showcase|product|suite|service/i', $identity) === 1) {
-            $recipe = 'Game/showcase recipe: use the approved focused role outline when the component contract supplies FEATURE_ROLE_MODE; express game variety and benefits through polished paragraph copy instead of cards, carousels, image tiles, or repeated game panels.';
+            $recipe = 'Game/showcase recipe: follow visual_signature.composition_pattern when present. Prefer editorial split, feature rail, comparison band, or asymmetric media feature — not the same three-card grid used elsewhere on the page. Vary media placement and surface rhythm per block.';
         } elseif (\preg_match('/faq|accordion|question|support|help/i', $identity) === 1) {
             $recipe = 'FAQ/support recipe: use accordion/list rhythm with an asymmetric help panel or support badge cluster. It must not look like testimonials, trust badges, or a feature grid.';
         } elseif (\preg_match('/cta|download|conversion|final|action/i', $identity) === 1) {
@@ -7057,16 +7928,151 @@ class AiSitePageComponentGenerationService
         }
 
         $heroRule = $isHero
-            ? "- HERO/BANNER DEFAULT BASELINE: unless the user's latest block-adjustment instruction or approved design plan explicitly conflicts, render a real premium 1920x750-style banner. When a verified generated image exists, it must be a real editable <img> cover layer with object-fit:cover and the required slot attributes; content sits inside a floating text-safe panel on top of an image-wide scrim/gradient veil. The text panel must have its own readable background/scrim, padding, max-width, and foreground colors so paragraphs remain readable on busy photos. If no verified image is available, the CSS-only media layer must still read as deliberate art direction through palette, shadow, border, overlay, and text-panel composition; it must express a subject-matter stage or editorial surface from the approved brief, not generic overlapping circles, blobs, a blank slab, or a centered card on empty background. The primary CTA should read as a compact button in the default layout, not a full-width bar; wrapper bands can be full width. Do NOT create a small side image, isolated centered card, narrow media frame, CSS background-image-only hero, huge empty side gutters, or dark body text directly over a detailed photo as the default. If the user explicitly asks for another hero composition, follow it while preserving premium generated imagery, strong hierarchy, and readable overlay treatment.\n"
+            ? "- HERO/BANNER DEFAULT BASELINE: unless the user's latest block-adjustment instruction or approved design plan explicitly conflicts, render a real premium 1920x750-style banner. Reset the framework component wrapper with `#componentId{padding:0;}` so the image owns the whole banner band. The root shell must be viewport-width even inside a centered PageBuilder wrapper: use width:100vw or min-width:100vw with margin:0 calc(50% - 50vw); never put max-width on the hero root. Only the inner text-safe container may use max-width. When a verified generated image exists, it must be a real editable <img> cover layer with object-fit:cover and the required slot attributes; content sits inside a floating text-safe panel on top of an image-wide scrim/gradient veil. The text panel must have its own readable background/scrim, padding, max-width, and foreground colors so paragraphs remain readable on busy photos. If no verified image is available, the CSS-only media layer must still read as deliberate art direction through palette, shadow, border, overlay, and text-panel composition; it must express a subject-matter stage or editorial surface from the approved brief, not generic overlapping circles, blobs, a blank slab, or a centered card on empty background. The primary CTA should read as a compact button in the default layout; place it in a sibling action wrapper after text/rows with visible outside clearance, never tight against a divider or row line. Wrapper bands can be full width. Do NOT create a small side image, isolated centered card, narrow media frame, centered 1200px image island, top/bottom theme-color gutters around the hero image, CSS background-image-only hero, huge empty side gutters, or dark body text directly over a detailed photo as the default. If the user explicitly asks for another hero composition, follow it while preserving premium generated imagery, strong hierarchy, and readable overlay treatment.\n"
             : "- NON-HERO HARD RULE: this block needs its own layout purpose and visual rhythm. Do not copy the hero structure or the previous block's card/media arrangement.\n";
 
         return "Premium site design contract for this section:\n"
             . "- Base prompt precedence: this section recipe is the default quality baseline. If the latest user refinement or approved block plan explicitly asks for a different composition, use that composition while preserving the same premium quality bar, content relevance, image-slot usage, contrast, and anti-placeholder constraints.\n"
             . $heroRule
             . "- Section recipe: {$recipe}\n"
+            . "- Spacing rhythm rule: CTA/action groups must have deliberate breathing room. When a CTA follows text, channel rows, form fields, or dividers, style its action wrapper or CTA with at least one clear margin, padding, or gap so the button never touches a line or neighboring row.\n"
             . "- Anti-monotony rule: adjacent blocks must not share the same three-card row, same image position, same copy labels, or same pale background/card treatment. Change composition, scale, motif, and spacing per section role.\n"
             . "- Rejected output patterns: centered title plus three small cards plus the same image; tiny cartoon/SVG-looking media used as a substitute for a real generated image; repeated generic CTA/category labels across blocks; hero built as a boxed card next to a small image; CTA stretched into a page-width bar; large empty dark panel with only a logo or one button; CSS-only hero made only from overlapping circles/blobs with no subject-matter stage.\n"
             . "- If a verified generated image exists, use it prominently and naturally as a real editable <img>. For hero, the <img> is a cover layer behind the overlay copy; for non-hero it is a purposeful media surface, not a thumbnail afterthought.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $visualSignature
+     */
+    private function buildNonHeroRoleOutlineFromVisualSignature(
+        array $visualSignature,
+        bool $isContactSupportContract,
+        string $contractIdentity
+    ): string {
+        if ($isContactSupportContract) {
+            return "section.pb-c-root\n"
+                . "  div.pb-c-inner\n"
+                . "    div.pb-c-media\n"
+                . "      img.pb-c-img    <-- paste REQUIRED_HTML_IMG_TO_COPY_VERBATIM\n"
+                . "    div.pb-c-copy\n"
+                . "      h2.pb-c-title\n"
+                . "      p.pb-c-text\n"
+                . "      div.pb-c-cards\n"
+                . "        div.pb-c-channel > span.pb-c-label + span.pb-c-value\n"
+                . "        div.pb-c-channel > span.pb-c-label + span.pb-c-value\n"
+                . "      div.pb-c-action\n"
+                . "        div.pb-c-cta\n"
+                . "      small.pb-c-note";
+        }
+
+        $pattern = \strtolower(\trim((string)($visualSignature['composition_pattern'] ?? '')));
+        $mediaStrategy = \strtolower(\trim((string)($visualSignature['media_strategy'] ?? '')));
+        $identity = \strtolower($contractIdentity . ' ' . $pattern . ' ' . $mediaStrategy);
+
+        if (
+            \str_contains($pattern, 'stack')
+            || \str_contains($pattern, 'editorial')
+            || \str_contains($pattern, 'narrative')
+        ) {
+            return "section.pb-c-root\n"
+                . "  div.pb-c-inner (stacked editorial)\n"
+                . "    div.pb-c-copy\n"
+                . "      h2.pb-c-title\n"
+                . "      p.pb-c-text\n"
+                . "    div.pb-c-media (full-width band below copy)\n"
+                . "      img.pb-c-img    <-- paste REQUIRED_HTML_IMG_TO_COPY_VERBATIM\n"
+                . "    div.pb-c-action\n"
+                . "      div.pb-c-cta";
+        }
+
+        if (
+            \str_contains($pattern, 'step')
+            || \str_contains($pattern, 'timeline')
+            || \str_contains($pattern, 'process')
+            || \str_contains($pattern, 'rail')
+        ) {
+            return "section.pb-c-root\n"
+                . "  div.pb-c-inner (step/process rail)\n"
+                . "    h2.pb-c-title\n"
+                . "    div.pb-c-steps\n"
+                . "      div.pb-c-step\n"
+                . "      div.pb-c-step\n"
+                . "      div.pb-c-step\n"
+                . "    div.pb-c-media (optional supporting visual)\n"
+                . "      img.pb-c-img    <-- paste REQUIRED_HTML_IMG_TO_COPY_VERBATIM when required\n"
+                . "    div.pb-c-action\n"
+                . "      div.pb-c-cta";
+        }
+
+        if (
+            \str_contains($pattern, 'proof')
+            || \str_contains($pattern, 'badge')
+            || \str_contains($pattern, 'metric')
+            || \str_contains($pattern, 'trust')
+            || \preg_match('/\b(proof|trust|badge|metric)\b/i', $identity) === 1
+        ) {
+            return "section.pb-c-root\n"
+                . "  div.pb-c-inner (proof/metric band)\n"
+                . "    h2.pb-c-title\n"
+                . "    div.pb-c-proof-band\n"
+                . "      div.pb-c-proof-item\n"
+                . "      div.pb-c-proof-item\n"
+                . "      div.pb-c-proof-item\n"
+                . "    div.pb-c-media (optional accent visual)\n"
+                . "      img.pb-c-img    <-- paste REQUIRED_HTML_IMG_TO_COPY_VERBATIM when required";
+        }
+
+        if (
+            \str_contains($pattern, 'faq')
+            || \str_contains($pattern, 'accordion')
+            || \str_contains($pattern, 'question')
+            || \preg_match('/\b(faq|accordion|support)\b/i', $identity) === 1
+        ) {
+            return "section.pb-c-root\n"
+                . "  div.pb-c-inner (FAQ/support rows)\n"
+                . "    h2.pb-c-title\n"
+                . "    div.pb-c-faq-list\n"
+                . "      div.pb-c-faq-item > div.pb-c-question + p.pb-c-answer\n"
+                . "      div.pb-c-faq-item > div.pb-c-question + p.pb-c-answer";
+        }
+
+        if (
+            \str_contains($pattern, 'cta')
+            || \str_contains($pattern, 'conversion')
+            || \str_contains($pattern, 'band')
+        ) {
+            return "section.pb-c-root\n"
+                . "  div.pb-c-inner (CTA band)\n"
+                . "    div.pb-c-copy\n"
+                . "      h2.pb-c-title\n"
+                . "      p.pb-c-text\n"
+                . "      small.pb-c-note\n"
+                . "    div.pb-c-media (optional supporting visual)\n"
+                . "      img.pb-c-img    <-- paste REQUIRED_HTML_IMG_TO_COPY_VERBATIM when required\n"
+                . "    div.pb-c-action\n"
+                . "      div.pb-c-cta";
+        }
+
+        if (\str_contains($pattern, 'reverse') || \str_contains($pattern, 'media-right')) {
+            return "section.pb-c-root\n"
+                . "  div.pb-c-inner (copy left, media right)\n"
+                . "    div.pb-c-copy\n"
+                . "      h2.pb-c-title\n"
+                . "      p.pb-c-text\n"
+                . "      div.pb-c-action > div.pb-c-cta\n"
+                . "    div.pb-c-media\n"
+                . "      img.pb-c-img    <-- paste REQUIRED_HTML_IMG_TO_COPY_VERBATIM";
+        }
+
+        return "section.pb-c-root\n"
+            . "  div.pb-c-inner (split panel; use only when composition_pattern calls for split)\n"
+            . "    div.pb-c-media\n"
+            . "      img.pb-c-img    <-- paste REQUIRED_HTML_IMG_TO_COPY_VERBATIM\n"
+            . "    div.pb-c-copy\n"
+            . "      h2.pb-c-title\n"
+            . "      p.pb-c-text\n"
+            . "      div.pb-c-action\n"
+            . "        div.pb-c-cta";
     }
 
     /**
@@ -7143,44 +8149,37 @@ class AiSitePageComponentGenerationService
                     . "      div.pb-c-action\n"
                     . "        div.pb-c-cta";
                 $cssStructuralHints = "结构层 CSS 必填规则（颜色由 palette_role_map 决定，禁止凭空发明色值）：\n"
-                    . "  .pb-c-root: position:relative; overflow:hidden; min-height:520px; padding:72px 24px; box-sizing:border-box; background= palette_role_map.surface 或 linear-gradient(palette_role_map.surface->palette_role_map.surface_alt)\n"
+                    . "  #componentId: padding:0\n"
+                    . "  .pb-c-root: position:relative; overflow:hidden; width:100vw; min-height:520px; margin:0 calc(50% - 50vw); padding:72px 24px; box-sizing:border-box; font-family= CTX_CONFIRMED_THEME.font_family or a named brand family before generic fallback; background= palette_role_map.surface 或 linear-gradient(palette_role_map.surface->palette_role_map.surface_alt). Do not put max-width on root; constrain only .pb-c-inner\n"
                     . "  .pb-c-hero-img: position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center\n"
                     . "  .pb-c-scrim: position:absolute; inset:0; background= palette_role_map.scrim (含 rgba 或 linear-gradient)\n"
                     . "  .pb-c-inner: position:relative; z-index:1; max-width:1180px; margin:0 auto; display:flex; align-items:center; min-height:420px\n"
                     . "  .pb-c-copy: max-width:620px; padding:32px; border-radius:24px; background= palette_role_map.copy_panel_bg; color= palette_role_map.copy_panel_text; box-shadow:0 28px 80px palette_role_map.shadow\n"
-                    . "  .pb-c-title: margin:0 0 16px; font-size: clamp(32px, 5vw, 52px); line-height:1.1; color= palette_role_map.copy_panel_text\n"
+                    . "  .pb-c-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size: clamp(32px, 5vw, 52px); line-height:1.1; color= palette_role_map.copy_panel_text\n"
                     . "  .pb-c-text: margin:0 0 22px; line-height:1.7; color= palette_role_map.muted_text\n"
+                    . "  .pb-c-action: margin:22px 0 0; padding:18px 0 0; display:flex; gap:12px; align-items:center; must be a sibling after channel/form/content rows, not inside a bordered row\n"
                     . "  .pb-c-cta: display:inline-flex; width:auto; max-width:280px; padding:12px 20px; border-radius:999px; background= palette_role_map.cta_bg; color= palette_role_map.cta_text; transition:transform .2s, box-shadow .2s\n"
                     . "  .pb-c-cta:hover: transform:translateY(-2px); box-shadow:0 12px 24px palette_role_map.shadow";
             } else {
-                $skeletonOutline = "section.pb-c-root\n"
-                    . "  div.pb-c-inner\n"
-                    . "    div.pb-c-media\n"
-                    . "      img.pb-c-img    <-- 这里粘贴 REQUIRED_HTML_IMG_TO_COPY_VERBATIM\n"
-                    . "    div.pb-c-copy\n"
-                    . "      h2.pb-c-title\n"
-                    . "      p.pb-c-text\n"
-                    . ($isContactSupportContract
-                        ? "      div.pb-c-cards\n"
-                            . "        div.pb-c-card > strong + span\n"
-                            . "        div.pb-c-card > strong + span\n"
-                            . "        div.pb-c-card > strong + span\n"
-                        : '')
-                    . "      div.pb-c-action\n"
-                    . "        div.pb-c-cta"
-                    . ($isContactSupportContract ? "\n        small.pb-c-note" : '');
+                $visualSignature = \is_array($visualContract['visual_signature'] ?? null) ? $visualContract['visual_signature'] : [];
+                $skeletonOutline = $this->buildNonHeroRoleOutlineFromVisualSignature(
+                    $visualSignature,
+                    $isContactSupportContract,
+                    $contractIdentity
+                );
                 $cssStructuralHints = "结构层 CSS 必填规则（颜色由 palette_role_map 决定，禁止凭空发明色值）：\n"
-                    . "  .pb-c-root: position:relative; overflow:hidden; padding:72px 24px; box-sizing:border-box; background= palette_role_map.surface\n"
+                    . "  .pb-c-root: position:relative; overflow:hidden; padding:72px 24px; box-sizing:border-box; font-family= CTX_CONFIRMED_THEME.font_family or a named brand family before generic fallback; background= palette_role_map.surface\n"
                     . "  .pb-c-inner: max-width:1180px; margin:0 auto; display:flex; flex-wrap:wrap; gap:32px; align-items:center\n"
                     . "  .pb-c-media: flex:1 1 360px; min-width:0; overflow:hidden; border-radius:24px; box-shadow:0 24px 64px palette_role_map.shadow\n"
                     . "  .pb-c-img: display:block; width:100%; height:360px; object-fit:cover; object-position:center\n"
                     . "  .pb-c-copy: flex:1 1 320px; min-width:0\n"
-                    . "  .pb-c-title: margin:0 0 16px; font-size: clamp(28px, 4vw, 42px); line-height:1.1; color= palette_role_map.text\n"
+                    . "  .pb-c-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size: clamp(28px, 4vw, 42px); line-height:1.1; color= palette_role_map.text\n"
                     . "  .pb-c-text: margin:0 0 22px; line-height:1.7; color= palette_role_map.muted_text\n"
                     . ($isContactSupportContract
                         ? "  .pb-c-cards: display:flex; flex-wrap:wrap; gap:14px; margin:0 0 22px\n"
                             . "  .pb-c-card: flex:1 1 160px; min-width:0; padding:16px; border-radius:18px; background= palette_role_map.surface_alt; box-shadow=0 12px 30px palette_role_map.shadow\n"
                         : '')
+                    . "  .pb-c-action: margin:22px 0 0; padding:18px 0 0; display:flex; gap:12px; align-items:center; must be a sibling after channel/form/content rows, not inside a bordered row\n"
                     . "  .pb-c-cta: display:inline-flex; width:auto; max-width:280px; padding:12px 20px; border-radius:999px; background= palette_role_map.cta_bg; color= palette_role_map.cta_text; transition:transform .2s, box-shadow .2s\n"
                     . "  .pb-c-cta:hover: transform:translateY(-2px); box-shadow:0 12px 24px palette_role_map.shadow";
             }
@@ -7296,9 +8295,9 @@ class AiSitePageComponentGenerationService
                     . "- Required palette rule: css_extra 必须使用 REQUIRED_PALETTE_ROLE_MAP 中的 hex（至少 4 个不同角色），禁止以下硬编码模板色：#111827、#f59e0b、#92400e、#f8fafc、#0f172a、#cbd5e1（这些是历史模板，已被禁用）。\n"
                     . "- Required URL copy rule: do not type, infer, concatenate, shorten, or normalize the image path. Do not build a path from slot_id, target_domain, filename, or folder patterns. Paste the src value already present inside REQUIRED_HTML_IMG_TO_COPY_VERBATIM. Do not use css_extra url(...) for this asset.\n"
                     . "- Required URL anti-memory rule: never write `/pub/media/page-build/ai-generated/` paths from memory. Copy the src exactly from the copied template. If the copied template is relative, keep it relative; if it includes a domain, keep the entire domain segment exactly as shown. Any missing slash, domain fragment, dot, or hash character is invalid.\n"
-                    . "- Required slot placement rule: place that copied <img> before overlay/text layers inside this component's root wrapper or first media wrapper. If the block is hero/background_cover, make that same <img> the full-cover media layer with CSS position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center. Do not satisfy this with a CSS background-image, side thumbnail, or decorative second image.\n"
+                    . "- Required slot placement rule: place that copied <img> before overlay/text layers inside this component's root wrapper or first media wrapper. If the block is hero/background_cover, include `#componentId{padding:0;}`, make that same <img> the full-cover media layer with CSS position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center, and make the root full-bleed with width:100vw plus margin:0 calc(50% - 50vw). Do not satisfy this with a CSS background-image, side thumbnail, narrow centered media frame, or decorative second image.\n"
                     . "- Required slot self-check: before returning JSON, search html_content for the exact final_url and exact slot_id. If either is absent from an <img> tag with data-pb-ai-image-role='generated-asset', rewrite the output. Do not rely on section config, CSS url(...), comments, alt text, or prose to satisfy the image contract.\n"
-                    . "- If the slot is hero/background_cover and the user's latest block-adjustment instruction does not explicitly request another composition, build the block as a real 1920x750-style banner: full-cover image layer, solid scrim/veil overlay, floating content container. A side thumbnail or cartoon-like illustration panel is invalid as the default baseline.\n"
+                    . "- If the slot is hero/background_cover and the user's latest block-adjustment instruction does not explicitly request another composition, build the block as a real 1920x750-style banner: viewport-width root, full-cover image layer, solid scrim/veil overlay, floating content container. A side thumbnail, centered 1200px image island, huge theme-color gutters, or cartoon-like illustration panel is invalid as the default baseline.\n"
                 : "- Optional image slot: do not invent image URLs. If no verified generated image is supplied, design with CSS-only motif/pseudo-elements; no <svg> and no placeholder service.\n");
     }
 
@@ -8437,11 +9436,15 @@ class AiSitePageComponentGenerationService
                 'stage3_directive' => (string)($taskScript['stage3_directive'] ?? ''),
                 'content_plan' => $contentPlan,
                 'style_plan' => $stylePlan,
+                'visual_signature' => $this->resolveBlockVisualSignature($buildPlanTask),
+                'image_intent' => \is_array($blockTask['image_intent'] ?? null) ? $blockTask['image_intent'] : [],
                 'implementation_detail' => (string)($blockTask['implementation_detail'] ?? ''),
                 'field_content_requirements' => $fieldRequirements,
                 'data_contract' => \array_replace_recursive($implementationDataContract, $taskScriptDataContract),
                 'acceptance' => $acceptance,
             ], 2600) . "\n"
+            . "5b block_visual_signature_hard_contract: " . $this->jsonEncodeForPrompt($this->resolveBlockVisualSignature($buildPlanTask), 700) . "\n"
+            . "- visual_signature execution rule: composition_pattern / spatial_rhythm / media_strategy / surface_treatment are binding layout choices. Implement them before any generic split-panel or three-card template.\n"
             . "6 skill_and_reference_context: " . $this->jsonEncodeForPrompt([
                 'skill_context' => $skillContext,
                 'reference_context' => $referenceContext,
@@ -11356,7 +12359,7 @@ class AiSitePageComponentGenerationService
             . $snippet;
     }
 
-    private function assertRenderedHtmlPassesBuildQualityGate(string $componentCode, string $html): void
+    private function assertRenderedHtmlPassesBuildQualityGate(string $componentCode, string $html, string $semanticComponentCode = ''): void
     {
         if (\trim($html) === '') {
             return;
@@ -11376,7 +12379,20 @@ class AiSitePageComponentGenerationService
                 ))
             );
         }
-        $visualReason = $this->detectComponentVisualContractViolation($componentCode, $html);
+        $qualityComponentCode = $this->mergeSemanticComponentCode($componentCode, $semanticComponentCode);
+        $roleFidelityReason = $this->detectBlockRoleFidelityViolation(
+            $qualityComponentCode,
+            $html,
+            $this->extractVisibleHtmlText($html)
+        );
+        if ($roleFidelityReason !== null) {
+            throw new \RuntimeException('Generated component role contract failed: ' . $roleFidelityReason);
+        }
+        $readabilityReason = $this->detectLabelValueReadabilityViolation($html, $this->extractVisibleHtmlText($html), $qualityComponentCode);
+        if ($readabilityReason !== null) {
+            throw new \RuntimeException('Generated component label/value contract failed: ' . $readabilityReason);
+        }
+        $visualReason = $this->detectComponentVisualContractViolation($qualityComponentCode, $html);
         if ($visualReason !== null) {
             throw new \RuntimeException('Generated component visual contract failed: ' . $visualReason);
         }

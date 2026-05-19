@@ -3,28 +3,6 @@
  * 由 account_auth 等布局按需 theme:css 加载，与全局 theme.css 分离。
  */
 
-/* ========== 认证页主区域：不与视口顶边贴死 ========== */
-
-.account-auth-page-body {
-    justify-content: center;
-    padding-top: clamp(2rem, 12vmin, 5.5rem);
-    padding-bottom: clamp(2rem, 10vmin, 4.5rem);
-    box-sizing: border-box;
-}
-
-.account-auth__main {
-    padding-top: clamp(2rem, 12vmin, 5.5rem);
-    padding-bottom: clamp(2rem, 10vmin, 4.5rem);
-    box-sizing: border-box;
-}
-
-.account-auth {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    box-sizing: border-box;
-}
-
 .auth-form .wflash,
 .auth-form__body .wflash {
     position: relative;

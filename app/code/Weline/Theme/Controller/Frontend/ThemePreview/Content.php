@@ -40,7 +40,9 @@ class Content extends FrontendController
         $layoutType = $pageTypeResolver->resolveLayoutType($layoutType, $this, $this->request, 'homepage');
         $layoutOption = $layoutOption !== '' ? $layoutOption : 'default';
 
-        $this->layoutType = $layoutType;
+        $this->layoutType = $layoutOption !== 'default'
+            ? $layoutType . '.' . $layoutOption
+            : $layoutType;
         $this->request->setData('skip_view_file_cache', true);
         $this->request->setGet('page_type', $layoutType);
         $this->request->setGet('layout_type', $layoutType);

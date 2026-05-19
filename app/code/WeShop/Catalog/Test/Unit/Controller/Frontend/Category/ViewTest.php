@@ -8,9 +8,16 @@ use PHPUnit\Framework\TestCase;
 use WeShop\Catalog\Controller\Frontend\Category\View;
 use WeShop\Catalog\Model\Category;
 use WeShop\Catalog\Service\CategoryService;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class ViewTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        RequestLifecycleTrace::reset();
+        unset($_SERVER['REQUEST_URI']);
+    }
+
     public function testBuildBreadcrumbsBuildsTopDownPaths(): void
     {
         $view = $this->newControllerWithoutConstructor();
@@ -59,6 +66,25 @@ class ViewTest extends TestCase
         $this->assertArrayNotHasKey('material', $filters);
         $this->assertArrayNotHasKey('shipping', $filters);
         $this->assertSame(['red', 'blue'], $filters['color']);
+    }
+
+    public function testEmptyLayoutDebugContextIncludesCaptureStateAndSizes(): void
+    {
+        $_SERVER['REQUEST_URI'] = '/CNY/en_US/catalog/category/home';
+
+        $view = $this->newControllerWithoutConstructor();
+        $context = $this->invokePrivateMethod($view, 'buildEmptyLayoutDebugContext', [
+            'initial',
+            '<main>content</main>',
+        ]);
+
+        $this->assertSame('initial', $context['stage']);
+        $this->assertSame('/CNY/en_US/catalog/category/home', $context['uri']);
+        $this->assertSame(strlen('<main>content</main>'), $context['content_bytes']);
+        $this->assertIsString($context['request_id']);
+        $this->assertNotSame('', $context['request_id']);
+        $this->assertArrayHasKey('fiber_output', $context);
+        $this->assertArrayHasKey('memory_mb', $context);
     }
 
     private function newControllerWithoutConstructor(): View

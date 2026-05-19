@@ -1,8 +1,8 @@
 <?php
 /**
- * WeShop_Subscription 模块 - 账户页内容分区
+ * WeShop_Subscription module - account content section bridge.
  *
- * Hook：account.sidebar.content
+ * Hook: account.sidebar.content
  *
  * @hook-priority 150
  * @hook-sort-order 20
@@ -10,5 +10,5 @@
  */
 ?>
 <section class="account-hook-section account-index__section d-none motor-account-section" id="subscriptions-section" data-account-section="subscriptions" hidden>
-    <w:hook name="Weline_Customer::frontend::account::index::subscriptions"/>
+    <?= $this->fetch('WeShop_Subscription::hooks/Weline_Customer/frontend/account/index/subscriptions.phtml') ?>
 </section>

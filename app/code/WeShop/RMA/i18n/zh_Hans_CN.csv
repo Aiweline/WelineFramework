@@ -11,28 +11,20 @@ Rejected,已拒绝
 "You do not have access to this order.",您无权访问该订单。
 "Please log in to continue.",请先登录后继续。
 "Returns & Exchanges",退货与换货
-Return,退货
-Exchange,换货
-"Wrong size",尺码不合适
-"Damaged in transit",运输损坏
-"Defective item",商品有缺陷
-"Item not as described",商品与描述不符
-"Changed my mind",改变主意
-Other,其他
+"Unsupported RMA provider operation: %{1}","Unsupported RMA provider operation: %{1}"
+待处理,待处理
+"RMA Query","RMA Query"
+"Submit a frontend RMA request.","Submit a frontend RMA request."
+订单没有可售后商品,订单没有可售后商品
+订单已取消或已退款,订单已取消或已退款
+订单尚未完成支付,订单尚未完成支付
+已同意,已同意
+已拒绝,已拒绝
 "Return reason is required.",退货原因不能为空。
 "RMA Management","RMA 管理"
 "RMA Detail","RMA 详情"
+联系我们,联系我们
 退换货,退换货
-查看退货、换货和售后申请进度。,查看退货、换货和售后申请进度。
-打开售后中心,打开售后中心
-暂无退换货申请,暂无退换货申请
-如果订单需要退货或换货，可以从订单详情或售后中心发起申请。,如果订单需要退货或换货，可以从订单详情或售后中心发起申请。
-去售后中心,去售后中心
-待处理,待处理
-已同意,已同意
-已拒绝,已拒绝
-"售后单 #%{1}","售后单 #%{1}"
-"订单 #%{1}","订单 #%{1}"
 提交和跟踪售后申请,提交和跟踪售后申请
 After-Sales,售后服务
 "Open RMA","打开 RMA"
@@ -85,10 +77,10 @@ Description,Description
 "Select a reason","Select a reason"
 "Tell us more details about your request","Tell us more details about your request"
 "Submit Request","Submit Request"
-"联系我们",联系我们
 "Request Timeline","Request Timeline"
 "Your Latest RMA Records","Your Latest RMA Records"
-Order,Order
-"Submitted at","Submitted at"
-"Your return request has been submitted.","售后申请已提交。"
+"Order #%{1}","Order #%{1}"
+"Submitted at: %{1}","Submitted at: %{1}"
 "Unable to submit your request right now.","Unable to submit your request right now."
+"Returns and Exchanges",退换货
+"Submit and track after-sales requests",提交和跟踪售后申请

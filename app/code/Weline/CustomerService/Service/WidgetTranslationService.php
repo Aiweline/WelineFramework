@@ -24,6 +24,7 @@ class WidgetTranslationService
 
     private const WIDGET_KEYS = [
         '客服服务',
+        '欢迎使用客服服务',
         '检测中...',
         '设置',
         '收起',

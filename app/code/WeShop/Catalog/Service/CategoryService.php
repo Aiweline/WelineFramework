@@ -168,7 +168,7 @@ class CategoryService
 
     public function getHeaderSearchCategoryOptions(int $parentId = 0): array
     {
-        $cacheKey = (string)$parentId;
+        $cacheKey = $this->resolveActiveLocale() . '|' . $parentId;
         $now = microtime(true);
         $cached = self::$headerSearchOptionsCache[$cacheKey] ?? null;
         if ($cached && $cached['expires_at'] > $now) {
@@ -234,7 +234,7 @@ class CategoryService
     public function getHeaderNavigationData(string $categoryBaseUrl, int $parentId = 0): array
     {
         $categoryBaseUrl = rtrim($categoryBaseUrl, '/') . '/';
-        $cacheKey = $parentId . '|' . md5($categoryBaseUrl);
+        $cacheKey = $this->resolveActiveLocale() . '|' . $parentId . '|' . md5($categoryBaseUrl);
         $now = microtime(true);
         $cached = self::$headerNavigationCache[$cacheKey] ?? null;
         if ($cached && $cached['expires_at'] > $now) {
@@ -336,6 +336,29 @@ class CategoryService
     private function localizeCategoryDisplayName(string $name): string
     {
         $name = trim($name);
+        if ($name === '') {
+            return '';
+        }
+
+        $locale = $this->resolveActiveLocale();
+        if (!str_starts_with($locale, 'zh')) {
+            $englishMap = [
+                '服装服饰' => 'Clothing & Accessories',
+                '家居用品' => 'Home & Living',
+                '运动户外' => 'Sports & Outdoors',
+                '图书音像' => 'Books & Media',
+                '食品饮料' => 'Food & Drinks',
+                '消费电子' => 'Consumer Electronics',
+                '日常服饰' => 'Everyday Apparel',
+                '日常穿搭' => 'Daily Wear',
+                '家居生活' => 'Home Living',
+                '生活空间' => 'Living Space',
+                '演示分类' => 'Empty Category Demo',
+            ];
+
+            return $englishMap[$name] ?? (string)__($name);
+        }
+
         $map = [
             'Consumer Electronics' => '消费电子',
             'Smart Devices' => '智能设备',
@@ -354,6 +377,34 @@ class CategoryService
         ];
 
         return $map[$name] ?? $name;
+    }
+
+    private function resolveActiveLocale(): string
+    {
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $hints = [
+                (string)($request->getBaseUrl() ?? ''),
+                (string)($request->getPathInfo() ?? ''),
+                (string)\w_env_request_uri(),
+            ];
+
+            foreach ($hints as $hint) {
+                if ($hint === '') {
+                    continue;
+                }
+                if (\str_contains($hint, '/en_US/')) {
+                    return 'en_US';
+                }
+                if (\preg_match('#/(?:[A-Z]{3}/)?([A-Za-z]{2}(?:_[A-Za-z]+)?_[A-Za-z]{2})(?:/|$)#', $hint, $matches)) {
+                    return (string)$matches[1];
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return \Weline\Framework\App\State::getLangLocal();
     }
     
     /**

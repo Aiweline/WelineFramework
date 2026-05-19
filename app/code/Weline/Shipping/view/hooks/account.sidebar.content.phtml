@@ -176,10 +176,10 @@ $renderAddressForm = static function (string $idField, string $typeLabel, string
         <textarea hidden readonly data-address-seed><?= $json($shippingPayloads) ?></textarea>
         <header class="account-card__header account-address-panel__header">
             <div>
-                <h2 class="account-card__title"><lang>发货地址</lang></h2>
-                <p class="account-address-panel__desc"><lang>管理店铺或账户发货时使用的寄出地址。</lang></p>
+                <h2 class="account-card__title"><?= __('Shipping Address') ?></h2>
+                <p class="account-address-panel__desc"><?= __('Manage the shipping addresses used when shipping from the store or account.') ?></p>
             </div>
-            <button type="button" class="account-address-panel__action" data-address-new><lang>新增发货地址</lang></button>
+            <button type="button" class="account-address-panel__action" data-address-new><?= __('Add Shipping Address') ?></button>
         </header>
         <div class="account-card__body">
             <div class="account-address-message" data-address-message hidden></div>
@@ -192,10 +192,10 @@ $renderAddressForm = static function (string $idField, string $typeLabel, string
                 <?php endforeach; ?>
             </div>
             <div class="account-address-empty" data-address-empty<?= empty($shippingPayloads) && !$shippingLoadError ? '' : ' hidden' ?>>
-                <strong><lang>还没有发货地址</lang></strong>
-                <span><lang>点击“新增发货地址”，直接在当前页面维护。</lang></span>
+                <strong><?= __('No shipping address yet') ?></strong>
+                <span><?= __('Click "Add Shipping Address" to maintain it directly on the current page.') ?></span>
             </div>
-            <?php $renderAddressForm('shipping_address_id', (string)__('发货地址'), (string)__('联系人')); ?>
+            <?php $renderAddressForm('shipping_address_id', (string)__('Shipping Address'), (string)__('Contact')); ?>
         </div>
     </div>
 </section>
@@ -205,10 +205,10 @@ $renderAddressForm = static function (string $idField, string $typeLabel, string
         <textarea hidden readonly data-address-seed><?= $json($deliveryPayloads) ?></textarea>
         <header class="account-card__header account-address-panel__header">
             <div>
-                <h2 class="account-card__title"><lang>收货地址</lang></h2>
-                <p class="account-address-panel__desc"><lang>管理配送和订单收货时使用的地址。</lang></p>
+                <h2 class="account-card__title"><?= __('Billing Address') ?></h2>
+                <p class="account-address-panel__desc"><?= __('Manage addresses used for delivery and order receiving.') ?></p>
             </div>
-            <button type="button" class="account-address-panel__action" data-address-new><lang>新增收货地址</lang></button>
+            <button type="button" class="account-address-panel__action" data-address-new><?= __('Add Delivery Address') ?></button>
         </header>
         <div class="account-card__body">
             <div class="account-address-message" data-address-message hidden></div>
@@ -221,10 +221,10 @@ $renderAddressForm = static function (string $idField, string $typeLabel, string
                 <?php endforeach; ?>
             </div>
             <div class="account-address-empty" data-address-empty<?= empty($deliveryPayloads) && !$deliveryLoadError ? '' : ' hidden' ?>>
-                <strong><lang>还没有收货地址</lang></strong>
-                <span><lang>点击“新增收货地址”，直接在当前页面维护。</lang></span>
+                <strong><?= __('No delivery address yet') ?></strong>
+                <span><?= __('Click "Add Receiving Address" to maintain it directly on the current page.') ?></span>
             </div>
-            <?php $renderAddressForm('delivery_address_id', (string)__('收货地址'), (string)__('收货人')); ?>
+            <?php $renderAddressForm('delivery_address_id', (string)__('Billing Address'), (string)__('Recipient')); ?>
         </div>
     </div>
 </section>

@@ -25,13 +25,13 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
         <div class="motor-account-sidebar__meta">
             <div class="motor-account-sidebar__badge">
                 <i class="fa fa-motorcycle"></i>
-                <lang>Motor 会员</lang>
+                <?= __('Motor Member') ?>
             </div>
             <h3 class="motor-account-sidebar__username"><?= htmlspecialchars($username) ?></h3>
             <?php if ($email): ?>
                 <p class="motor-account-sidebar__email"><?= htmlspecialchars($email) ?></p>
             <?php endif; ?>
-            <p class="motor-account-sidebar__subtext"><lang>资料、密码与登录状态都可以在这里快速管理。</lang></p>
+            <p class="motor-account-sidebar__subtext"><?= __('Profile, password, and login activity are managed here.') ?></p>
         </div>
     </header>
 
@@ -40,8 +40,8 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
             <span class="motor-account-sidebar__link-label">
                 <i class="fa fa-dashboard"></i>
                 <span class="motor-account-sidebar__link-text">
-                    <strong><lang>总览</lang></strong>
-                    <span><lang>快速查看账号状态</lang></span>
+                    <strong><?= __('Overview') ?></strong>
+                    <span><?= __('Quick account status overview') ?></span>
                 </span>
             </span>
             <span class="motor-account-sidebar__link-arrow">
@@ -53,8 +53,8 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
             <span class="motor-account-sidebar__link-label">
                 <i class="fa fa-user"></i>
                 <span class="motor-account-sidebar__link-text">
-                    <strong><lang>个人资料</lang></strong>
-                    <span><lang>头像与基础资料</lang></span>
+                    <strong><?= __('Profile') ?></strong>
+                    <span><?= __('Avatar and basic profile details') ?></span>
                 </span>
             </span>
             <span class="motor-account-sidebar__link-arrow">
@@ -66,8 +66,8 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
             <span class="motor-account-sidebar__link-label">
                 <i class="fa fa-lock"></i>
                 <span class="motor-account-sidebar__link-text">
-                    <strong><lang>安全设置</lang></strong>
-                    <span><lang>修改登录密码</lang></span>
+                    <strong><?= __('Security Settings') ?></strong>
+                    <span><?= __('Change your sign-in password') ?></span>
                 </span>
             </span>
             <span class="motor-account-sidebar__link-arrow">
@@ -79,8 +79,8 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
             <span class="motor-account-sidebar__link-label">
                 <i class="fa fa-clock-o"></i>
                 <span class="motor-account-sidebar__link-text">
-                    <strong><lang>登录信息</lang></strong>
-                    <span><lang>查看最近会话状态</lang></span>
+                    <strong><?= __('Login Information') ?></strong>
+                    <span><?= __('Review recent session activity') ?></span>
                 </span>
             </span>
             <span class="motor-account-sidebar__link-arrow">
@@ -94,8 +94,8 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
             <span class="motor-account-sidebar__link-label">
                 <i class="fa fa-sign-out"></i>
                 <span class="motor-account-sidebar__link-text">
-                    <strong><lang>退出登录</lang></strong>
-                    <span><lang>离开当前账户</lang></span>
+                    <strong><?= __('Log Out') ?></strong>
+                    <span><?= __('Leave the current account') ?></span>
                 </span>
             </span>
             <span class="motor-account-sidebar__link-arrow">

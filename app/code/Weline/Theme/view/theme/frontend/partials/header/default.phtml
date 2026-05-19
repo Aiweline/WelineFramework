@@ -32,6 +32,25 @@ $showUserMenu = $meta['showUserMenu'] ?? true;
 $class = $meta['class'] ?? '';
 
 $baseUrl = $this->request->getBaseUrl();
+$requestPath = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$isEnglishRoute = (bool)\preg_match('#/(?:[A-Z]{3}/)?en_US(?:/|$)#i', $requestPath);
+$headerAllCategories = $isEnglishRoute ? 'All Categories' : (string)__('全部分类');
+$headerSearchPlaceholder = $isEnglishRoute ? 'Search products...' : (string)__('搜索商品...');
+$headerTranslate = static function (string $source) use ($isEnglishRoute): string {
+    if (!$isEnglishRoute) {
+        return (string)__($source);
+    }
+
+    return match ($source) {
+        '电子产品' => 'Electronics',
+        '服装服饰' => 'Clothing & Accessories',
+        '家居用品' => 'Home & Living',
+        '运动户外' => 'Sports & Outdoors',
+        '图书音像' => 'Books & Media',
+        '食品饮料' => 'Food & Drinks',
+        default => (string)__($source),
+    };
+};
 
 // 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
 // 直接使用colors数组，无需重复读取和处理
@@ -48,7 +67,7 @@ $defaultNavItemsFactory = static function (): array {
 
     $defaultNavItems = [
     [
-        'text' => __('电子产品'), 'url' => '/category/electronics',
+        'text' => $headerTranslate('电子产品'), 'url' => '/category/electronics',
         'children' => [
             [
                 'text' => __('手机通讯'), 'url' => '/category/electronics/phones',
@@ -112,7 +131,7 @@ $defaultNavItemsFactory = static function (): array {
         ]
     ],
     [
-        'text' => __('服装服饰'), 'url' => '/category/clothing',
+        'text' => $headerTranslate('服装服饰'), 'url' => '/category/clothing',
         'children' => [
             [
                 'text' => __('男装'), 'url' => '/category/clothing/men',
@@ -177,7 +196,7 @@ $defaultNavItemsFactory = static function (): array {
         ]
     ],
     [
-        'text' => __('家居用品'), 'url' => '/category/home',
+        'text' => $headerTranslate('家居用品'), 'url' => '/category/home',
         'children' => [
             [
                 'text' => __('家具'), 'url' => '/category/home/furniture',
@@ -230,9 +249,9 @@ $defaultNavItemsFactory = static function (): array {
             ],
         ]
     ],
-    ['text' => __('运动户外'), 'url' => '/category/sports'],
-    ['text' => __('图书音像'), 'url' => '/category/books'],
-    ['text' => __('食品饮料'), 'url' => '/category/food'],
+    ['text' => $headerTranslate('运动户外'), 'url' => '/category/sports'],
+    ['text' => $headerTranslate('图书音像'), 'url' => '/category/books'],
+    ['text' => $headerTranslate('食品饮料'), 'url' => '/category/food'],
     ];
 
     return $defaultNavItems;
@@ -328,24 +347,24 @@ $defaultNavItemsFactory = static function (): array {
                                 <else/>
                                 <!-- 分类下拉菜单 -->
                                 <div class="search-category-dropdown">
-                                <select name="category" class="search-category-select" title="<lang>选择分类</lang>">
-                                    <option value=""><lang>全部分类</lang></option>
-                                    <option value="electronics"><lang>电子产品</lang></option>
-                                    <option value="clothing"><lang>服装服饰</lang></option>
-                                    <option value="home"><lang>家居用品</lang></option>
-                                    <option value="sports"><lang>运动户外</lang></option>
-                                    <option value="books"><lang>图书音像</lang></option>
-                                    <option value="food"><lang>食品饮料</lang></option>
+                                <select name="category" class="search-category-select" title="<?= __('选择分类') ?>">
+                                    <option value=""><?= htmlspecialchars($headerAllCategories, ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="electronics"><?= htmlspecialchars($headerTranslate('电子产品'), ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="clothing"><?= htmlspecialchars($headerTranslate('服装服饰'), ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="home"><?= htmlspecialchars($headerTranslate('家居用品'), ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="sports"><?= htmlspecialchars($headerTranslate('运动户外'), ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="books"><?= htmlspecialchars($headerTranslate('图书音像'), ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="food"><?= htmlspecialchars($headerTranslate('食品饮料'), ENT_QUOTES, 'UTF-8') ?></option>
                                 </select>
                                 <div class="search-category-facade">
-                                    <span class="search-category-label"><lang>全部分类</lang></span>
+                                    <span class="search-category-label"><?= htmlspecialchars($headerAllCategories, ENT_QUOTES, 'UTF-8') ?></span>
                                     <i class="fas fa-chevron-down"></i>
                                 </div>
                                 </div>
                             </w:hook>
                             <!-- 搜索输入框 -->
                             <div class="search-input-wrapper">
-                                <input type="text" name="q" class="search-input" placeholder="<lang>搜索商品...</lang>" autocomplete="off" value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>">
+                                <input type="text" name="q" class="search-input" placeholder="<?= htmlspecialchars($headerSearchPlaceholder, ENT_QUOTES, 'UTF-8') ?>" autocomplete="off" value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>">
                             </div>
                             <!-- 搜索按钮 -->
                             <button type="submit" class="search-submit-btn" title="<lang>搜索</lang>" aria-label="<lang>搜索</lang>">
@@ -647,9 +666,9 @@ $defaultNavItemsFactory = static function (): array {
             <div class="header-nav-left">
                 <!-- 汉堡菜单（全部） -->
                 <w:hook>header-hamburger-menu<else/>
-                    <a href="#" class="hamburger-menu-btn" id="hamburger-menu" role="button" aria-label="<lang>打开所有类别菜单</lang>" aria-expanded="false" aria-controls="categories-list">
+                    <a href="#" class="hamburger-menu-btn" id="hamburger-menu" role="button" aria-label="<?= __('打开所有类别菜单') ?>" aria-expanded="false" aria-controls="categories-list">
                         <i class="fas fa-bars" aria-hidden="true"></i>
-                        <span class="hamburger-label"><lang>全部</lang></span>
+                        <span class="hamburger-label"><?= __('全部') ?></span>
                     </a>
                 </w:hook>
                 
@@ -723,16 +742,16 @@ $defaultNavItemsFactory = static function (): array {
                 <w:hook>header-nav-links<else/>
                     <nav class="header-nav-links">
                         <ul class="nav-links-list" id="nav-links-list">
-                            <li><a href="/deals"><lang>今日特价</lang></a></li>
-                            <li><a href="/video"><lang>会员视频</lang></a></li>
-                            <li><a href="/registry"><lang>礼品心愿单</lang></a></li>
-                            <li><a href="/gift-cards"><lang>礼品卡</lang></a></li>
-                            <li><a href="/help"><lang>客户服务</lang></a></li>
+                            <li><a href="/deals"><?= $isEnglishRoute ? 'Today\'s Deals' : __('今日特价') ?></a></li>
+                            <li><a href="/video"><?= $isEnglishRoute ? 'Prime Video' : __('会员视频') ?></a></li>
+                            <li><a href="/registry"><?= $isEnglishRoute ? 'Gift List' : __('礼品心愿单') ?></a></li>
+                            <li><a href="/gift-cards"><?= $isEnglishRoute ? 'Gift Cards' : __('礼品卡') ?></a></li>
+                            <li><a href="/help"><?= $isEnglishRoute ? 'Customer Service' : __('客户服务') ?></a></li>
                         </ul>
                         <!-- 更多按钮 -->
                         <div class="nav-more-wrapper" id="nav-more-wrapper" style="display: none;">
                             <button class="nav-more-btn" id="nav-more-btn" aria-label="更多" aria-expanded="false">
-                                <span><lang>更多</lang></span>
+                                <span><?= __('更多') ?></span>
                                 <i class="fas fa-chevron-down"></i>
                             </button>
                             <ul class="nav-more-dropdown" id="nav-more-dropdown" role="menu" aria-hidden="true">
@@ -756,8 +775,8 @@ $defaultNavItemsFactory = static function (): array {
 <div class="categories-sidebar-overlay" id="categories-sidebar-overlay" aria-hidden="true"></div>
 <div class="categories-sidebar" id="categories-sidebar" role="dialog" aria-modal="true" aria-labelledby="categories-sidebar-title" aria-hidden="true">
     <div class="categories-sidebar-header">
-        <h2 class="categories-sidebar-title" id="categories-sidebar-title"><lang>全部</lang></h2>
-        <button class="categories-sidebar-close" id="categories-sidebar-close" aria-label="<lang>关闭菜单</lang>" type="button">
+        <h2 class="categories-sidebar-title" id="categories-sidebar-title"><?= __('全部') ?></h2>
+        <button class="categories-sidebar-close" id="categories-sidebar-close" aria-label="<?= __('关闭菜单') ?>" type="button">
             <i class="fas fa-times" aria-hidden="true"></i>
         </button>
     </div>
@@ -3201,7 +3220,7 @@ textarea::-webkit-scrollbar-thumb:hover,
             categoriesOverflowWrapper.className = 'categories-overflow-wrapper';
             categoriesOverflowWrapper.id = 'categories-overflow-wrapper';
             categoriesOverflowWrapper.style.display = 'none';
-            categoriesOverflowWrapper.innerHTML = '<button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="更多分类" aria-expanded="false" type="button"><span>更多</span><i class="fas fa-chevron-down"></i></button><ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true"></ul>';
+            categoriesOverflowWrapper.innerHTML = '<button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="<?= htmlspecialchars($isEnglishRoute ? 'More categories' : (string)__('更多分类'), ENT_QUOTES, 'UTF-8') ?>" aria-expanded="false" type="button"><span><?= htmlspecialchars($isEnglishRoute ? 'More' : (string)__('更多'), ENT_QUOTES, 'UTF-8') ?></span><i class="fas fa-chevron-down"></i></button><ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true"></ul>';
             categoriesList.appendChild(categoriesOverflowWrapper);
             categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
             categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');

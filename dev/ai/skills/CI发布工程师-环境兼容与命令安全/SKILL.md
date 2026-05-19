@@ -45,6 +45,7 @@ This skill owns environment compatibility and command safety for automated execu
 - Do not edit `generated/` directly.
 - In WLS-sensitive code, do not use `sleep`, `die`, or `exit`.
 - Keep validation commands repeatable and automation-safe.
+- If a framework command times out while running a self-healing or nested `php` path, do not treat the timeout alone as proof that the schema/setup change failed; verify the target registration or schema surface directly before concluding.
 
 # Inputs Required
 
@@ -65,6 +66,7 @@ This skill owns environment compatibility and command safety for automated execu
 - Confirm argument quoting and interpolation behave as intended.
 - Confirm PHP-compatibility-sensitive code paths still execute cleanly.
 - Confirm the result is suitable for repeated automation use.
+- When a command's nested PHP invocation depends on PATH, verify whether the environment actually exposes `php` to child processes before treating a stuck `setup:upgrade` as application failure.
 
 # Constraints
 

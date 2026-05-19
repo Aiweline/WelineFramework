@@ -102,7 +102,7 @@ $statusText = [
     <div class="weshop-orders-header">
         <h2 class="weshop-orders-title"><?= __('我的订单') ?></h2>
         <a href="/customer/account/index#orders" class="weshop-view-all-link" data-account-nav-link="true" data-section="orders">
-            <?= __('查看全部') ?>
+            <?= __('View All') ?>
             <i class="ri-arrow-right-s-line weshop-view-all-icon" aria-hidden="true"></i>
         </a>
     </div>
@@ -289,11 +289,11 @@ $statusText = [
         <?php endif; ?>
     </div>
     <?php if ($totalPages > 1): ?>
-        <nav class="weshop-order-pagination" aria-label="Order pagination">
+        <nav class="weshop-order-pagination" aria-label="<?= $escape(__('订单分页')) ?>">
             <?php if ($currentPage > 1): ?>
-                <a href="<?= $escape($buildPageUrl($currentPage - 1)) ?>">Prev</a>
+                <a href="<?= $escape($buildPageUrl($currentPage - 1)) ?>"><?= __('上一页') ?></a>
             <?php else: ?>
-                <span class="is-disabled">Prev</span>
+                <span class="is-disabled"><?= __('上一页') ?></span>
             <?php endif; ?>
 
             <?php for ($page = 1; $page <= $totalPages; $page++): ?>
@@ -305,9 +305,9 @@ $statusText = [
             <?php endfor; ?>
 
             <?php if ($currentPage < $totalPages): ?>
-                <a href="<?= $escape($buildPageUrl($currentPage + 1)) ?>">Next</a>
+                <a href="<?= $escape($buildPageUrl($currentPage + 1)) ?>"><?= __('下一页') ?></a>
             <?php else: ?>
-                <span class="is-disabled">Next</span>
+                <span class="is-disabled"><?= __('下一页') ?></span>
             <?php endif; ?>
         </nav>
     <?php endif; ?>
@@ -545,7 +545,7 @@ $statusText = [
     function notifyOrder(message, type, duration) {
         var titleMap = {
             info: '订单通知',
-            success: '订单已更新',
+            success: '订单已取消',
             warning: '请确认操作',
             error: '操作失败'
         };
