@@ -74,6 +74,8 @@
 
 ## 5. 输出行为约束（强制）
 
+- **禁止**用批量替换或一次性脚本机械修改多个源码文件；须逐文件、逐处理解后编辑。详见 `dev/ai/global-constraints.md` 第 5.1 节与 `.cursor/rules/no-batch-code-modification.mdc`。
+
 当你在回答中同时包含代码与验收交付物时，必须按以下顺序输出：
 
 1. 影响范围（哪些模块/需求项/AC）

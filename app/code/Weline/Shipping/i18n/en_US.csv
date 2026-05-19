@@ -75,15 +75,11 @@ API配置JSON格式错误,"API configuration JSON format error"
 新增发货地址,"Add Shipping Address"
 还没有发货地址,"No shipping address yet"
 点击“新增发货地址”，直接在当前页面维护。,"Click ""Add Shipping Address"" to maintain it directly on the current page."
-收货地址,"Billing Address"
+收货地址,"Delivery Address"
 管理配送和订单收货时使用的地址。,"Manage addresses used for delivery and order receiving."
 新增收货地址,"Add Delivery Address"
 还没有收货地址,"No delivery address yet"
 点击“新增收货地址”，直接在当前页面维护。,"Click ""Add Receiving Address"" to maintain it directly on the current page."
-Click "Add Shipping Address" to maintain it directly on the current page.,"Click ""Add Shipping Address"" to maintain it directly on the current page."
-Click "Add Receiving Address" to maintain it directly on the current page.,"Click ""Add Receiving Address"" to maintain it directly on the current page."
-Manage the shipping addresses used when shipping from the store or account.,"Manage the shipping addresses used when shipping from the store or account."
-Manage addresses used for delivery and order receiving.,"Manage addresses used for delivery and order receiving."
 发货地址加载失败，请稍后重试,"Failed to load shipping addresses. Please try again later."
 收货地址加载失败，请稍后重试,"Failed to load delivery addresses. Please try again later."
 中国,China
@@ -227,8 +223,6 @@ ID,ID
 暂无地址，请添加收货地址,"No address. Please add a delivery address."
 电话,Phone
 邮编,"Postal Code"
-鎿嶄綔澶辫触,鎿嶄綔澶辫触
-纭畾,纭畾
 操作失败,"Operation failed"
 确定,Confirm
 确定要删除此地址吗？,"Are you sure you want to delete this address?"

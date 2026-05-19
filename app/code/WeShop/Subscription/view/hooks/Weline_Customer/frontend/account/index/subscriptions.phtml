@@ -18,20 +18,20 @@ if (!$user) {
 try {
     /** @var \WeShop\Subscription\Service\SubscriptionListPageDataService $subscriptionListPageDataService */
     $subscriptionListPageDataService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Subscription\Service\SubscriptionListPageDataService::class);
-    $data = $subscriptionListPageDataService->build((int) $user->getId(), 1, 10, '');
-    $data['title'] = __('My Subscriptions');
+    $data = $subscriptionListPageDataService->build((int)$user->getId(), 1, 10, '');
+    $data['title'] = __('我的订阅服务');
     echo $this->fetch('WeShop_Subscription::templates/Frontend/Subscription/SubscriptionList/index.phtml', $data);
 } catch (\Throwable $exception) {
     ?>
     <div class="account-card weshop-account-subscriptions">
         <header class="account-card__header">
-            <h2 class="account-card__title"><?= __('My Subscriptions') ?></h2>
+            <h2 class="account-card__title"><?= __('我的订阅服务') ?></h2>
         </header>
         <div class="account-card__body">
             <div class="weshop-subscription-empty">
                 <div class="weshop-subscription-empty__mark">S</div>
-                <h2><?= __('Subscription info is currently unavailable') ?></h2>
-                <p><?= __('The subscription service is temporarily unavailable, please try again later.') ?></p>
+                <h2><?= __('订阅信息暂不可用') ?></h2>
+                <p><?= __('订阅服务暂时无法加载，请稍后重试。') ?></p>
             </div>
         </div>
     </div>

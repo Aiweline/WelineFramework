@@ -72,7 +72,7 @@ $renderIcon = static function (string $name): string {
                             class="mini-cart-item__qty-btn" 
                             data-action="decrease-qty" 
                             data-item-id="<?= htmlspecialchars((string)($item['cart_id'] ?? '')) ?>"
-                            aria-label="<?= __('Decrease quantity') ?>">
+                            aria-label="<?= __('减少数量') ?>">
                         <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('minus') ?></span>
                     </button>
                     <span class="mini-cart-item__qty-value"><?= (int)($item['quantity'] ?? 1) ?></span>
@@ -80,7 +80,7 @@ $renderIcon = static function (string $name): string {
                             class="mini-cart-item__qty-btn" 
                             data-action="increase-qty" 
                             data-item-id="<?= htmlspecialchars((string)($item['cart_id'] ?? '')) ?>"
-                            aria-label="<?= __('Increase quantity') ?>">
+                            aria-label="<?= __('增加数量') ?>">
                         <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('plus') ?></span>
                     </button>
                 </div>
@@ -91,7 +91,7 @@ $renderIcon = static function (string $name): string {
                     class="mini-cart-item__remove" 
                     data-action="remove-item" 
                     data-item-id="<?= htmlspecialchars((string)($item['cart_id'] ?? '')) ?>"
-                    aria-label="<?= __('Remove item') ?>">
+                    aria-label="<?= __('删除商品') ?>">
                 <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('trash') ?></span>
             </button>
         </div>

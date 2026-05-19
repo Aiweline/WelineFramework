@@ -282,6 +282,40 @@ final class StartBackgroundStartupReadyTest extends TestCase
         });
     }
 
+    public function testFormatBackgroundStartupProgressIncludesFailureReasonAndFullPending(): void
+    {
+        $start = new Start();
+        $progress = $this->invokeProtected($start, 'formatBackgroundStartupProgress', [
+            'startup_phase' => 'stopping',
+            'startup_failure_reason' => '启动异常：计划进程 30.00s 内未全部 READY',
+            'current_snapshot' => [
+                'services' => [
+                    'dispatcher' => [
+                        'display_name' => 'Dispatcher',
+                        'instances' => [['state' => 'starting']],
+                    ],
+                    'redirect' => [
+                        'display_name' => 'HTTP Redirect',
+                        'instances' => [['state' => 'starting']],
+                    ],
+                    'maintenance' => [
+                        'display_name' => 'Maintenance Worker',
+                        'instances' => [
+                            ['state' => 'starting'],
+                            ['state' => 'starting'],
+                        ],
+                    ],
+                ],
+            ],
+        ], 14000);
+
+        self::assertMatchesRegularExpression('/阶段：(停止中|Stopping)/u', $progress);
+        self::assertStringContainsString('原因：', $progress);
+        self::assertStringContainsString('启动异常', $progress);
+        self::assertStringContainsString('Dispatcher 0/1', $progress);
+        self::assertStringContainsString('Maintenance Worker 0/2', $progress);
+    }
+
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

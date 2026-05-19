@@ -700,7 +700,6 @@ Cookie政策,Cookie政策
 "Invalid plan stream parameters","Invalid plan stream parameters"
 "Plan generation started","Plan generation started"
 "Loaded current draft plan","Loaded current draft plan"
-"Plan generation failed","Plan generation failed"
 "Plan generation finished","Plan generation finished"
 "Invalid plan confirmation request","Invalid plan confirmation request"
 "Please generate a plan before confirming it","Please generate a plan before confirming it"
@@ -1225,8 +1224,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "Reserved local domain: %{domain}","Reserved local domain: %{domain}"
 "Starting plan generation","Starting plan generation"
 "Plan generation completed","Plan generation completed"
-"AI service is not available for plan generation","AI service is not available for plan generation"
-"AI plan generation failed: %{message}","AI plan generation failed: %{message}"
+"AI plan generation failed, fallback will be used: %{message}","AI plan generation failed, fallback will be used: %{message}"
 已接入,已接入
 查看此流程,查看此流程
 "已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。","已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。"

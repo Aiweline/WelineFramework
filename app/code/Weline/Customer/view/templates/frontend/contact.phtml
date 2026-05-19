@@ -3,182 +3,77 @@
 $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 $accountUrl = $this->getUrl('customer/account');
 $returnsUrl = $this->getUrl('customer/account');
-$formAction = $this->getUrl('customer/contact');
-$formData = is_array($form_data ?? null) ? $form_data : [];
-$contactCategories = is_array($contact_categories ?? null) ? $contact_categories : [];
-$formError = trim((string) ($form_error ?? ''));
-$contactSubmitted = !empty($contact_submitted);
-$getValue = static fn(string $key, string $default = ''): string => htmlspecialchars((string) ($formData[$key] ?? $default), ENT_QUOTES, 'UTF-8');
 ?>
-<section class="contact-page" data-testid="customer-contact-page">
-    <div class="contact-page__hero">
-        <article class="contact-surface contact-surface--hero">
-            <div class="contact-eyebrow"><?= __('客户支持') ?></div>
-            <h1 class="contact-title"><?= __('联系我们') ?></h1>
-            <p class="contact-description">
-                <?= __('订单、配送、退换货和账户访问问题都可以从这里联系支持团队。你可以先尝试在线客服，也可以留下联系方式和问题详情，方便客服按单跟进。') ?>
+<section class="customer-contact-page" data-testid="customer-contact-page">
+    <div class="customer-contact-hero">
+        <div class="customer-contact-hero__main">
+            <span class="customer-contact-eyebrow"><?= __('客户支持') ?></span>
+            <h1><?= __('联系我们') ?></h1>
+            <p class="customer-contact-lead">
+                <?= __('订单、配送、退换货和账户问题都可以从这里联系支持团队。请优先说明订单号或问题场景，便于客服更快定位。') ?>
             </p>
-
-            <div class="contact-tag-list" aria-label="<?= $escape(__('联系方式')) ?>">
-                <span class="contact-tag"><?= __('在线客服') ?></span>
-                <span class="contact-tag"><?= __('资料留存') ?></span>
-                <span class="contact-tag"><?= __('售后资料') ?></span>
-            </div>
-
-            <div class="contact-action-row">
-                <a class="contact-btn contact-btn--primary" href="javascript:void(0)" data-customer-contact-chat>
+            <div class="customer-contact-actions">
+                <a class="customer-contact-button customer-contact-button--primary" href="javascript:void(0)" data-customer-contact-chat>
                     <?= __('打开在线客服') ?>
                 </a>
-                <a class="contact-btn contact-btn--secondary" href="<?= $escape($accountUrl) ?>">
+                <a class="customer-contact-button customer-contact-button--secondary" href="<?= $escape($accountUrl) ?>">
                     <?= __('返回个人中心') ?>
                 </a>
             </div>
-        </article>
+        </div>
 
-        <aside class="contact-surface contact-surface--support">
-            <h2 class="contact-support__title"><?= __('需要售后帮助？') ?></h2>
-            <p class="contact-support__description">
-                <?= __('如果你正在申请退换货，请优先从个人中心的订单或退换货区域进入，系统会带上更完整的订单上下文。若暂时找不到对应入口，也可以直接在下方表单里提交资料。') ?>
-            </p>
-
-            <a class="contact-btn contact-btn--light" href="<?= $escape($returnsUrl) ?>">
+        <aside class="customer-contact-hero__side">
+            <h2><?= __('需要售后帮助？') ?></h2>
+            <p><?= __('如果你正在申请退换货，请从个人中心的订单或退换货区域进入，系统会带上更完整的订单上下文。') ?></p>
+            <a class="customer-contact-button customer-contact-button--dark" href="<?= $escape($returnsUrl) ?>">
                 <?= __('查看我的售后') ?>
             </a>
-
-            <div class="contact-support__meta">
-                <div class="contact-support__meta-item">
-                    <strong><?= __('订单信息') ?></strong>
-                    <span><?= __('与订单相关的问题建议提供订单号、商品名称和下单时间。') ?></span>
-                </div>
-                <div class="contact-support__meta-item">
-                    <strong><?= __('问题证据') ?></strong>
-                    <span><?= __('如涉及损坏、缺件或物流异常，建议先准备照片、视频或物流凭证。') ?></span>
-                </div>
-            </div>
         </aside>
     </div>
 
-    <div class="contact-channel-grid" aria-label="<?= $escape(__('联系方式')) ?>">
-        <article class="contact-surface contact-channel-card">
-            <div class="contact-channel-card__icon" aria-hidden="true">
-                <i class="fa fa-comments-o"></i>
+    <div class="customer-contact-grid" aria-label="<?= $escape(__('联系方式')) ?>">
+        <article class="customer-contact-card">
+            <div class="customer-contact-card__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3C7.03 3 3 6.58 3 11c0 2.39 1.18 4.54 3.05 6.01L5.2 21l4.15-2.08c.84.2 1.73.31 2.65.31 4.97 0 9-3.58 9-8S16.97 3 12 3Zm-4 7.25h8v1.5H8v-1.5Zm0 3h5.5v1.5H8v-1.5Z"/></svg>
             </div>
             <h3><?= __('在线客服') ?></h3>
             <p><?= __('适合处理实时咨询、订单状态、退换货进度和账户登录问题。') ?></p>
         </article>
 
-        <article class="contact-surface contact-channel-card">
-            <div class="contact-channel-card__icon" aria-hidden="true">
-                <i class="fa fa-envelope-o"></i>
+        <article class="customer-contact-card">
+            <div class="customer-contact-card__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4V5Zm2 3.2v8.8h12V8.2l-6 4.1-6-4.1Zm1.16-1.2L12 10.3 16.84 7H7.16Z"/></svg>
             </div>
-            <h3><?= __('资料留存') ?></h3>
-            <p><?= __('提交表单后，客服可以看到你留下的邮箱、电话、订单号和问题描述，便于后续追踪。') ?></p>
+            <h3><?= __('订单沟通') ?></h3>
+            <p><?= __('请准备好订单号、商品名称和问题说明，避免客服反复确认基础信息。') ?></p>
         </article>
 
-        <article class="contact-surface contact-channel-card">
-            <div class="contact-channel-card__icon" aria-hidden="true">
-                <i class="fa fa-file-text-o"></i>
+        <article class="customer-contact-card">
+            <div class="customer-contact-card__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h10V6H7Zm2 3h6v1.5H9V9Zm0 3h6v1.5H9V12Zm0 3h4v1.5H9V15Z"/></svg>
             </div>
             <h3><?= __('售后资料') ?></h3>
             <p><?= __('退换货问题建议附上商品照片、包装照片和物流凭证，能减少处理等待。') ?></p>
         </article>
     </div>
-
-    <div class="contact-workspace">
-        <article class="contact-surface contact-form-card">
-            <header class="contact-section-header">
-                <h2><?= __('留下你的联系方式') ?></h2>
-                <p><?= __('如果当前不方便等待在线客服，可以直接提交表单。客服会根据你留下的信息继续跟进。') ?></p>
-            </header>
-
-            <div class="contact-form-card__body">
-                <?php if ($contactSubmitted): ?>
-                    <div class="contact-notice contact-notice--success" aria-live="polite">
-                        <?= __('你的留言已经提交成功，我们会尽快通过你留下的联系方式与您沟通。') ?>
-                    </div>
-                <?php elseif ($formError !== ''): ?>
-                    <div class="contact-notice contact-notice--error" aria-live="assertive">
-                        <?= $escape($formError) ?>
-                    </div>
-                <?php endif; ?>
-
-                <form class="contact-form" method="post" action="<?= $escape($formAction) ?>">
-                    <div class="contact-form__row">
-                        <div class="contact-field">
-                            <label class="contact-field__label" for="contact-name"><?= __('联系人姓名') ?></label>
-                            <input id="contact-name" class="contact-control" type="text" name="name" value="<?= $getValue('name') ?>" maxlength="100" autocomplete="name" required>
-                        </div>
-                        <div class="contact-field">
-                            <label class="contact-field__label" for="contact-email"><?= __('联系邮箱') ?></label>
-                            <input id="contact-email" class="contact-control" type="email" name="email" value="<?= $getValue('email') ?>" maxlength="100" autocomplete="email" required>
-                        </div>
-                    </div>
-
-                    <div class="contact-form__row">
-                        <div class="contact-field">
-                            <label class="contact-field__label" for="contact-phone"><?= __('联系电话') ?></label>
-                            <input id="contact-phone" class="contact-control" type="text" name="phone" value="<?= $getValue('phone') ?>" maxlength="32" autocomplete="tel" placeholder="<?= $escape(__('可选，便于客服联系')) ?>">
-                        </div>
-                        <div class="contact-field">
-                            <label class="contact-field__label" for="contact-order-number"><?= __('订单号') ?></label>
-                            <input id="contact-order-number" class="contact-control" type="text" name="order_number" value="<?= $getValue('order_number') ?>" maxlength="64" placeholder="<?= $escape(__('如与订单相关，建议填写')) ?>">
-                        </div>
-                    </div>
-
-                    <div class="contact-form__row">
-                        <div class="contact-field">
-                            <label class="contact-field__label" for="contact-category"><?= __('问题分类') ?></label>
-                            <select id="contact-category" class="contact-control" name="category" required>
-                                <?php foreach ($contactCategories as $categoryCode => $categoryLabel): ?>
-                                    <option value="<?= $escape($categoryCode) ?>"<?= (($formData['category'] ?? '') === $categoryCode) ? ' selected' : '' ?>>
-                                        <?= $escape($categoryLabel) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="contact-field">
-                            <label class="contact-field__label" for="contact-subject"><?= __('联系主题') ?></label>
-                            <input id="contact-subject" class="contact-control" type="text" name="subject" value="<?= $getValue('subject') ?>" maxlength="150" required placeholder="<?= $escape(__('例如：订单延迟发货')) ?>">
-                        </div>
-                    </div>
-
-                    <div class="contact-field">
-                        <label class="contact-field__label" for="contact-message"><?= __('问题描述') ?></label>
-                        <textarea id="contact-message" class="contact-control contact-control--textarea" name="message" maxlength="5000" required placeholder="<?= $escape(__('请尽量写清楚问题经过、当前状态、希望的处理方式。')) ?>"><?= $getValue('message') ?></textarea>
-                        <div class="contact-field__hint"><?= __('建议写明订单号、商品名称、问题发生时间和你已经尝试过的处理动作。') ?></div>
-                    </div>
-
-                    <div class="contact-form__actions">
-                        <button class="contact-btn contact-btn--primary contact-btn--submit" type="submit"><?= __('提交联系单') ?></button>
-                    </div>
-                </form>
-            </div>
-        </article>
-
-        <aside class="contact-surface contact-tips-card">
-            <header class="contact-section-header">
-                <h2><?= __('提交前建议准备') ?></h2>
-                <p><?= __('资料越完整，客服越容易一次定位问题，减少来回确认。') ?></p>
-            </header>
-
-            <ul class="contact-tip-list">
-                <li class="contact-tip">
-                    <strong><?= __('订单信息') ?></strong>
-                    <span><?= __('与订单相关的问题建议提供订单号、商品名称和下单时间。') ?></span>
-                </li>
-                <li class="contact-tip">
-                    <strong><?= __('联系方式') ?></strong>
-                    <span><?= __('可选，便于客服联系') ?></span>
-                </li>
-                <li class="contact-tip">
-                    <strong><?= __('问题证据') ?></strong>
-                    <span><?= __('如涉及损坏、缺件或物流异常，建议先准备照片、视频或物流凭证。') ?></span>
-                </li>
-                <li class="contact-tip">
-                    <strong><?= __('响应预期') ?></strong>
-                    <span><?= __('表单提交后会进入后台联系单管理，客服可以继续跟进处理状态。') ?></span>
-                </li>
-            </ul>
-        </aside>
-    </div>
 </section>
+
+<script>
+document.addEventListener('click', function (event) {
+    var trigger = event.target.closest('[data-customer-contact-chat]');
+    if (!trigger) {
+        return;
+    }
+
+    event.preventDefault();
+    if (typeof CustomerServiceWidget !== 'undefined' && typeof CustomerServiceWidget.toggleChat === 'function') {
+        CustomerServiceWidget.toggleChat();
+        return;
+    }
+
+    var widgetButton = document.getElementById('cs-chat-button');
+    if (widgetButton) {
+        widgetButton.click();
+    }
+});
+</script>

@@ -10,13 +10,6 @@
 "Compare item ID is required.","缺少对比项 ID。"
 "Compare item could not be removed.",无法移除该对比项。
 "Removed from compare.",已从对比中移除。
-"Unsupported compare provider operation: %{1}","Unsupported compare provider operation: %{1}"
-"Compare count loaded.","Compare count loaded."
-"Compare Query","Compare Query"
-"Provides frontend compare-list operations through the worker API.","Provides frontend compare-list operations through the worker API."
-"Frontend compare add operation.","Frontend compare add operation."
-"Frontend compare remove operation.","Frontend compare remove operation."
-"Frontend compare count operation.","Frontend compare count operation."
 "Customer #%1","Customer #%1"
 "Product #%1","Product #%1"
 "In stock",有货

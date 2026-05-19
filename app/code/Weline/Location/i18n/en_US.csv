@@ -28,18 +28,22 @@ geojs.io返回空数据,"geojs.io returned empty data"
 "ipwhois.app返回数据解析失败: %{1}","ipwhois.app response data parsing failed: %{1}"
 "ipwhois.app定位失败: %{1}","ipwhois.app location failed: %{1}"
 本地定位服务暂未实现，将使用备用通道,"Local location service not implemented, will use fallback channels"
-China,China
-"Deliver to","Deliver to"
-"Select delivery address","Select delivery address"
-"Auto detect","Auto detect"
-"Manual select","Manual select"
-Close,Close
-Locating...,Locating...
-"Enter delivery address, format: Province/City/District","Enter delivery address, format: Province/City/District"
+定位中...,Locating...
+中国大陆,"Chinese mainland"
+配送至,"Ship to"
+选择配送地址,"Select Shipping Address"
+自动定位,"Auto Locate"
+手动选择,"Manual selection"
+关闭,Close
+Geo模块未加载,"Geo module not loaded"
+获取地址信息失败,"Failed to retrieve address information"
+定位失败，请稍后重试,"Location Failed, Please Try Again Later"
+请输入配送地址（格式：省/市/区）,"Please enter the delivery address (format: Province/City/District)"
+中国,China
 "浏览器不支持Geolocation API","Browser does not support Geolocation API"
 用户拒绝了定位权限,"User denied geolocation permission"
 位置信息不可用,"Position information unavailable"
 定位请求超时,"Location request timeout"
-"Weline API is not available","Weline API is not available"
+IP定位服务响应错误,"IP location service response error"
 IP定位失败,"IP location failed"
 "IP定位服务不可用: %{1}","IP location service unavailable: %{1}"

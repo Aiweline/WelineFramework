@@ -21,7 +21,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| `global-constraints.md` | 唯一 AI 总则与全局约束，包含对抗性思维、反顺从原则、并行拆分、WLS 安全、开发禁令和验证底线。 |
+| `global-constraints.md` | 唯一 AI 总则与全局约束，包含对抗性思维、反顺从原则、并行拆分、WLS 安全、开发禁令（含 §5.1 禁止批量替换/批量脚本改码）、layout 约定和验证底线。 |
 
 `AI-开发与测试指南.md` 是扩展参考资料，不作为总则入口；如与 `global-constraints.md` 冲突，以 `global-constraints.md` 为准。
 
@@ -29,9 +29,7 @@
 
 ## 规则目录说明
 
-历史 `.mdc` 规则已归档到 `archive/rules/`。当前规则总入口只有一个：
-
-- `global-constraints.md`
+历史 `.mdc` 规则已归档到 `archive/rules/`。当前规则总入口为 `global-constraints.md`；Cursor `alwaysApply` 摘要见 `dev/ai/rules/*.mdc`（与 `.cursor/rules/` 同步，如 `no-batch-code-modification.mdc`）。
 
 `skills/*/SKILL.md` 只写专项技能独有规则；跨角色共识规则必须回到 `global-constraints.md` 维护。
 

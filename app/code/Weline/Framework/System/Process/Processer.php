@@ -4171,19 +4171,30 @@ POWERSHELL;
     }
 
     /**
+     * Windows：用 start /B 脱离当前 CLI，避免 taskkill /T 在父进程内同步扫完整棵子树。
+     */
+    private static function wrapWindowsDetachedAsyncCommand(string $command): string
+    {
+        $command = \trim($command);
+        if ($command === '') {
+            return $command;
+        }
+
+        if (\preg_match('/\s2>NUL\s*$/i', $command)) {
+            $command = (string) \preg_replace('/\s2>NUL\s*$/i', '', $command) . ' 1>NUL 2>NUL';
+        } elseif (!\preg_match('/1>NUL/i', $command)) {
+            $command .= ' 1>NUL 2>NUL';
+        }
+
+        return 'cmd /d /c start "" /B cmd /d /c "' . $command . '"';
+    }
+
+    /**
      * @param int[] $pids
      */
     private static function buildWindowsAsyncBatchSignalCommand(array $pids): string
     {
-        $pidArgs = [];
-        foreach ($pids as $pid) {
-            $pid = (int) $pid;
-            if ($pid > 0) {
-                $pidArgs[] = '/PID ' . $pid;
-            }
-        }
-
-        return self::buildWindowsBatchSignalCommand($pids);
+        return self::wrapWindowsDetachedAsyncCommand(self::buildWindowsBatchSignalCommand($pids));
     }
 
     /**
@@ -4191,15 +4202,7 @@ POWERSHELL;
      */
     private static function buildWindowsAsyncBatchTreeKillCommand(array $pids): string
     {
-        $pidArgs = [];
-        foreach ($pids as $pid) {
-            $pid = (int) $pid;
-            if ($pid > 0) {
-                $pidArgs[] = '/PID ' . $pid;
-            }
-        }
-
-        return self::buildWindowsBatchTreeKillCommand($pids);
+        return self::wrapWindowsDetachedAsyncCommand(self::buildWindowsBatchTreeKillCommand($pids));
     }
 
     /**

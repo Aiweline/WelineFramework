@@ -45,41 +45,6 @@ if (!\function_exists('wlsNormalizeMemoryLimit')) {
         return $default;
     }
 }
-if (!\function_exists('wlsMemoryLimitToBytes')) {
-    function wlsMemoryLimitToBytes(mixed $value): int
-    {
-        $limit = \strtoupper(\trim((string)$value));
-        if ($limit === '' || $limit === '-1' || $limit === '0') {
-            return 0;
-        }
-        $unit = \substr($limit, -1);
-        $number = (float)$limit;
-        if ($number <= 0) {
-            return 0;
-        }
-
-        return match ($unit) {
-            'G' => (int)\round($number * 1024 * 1024 * 1024),
-            'M' => (int)\round($number * 1024 * 1024),
-            'K' => (int)\round($number * 1024),
-            default => (int)\round($number),
-        };
-    }
-}
-if (!\function_exists('wlsResolveMemoryGuardBytes')) {
-    function wlsResolveMemoryGuardBytes(array $envConfig, string $key, int $defaultBytes): int
-    {
-        $value = $envConfig['wls']['memory_guard'][$key] ?? null;
-        if ($value === null || $value === '') {
-            return $defaultBytes;
-        }
-        if (\is_int($value) || \is_float($value) || (\is_string($value) && \preg_match('/^\d+(?:\.\d+)?$/', \trim($value)) === 1)) {
-            return \max(0, (int)\round((float)$value * 1024 * 1024));
-        }
-
-        return wlsMemoryLimitToBytes($value) ?: $defaultBytes;
-    }
-}
 
 $wlsMemoryLimit = '256M';
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -1062,12 +1027,10 @@ if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRE
 }
 
 // 内存监控配置（防止内存泄漏导致 OOM）
-$maxMemoryBytes = wlsMemoryLimitToBytes($wlsMemoryLimit) ?: (256 * 1024 * 1024);
+$maxMemoryBytes = 256 * 1024 * 1024; // 256MB 内存上限
 $memoryCheckInterval = 10; // 每 10 秒检查一次内存
 $lastMemoryCheck = \time();
 $memoryWarningThreshold = 0.8; // 80% 时告警
-$memoryWarningBytes = wlsResolveMemoryGuardBytes($envConfig, 'warning_mb', 128 * 1024 * 1024);
-$memoryDrainBytes = wlsResolveMemoryGuardBytes($envConfig, 'drain_mb', 192 * 1024 * 1024);
 
 // 最大请求数限制（可选的内存保护措施）
 $maxRequests = 10000; // 处理 10000 个请求后优雅重启（0=禁用）
@@ -1458,41 +1421,17 @@ while (true) {
         $lastMemoryCheck = $now;
         $currentMemory = \memory_get_usage(true);
         $memoryPercent = $currentMemory / $maxMemoryBytes;
-        $memoryDrainHit = $currentMemory >= $maxMemoryBytes
-            || ($memoryDrainBytes > 0 && $currentMemory >= $memoryDrainBytes);
-        $memoryWarningHit = $memoryPercent >= $memoryWarningThreshold
-            || ($memoryWarningBytes > 0 && $currentMemory >= $memoryWarningBytes);
         
         // 超过内存上限，触发优雅重启
-        if ($memoryDrainHit) {
-            $beforeMb = \round($currentMemory / 1024 / 1024, 2);
-            $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-            $currentMemory = \memory_get_usage(true);
-            $memoryPercent = $currentMemory / $maxMemoryBytes;
-            $memoryDrainHit = $currentMemory >= $maxMemoryBytes
-                || ($memoryDrainBytes > 0 && $currentMemory >= $memoryDrainBytes);
+        if ($currentMemory >= $maxMemoryBytes) {
             $memoryMB = \round($currentMemory / 1024 / 1024, 2);
-            if ($memoryDrainHit) {
-                WlsLogger::warning_(
-                    "Memory pressure {$memoryMB}MB after compact (before={$beforeMb}MB, drain_mb="
-                    . \round($memoryDrainBytes / 1024 / 1024, 1) . "), start graceful restart"
-                );
-                $shouldExit = true;
-            } elseif ($memoryPercent >= $memoryWarningThreshold
-                || ($memoryWarningBytes > 0 && $currentMemory >= $memoryWarningBytes)) {
-                WlsLogger::warning_(
-                    "Memory high {$memoryMB}MB after compact (before={$beforeMb}MB, cycles="
-                    . (int)($compaction['cycles'] ?? 0) . ")"
-                );
-            }
+            WlsLogger::warning_("内存使用超限 ({$memoryMB}MB >= " . ($maxMemoryBytes / 1024 / 1024) . "MB)，触发优雅重启");
+            $shouldExit = true;
         }
         // 达到告警阈值，输出警告日志
-        elseif ($memoryWarningHit) {
+        elseif ($memoryPercent >= $memoryWarningThreshold) {
             $memoryMB = \round($currentMemory / 1024 / 1024, 2);
-            WlsLogger::warning_(
-                "Memory high {$memoryMB}MB (" . \round($memoryPercent * 100)
-                . "%, warning_mb=" . \round($memoryWarningBytes / 1024 / 1024, 1) . ")"
-            );
+            WlsLogger::warning_("内存使用率较高: {$memoryMB}MB (" . \round($memoryPercent * 100) . "%)");
         }
         
         // 定期记录 Worker 状态到数据库
@@ -3586,14 +3525,6 @@ function handleRequest(
             || $responseLocation !== ''
             || \str_contains($responseContentType, 'text/event-stream');
         if ($responseBody === '' && !$isExpectedEmptyResponse) {
-            $emptyResponseDebug = [
-                'memory_mb' => \round(\memory_get_usage(true) / 1048576, 2),
-                'peak_memory_mb' => \round(\memory_get_peak_usage(true) / 1048576, 2),
-                'memory_limit' => (string)\ini_get('memory_limit'),
-            ];
-            if (\class_exists(\Weline\Framework\Runtime\FiberOutputBuffer::class, false)) {
-                $emptyResponseDebug['fiber_output'] = \Weline\Framework\Runtime\FiberOutputBuffer::debugState();
-            }
             WlsLogger::error_(
                 '[UnexpectedEmptyResponse] method=' . $method
                 . ' uri=' . ($request->getUri() ?: ($request->getServer('REQUEST_URI') ?? ''))
@@ -3602,7 +3533,6 @@ function handleRequest(
                 . ' location=' . ($responseLocation !== '' ? $responseLocation : '(none)')
                 . ' worker_id=' . $workerId
                 . ' worker_port=' . $port
-                . ' debug=' . \json_encode($emptyResponseDebug, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE)
             );
         }
 

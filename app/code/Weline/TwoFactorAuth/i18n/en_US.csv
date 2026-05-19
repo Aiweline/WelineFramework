@@ -20,7 +20,6 @@
 请提供验证码,"Please provide the verification code"
 双因素身份验证已禁用,"Two-factor authentication disabled"
 备份码已重新生成,"Backup code regenerated"
-"Code data loaded.","Code data loaded."
 "The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
 "Please enter the verification code.","Please enter the verification code."
 "Verification code is incorrect.","Verification code is incorrect."
@@ -163,8 +162,6 @@ Android设备安装步骤：,"Android Device Installation Steps:"
 我们的验证器是一个PWA（渐进式Web应用），可以像原生应用一样安装到您的设备上。,"Our authenticator is a PWA (Progressive Web App) that can be installed on your device like a native app."
 提示：,Tip:
 建议将验证器保存到桌面，方便随时使用。安装后可以离线使用，无需每次打开浏览器。,"It is recommended to save the authenticator to your desktop for easy access. After installation, it can be used offline without opening the browser each time."
-鎻愮ず,鎻愮ず
-纭畾,纭畾
 无法访问摄像头,"Unable to access the camera"
 错误,Error
 无效的二维码格式,"Invalid QR Code Format"

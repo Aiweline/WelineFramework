@@ -18,11 +18,6 @@
 "Question ID is required.",问题ID不能为空。
 "Cannot remove this question.",无法删除该问题。
 "Question removed.",问题已删除。
-"Unsupported QA provider operation: %{1}","Unsupported QA provider operation: %{1}"
-"Product QA Query","Product QA Query"
-"Provides frontend product Q&A operations through the worker API.","Provides frontend product Q&A operations through the worker API."
-"Submit a frontend product question.","Submit a frontend product question."
-"Remove a frontend product question owned by the customer.","Remove a frontend product question owned by the customer."
 "Product Q&A tab content",商品问答标签内容
 "Render the Q&A block inside product detail tabs.",在商品详情标签中渲染问答模块。
 "QA Page Hooks",问答页面扩展位

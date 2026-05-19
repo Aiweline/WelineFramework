@@ -32,6 +32,7 @@ This shared skill owns baseline development standards for all WelineFramework en
 - Enforce `dev/ai/global-constraints.md` and the repository reading order before deep source-code inspection.
 - Keep changes within the correct module or framework boundary.
 - Prefer small, isolated, testable changes over broad rewrites.
+- Never use cross-file batch replace or one-off bulk rewrite scripts; edit source file-by-file with per-occurrence context review (`dev/ai/global-constraints.md` §5.1).
 - Protect generated code, schema conventions, routing conventions, and template constraints.
 - Ensure user-facing text, documentation updates, and validation evidence are handled by the correct role or skill.
 - Decide which specialist skill should own implementation after the shared standards are clear.
@@ -179,7 +180,7 @@ Use this format:
 # Validation
 
 - Confirm the change follows the required reading order and module boundary.
-- Confirm no forbidden files or patterns were introduced, including direct `generated/` edits, `routes.xml`, browser-native dialogs, hardcoded visible text, `.phtml` strict types, or WLS `sleep`/`die`/`exit`.
+- Confirm no forbidden files or patterns were introduced, including direct `generated/` edits, `routes.xml`, browser-native dialogs, hardcoded visible text, `.phtml` strict types, WLS `sleep`/`die`/`exit`, or batch replace / bulk script rewrites across source files.
 - Run targeted unit tests when logic changes.
 - Run HTTP or route validation when routes, controllers, APIs, or UI entry points change.
 - Run E2E or browser validation when user flows, forms, interactions, or visible feedback change.

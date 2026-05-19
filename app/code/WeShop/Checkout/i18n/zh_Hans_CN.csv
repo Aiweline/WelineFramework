@@ -2,11 +2,10 @@
 该订单已无法重新支付。,该订单已无法重新支付。
 结账内容为空。,结账内容为空。
 结账方式刷新成功。,结账方式刷新成功。
+匿名结账需要填写邮箱。,匿名结账需要填写邮箱。
 订单提交成功。,订单提交成功。
 "缺少订单 ID。","缺少订单 ID。"
 未找到请求的订单。,未找到请求的订单。
-"WeShop checkout order created","WeShop checkout order created"
-"Dispatched after WeShop checkout creates an order. Payload includes order, customer identity, guest email, checkout data, and selected notification channels.","Dispatched after WeShop checkout creates an order. Payload includes order, customer identity, guest email, checkout data, and selected notification channels."
 "Checkout success page before content","Checkout success page before content"
 "Render extension content before the checkout success page body.","Render extension content before the checkout success page body."
 "Checkout success recommendations before","Checkout success recommendations before"
@@ -40,8 +39,6 @@
 请填写收货地址信息。,请填写收货地址信息。
 请选择配送方式。,请选择配送方式。
 请选择支付方式。,请选择支付方式。
-"优惠券 %{1}","优惠券 %{1}"
-优惠,优惠
 WeShop,WeShop
 一页式结账：联系信息、配送和支付一次完成。,一页式结账：联系信息、配送和支付一次完成。
 匿名结账,匿名结账
@@ -49,13 +46,6 @@ WeShop,WeShop
 查看订单摘要,查看订单摘要
 重新支付,重新支付
 将复用当前订单，不会重复创建订单。,将复用当前订单，不会重复创建订单。
-结账方式,结账方式
-由客户选择是否匿名结账,由客户选择是否匿名结账
-使用账户结账,使用账户结账
-订单、收货地址和售后会关联到当前账户。,订单、收货地址和售后会关联到当前账户。
-登录后可选择账户结账并使用账户地址。,登录后可选择账户结账并使用账户地址。
-不强制登录；本次订单使用邮箱接收通知，支付、配送模块可按匿名上下文处理。,不强制登录；本次订单使用邮箱接收通知，支付、配送模块可按匿名上下文处理。
-"全局结账只负责输出身份选择和上下文，支付、配送、风控等特殊逻辑由各自模块通过 hook 或 event 处理。","全局结账只负责输出身份选择和上下文，支付、配送、风控等特殊逻辑由各自模块通过 hook 或 event 处理。"
 联系信息,联系信息
 无需账户,无需账户
 账户邮箱,账户邮箱
@@ -66,8 +56,6 @@ WeShop,WeShop
 收货地址,收货地址
 使用新地址,使用新地址
 在下方填写新的收货地址。,在下方填写新的收货地址。
-添加新的收货地址,添加新的收货地址
-当前账户还没有保存地址，填写下方地址即可完成本次结账。,当前账户还没有保存地址，填写下方地址即可完成本次结账。
 名,名
 姓,姓
 详细地址,详细地址
@@ -94,14 +82,9 @@ WeShop,WeShop
 小计,小计
 运费,运费
 税费,税费
+优惠,优惠
 合计,合计
-优惠券,优惠券
-暂时无法刷新结账方式。,暂时无法刷新结账方式。
-当前收货地址没有可用配送方式。,当前收货地址没有可用配送方式。
-当前没有可用的匿名支付方式。,当前没有可用的匿名支付方式。
 收起订单摘要,收起订单摘要
-暂时无法提交订单。,暂时无法提交订单。
-%{1}年%{2}月%{3}日,%{1}年%{2}月%{3}日
 订单提交成功！,订单提交成功！
 订单已确认！,订单已确认！
 感谢购买，我们已收到你的订单，并会持续更新处理进度。,感谢购买，我们已收到你的订单，并会持续更新处理进度。
@@ -122,3 +105,9 @@ WeShop,WeShop
 购买该商品的顾客还购买了,购买该商品的顾客还购买了
 查看订单详情,查看订单详情
 继续购物,继续购物
+暂时无法刷新结账方式。,暂时无法刷新结账方式。
+暂时无法提交订单。,暂时无法提交订单。
+当前收货地址没有可用配送方式。,当前收货地址没有可用配送方式。
+当前没有可用的匿名支付方式。,当前没有可用的匿名支付方式。
+%{1}年%{2}月%{3}日,%{1}年%{2}月%{3}日
+合计,合计

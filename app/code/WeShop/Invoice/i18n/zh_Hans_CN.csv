@@ -89,6 +89,16 @@ Outstanding,Outstanding
 "Invoice Created","Invoice Created"
 "Invoice Issued","Invoice Issued"
 "Payment Received","Payment Received"
+"Billing Documents","Billing Documents"
+"My Invoices","My Invoices"
+"Review issued invoices, pending requests, and billing references for your recent orders.","Review issued invoices, pending requests, and billing references for your recent orders."
+Order,Order
+"No invoices yet","No invoices yet"
+"Your issued billing documents will appear here once order invoicing is complete.","Your issued billing documents will appear here once order invoicing is complete."
+"Issued: %1","Issued: %1"
+"Page %1 of %2","Page %1 of %2"
+"Previous page","Previous page"
+"Next page","Next page"
 账单文档,账单文档
 我的发票,我的发票
 查看已开具的发票、待处理申请和近期订单的账单参考信息。,查看已开具的发票、待处理申请和近期订单的账单参考信息。
@@ -102,6 +112,6 @@ Outstanding,Outstanding
 暂无发票,暂无发票
 订单开票完成后，已开具的账单文档会显示在这里。,订单开票完成后，已开具的账单文档会显示在这里。
 已开具：%{1},已开具：%{1}
-"第 %{1} 页 / 共 %{2} 页","第 %{1} 页 / 共 %{2} 页"
+第 %{1} 页 / 共 %{2} 页,第 %{1} 页 / 共 %{2} 页
 上一页,上一页
 下一页,下一页

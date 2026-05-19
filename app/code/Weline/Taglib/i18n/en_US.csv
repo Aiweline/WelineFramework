@@ -38,9 +38,9 @@
 "所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>","The specified name could not find the corresponding JS template file! Name cannot be empty; for inline JS, please use paired tags <js:part>code</js:part>"
 所指定的name找不到对应的js模板文件！,"The specified name could not find the corresponding JS template file!"
 "Scope 标签属性 container-id 不能为空！","Scope label attribute container-id cannot be empty!"
-濂界殑,濂界殑
-绠椾簡,绠椾簡
-鎿嶄綔鎴愬姛!,鎿嶄綔鎴愬姛!
+好的,OK
+算了,"Forget it"
+操作成功!,"Operation successful!"
 标签文档,"Tag documentation"
 json数据,"json data"
 开发>标签管理,"Development > Tag Management"

@@ -241,7 +241,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
             }
         }
     } else {
-        
+        WlsLogger::warning_("[IPC] 初次连接 Master 失败 (端口: {$controlPort})，主循环内将继续重试并上报 READY");
     }
 }
 // ========== IPC 控制通道结束 ==========
@@ -313,9 +313,11 @@ while (true) {
         $gracefulExit('孤儿检测：Master 已死亡');
     }
     
-    // IPC 重连
+    // IPC 重连 / 初次连接补偿（避免进程已 listen 但从未 sendReady）
     if ($kernel && !$kernel->isConnected() && !$ipcReceivedShutdown) {
-        $kernel->reconnect();
+        if (!$kernel->reconnect() && $controlPort > 0) {
+            $kernel->connectAndRegister($controlPort);
+        }
     }
 
     // 构建 stream_select 读数组

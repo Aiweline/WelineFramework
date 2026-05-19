@@ -14,8 +14,6 @@ use WeShop\Catalog\Service\CategoryService;
 $categoryService = ObjectManager::getInstance(CategoryService::class);
 $categoryOptions = $categoryService->getHeaderSearchCategoryOptions(0);
 $selectedCategory = (string)($this->request->getParam('category') ?? '');
-$isEnglishRoute = \str_contains((string)$this->getUrl('catalog/category'), '/en_US/');
-$allCategoriesLabel = $isEnglishRoute ? 'All Categories' : (string)__('全部分类');
 
 if (empty($categoryOptions)) {
     return;
@@ -23,8 +21,8 @@ if (empty($categoryOptions)) {
 ?>
 
 <div class="search-category-dropdown">
-    <select name="category" class="search-category-select" title="<?= htmlspecialchars($isEnglishRoute ? 'Choose category' : (string)__('选择分类'), ENT_QUOTES, 'UTF-8') ?>">
-        <option value=""><?= htmlspecialchars($allCategoriesLabel, ENT_QUOTES, 'UTF-8') ?></option>
+    <select name="category" class="search-category-select" title="<lang>选择分类</lang>">
+        <option value=""><lang>全部分类</lang></option>
         <?php foreach ($categoryOptions as $option): ?>
             <?php
             $rawValue = (string)($option['value'] ?? '');
@@ -39,17 +37,17 @@ if (empty($categoryOptions)) {
         <span class="search-category-label">
             <?php if ($selectedCategory): ?>
                 <?php
-                $selectedLabel = $allCategoriesLabel;
+                $selectedLabel = '全部分类';
                 foreach ($categoryOptions as $option) {
                     if ((string)($option['value'] ?? '') === $selectedCategory) {
-                        $selectedLabel = (string)($option['display_label'] ?? $option['label'] ?? $allCategoriesLabel);
+                        $selectedLabel = (string)($option['display_label'] ?? $option['label'] ?? '全部分类');
                         break;
                     }
                 }
                 ?>
-                <?= htmlspecialchars($selectedLabel, ENT_QUOTES, 'UTF-8') ?>
+                <lang><?= htmlspecialchars($selectedLabel, ENT_QUOTES, 'UTF-8') ?></lang>
             <?php else: ?>
-                <?= htmlspecialchars($allCategoriesLabel, ENT_QUOTES, 'UTF-8') ?>
+                <lang>全部分类</lang>
             <?php endif; ?>
         </span>
         <i class="fas fa-chevron-down"></i>

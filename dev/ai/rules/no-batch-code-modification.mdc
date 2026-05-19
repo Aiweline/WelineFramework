@@ -1,0 +1,13 @@
+---
+description: 禁止批量替换与批量脚本改代码；须逐文件理解后定向编辑
+alwaysApply: true
+---
+
+# 禁止批量替换与批量脚本改代码（强制）
+
+- **禁止**跨文件/跨目录批量文本替换改源码（全局 Replace All、`sed`/`awk`、`perl -pi`、PowerShell 批量 `-replace`、管道写回全仓、未经逐文件审阅的 `codemod` 等）。
+- **禁止**用 Python / PHP / Shell / Node 等一次性脚本对多个源文件做机械改写。
+- **必须**逐文件定位、逐处核对上下文后再改；同一模式多处出现时不得假定等价。
+- **例外**：用户明示，或框架已文档化的官方生成/迁移命令；仍须逐文件验收 diff。AI 自写临时批量脚本不算例外。
+
+详见：`dev/ai/global-constraints.md` 第 5.1 节。
