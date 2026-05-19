@@ -21,7 +21,7 @@ class Index extends BaseController
 
         $this->assign(array_merge(
             [
-                'title' => (string) __('Subscription Management'),
+                'title' => (string) __('订阅管理'),
             ],
             $this->subscriptionAdminPageDataService->getListData($page, $pageSize, [
                 'status' => $this->request->getParam('status', ''),

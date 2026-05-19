@@ -17,9 +17,9 @@ $statusBadgeClassMap = [
 ];
 
 $statusLabelMap = [
-    RmaService::STATUS_PENDING => __('Pending'),
-    RmaService::STATUS_APPROVED => __('Approved'),
-    RmaService::STATUS_REJECTED => __('Rejected'),
+    RmaService::STATUS_PENDING => __('待处理'),
+    RmaService::STATUS_APPROVED => __('已同意'),
+    RmaService::STATUS_REJECTED => __('已拒绝'),
 ];
 ?>
 <style>
@@ -96,7 +96,7 @@ $statusLabelMap = [
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0">
-                <lang>RMA Management</lang>
+                <lang>售后管理</lang>
             </h4>
 
             <div class="page-title-right">
@@ -105,7 +105,7 @@ $statusLabelMap = [
                             <lang>WeShop</lang>
                         </a></li>
                     <li class="breadcrumb-item active">
-                        <lang>RMA Management</lang>
+                        <lang>售后管理</lang>
                     </li>
                 </ol>
             </div>
@@ -127,7 +127,7 @@ $statusLabelMap = [
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-white-50 small"><lang>Total RMA Requests</lang></div>
+                        <div class="text-white-50 small"><lang>售后申请总数</lang></div>
                         <div class="display-6 fw-bold text-white"><?= count($rmas) ?></div>
                     </div>
                     <div>
@@ -142,7 +142,7 @@ $statusLabelMap = [
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-white-50 small"><lang>Pending</lang></div>
+                        <div class="text-white-50 small"><lang>待处理</lang></div>
                         <div class="display-6 fw-bold text-white">
                             <?= count(array_filter($rmas, fn($r) => ($r['status'] ?? '') === RmaService::STATUS_PENDING)) ?>
                         </div>
@@ -159,7 +159,7 @@ $statusLabelMap = [
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-white-50 small"><lang>Approved</lang></div>
+                        <div class="text-white-50 small"><lang>已同意</lang></div>
                         <div class="display-6 fw-bold text-white">
                             <?= count(array_filter($rmas, fn($r) => ($r['status'] ?? '') === RmaService::STATUS_APPROVED)) ?>
                         </div>
@@ -190,29 +190,29 @@ $statusLabelMap = [
                                         </span>
                                         <input type="text" class="form-control border-start-0" name="order_id"
                                                value="<?= htmlspecialchars((string) ($filters['order_id'] ?? '')) ?>"
-                                               placeholder="<?= __('Search by Order ID...') ?>">
+                                               placeholder="<?= __('按订单号搜索…') ?>">
                                     </div>
 
                                     <select class="form-select shadow-sm" name="status" style="max-width: 160px;">
-                                        <option value=""><?= __('All Status') ?></option>
+                                        <option value=""><?= __('全部状态') ?></option>
                                         <option value="<?= RmaService::STATUS_PENDING ?>" <?= ($filters['status'] ?? '') === RmaService::STATUS_PENDING ? 'selected' : '' ?>>
-                                            <?= __('Pending') ?>
+                                            <?= __('待处理') ?>
                                         </option>
                                         <option value="<?= RmaService::STATUS_APPROVED ?>" <?= ($filters['status'] ?? '') === RmaService::STATUS_APPROVED ? 'selected' : '' ?>>
-                                            <?= __('Approved') ?>
+                                            <?= __('已同意') ?>
                                         </option>
                                         <option value="<?= RmaService::STATUS_REJECTED ?>" <?= ($filters['status'] ?? '') === RmaService::STATUS_REJECTED ? 'selected' : '' ?>>
-                                            <?= __('Rejected') ?>
+                                            <?= __('已拒绝') ?>
                                         </option>
                                     </select>
 
                                     <button class="btn btn-light px-4 shadow-sm" type="submit">
-                                        <i class="mdi mdi-magnify me-1"></i> <?= __('Search') ?>
+                                        <i class="mdi mdi-magnify me-1"></i> <?= __('搜索') ?>
                                     </button>
 
                                     <?php if (!empty($filters['order_id']) || !empty($filters['status'])): ?>
                                         <a href="<?= htmlspecialchars($rmaIndexUrl) ?>" class="btn btn-outline-secondary px-4 shadow-sm">
-                                            <i class="mdi mdi-close-circle me-1"></i> <?= __('Clear Filter') ?>
+                                            <i class="mdi mdi-close-circle me-1"></i> <?= __('清除筛选') ?>
                                         </a>
                                     <?php endif; ?>
                                 </form>
@@ -226,7 +226,7 @@ $statusLabelMap = [
                 <?php if (empty($rmas)): ?>
                     <div class="text-center text-muted py-5">
                         <i class="mdi mdi-undo-variant" style="font-size: 64px;"></i>
-                        <p class="mt-3 fs-5"><lang>No RMA Requests</lang></p>
+                        <p class="mt-3 fs-5"><lang>暂无售后申请</lang></p>
                     </div>
                 <?php else: ?>
                     <div class="table-responsive">
@@ -234,12 +234,12 @@ $statusLabelMap = [
                             <thead>
                                 <tr>
                                     <th width="80"><lang>ID</lang></th>
-                                    <th width="120"><lang>Order ID</lang></th>
-                                    <th width="80"><lang>Customer ID</lang></th>
-                                    <th width="180"><lang>Reason</lang></th>
-                                    <th width="100"><lang>Status</lang></th>
-                                    <th width="160"><lang>Created At</lang></th>
-                                    <th width="160" class="text-center"><lang>Actions</lang></th>
+                                    <th width="120"><lang>订单号</lang></th>
+                                    <th width="80"><lang>客户 ID</lang></th>
+                                    <th width="180"><lang>原因</lang></th>
+                                    <th width="100"><lang>状态</lang></th>
+                                    <th width="160"><lang>创建时间</lang></th>
+                                    <th width="160" class="text-center"><lang>操作</lang></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -278,25 +278,25 @@ $statusLabelMap = [
                                             <div class="btn-group" role="group">
                                                 <a href="<?= $this->getBackendUrl('*/backend/rma/view') ?>?id=<?= $rmaId ?>"
                                                    class="btn btn-sm btn-outline-primary"
-                                                   title="<?= __('View Detail') ?>">
+                                                   title="<?= __('查看详情') ?>">
                                                     <i class="mdi mdi-eye"></i>
                                                 </a>
 
                                                 <?php if ($status === RmaService::STATUS_PENDING): ?>
                                                     <button class="btn btn-sm btn-outline-success"
-                                                            w-confirm="<?= __('Are you sure you want to approve this RMA request?') ?>"
+                                                            w-confirm="<?= __('确认批准此售后申请？') ?>"
                                                             w-delete="<?= $this->getBackendUrl('*/backend/rma/approve') ?>"
                                                             w-params='{"rma_id": <?= $rmaId ?>}'
                                                             w-method="post"
-                                                            title="<?= __('Approve') ?>">
+                                                            title="<?= __('批准') ?>">
                                                         <i class="mdi mdi-check"></i>
                                                     </button>
                                                     <button class="btn btn-sm btn-outline-danger"
-                                                            w-confirm="<?= __('Are you sure you want to reject this RMA request?') ?>"
+                                                            w-confirm="<?= __('确认拒绝此售后申请？') ?>"
                                                             w-delete="<?= $this->getBackendUrl('*/backend/rma/reject') ?>"
                                                             w-params='{"rma_id": <?= $rmaId ?>}'
                                                             w-method="post"
-                                                            title="<?= __('Reject') ?>">
+                                                            title="<?= __('拒绝') ?>">
                                                         <i class="mdi mdi-close"></i>
                                                     </button>
                                                 <?php endif; ?>

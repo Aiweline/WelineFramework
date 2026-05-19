@@ -78,8 +78,8 @@ class SubscriptionListPageDataService
             'billing_interval' => $interval,
             'billing_cycle_label' => $cycleLabel,
             'billing_label' => $interval > 1
-                ? (string) __('Every %1 %2', $interval, $cycleLabel)
-                : (string) __('Every %1', $cycleLabel),
+                ? (string) __('每%{interval}%{cycle}', ['interval' => $interval, 'cycle' => $cycleLabel])
+                : (string) __('每%{cycle}', ['cycle' => $cycleLabel]),
             'current_period_start' => (string) ($item[Subscription::schema_fields_CURRENT_PERIOD_START] ?? ''),
             'current_period_end' => (string) ($item[Subscription::schema_fields_CURRENT_PERIOD_END] ?? ''),
             'next_billing_at' => (string) ($item[Subscription::schema_fields_NEXT_BILLING_AT] ?? ''),

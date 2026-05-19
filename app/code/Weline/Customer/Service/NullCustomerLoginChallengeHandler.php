@@ -20,6 +20,6 @@ class NullCustomerLoginChallengeHandler implements CustomerLoginChallengeHandler
     public function completeChallenge(string $challengeToken, string $code): array
     {
         unset($challengeToken, $code);
-        throw new \RuntimeException((string) __('Two-factor verification is not available.'));
+        throw new \RuntimeException((string) __('两步验证暂不可用。'));
     }
 }

@@ -34,22 +34,22 @@ class CartApiPayloadService
         $selectedOptions = $this->normalizeSelectedOptions($payload['selected_options'] ?? []);
 
         if ($productId <= 0) {
-            return $this->errorResponse(422, (string) __('Invalid product ID.'));
+            return $this->errorResponse(422, (string) __('无效的商品 ID。'));
         }
 
         $product = $this->productService->getProduct($productId);
         if (!$product || !$product->getId()) {
-            return $this->errorResponse(404, (string) __('Product does not exist.'));
+            return $this->errorResponse(404, (string) __('商品不存在。'));
         }
 
         if ((int) $product->getStatus() !== 1) {
-            return $this->errorResponse(422, (string) __('Product is unavailable.'));
+            return $this->errorResponse(422, (string) __('商品不可用。'));
         }
 
         $finalProduct = $product;
         if ($this->configurableProductService->isConfigurable($productId)) {
             if ($selectedOptions === []) {
-                return $this->errorResponse(409, (string) __('Please select product options.'), [
+                return $this->errorResponse(409, (string) __('请选择商品规格。'), [
                     'requires_options' => true,
                     'options' => $this->configurableProductService->getConfigurableOptions($productId),
                     'product_id' => $productId,
@@ -58,7 +58,7 @@ class CartApiPayloadService
 
             $variant = $this->configurableProductService->findVariantByOptions($productId, $selectedOptions);
             if (!$variant || !$variant->getId()) {
-                return $this->errorResponse(422, (string) __('The selected product configuration is unavailable.'));
+                return $this->errorResponse(422, (string) __('所选商品配置不可用。'));
             }
 
             $finalProduct = $variant;
@@ -68,7 +68,7 @@ class CartApiPayloadService
         if ($stock < $qty) {
             return $this->errorResponse(
                 422,
-                (string) __('Insufficient stock. Available quantity: %{1}', $stock)
+                (string) __('库存不足，可售数量：%{1}', $stock)
             );
         }
 
@@ -86,7 +86,7 @@ class CartApiPayloadService
         $totals = $this->cartService->calculateTotals($customerId);
         $cartTotal = (float) ($totals['total'] ?? 0);
 
-        return $this->successResponse((string) __('Added to cart successfully.'), [
+        return $this->successResponse((string) __('已成功加入购物车。'), [
             'cart_item_id' => $cartItemId,
             'cart_count' => $cartCount,
             'cart_total' => $cartTotal,
@@ -107,16 +107,16 @@ class CartApiPayloadService
     public function buildOptionsResponse(int $productId): array
     {
         if ($productId <= 0) {
-            return $this->errorResponse(422, (string) __('Invalid product ID.'));
+            return $this->errorResponse(422, (string) __('无效的商品 ID。'));
         }
 
         $product = $this->productService->getProduct($productId);
         if (!$product || !$product->getId()) {
-            return $this->errorResponse(404, (string) __('Product does not exist.'));
+            return $this->errorResponse(404, (string) __('商品不存在。'));
         }
 
         if (!$this->configurableProductService->isConfigurable($productId)) {
-            return $this->successResponse((string) __('Product options loaded successfully.'), [
+            return $this->successResponse((string) __('商品规格加载成功。'), [
                 'is_configurable' => false,
                 'product' => [
                     'id' => $productId,
@@ -128,7 +128,7 @@ class CartApiPayloadService
             ]);
         }
 
-        return $this->successResponse((string) __('Product options loaded successfully.'), [
+        return $this->successResponse((string) __('商品规格加载成功。'), [
             'is_configurable' => true,
             'product' => [
                 'id' => $productId,
@@ -150,16 +150,16 @@ class CartApiPayloadService
         }
 
         if ($itemId <= 0) {
-            return $this->errorResponse(422, (string) __('Invalid cart item.'));
+            return $this->errorResponse(422, (string) __('无效的购物车项。'));
         }
 
         if ($quantity <= 0) {
-            return $this->errorResponse(422, (string) __('Invalid quantity.'));
+            return $this->errorResponse(422, (string) __('无效的数量。'));
         }
 
         $this->cartService->updateCart($itemId, $quantity, $customerId);
 
-        return $this->successResponse((string) __('Cart updated successfully.'), [
+        return $this->successResponse((string) __('购物车更新成功。'), [
             'totals' => $this->buildCompactTotals($customerId),
         ]);
     }
@@ -174,12 +174,12 @@ class CartApiPayloadService
         }
 
         if ($itemId <= 0) {
-            return $this->errorResponse(422, (string) __('Invalid cart item.'));
+            return $this->errorResponse(422, (string) __('无效的购物车项。'));
         }
 
         $this->cartService->moveToTrash($itemId, $customerId);
 
-        return $this->successResponse((string) __('Item moved to cart trash.'), [
+        return $this->successResponse((string) __('商品已移至购物车回收站。'), [
             'totals' => $this->buildCompactTotals($customerId),
             'trash' => $this->buildTrashData($customerId),
         ]);
@@ -195,12 +195,12 @@ class CartApiPayloadService
         }
 
         if ($itemId <= 0) {
-            return $this->errorResponse(422, (string) __('Invalid cart item.'));
+            return $this->errorResponse(422, (string) __('无效的购物车项。'));
         }
 
         $this->cartService->restoreFromTrash($itemId, $customerId);
 
-        return $this->successResponse((string) __('Item restored to cart.'), [
+        return $this->successResponse((string) __('商品已恢复至购物车。'), [
             'totals' => $this->buildCompactTotals($customerId),
             'trash' => $this->buildTrashData($customerId),
         ]);
@@ -215,7 +215,7 @@ class CartApiPayloadService
             return $this->unauthorizedResponse();
         }
 
-        return $this->successResponse((string) __('Cart trash loaded successfully.'), [
+        return $this->successResponse((string) __('购物车回收站加载成功。'), [
             'trash' => $this->buildTrashData($customerId, $limit),
         ]);
     }
@@ -226,7 +226,7 @@ class CartApiPayloadService
     public function buildMiniItemsResponse(?int $customerId): array
     {
         if (($customerId ?? 0) <= 0) {
-            return $this->successResponse((string) __('Mini cart loaded successfully.'), [
+            return $this->successResponse((string) __('迷你购物车加载成功。'), [
                 'html' => '',
                 'items' => [],
                 'totals' => $this->buildFullTotals(0),
@@ -235,7 +235,7 @@ class CartApiPayloadService
 
         $items = $this->formatMiniItems($this->cartService->getCartItems($customerId));
 
-        return $this->successResponse((string) __('Mini cart loaded successfully.'), [
+        return $this->successResponse((string) __('迷你购物车加载成功。'), [
             'html' => '',
             'items' => $items,
             'totals' => $this->buildFullTotals($customerId),
@@ -298,7 +298,7 @@ class CartApiPayloadService
      */
     private function unauthorizedResponse(): array
     {
-        return $this->errorResponse(401, (string) __('Please log in first'), [
+        return $this->errorResponse(401, (string) __('请先登录'), [
             'requires_login' => true,
             'cart_count' => 0,
             'cart_total' => 0.0,

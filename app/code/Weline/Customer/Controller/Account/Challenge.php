@@ -23,19 +23,19 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
     {
         $challengeToken = trim((string) ($this->request->getParam('challenge_token') ?? ''));
         if ($challengeToken === '') {
-            MessageManager::error((string)__('The login challenge token is missing.'));
+            MessageManager::error((string)__('缺少登录验证令牌。'));
             return $this->redirect('/customer/account/login');
         }
 
         $expiresAt = $this->challengeHandler->getChallengeExpiresAt($challengeToken);
         if ($expiresAt === null) {
-            MessageManager::error((string)__('The login challenge is invalid or has expired.'));
+            MessageManager::error((string)__('登录验证已失效或已过期。'));
             return $this->redirect('/customer/account/login');
         }
 
         $this->assign('challenge_token', $challengeToken);
         $this->assign('expires_at', $expiresAt);
-        $this->assign('title', __('Two-Factor Verification'));
+        $this->assign('title', __('两步验证'));
 
         return $this->fetch('Weline_Customer::templates/frontend/account/challenge.phtml');
     }
@@ -47,7 +47,7 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
 
         if ($challengeToken === '' || $code === '') {
             return $this->respondFailure(
-                (string)__('Please enter the verification code.'),
+                (string)__('请输入验证码。'),
                 $challengeToken
             );
         }
@@ -55,7 +55,7 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
         try {
             $result = $this->challengeHandler->completeChallenge($challengeToken, $code);
             return $this->respondSuccess(
-                (string)__('Two-factor verification succeeded.'),
+                (string)__('两步验证成功。'),
                 (string)($result['redirect_url'] ?? 'customer/account')
             );
         } catch (ResponseTerminateException $terminate) {

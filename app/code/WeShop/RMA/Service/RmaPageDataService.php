@@ -7,8 +7,6 @@ namespace WeShop\RMA\Service;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
 use WeShop\RMA\Model\Rma;
-use Weline\Framework\Http\Cookie;
-
 class RmaPageDataService
 {
     /** @var array<int, Order|null> */
@@ -45,8 +43,8 @@ class RmaPageDataService
     protected function getRequestTypes(): array
     {
         return [
-            ['code' => 'return', 'label' => $this->label('Return')],
-            ['code' => 'exchange', 'label' => $this->label('Exchange')],
+            ['code' => 'return', 'label' => (string) __('退货')],
+            ['code' => 'exchange', 'label' => (string) __('换货')],
         ];
     }
 
@@ -56,37 +54,18 @@ class RmaPageDataService
     protected function getReasonOptions(): array
     {
         $values = [
-            'Wrong size',
-            'Damaged in transit',
-            'Defective item',
-            'Item not as described',
-            'Changed my mind',
-            'Other',
+            (string) __('尺码不合适'),
+            (string) __('运输损坏'),
+            (string) __('商品有缺陷'),
+            (string) __('商品与描述不符'),
+            (string) __('改变主意'),
+            (string) __('其他'),
         ];
 
-        return array_map(fn(string $value): array => [
+        return array_map(static fn(string $value): array => [
             'value' => $value,
-            'label' => $this->label($value),
+            'label' => $value,
         ], $values);
-    }
-
-    protected function label(string $key): string
-    {
-        $locale = Cookie::getLangLocal() ?: 'en_US';
-        $labels = [
-            'zh_Hans_CN' => [
-                'Return' => '退货',
-                'Exchange' => '换货',
-                'Wrong size' => '尺码不合适',
-                'Damaged in transit' => '运输损坏',
-                'Defective item' => '商品有缺陷',
-                'Item not as described' => '商品与描述不符',
-                'Changed my mind' => '改变主意',
-                'Other' => '其他',
-            ],
-        ];
-
-        return $labels[$locale][$key] ?? (string) __($key);
     }
 
     /**

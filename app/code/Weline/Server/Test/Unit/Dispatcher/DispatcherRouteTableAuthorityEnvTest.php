@@ -8,11 +8,14 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\Dispatcher\Dispatcher;
 
 /**
- * B-ii 阶段：环境变量灰度开关 WLS_ROUTE_TABLE_AS_AUTHORITY 的解析行为契约测试。
+ * B-iii 阶段：环境变量灰度开关 WLS_ROUTE_TABLE_AS_AUTHORITY 的解析行为契约测试。
  *
- * 真值（开关启用）：1 / true / yes / on，大小写不敏感、容忍前后空格。
- * 其它值（含未设置、空、0、false、no、off、随机字符串）一律视为关闭，
- * 保证默认行为兼容 B-i（SET_WORKER_POOL 仍是业务路由权威）。
+ * **B-iii 起契约翻转**：默认（env 未设置 / 空 / 不识别）→ true，SET_ROUTE_TABLE 成为新的权威。
+ * - 显式 truthy 值（1 / true / yes / on）→ true，启用 B-iii 权威路径；
+ * - 显式 falsy 值（0 / false / no / off）→ false，应急回退到 B-i 行为；
+ * - 其它字符串（如随机词）→ true，保守默认权威，避免误配置导致悄悄回退。
+ *
+ * 解析对大小写不敏感、容忍前后空格。
  */
 final class DispatcherRouteTableAuthorityEnvTest extends TestCase
 {
@@ -43,10 +46,22 @@ final class DispatcherRouteTableAuthorityEnvTest extends TestCase
         parent::tearDown();
     }
 
-    public function testReturnsFalseWhenEnvNotSet(): void
+    public function testReturnsTrueWhenEnvNotSet(): void
     {
         \putenv('WLS_ROUTE_TABLE_AS_AUTHORITY');
-        self::assertFalse(Dispatcher::resolveRouteTableAuthorityFromEnv());
+        self::assertTrue(
+            Dispatcher::resolveRouteTableAuthorityFromEnv(),
+            'B-iii: env 未设置时应默认返回 true（SET_ROUTE_TABLE 成为默认权威）'
+        );
+    }
+
+    public function testReturnsTrueForEmptyStringEnv(): void
+    {
+        \putenv('WLS_ROUTE_TABLE_AS_AUTHORITY=');
+        self::assertTrue(
+            Dispatcher::resolveRouteTableAuthorityFromEnv(),
+            'B-iii: 空字符串等同于未设置，应默认 true'
+        );
     }
 
     /**
@@ -81,28 +96,54 @@ final class DispatcherRouteTableAuthorityEnvTest extends TestCase
     /**
      * @dataProvider falsyEnvValuesProvider
      */
-    public function testReturnsFalseForFalsyEnvValues(string $rawValue): void
+    public function testReturnsFalseForExplicitFalsyEnvValues(string $rawValue): void
     {
         \putenv('WLS_ROUTE_TABLE_AS_AUTHORITY=' . $rawValue);
         self::assertFalse(
             Dispatcher::resolveRouteTableAuthorityFromEnv(),
-            "Expected falsy resolution for env value '{$rawValue}'"
+            "Expected falsy resolution (B-i emergency rollback) for env value '{$rawValue}'"
+        );
+    }
+
+    /**
+     * 仅显式 falsy 值会回退到 B-i 行为，避免误配置悄悄掉队。
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function falsyEnvValuesProvider(): array
+    {
+        return [
+            'literal 0'         => ['0'],
+            'literal false'     => ['false'],
+            'literal no'        => ['no'],
+            'literal off'       => ['off'],
+            'upper FALSE'       => ['FALSE'],
+            'padded off'        => ["  off\n"],
+        ];
+    }
+
+    /**
+     * @dataProvider unknownEnvValuesProvider
+     */
+    public function testReturnsTrueForUnknownEnvValues(string $rawValue): void
+    {
+        \putenv('WLS_ROUTE_TABLE_AS_AUTHORITY=' . $rawValue);
+        self::assertTrue(
+            Dispatcher::resolveRouteTableAuthorityFromEnv(),
+            "B-iii: 不识别的 env 值（'{$rawValue}'）应保守返回 true（默认权威路径）"
         );
     }
 
     /**
      * @return array<string, array{0: string}>
      */
-    public static function falsyEnvValuesProvider(): array
+    public static function unknownEnvValuesProvider(): array
     {
         return [
-            'empty string'  => [''],
-            'literal 0'     => ['0'],
-            'literal false' => ['false'],
-            'literal no'    => ['no'],
-            'literal off'   => ['off'],
             'random word'   => ['enabled-please'],
             'unicode noise' => ['是'],
+            'numeric 2'     => ['2'],
+            'numeric -1'    => ['-1'],
         ];
     }
 }

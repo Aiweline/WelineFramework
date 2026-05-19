@@ -23,12 +23,12 @@ class Cancel extends BaseController
             if ($this->request->isAjax()) {
                 return $this->fetchJson([
                     'code' => 401,
-                    'msg' => __('Please login first.'),
+                    'msg' => __('请先登录。'),
                     'data' => ['redirect_url' => $this->getUrl('customer/account/login')],
                 ]);
             }
 
-            $this->getMessageManager()->addError(__('Please login first.'));
+            $this->getMessageManager()->addError(__('请先登录。'));
             $this->redirect('customer/account/login');
             return '';
         }
@@ -40,7 +40,7 @@ class Cancel extends BaseController
             ?? 0
         );
         if ($id <= 0) {
-            return $this->errorResponse(__('Subscription ID is required.'));
+            return $this->errorResponse(__('缺少订阅 ID。'));
         }
 
         $reason = trim((string) (
@@ -53,17 +53,17 @@ class Cancel extends BaseController
         try {
             $this->subscriptionService->cancelSubscription($id, $customerId, $reason);
         } catch (\Throwable $exception) {
-            return $this->errorResponse(__('Unable to cancel this subscription right now.'));
+            return $this->errorResponse(__('暂时无法取消该订阅。'));
         }
 
         if ($this->request->isAjax()) {
             return $this->fetchJson([
                 'code' => 200,
-                'msg' => __('Subscription cancelled.'),
+                'msg' => __('订阅已取消。'),
             ]);
         }
 
-        $this->getMessageManager()->addSuccess(__('Subscription cancelled.'));
+        $this->getMessageManager()->addSuccess(__('订阅已取消。'));
         $this->redirect('subscription');
         return '';
     }

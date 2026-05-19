@@ -22,7 +22,7 @@ class Approve extends BackendController
             $rmaId = (int)($this->request->getParam('rma_id') ?? 0);
             
             if (!$rmaId) {
-                return $this->fetchJson(['success' => false, 'message' => __('RMA ID不能为空')]);
+                return $this->fetchJson(['success' => false, 'message' => __('售后单 ID 不能为空')]);
             }
             
             /** @var RmaService $rmaService */

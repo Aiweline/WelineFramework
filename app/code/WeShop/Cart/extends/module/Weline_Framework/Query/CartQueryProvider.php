@@ -89,10 +89,10 @@ class CartQueryProvider implements QueryProviderInterface
 
         return [
             'code' => 200,
-            'msg' => (string)__('Cart count loaded successfully.'),
+            'msg' => (string)__('购物车数量加载成功。'),
             'data' => [
                 'success' => true,
-                'message' => (string)__('Cart count loaded successfully.'),
+                'message' => (string)__('购物车数量加载成功。'),
                 'count' => $count,
             ],
         ];
@@ -192,7 +192,7 @@ class CartQueryProvider implements QueryProviderInterface
             'operations' => [
                 [
                     'name' => 'renderPage',
-                    'description' => __('Render frontend cart page through Weline_Cart root route'),
+                    'description' => __('通过 Weline_Cart 根路由渲染前台购物车页面'),
                     'frontend' => true,
                     'mode' => 'read',
                     'graph' => false,
@@ -203,7 +203,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'add',
-                    'description' => __('Frontend cart add operation'),
+                    'description' => __('前台购物车加购操作'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -218,7 +218,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'options',
-                    'description' => __('Frontend product options operation'),
+                    'description' => __('前台商品规格读取操作'),
                     'frontend' => true,
                     'mode' => 'read',
                     'graph' => true,
@@ -232,7 +232,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'miniItems',
-                    'description' => __('Frontend mini cart items operation'),
+                    'description' => __('前台迷你购物车商品列表操作'),
                     'frontend' => true,
                     'mode' => 'read',
                     'graph' => true,
@@ -246,7 +246,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'count',
-                    'description' => __('Frontend cart count operation'),
+                    'description' => __('前台购物车数量读取操作'),
                     'frontend' => true,
                     'mode' => 'read',
                     'graph' => true,
@@ -258,7 +258,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'update',
-                    'description' => __('Frontend cart update operation'),
+                    'description' => __('前台购物车更新操作'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -272,7 +272,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'remove',
-                    'description' => __('Frontend cart remove operation, moves item to cart trash'),
+                    'description' => __('前台购物车移除操作（移至回收站）'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -285,7 +285,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'trash',
-                    'description' => __('Frontend cart trash operation'),
+                    'description' => __('前台购物车回收站读取操作'),
                     'frontend' => true,
                     'mode' => 'read',
                     'graph' => true,
@@ -299,7 +299,7 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'restore',
-                    'description' => __('Frontend cart trash restore operation'),
+                    'description' => __('前台购物车回收站恢复操作'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -371,16 +371,16 @@ class CartQueryProvider implements QueryProviderInterface
                 . $optionsHtml
                 . '<div class="mini-cart-item__price">' . $priceFormatted . '</div>'
                 . '<div class="mini-cart-item__qty">'
-                . '<button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('Decrease quantity')) . '">'
+                . '<button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('减少数量')) . '">'
                 . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('minus') . '</span>'
                 . '</button>'
                 . '<span class="mini-cart-item__qty-value">' . $quantityText . '</span>'
-                . '<button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('Increase quantity')) . '">'
+                . '<button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('增加数量')) . '">'
                 . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('plus') . '</span>'
                 . '</button>'
                 . '</div>'
                 . '</div>'
-                . '<button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('Remove item')) . '">'
+                . '<button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="' . $cartIdAttr . '" aria-label="' . $this->escapeHtml((string)__('删除商品')) . '">'
                 . '<span class="mini-cart-icon" aria-hidden="true">' . $this->renderMiniCartIconHtml('trash') . '</span>'
                 . '</button>'
                 . '</div>';

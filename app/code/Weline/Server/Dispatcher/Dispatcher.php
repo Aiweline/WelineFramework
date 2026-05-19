@@ -266,12 +266,13 @@ class Dispatcher
     private string $observedRouteTableChecksum = '';
 
     /**
-     * B-ii 阶段灰度开关：true=SET_ROUTE_TABLE 成为业务路由权威，SET_WORKER_POOL/ADD_WORKER 降级为兼容信号；
+     * B-ii/B-iii 阶段灰度开关：true=SET_ROUTE_TABLE 成为业务路由权威，SET_WORKER_POOL/ADD_WORKER 降级为兼容信号；
      * false=维持 B-i 行为（SET_WORKER_POOL 仍是权威，SET_ROUTE_TABLE 仅观测）。
      *
-     * 由环境变量 WLS_ROUTE_TABLE_AS_AUTHORITY=1 开启，默认关闭，可热回退。
+     * **B-iii 起默认开启**——SET_ROUTE_TABLE 成为新的默认权威源。
+     * 应急回退路径：设置环境变量 WLS_ROUTE_TABLE_AS_AUTHORITY=0（或 false/no/off）后重启即可回到 B-i 行为。
      */
-    private bool $routeTableAsAuthority = false;
+    private bool $routeTableAsAuthority = true;
     
     /**
      * 是否收到 shutdown 命令
@@ -444,21 +445,30 @@ class Dispatcher
     }
 
     /**
-     * B-ii 灰度开关解析：从环境变量 WLS_ROUTE_TABLE_AS_AUTHORITY 读取。
+     * B-iii 灰度开关解析：从环境变量 WLS_ROUTE_TABLE_AS_AUTHORITY 读取。
      *
      * 单独抽成静态方法便于单元测试（不必构造完整的 Dispatcher 实例）。
      *
-     * 接受的 truthy 值：1 / true / yes / on（不区分大小写，前后空格容忍）。
-     * 其它一律视为 false（包括空字符串、0、false、no、off 等）。
+     * **默认行为（env 未设置或未识别）**：返回 true（B-iii 让 SET_ROUTE_TABLE 成为默认权威源）。
+     * **显式 truthy 值**：1 / true / yes / on（不区分大小写，前后空格容忍）→ true。
+     * **显式 falsy 值**：0 / false / no / off（不区分大小写，前后空格容忍）→ false（应急回退到 B-i 行为）。
+     * **空字符串**：等同于"未设置"，返回 true（默认权威）。
+     * **其它字符串**（如 'enabled-please'）：保守返回 true，保持 B-iii 默认权威路径。
      */
     public static function resolveRouteTableAuthorityFromEnv(): bool
     {
         $raw = \getenv('WLS_ROUTE_TABLE_AS_AUTHORITY');
         if ($raw === false) {
-            return false;
+            return true; // B-iii: env 未设置时默认权威
         }
         $normalized = \strtolower(\trim((string)$raw));
-        return \in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+        if ($normalized === '') {
+            return true; // 空字符串视为未设置
+        }
+        if (\in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+            return false; // 显式 falsy → 应急回退
+        }
+        return true;
     }
 
     /**

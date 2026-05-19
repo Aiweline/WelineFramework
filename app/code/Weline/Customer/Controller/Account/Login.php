@@ -57,7 +57,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         $redirectUrl = $this->normalizeRedirectTarget($redirectUrl);
 
         $this->assign('redirect_url', $redirectUrl);
-        $this->assign('title', __('Sign In'));
+        $this->assign('title', __('登录'));
         $this->assign('meta', [
             'showHeader' => false,
             'showFooter' => false,
@@ -107,7 +107,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
         if ($username === '' || $password === '') {
             return $this->respondFailure(
-                (string) __('Username/email and password are required.'),
+                (string) __('请输入用户名/邮箱和密码。'),
                 $redirectUrl
             );
         }
@@ -146,7 +146,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 $challenge = $challengeHandler->createChallenge($user, $redirectUrl, $rememberDuration);
                 if (is_array($challenge) && !empty($challenge['redirect'])) {
                     return $this->respondChallenge(
-                        (string)__('Please complete two-factor verification.'),
+                        (string)__('请完成两步验证。'),
                         (string)$challenge['redirect'],
                         [
                             'challenge_token' => (string)($challenge['challenge_token'] ?? ''),

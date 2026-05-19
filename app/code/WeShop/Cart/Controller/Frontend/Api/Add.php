@@ -28,7 +28,7 @@ class Add extends FrontendController
 
         try {
             if ($this->request->getMethod() !== 'POST') {
-                $this->jsonError(__('Request method is not allowed.'), 405);
+                $this->jsonError(__('请求方法不允许。'), 405);
                 return;
             }
 
@@ -45,7 +45,7 @@ class Add extends FrontendController
             }
 
             if ($productId <= 0) {
-                $this->jsonError(__('Invalid product ID.'));
+                $this->jsonError(__('无效的商品 ID。'));
                 return;
             }
 
@@ -58,12 +58,12 @@ class Add extends FrontendController
             $product->load($productId);
 
             if (!$product->getId()) {
-                $this->jsonError(__('Product does not exist.'));
+                $this->jsonError(__('商品不存在。'));
                 return;
             }
 
             if ($product->getStatus() !== 1) {
-                $this->jsonError(__('Product is disabled.'));
+                $this->jsonError(__('商品已下架。'));
                 return;
             }
 
@@ -81,14 +81,14 @@ class Add extends FrontendController
                         'success' => false,
                         'requires_options' => true,
                         'options' => $configurableService->getConfigurableOptions($productId),
-                        'message' => __('Please choose product options.'),
+                        'message' => __('请选择商品规格。'),
                     ]);
                     return;
                 }
 
                 $variant = $configurableService->findVariantByOptions($productId, $selectedOptions);
                 if (!$variant) {
-                    $this->jsonError(__('The selected product option combination is unavailable.'));
+                    $this->jsonError(__('所选商品规格组合不可用。'));
                     return;
                 }
 
@@ -96,11 +96,11 @@ class Add extends FrontendController
                 $finalPrice = $this->priceService->calculatePrice($finalProductId, $customerId, $qty);
 
                 if ($variant->getStock() < $qty) {
-                    $this->jsonError(__('Insufficient stock. Current stock: %{1}', $variant->getStock()));
+                    $this->jsonError(__('库存不足，当前库存：%{1}', $variant->getStock()));
                     return;
                 }
             } elseif ($product->getStock() < $qty) {
-                $this->jsonError(__('Insufficient stock. Current stock: %{1}', $product->getStock()));
+                $this->jsonError(__('库存不足，当前库存：%{1}', $product->getStock()));
                 return;
             }
 
@@ -121,7 +121,7 @@ class Add extends FrontendController
 
             $this->jsonResponse([
                 'success' => true,
-                'message' => __('Added to cart successfully.'),
+                'message' => __('已成功加入购物车。'),
                 'cart_item_id' => $cartItemId,
                 'cart_count' => $cartCount,
                 'cart_total' => $totals['total'] ?? 0,
@@ -134,7 +134,7 @@ class Add extends FrontendController
                 ],
             ]);
         } catch (\Throwable $e) {
-            $this->jsonError(__('Add to cart failed: %{1}', $e->getMessage()), 500);
+            $this->jsonError(__('加入购物车失败：%{1}'), $e->getMessage()), 500);
         }
     }
 
@@ -149,7 +149,7 @@ class Add extends FrontendController
             $productId = (int) $this->request->getGet('product_id', 0);
 
             if ($productId <= 0) {
-                $this->jsonError(__('Invalid product ID.'));
+                $this->jsonError(__('无效的商品 ID。'));
                 return;
             }
 
@@ -158,7 +158,7 @@ class Add extends FrontendController
             $product->load($productId);
 
             if (!$product->getId()) {
-                $this->jsonError(__('Product does not exist.'));
+                $this->jsonError(__('商品不存在。'));
                 return;
             }
 
@@ -186,7 +186,7 @@ class Add extends FrontendController
                 'options' => $configurableService->getConfigurableOptions($productId),
             ]);
         } catch (\Throwable $e) {
-            $this->jsonError(__('Unable to load product options: %{1}', $e->getMessage()), 500);
+            $this->jsonError(__('无法加载商品规格：%{1}'), $e->getMessage()), 500);
         }
     }
 
@@ -212,7 +212,7 @@ class Add extends FrontendController
         header('Cache-Control: no-store');
         echo json_encode([
             'code' => 410,
-            'msg' => (string)__('Direct browser cart API is deprecated. Use the frontend worker API.'),
+            'msg' => (string)__('浏览器直连购物车 API 已弃用，请使用前台 Worker API。'),
             'data' => [
                 'deprecated' => true,
                 'browser_direct' => false,

@@ -30,7 +30,7 @@ class View extends BaseController
 
         $subscriptionId = (int) ($this->request->getParam('id') ?? 0);
         if ($subscriptionId <= 0) {
-            $this->getMessageManager()->addError(__('Subscription ID is required.'));
+            $this->getMessageManager()->addError(__('缺少订阅 ID。'));
             $this->redirect('subscription');
             return '';
         }

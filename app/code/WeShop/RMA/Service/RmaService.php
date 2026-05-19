@@ -23,7 +23,7 @@ class RmaService
 
         $reason = trim((string) ($rmaData[Rma::schema_fields_REASON] ?? ''));
         if ($reason === '') {
-            throw new \InvalidArgumentException((string) __('Return reason is required.'));
+            throw new \InvalidArgumentException((string) __('请填写退换货原因。'));
         }
 
         $now = date('Y-m-d H:i:s');
@@ -72,7 +72,7 @@ class RmaService
         $rma->load($rmaId);
 
         if (!$rma->getId()) {
-            throw new \RuntimeException((string) __('RMA record not found.'));
+            throw new \RuntimeException((string) __('售后单不存在。'));
         }
 
         $rma->setData(Rma::schema_fields_STATUS, $status)
