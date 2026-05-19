@@ -1990,7 +1990,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
             if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_ADD_WORKER) {
-                self::fail('缁存姢妯″紡涓嬫棤涓氬姟 Worker 鏃朵笉搴斿悜 Dispatcher 鍙戦€?ADD_WORKER');
+                self::fail('维护模式下无业务 Worker 时不应向 Dispatcher 发送 ADD_WORKER');
             }
         }
     }
@@ -2302,8 +2302,8 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * Dispatcher 鍏堜簬缁存姢 Worker READY 鏃讹紝棣栨 sendAllWorkerPortsToDispatcher 鏃犳硶涓嬪彂姹狅紱
-     * 缁存姢杩涚▼涓婃姤 READY 鍚庡簲琛ュ彂 SET_WORKER_POOL銆?
+     * Dispatcher 先于维护 Worker READY 时，首次的 Worker 池下发因尚无 READY 维护 Worker 而无法落地；
+     * 待维护进程上报 READY 后，应补发 SET_WORKER_POOL 完成池注入。
      */
     public function testMaintenanceReadyAfterDispatcherSendsSetWorkerPool(): void
     {
@@ -3908,7 +3908,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
             if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_ADD_WORKER) {
-                self::fail('缁存姢妯″紡浠嶅湪婵€娲绘椂锛屼笟鍔?Worker READY 涓嶅簲绔嬪嵆鍙戝竷缁?Dispatcher');
+                self::fail('维护模式仍在激活时，业务 Worker READY 不应立即发布给 Dispatcher');
             }
         }
     }
