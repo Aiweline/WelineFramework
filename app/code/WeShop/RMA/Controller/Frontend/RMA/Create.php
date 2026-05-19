@@ -32,7 +32,7 @@ class Create extends BaseController
 
         $orderId = $this->resolveOrderId($this->readOrderId(), $this->readOrderIncrementId());
         if ($orderId <= 0) {
-            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->getMessageManager()->addError(__('请填写订单号。'));
             $this->redirect($this->buildRmaRoute(0, $this->readOrderIncrementId()));
             return '';
         }
@@ -58,7 +58,7 @@ class Create extends BaseController
         }
 
         if ($orderId <= 0 || $reason === '') {
-            $message = (string) __('Order and reason are required.');
+            $message = (string) __('请填写订单与原因。');
             if ($this->shouldReturnJson()) {
                 return $this->fetchJson(['success' => false, 'message' => $message]);
             }
@@ -70,7 +70,7 @@ class Create extends BaseController
 
         $order = $this->orderService->getOrder($orderId);
         if (!$order || (int) ($order->getData(Order::schema_fields_customer_id) ?? 0) !== $customerId) {
-            $message = (string) __('You do not have access to this order.');
+            $message = (string) __('您无权操作该订单。');
             if ($this->shouldReturnJson()) {
                 return $this->fetchJson(['success' => false, 'message' => $message]);
             }
@@ -88,7 +88,7 @@ class Create extends BaseController
             Rma::schema_fields_STATUS => RmaService::STATUS_PENDING,
         ]);
 
-        $successMessage = (string) __('Your return request has been submitted.');
+        $successMessage = (string) __('退换货申请已提交。');
         $returnAnchor = $this->readReturnAnchor();
         $returnUrl = $this->buildReturnsRoute($orderId, $orderIncrementId, $returnAnchor, $this->readReturnUrl());
 
@@ -173,7 +173,7 @@ class Create extends BaseController
 
     protected function handleGuestCreate(): string
     {
-        $message = (string) __('Please log in to continue.');
+        $message = (string) __('请先登录。');
         $returnUrl = $this->normalizeReturnUrl(
             trim((string) ($this->request->body('return_url') ?? $this->request->getPost('return_url') ?? $this->request->getParam('return_url') ?? ''))
         );

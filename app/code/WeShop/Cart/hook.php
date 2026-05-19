@@ -264,13 +264,13 @@ return [
     // ==================== Header Cart Hook ====================
     // 注意：'header-cart' Hook 由 Weline_Theme 定义，WeShop_Cart 实现它
     'WeShop_Cart::frontend::partials::header::mini-cart' => [
-        'name' => __('WeShop Header 迷你购物车'),
-        'description' => __('WeShop 主题 Header 中的迷你购物车区域。'),
+        'name' => __('WeShop 页眉迷你购物车'),
+        'description' => __('WeShop 主题页眉中的迷你购物车区域。'),
         'doc' => 'frontend/partials/header/mini-cart.md',
     ],
     'WeShop_Cart::frontend::partials::header::mini-cart-items' => [
-        'name' => __('Header 迷你购物车商品列表'),
-        'description' => __('Header 下拉迷你购物车中的商品列表区域。'),
+        'name' => __('页眉迷你购物车商品列表'),
+        'description' => __('页眉下拉迷你购物车中的商品列表区域。'),
         'doc' => 'frontend/partials/header/mini-cart-items.md',
     ],
     

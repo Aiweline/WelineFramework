@@ -33,7 +33,7 @@ class Remove extends BaseController
             if ($customerId <= 0) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('Please login first'),
+                    'message' => __('请先登录'),
                 ]);
             }
 
@@ -43,7 +43,7 @@ class Remove extends BaseController
             if ($itemId <= 0) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('Invalid cart item'),
+                    'message' => __('无效的购物车项'),
                 ]);
             }
 
@@ -59,7 +59,7 @@ class Remove extends BaseController
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('Item removed from cart'),
+                'message' => __('商品已从购物车移除'),
                 'totals' => [
                     'subtotal' => $totals['subtotal'] ?? 0,
                     'subtotal_formatted' => $this->formatPrice($totals['subtotal'] ?? 0),
@@ -85,7 +85,7 @@ class Remove extends BaseController
 
         $json = \json_encode([
             'code' => 410,
-            'msg' => (string)__('Direct browser cart API is deprecated. Use the frontend worker API.'),
+            'msg' => (string)__('浏览器直连购物车 API 已弃用，请使用前台 Worker API。'),
             'data' => [
                 'deprecated' => true,
                 'browser_direct' => false,

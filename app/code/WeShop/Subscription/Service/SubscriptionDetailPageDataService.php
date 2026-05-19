@@ -26,11 +26,11 @@ class SubscriptionDetailPageDataService
         $subscription->load($subscriptionId);
 
         if (!$subscription->getId()) {
-            throw new \RuntimeException((string) __('Subscription does not exist.'));
+            throw new \RuntimeException((string) __('订阅不存在。'));
         }
 
         if ((int) $subscription->getData(Subscription::schema_fields_CUSTOMER_ID) !== $customerId) {
-            throw new \RuntimeException((string) __('You do not have permission to view this subscription.'));
+            throw new \RuntimeException((string) __('您无权查看该订阅。'));
         }
 
         $plan = $this->subscriptionPlan->clear();
@@ -66,8 +66,8 @@ class SubscriptionDetailPageDataService
             'price' => (float) ($subscription[Subscription::schema_fields_PRICE] ?? 0),
             'currency' => (string) ($subscription[Subscription::schema_fields_CURRENCY] ?? 'USD'),
             'billing_label' => $interval > 1
-                ? (string) __('Every %1 %2', $interval, $cycleLabel)
-                : (string) __('Every %1', $cycleLabel),
+                ? (string) __('每%{interval}%{cycle}', ['interval' => $interval, 'cycle' => $cycleLabel])
+                : (string) __('每%{cycle}', ['cycle' => $cycleLabel]),
             'current_period_start' => (string) ($subscription[Subscription::schema_fields_CURRENT_PERIOD_START] ?? ''),
             'current_period_end' => (string) ($subscription[Subscription::schema_fields_CURRENT_PERIOD_END] ?? ''),
             'next_billing_at' => (string) ($subscription[Subscription::schema_fields_NEXT_BILLING_AT] ?? ''),
