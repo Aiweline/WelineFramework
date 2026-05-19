@@ -16,7 +16,7 @@ class Add extends FrontendController
     public function index(): void
     {
         if ($this->request->getMethod() !== 'POST') {
-            $this->getMessageManager()->addError(__('Request method is not allowed.'));
+            $this->getMessageManager()->addError(__('请求方法不允许。'));
             $this->redirect('/cart');
             return;
         }
@@ -26,7 +26,7 @@ class Add extends FrontendController
         $redirectUrl = (string) $this->request->getPost('redirect', '');
 
         if ($productId <= 0) {
-            $this->getMessageManager()->addError(__('Invalid product ID.'));
+            $this->getMessageManager()->addError(__('无效的商品 ID。'));
             $this->redirectBack();
             return;
         }
@@ -45,13 +45,13 @@ class Add extends FrontendController
             $product->load($productId);
 
             if (!$product->getId()) {
-                $this->getMessageManager()->addError(__('Product does not exist.'));
+                $this->getMessageManager()->addError(__('商品不存在。'));
                 $this->redirectBack();
                 return;
             }
 
             if ($product->getStatus() !== 1) {
-                $this->getMessageManager()->addError(__('Product is disabled.'));
+                $this->getMessageManager()->addError(__('商品已下架。'));
                 $this->redirectBack();
                 return;
             }
@@ -66,7 +66,7 @@ class Add extends FrontendController
             $cartService = ObjectManager::getInstance(CartService::class);
             $cartService->addToCart($customerId, $productId, $qty);
 
-            $this->getMessageManager()->addSuccess(__('Added to cart successfully.'));
+            $this->getMessageManager()->addSuccess(__('已成功加入购物车。'));
 
             if ($redirectUrl !== '') {
                 $this->redirect($redirectUrl);
@@ -77,7 +77,7 @@ class Add extends FrontendController
         } catch (ResponseTerminateException $e) {
             throw $e;
         } catch (\Throwable $e) {
-            $this->getMessageManager()->addError(__('Add to cart failed: %{1}', $e->getMessage()));
+            $this->getMessageManager()->addError(__('加入购物车失败：%{1}', $e->getMessage()));
             $this->redirectBack();
         }
     }

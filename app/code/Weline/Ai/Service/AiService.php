@@ -430,15 +430,13 @@ class AiService
         $this->applyResolvedConfigToModel($model, $resolvedConfig);
         $params['resolved_config'] = $resolvedConfig;
 
-        $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
-
         $provider = $this->providerFactory->getProvider($model);
         if (!$provider instanceof ImageGenerationProviderInterface) {
             throw new Exception(__('模型 "%{1}" 的供应商未实现图片生成接口', [$model->getModelCode()]));
         }
 
         return $this->normalizeImageGenerationResult(
-            $provider->generateImage($model, $adaptedPrompt, $params),
+            $provider->generateImage($model, $prompt, $params),
             $model
         );
     }

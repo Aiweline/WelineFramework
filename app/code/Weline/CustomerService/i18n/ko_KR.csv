@@ -54,17 +54,6 @@
 设置语言失败：%{1},"언어 설정 실패: %{1}"
 客服消息翻译,"고객 서비스 메시지 번역"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"고객 서비스 모듈은 이 이벤트를 통해 번역 서비스를 요청합니다. 이벤트 데이터에는 번역할 텍스트, 소스 언어, 대상 언어 등이 포함됩니다. 번역 모듈은 이 이벤트를 수신하여 번역 서비스를 제공할 수 있습니다."
-"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
-"Session and message content are required.","Session and message content are required."
-"Session ID is required.","Session ID is required."
-"Language code is required.","Language code is required."
-"Language updated.","Language updated."
-"Please enter a valid email address.","Please enter a valid email address."
-"Session token is required.","Session token is required."
-"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
-"Verification email has been sent.","Verification email has been sent."
-"Customer Service Query","Customer Service Query"
-"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","고객 서비스 - 이메일 연결 인증"
 客服系统,"고객 서비스 시스템"
 客服服务,"고객 서비스"
@@ -72,6 +61,8 @@
 设置,설정
 收起,최소화
 我的语言,"내 언어"
+简体中文,"간체 중국어"
+繁體中文,"번체 중국어"
 显示模式,"표시 모드"
 仅显示译文,"번역만 표시"
 原文+译文,원문+번역
@@ -113,8 +104,8 @@
 分钟,분
 最长,"가장 김"
 秒,초
-欢迎使用客服服务,欢迎使用客服服务
 客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
+欢迎使用客服服务,欢迎使用客服服务
 鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服","AI 고객 서비스"
 鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
@@ -168,7 +159,6 @@ ID,ID
 启用客服服务,"고객 서비스 활성화"
 启用,启用
 默认客服语言,"기본 담당자 언어"
-简体中文,"간체 중국어"
 English,English
 默认客户语言,"기본 고객 언어"
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","서비스 담당자가 온라인에 없을 때 AI가 고객 메시지에 자동으로 답변하도록 활성화할 수 있습니다."

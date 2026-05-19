@@ -1530,6 +1530,10 @@ class Start extends CommandAbstract
                 $phaseLabel = $this->normalizeBackgroundStartupPhase($lastStartupPhase !== '' ? $lastStartupPhase : 'bootstrapping');
                 $readyWaitSec = \max(1, (int) \ceil(((int) ($readyResult['waited_ms'] ?? 0)) / 1000));
                 $this->printer->warning(__('Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。', [$lastMasterPid, $lastControlPort, $readyWaitSec, $phaseLabel]));
+                $failureReason = $this->readStartupFailureReason((array) ($readyResult['data'] ?? []));
+                if ($failureReason !== '') {
+                    $this->printer->warning(__('启动失败原因：%{1}', [$failureReason]));
+                }
                 $this->printer->note(__('本次启动未视为完成，请稍后执行以下命令检查状态：'));
                 $this->printer->note(__('  php bin/w server:status'));
                 $this->printer->note(__('  php bin/w server:status --all'));
@@ -1975,15 +1979,39 @@ class Start extends CommandAbstract
             'starting' => (string) __('启动服务'),
             'waiting_ready' => (string) __('等待就绪'),
             'running' => (string) __('运行中'),
+            'stopping' => (string) __('停止中'),
+            'stopped' => (string) __('已停止'),
+            'master_exited' => (string) __('Master 已退出'),
             '' => 'bootstrapping',
             default => $phase,
         };
     }
 
+    /**
+     * @param array<string, mixed> $instanceData
+     */
+    protected function readStartupFailureReason(array $instanceData): string
+    {
+        $reason = \trim((string) ($instanceData['startup_failure_reason'] ?? ''));
+        if ($reason !== '') {
+            return $reason;
+        }
+
+        $snapshot = $instanceData['current_snapshot'] ?? null;
+        if (\is_array($snapshot)) {
+            return \trim((string) ($snapshot['startup_failure_reason'] ?? ''));
+        }
+
+        return '';
+    }
+
     protected function formatBackgroundStartupProgress(array $instanceData, int $waitedMs): string
     {
-        $phase = $this->normalizeBackgroundStartupPhase((string) ($instanceData['startup_phase'] ?? 'bootstrapping'));
-        $summary = $this->summarizeBackgroundStartupServices($instanceData);
+        $rawPhase = \trim((string) ($instanceData['startup_phase'] ?? ''));
+        $phase = $this->normalizeBackgroundStartupPhase($rawPhase !== '' ? $rawPhase : 'bootstrapping');
+        $failureReason = $this->readStartupFailureReason($instanceData);
+        $includeFullPending = $failureReason !== '' || $rawPhase === 'stopping';
+        $summary = $this->summarizeBackgroundStartupServices($instanceData, $includeFullPending);
         $parts = [
             (string) __('启动中'),
             '阶段：' . $phase,
@@ -1996,6 +2024,10 @@ class Start extends CommandAbstract
             }
         }
 
+        if ($failureReason !== '') {
+            $parts[] = '原因：' . $failureReason;
+        }
+
         $parts[] = '已等待 ' . \max(0, (int) \ceil($waitedMs / 1000)) . ' 秒';
 
         return \implode(' | ', $parts);
@@ -2004,7 +2036,7 @@ class Start extends CommandAbstract
     /**
      * @return array{ready:int,total:int,pending_detail:string}
      */
-    protected function summarizeBackgroundStartupServices(array $instanceData): array
+    protected function summarizeBackgroundStartupServices(array $instanceData, bool $includeFullPending = false): array
     {
         $snapshotServices = [];
         $currentSnapshot = $instanceData['current_snapshot'] ?? [];
@@ -2069,10 +2101,12 @@ class Start extends CommandAbstract
             }
         }
 
+        $pendingLimit = $includeFullPending ? \count($pendingDetails) : 3;
+
         return [
             'ready' => $ready,
             'total' => $total,
-            'pending_detail' => \implode(', ', \array_slice($pendingDetails, 0, 3)),
+            'pending_detail' => \implode(', ', \array_slice($pendingDetails, 0, $pendingLimit)),
         ];
     }
 

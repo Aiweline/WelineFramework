@@ -6,18 +6,6 @@
 "Please log in to continue.",请先登录。
 "Product ID is required.",产品ID不能为空。
 "Added to wishlist.",已添加到收藏。
-"Unsupported wishlist provider operation: %{1}","Unsupported wishlist provider operation: %{1}"
-"Cart item ID is required.","Cart item ID is required."
-"Cart item could not be found.","Cart item could not be found."
-"Saved for later.","Saved for later."
-"Wishlist item could not be removed.","Wishlist item could not be removed."
-"Wishlist count loaded.","Wishlist count loaded."
-"Wishlist Query","Wishlist Query"
-"Provides frontend wishlist operations through the worker API.","Provides frontend wishlist operations through the worker API."
-"Frontend wishlist add operation.","Frontend wishlist add operation."
-"Frontend wishlist remove operation.","Frontend wishlist remove operation."
-"Frontend save-for-later operation.","Frontend save-for-later operation."
-"Frontend wishlist count operation.","Frontend wishlist count operation."
 "You are not allowed to remove this wishlist item.",无权移除此愿望清单项。
 Wishlist,收藏夹
 "Resume with %1 saved item(s).","Resume with %1 saved item(s)."
