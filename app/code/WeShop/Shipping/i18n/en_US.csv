@@ -11,6 +11,7 @@
 "Get enabled shipping methods for checkout.","Get enabled shipping methods for checkout."
 "Get available shipping methods as code-label map.","Get available shipping methods as code-label map."
 "Calculate shipping fee for a shipping method.","Calculate shipping fee for a shipping method."
+"Calculate frontend shipping fee for the selected method.","Calculate frontend shipping fee for the selected method."
 "Checkout shipping extension slot","Checkout shipping extension slot"
 "Inject extra shipping UI blocks into checkout shipping section without overriding theme pages.","Inject extra shipping UI blocks into checkout shipping section without overriding theme pages."
 DHL,DHL

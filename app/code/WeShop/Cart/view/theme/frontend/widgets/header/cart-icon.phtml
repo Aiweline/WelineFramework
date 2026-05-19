@@ -11,6 +11,12 @@ use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Service\CartService;
 use Weline\Framework\Session\SessionFactory;
 
+$requestPath = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$isEnglishRoute = (bool)\preg_match('#/(?:[A-Z]{3}/)?en_US(?:/|$)#i', $requestPath);
+$cartLabel = $isEnglishRoute ? 'Cart' : (string)__('购物车');
+$openCartLabel = $isEnglishRoute ? 'Open shopping cart' : (string)__('打开购物车');
+$viewCartLabel = $isEnglishRoute ? 'View Shopping Cart' : (string)__('查看购物车');
+
 // 获取参数
 $showCount = $this->getData('showCount') ?? true;
 $showLabel = $this->getData('showLabel') ?? true;
@@ -38,12 +44,12 @@ $isDrawer = $triggerAction === 'drawer';
 <button type="button" 
         class="header-cart-icon" 
         data-action="open-mini-cart"
-        aria-label="<?= __('打开购物车') ?>"
+        aria-label="<?= htmlspecialchars($openCartLabel, ENT_QUOTES, 'UTF-8') ?>"
         aria-haspopup="dialog">
 <?php else: ?>
 <a href="<?= $this->getUrl('cart') ?>" 
    class="header-cart-icon"
-   aria-label="<?= __('查看购物车') ?>">
+   aria-label="<?= htmlspecialchars($viewCartLabel, ENT_QUOTES, 'UTF-8') ?>">
 <?php endif; ?>
 
     <span class="header-cart-icon__wrapper">
@@ -58,7 +64,7 @@ $isDrawer = $triggerAction === 'drawer';
     </span>
     
     <?php if ($showLabel): ?>
-        <span class="header-cart-icon__label"><?= __('购物车') ?></span>
+        <span class="header-cart-icon__label"><?= htmlspecialchars($cartLabel, ENT_QUOTES, 'UTF-8') ?></span>
     <?php endif; ?>
 
 <?php if ($isDrawer): ?>

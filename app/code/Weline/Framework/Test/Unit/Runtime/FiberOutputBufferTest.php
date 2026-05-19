@@ -97,6 +97,29 @@ final class FiberOutputBufferTest extends TestCase
         self::assertSame('request-boundary', FiberOutputBuffer::endCapture());
     }
 
+    public function testDebugStateReportsFiberCaptureDepth(): void
+    {
+        $fiber = new \Fiber(static function (): array {
+            FiberOutputBuffer::beginCapture();
+            $duringCapture = FiberOutputBuffer::debugState();
+            echo 'tracked-output';
+            $captured = FiberOutputBuffer::endCapture();
+            $afterCapture = FiberOutputBuffer::debugState();
+
+            return [$duringCapture, $afterCapture, $captured];
+        });
+
+        $fiber->start();
+
+        self::assertTrue($fiber->isTerminated());
+        [$duringCapture, $afterCapture, $captured] = $fiber->getReturn();
+
+        self::assertSame('yes', $duringCapture['fiber']);
+        self::assertSame(1, $duringCapture['fiber_capture_depth']);
+        self::assertSame(0, $afterCapture['fiber_capture_depth']);
+        self::assertSame('tracked-output', $captured);
+    }
+
     public function testOversizedCaptureThrowsBeforeOutputHandlerExhaustsMemory(): void
     {
         $fiber = new \Fiber(static function (): void {

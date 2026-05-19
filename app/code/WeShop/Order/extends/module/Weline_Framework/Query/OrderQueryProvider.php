@@ -36,7 +36,7 @@ class OrderQueryProvider implements QueryProviderInterface
             'dashboard' => $this->getFrontendDashboardOrders($params),
             'unpaidSummary' => $this->getFrontendDashboardOrders($params),
             'cancel' => $this->cancel($params),
-            default => throw new \InvalidArgumentException((string) __('Unsupported order provider operation: %{1}', [$operation])),
+            default => throw new \InvalidArgumentException((string) __('不支持的订单提供者操作：%{1}', [$operation])),
         };
     }
 
@@ -105,7 +105,7 @@ class OrderQueryProvider implements QueryProviderInterface
         if ($customerId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Please log in to continue.'),
+                'message' => (string)__('请先登录后再继续。'),
                 'data' => [
                     'recent_orders' => [],
                     'unpaid_orders' => [],
@@ -118,7 +118,7 @@ class OrderQueryProvider implements QueryProviderInterface
 
         return [
             'success' => true,
-            'message' => (string)__('Orders loaded.'),
+            'message' => (string)__('订单加载成功。'),
             'data' => $this->getCustomerDashboardOrders([
                 'customer_id' => $customerId,
                 'page' => max(1, (int) ($params['page'] ?? 1)),
@@ -133,7 +133,7 @@ class OrderQueryProvider implements QueryProviderInterface
         if ($customerId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Please log in to continue.'),
+                'message' => (string)__('请先登录后再继续。'),
                 'data' => ['redirect_url' => $this->getUrl()->getUrl('customer/account/login')],
             ];
         }
@@ -142,7 +142,7 @@ class OrderQueryProvider implements QueryProviderInterface
         if ($orderId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Order ID is required.'),
+                'message' => (string)__('订单ID不能为空。'),
             ];
         }
 
@@ -150,7 +150,7 @@ class OrderQueryProvider implements QueryProviderInterface
         if (empty($checkResult['can_cancel'])) {
             return [
                 'success' => false,
-                'message' => (string)($checkResult['reason'] ?? __('This order cannot be cancelled.')),
+                'message' => (string)($checkResult['reason'] ?? __('该订单无法取消。')),
                 'data' => $checkResult,
             ];
         }
@@ -160,8 +160,8 @@ class OrderQueryProvider implements QueryProviderInterface
         return [
             'success' => true,
             'message' => !empty($checkResult['require_refund'])
-                ? (string)__('Order cancelled. Refund processing will follow your payment method rules.')
-                : (string)__('Order cancelled.'),
+                ? (string)__('订单已取消，退款将按支付方式规则处理。')
+                : (string)__('订单已取消。'),
             'data' => ['order_id' => $orderId],
         ];
     }
@@ -199,18 +199,18 @@ class OrderQueryProvider implements QueryProviderInterface
     {
         return [
             'provider' => 'order',
-            'name' => __('Order Query'),
-            'description' => __('Provides order creation, order item persistence, and account-summary queries.'),
+            'name' => __('订单查询'),
+            'description' => __('提供订单创建、订单商品持久化和账户摘要查询。'),
             'module' => 'WeShop_Order',
             'operations' => [
                 [
                     'name' => 'createOrder',
-                    'description' => __('Create an order and return its summary.'),
+                    'description' => __('创建订单并返回订单摘要。'),
                     'params' => [['name' => 'order_data', 'type' => 'array', 'required' => true]],
                 ],
                 [
                     'name' => 'addOrderItems',
-                    'description' => __('Persist order items in batch.'),
+                    'description' => __('批量保存订单商品。'),
                     'params' => [
                         ['name' => 'order_id', 'type' => 'int', 'required' => true],
                         ['name' => 'items', 'type' => 'array', 'required' => true],
@@ -218,7 +218,7 @@ class OrderQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'getCustomerDashboardOrders',
-                    'description' => __('Return recent and unpaid orders for the customer account center.'),
+                    'description' => __('返回账户中心最近订单和待支付订单。'),
                     'params' => [
                         ['name' => 'customer_id', 'type' => 'int', 'required' => true],
                         ['name' => 'page', 'type' => 'int', 'required' => false],
@@ -227,7 +227,7 @@ class OrderQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'dashboard',
-                    'description' => __('Return current frontend customer order dashboard data.'),
+                    'description' => __('返回当前前台客户的订单看板数据。'),
                     'frontend' => true,
                     'mode' => 'read',
                     'graph' => true,
@@ -238,11 +238,11 @@ class OrderQueryProvider implements QueryProviderInterface
                         'page_size' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 20],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Customer order dashboard',
+                    'summary' => '客户订单看板',
                 ],
                 [
                     'name' => 'unpaidSummary',
-                    'description' => __('Return current frontend customer unpaid orders summary.'),
+                    'description' => __('返回当前前台客户的待支付订单摘要。'),
                     'frontend' => true,
                     'mode' => 'read',
                     'graph' => true,
@@ -252,11 +252,11 @@ class OrderQueryProvider implements QueryProviderInterface
                         'page_size' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 20],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Customer unpaid orders',
+                    'summary' => '客户待支付订单',
                 ],
                 [
                     'name' => 'cancel',
-                    'description' => __('Cancel an order owned by the current frontend customer.'),
+                    'description' => __('取消当前前台客户拥有的订单。'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -265,7 +265,7 @@ class OrderQueryProvider implements QueryProviderInterface
                         'order_id' => ['type' => 'int', 'required' => true, 'min' => 1],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Cancel customer order',
+                    'summary' => '取消客户订单',
                 ],
             ],
         ];

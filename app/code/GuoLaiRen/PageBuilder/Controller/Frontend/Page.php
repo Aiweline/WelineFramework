@@ -26,7 +26,11 @@ use Weline\Websites\Model\WebsiteDomain;
 
 class Page extends FrontendController
 {
-    private const VIEW_HTML_CACHE_TTL = 120;
+    private const VIEW_HTML_CACHE_TTL = 60;
+    private const VIEW_HTML_CACHE_MAX_ENTRIES = 8;
+    private const VIEW_HTML_CACHE_KEEP_ENTRIES = 4;
+    private const VIEW_HTML_CACHE_MAX_BYTES = 8388608;
+    private const VIEW_HTML_CACHE_MAX_ITEM_BYTES = 524288;
 
     /** @var array<string, array{expires_at: float, html: string}> */
     private static array $viewHtmlCache = [];
@@ -396,6 +400,7 @@ class Page extends FrontendController
     private function getViewHtmlCache(string $key): ?string
     {
         $now = \microtime(true);
+        self::pruneViewHtmlCache($now);
         if (isset(self::$viewHtmlCache[$key])) {
             $cached = self::$viewHtmlCache[$key];
             if (($cached['expires_at'] ?? 0.0) >= $now) {
@@ -406,13 +411,7 @@ class Page extends FrontendController
 
         $runtimeCached = $this->runtimeCacheGet('pagebuilder.view.' . $key);
         if (\is_string($runtimeCached) && $runtimeCached !== '') {
-            if (\count(self::$viewHtmlCache) > 96) {
-                self::$viewHtmlCache = \array_slice(self::$viewHtmlCache, -48, null, true);
-            }
-            self::$viewHtmlCache[$key] = [
-                'expires_at' => $now + self::VIEW_HTML_CACHE_TTL,
-                'html' => $runtimeCached,
-            ];
+            self::rememberLocalViewHtmlCache($key, $runtimeCached, $now);
             return $runtimeCached;
         }
 
@@ -424,15 +423,86 @@ class Page extends FrontendController
         if ($html === '') {
             return;
         }
-        if (\count(self::$viewHtmlCache) > 96) {
-            self::$viewHtmlCache = \array_slice(self::$viewHtmlCache, -48, null, true);
+        if (\strlen($html) > self::VIEW_HTML_CACHE_MAX_ITEM_BYTES) {
+            return;
         }
 
+        self::rememberLocalViewHtmlCache($key, $html, \microtime(true));
+        $this->runtimeCacheSet('pagebuilder.view.' . $key, $html, self::VIEW_HTML_CACHE_TTL);
+    }
+
+    public static function clearProcessCaches(bool $aggressive = false): void
+    {
+        self::$viewHtmlCache = [];
+        if ($aggressive) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = false;
+        }
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public static function debugViewHtmlCacheState(): array
+    {
+        self::pruneViewHtmlCache(\microtime(true));
+
+        return [
+            'entries' => \count(self::$viewHtmlCache),
+            'bytes' => self::viewHtmlCacheBytes(),
+            'max_entries' => self::VIEW_HTML_CACHE_MAX_ENTRIES,
+            'max_bytes' => self::VIEW_HTML_CACHE_MAX_BYTES,
+            'max_item_bytes' => self::VIEW_HTML_CACHE_MAX_ITEM_BYTES,
+        ];
+    }
+
+    private static function rememberLocalViewHtmlCache(string $key, string $html, float $now): void
+    {
+        if ($html === '' || \strlen($html) > self::VIEW_HTML_CACHE_MAX_ITEM_BYTES) {
+            return;
+        }
+
+        self::pruneViewHtmlCache($now);
         self::$viewHtmlCache[$key] = [
-            'expires_at' => \microtime(true) + self::VIEW_HTML_CACHE_TTL,
+            'expires_at' => $now + self::VIEW_HTML_CACHE_TTL,
             'html' => $html,
         ];
-        $this->runtimeCacheSet('pagebuilder.view.' . $key, $html, self::VIEW_HTML_CACHE_TTL);
+        self::trimViewHtmlCache();
+    }
+
+    private static function pruneViewHtmlCache(float $now): void
+    {
+        foreach (self::$viewHtmlCache as $key => $cached) {
+            if (!\is_array($cached)
+                || (float)($cached['expires_at'] ?? 0.0) < $now
+                || !\is_string($cached['html'] ?? null)) {
+                unset(self::$viewHtmlCache[$key]);
+            }
+        }
+    }
+
+    private static function trimViewHtmlCache(): void
+    {
+        while (\count(self::$viewHtmlCache) > self::VIEW_HTML_CACHE_MAX_ENTRIES
+            || self::viewHtmlCacheBytes() > self::VIEW_HTML_CACHE_MAX_BYTES) {
+            if (\count(self::$viewHtmlCache) <= self::VIEW_HTML_CACHE_KEEP_ENTRIES) {
+                self::$viewHtmlCache = [];
+                return;
+            }
+            \array_shift(self::$viewHtmlCache);
+        }
+    }
+
+    private static function viewHtmlCacheBytes(): int
+    {
+        $bytes = 0;
+        foreach (self::$viewHtmlCache as $cached) {
+            if (\is_array($cached) && \is_string($cached['html'] ?? null)) {
+                $bytes += \strlen($cached['html']);
+            }
+        }
+
+        return $bytes;
     }
 
     private function buildViewHtmlCacheKey(PageModel $page, string $locale, int $websiteId, string $styleCode): string
