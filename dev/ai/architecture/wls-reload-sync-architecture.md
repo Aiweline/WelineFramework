@@ -1,5 +1,11 @@
 # WLS 重载后 Worker 池同步失败架构方案
 
+> **状态：历史归档（已被取代）。** 本文档描述的"带 ACK 的 ADD_WORKER 推送 + 三层同步保障"方案是早期设计稿。
+> 当前实际链路已演进为 **Master Registry 单一事实源 + 版本化全量路由表（SET_ROUTE_TABLE / ROUTE_TABLE_ACK / ROUTE_OBSERVATION）**，
+> 由 `ServiceOrchestrator::convergeDispatcherRouteTableAfterWorkerReady` + `syncDispatcherFullWorkerPoolFromRegistry` 收敛；
+> 文档中出现的 `notifyDispatcherWorkerReadyWithAck`、`ControlMessage::addWorker` 等示例符号已不存在于生产代码。
+> 仅保留作设计思路追溯。
+
 ## 问题诊断
 
 ### 现象

@@ -238,7 +238,7 @@ class Dispatcher
     private float $startupProtectionReadyRatio = 0.0;
     private int $startupProtectionMinReady = 1;
     private int $expectedWorkerCount = 0;
-    private float $backendRouteWaitTimeoutSec = 3.0;
+    private float $backendRouteWaitTimeoutSec = 0.0;
     
     // ========== IPC 控制通道 ==========
     
@@ -1828,78 +1828,6 @@ class Dispatcher
                 $this->log('Undrain: 端口 ' . \implode(',', $ports) . ' 已从黑名单移除', 'DRAIN');
                 break;
                 
-            case ControlMessage::TYPE_ADD_WORKER:
-                $ports = $msg['ports'] ?? [];
-                $role = $msg['role'] ?? ControlMessage::ROLE_WORKER;
-                $workerDescriptors = $this->extractWorkerDescriptors($msg, (string)$role);
-
-                // B-ii: 当 SET_ROUTE_TABLE 已被声明为权威源时，ADD_WORKER 降级为兼容信号。
-                // 仅日志 + 必要时回 worker_pool_ack（让 Master 端 ack 闭环不超时），不再入池。
-                if ($this->routeTableAsAuthority) {
-                    $this->log(
-                        'ADD_WORKER 降级为兼容信号（B-ii: route_table_as_authority=on）: '
-                        . \json_encode($ports) . ' role: ' . $role,
-                        'DEBUG'
-                    );
-                    if ($role === ControlMessage::ROLE_WORKER && \is_array($ports)) {
-                        $this->sendWorkerPoolAckForPorts(
-                            \array_values(\array_filter(\array_map('intval', $ports), static fn(int $p) => $p > 0)),
-                            $workerDescriptors
-                        );
-                    }
-                    break;
-                }
-
-                $this->log('收到 ADD_WORKER 消息（已入队异步入池）: ' . \json_encode($ports) . ' role: ' . $role, 'INFO');
-                $norm = [];
-                foreach (\is_array($ports) ? $ports : [] as $port) {
-                    $p = (int) $port;
-                    if ($p > 0) {
-                        $norm[] = $p;
-                    }
-                }
-                foreach ($workerDescriptors as $worker) {
-                    if ((string)($worker['state'] ?? 'ready') !== 'ready') {
-                        continue;
-                    }
-                    $p = (int)($worker['port'] ?? 0);
-                    if ($p > 0) {
-                        $norm[] = $p;
-                    }
-                }
-                $norm = \array_values(\array_unique($norm));
-                if ($norm !== []) {
-                    if ($role === ControlMessage::ROLE_MAINTENANCE) {
-                        // 维护 Worker 注册
-                        foreach ($norm as $port) {
-                            $result = $this->passthroughCore->addMaintenanceWorkerPort($port);
-                            if ($result['success']) {
-                                $this->log("维护 Worker 端口已注册: {$port}", 'INFO');
-                            } else {
-                                $this->log("维护 Worker 端口注册失败: {$port} - {$result['error']}", 'WARN');
-                            }
-                        }
-                    } else {
-                        $currentWorkerPorts = $this->passthroughCore->getWorkerPorts();
-                        $duplicatePorts = \array_values(\array_intersect($norm, $currentWorkerPorts));
-                        if ($duplicatePorts !== []) {
-                            $this->log(
-                                '收到额外 Worker READY/ADD_WORKER，端口已在负载池中，立即触发池校正与健康检查: '
-                                . \implode(',', $duplicatePorts),
-                                'WARN'
-                            );
-                            $this->sendWorkerPoolAckForPorts($duplicatePorts, $workerDescriptors);
-                            $norm = \array_values(\array_diff($norm, $duplicatePorts));
-                        }
-                        if ($norm === []) {
-                            break;
-                        }
-                        // Startup consensus trusts Master READY; health probes run later.
-                        $this->addWorkerPortsFromMasterReady($norm, $workerDescriptors, 'ADD_WORKER');
-                    }
-                }
-                break;
-                
             case ControlMessage::TYPE_REMOVE_WORKER:
                 // 从负载均衡池移除端口，并关闭所有使用该 Worker 的客户端连接
                 $ports = $msg['ports'] ?? [];
@@ -2945,15 +2873,26 @@ skipLegacyImmediateStartup503:
     }
 
     /**
-     * 在后端尚未可路由的短窗口内，先等待并重试一次路由，避免 TLS 请求立即断开导致 ERR_CONNECTION_ABORTED。
+     * 在后端尚未可路由的短窗口内，先 pump 控制面并重试一次路由。
+     * 默认不再同步自旋等待（backendRouteWaitTimeoutSec=0），启动兜底交给 pending 维护页队列。
      *
      * @param \Socket|resource $clientSocket
      */
     private function tryWaitAndRouteUnavailableBackend($clientSocket, string $clientIp, int $connId): bool
     {
         if ($this->backendRouteWaitTimeoutSec <= 0.0) {
+            $this->pumpSpinWaitControlTick();
+            if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
+                $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
+                return true;
+            }
+            if ($this->tryRouteToMaintenanceWorker($clientSocket, $clientIp, $connId)) {
+                return true;
+            }
+
             return false;
         }
+
         if (!$this->shouldServeMaintenanceFallback()) {
             return false;
         }
