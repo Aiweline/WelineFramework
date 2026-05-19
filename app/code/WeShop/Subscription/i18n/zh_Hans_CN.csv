@@ -1,28 +1,28 @@
-﻿"Subscription Plan Management","Subscription Plan Management"
-"Edit Subscription Plan","Edit Subscription Plan"
-"Create Subscription Plan","Create Subscription Plan"
-"Subscription plan does not exist.","Subscription plan does not exist."
-"Saved successfully.","Saved successfully."
-"Save failed: %{error}","Save failed: %{error}"
-"Deleted successfully.","Deleted successfully."
-"Delete failed: %{error}","Delete failed: %{error}"
-"Subscription Management","Subscription Management"
-"Subscription ID is required.",缺少订阅ID。
-"Subscription Details",订阅详情
-"Subscription cancelled.",订阅已取消。
-"Cancel failed: %{error}","Cancel failed: %{error}"
-"Subscription paused.",订阅已暂停。
-"Subscription resumed.",订阅已恢复。
-"Resume failed: %{error}","Resume failed: %{error}"
-"Please login first.",请先登录。
-"Unable to cancel this subscription right now.",暂时无法取消该订阅。
+﻿订阅计划管理,订阅计划管理
+编辑订阅计划,编辑订阅计划
+新建订阅计划,新建订阅计划
+订阅计划不存在。,订阅计划不存在。
+保存成功。,保存成功。
+保存失败：%{error},保存失败：%{error}
+删除成功。,删除成功。
+删除失败：%{error},删除失败：%{error}
+订阅管理,订阅管理
+缺少订阅 ID。,缺少订阅 ID。
+订阅详情,订阅详情
+订阅已取消。,订阅已取消。
+取消失败：%{error},取消失败：%{error}
+订阅已暂停。,订阅已暂停。
+订阅已恢复。,订阅已恢复。
+恢复失败：%{error},恢复失败：%{error}
+请先登录。,请先登录。
+暂时无法取消该订阅。,暂时无法取消该订阅。
 我的订阅服务,我的订阅服务
-"Unable to resume this subscription right now.",暂时无法恢复该订阅。
+暂时无法恢复该订阅。,暂时无法恢复该订阅。
 订阅服务详情,订阅服务详情
-"Subscription page before content",订阅页前置扩展内容
-"Inject content before the subscription list on the storefront subscription page.",在前台订阅列表前注入扩展内容。
-"Subscription item after content",订阅卡片后置扩展内容
-"Inject content after each subscription item card.",在每个订阅卡片后注入扩展内容。
+订阅页前置扩展内容,订阅页前置扩展内容
+在前台订阅列表前注入扩展内容。,在前台订阅列表前注入扩展内容。
+订阅卡片后置扩展内容,订阅卡片后置扩展内容
+在每个订阅卡片后注入扩展内容。,在每个订阅卡片后注入扩展内容。
 试用中,试用中
 生效中,生效中
 已暂停,已暂停
@@ -46,10 +46,10 @@
 年,年
 每%{interval}%{cycle},每%{interval}%{cycle}
 每%{cycle},每%{cycle}
-"Subscription does not exist.",订阅不存在。
-"You do not have permission to view this subscription.",您无权查看该订阅。
-"Every %1 %2","Every %1 %2"
-"Every %1","Every %1"
+订阅不存在。,订阅不存在。
+您无权查看该订阅。,您无权查看该订阅。
+暂时无法暂停该订阅。,暂时无法暂停该订阅。
+暂停失败：%{error},暂停失败：%{error}
 订阅计划不存在,订阅计划不存在
 订阅计划已停用,订阅计划已停用
 创建订阅：%{plan},创建订阅：%{plan}
@@ -67,10 +67,11 @@
 管理周期性订阅与方案,管理周期性订阅与方案
 订阅信息暂不可用,订阅信息暂不可用
 订阅服务暂时无法加载，请稍后重试。,订阅服务暂时无法加载，请稍后重试。
-"Recurring Orders",周期订单
-Subscriptions,Subscriptions
-"Open Subscriptions",打开订阅中心
-"Active and historical plans",生效与历史计划
+周期订单,周期订单
+订阅服务,订阅服务
+打开订阅中心,打开订阅中心
+生效与历史计划,生效与历史计划
+在此集中查看计费周期，暂停或恢复计划，并管理续费。,在此集中查看计费周期，暂停或恢复计划，并管理续费。
 新建订阅计划,新建订阅计划
 返回,返回
 计划名称,计划名称

@@ -25,7 +25,7 @@ class BackendTemplatesTest extends TestCase
         $templatePath = BP . '/app/code/WeShop/RMA/view/templates/Backend/RMA/Index/index.phtml';
         $content = file_get_contents($templatePath);
 
-        $this->assertStringContainsString('<lang>RMA Management</lang>', $content);
+        $this->assertStringContainsString('<lang>售后管理</lang>', $content);
         $this->assertStringContainsString('__(\'Search\')', $content);
         $this->assertStringContainsString('__(\'Pending\')', $content);
         $this->assertStringContainsString('__(\'Approved\')', $content);
@@ -36,7 +36,7 @@ class BackendTemplatesTest extends TestCase
         $templatePath = BP . '/app/code/WeShop/RMA/view/templates/Backend/RMA/View/index.phtml';
         $content = file_get_contents($templatePath);
 
-        $this->assertStringContainsString('<lang>RMA Detail</lang>', $content);
+        $this->assertStringContainsString('<lang>售后详情</lang>', $content);
         $this->assertStringContainsString('__(\'Approve\')', $content);
         $this->assertStringContainsString('__(\'Reject\')', $content);
         $this->assertStringContainsString('__(\'RMA Information\')', $content);

@@ -35,16 +35,16 @@ class Pause extends BaseController
 
         $id = $this->readId();
         if ($id <= 0) {
-            return $this->errorResponse(__('Subscription ID is required.'));
+            return $this->errorResponse(__('缺少订阅 ID。'));
         }
 
         try {
             $this->subscriptionService->pauseSubscription($id, $customerId);
         } catch (\Throwable $exception) {
-            return $this->errorResponse((string) __('Unable to pause this subscription right now.'));
+            return $this->errorResponse((string) __('暂时无法暂停该订阅。'));
         }
 
-        return $this->successResponse(__('Subscription paused.'));
+        return $this->successResponse(__('订阅已暂停。'));
     }
 
     protected function handleResume(): string
@@ -56,16 +56,16 @@ class Pause extends BaseController
 
         $id = $this->readId();
         if ($id <= 0) {
-            return $this->errorResponse(__('Subscription ID is required.'));
+            return $this->errorResponse(__('缺少订阅 ID。'));
         }
 
         try {
             $this->subscriptionService->resumeSubscription($id, $customerId);
         } catch (\Throwable $exception) {
-            return $this->errorResponse((string) __('Unable to resume this subscription right now.'));
+            return $this->errorResponse((string) __('暂时无法恢复该订阅。'));
         }
 
-        return $this->successResponse(__('Subscription resumed.'));
+        return $this->successResponse(__('订阅已恢复。'));
     }
 
     protected function readId(): int
@@ -83,12 +83,12 @@ class Pause extends BaseController
         if ($this->request->isAjax()) {
             return $this->fetchJson([
                 'code' => 401,
-                'msg' => __('Please login first.'),
+                'msg' => __('请先登录。'),
                 'data' => ['redirect_url' => $this->getUrl('customer/account/login')],
             ]);
         }
 
-        $this->getMessageManager()->addError(__('Please login first.'));
+        $this->getMessageManager()->addError(__('请先登录。'));
         $this->redirect('customer/account/login');
         return '';
     }

@@ -28,7 +28,7 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
         }
 
         $this->assign('login_url', '/customer/account/login');
-        $this->assign('title', __('Create Account'));
+        $this->assign('title', __('创建账户'));
 
         return (string) $this->fetch('Weline_Customer::templates/frontend/account/register.phtml');
     }
@@ -48,27 +48,27 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
         $agreeTerms = (bool) ($this->request->getPost('agree_terms') ?? false);
 
         if ($firstName === '' || $lastName === '') {
-            MessageManager::error(__('First name and last name are required.'));
+            MessageManager::error(__('请填写名和姓。'));
             return (string) $this->redirect('/customer/account/register');
         }
 
         if ($email === '') {
-            MessageManager::error(__('Email is required.'));
+            MessageManager::error(__('请填写邮箱。'));
             return (string) $this->redirect('/customer/account/register');
         }
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            MessageManager::error(__('Please enter a valid email address.'));
+            MessageManager::error(__('请输入有效的邮箱地址。'));
             return (string) $this->redirect('/customer/account/register');
         }
 
         if ($password !== $confirmPassword) {
-            MessageManager::error(__('The password confirmation does not match.'));
+            MessageManager::error(__('两次输入的密码不一致。'));
             return (string) $this->redirect('/customer/account/register');
         }
 
         if (!$agreeTerms) {
-            MessageManager::error(__('Please accept the terms and privacy policy.'));
+            MessageManager::error(__('请同意服务条款与隐私政策。'));
             return (string) $this->redirect('/customer/account/register');
         }
 
@@ -78,7 +78,7 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
                 'last_name' => $lastName,
             ]);
             $this->customerAccountService->loginCustomer($result['customer']);
-            MessageManager::success(__('Registration succeeded. Welcome.'));
+            MessageManager::success(__('注册成功，欢迎加入。'));
             return (string) $this->redirect('/customer/account');
         } catch (\Throwable $throwable) {
             MessageManager::error($throwable->getMessage());

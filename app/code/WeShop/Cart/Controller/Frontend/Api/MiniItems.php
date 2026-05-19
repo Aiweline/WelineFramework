@@ -62,7 +62,7 @@ class MiniItems extends BaseController
                 $formattedItems[] = [
                     'cart_id' => $item['cart_id'] ?? $item['id'] ?? 0,
                     'product_id' => $item['product_id'] ?? 0,
-                    'name' => $item['product']['name'] ?? __('Product') . ' #' . ($item['product_id'] ?? 0),
+                    'name' => $item['product']['name'] ?? __('商品') . ' #' . ($item['product_id'] ?? 0),
                     'image' => $item['product']['image'] ?? '',
                     'price' => $price,
                     'price_formatted' => $this->formatPrice($price),
@@ -136,7 +136,7 @@ class MiniItems extends BaseController
 
         $json = \json_encode([
             'code' => 410,
-            'msg' => (string)__('Direct browser cart API is deprecated. Use the frontend worker API.'),
+            'msg' => (string)__('浏览器直连购物车 API 已弃用，请使用前台 Worker API。'),
             'data' => [
                 'deprecated' => true,
                 'browser_direct' => false,
