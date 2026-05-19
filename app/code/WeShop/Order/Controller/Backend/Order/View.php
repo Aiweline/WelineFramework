@@ -21,7 +21,7 @@ class View extends BaseController
     {
         $orderId = (int) $this->request->getParam('id', 0);
         if (!$orderId) {
-            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->getMessageManager()->addError(__('缺少订单 ID。'));
             $this->redirect('*/backend/order');
             return '';
         }
@@ -29,14 +29,14 @@ class View extends BaseController
         try {
             $detailData = $this->orderAdminPageDataService->getDetailData($orderId);
         } catch (\Throwable $throwable) {
-            $this->getMessageManager()->addError($throwable->getMessage() ?: __('Order not found.'));
+            $this->getMessageManager()->addError($throwable->getMessage() ?: __('订单不存在。'));
             $this->redirect('*/backend/order');
             return '';
         }
 
         $this->assign(array_merge(
             [
-                'title' => (string) __('Order Detail'),
+                'title' => (string) __('订单详情'),
                 'orderIndexUrl' => $this->getUrl('*/backend/order'),
                 'updateStatusUrl' => $this->getUrl('*/backend/order/update-status'),
                 'createShipmentUrl' => $this->getUrl('*/backend/order/create-shipment'),

@@ -34,7 +34,7 @@ class WishlistQueryProvider implements QueryProviderInterface
             'remove' => $this->remove($params),
             'count' => $this->count(),
             default => throw new \InvalidArgumentException(
-                (string)__('Unsupported wishlist provider operation: %{1}', $operation)
+                (string)__('心愿单查询器不支持的操作：%{1}', $operation)
             ),
         };
     }
@@ -50,7 +50,7 @@ class WishlistQueryProvider implements QueryProviderInterface
         if ($productId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Product ID is required.'),
+                'message' => (string)__('缺少商品 ID。'),
             ];
         }
 
@@ -58,7 +58,7 @@ class WishlistQueryProvider implements QueryProviderInterface
 
         return [
             'success' => true,
-            'message' => (string)__('Added to wishlist.'),
+            'message' => (string)__('已加入心愿单。'),
             'data' => [
                 'item_id' => (int)($item->getId() ?? 0),
                 'product_id' => $productId,
@@ -78,7 +78,7 @@ class WishlistQueryProvider implements QueryProviderInterface
         if ($cartItemId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Cart item ID is required.'),
+                'message' => (string)__('缺少购物车条目 ID。'),
             ];
         }
 
@@ -94,7 +94,7 @@ class WishlistQueryProvider implements QueryProviderInterface
         if ($productId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Cart item could not be found.'),
+                'message' => (string)__('未找到对应购物车条目。'),
             ];
         }
 
@@ -103,7 +103,7 @@ class WishlistQueryProvider implements QueryProviderInterface
 
         return [
             'success' => true,
-            'message' => (string)__('Saved for later.'),
+            'message' => (string)__('已移至稍后购买。'),
             'data' => [
                 'item_id' => (int)($item->getId() ?? 0),
                 'product_id' => $productId,
@@ -124,7 +124,7 @@ class WishlistQueryProvider implements QueryProviderInterface
         if ($wishlistId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Wishlist item ID is required.'),
+                'message' => (string)__('缺少心愿单条目 ID。'),
             ];
         }
 
@@ -132,13 +132,13 @@ class WishlistQueryProvider implements QueryProviderInterface
         if (!$removed) {
             return [
                 'success' => false,
-                'message' => (string)__('Wishlist item could not be removed.'),
+                'message' => (string)__('无法移除该心愿单条目。'),
             ];
         }
 
         return [
             'success' => true,
-            'message' => (string)__('Removed from wishlist.'),
+            'message' => (string)__('已从心愿单移除。'),
             'data' => [
                 'wishlist_count' => $this->wishlistService->getCustomerWishlistCount($customerId),
             ],
@@ -151,7 +151,7 @@ class WishlistQueryProvider implements QueryProviderInterface
 
         return [
             'success' => true,
-            'message' => (string)__('Wishlist count loaded.'),
+            'message' => (string)__('心愿单数量已加载。'),
             'data' => [
                 'wishlist_count' => $customerId > 0
                     ? $this->wishlistService->getCustomerWishlistCount($customerId)
@@ -169,7 +169,7 @@ class WishlistQueryProvider implements QueryProviderInterface
     {
         return [
             'success' => false,
-            'message' => (string)__('Please log in to continue.'),
+            'message' => (string)__('请先登录。'),
             'data' => [
                 'redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE),
             ],
@@ -180,13 +180,13 @@ class WishlistQueryProvider implements QueryProviderInterface
     {
         return [
             'provider' => 'wishlist',
-            'name' => __('Wishlist Query'),
-            'description' => __('Provides frontend wishlist operations through the worker API.'),
+            'name' => __('心愿单查询'),
+            'description' => __('通过 Worker API 提供前台心愿单操作。'),
             'module' => 'WeShop_Wishlist',
             'operations' => [
                 [
                     'name' => 'add',
-                    'description' => __('Frontend wishlist add operation.'),
+                    'description' => __('前台心愿单添加操作。'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -199,7 +199,7 @@ class WishlistQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'remove',
-                    'description' => __('Frontend wishlist remove operation.'),
+                    'description' => __('前台心愿单移除操作。'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -212,7 +212,7 @@ class WishlistQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'addFromCart',
-                    'description' => __('Frontend save-for-later operation.'),
+                    'description' => __('前台稍后购买（从购物车移入）操作。'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,
@@ -225,7 +225,7 @@ class WishlistQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'count',
-                    'description' => __('Frontend wishlist count operation.'),
+                    'description' => __('前台心愿单数量查询操作。'),
                     'frontend' => true,
                     'mode' => 'read',
                     'graph' => true,

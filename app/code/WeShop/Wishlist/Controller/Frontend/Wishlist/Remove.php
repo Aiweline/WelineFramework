@@ -26,7 +26,7 @@ class Remove extends FrontendController
         if ($customerId <= 0) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Please log in to continue.'),
+                'message' => __('请先登录。'),
                 'data' => [
                     'redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE),
                 ],
@@ -37,7 +37,7 @@ class Remove extends FrontendController
         if ($wishlistId <= 0) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Wishlist item ID is required.'),
+                'message' => __('缺少心愿单条目 ID。'),
             ]);
         }
 
@@ -45,7 +45,7 @@ class Remove extends FrontendController
 
         return $this->fetchJson([
             'success' => true,
-            'message' => __('Removed from wishlist.'),
+            'message' => __('已从心愿单移除。'),
             'data' => [
                 'wishlist_count' => $this->wishlistService->getCustomerWishlistCount($customerId),
             ],

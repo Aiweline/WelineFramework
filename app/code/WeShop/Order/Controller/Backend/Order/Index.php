@@ -29,7 +29,7 @@ class Index extends BaseController
 
         $this->assign(array_merge(
             [
-                'title' => (string) __('Order Management'),
+                'title' => (string) __('订单管理'),
                 'orderIndexUrl' => $this->getUrl('*/backend/order'),
             ],
             $this->orderAdminPageDataService->getListData($page, $pageSize, $filters)

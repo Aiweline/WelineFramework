@@ -467,3 +467,98 @@ html.dark .auth-form__password-toggle:hover {
 .auth-form__password-toggle-icon .auth-form__pwd-svg[hidden] {
     display: none;
 }
+
+/* ========== 认证表单控件（输入框 / 下拉框统一主题） ========== */
+
+.auth-form .auth-form__input,
+.auth-form .auth-form__select {
+    min-height: var(--auth-input-height, 44px);
+    border: var(--auth-input-border-width, 2px) solid var(--color-border-default);
+    border-radius: var(--auth-input-radius, var(--radius-md, 8px));
+    font-family: inherit;
+    line-height: 1.4;
+    box-sizing: border-box;
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+}
+
+.auth-form .auth-form__input:focus,
+.auth-form .auth-form__select:focus {
+    background-color: var(--color-bg-primary);
+}
+
+.auth-form .auth-form__input:-webkit-autofill,
+.auth-form .auth-form__input:-webkit-autofill:hover,
+.auth-form .auth-form__input:-webkit-autofill:focus,
+.auth-form .auth-form__input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-bg-secondary) inset !important;
+    -webkit-text-fill-color: var(--color-text-primary) !important;
+    caret-color: var(--color-text-primary);
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+.auth-form .auth-form__select {
+    width: 100%;
+    padding: var(--auth-input-padding-y, 0.75rem) calc(var(--auth-input-padding-x, 1rem) + 1.5rem) var(--auth-input-padding-y, 0.75rem) var(--auth-input-padding-x, 1rem);
+    font-size: var(--font-size-base, 0.9375rem);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--auth-input-padding-x, 1rem) center;
+    background-size: 1rem;
+    transition: all 0.3s;
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.auth-form .auth-form__select:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+.auth-form .auth-form__select option {
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+}
+
+.dark .auth-form .auth-form__input,
+.dark .auth-form .auth-form__select,
+html.dark .auth-form .auth-form__input,
+html.dark .auth-form .auth-form__select {
+    background-color: var(--color-bg-dark-tertiary, #334155);
+    color: var(--color-text-light, #f5f5f5);
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+.dark .auth-form .auth-form__input:focus,
+.dark .auth-form .auth-form__select:focus,
+html.dark .auth-form .auth-form__input:focus,
+html.dark .auth-form .auth-form__select:focus {
+    background-color: var(--color-bg-dark-secondary, #0f172a);
+}
+
+.dark .auth-form .auth-form__input:-webkit-autofill,
+.dark .auth-form .auth-form__input:-webkit-autofill:hover,
+.dark .auth-form .auth-form__input:-webkit-autofill:focus,
+.dark .auth-form .auth-form__input:-webkit-autofill:active,
+html.dark .auth-form .auth-form__input:-webkit-autofill,
+html.dark .auth-form .auth-form__input:-webkit-autofill:hover,
+html.dark .auth-form .auth-form__input:-webkit-autofill:focus,
+html.dark .auth-form .auth-form__input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-bg-dark-tertiary, #334155) inset !important;
+    -webkit-text-fill-color: var(--color-text-light, #f5f5f5) !important;
+    caret-color: var(--color-text-light, #f5f5f5);
+}
+
+.dark .auth-form .auth-form__select,
+html.dark .auth-form .auth-form__select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+.dark .auth-form .auth-form__select option,
+html.dark .auth-form .auth-form__select option {
+    background-color: var(--color-bg-dark, #1a1a1a);
+    color: var(--color-text-light, #f5f5f5);
+}

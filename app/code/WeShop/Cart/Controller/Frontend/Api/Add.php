@@ -134,7 +134,7 @@ class Add extends FrontendController
                 ],
             ]);
         } catch (\Throwable $e) {
-            $this->jsonError(__('加入购物车失败：%{1}'), $e->getMessage()), 500);
+            $this->jsonError(__('加入购物车失败：%{1}', [$e->getMessage()]), 500);
         }
     }
 
@@ -186,7 +186,7 @@ class Add extends FrontendController
                 'options' => $configurableService->getConfigurableOptions($productId),
             ]);
         } catch (\Throwable $e) {
-            $this->jsonError(__('无法加载商品规格：%{1}'), $e->getMessage()), 500);
+            $this->jsonError(__('无法加载商品规格：%{1}', [$e->getMessage()]), 500);
         }
     }
 

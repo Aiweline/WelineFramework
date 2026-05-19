@@ -39,7 +39,7 @@ class View extends BaseController
             $this->redirect('weshop/order/list');
             return '';
         } catch (\Throwable) {
-            $this->getMessageManager()->addError((string) __('Failed to load order details.'));
+            $this->getMessageManager()->addError((string) __('订单详情加载失败。'));
             $this->redirect('weshop/order/list');
             return '';
         }
@@ -48,7 +48,7 @@ class View extends BaseController
             $this->assign($key, $value);
         }
 
-        $this->assign('page_title', (string) __('Order Details'));
+        $this->assign('page_title', (string) __('订单详情'));
 
         return $this->renderPage();
     }
