@@ -9104,9 +9104,13 @@ class ServiceOrchestrator
             $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
         }
 
-        // Dispatcher 就绪：用 Registry 单一事实源 + 版本化全量路由表向其下发当前 READY Worker 与 HTTP Redirect 端口。
+        // Dispatcher 就绪：维护模式下发维护池；否则用 Registry 同步业务 Worker 池，并下发 HTTP Redirect 端口。
         if ($instance->role === 'dispatcher') {
-            $this->syncDispatcherFullWorkerPoolFromRegistry();
+            if ($this->maintenanceMode) {
+                $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
+            } else {
+                $this->syncDispatcherFullWorkerPoolFromRegistry();
+            }
             $this->sendRedirectPortToDispatcher($instance);
         }
         
