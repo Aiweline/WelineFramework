@@ -30,16 +30,16 @@ class CreateShipment extends BaseController
         );
 
         if ($orderId <= 0) {
-            $this->getMessageManager()->addError((string) __('Order ID is required.'));
+            $this->getMessageManager()->addError((string) __('缺少订单 ID。'));
             $this->redirect($backUrl);
             return '';
         }
 
         try {
             $this->orderService->createShipment($orderId, $carrier, $trackingNumber);
-            $this->getMessageManager()->addSuccess((string) __('Shipment created. The order is now fulfilled.'));
+            $this->getMessageManager()->addSuccess((string) __('发货单已创建，订单已进入已发货状态。'));
         } catch (\Throwable $throwable) {
-            $this->getMessageManager()->addError($throwable->getMessage() ?: (string) __('Shipment creation failed.'));
+            $this->getMessageManager()->addError($throwable->getMessage() ?: (string) __('创建发货单失败。'));
         }
 
         $this->redirect($backUrl);

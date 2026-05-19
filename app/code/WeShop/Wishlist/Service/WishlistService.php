@@ -50,7 +50,7 @@ class WishlistService
         }
 
         if ((int) $wishlist->getData(Wishlist::schema_fields_CUSTOMER_ID) !== $customerId) {
-            throw new \Exception((string) __('You are not allowed to remove this wishlist item.'));
+            throw new \Exception((string) __('您无权移除此心愿单条目。'));
         }
 
         return (bool) $wishlist->delete()->fetch();

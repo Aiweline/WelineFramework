@@ -29,9 +29,9 @@ $wishlistUrl = (string) ($data['wishlist_url'] ?? $this->getUrl('wishlist'));
             <span class="material-symbols-outlined text-2xl">favorite</span>
         </div>
         <div>
-            <p class="font-semibold text-text-primary-light group-hover:text-primary dark:text-text-primary-dark"><?= __('Wishlist') ?></p>
+            <p class="font-semibold text-text-primary-light group-hover:text-primary dark:text-text-primary-dark"><?= __('心愿单') ?></p>
             <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                <?= __('Resume with %1 saved item(s).', $wishlistCount) ?>
+                <?= __('继续浏览已保存的 %{1} 件商品', $wishlistCount) ?>
             </p>
         </div>
     </div>

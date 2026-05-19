@@ -40,8 +40,10 @@
         return url.href;
     };
 
+    const isDevMode = () => !!(window.DEV || window.WELINE_ENV === 'DEV');
+
     const withDevCacheBust = (url) => {
-        const isDev = window.DEV || window.WELINE_ENV === 'DEV' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const isDev = isDevMode() || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         if (!isDev) {
             return url;
         }
@@ -53,7 +55,7 @@
     };
 
     const getDefaultWorkerUrl = () => {
-        const isDev = window.DEV || window.WELINE_ENV === 'DEV';
+        const isDev = isDevMode();
         if (isDev) {
             return '/Weline/Frontend/view/statics/js/weline-api-worker.js';
         }
@@ -257,6 +259,7 @@
                     data: body,
                     maintenance: false,
                 };
+                this.reportDevError(error, { type: 'upload', provider, operation, options });
                 this.handleHttpError(error.status, error, options && options.silent, options);
                 throw error;
             }
@@ -314,9 +317,11 @@
                     if (!this.pending.has(messageId)) {
                         return;
                     }
+                    const pending = this.pending.get(messageId);
                     this.pending.delete(messageId);
                     const error = new Error('[Weline.Api] worker request timed out.');
                     error.code = 'worker_timeout';
+                    this.reportDevError(error, { type: 'timeout', request: pending && pending.payload });
                     reject(error);
                 }, timeoutMs);
                 this.pending.set(messageId, { resolve, reject, payload, timeoutId });
@@ -382,13 +387,26 @@
                 data: wrapper,
                 maintenance: !!data.maintenance,
             };
-            this.handleHttpError(error.status, error, pending.payload && pending.payload.options && pending.payload.options.silent, pending.payload && pending.payload.options);
+            const requestOptions = pending.payload && pending.payload.options;
+            this.reportDevError(error, {
+                status: error.status,
+                silent: !!(requestOptions && requestOptions.silent),
+                request: pending.payload,
+                workerMessage: data,
+            });
+            this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions);
             pending.reject(error);
         }
 
         handleWorkerError(event) {
-            console.error('[Weline.Api] worker error:', event);
             const message = event && event.message ? event.message : '[Weline.Api] worker failed.';
+            const workerDetail = {
+                message: event && event.message,
+                filename: event && event.filename,
+                lineno: event && event.lineno,
+                colno: event && event.colno,
+                error: event && event.error,
+            };
             for (const [id, pending] of this.pending.entries()) {
                 this.pending.delete(id);
                 if (pending.timeoutId) {
@@ -396,6 +414,7 @@
                 }
                 const error = new Error(message);
                 error.code = 'worker_error';
+                this.reportDevError(error, Object.assign({ type: 'worker_crash', requestId: id, request: pending.payload }, workerDetail));
                 pending.reject(error);
             }
         }
@@ -420,6 +439,35 @@
                 }
             }
             this.showDefaultError(error);
+        }
+
+        reportDevError(error, detail) {
+            if (!isDevMode() || !error) {
+                return;
+            }
+            if (error._welineApiDevLogged) {
+                return;
+            }
+            error._welineApiDevLogged = true;
+            this.logDevError('request failed', error, detail);
+        }
+
+        logDevError(context, error, detail) {
+            const label = `[Weline.Api] ${context}`;
+            const extra = detail && typeof detail === 'object' ? detail : {};
+            if (typeof console.groupCollapsed === 'function') {
+                console.groupCollapsed(label);
+                console.error(error);
+                if (error && error.response) {
+                    console.log('response:', error.response);
+                }
+                if (Object.keys(extra).length > 0) {
+                    console.log('detail:', extra);
+                }
+                console.groupEnd();
+                return;
+            }
+            console.error(label, error, error && error.response ? { response: error.response } : null, extra);
         }
 
         showDefaultError(error) {

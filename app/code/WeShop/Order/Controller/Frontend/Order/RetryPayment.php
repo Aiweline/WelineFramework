@@ -20,26 +20,26 @@ class RetryPayment extends BaseController
     {
         $orderId = (int) ($this->request->getParam('order_id') ?? 0);
         if ($orderId <= 0) {
-            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->getMessageManager()->addError(__('缺少订单 ID。'));
             $this->redirect('weshop/order/list');
             return '';
         }
 
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
         if ($customerId <= 0) {
-            $this->getMessageManager()->addError(__('Please log in to continue.'));
+            $this->getMessageManager()->addError(__('请先登录。'));
             $this->redirect($this->getStorefrontLoginRoute());
             return '';
         }
 
         $retryContext = $this->orderService->getRetryPaymentContext($orderId, $customerId);
         if ($retryContext === null) {
-            $this->getMessageManager()->addError(__('This order cannot continue to payment.'));
+            $this->getMessageManager()->addError(__('该订单无法继续支付。'));
             $this->redirect('weshop/order/list');
             return '';
         }
 
-        $this->getMessageManager()->addSuccess(__('Continue the payment flow from checkout.'));
+        $this->getMessageManager()->addSuccess(__('请从结账页继续完成支付。'));
         $this->redirect('checkout', ['order_id' => $orderId]);
         return '';
     }

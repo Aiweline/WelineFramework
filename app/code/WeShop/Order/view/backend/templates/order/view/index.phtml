@@ -10,9 +10,9 @@ $updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? $this->getBack
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
         <div>
-            <a href="<?= $orderIndexUrl ?>" class="text-decoration-none small text-muted"><?= __('Back to Orders') ?></a>
-            <h1 class="h3 mb-1"><?= __('Order Detail') ?> #<?= htmlspecialchars((string) ($order['increment_id'] ?? ''), ENT_QUOTES) ?></h1>
-            <p class="text-muted mb-0"><?= __('Review the order payload, items, and current status.') ?></p>
+            <a href="<?= $orderIndexUrl ?>" class="text-decoration-none small text-muted"><?= __('返回订单列表') ?></a>
+            <h1 class="h3 mb-1"><?= __('订单详情') ?> #<?= htmlspecialchars((string) ($order['increment_id'] ?? ''), ENT_QUOTES) ?></h1>
+            <p class="text-muted mb-0"><?= __('查看订单数据、商品行与当前状态。') ?></p>
         </div>
     </div>
 
@@ -20,28 +20,28 @@ $updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? $this->getBack
         <div class="col-lg-4">
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
-                    <h2 class="h5 mb-3"><?= __('Order Summary') ?></h2>
+                    <h2 class="h5 mb-3"><?= __('订单摘要') ?></h2>
                     <dl class="row mb-0">
-                        <dt class="col-sm-5"><?= __('Order Number') ?></dt>
+                        <dt class="col-sm-5"><?= __('订单号') ?></dt>
                         <dd class="col-sm-7">#<?= htmlspecialchars((string) ($order['increment_id'] ?? ''), ENT_QUOTES) ?></dd>
 
-                        <dt class="col-sm-5"><?= __('Customer ID') ?></dt>
+                        <dt class="col-sm-5"><?= __('客户 ID') ?></dt>
                         <dd class="col-sm-7"><?= (int) ($order['customer_id'] ?? 0) ?></dd>
 
-                        <dt class="col-sm-5"><?= __('Status') ?></dt>
+                        <dt class="col-sm-5"><?= __('状态') ?></dt>
                         <dd class="col-sm-7">
                             <span class="badge text-bg-<?= htmlspecialchars((string) ($order['status_badge_class'] ?? 'secondary'), ENT_QUOTES) ?>">
                                 <?= htmlspecialchars((string) ($order['status_label'] ?? ''), ENT_QUOTES) ?>
                             </span>
                         </dd>
 
-                        <dt class="col-sm-5"><?= __('Payment Status') ?></dt>
+                        <dt class="col-sm-5"><?= __('支付状态') ?></dt>
                         <dd class="col-sm-7"><?= htmlspecialchars((string) ($order['payment_status'] ?? ''), ENT_QUOTES) ?></dd>
 
-                        <dt class="col-sm-5"><?= __('Grand Total') ?></dt>
+                        <dt class="col-sm-5"><?= __('订单总额') ?></dt>
                         <dd class="col-sm-7"><?= number_format((float) ($order['total'] ?? 0), 2) ?></dd>
 
-                        <dt class="col-sm-5"><?= __('Created At') ?></dt>
+                        <dt class="col-sm-5"><?= __('创建时间') ?></dt>
                         <dd class="col-sm-7"><?= htmlspecialchars((string) ($order['created_at'] ?? ''), ENT_QUOTES) ?></dd>
                     </dl>
                 </div>
@@ -49,12 +49,12 @@ $updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? $this->getBack
 
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h2 class="h5 mb-3"><?= __('Update Status') ?></h2>
+                    <h2 class="h5 mb-3"><?= __('更新状态') ?></h2>
                     <form method="post" action="<?= $updateStatusUrl ?>" class="d-grid gap-3">
                         <input type="hidden" name="id" value="<?= (int) ($order['order_id'] ?? 0) ?>">
                         <input type="hidden" name="back_url" value="<?= htmlspecialchars((string) $this->getBackendUrl('*/backend/order/view', ['id' => $order['order_id'] ?? 0]), ENT_QUOTES) ?>">
                         <div>
-                            <label class="form-label"><?= __('Status') ?></label>
+                            <label class="form-label"><?= __('状态') ?></label>
                             <select name="status" class="form-select">
                                 <?php foreach ($statusOptions as $code => $label): ?>
                                     <option value="<?= htmlspecialchars((string) $code, ENT_QUOTES) ?>" <?= ($order['status'] ?? '') === $code ? 'selected' : '' ?>>
@@ -63,7 +63,7 @@ $updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? $this->getBack
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <button type="submit" class="btn btn-primary"><?= __('Save Status') ?></button>
+                        <button type="submit" class="btn btn-primary"><?= __('保存状态') ?></button>
                     </form>
                 </div>
             </div>
@@ -72,17 +72,17 @@ $updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? $this->getBack
         <div class="col-lg-8">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h2 class="h5 mb-3"><?= __('Order Items') ?></h2>
+                    <h2 class="h5 mb-3"><?= __('订单商品') ?></h2>
                     <?php if ($items): ?>
                         <div class="table-responsive">
                             <table class="table align-middle">
                                 <thead>
                                 <tr>
-                                    <th><?= __('Product') ?></th>
+                                    <th><?= __('商品') ?></th>
                                     <th><?= __('SKU') ?></th>
-                                    <th><?= __('Qty') ?></th>
-                                    <th><?= __('Price') ?></th>
-                                    <th><?= __('Row Total') ?></th>
+                                    <th><?= __('数量') ?></th>
+                                    <th><?= __('单价') ?></th>
+                                    <th><?= __('小计') ?></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -99,7 +99,7 @@ $updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? $this->getBack
                             </table>
                         </div>
                     <?php else: ?>
-                        <div class="text-center py-4 text-muted"><?= __('No order items found.') ?></div>
+                        <div class="text-center py-4 text-muted"><?= __('暂无订单商品。') ?></div>
                     <?php endif; ?>
                 </div>
             </div>

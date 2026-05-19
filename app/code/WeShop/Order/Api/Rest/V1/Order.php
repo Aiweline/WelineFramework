@@ -28,14 +28,14 @@ class Order extends FrontendRestController
         if ($customerId <= 0) {
             return $this->fetchJson([
                 'code' => 401,
-                'msg' => (string) __('Please log in first'),
+                'msg' => (string) __('请先登录'),
                 'data' => ['orders' => []],
             ]);
         }
 
         return $this->fetchJson([
             'code' => 200,
-            'msg' => (string) __('Success'),
+            'msg' => (string) __('成功'),
             'data' => $this->getOrderListPageDataService()->build(
                 $customerId,
                 max(1, (int) ($this->request->getParam('page') ?? 1)),
@@ -50,7 +50,7 @@ class Order extends FrontendRestController
         if ($customerId <= 0) {
             return $this->fetchJson([
                 'code' => 401,
-                'msg' => (string) __('Please log in first'),
+                'msg' => (string) __('请先登录'),
                 'data' => ['order' => null, 'items' => []],
             ]);
         }
@@ -70,7 +70,7 @@ class Order extends FrontendRestController
 
         return $this->fetchJson([
             'code' => 200,
-            'msg' => (string) __('Success'),
+            'msg' => (string) __('成功'),
             'data' => $data,
         ]);
     }
@@ -81,7 +81,7 @@ class Order extends FrontendRestController
         if ($customerId <= 0) {
             return $this->fetchJson([
                 'code' => 401,
-                'msg' => (string) __('Please log in first'),
+                'msg' => (string) __('请先登录'),
                 'data' => ['count' => 0],
             ]);
         }
@@ -90,7 +90,7 @@ class Order extends FrontendRestController
 
         return $this->fetchJson([
             'code' => 200,
-            'msg' => (string) __('Success'),
+            'msg' => (string) __('成功'),
             'data' => [
                 'count' => $count,
                 'has_unpaid' => $count > 0,
@@ -104,7 +104,7 @@ class Order extends FrontendRestController
         if ($customerId <= 0) {
             return $this->fetchJson([
                 'code' => 401,
-                'msg' => (string) __('Please log in first'),
+                'msg' => (string) __('请先登录'),
                 'data' => ['orders' => []],
             ]);
         }
@@ -123,7 +123,7 @@ class Order extends FrontendRestController
 
         return $this->fetchJson([
             'code' => 200,
-            'msg' => (string) __('Success'),
+            'msg' => (string) __('成功'),
             'data' => [
                 'orders' => $orderList,
                 'count' => count($orderList),

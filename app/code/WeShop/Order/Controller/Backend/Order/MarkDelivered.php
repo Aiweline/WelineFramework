@@ -28,16 +28,16 @@ class MarkDelivered extends BaseController
         );
 
         if ($orderId <= 0) {
-            $this->getMessageManager()->addError((string) __('Order ID is required.'));
+            $this->getMessageManager()->addError((string) __('缺少订单 ID。'));
             $this->redirect($backUrl);
             return '';
         }
 
         try {
             $this->orderService->markDelivered($orderId);
-            $this->getMessageManager()->addSuccess((string) __('Order marked as delivered.'));
+            $this->getMessageManager()->addSuccess((string) __('订单已标记为已送达。'));
         } catch (\Throwable $throwable) {
-            $this->getMessageManager()->addError($throwable->getMessage() ?: (string) __('Delivery update failed.'));
+            $this->getMessageManager()->addError($throwable->getMessage() ?: (string) __('送达状态更新失败。'));
         }
 
         $this->redirect($backUrl);

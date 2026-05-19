@@ -14,7 +14,7 @@ class FooterCopyrightHelper
     {
         $raw = trim((string) ($raw ?? ''));
         if ($raw === '') {
-            return __('© %{1} Weline Framework. %{2}', date('Y'), __('保留所有权利')]);
+            return __('© %{1} Weline Framework. %{2}', [date('Y'), __('保留所有权利')]);
         }
 
         $raw = str_replace('{year}', (string) date('Y'), $raw);
