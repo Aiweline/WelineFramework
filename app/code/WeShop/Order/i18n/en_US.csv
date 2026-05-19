@@ -200,3 +200,97 @@ Items,Items
 "查看本订单的最新状态、支付状态和商品明细。","Review the latest status, payment state, and items for this order."
 时间轴,Timeline
 暂无,N/A
+订单概览,"Order Snapshot"
+最近订单,"Recent Orders"
+查看全部,"View All"
+总计,Total
+待付款,Unpaid
+合计,Subtotal
+暂无订单。下单后即可在此查看动态。,"No orders yet. Place your first order to see activity here."
+缺少订单 ID。,"Order ID is required."
+请先登录。,"Please log in to continue."
+该订单无法取消。,"This order cannot be cancelled."
+请先为该订单提交退换货申请。,"Please request a return for this order first."
+订单已取消。退款将按您的支付方式规则处理。,"Order cancelled. Refund processing will follow your payment method rules."
+订单已取消。,"Order cancelled."
+该订单无法继续支付。,"This order cannot continue to payment."
+请从结账页继续完成支付。,"Continue the payment flow from checkout."
+订单详情加载失败。,"Failed to load order details."
+订单详情,"Order Details"
+订单已加载。,"Orders loaded."
+订单查询,"Order Query"
+提供订单创建、订单行持久化与账户摘要查询。,"Provides order creation, order item persistence, and account-summary queries."
+订单查询器不支持的操作：%{1},"Unsupported order provider operation: %{1}"
+创建订单并返回摘要。,"Create an order and return its summary."
+批量持久化订单商品行。,"Persist order items in batch."
+返回客户账户中心的最近订单与待付款订单。,"Return recent and unpaid orders for the customer account center."
+返回当前前台客户订单仪表盘数据。,"Return current frontend customer order dashboard data."
+返回当前前台客户待付款订单摘要。,"Return current frontend customer unpaid orders summary."
+取消当前前台客户拥有的订单。,"Cancel an order owned by the current frontend customer."
+×%{1},×%{1}
+处理中,Processing
+已付款,Paid
+已发货,Fulfilled
+已完成,Completed
+已退款,Refunded
+已取消或已退款的订单无法发货。,"Cancelled or refunded orders cannot be shipped."
+仅已付款订单可发货。,"Only paid orders can be shipped."
+仅已发货订单可标记为已送达。,"Only shipped orders can be marked as delivered."
+不支持的订单状态。,"Unsupported order status."
+不允许的订单状态变更：%{1} → %{2},"Order status transition %{1} -> %{2} is not allowed."
+不支持的支付状态。,"Unsupported payment status."
+您无法取消该订单。,"You cannot cancel this order."
+订单已退款。,"The order has already been refunded."
+已完成订单无法取消，请申请退换货。,"Completed orders cannot be cancelled. Please request a return instead."
+订单已发货，取消前请先提交退换货申请。,"This order has already shipped. Please submit a return before cancellation."
+退换货待确认，收到退货后方可取消订单。,"The return is pending confirmation. Cancellation will be available after the return is received."
+当前订单状态不允许取消。,"The current order status does not allow cancellation."
+该订单无法取消。,"The order cannot be cancelled."
+订单列表页前置内容,"Order list content before"
+在前台订单列表页正文前注入扩展内容。,"Inject content before the storefront order list page body."
+订单列表页后置内容,"Order list content after"
+在前台订单列表页正文后注入扩展内容。,"Inject content after the storefront order list page body."
+订单详情页前置内容,"Order detail content before"
+在前台订单详情页正文前注入扩展内容。,"Inject content before the storefront order detail page body."
+订单详情商品区内容,"Order detail items content"
+在前台订单详情商品区块内注入扩展内容。,"Inject content inside the storefront order detail items section."
+订单详情页后置内容,"Order detail content after"
+在前台订单详情页正文后注入扩展内容。,"Inject content after the storefront order detail page body."
+请先登录,"Please log in first"
+成功,Success
+订单管理,"Order Management"
+无效的订单状态。,"Invalid order status."
+订单状态已更新。,"Order status updated."
+订单状态更新失败。,"Order status update failed."
+发货单已创建，订单已进入已发货状态。,"Shipment created. The order is now fulfilled."
+创建发货单失败。,"Shipment creation failed."
+订单已标记为已送达。,"Order marked as delivered."
+送达状态更新失败。,"Delivery update failed."
+在一处完成订单搜索、审核与状态变更。,"Manage order search, review, and status transitions from one place."
+订单总数,"Total Orders"
+已完成/已取消,"Completed / Cancelled"
+按订单号搜索,"Search by order number"
+按客户 ID 搜索,"Search by customer ID"
+全部状态,"All statuses"
+应用筛选,"Apply Filters"
+重置,Reset
+支付状态,"Payment Status"
+操作,Actions
+查看,View
+未找到订单。,"No orders found."
+请调整筛选条件，或从前台下单流程创建订单。,"Try adjusting the filters or create a new order flow from the storefront."
+返回订单列表,"Back to Orders"
+查看订单数据、商品行与当前状态。,"Review the order payload, items, and current status."
+订单摘要,"Order Summary"
+订单总额,"Grand Total"
+更新状态,"Update Status"
+保存状态,"Save Status"
+订单商品,"Order Items"
+商品,Product
+数量,Qty
+单价,Price
+小计,"Row Total"
+暂无订单商品。,"No order items found."
+心愿单管理,"Wishlist Management"
+客户心愿单,"Customer Wishlist"
+从心愿单移除失败。,"Failed to remove from wishlist."

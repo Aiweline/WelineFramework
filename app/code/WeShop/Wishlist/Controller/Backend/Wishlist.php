@@ -84,7 +84,7 @@ class Wishlist extends BaseController
             ->getPaginationHtml();
 
         $this->assign([
-            'title' => (string) __('Wishlist Management'),
+            'title' => (string) __('心愿单管理'),
             'wishlistIndexUrl' => $this->_url->getBackendUrl('*/backend/wishlist'),
             'wishlistItems' => $wishlistItems,
             'total_count' => $totalCount,
@@ -117,7 +117,7 @@ class Wishlist extends BaseController
         $wishlistItems = $this->wishlistService->getCustomerWishlist($customerId);
 
         $this->assign([
-            'title' => (string) __('Customer Wishlist'),
+            'title' => (string) __('客户心愿单'),
             'customer' => [
                 'customer_id' => (int) $customer->getId(),
                 'full_name' => $customer->getFullName(),
@@ -137,16 +137,16 @@ class Wishlist extends BaseController
         $customerId = (int) $this->request->getParam('customer_id', 0);
 
         if ($wishlistId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => (string) __('Wishlist item ID is required.')]);
+            return $this->fetchJson(['success' => false, 'message' => (string) __('缺少心愿单条目 ID。')]);
         }
 
         try {
             $result = $this->wishlistService->removeFromWishlist($wishlistId, $customerId);
 
             if ($result) {
-                return $this->fetchJson(['success' => true, 'message' => (string) __('Removed from wishlist.')]);
+                return $this->fetchJson(['success' => true, 'message' => (string) __('已从心愿单移除。')]);
             } else {
-                return $this->fetchJson(['success' => false, 'message' => (string) __('Failed to remove from wishlist.')]);
+                return $this->fetchJson(['success' => false, 'message' => (string) __('从心愿单移除失败。')]);
             }
         } catch (\Exception $e) {
             return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);

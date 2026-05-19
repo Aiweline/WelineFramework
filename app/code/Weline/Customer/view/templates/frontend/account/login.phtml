@@ -109,19 +109,59 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect
 
 .auth-form__input {
     width: 100%;
-    padding: var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-xl, 2.25rem);
-    border: 2px solid var(--color-border-default);
-    border-radius: var(--radius-md, 8px);
+    min-height: var(--auth-input-height, 44px);
+    padding: var(--auth-input-padding-y, 0.75rem) var(--auth-input-padding-y, 0.75rem) var(--auth-input-padding-y, 0.75rem) var(--spacing-xl, 2.25rem);
+    border: var(--auth-input-border-width, 2px) solid var(--color-border-default);
+    border-radius: var(--auth-input-radius, var(--radius-md, 8px));
     font-size: var(--font-size-base, 0.9375rem);
+    font-family: inherit;
+    line-height: 1.4;
     transition: all 0.3s;
-    background: var(--color-bg-primary);
+    background-color: var(--color-bg-secondary);
     color: var(--color-text-primary);
+    box-sizing: border-box;
 }
 
 .auth-form__input:focus {
     outline: none;
     border-color: var(--color-border-focus);
     box-shadow: 0 0 0 3px var(--color-accent-light);
+    background-color: var(--color-bg-primary);
+}
+
+.auth-form__input:-webkit-autofill,
+.auth-form__input:-webkit-autofill:hover,
+.auth-form__input:-webkit-autofill:focus,
+.auth-form__input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-bg-secondary) inset !important;
+    -webkit-text-fill-color: var(--color-text-primary) !important;
+    caret-color: var(--color-text-primary);
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+.dark .auth-form__input,
+html.dark .auth-form__input {
+    background-color: var(--color-bg-dark-tertiary, #334155);
+    color: var(--color-text-light, #f5f5f5);
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+.dark .auth-form__input:focus,
+html.dark .auth-form__input:focus {
+    background-color: var(--color-bg-dark-secondary, #0f172a);
+}
+
+.dark .auth-form__input:-webkit-autofill,
+.dark .auth-form__input:-webkit-autofill:hover,
+.dark .auth-form__input:-webkit-autofill:focus,
+.dark .auth-form__input:-webkit-autofill:active,
+html.dark .auth-form__input:-webkit-autofill,
+html.dark .auth-form__input:-webkit-autofill:hover,
+html.dark .auth-form__input:-webkit-autofill:focus,
+html.dark .auth-form__input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-bg-dark-tertiary, #334155) inset !important;
+    -webkit-text-fill-color: var(--color-text-light, #f5f5f5) !important;
+    caret-color: var(--color-text-light, #f5f5f5);
 }
 
 .auth-form__input:focus + i,
@@ -136,10 +176,6 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect
 /* ========== 记住登录状态区块 ========== */
 .auth-form__remember {
     margin: var(--spacing-md, 1rem) 0;
-    padding: var(--spacing-sm, 0.75rem);
-    background: var(--color-bg-secondary);
-    border-radius: var(--radius-md, 8px);
-    border: 1px solid var(--color-border-default);
 }
 
 .auth-form__remember-label {
@@ -154,24 +190,6 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect
 
 .auth-form__remember-label i {
     color: var(--color-primary);
-}
-
-.auth-form__select {
-    width: 100%;
-    padding: var(--spacing-xs, 0.5rem) var(--spacing-sm, 0.75rem);
-    border: 2px solid var(--color-border-default);
-    border-radius: var(--radius-sm, 6px);
-    font-size: var(--font-size-sm, 0.875rem);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    transition: all 0.3s;
-    cursor: pointer;
-}
-
-.auth-form__select:focus {
-    outline: none;
-    border-color: var(--color-border-focus);
-    box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
 /* ========== 忘记密码链接 ========== */

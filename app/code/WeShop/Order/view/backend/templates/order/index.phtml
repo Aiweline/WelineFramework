@@ -10,8 +10,8 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
         <div>
-            <h1 class="h3 mb-1"><?= __('Order Management') ?></h1>
-            <p class="text-muted mb-0"><?= __('Manage order search, review, and status transitions from one place.') ?></p>
+            <h1 class="h3 mb-1"><?= __('订单管理') ?></h1>
+            <p class="text-muted mb-0"><?= __('在一处完成订单搜索、审核与状态变更。') ?></p>
         </div>
     </div>
 
@@ -19,7 +19,7 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
         <div class="col-md-3">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
-                    <div class="text-muted small mb-1"><?= __('Total Orders') ?></div>
+                    <div class="text-muted small mb-1"><?= __('订单总数') ?></div>
                     <div class="display-6"><?= (int) ($summary['total'] ?? 0) ?></div>
                 </div>
             </div>
@@ -27,7 +27,7 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
         <div class="col-md-3">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
-                    <div class="text-muted small mb-1"><?= __('Pending') ?></div>
+                    <div class="text-muted small mb-1"><?= __('待处理') ?></div>
                     <div class="display-6"><?= (int) ($summary['pending'] ?? 0) ?></div>
                 </div>
             </div>
@@ -35,7 +35,7 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
         <div class="col-md-3">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
-                    <div class="text-muted small mb-1"><?= __('Processing') ?></div>
+                    <div class="text-muted small mb-1"><?= __('处理中') ?></div>
                     <div class="display-6"><?= (int) ($summary['processing'] ?? 0) ?></div>
                 </div>
             </div>
@@ -43,7 +43,7 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
         <div class="col-md-3">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
-                    <div class="text-muted small mb-1"><?= __('Completed / Cancelled') ?></div>
+                    <div class="text-muted small mb-1"><?= __('已完成/已取消') ?></div>
                     <div class="display-6"><?= (int) (($summary['completed'] ?? 0) + ($summary['cancelled'] ?? 0)) ?></div>
                 </div>
             </div>
@@ -54,25 +54,25 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
         <div class="card-body">
             <form method="get" action="<?= $orderIndexUrl ?>" class="row g-3 align-items-end">
                 <div class="col-md-3">
-                    <label class="form-label"><?= __('Order Number') ?></label>
+                    <label class="form-label"><?= __('订单号') ?></label>
                     <input type="text"
                            name="increment_id"
                            value="<?= htmlspecialchars((string) ($filters['increment_id'] ?? ''), ENT_QUOTES) ?>"
                            class="form-control"
-                           placeholder="<?= __('Search by order number') ?>">
+                           placeholder="<?= __('按订单号搜索') ?>">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label"><?= __('Customer ID') ?></label>
+                    <label class="form-label"><?= __('客户 ID') ?></label>
                     <input type="number"
                            name="customer_id"
                            value="<?= htmlspecialchars((string) ($filters['customer_id'] ?? ''), ENT_QUOTES) ?>"
                            class="form-control"
-                           placeholder="<?= __('Search by customer ID') ?>">
+                           placeholder="<?= __('按客户 ID 搜索') ?>">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label"><?= __('Status') ?></label>
+                    <label class="form-label"><?= __('状态') ?></label>
                     <select name="status" class="form-select">
-                        <option value=""><?= __('All statuses') ?></option>
+                        <option value=""><?= __('全部状态') ?></option>
                         <?php foreach ($statusOptions as $code => $label): ?>
                             <option value="<?= htmlspecialchars((string) $code, ENT_QUOTES) ?>" <?= ($filters['status'] ?? '') === $code ? 'selected' : '' ?>>
                                 <?= htmlspecialchars((string) $label, ENT_QUOTES) ?>
@@ -81,8 +81,8 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
                     </select>
                 </div>
                 <div class="col-md-3 d-flex gap-2">
-                    <button type="submit" class="btn btn-primary w-100"><?= __('Apply Filters') ?></button>
-                    <a href="<?= $orderIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Reset') ?></a>
+                    <button type="submit" class="btn btn-primary w-100"><?= __('应用筛选') ?></button>
+                    <a href="<?= $orderIndexUrl ?>" class="btn btn-outline-secondary"><?= __('重置') ?></a>
                 </div>
             </form>
         </div>
@@ -95,13 +95,13 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
                     <table class="table align-middle">
                         <thead>
                         <tr>
-                            <th><?= __('Order Number') ?></th>
-                            <th><?= __('Customer ID') ?></th>
-                            <th><?= __('Status') ?></th>
-                            <th><?= __('Payment Status') ?></th>
-                            <th><?= __('Total') ?></th>
-                            <th><?= __('Created At') ?></th>
-                            <th class="text-end"><?= __('Actions') ?></th>
+                            <th><?= __('订单号') ?></th>
+                            <th><?= __('客户 ID') ?></th>
+                            <th><?= __('状态') ?></th>
+                            <th><?= __('支付状态') ?></th>
+                            <th><?= __('总计') ?></th>
+                            <th><?= __('创建时间') ?></th>
+                            <th class="text-end"><?= __('操作') ?></th>
                         </tr>
                         </thead>
                         <tbody>
@@ -123,7 +123,7 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
                                 <td><?= htmlspecialchars((string) $order['created_at'], ENT_QUOTES) ?></td>
                                 <td class="text-end">
                                     <a href="<?= $this->getBackendUrl('*/backend/order/view', ['id' => $order['order_id']]) ?>" class="btn btn-sm btn-outline-primary">
-                                        <?= __('View') ?>
+                                        <?= __('查看') ?>
                                     </a>
                                 </td>
                             </tr>
@@ -133,8 +133,8 @@ $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? $this->getBackendU
                 </div>
             <?php else: ?>
                 <div class="text-center py-5">
-                    <h2 class="h5 mb-2"><?= __('No orders found.') ?></h2>
-                    <p class="text-muted mb-0"><?= __('Try adjusting the filters or create a new order flow from the storefront.') ?></p>
+                    <h2 class="h5 mb-2"><?= __('未找到订单。') ?></h2>
+                    <p class="text-muted mb-0"><?= __('请调整筛选条件，或从前台下单流程创建订单。') ?></p>
                 </div>
             <?php endif; ?>
         </div>
