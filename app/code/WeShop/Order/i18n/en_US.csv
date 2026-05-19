@@ -87,7 +87,7 @@ Price,Price
 "No order items found.","No order items found."
 我的订单,"My Orders"
 查看订单进度与支付状态,"View Order Progress and Payment Status"
-"您有 %1 个订单待支付","您有 %1 个订单待支付"
+"您有 %1 个订单待支付","You have %1 order(s) awaiting payment"
 请及时完成支付，避免订单自动取消,"Please complete the payment promptly to avoid automatic order cancellation"
 查看全部,"View all"
 您还没有订单,"You have no orders yet"
@@ -99,7 +99,7 @@ Price,Price
 已完成,Completed
 已取消,Canceled
 已退款,Refunded
-订单号：%{1},订单号：%{1}
+订单号：%{1},"Order #%{1}"
 待支付,"To pay"
 订单金额：,"Order Amount:"
 查看详情,"View Details"
@@ -132,7 +132,7 @@ ID,ID
 清除筛选,"Clear filter"
 更新状态,"Update status"
 订单详情,"Order Details"
-发货状态,发货状态
+发货状态,"Shipping Status"
 订单商品,"Order items"
 暂无商品信息,"No product information"
 商品图片,"Product Image"
@@ -143,22 +143,22 @@ ID,ID
 订单信息,"Order information"
 订单ID,"Order ID"
 更新时间,"Update time"
-配送方式,配送方式
-支付方式,支付方式
-发货信息,发货信息
-承运商,承运商
-物流单号,物流单号
-发货时间,发货时间
-送达时间,送达时间
-收货地址,收货地址
+配送方式,"Shipping Method"
+支付方式,"Payment Method"
+发货信息,"Shipment Information"
+承运商,Carrier
+物流单号,"Tracking Number"
+发货时间,"Shipped At"
+送达时间,"Delivered At"
+收货地址,"Delivery Address"
 金额汇总,"Amount Summary"
 商品小计,"Product Subtotal"
 运费,"Shipping cost"
 税费,"Taxes and Fees"
 折扣,Discount
 订单操作,"Order actions"
-确认发货,确认发货
-标记已送达,标记已送达
+确认发货,"Confirm Shipment"
+标记已送达,"Mark as Delivered"
 打印订单,"Print order"
 返回订单列表,"Return to Order List"
 确定要取消此订单吗？此操作不可恢复。,"Are you sure you want to cancel this order? This action cannot be undone."
