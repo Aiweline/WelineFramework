@@ -707,10 +707,6 @@ SEO解码,"SEO decoding"
 "在渲染视图指定位置时触发，允许其他模块注入该位置的内容。position 可以是 head、footer 等。","Triggered when rendering a specified position in the view, allowing other modules to inject content at that position. The position can be head, footer, etc."
 标签配置后,"After tag configuration"
 在模板标签配置完成后触发，允许其他模块修改标签配置。,"Triggered after template tag configuration is complete, allowing other modules to modify tag configurations."
-模板编译决策,模板编译决策
-在模板编译新鲜度判断前触发，允许模块要求本次模板强制重新编译。,在模板编译新鲜度判断前触发，允许模块要求本次模板强制重新编译。
-模板编译前,模板编译前
-在模板源内容进入标签编译前触发，允许模块对静态模板内容进行编译前改写。,在模板源内容进入标签编译前触发，允许模块对静态模板内容进行编译前改写。
 模板编译后,"After template compilation"
 在模板编译完成后触发，允许其他模块处理编译后的模板内容。可以修改模板内容、提取信息、注入代码等。,"Triggered after template compilation is complete, allowing other modules to process the compiled template content. You can modify template content, extract information, inject code, etc."
 模板渲染后,"After template rendering"

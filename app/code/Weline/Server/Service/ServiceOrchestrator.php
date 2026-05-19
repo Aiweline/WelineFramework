@@ -106,6 +106,24 @@ class ServiceOrchestrator
     private float $lastReconcileAt = 0.0;
     private float $lastSweepAt = 0.0;
     private string $lastDispatcherWorkerPoolSignature = '';
+    private int $routeTableVersion = 0;
+
+    /**
+     * B-i 阶段：最近一次成功发布的版本化路由表快照。
+     *
+     * key: "{role}:{epoch}"，避免不同 role / 不同 epoch 之间互相覆盖。
+     * value:
+     *   route_version: int
+     *   checksum: string
+     *   ports: int[]
+     *   workers_count: int
+     *   published_at: float (microtime)
+     *
+     * 仅用作幂等去重 + 观测；B-i 不参与路由源切换。
+     *
+     * @var array<string, array{route_version:int,checksum:string,ports:array<int,int>,workers_count:int,published_at:float}>
+     */
+    private array $lastDispatcherRouteTablePublish = [];
     private int $registerTimeoutCount = 0;
     private int $fullRestartCount = 0;
     private int $lastSweepKilled = 0;
@@ -538,8 +556,16 @@ class ServiceOrchestrator
 
     private function handleStartupFailure(\Throwable $throwable, string $label): void
     {
-        $this->startupFailureReason = $throwable->getMessage();
+        $reason = $label !== '' ? "{$label}: " . $throwable->getMessage() : $throwable->getMessage();
+        $this->startupFailureReason = $reason;
         WlsLogger::error_("[Orchestrator] {$label}: " . $throwable->getMessage(), ['exception' => $throwable]);
+        if ($this->context !== null) {
+            $this->persistStartupFailureToInstance(
+                $this->context,
+                $reason,
+                $this->collectStartupFailurePendingRoleLabels()
+            );
+        }
 
         if ($this->running || $this->controlServer !== null) {
             $requested = $this->requestStop('startup_failure');
@@ -1596,6 +1622,7 @@ class ServiceOrchestrator
             // 防止 register_timeout 过短导致误判，至少与启动宽限一致
             $this->registerTimeout = $this->startupGracePeriod;
         }
+        $this->applyOrchestratorStartupTimeoutFromContext($context);
         $this->desiredState = [];
         $this->maintenanceSticky = false;
 
@@ -1637,7 +1664,7 @@ class ServiceOrchestrator
         $this->controlServer->onMessage([$this, 'handleIpcMessage']);
         $this->controlServer->onDisconnect([$this, 'handleIpcDisconnect']);
 
-        // 启动预设：优先将入口置入“维护池优先”语义，避免业务 Worker 未就绪时流量无处可去。
+        // 启动预设：优先将入口置入"维护池优先"语义，避免业务 Worker 未就绪时流量无处可去。
         // 真正进程拉起放到 startAllChildServicesBody 的第一阶段并发批启动。
         $this->autoStartMaintenanceMode($context);
 
@@ -1744,7 +1771,7 @@ class ServiceOrchestrator
 
     /**
      * 启动前清理当前实例的遗留子进程，避免旧代际 register/ready 干扰新一轮启动。
-     * 仅按“实例作用域前缀”清理，不影响其它实例。
+     * 仅按"实例作用域前缀"清理，不影响其它实例。
      */
     private function cleanupStartupInterferenceProcesses(ServiceContext $context): void
     {
@@ -2158,6 +2185,7 @@ class ServiceOrchestrator
         $elapsedLabel = \number_format($elapsed, 2, '.', '');
         $message = "启动异常：计划进程 {$timeout}s 内未全部 READY，pending={$pendingLabel}, elapsed={$elapsedLabel}s";
         $this->startupFailureReason = $message;
+        $this->persistStartupFailureToInstance($context, $message, $pending);
         WlsLogger::error_('[Orchestrator] ' . $message . '，关闭服务器并清理已提交进程');
         foreach ($startupAcceptance as $role => $rule) {
             $readyCount = $this->countRoleReadyInstances((string)$role);
@@ -2175,6 +2203,133 @@ class ServiceOrchestrator
         }
 
         $this->forceTerminateMasterAndChildren('startup_ready_timeout:' . $pendingLabel);
+    }
+
+    /**
+     * 将启动失败原因写入实例 JSON，供 server:start 进度条与 status 直接展示。
+     *
+     * @param list<string> $pendingLabels
+     */
+    private function persistStartupFailureToInstance(
+        ServiceContext $context,
+        string $reason,
+        array $pendingLabels = []
+    ): void {
+        $reason = \trim($reason);
+        if ($reason === '' || $context->instanceName === '') {
+            return;
+        }
+
+        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
+        $now = \time();
+        $at = \date('Y-m-d H:i:s', $now);
+
+        ServerInstanceManager::atomicUpdateJsonStatic(
+            $instanceFile,
+            static function (array $data) use ($reason, $pendingLabels, $now, $at): array {
+                $data['startup_failure_reason'] = $reason;
+                $data['startup_failure_at'] = $at;
+                $data['startup_failure_timestamp'] = $now;
+                if ($pendingLabels !== []) {
+                    $data['startup_failure_pending'] = $pendingLabels;
+                }
+                $data['updated_at'] = $now;
+                if (isset($data['current_snapshot']) && \is_array($data['current_snapshot'])) {
+                    $data['current_snapshot']['startup_failure_reason'] = $reason;
+                    $data['current_snapshot']['startup_failure_at'] = $at;
+                    if ($pendingLabels !== []) {
+                        $data['current_snapshot']['startup_failure_pending'] = $pendingLabels;
+                    }
+                }
+
+                return $data;
+            }
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectStartupFailurePendingRoleLabels(): array
+    {
+        $pending = [];
+        foreach ($this->registry->getAllInstances() as $instance) {
+            if ($instance->state === ServiceInstance::STATE_READY) {
+                continue;
+            }
+            if ($instance->state === ServiceInstance::STATE_STOPPED) {
+                continue;
+            }
+            $pending[] = "{$instance->role}#{$instance->instanceId}:{$instance->state}";
+        }
+
+        return $pending;
+    }
+
+    /**
+     * 自动维护池 Worker 不阻塞整站 startup_phase=running（与 autoStartMaintenanceMode 注释一致）。
+     */
+    private function isInstanceRequiredForServerReadyNotification(ServiceInstance $instance): bool
+    {
+        if ($instance->role !== ControlMessage::ROLE_MAINTENANCE) {
+            return true;
+        }
+
+        return !($this->maintenanceMode && !$this->maintenanceSticky);
+    }
+
+    /**
+     * 按实例规模与 CLI 后台等待时长对齐 Orchestrator 启动确认超时，避免 30s 硬杀早于 background_ready_wait_sec。
+     */
+    private function applyOrchestratorStartupTimeoutFromContext(ServiceContext $context): void
+    {
+        $workerCount = $context->getWorkerCount();
+        if ($workerCount === 'auto') {
+            $workerProvider = $this->registry->getProvider(ControlMessage::ROLE_WORKER);
+            $workerCount = $workerProvider?->getInstanceCount($context) ?? 1;
+        }
+        $workerCount = \max(1, (int) $workerCount);
+        $dispatcherEnabled = $context->isDispatcherEnabled();
+        $sslEnabled = $context->sslEnabled;
+        $sharedServiceCount = 0;
+        $sharedState = \is_array($context->envConfig['wls']['shared_state'] ?? null)
+            ? $context->envConfig['wls']['shared_state']
+            : [];
+        foreach (['session', 'memory'] as $sharedRole) {
+            if (!empty($sharedState[$sharedRole])) {
+                $sharedServiceCount++;
+            }
+        }
+
+        $configuredSec = (float) ($context->getConfig('wls.orchestrator.startup_timeout_sec', 0) ?? 0);
+        if ($configuredSec > 0.0) {
+            $timeoutSec = $configuredSec
+                + \max(0, $workerCount - 1) * 4.0
+                + ($dispatcherEnabled ? 8.0 : 0.0)
+                + ($sslEnabled ? 5.0 : 0.0)
+                + $sharedServiceCount * 3.0;
+        } else {
+            $timeoutSec = 30.0
+                + \max(0, $workerCount - 1) * 4.0
+                + ($dispatcherEnabled ? 8.0 : 0.0)
+                + ($sslEnabled ? 5.0 : 0.0)
+                + $sharedServiceCount * 3.0;
+        }
+        $timeoutSec = \max(15.0, \min(180.0, $timeoutSec));
+        $this->startupTimeout = $timeoutSec;
+
+        $maxDuration = (float) ($context->getConfig('wls.orchestrator.startup_max_duration_sec', $this->startupMaxDuration) ?? $this->startupMaxDuration);
+        $maxDuration = \max($timeoutSec * 2.0, $maxDuration, 60.0);
+        $maxDuration = \min(300.0, $maxDuration);
+        $this->startupMaxDuration = $maxDuration;
+
+        WlsLogger::info_(
+            '[Orchestrator] 启动确认超时: startup_timeout='
+            . \number_format($this->startupTimeout, 1, '.', '')
+            . 's, startup_max_duration='
+            . \number_format($this->startupMaxDuration, 1, '.', '')
+            . 's'
+        );
     }
 
     /**
@@ -3299,7 +3454,7 @@ class ServiceOrchestrator
 
     /**
      * 启动窗口内尽量把已到达的 register/ready/ack 等控制消息及时消化掉，
-     * 避免“只 poll 一帧”后马上再次进入长时间 spawnProcess，导致 READY 饿死。
+     * 避免"只 poll 一帧"后马上再次进入长时间 spawnProcess，导致 READY 饿死。
      */
     private function drainControlPlaneAfterStartupStep(
         int $maxPolls = 30,
@@ -3436,7 +3591,7 @@ class ServiceOrchestrator
             && $ageSec < $startupWindowSec;
 
         // 端口上仍有 Weline 监听时，即使 IPC 未连上或 PID 探测失败，也必须视为槽位占用，
-        // 否则 reconcile/复活路径会在同端口再拉起第二个子进程（典型“逃逸/重复进程”）。
+        // 否则 reconcile/复活路径会在同端口再拉起第二个子进程（典型"逃逸/重复进程"）。
         $port = (int) ($instance->port ?? 0);
         $portHeldByWeline = $port > 0 && $this->isPortHeldByWelineSlotOwner($port);
         $hasPidOrTree = $trackedPid > 0 || $instance->getManagedPids() !== [];
@@ -4327,7 +4482,7 @@ class ServiceOrchestrator
             : '阶段5/5: 关闭 IPC 服务器'
         );
         
-        // 不提前移除 Master PID 索引，避免外部将“索引消失”误判为“进程已退出”。
+        // 不提前移除 Master PID 索引，避免外部将"索引消失"误判为"进程已退出"。
         // 索引交由 Master 进程最终退出阶段统一清理。
         $this->sendStopProgress('所有子进程已完整退出，Master 即将退出进程');
         
@@ -6297,7 +6452,7 @@ class ServiceOrchestrator
             );
         } else {
             WlsLogger::info_(
-                '[Orchestrator] 批次 [' . \implode(',', $instanceIds) . '] 已全部 READY 并已通知 Dispatcher 纳入负载池'
+                '[Orchestrator] 批次 [' . \implode(',', $instanceIds) . '] 已全部 READY，已推送全量路由表至 Dispatcher'
             );
         }
 
@@ -7102,7 +7257,7 @@ class ServiceOrchestrator
         $trackingPid = $this->getInstanceTrackingPid($instance);
 
         // 外部复用的 shared sidecar 可能长期无法与当前 Master 建立 IPC（例如 Master 重启/代际切换）。
-        // 只要进程仍存活，就不应触发本地 kill + resurrect，否则会在复用场景下形成“误复活风暴”。
+        // 只要进程仍存活，就不应触发本地 kill + resurrect，否则会在复用场景下形成"误复活风暴"。
         if ($this->isExternallyManagedSharedInstance($instance)
             && \str_starts_with($reason, 'no_ipc_timeout:')
             && $trackingPid > 0
@@ -7750,7 +7905,7 @@ class ServiceOrchestrator
      */
     private function cleanupOrphanChildProcesses(bool $aggressiveKill = true): void
     {
-        // 周期扫尾默认不做强杀，避免误杀“正在启动但尚未注册”的进程
+        // 周期扫尾默认不做强杀，避免误杀"正在启动但尚未注册"的进程
         if (!$aggressiveKill) {
             $staleRemoved = Processer::cleanupStalePidFiles();
             $this->lastSweepKilled = 0;
@@ -8324,6 +8479,16 @@ class ServiceOrchestrator
                 $this->handleWorkerPoolAck($msg, $clientId);
                 return;
 
+            case ControlMessage::TYPE_ROUTE_TABLE_ACK:
+                // B-i 阶段：仅观测路由表 ACK，不联动 Worker 生死与业务路由源。
+                $this->handleRouteTableAck($msg, $clientId);
+                return;
+
+            case ControlMessage::TYPE_ROUTE_OBSERVATION:
+                // B-i 阶段：仅记录身份/路由观察事件，留待 B-ii/B-iii 据此收敛。
+                $this->handleRouteObservation($msg, $clientId);
+                return;
+
             case ControlMessage::TYPE_WORKER_LOOP_STARTED:
                 $this->handleWorkerLoopStarted($msg, $clientId);
                 return;
@@ -8866,9 +9031,22 @@ class ServiceOrchestrator
         $workerId = (int) ($instance->getMeta('worker_id') ?? $instance->instanceId);
         if ($instance->role === ControlMessage::ROLE_WORKER) {
             $instance->setMeta('dispatcher_pool_confirmed_at', null);
-            $instance->setMeta('lease_state', 'ready_pending_pool');
+            $instance->setMeta('lease_state', 'ready_accepted');
+            $instance->setMeta('listening_at', $readyReceivedAt);
             $this->registry->updateInstance($instance);
-            WlsLogger::info_("[Orchestrator] 服务就绪: {$instance->role}#{$instance->instanceId} (等待 Dispatcher 入池确认, port={$instance->port})");
+            $this->controlServer?->sendTo(
+                $clientId,
+                ControlMessage::ackReady(
+                    $workerId,
+                    false,
+                    (int)($instance->port ?? 0),
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance)
+                )
+            );
+            WlsLogger::info_("[Orchestrator] Worker accepted by Master immediately (port={$instance->port}, dispatcher_pool_confirmed=false)");
         } else {
             $this->controlServer?->sendTo(
                 $clientId,
@@ -9021,48 +9199,27 @@ class ServiceOrchestrator
                 'dispatcher_pool_reject_count',
                 (int) ($worker->getMeta('dispatcher_pool_reject_count') ?? 0) + 1
             );
-            $this->registry->updateInstance($worker);
-            $targetClientId = $worker->ipcClientId;
-            if ($targetClientId !== null && $this->controlServer !== null) {
-                $this->controlServer->sendTo($targetClientId, ControlMessage::workerPoolAck(
-                    $port,
-                    false,
-                    ControlMessage::ROLE_WORKER,
-                    $this->getInstanceSlotId($worker),
-                    $this->getInstanceLeaseId($worker),
-                    $this->getInstanceGeneration($worker),
-                    (string)($msg['msg_id'] ?? ''),
-                    'dispatcher_not_in_pool',
-                    true
-                ));
-            }
-            // 关键：清空签名，避免同一签名下次被 syncDispatcherFullWorkerPoolFromRegistry() 误判“已同步”而跳过重试。
+            // Pool rejection is a routing event, not a Worker lifecycle event.
+            // Master decides Worker health independently; just resend route table.
             $this->lastDispatcherWorkerPoolSignature = '';
             $taskKey = "worker_pool_recover:{$port}";
             if (!$this->hasMainLoopTask($taskKey)) {
                 $this->scheduleMainLoopTask($taskKey, 'worker_pool_recover', function () use ($port): void {
-                    // 给 Dispatcher 一点时间完成当前 warmup Fiber，再做一次全量对齐，避免“启动抖动期”永久卡池。
                     SchedulerSystem::yieldDelay(120);
                     $this->syncDispatcherFullWorkerPoolFromRegistry();
                 });
             }
             WlsLogger::warning_(
-                "[Orchestrator] Dispatcher 回执 Worker 未入池，已触发自愈重试: worker#{$worker->instanceId}, port={$port}"
+                "[Orchestrator] Dispatcher reports worker not in pool (routing event), resending route table: worker#{$worker->instanceId}, port={$port}"
             );
             return;
         }
 
-        $workerId = (int) ($worker->getMeta('worker_id') ?? $worker->instanceId);
-        $targetClientId = $worker->ipcClientId;
-        if ($targetClientId === null || $this->controlServer === null) {
-            WlsLogger::warning_("[Orchestrator] Worker 已入池但 IPC 不可用，无法发送 ACK_READY: worker#{$worker->instanceId}, port={$port}");
-            return;
-        }
-
+        // Dispatcher pool confirmed: only update registry metadata.
+        // Worker already received READY_ACCEPTED in handleReady(); Dispatcher pool is a separate routing event.
         $ackReadyAt = \microtime(true);
         $worker->setMeta('dispatcher_pool_confirmed_at', $ackReadyAt);
-        $worker->setMeta('ack_ready_at', $ackReadyAt);
-        $worker->setMeta('lease_state', 'in_pool');
+        $worker->setMeta('lease_state', 'dispatcher_active');
         if ($worker->startedAt > 0) {
             $worker->setMeta(
                 'ack_ready_elapsed_ms',
@@ -9070,17 +9227,111 @@ class ServiceOrchestrator
             );
         }
         $this->registry->updateInstance($worker);
+        WlsLogger::info_("[Orchestrator] Dispatcher confirmed pool (routing event), registry updated: worker#{$worker->instanceId}, port={$port}, dispatcher_client_id={$clientId}");
+    }
 
-        $this->controlServer->sendTo($targetClientId, ControlMessage::ackReady(
-            $workerId,
-            true,
-            $port,
-            (string)($msg['msg_id'] ?? ''),
-            $this->getInstanceSlotId($worker),
-            $this->getInstanceLeaseId($worker),
-            $this->getInstanceGeneration($worker)
+    /**
+     * B-i 阶段：处理 Dispatcher 回执的路由表版本 ACK。
+     *
+     * 当前行为：
+     * - 只做观测日志：是否与本地最近发布的版本/checksum 一致；
+     * - 在 Dispatcher 实例 meta 中记录最新接受的 route_version + checksum（供管理面查询）；
+     * - 不联动 Worker 生死，不影响 SET_WORKER_POOL 既有正确性路径。
+     *
+     * B-ii 阶段将让本回执参与路由源切换（当前阶段保持纯观测）。
+     */
+    private function handleRouteTableAck(array $msg, int $clientId): void
+    {
+        $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
+        $routeVersion = (int)($msg['route_version'] ?? 0);
+        $checksum = (string)($msg['checksum'] ?? '');
+        $status = (string)($msg['status'] ?? '');
+        $reason = (string)($msg['reason'] ?? '');
+        $epoch = (int)($msg['epoch'] ?? 0);
+
+        $dispatcher = null;
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER) as $candidate) {
+            if ($candidate->ipcClientId === $clientId) {
+                $dispatcher = $candidate;
+                break;
+            }
+        }
+
+        $cacheKey = $role . ':' . $epoch;
+        $expected = $this->lastDispatcherRouteTablePublish[$cacheKey] ?? null;
+        $matches = $expected !== null
+            && $expected['route_version'] === $routeVersion
+            && $expected['checksum'] === $checksum;
+
+        if ($dispatcher !== null) {
+            $dispatcher->setMeta('last_route_table_ack_version', $routeVersion);
+            $dispatcher->setMeta('last_route_table_ack_checksum', $checksum);
+            $dispatcher->setMeta('last_route_table_ack_status', $status);
+            $dispatcher->setMeta('last_route_table_ack_at', \microtime(true));
+            $this->registry->updateInstance($dispatcher);
+        }
+
+        $dispatcherLabel = $dispatcher !== null ? ('#' . $dispatcher->instanceId) : ('client=' . $clientId);
+        WlsLogger::info_(\sprintf(
+            '[Orchestrator] ROUTE_TABLE_ACK observed: dispatcher=%s, role=%s, version=%d, status=%s%s%s, matches_local_publish=%s',
+            $dispatcherLabel,
+            $role,
+            $routeVersion,
+            $status !== '' ? $status : 'applied',
+            $reason !== '' ? ', reason=' . $reason : '',
+            $checksum !== '' ? ', checksum=' . \substr($checksum, 0, 12) : '',
+            $matches ? 'yes' : 'no'
         ));
-        WlsLogger::info_("[Orchestrator] Worker 入池闭环确认完成: worker#{$worker->instanceId}, port={$port}, dispatcher_client_id={$clientId}");
+    }
+
+    /**
+     * B-i 阶段：处理子进程上报的身份/路由观察事件。
+     *
+     * 仅记录日志 + 写入对应实例 meta（observed_event / observed_event_at）。
+     * B-ii/B-iii 阶段将根据 event 类型触发收敛动作（例如 slot/lease 重分配）。
+     */
+    private function handleRouteObservation(array $msg, int $clientId): void
+    {
+        $role = (string)($msg['role'] ?? '');
+        $event = (string)($msg['event'] ?? '');
+        $detail = (string)($msg['detail'] ?? '');
+        $slotId = (string)($msg['slot_id'] ?? '');
+        $leaseId = (string)($msg['lease_id'] ?? '');
+        $generation = (int)($msg['generation'] ?? 0);
+        $port = (int)($msg['port'] ?? 0);
+
+        if ($event === '') {
+            return;
+        }
+
+        $instance = null;
+        foreach ($this->registry->getAllInstances() as $candidate) {
+            if ($candidate->ipcClientId === $clientId) {
+                $instance = $candidate;
+                break;
+            }
+        }
+        if ($instance !== null) {
+            $instance->setMeta('last_route_observation_event', $event);
+            $instance->setMeta('last_route_observation_detail', $detail);
+            $instance->setMeta('last_route_observation_at', \microtime(true));
+            $this->registry->updateInstance($instance);
+        }
+
+        $instanceLabel = $instance !== null
+            ? ($instance->role . '#' . $instance->instanceId)
+            : ('client=' . $clientId);
+        WlsLogger::info_(\sprintf(
+            '[Orchestrator] ROUTE_OBSERVATION: instance=%s, role=%s, event=%s%s%s%s%s%s',
+            $instanceLabel,
+            $role !== '' ? $role : 'unknown',
+            $event,
+            $port > 0 ? ', port=' . $port : '',
+            $slotId !== '' ? ', slot_id=' . $slotId : '',
+            $leaseId !== '' ? ', lease_id=' . $leaseId : '',
+            $generation > 0 ? ', generation=' . $generation : '',
+            $detail !== '' ? ', detail=' . $detail : ''
+        ));
     }
 
     /**
@@ -9097,8 +9348,11 @@ class ServiceOrchestrator
             return;
         }
 
-        // 检查所有实例是否都已就绪
+        // 检查所有实例是否都已就绪（自动维护池 Worker 不阻塞整站 running 标记）
         foreach ($allInstances as $instance) {
+            if (!$this->isInstanceRequiredForServerReadyNotification($instance)) {
+                continue;
+            }
             if ($instance->state !== ServiceInstance::STATE_READY) {
                 return;
             }
@@ -9677,91 +9931,6 @@ class ServiceOrchestrator
     /**
      * 发送所有已就绪的 Worker 端口给 Dispatcher
      */
-    private function sendAllWorkerPortsToDispatcher(ServiceInstance $dispatcherInstance): void
-    {
-        if ($dispatcherInstance->ipcClientId === null || $this->controlServer === null) {
-            return;
-        }
-
-        if ($this->maintenanceMode) {
-            $maintenancePorts = $this->collectReadyMaintenancePortsSorted();
-            if ($maintenancePorts !== []) {
-                $timestamp = date('Y-m-d H:i:s');
-                $maintenanceWorkers = [];
-                $portSet = \array_fill_keys(\array_map('intval', $maintenancePorts), true);
-                foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_MAINTENANCE) as $maintenance) {
-                    $p = (int)($maintenance->port ?? 0);
-                    if ($maintenance->state === ServiceInstance::STATE_READY && isset($portSet[$p])) {
-                        $maintenanceWorkers[] = $this->buildWorkerDescriptor($maintenance);
-                    }
-                }
-                $this->controlServer->sendTo(
-                    $dispatcherInstance->ipcClientId,
-                    ControlMessage::setWorkerPool($maintenancePorts, ControlMessage::ROLE_MAINTENANCE, $maintenanceWorkers)
-                );
-                WlsLogger::info_(
-                    "[IPC-Send] {$timestamp} → Dispatcher#{$dispatcherInstance->instanceId} (clientId={$dispatcherInstance->ipcClientId}) SET_WORKER_POOL (maintenance) ports="
-                    . \implode(',', $maintenancePorts)
-                );
-
-                return;
-            }
-            $maintenancePoolMessage = "[Orchestrator] 维护模式激活但无 READY maintenance 端口，Dispatcher#{$dispatcherInstance->instanceId} 初始化池保持现状";
-            if ($this->childServicesBootstrapInProgress) {
-                WlsLogger::info_($maintenancePoolMessage . '（启动窗口期，等待 maintenance READY 后补发）');
-            } else {
-                WlsLogger::warning_($maintenancePoolMessage);
-            }
-        }
-
-        $workerPorts = [];
-        $workers = $this->registry->getInstancesByRole('worker');
-        foreach ($workers as $worker) {
-            if ($worker->state === ServiceInstance::STATE_READY && $worker->port !== null) {
-                $workerPorts[] = $worker->port;
-            }
-        }
-
-        if (!empty($workerPorts)) {
-            $timestamp = date('Y-m-d H:i:s');
-            $workers = [];
-            $portSet = \array_fill_keys(\array_map('intval', $workerPorts), true);
-            foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $worker) {
-                $p = (int)($worker->port ?? 0);
-                if ($worker->state === ServiceInstance::STATE_READY && isset($portSet[$p])) {
-                    $workers[] = $this->buildWorkerDescriptor($worker);
-                }
-            }
-            $this->controlServer->sendTo($dispatcherInstance->ipcClientId, ControlMessage::addWorker($workerPorts, ControlMessage::ROLE_WORKER, $workers));
-            WlsLogger::info_("[IPC-Send] {$timestamp} → Dispatcher#{$dispatcherInstance->instanceId} (clientId={$dispatcherInstance->ipcClientId}) ADD_WORKER (初始化) ports=" . \implode(',', $workerPorts));
-        }
-    }
-
-    /**
-     * 通知 Dispatcher 有 Worker 就绪
-     */
-    private function notifyDispatcherWorkerReady(ServiceInstance $workerInstance): void
-    {
-        $dispatchers = $this->registry->getInstancesByRole('dispatcher');
-        if (empty($dispatchers)) {
-            return;
-        }
-
-        $addWorkerMsg = ControlMessage::addWorker(
-            [(int)$workerInstance->port],
-            ControlMessage::ROLE_WORKER,
-            [$this->buildWorkerDescriptor($workerInstance)]
-        );
-        $timestamp = date('Y-m-d H:i:s');
-
-        foreach ($dispatchers as $dispatcher) {
-            if ($dispatcher->ipcClientId !== null && $this->controlServer !== null) {
-                $this->controlServer->sendTo($dispatcher->ipcClientId, $addWorkerMsg);
-                WlsLogger::info_("[IPC-Send] {$timestamp} → Dispatcher#{$dispatcher->instanceId} (clientId={$dispatcher->ipcClientId}) ADD_WORKER port={$workerInstance->port}");
-            }
-        }
-    }
-
     private function recoverDispatcherBusinessPoolAfterWorkerReady(ServiceInstance $workerInstance, bool $duplicateReady): void
     {
         if ($workerInstance->port === null || $workerInstance->port <= 0) {
@@ -9780,13 +9949,7 @@ class ServiceOrchestrator
             return;
         }
 
-        if ($duplicateReady) {
-            $this->syncDispatcherFullWorkerPoolFromRegistry();
-            return;
-        }
-
-        $this->notifyDispatcherWorkerReady($workerInstance);
-        // 增量 ADD_WORKER 之后再做一次全量对齐，避免消息丢失/乱序导致 Dispatcher 池漂移。
+        // Always use full versioned route table (SET_WORKER_POOL), never incremental ADD_WORKER.
         $this->syncDispatcherFullWorkerPoolFromRegistry();
     }
 
@@ -9810,7 +9973,8 @@ class ServiceOrchestrator
             }
             $workers[] = $this->buildWorkerDescriptor($instance);
         }
-        $msg = ControlMessage::setWorkerPool($ports, $role, $workers);
+        $epoch = $this->context !== null ? $this->context->epoch : 0;
+        $msg = ControlMessage::setWorkerPool($ports, $role, $workers, $this->routeTableVersion, '', $epoch);
         $timestamp = date('Y-m-d H:i:s');
         $portsStr = \implode(',', $ports);
 
@@ -9842,6 +10006,78 @@ class ServiceOrchestrator
             $this->lastDispatcherWorkerPoolSignature = \implode(',', $normalizedPorts);
         } else {
             $this->lastDispatcherWorkerPoolSignature = '';
+        }
+
+        // B-i 阶段：与 SET_WORKER_POOL 并行下发版本化路由表（仅观测，不切换路由源）。
+        // Dispatcher 端收到后只回 ROUTE_TABLE_ACK，业务路由源仍以 SET_WORKER_POOL 为权威。
+        $this->publishDispatcherRouteTable($dispatchers, $ports, $role, $workers, $epoch);
+    }
+
+    /**
+     * B-i 阶段：向所有 Dispatcher 并行下发版本化路由表（与 SET_WORKER_POOL 并存）。
+     *
+     * @param ServiceInstance[] $dispatchers
+     * @param int[]             $ports
+     * @param array<int, array<string, mixed>> $workers 已由 buildWorkerDescriptor() 构造
+     */
+    private function publishDispatcherRouteTable(array $dispatchers, array $ports, string $role, array $workers, int $epoch): void
+    {
+        if ($dispatchers === [] || $this->controlServer === null) {
+            return;
+        }
+
+        $msg = ControlMessage::setRouteTable(
+            $ports,
+            $role,
+            $workers,
+            $this->routeTableVersion,
+            $epoch
+        );
+
+        // 解出 checksum 用于本地缓存（避免重复发布）；
+        // decode 失败时直接跳过缓存即可，发送本身仍然要进行。
+        $decoded = \json_decode(\rtrim($msg, "\n"), true);
+        $checksum = \is_array($decoded) ? (string)($decoded['checksum'] ?? '') : '';
+        $cacheKey = $role . ':' . $epoch;
+
+        if ($checksum !== '' && isset($this->lastDispatcherRouteTablePublish[$cacheKey])
+            && $this->lastDispatcherRouteTablePublish[$cacheKey]['checksum'] === $checksum
+            && $this->lastDispatcherRouteTablePublish[$cacheKey]['route_version'] === $this->routeTableVersion) {
+            return;
+        }
+
+        $sentCount = 0;
+        foreach ($dispatchers as $dispatcher) {
+            if ($dispatcher->ipcClientId === null) {
+                continue;
+            }
+            $this->controlServer->sendTo($dispatcher->ipcClientId, $msg);
+            $sentCount++;
+        }
+
+        if ($checksum !== '') {
+            $normalizedPorts = \array_values(\array_map('intval', $ports));
+            \sort($normalizedPorts, \SORT_NUMERIC);
+            $this->lastDispatcherRouteTablePublish[$cacheKey] = [
+                'route_version' => $this->routeTableVersion,
+                'checksum'      => $checksum,
+                'ports'         => $normalizedPorts,
+                'workers_count' => \count($workers),
+                'published_at'  => \microtime(true),
+            ];
+        }
+
+        if ($sentCount > 0) {
+            WlsLogger::info_(\sprintf(
+                '[Orchestrator] SET_ROUTE_TABLE published: role=%s, version=%d, epoch=%d, ports=%d, workers=%d, dispatchers=%d, checksum=%s',
+                $role,
+                $this->routeTableVersion,
+                $epoch,
+                \count($ports),
+                \count($workers),
+                $sentCount,
+                $checksum !== '' ? \substr($checksum, 0, 12) : 'n/a'
+            ));
         }
     }
 
@@ -9881,6 +10117,7 @@ class ServiceOrchestrator
             return;
         }
 
+        $this->routeTableVersion++;
         $this->notifyDispatcherSetWorkerPool($ports);
         $this->controlServer->poll(0, 150000);
         $this->broadcastRoutingPolicyToWorkers();
@@ -11387,7 +11624,7 @@ class ServiceOrchestrator
         $this->pendingMaintenanceModeAck = null;
 
         // 维护 Worker 保持常驻，不执行 provider->disable / stopMaintenanceWorkers。
-        // 仅退出“维护流量态”，下次切换可直接复用已就绪维护池，减少抖动。
+        // 仅退出"维护流量态"，下次切换可直接复用已就绪维护池，减少抖动。
         $this->maintenanceMode = false;
         $this->maintenanceSticky = false;
 
@@ -11660,7 +11897,7 @@ class ServiceOrchestrator
     {
         WlsLogger::info_("[Orchestrator] 滚动重启完成: success={$success}, message={$message}, elapsed={$elapsedMs}ms");
 
-        // 先清理滚动标志，再禁用维护模式，避免 disableMaintenanceMode() 因“滚动中”被拒绝。
+        // 先清理滚动标志，再禁用维护模式，避免 disableMaintenanceMode() 因"滚动中"被拒绝。
         $clientId = $this->rollingRestartClientId;
         $progress = $this->rollingRestartProgress;
         $total = $this->rollingRestartTotal;
@@ -12503,7 +12740,7 @@ class ServiceOrchestrator
 
     /**
      * Windows foreground spawn 场景下，返回的 PID 可能是短生命周期壳进程，
-     * 启动初期按 PID 早判“已退出”会误触发复活，导致同槽位重复拉起与 launchId 竞态。
+     * 启动初期按 PID 早判"已退出"会误触发复活，导致同槽位重复拉起与 launchId 竞态。
      */
     private function shouldSkipEarlyPidDeathResurrectionCheck(ServiceInstance $instance): bool
     {

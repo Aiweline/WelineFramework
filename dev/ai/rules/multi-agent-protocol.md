@@ -41,7 +41,8 @@ Note: Full e2e + deep regression can be added after smoke pass. **NO delivery of
 ## E. Bound Rule Files (MUST follow)
 - `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md`
 - `dev/ai/rules/efficiency_rules.md`
-- `dev/ai/global-constraints.md`
+- `dev/ai/global-constraints.md`（含 §5.1：禁止批量替换与批量脚本改代码）
+- `.cursor/rules/no-batch-code-modification.mdc`（Cursor 常驻摘要）
 
 ## F. Issue Closure & Autonomous Management (MANDATORY)
 - **Tech Lead handles all issues**: Register, prioritize, assign, track to closure. **NO repeated trivial requests to boss**.

@@ -18,8 +18,6 @@
 没有接收到文件数据,"No file data received"
 无法解析文件数据,"Unable to parse file data"
 文件数据解析失败,"File data parsing failed"
-"Font subset frontend worker API","Font subset frontend worker API"
-"Frontend font subset tool operations exposed through Weline worker API.","Frontend font subset tool operations exposed through Weline worker API."
 已上传,Uploaded
 处理中,Processing
 已完成,Completed
