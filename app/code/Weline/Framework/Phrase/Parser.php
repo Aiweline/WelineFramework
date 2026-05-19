@@ -147,9 +147,11 @@ class Parser
         // 记录请求生命周期内使用的翻译词（用于按需加载到前端）
         self::$usedWords[$words] = $words;
         
-        // 如果有就替换
         if (isset(self::$words[$words])) {
-            $words = self::$words[$words];
+            $translated = self::$words[$words];
+            if (\is_string($translated) && $translated !== '' && $translated !== $words) {
+                $words = $translated;
+            }
         } else {
             self::$words[$words] = $words;
         }
@@ -203,23 +205,21 @@ class Parser
         
         // 防止循环调用：如果正在加载翻译文件，直接返回空数组或已加载的词
         $requestId = Runtime::isPersistent() ? RequestContext::getId() : null;
+        $currentLang = State::getLangLocal();
+        $requestModules = self::resolveRequestModules();
+        $requestCacheKey = self::buildWordsCacheKey($currentLang, $requestModules);
         if ($requestId !== null
             && self::$currentRequestWordsId === $requestId
-            && self::$currentRequestWordsKey !== null
-            && isset(self::$workerWordsCache[self::$currentRequestWordsKey])
+            && self::$currentRequestWordsKey === $requestCacheKey
+            && isset(self::$workerWordsCache[$requestCacheKey])
         ) {
-            self::$words = self::$workerWordsCache[self::$currentRequestWordsKey];
+            self::$words = self::$workerWordsCache[$requestCacheKey];
             return self::$words;
         }
 
         if (self::$isLoadingWords) {
             return self::$words ?? [];
         }
-        
-        // 获取当前请求的语言
-        $currentLang = State::getLangLocal();
-        $requestModules = self::resolveRequestModules();
-        $requestCacheKey = self::buildWordsCacheKey($currentLang, $requestModules);
         if (isset(self::$workerWordsCache[$requestCacheKey])) {
             self::$words = self::$workerWordsCache[$requestCacheKey];
             self::$loaded = true;
@@ -357,21 +357,28 @@ class Parser
     private static function getCurrentLayeredWords(): array
     {
         $requestId = Runtime::isPersistent() ? RequestContext::getId() : null;
-        if ($requestId !== null
-            && self::$currentRequestWordsId === $requestId
-            && self::$currentRequestWordsKey !== null
-            && isset(self::$workerLayeredWordsCache[self::$currentRequestWordsKey])
-        ) {
-            return self::$workerLayeredWordsCache[self::$currentRequestWordsKey];
-        }
-
         $lang = State::getLangLocal();
         $modules = self::resolveRequestModules();
+        $layeredCacheKey = self::buildLayeredWordsCacheKey($lang, $modules);
+
+        if ($requestId !== null
+            && self::$currentRequestWordsId === $requestId
+            && self::$currentRequestWordsKey === $layeredCacheKey
+            && isset(self::$workerLayeredWordsCache[$layeredCacheKey])
+        ) {
+            return self::$workerLayeredWordsCache[$layeredCacheKey];
+        }
+
         $layers = self::getLayeredWords($lang, $modules);
         self::$currentRequestWordsId = $requestId;
-        self::$currentRequestWordsKey = (string)$layers['cache_key'];
+        self::$currentRequestWordsKey = $layeredCacheKey;
 
         return $layers;
+    }
+
+    private static function buildLayeredWordsCacheKey(string $lang, array $modules, bool $includeGlobalDictionary = true): string
+    {
+        return self::buildWordsCacheKey($lang, $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file');
     }
 
     private static function getLayeredWords(string $lang, array $modules, bool $includeGlobalDictionary = true): array
@@ -403,13 +410,24 @@ class Parser
         $moduleWords = (array)($layers['module_words'] ?? []);
         for ($i = \count($modules) - 1; $i >= 0; $i--) {
             $moduleName = $modules[$i];
-            if (isset($moduleWords[$moduleName][$word])) {
-                return $moduleWords[$moduleName][$word];
+            if (!isset($moduleWords[$moduleName][$word])) {
+                continue;
+            }
+            $translate = $moduleWords[$moduleName][$word];
+            if (\is_string($translate) && $translate !== '' && $translate !== $word) {
+                return $translate;
             }
         }
 
         $localeWords = (array)($layers['locale_words'] ?? []);
-        return $localeWords[$word] ?? $word;
+        if (isset($localeWords[$word])) {
+            $translate = $localeWords[$word];
+            if (\is_string($translate) && $translate !== '' && $translate !== $word) {
+                return $translate;
+            }
+        }
+
+        return $word;
     }
 
     private static function materializeLayeredWords(array $layers): array
@@ -603,7 +621,9 @@ class Parser
                     }
                 }
                 
-                $words[$word] = $translate;
+                if ($translate !== '' && $translate !== $word) {
+                    $words[$word] = $translate;
+                }
             }
             
             fclose($handle);
