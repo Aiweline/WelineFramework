@@ -25,7 +25,7 @@ class Index extends BaseController
     {
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
         if ($customerId <= 0) {
-            $this->getMessageManager()->addError(__('Please log in to continue.'));
+            $this->getMessageManager()->addError(__('请先登录。'));
             $this->redirect(self::LOGIN_ROUTE);
             return '';
         }
@@ -36,7 +36,7 @@ class Index extends BaseController
             $this->assign($key, $value);
         }
 
-        $this->assign('title', __('Returns & Exchanges'));
+        $this->assign('title', __('退换货'));
         return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }

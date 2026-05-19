@@ -33,7 +33,7 @@ class RmaQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'create' => $this->create($params),
             default => throw new \InvalidArgumentException(
-                (string)__('Unsupported RMA provider operation: %{1}', $operation)
+                (string)__('RMA 查询器不支持的操作：%{1}', $operation)
             ),
         };
     }
@@ -56,7 +56,7 @@ class RmaQueryProvider implements QueryProviderInterface
         if ($orderId <= 0 || $reason === '') {
             return [
                 'success' => false,
-                'message' => (string)__('Order and reason are required.'),
+                'message' => (string)__('请填写订单与原因。'),
             ];
         }
 
@@ -64,7 +64,7 @@ class RmaQueryProvider implements QueryProviderInterface
         if (!$order || (int)($order->getData(Order::schema_fields_customer_id) ?? 0) !== $customerId) {
             return [
                 'success' => false,
-                'message' => (string)__('You do not have access to this order.'),
+                'message' => (string)__('您无权操作该订单。'),
             ];
         }
 
@@ -84,7 +84,7 @@ class RmaQueryProvider implements QueryProviderInterface
 
         return [
             'success' => true,
-            'message' => (string)__('Your return request has been submitted.'),
+            'message' => (string)__('退换货申请已提交。'),
             'data' => [
                 'rma_id' => (int)($rma->getId() ?? 0),
                 'order_id' => $orderId,
@@ -115,7 +115,7 @@ class RmaQueryProvider implements QueryProviderInterface
 
         return [
             'success' => false,
-            'message' => (string)__('Please log in to continue.'),
+            'message' => (string)__('请先登录。'),
             'data' => [
                 'redirect_url' => $loginUrl,
             ],
@@ -185,13 +185,13 @@ class RmaQueryProvider implements QueryProviderInterface
     {
         return [
             'provider' => 'rma',
-            'name' => __('RMA Query'),
-            'description' => __('Provides frontend return and exchange request operations through the worker API.'),
+            'name' => __('RMA 查询'),
+            'description' => __('通过 Worker API 提供前台退换货申请操作。'),
             'module' => 'WeShop_RMA',
             'operations' => [
                 [
                     'name' => 'create',
-                    'description' => __('Submit a frontend RMA request.'),
+                    'description' => __('提交前台退换货申请。'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,

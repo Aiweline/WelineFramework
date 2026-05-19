@@ -21,7 +21,7 @@ class View extends BaseController
         $id = (int) $this->request->getParam('id', 0);
 
         if ($id <= 0) {
-            $this->getMessageManager()->addWarning(__('Subscription ID is required.'));
+            $this->getMessageManager()->addWarning(__('缺少订阅 ID。'));
             $this->redirect($this->getBackendUrl('*/backend/subscription'));
             return '';
         }
@@ -29,7 +29,7 @@ class View extends BaseController
         try {
             $this->assign(array_merge(
                 [
-                    'title' => (string) __('Subscription Details'),
+                    'title' => (string) __('订阅详情'),
                 ],
                 $this->subscriptionAdminPageDataService->getDetailData($id)
             ));
@@ -52,12 +52,12 @@ class View extends BaseController
 
             return $this->fetchJson([
                 'code' => 200,
-                'msg' => __('Subscription cancelled.'),
+                'msg' => __('订阅已取消。'),
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'code' => 400,
-                'msg' => __('Cancel failed: %{error}', ['error' => $e->getMessage()]),
+                'msg' => __('取消失败：%{error}', ['error' => $e->getMessage()]),
             ]);
         }
     }
@@ -71,12 +71,12 @@ class View extends BaseController
 
             return $this->fetchJson([
                 'code' => 200,
-                'msg' => __('Subscription paused.'),
+                'msg' => __('订阅已暂停。'),
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'code' => 400,
-                'msg' => __('Pause failed: %{error}', ['error' => $e->getMessage()]),
+                'msg' => __('暂停失败：%{error}', ['error' => $e->getMessage()]),
             ]);
         }
     }
@@ -90,12 +90,12 @@ class View extends BaseController
 
             return $this->fetchJson([
                 'code' => 200,
-                'msg' => __('Subscription resumed.'),
+                'msg' => __('订阅已恢复。'),
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'code' => 400,
-                'msg' => __('Resume failed: %{error}', ['error' => $e->getMessage()]),
+                'msg' => __('恢复失败：%{error}', ['error' => $e->getMessage()]),
             ]);
         }
     }

@@ -795,6 +795,10 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $reflector = new \ReflectionClass(Dispatcher::class);
         /** @var Dispatcher $dispatcher */
         $dispatcher = $reflector->newInstanceWithoutConstructor();
+        // B-iii: 默认让本套测试走 B-i / B-ii flag=off 兼容回退路径（SET_WORKER_POOL 仍是业务路由权威），
+        // 保护历史用例对 SET_WORKER_POOL 真实业务行为的回归覆盖。
+        // 要测 B-iii 新默认路径（SET_ROUTE_TABLE 作为权威）请在用例内显式 setProperty('routeTableAsAuthority', true)。
+        $this->setProperty($dispatcher, 'routeTableAsAuthority', false);
         return $dispatcher;
     }
 

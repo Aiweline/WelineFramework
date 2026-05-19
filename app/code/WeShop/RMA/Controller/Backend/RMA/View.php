@@ -34,7 +34,7 @@ class View extends BackendController
         $rmaModel->load($rmaId);
 
         if (!$rmaModel->getId()) {
-            $this->getMessageManager()->addError((string) __('RMA record not found.'));
+            $this->getMessageManager()->addError((string) __('售后单不存在。'));
             $this->redirect($this->_url->getBackendUrl('*/backend/rma'));
             return '';
         }
@@ -51,9 +51,9 @@ class View extends BackendController
         ];
 
         $statusLabelMap = [
-            RmaService::STATUS_PENDING => __('Pending'),
-            RmaService::STATUS_APPROVED => __('Approved'),
-            RmaService::STATUS_REJECTED => __('Rejected'),
+            RmaService::STATUS_PENDING => __('待处理'),
+            RmaService::STATUS_APPROVED => __('已同意'),
+            RmaService::STATUS_REJECTED => __('已拒绝'),
         ];
 
         $rmaData['status_label'] = $statusLabelMap[$rmaData['status']] ?? ucfirst($rmaData['status']);
