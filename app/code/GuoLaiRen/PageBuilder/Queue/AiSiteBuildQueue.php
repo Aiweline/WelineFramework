@@ -18,6 +18,14 @@ use Weline\Queue\QueueInterface;
 
 class AiSiteBuildQueue implements QueueInterface
 {
+    private const DEFAULT_MAX_ATTEMPTS = 3;
+    private const CONTENT_ATTEMPT_KEY = 'attempt';
+    private const CONTENT_MAX_ATTEMPTS_KEY = 'max_attempts';
+    private const CONTENT_LAST_GATE_REASON_KEY = 'last_gate_reason';
+    private const CONTENT_LAST_GATE_AT_KEY = 'last_gate_at';
+    private const CONTENT_LAST_GATE_DECISION_KEY = 'completion_gate_decision';
+    private const CONTENT_LAST_GATE_SNAPSHOT_KEY = 'completion_gate_snapshot';
+
     public function name(): string
     {
         return 'PageBuilder AI 建站构建队列';
@@ -57,6 +65,7 @@ class AiSiteBuildQueue implements QueueInterface
     public function execute(Queue &$queue): string
     {
         $content = \json_decode((string)$queue->getContent(), true);
+        $content = \is_array($content) ? $content : [];
         $publicId = \trim((string)($content['public_id'] ?? ''));
         $adminId = (int)($content['admin_id'] ?? 0);
         $executionToken = \trim((string)($content['execution_token'] ?? ''));
@@ -74,6 +83,11 @@ class AiSiteBuildQueue implements QueueInterface
             );
         }
         $queueId = (int)$queue->getId();
+        [$content, $attempt, $maxAttempts] = $this->beginQueueAttempt(
+            $queue,
+            $content,
+            $effectiveExecutionToken !== '' ? $effectiveExecutionToken : $executionToken
+        );
 
         $sse = null;
         $previousSseContextExists = false;
@@ -292,11 +306,26 @@ class AiSiteBuildQueue implements QueueInterface
             }
             $this->queueTrace($sse, '队列操作已返回 operation=' . $operation);
 
-            if ($forceNewExecutionToken) {
-                $this->clearQueueForceBuildMarker($sessionService, (int)$session->getId(), $adminId);
-            }
             if (\in_array($operation, ['build', 'regenerate_page'], true)) {
-                $this->assertQueueBuildTasksComplete($sessionService, $scopeService, $buildTaskService, $session, $adminId, $operation);
+                $gateAction = $this->finalizeQueueBuildCompletion(
+                    $queue,
+                    $sessionService,
+                    $scopeService,
+                    $buildTaskService,
+                    $session,
+                    $adminId,
+                    $operation,
+                    $effectiveExecutionToken,
+                    $queueId,
+                    $attempt,
+                    $maxAttempts
+                );
+                if (($gateAction['action'] ?? '') === 'requeued') {
+                    $retryMessage = (string)($gateAction['message'] ?? 'Build queue requeued after completion gate failure.');
+                    $this->queueTrace($sse, 'completion gate blocked, queue requeued: ' . $retryMessage);
+
+                    return $retryMessage;
+                }
                 $this->markQueueBuildOperationPassedGate(
                     $sessionService,
                     $scopeService,
@@ -307,6 +336,9 @@ class AiSiteBuildQueue implements QueueInterface
                     $effectiveExecutionToken,
                     $queueId
                 );
+            }
+            if ($forceNewExecutionToken) {
+                $this->clearQueueForceBuildMarker($sessionService, (int)$session->getId(), $adminId);
             }
 
             $doneMessage = $this->buildOperationDoneMessage($operation);
@@ -766,14 +798,22 @@ class AiSiteBuildQueue implements QueueInterface
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
     }
 
-    private function assertQueueBuildTasksComplete(
+    /**
+     * @return array{action:string,message:string}
+     */
+    private function finalizeQueueBuildCompletion(
+        Queue &$queue,
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
         AiSiteBuildTaskService $buildTaskService,
         AiSiteAgentSession $session,
         int $adminId,
-        string $operation
-    ): void {
+        string $operation,
+        string $executionToken,
+        int $queueId,
+        int $attempt,
+        int $maxAttempts
+    ): array {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         $scope = $scopeService->normalizeScope(
             $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
@@ -807,33 +847,88 @@ class AiSiteBuildQueue implements QueueInterface
         }
         $gate = $buildTaskService->inspectBuildCompletionGate($scope);
         $total = (int)($gate['total'] ?? 0);
-        $pending = (int)($gate['pending'] ?? 0);
-        $running = (int)($gate['running'] ?? 0);
-        $failed = (int)($gate['failed'] ?? 0);
-        $cancelled = (int)($gate['cancelled'] ?? 0);
-        $invalidArtifacts = (int)($gate['invalid_artifacts'] ?? 0);
+        $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
+        $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
+        $buildSummary['completion_gate'] = $this->stripGateSummary($gate);
+        $buildSummary['last_gate_checked_at'] = \date('Y-m-d H:i:s');
+        $scope['build_summary'] = $buildSummary;
+        $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
+
+        $content = $this->decodeQueueContent($queue);
+        $content[self::CONTENT_ATTEMPT_KEY] = $attempt;
+        $content[self::CONTENT_MAX_ATTEMPTS_KEY] = $maxAttempts;
+        $content[self::CONTENT_LAST_GATE_REASON_KEY] = (string)($gate['reason'] ?? ($gate['passed'] ? 'passed' : 'completion_gate_failed'));
+        $content[self::CONTENT_LAST_GATE_AT_KEY] = \date('Y-m-d H:i:s');
+        $content[self::CONTENT_LAST_GATE_SNAPSHOT_KEY] = $this->stripGateSummary($gate);
+
         if ($total <= 0) {
+            $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'error';
+            $this->saveQueueContent($queue, $content);
+
             throw new \RuntimeException('Build queue returned without any build task summary.');
         }
-        if (empty($gate['passed'])) {
-            $actionDetail = $buildTaskService->formatBuildCompletionGateFailureDetail($gate);
-            $message = \sprintf(
-                'Build queue operation %s cannot finish while completion gate is blocked: total=%d pending=%d running=%d failed=%d cancelled=%d invalid_artifacts=%d reason=%s.',
-                $operation,
-                $total,
-                $pending,
-                $running,
-                $failed,
-                $cancelled,
-                $invalidArtifacts,
-                (string)($gate['reason'] ?? '')
-            );
-            if ($actionDetail !== '') {
-                $message .= ' ' . $actionDetail;
-            }
 
-            throw new \RuntimeException($message);
+        if (!empty($gate['passed'])) {
+            $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'passed';
+            $this->saveQueueContent($queue, $content);
+
+            return [
+                'action' => 'passed',
+                'message' => '',
+            ];
         }
+
+        $message = $this->formatBuildCompletionGateBlockedMessage($buildTaskService, $gate, $operation);
+        if ($this->shouldRetryBuildQueue($gate) && $attempt < $maxAttempts) {
+            $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'requeued';
+            $scope = $buildTaskService->resetUnfinishedTasksForQueueRetry($scope, $message);
+            $scope = $this->patchBuildActiveOperationForRetry(
+                $scope,
+                $operation,
+                $queueId,
+                $attempt,
+                $maxAttempts,
+                $executionToken,
+                $message,
+                $gate
+            );
+            $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
+            $sessionService->appendEvent(
+                (int)$fresh->getId(),
+                $adminId,
+                'pagebuilder_queue_retry_scheduled',
+                [
+                    'queue_id' => $queueId,
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'last_gate_reason' => (string)($gate['reason'] ?? 'completion_gate_failed'),
+                    'completion_gate_snapshot' => $this->stripGateSummary($gate),
+                ],
+                AiSiteAgentSession::STAGE_VISUAL_EDIT
+            );
+            $this->requeueQueueToPending($queue, $content, $message);
+
+            return [
+                'action' => 'requeued',
+                'message' => $message,
+            ];
+        }
+
+        $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'error';
+        $this->saveQueueContent($queue, $content);
+        $scope = $this->patchBuildActiveOperationForGateFailure(
+            $scope,
+            $operation,
+            $queueId,
+            $attempt,
+            $maxAttempts,
+            $executionToken,
+            $message,
+            $gate
+        );
+        $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
+
+        throw new \RuntimeException($message);
     }
 
     private function markQueueBuildOperationPassedGate(
@@ -923,6 +1018,137 @@ class AiSiteBuildQueue implements QueueInterface
         }
 
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $gate
+     */
+    private function shouldRetryBuildQueue(array $gate): bool
+    {
+        $total = (int)($gate['total'] ?? 0);
+        $failed = (int)($gate['failed'] ?? 0);
+        $reason = \trim((string)($gate['reason'] ?? ''));
+        if ($failed > 0 || $reason === 'failed_build_tasks') {
+            return false;
+        }
+
+        return $total > 0 && empty($gate['passed']);
+    }
+
+    /**
+     * @param array<string, mixed> $gate
+     */
+    private function formatBuildCompletionGateBlockedMessage(
+        AiSiteBuildTaskService $buildTaskService,
+        array $gate,
+        string $operation
+    ): string {
+        $detail = $buildTaskService->formatBuildCompletionGateFailureDetail($gate);
+        $message = \sprintf(
+            'Build queue operation %s cannot finish while completion gate is blocked: total=%d pending=%d running=%d failed=%d cancelled=%d invalid_artifacts=%d duplicate_artifacts=%d reason=%s.',
+            $operation,
+            (int)($gate['total'] ?? 0),
+            (int)($gate['pending'] ?? 0),
+            (int)($gate['running'] ?? 0),
+            (int)($gate['failed'] ?? 0),
+            (int)($gate['cancelled'] ?? 0),
+            (int)($gate['invalid_artifacts'] ?? 0),
+            (int)($gate['duplicate_artifacts'] ?? 0),
+            (string)($gate['reason'] ?? '')
+        );
+        if ($detail !== '') {
+            $message .= ' ' . $detail;
+        }
+
+        return $message;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $gate
+     * @return array<string, mixed>
+     */
+    private function patchBuildActiveOperationForRetry(
+        array $scope,
+        string $operation,
+        int $queueId,
+        int $attempt,
+        int $maxAttempts,
+        string $executionToken,
+        string $message,
+        array $gate
+    ): array {
+        $now = \date('Y-m-d H:i:s');
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $startedAt = \trim((string)($activeOperation['started_at'] ?? ''));
+        if ($startedAt === '') {
+            $startedAt = $now;
+        }
+        $operationState = \array_replace($activeOperation, [
+            'operation' => $operation,
+            'status' => 'queued',
+            'queue_id' => $queueId,
+            'execution_token' => $executionToken,
+            'message' => $message,
+            'queue_waiting_for_scheduler' => true,
+            'started_at' => $startedAt,
+            'updated_at' => $now,
+            'attempt' => $attempt,
+            'max_attempts' => $maxAttempts,
+            'last_gate_reason' => (string)($gate['reason'] ?? 'completion_gate_failed'),
+            'completion_gate_snapshot' => $this->stripGateSummary($gate),
+            'can_close_stream' => true,
+            'continue_other_operations' => true,
+        ]);
+
+        $scope['active_operation'] = $operationState;
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $activeOperations[$operation] = $operationState;
+        $scope['active_operations'] = $activeOperations;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $gate
+     * @return array<string, mixed>
+     */
+    private function patchBuildActiveOperationForGateFailure(
+        array $scope,
+        string $operation,
+        int $queueId,
+        int $attempt,
+        int $maxAttempts,
+        string $executionToken,
+        string $message,
+        array $gate
+    ): array {
+        $now = \date('Y-m-d H:i:s');
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $operationState = \array_replace($activeOperation, [
+            'operation' => $operation,
+            'status' => 'error',
+            'queue_id' => $queueId,
+            'execution_token' => $executionToken,
+            'message' => $message,
+            'updated_at' => $now,
+            'finished_at' => $now,
+            'queue_waiting_for_scheduler' => false,
+            'attempt' => $attempt,
+            'max_attempts' => $maxAttempts,
+            'last_gate_reason' => (string)($gate['reason'] ?? 'completion_gate_failed'),
+            'completion_gate_snapshot' => $this->stripGateSummary($gate),
+            'can_close_stream' => false,
+            'continue_other_operations' => false,
+        ]);
+        $scope['active_operation'] = $operationState;
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $activeOperations[$operation] = $operationState;
+        $scope['active_operations'] = $activeOperations;
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+
+        return $scope;
     }
 
     private function clearQueueForceBuildMarker(AiSiteAgentSessionService $sessionService, int $sessionId, int $adminId): void
@@ -1313,5 +1539,100 @@ class AiSiteBuildQueue implements QueueInterface
         if (\function_exists('flush')) {
             \flush();
         }
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     * @return array{0:array<string,mixed>,1:int,2:int}
+     */
+    private function beginQueueAttempt(Queue &$queue, array $content, string $effectiveExecutionToken): array
+    {
+        $attempt = \max(0, (int)($content[self::CONTENT_ATTEMPT_KEY] ?? 0)) + 1;
+        $maxAttempts = \max(
+            $attempt,
+            (int)($content[self::CONTENT_MAX_ATTEMPTS_KEY] ?? self::DEFAULT_MAX_ATTEMPTS),
+            self::DEFAULT_MAX_ATTEMPTS
+        );
+        $content[self::CONTENT_ATTEMPT_KEY] = $attempt;
+        $content[self::CONTENT_MAX_ATTEMPTS_KEY] = $maxAttempts;
+        $content[self::CONTENT_LAST_GATE_REASON_KEY] = '';
+        $content[self::CONTENT_LAST_GATE_AT_KEY] = '';
+        $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'running';
+        $content[self::CONTENT_LAST_GATE_SNAPSHOT_KEY] = [];
+        if ($effectiveExecutionToken !== '') {
+            $content['execution_token'] = $effectiveExecutionToken;
+        }
+        $this->saveQueueContent($queue, $content);
+
+        return [$content, $attempt, $maxAttempts];
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function saveQueueContent(Queue &$queue, array $content): void
+    {
+        $queue->setContent($this->encodeQueueContent($content))->save();
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function requeueQueueToPending(Queue &$queue, array $content, string $message): void
+    {
+        $line = '[' . \date('H:i:s') . '] QUEUE_REQUEUE ' . $message;
+        $queue->setStatus(Queue::status_pending)
+            ->setFinished(false)
+            ->setPid(0)
+            ->setData(Queue::schema_fields_start_at, null)
+            ->setData(Queue::schema_fields_end_at, null)
+            ->setContent($this->encodeQueueContent($content))
+            ->setProcess($message)
+            ->setResult($this->appendQueueMessage((string)$queue->getResult(), $line))
+            ->save();
+        $this->mirrorToCli($line);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeQueueContent(Queue &$queue): array
+    {
+        $decoded = \json_decode((string)$queue->getContent(), true);
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param array<string, mixed> $gate
+     * @return array<string, mixed>
+     */
+    private function stripGateSummary(array $gate): array
+    {
+        return \array_diff_key($gate, ['summary' => true]);
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function encodeQueueContent(array $content): string
+    {
+        $json = \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+
+        return \is_string($json) ? $json : '{}';
+    }
+
+    private function appendQueueMessage(string $existing, string $line): string
+    {
+        $existing = \trim($existing);
+        $line = \trim($line);
+        if ($line === '') {
+            return $existing;
+        }
+        if ($existing === '') {
+            return $line;
+        }
+
+        return $existing . \PHP_EOL . $line;
     }
 }

@@ -11,6 +11,10 @@
 "Thank you for submitting your review.",感谢您提交评论。
 "Product ID cannot be empty.",产品ID不能为空。
 "Product Reviews",商品评论
+"Unsupported review provider operation: %{1}","Unsupported review provider operation: %{1}"
+"Review Query","Review Query"
+"Provides frontend review operations through the worker API.","Provides frontend review operations through the worker API."
+"Submit a frontend product review.","Submit a frontend product review."
 "Product review tab content",商品评论标签内容
 "Render the customer review block inside product detail tabs.",在商品详情标签中渲染客户评论模块。
 "Review Page Hooks",评论页面扩展位

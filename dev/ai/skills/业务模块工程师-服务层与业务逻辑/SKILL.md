@@ -46,6 +46,8 @@ This skill owns service-layer implementation and business-rule placement inside 
 - Do not hardcode user-facing text.
 - Use i18n for user-facing text.
 - Provide unit test evidence where relevant.
+- For broken cart/list display rows, verify stale foreign keys or deleted backing records before rewriting templates; prefer service-layer snapshot persistence or rebinding when the visible item must survive upstream record churn.
+- When live data exists in storage but the rendered page still shows placeholders, treat template fallback and controller cache as part of the business delivery path, not as separate frontend-only concerns.
 
 # Inputs Required
 
@@ -66,6 +68,7 @@ This skill owns service-layer implementation and business-rule placement inside 
 - Run a route, command, or API check through the real entry point when relevant.
 - Confirm controllers no longer contain unnecessary business-rule branches.
 - Confirm models remain persistence-focused rather than becoming orchestration hubs.
+- For snapshot or repair logic, prove the service result through a targeted builder/API payload call in addition to raw database inspection.
 
 # Constraints
 

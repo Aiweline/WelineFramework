@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 本文件由 秋枫雁飞 编写，所有解释权归属aiweline所有。
  * 作者：Administrator
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
@@ -13,65 +13,46 @@ declare(strict_types=1);
 
 namespace Weline\Queue\Cron;
 
-use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
 use Weline\Framework\App\Env;
-use Weline\Framework\System\Process\Processer;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\System\Process\Processer;
 
 class Queue implements \Weline\Cron\CronTaskInterface
 {
-
     private \Weline\Queue\Model\Queue $queue;
     private \Weline\Framework\Output\Cli\Printing $printing;
 
-    function __construct(
+    public function __construct(
         \Weline\Queue\Model\Queue $queue,
-        Printing                  $printing
-    )
-    {
+        Printing $printing
+    ) {
         $this->queue = $queue;
         $this->printing = $printing;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function name(): string
     {
         return '消息队列-消费任务';
     }
 
-    /**
-     * @inheritDoc
-     */
     public function execute_name(): string
     {
         return 'queue';
     }
 
-    /**
-     * @inheritDoc
-     */
     public function tip(): string
     {
         return <<<QUEUETIP
 定时消费任务，每分钟检测一次消息队列。如果有任务继续执行队列中的任务。
 QUEUETIP;
-
     }
 
-    /**
-     * @inheritDoc
-     */
     public function cron_time(): string
     {
         return '*/1 * * * *';
     }
 
-    /**
-     * @inheritDoc
-     */
     public function execute(): string
     {
         $maxConcurrent = $this->resolveMaxConcurrent();
@@ -95,6 +76,7 @@ QUEUETIP;
         foreach ($pendingQueues as $queue) {
             $this->startQueueProcess($queue);
         }
+
         return 'OK';
     }
 
@@ -164,6 +146,12 @@ QUEUETIP;
                     $queue->setFinished(true);
                     $queue->setResult(PHP_EOL . $output . __('队列结束...') . $queue->getResult())
                         ->setStatus($queue::status_done)
+                        ->save();
+                    continue;
+                }
+                if ($queue->getStatus() === $queue::status_pending) {
+                    $queue->setFinished(false)
+                        ->setResult(PHP_EOL . $output . __('队列自身决定重进 pending，等待下次调度。') . $queue->getResult())
                         ->save();
                     continue;
                 }
@@ -245,9 +233,6 @@ QUEUETIP;
         return str_contains($haystack, 'QUEUE_DONE');
     }
 
-    /**
-     * @inheritDoc
-     */
     public function unlock_timeout(int $minute = 30): int
     {
         return 180;

@@ -156,6 +156,18 @@ final class WorkerResponseMemoryGuard
             $compactions['cleared_process_caches']++;
         }
 
+        if (\class_exists(\Weline\Framework\View\Template::class, false)
+            && \method_exists(\Weline\Framework\View\Template::class, 'clearProcessCaches')) {
+            \Weline\Framework\View\Template::clearProcessCaches($aggressive);
+            $compactions['cleared_process_caches']++;
+        }
+
+        if (\class_exists(\GuoLaiRen\PageBuilder\Controller\Frontend\Page::class, false)
+            && \method_exists(\GuoLaiRen\PageBuilder\Controller\Frontend\Page::class, 'clearProcessCaches')) {
+            \GuoLaiRen\PageBuilder\Controller\Frontend\Page::clearProcessCaches($aggressive);
+            $compactions['cleared_process_caches']++;
+        }
+
         if (\class_exists(\Weline\Widget\Service\WidgetData::class, false)) {
             \Weline\Widget\Service\WidgetData::clearCache();
             $compactions['cleared_process_caches']++;
@@ -200,6 +212,41 @@ final class WorkerResponseMemoryGuard
         }
 
         return $compactions;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function describeRuntimeCaches(): array
+    {
+        $state = [];
+
+        if (\class_exists(\Weline\Framework\View\Template::class, false)
+            && \method_exists(\Weline\Framework\View\Template::class, 'debugCacheState')) {
+            $state['template'] = \Weline\Framework\View\Template::debugCacheState();
+        }
+
+        if (\class_exists(\Weline\Framework\View\TemplateCacheManager::class, false)
+            && \method_exists(\Weline\Framework\View\TemplateCacheManager::class, 'getMemoryStats')) {
+            $state['template_cache_manager'] = \Weline\Framework\View\TemplateCacheManager::getInstance()->getMemoryStats();
+        }
+
+        if (\class_exists(\GuoLaiRen\PageBuilder\Controller\Frontend\Page::class, false)
+            && \method_exists(\GuoLaiRen\PageBuilder\Controller\Frontend\Page::class, 'debugViewHtmlCacheState')) {
+            $state['pagebuilder_frontend_page'] = \GuoLaiRen\PageBuilder\Controller\Frontend\Page::debugViewHtmlCacheState();
+        }
+
+        if (\class_exists(\Weline\Server\Service\MemoryCacheService::class, false)
+            && \method_exists(\Weline\Server\Service\MemoryCacheService::class, 'getStats')) {
+            $stats = \Weline\Server\Service\MemoryCacheService::getStats();
+            $state['memory_cache_service'] = [
+                'entries' => (int)($stats['entries'] ?? 0),
+                'size_bytes' => (int)($stats['size'] ?? 0),
+                'size_human' => (string)($stats['size_human'] ?? ''),
+            ];
+        }
+
+        return $state;
     }
 
     private static function getMemoryPressure(): float

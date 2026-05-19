@@ -26,6 +26,27 @@
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <style>
+        .checkout-failer-main {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: clamp(460px, 65vh, 760px);
+            padding: clamp(3rem, 8vw, 5rem) 1rem;
+            box-sizing: border-box;
+        }
+
+        .checkout-failer-container {
+            width: 100%;
+            max-width: 820px;
+            margin: 0 auto;
+        }
+
+        .checkout-failer-content {
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
     @template(Weline_Frontend::templates/public/header.phtml)

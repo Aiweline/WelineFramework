@@ -1393,7 +1393,7 @@ class AiSiteBuildTaskService
                 // this, stage1_execution_blueprint tasks are context-blind and the AI
                 // generates generic/irrelevant content (e.g., white students for an Indian
                 // gaming site).
-                $blockGoal = (string)($block['goal'] ?? $block['implementation_detail'] ?? '');
+                $blockGoal = $this->firstStageBlockGoal($block);
                 $blockStyleDirection = (string)($block['style_direction'] ?? '');
                 $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
                 // 内联 field_plan → field_content_requirements，避免单独私有方法在合并/缓存不一致时出现 undefined method
@@ -1443,7 +1443,7 @@ class AiSiteBuildTaskService
                         'stage1_style_direction' => $blockStyleDirection,
                         'source_page_type' => $pageType,
                         'source_block_key' => $blockKey,
-                        'page_flow_role' => $this->firstStageBlockTitle($block, $blockKey),
+                        'page_flow_role' => (string)($block['page_flow_role'] ?? ''),
                         'page_goal' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),
                         'block_goal' => $blockGoal,
                         'stage1_visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
@@ -1592,6 +1592,31 @@ class AiSiteBuildTaskService
     /**
      * @param array<string, mixed> $block
      */
+    private function firstStageBlockGoal(array $block): string
+    {
+        foreach ([
+            $block['block_goal'] ?? null,
+            $block['goal'] ?? null,
+            $block['execution_script']['core_copy'] ?? null,
+            $block['execution_script'] ?? null,
+            $block['content_brief'] ?? null,
+            $block['implementation_detail'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value) || \trim((string)$value) === '') {
+                continue;
+            }
+            $cleaned = $this->stripPlanningLanguage(\trim((string)$value));
+            if ($cleaned !== '') {
+                return $cleaned;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
     private function firstStageBlockTitle(array $block, string $fallback): string
     {
         foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
@@ -1650,7 +1675,15 @@ class AiSiteBuildTaskService
                 }
             }
         }
-        foreach ([$block['content'] ?? null, $block['implementation_detail'] ?? null] as $value) {
+        foreach ([
+            $block['content_brief'] ?? null,
+            $block['content'] ?? null,
+            $block['execution_script']['core_copy'] ?? null,
+            $block['execution_script'] ?? null,
+            $block['block_goal'] ?? null,
+            $block['goal'] ?? null,
+            $block['implementation_detail'] ?? null,
+        ] as $value) {
             if (\is_scalar($value) && \trim((string)$value) !== '') {
                 $cleaned = $this->stripPlanningLanguage(\trim((string)$value));
                 if ($cleaned !== '') {
@@ -1735,9 +1768,13 @@ class AiSiteBuildTaskService
         if ($ctas !== []) {
             $plan['ctas'] = $ctas;
         }
-        $impl = $this->stripPlanningLanguage(\trim((string)($block['implementation_detail'] ?? '')));
-        if ($impl !== '' && $impl !== $block['goal'] ?? '') {
+        $blockGoal = $this->firstStageBlockGoal($block);
+        $impl = $this->stripPlanningLanguage(\trim((string)($block['implementation_detail'] ?? $block['execution_script']['core_copy'] ?? $block['execution_script'] ?? '')));
+        if ($impl !== '' && $impl !== $blockGoal) {
             $plan['implementation_notes'] = $impl;
+        }
+        if ($blockGoal !== '') {
+            $plan['block_goal'] = $blockGoal;
         }
         return $plan;
     }
@@ -2261,9 +2298,9 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * Queue watchdog repair path: when a scheduler-owned build queue has already
-     * reached a terminal queue status but build tasks are still not all done, put
-     * every unfinished task back to pending and let the scheduler retry the queue.
+     * Queue-owned retry path: when a scheduler-owned build queue fails the
+     * completion gate at the end of its own execute() cycle, put every unfinished
+     * task back to pending and let the scheduler retry the same queue row.
      *
      * Cancelled tasks stay cancelled so an explicit operator stop is respected.
      *

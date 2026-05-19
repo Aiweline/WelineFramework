@@ -20,6 +20,8 @@ final class QueueCronTest extends TestCase
             \strpos($reconcileSource, 'hasQueueDoneMarker($output, $queue)'),
             'QUEUE_DONE marker must be checked before marking a reconciled queue as error.'
         );
+        self::assertStringContainsString("\$queue->getStatus() === \$queue::status_pending", $reconcileSource);
+        self::assertStringContainsString('队列自身决定重进 pending', $source);
     }
 
     private function extractPrivateMethodSource(string $source, string $methodName): string

@@ -52,6 +52,7 @@ This skill builds or modifies business modules in WelineFramework. It handles mo
 - Frontend module scripts must not use direct `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or equivalent helpers; request interactions must go through Theme `theme.js` and the built-in `weline-api` worker chain.
 - Browser business APIs should be written as `const Api = await Weline.Api.resource('provider')` and then `await Api.operation(params)`; only pass a resource map when aliases or a method subset are needed.
 - Update module README after fixing bugs.
+- When a broad business ask lands in a repo that already has substantial module/page scaffolding, inspect the existing acceptance docs, theme pages, and module matrix first; default to closing the highest-leverage missing chain instead of building a parallel feature set.
 - When data is written successfully but the page still looks unchanged, check the module's template source and page/controller cache path before assuming the provider or database write failed.
 
 # Inputs Required
@@ -75,6 +76,7 @@ This skill builds or modifies business modules in WelineFramework. It handles mo
 - Confirm user-facing text is externalized through i18n.
 - Confirm frontend request interactions are registered through the theme API path and not implemented as direct browser-side HTTP calls.
 - When the task is data-import driven, prove the result with the import command output plus either database evidence or the visible module surface that consumes the imported data.
+- If the user explicitly follows data preparation with "然后导入" or equivalent execution wording, treat the actual import/sync command as required completion rather than optional follow-up.
 
 # Constraints
 

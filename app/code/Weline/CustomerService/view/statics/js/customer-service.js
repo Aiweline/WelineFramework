@@ -128,6 +128,7 @@ const CustomerServiceWidget = (function() {
         
         // 閸掓繂顫愰崠鏈閻樿埖鈧?
         initUIState();
+        updateWidgetLocaleText();
         bindMiniCartLayerState();
     }
     
@@ -146,6 +147,57 @@ const CustomerServiceWidget = (function() {
         if (displayModeSelect) {
             displayModeSelect.value = state.displayMode;
         }
+    }
+
+    function updateWidgetLocaleText() {
+        const textMap = {
+            'cs-title-text': __('欢迎使用客服服务'),
+            'cs-locale-label-text': __('我的语言'),
+            'cs-display-mode-label-text': __('显示模式'),
+            'cs-welcome-title': __('欢迎使用客服服务！'),
+            'cs-welcome-copy': __('请输入您的问题，我们的客服将尽快为您解答。')
+        };
+
+        Object.keys(textMap).forEach((id) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = textMap[id];
+            }
+        });
+
+        const messageInput = document.getElementById('cs-message-input');
+        if (messageInput) {
+            messageInput.placeholder = __('输入消息...');
+        }
+
+        const settingsButton = document.getElementById('cs-settings-btn');
+        if (settingsButton) {
+            settingsButton.title = __('设置');
+        }
+
+        const minimizeButton = document.getElementById('cs-minimize-btn');
+        if (minimizeButton) {
+            minimizeButton.title = __('收起');
+        }
+
+        const displayModeSelect = document.getElementById('cs-display-mode');
+        if (displayModeSelect) {
+            Array.from(displayModeSelect.options).forEach((option) => {
+                switch (option.value) {
+                    case 'translated':
+                        option.textContent = __('仅显示译文');
+                        break;
+                    case 'both':
+                        option.textContent = __('原文+译文');
+                        break;
+                    case 'original':
+                        option.textContent = __('仅显示原文');
+                        break;
+                }
+            });
+        }
+
+        updateStatusIndicator();
     }
 
     function syncMiniCartLayerState() {
@@ -223,6 +275,7 @@ const CustomerServiceWidget = (function() {
                 
                 saveState();
                 initUIState();
+                updateWidgetLocaleText();
                 return true;
             }
             return false;
@@ -741,6 +794,7 @@ const CustomerServiceWidget = (function() {
     async function changeLanguage(locale) {
         state.locale = locale;
         saveState();
+        updateWidgetLocaleText();
 
         const sessionReady = await ensureSessionReady();
         if (!sessionReady || !state.sessionToken) {
