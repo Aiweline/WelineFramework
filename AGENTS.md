@@ -6,7 +6,7 @@ Full AI rules are maintained in one place only:
 
 - `dev/ai/global-constraints.md`（layout 约定见第 8 节；Cursor 同步 `.cursor/rules/layout-files-convention.mdc`）
 
-The Codex global rules are merged into that file as part of the unified repository-wide constraints, including Browser-first frontend validation, no premature test solidification, and the explicit ban on fallback/patch-style code.
+The Codex global rules are merged into that file as part of the unified repository-wide constraints, including Browser-first frontend validation, no premature test solidification, the explicit ban on fallback/patch-style code, and the ban on batch replace / batch script rewrites (edit file-by-file; see §5.1).
 
 For other AIs (GPT/Gemini/Cursor): start with `AI-README.md` -> `AI-ENTRY.md` -> `dev/ai/global-constraints.md`.
 

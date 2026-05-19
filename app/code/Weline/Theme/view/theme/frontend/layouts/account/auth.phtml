@@ -23,23 +23,6 @@
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
-    <style>
-        .account-auth-content {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            min-height: min(760px, calc(100vh - 160px));
-            padding: clamp(2rem, 8vmin, 5rem) 1rem;
-            box-sizing: border-box;
-        }
-
-        .account-auth-content .auth-container {
-            width: 100%;
-            max-width: var(--auth-form-max-width, 30rem);
-            margin: 0 auto;
-        }
-    </style>
     <theme:css>Weline_Theme::theme/frontend/assets/css/auth-form-wflash.css</theme:css>
 </head>
 <body class="account-auth-layout">

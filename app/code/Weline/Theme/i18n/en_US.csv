@@ -1,4 +1,4 @@
-﻿不存在的编译资源类型：%{1}，支持的资源类型：%{2},"Non-existent compiled resource type: %{1}, supported resource type: %{2}"
+不存在的编译资源类型：%{1}，支持的资源类型：%{2},"Non-existent compiled resource type: %{1}, supported resource type: %{2}"
 开始编译器工作。,"Start compiler work."
 编译中...,Compiling...
 编译器工作已完成。,"Compiler Work Completed."
@@ -505,8 +505,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 缺少必要参数,"Missing required parameter"
 CSS/JS提取功能测试,"CSS/JS extraction function test"
 首页,"Home Page"
-上一页,Previous
-下一页,Next
+上一页,"Previous page"
+下一页,"Next page"
 末页,"Last page"
 主题通知事件,"Theme Notification Events"
 "构建预览 URL 事件","Build preview URL event"
@@ -1310,8 +1310,10 @@ Close,Close
 筛选条件,"Filter Conditions"
 关闭筛选,"Close filter"
 分类,Classification
-分页,Pagination
-"第 %{1} 页，共 %{2} 页","Page %{1} of %{2}"
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
 结账,Checkout
 订单提交失败,"Order submission failed"
 很抱歉，您的订单提交失败，请稍后重试。,"We're sorry, your order submission failed. Please try again later."
@@ -1599,7 +1601,7 @@ Close,Close
 商店卡,"Store Card"
 购物积分,"Shopping points"
 货币转换器,"Currency Converter"
-礼品卡,"Gift Cards"
+礼品卡,"Gift Card"
 需要帮助？,"Need assistance?"
 COVID-19和网站,"COVID-19 and website"
 您的账户,"Your account"
@@ -1626,6 +1628,14 @@ Weline,Weline
 选择配送地址,"Choose delivery address"
 配送至,"Deliver to"
 中国大陆,"China Mainland"
+选择分类,"Choose category"
+全部分类,"All categories"
+电子产品,Electronics
+服装服饰,"Clothing & Accessories"
+家居用品,"Home & Living"
+运动户外,"Sports & Outdoors"
+图书音像,"Books & Media"
+食品饮料,"Food & Drinks"
 搜索建议,"Search suggestions"
 我的,My
 我的菜单,"My menu"
@@ -1649,13 +1659,14 @@ CNY,CNY
 总计,Total
 查看购物车,"View Shopping Cart"
 去结算,"Proceed to Checkout"
+打开所有类别菜单,"Open all categories menu"
 更多,More
 今日特价,"Today's Deals"
-会员视频,"Prime Video"
+会员视频,会员视频
 礼品心愿单,"Gift List"
 客户服务,"Customer Service"
+关闭菜单,"Close menu"
 分类导航,"Category Navigation"
-电子产品,Electronics
 手机通讯,"Mobile Phones & Communication"
 智能手机,Smartphones
 功能手机,"Feature phones"
@@ -1699,7 +1710,6 @@ Soundbar,Soundbar
 运动相机,"Action camera"
 游戏主机,"Game console"
 游戏配件,"Gaming accessories"
-服装服饰,"Clothing & Accessories"
 男装,"Men's clothing"
 衬衫,Shirt
 T恤,T-shirt
@@ -1741,7 +1751,6 @@ Polo衫,"Polo shirt"
 篮球鞋,"Basketball shoes"
 户外装备,"Outdoor Gear"
 露营装备,"Camping Gear"
-家居用品,"Home & Living"
 家具,Furniture
 沙发,Sofa
 沙发床,"Sofa bed"
@@ -1775,13 +1784,6 @@ Polo衫,"Polo shirt"
 灯具,"Lighting fixtures"
 镜子,Mirror
 绿植,"Green plants"
-运动户外,"Sports & Outdoors"
-图书音像,"Books & Media"
-食品饮料,"Food & Drinks"
-选择分类,"Choose category"
-全部分类,"All categories"
-打开所有类别菜单,"Open all categories menu"
-关闭菜单,"Close menu"
 分页导航,"Pagination navigation"
 NEW,NEW
 SALE,SALE
@@ -1910,6 +1912,8 @@ Cookie政策,"Cookie Policy"
 最后一页,"Last page"
 热销产品,"Hot Selling Products"
 最受欢迎的商品,"Most popular products"
+"热销产品 %d","热销产品 %d"
+HOT,HOT
 快速查看,"Quick View"
 已售,Sold
 经常一起购买,"Frequently bought together"
@@ -1930,9 +1934,9 @@ Cookie政策,"Cookie Policy"
 上架,"On the shelves"
 查看全部新品,"View all new products"
 最近浏览,"Recently viewed"
+"浏览过的产品 %d","浏览过的产品 %d"
 相关产品,"Related products"
-上一组,上一组
-下一组,下一组
+"相关产品 %d","相关产品 %d"
 您可能还喜欢,"You may also like"
 "升级产品 %d","升级产品 %d"
 更大容量,"Larger capacity"

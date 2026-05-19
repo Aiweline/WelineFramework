@@ -32,19 +32,19 @@ $ordersSectionUrl = '/customer/account/index#orders';
 <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
     <div class="flex items-center justify-between gap-4">
         <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('订单概览') ?></p>
-            <h3 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('最近订单') ?></h3>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Order Snapshot') ?></p>
+            <h3 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Recent Orders') ?></h3>
         </div>
-        <a href="<?= htmlspecialchars($ordersSectionUrl, ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-semibold text-primary hover:underline" data-account-nav-link="true" data-section="orders"><?= __('查看全部') ?></a>
+        <a href="<?= htmlspecialchars($ordersSectionUrl, ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-semibold text-primary hover:underline" data-account-nav-link="true" data-section="orders"><?= __('View All') ?></a>
     </div>
 
     <div class="mt-5 grid grid-cols-2 gap-3">
         <div class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
-            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('订单总数') ?></p>
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('Total') ?></p>
             <p class="mt-2 text-2xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $orderCount ?></p>
         </div>
         <div class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
-            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('待支付') ?></p>
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('Unpaid') ?></p>
             <p class="mt-2 text-2xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $unpaidCount ?></p>
         </div>
     </div>
@@ -64,14 +64,14 @@ $ordersSectionUrl = '/customer/account/index#orders';
                         <span class="text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($status, ENT_QUOTES) ?></span>
                     </div>
                     <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                        <?= __('订单金额') ?>: <?= $this->formatPrice((float) ($order['total'] ?? 0)) ?>
+                        <?= __('Total') ?>: <?= $this->formatPrice((float) ($order['total'] ?? 0)) ?>
                     </p>
                 </a>
             <?php endforeach; ?>
         </div>
     <?php else: ?>
         <div class="mt-5 rounded-2xl border border-dashed border-border-light bg-background-light px-4 py-5 text-sm text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
-            <?= __('您还没有订单，下单后可在这里查看记录。') ?>
+            <?= __('No orders yet. Place your first order to see activity here.') ?>
         </div>
     <?php endif; ?>
 </article>

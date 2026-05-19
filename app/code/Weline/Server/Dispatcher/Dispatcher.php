@@ -252,6 +252,26 @@ class Dispatcher
      */
     private int $controlPort = 0;
     private int $lastAppliedWorkerPoolSnapshotVersion = 0;
+    private int $currentRouteVersion = 0;
+
+    /**
+     * B-i 阶段：观察到的最新版本化路由表（SET_ROUTE_TABLE）版本号。
+     * 仅用于幂等去重 + 观测，**不参与业务路由源切换**（业务仍以 SET_WORKER_POOL 为权威）。
+     */
+    private int $observedRouteTableVersion = 0;
+
+    /**
+     * B-i 阶段：观察到的最新版本化路由表 checksum，用于幂等去重。
+     */
+    private string $observedRouteTableChecksum = '';
+
+    /**
+     * B-ii 阶段灰度开关：true=SET_ROUTE_TABLE 成为业务路由权威，SET_WORKER_POOL/ADD_WORKER 降级为兼容信号；
+     * false=维持 B-i 行为（SET_WORKER_POOL 仍是权威，SET_ROUTE_TABLE 仅观测）。
+     *
+     * 由环境变量 WLS_ROUTE_TABLE_AS_AUTHORITY=1 开启，默认关闭，可热回退。
+     */
+    private bool $routeTableAsAuthority = false;
     
     /**
      * 是否收到 shutdown 命令
@@ -408,9 +428,37 @@ class Dispatcher
         
         // 初始化硬编码维护页（纯内存，最后一道防线）
         $this->fallbackMaintenancePage = $this->buildFriendlyStartupMaintenancePage();
-        
+
+        // B-ii 灰度开关：从环境变量解析路由表权威性（默认关闭，可热回退）
+        $this->routeTableAsAuthority = self::resolveRouteTableAuthorityFromEnv();
+        if ($this->routeTableAsAuthority) {
+            $this->log(
+                'B-ii: SET_ROUTE_TABLE 已被指定为业务路由权威源（WLS_ROUTE_TABLE_AS_AUTHORITY=1），'
+                . 'SET_WORKER_POOL / ADD_WORKER 降级为兼容信号。',
+                'WARN'
+            );
+        }
+
         // 注册信号处理
         $this->registerSignals();
+    }
+
+    /**
+     * B-ii 灰度开关解析：从环境变量 WLS_ROUTE_TABLE_AS_AUTHORITY 读取。
+     *
+     * 单独抽成静态方法便于单元测试（不必构造完整的 Dispatcher 实例）。
+     *
+     * 接受的 truthy 值：1 / true / yes / on（不区分大小写，前后空格容忍）。
+     * 其它一律视为 false（包括空字符串、0、false、no、off 等）。
+     */
+    public static function resolveRouteTableAuthorityFromEnv(): bool
+    {
+        $raw = \getenv('WLS_ROUTE_TABLE_AS_AUTHORITY');
+        if ($raw === false) {
+            return false;
+        }
+        $normalized = \strtolower(\trim((string)$raw));
+        return \in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
     /**
@@ -1367,6 +1415,96 @@ class Dispatcher
     }
 
     /**
+     * B-ii 共享 helper：把一份"维护池"端口列表同步到 PassthroughCore（含删除多余、新增缺失），
+     * 并按 ROLE_MAINTENANCE 回 worker_pool_ack。SET_WORKER_POOL / SET_ROUTE_TABLE 两种消息类型
+     * 都通过本方法落地维护池切换，避免重复实现。
+     *
+     * @param int[] $rawPorts 未规范化的维护池端口集合
+     * @param string $source  来源标识（仅用于日志）
+     */
+    private function applyMaintenanceWorkerPoolSync(array $rawPorts, string $source): void
+    {
+        $normalizedPorts = [];
+        foreach ($rawPorts as $port) {
+            $p = (int)$port;
+            if ($p > 0) {
+                $normalizedPorts[$p] = $p;
+            }
+        }
+        $normalizedPorts = \array_values($normalizedPorts);
+
+        // 维护池只更新维护端口，不得覆盖业务 worker 池，
+        // 否则会出现业务流量在「维护/正常」之间抖动。
+        $currentMaintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+        foreach ($currentMaintenancePorts as $currentPort) {
+            if (!\in_array((int)$currentPort, $normalizedPorts, true)) {
+                $this->passthroughCore->removeMaintenanceWorkerPort((int)$currentPort);
+            }
+        }
+        foreach ($normalizedPorts as $port) {
+            $result = $this->passthroughCore->addMaintenanceWorkerPort((int)$port);
+            if (!$result['success']) {
+                $this->log("{$source} 维护端口注册失败: {$port} - {$result['error']}", 'WARN');
+            }
+        }
+        if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+            $currentMaintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+            foreach ($normalizedPorts as $port) {
+                $p = (int)$port;
+                $this->ipcClient->send(ControlMessage::workerPoolAck(
+                    $p,
+                    \in_array($p, $currentMaintenancePorts, true),
+                    ControlMessage::ROLE_MAINTENANCE
+                ));
+            }
+        }
+        $this->log(
+            "{$source}（maintenance）: 维护端口已同步，端口数: " . \count($normalizedPorts),
+            'INFO'
+        );
+    }
+
+    /**
+     * B-ii 共享 helper：业务 Worker 池"全量切换"。
+     *
+     * 由 SET_WORKER_POOL（flag=false 时）或 SET_ROUTE_TABLE（flag=true 时）调用，
+     * 行为完全一致——内部仍然委托 acceptWorkerPoolFromMasterReady 完成路由切换。
+     *
+     * @param int[]                              $rawPorts
+     * @param array<int, array<string, mixed>>   $workerDescriptors
+     */
+    private function applyBusinessWorkerPoolSwitch(
+        array $rawPorts,
+        array $workerDescriptors,
+        string $source,
+        int $version
+    ): void {
+        // 合并 workers[] 中标记 ready 的端口（保持与原 SET_WORKER_POOL 行为一致）
+        $ports = $rawPorts;
+        if ($workerDescriptors !== []) {
+            foreach ($workerDescriptors as $worker) {
+                if ((string)($worker['state'] ?? 'ready') !== 'ready') {
+                    continue;
+                }
+                $p = (int)($worker['port'] ?? 0);
+                if ($p > 0) {
+                    $ports[] = $p;
+                }
+            }
+            $ports = \array_values(\array_unique(\array_map('intval', $ports)));
+        }
+
+        $this->acceptWorkerPoolFromMasterReady($ports, $workerDescriptors, $source);
+        if ($version > 0) {
+            $this->currentRouteVersion = $version;
+        }
+        $this->log(
+            "{$source} installed: candidates=" . \count($ports) . ', role=' . ControlMessage::ROLE_WORKER . ', version=' . $version,
+            'INFO'
+        );
+    }
+
+    /**
      * @param int[] $ports
      * @param array<int, array<string, mixed>> $workers
      */
@@ -1456,6 +1594,186 @@ class Dispatcher
         return $normalized;
     }
 
+    /**
+     * B-ii 阶段：当 routeTableAsAuthority=true 时，由本方法接管业务路由源切换。
+     *
+     * 与 observation 路径相比：
+     * - 同样做 checksum 校验 + 版本号去重；
+     * - 当 status=applied 时，**真正调用 applyMaintenanceWorkerPoolSync / applyBusinessWorkerPoolSwitch**；
+     * - duplicate / rejected 走纯观测路径，不改路由。
+     *
+     * 回 ROUTE_TABLE_ACK 时携带真实 status。
+     */
+    private function handleSetRouteTableAsAuthority(array $msg): void
+    {
+        $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
+        $routeVersion = (int)($msg['route_version'] ?? 0);
+        $remoteChecksum = (string)($msg['checksum'] ?? '');
+        $epoch = (int)($msg['epoch'] ?? 0);
+        $traceId = (string)($msg['trace_id'] ?? '');
+
+        $rawPorts = \is_array($msg['ports'] ?? null) ? $msg['ports'] : [];
+        $normalizedPorts = [];
+        foreach ($rawPorts as $port) {
+            $p = (int)$port;
+            if ($p > 0) {
+                $normalizedPorts[$p] = $p;
+            }
+        }
+        $normalizedPorts = \array_values($normalizedPorts);
+        \sort($normalizedPorts, \SORT_NUMERIC);
+
+        $normalizedWorkers = $this->extractWorkerDescriptors($msg, $role);
+        $localChecksum = ControlMessage::computeRouteTableChecksum(
+            $role,
+            $routeVersion,
+            $epoch,
+            $normalizedPorts,
+            $normalizedWorkers
+        );
+
+        $status = 'applied';
+        $reason = '';
+
+        // 版本号去重：与业务路由源 currentRouteVersion 比较（B-ii 已统一以此为权威）
+        if ($role === ControlMessage::ROLE_WORKER && $routeVersion > 0 && $routeVersion <= $this->currentRouteVersion) {
+            $status = 'duplicate';
+            $reason = 'old_or_same_version';
+        } elseif ($routeVersion > 0
+            && $routeVersion === $this->observedRouteTableVersion
+            && $remoteChecksum !== ''
+            && $remoteChecksum === $this->observedRouteTableChecksum) {
+            $status = 'duplicate';
+            $reason = 'same_version_and_checksum';
+        } elseif ($remoteChecksum !== '' && $localChecksum !== $remoteChecksum) {
+            $status = 'rejected';
+            $reason = 'checksum_mismatch';
+        }
+
+        if ($status === 'applied') {
+            // 记录新版本（无论 role 类型）
+            $this->observedRouteTableVersion = $routeVersion;
+            $this->observedRouteTableChecksum = $remoteChecksum !== '' ? $remoteChecksum : $localChecksum;
+
+            // 按 role 走对应 helper（与 SET_WORKER_POOL 完全一致的行为）
+            if ($role === ControlMessage::ROLE_MAINTENANCE) {
+                $this->applyMaintenanceWorkerPoolSync($normalizedPorts, '收到 SET_ROUTE_TABLE');
+            } else {
+                $this->applyBusinessWorkerPoolSwitch(
+                    $normalizedPorts,
+                    $normalizedWorkers,
+                    'SET_ROUTE_TABLE',
+                    $routeVersion
+                );
+            }
+        }
+
+        $this->log(\sprintf(
+            'SET_ROUTE_TABLE %s (B-ii authority): role=%s, version=%d%s, ports=%d, workers=%d, checksum=%s',
+            $status,
+            $role,
+            $routeVersion,
+            $reason !== '' ? ', reason=' . $reason : '',
+            \count($normalizedPorts),
+            \count($normalizedWorkers),
+            $remoteChecksum !== '' ? \substr($remoteChecksum, 0, 12) : 'n/a'
+        ), $status === 'rejected' ? 'WARN' : 'INFO');
+
+        if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+            $this->ipcClient->send(ControlMessage::routeTableAck(
+                $routeVersion,
+                $remoteChecksum !== '' ? $remoteChecksum : $localChecksum,
+                $status,
+                $role,
+                $epoch,
+                $reason,
+                $traceId
+            ));
+        }
+    }
+
+    /**
+     * B-i 阶段：处理 Master 推送的版本化路由表（SET_ROUTE_TABLE）。
+     *
+     * 当前阶段（B-i / routeTableAsAuthority=false）：
+     * - 仅观测（记录版本号 + checksum + workers 概览）；
+     * - 校验 checksum 与本地基于消息字段重算的 checksum 一致；
+     * - 回 ROUTE_TABLE_ACK（applied / duplicate / rejected）告知 Master；
+     * - **不切换业务路由源**（SET_WORKER_POOL 仍为唯一权威）。
+     *
+     * B-ii 阶段（routeTableAsAuthority=true）走 handleSetRouteTableAsAuthority。
+     */
+    private function handleSetRouteTableObservation(array $msg): void
+    {
+        $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
+        $routeVersion = (int)($msg['route_version'] ?? 0);
+        $remoteChecksum = (string)($msg['checksum'] ?? '');
+        $epoch = (int)($msg['epoch'] ?? 0);
+        $traceId = (string)($msg['trace_id'] ?? '');
+
+        $rawPorts = \is_array($msg['ports'] ?? null) ? $msg['ports'] : [];
+        $normalizedPorts = [];
+        foreach ($rawPorts as $port) {
+            $p = (int)$port;
+            if ($p > 0) {
+                $normalizedPorts[$p] = $p;
+            }
+        }
+        $normalizedPorts = \array_values($normalizedPorts);
+        \sort($normalizedPorts, \SORT_NUMERIC);
+
+        $normalizedWorkers = $this->extractWorkerDescriptors($msg, $role);
+
+        $localChecksum = ControlMessage::computeRouteTableChecksum(
+            $role,
+            $routeVersion,
+            $epoch,
+            $normalizedPorts,
+            $normalizedWorkers
+        );
+
+        $status = 'applied';
+        $reason = '';
+
+        if ($routeVersion > 0
+            && $routeVersion === $this->observedRouteTableVersion
+            && $remoteChecksum !== ''
+            && $remoteChecksum === $this->observedRouteTableChecksum) {
+            $status = 'duplicate';
+            $reason = 'same_version_and_checksum';
+        } elseif ($remoteChecksum !== '' && $localChecksum !== $remoteChecksum) {
+            $status = 'rejected';
+            $reason = 'checksum_mismatch';
+        } else {
+            // applied（仅观测，未切换路由源）
+            $this->observedRouteTableVersion = $routeVersion;
+            $this->observedRouteTableChecksum = $remoteChecksum !== '' ? $remoteChecksum : $localChecksum;
+        }
+
+        $this->log(\sprintf(
+            'SET_ROUTE_TABLE observed (B-i: routing source NOT switched): role=%s, version=%d, status=%s%s, ports=%d, workers=%d, checksum=%s',
+            $role,
+            $routeVersion,
+            $status,
+            $reason !== '' ? ', reason=' . $reason : '',
+            \count($normalizedPorts),
+            \count($normalizedWorkers),
+            $remoteChecksum !== '' ? \substr($remoteChecksum, 0, 12) : 'n/a'
+        ), $status === 'rejected' ? 'WARN' : 'INFO');
+
+        if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+            $this->ipcClient->send(ControlMessage::routeTableAck(
+                $routeVersion,
+                $remoteChecksum !== '' ? $remoteChecksum : $localChecksum,
+                $status,
+                $role,
+                $epoch,
+                $reason,
+                $traceId
+            ));
+        }
+    }
+
     private function handleIpcMessage(array $msg): void
     {
         $type = $msg['type'] ?? '';
@@ -1504,6 +1822,24 @@ class Dispatcher
                 $ports = $msg['ports'] ?? [];
                 $role = $msg['role'] ?? ControlMessage::ROLE_WORKER;
                 $workerDescriptors = $this->extractWorkerDescriptors($msg, (string)$role);
+
+                // B-ii: 当 SET_ROUTE_TABLE 已被声明为权威源时，ADD_WORKER 降级为兼容信号。
+                // 仅日志 + 必要时回 worker_pool_ack（让 Master 端 ack 闭环不超时），不再入池。
+                if ($this->routeTableAsAuthority) {
+                    $this->log(
+                        'ADD_WORKER 降级为兼容信号（B-ii: route_table_as_authority=on）: '
+                        . \json_encode($ports) . ' role: ' . $role,
+                        'DEBUG'
+                    );
+                    if ($role === ControlMessage::ROLE_WORKER && \is_array($ports)) {
+                        $this->sendWorkerPoolAckForPorts(
+                            \array_values(\array_filter(\array_map('intval', $ports), static fn(int $p) => $p > 0)),
+                            $workerDescriptors
+                        );
+                    }
+                    break;
+                }
+
                 $this->log('收到 ADD_WORKER 消息（已入队异步入池）: ' . \json_encode($ports) . ' role: ' . $role, 'INFO');
                 $norm = [];
                 foreach (\is_array($ports) ? $ports : [] as $port) {
@@ -1581,62 +1917,46 @@ class Dispatcher
                 $ports = $msg['ports'] ?? [];
                 $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
                 $workerDescriptors = $this->extractWorkerDescriptors($msg, $role);
+                $version = (int)($msg['version'] ?? 0);
+
+                // B-ii: 当 SET_ROUTE_TABLE 已被声明为权威源时，SET_WORKER_POOL 降级为兼容信号。
+                // 仅日志 + 必要时回 worker_pool_ack（B-iii 才彻底拆除 ack 闭环），不再切换业务路由源。
+                if ($this->routeTableAsAuthority) {
+                    $this->log(
+                        'SET_WORKER_POOL 降级为兼容信号（B-ii: route_table_as_authority=on）: role='
+                        . $role . ', version=' . $version . ', ports=' . \count(\is_array($ports) ? $ports : []),
+                        'DEBUG'
+                    );
+                    if ($role === ControlMessage::ROLE_WORKER && \is_array($ports)) {
+                        // 维持 ack 闭环（让 Master 端 worker_pool_ack 路径不超时），但不应用入池
+                        $this->sendWorkerPoolAckForPorts(
+                            \array_values(\array_filter(\array_map('intval', $ports), static fn(int $p) => $p > 0)),
+                            $workerDescriptors
+                        );
+                    }
+                    break;
+                }
+
+                if ($role === ControlMessage::ROLE_WORKER && $version > 0 && $version <= $this->currentRouteVersion) {
+                    $this->log("SET_WORKER_POOL old version ignored: v{$version} <= current v{$this->currentRouteVersion}", 'DEBUG');
+                    break;
+                }
+
                 if (\is_array($ports)) {
                     if ($role === ControlMessage::ROLE_MAINTENANCE) {
-                        $normalizedPorts = [];
-                        foreach ($ports as $port) {
-                            $p = (int)$port;
-                            if ($p > 0) {
-                                $normalizedPorts[$p] = $p;
-                            }
-                        }
-                        $normalizedPorts = \array_values($normalizedPorts);
-
-                        // maintenance 池只更新维护端口，不得覆盖业务 worker 池，
-                        // 否则会出现业务流量在“维护/正常”之间抖动。
-                        $currentMaintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
-                        foreach ($currentMaintenancePorts as $currentPort) {
-                            if (!\in_array((int)$currentPort, $normalizedPorts, true)) {
-                                $this->passthroughCore->removeMaintenanceWorkerPort((int)$currentPort);
-                            }
-                        }
-                        foreach ($normalizedPorts as $port) {
-                            $result = $this->passthroughCore->addMaintenanceWorkerPort((int)$port);
-                            if (!$result['success']) {
-                                $this->log("SET_WORKER_POOL 维护端口注册失败: {$port} - {$result['error']}", 'WARN');
-                            }
-                        }
-                        if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
-                            $currentMaintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
-                            foreach ($normalizedPorts as $port) {
-                                $p = (int) $port;
-                                $this->ipcClient->send(ControlMessage::workerPoolAck(
-                                    $p,
-                                    \in_array($p, $currentMaintenancePorts, true),
-                                    ControlMessage::ROLE_MAINTENANCE
-                                ));
-                            }
-                        }
-                        $this->log(
-                            '收到 SET_WORKER_POOL（maintenance）: 维护端口已同步，端口数: ' . \count($normalizedPorts),
-                            'INFO'
-                        );
+                        $this->applyMaintenanceWorkerPoolSync($ports, '收到 SET_WORKER_POOL');
                         break;
                     }
-                    if ($workerDescriptors !== []) {
-                        foreach ($workerDescriptors as $worker) {
-                            if ((string)($worker['state'] ?? 'ready') !== 'ready') {
-                                continue;
-                            }
-                            $p = (int)($worker['port'] ?? 0);
-                            if ($p > 0) {
-                                $ports[] = $p;
-                            }
-                        }
-                        $ports = \array_values(\array_unique(\array_map('intval', $ports)));
-                    }
-                    $this->acceptWorkerPoolFromMasterReady($ports, $workerDescriptors, 'SET_WORKER_POOL');
-                    $this->log('收到 SET_WORKER_POOL（信任 Master READY 直接入池），候选端口数: ' . \count($ports) . ', role: ' . $role, 'INFO');
+                    $this->applyBusinessWorkerPoolSwitch($ports, $workerDescriptors, 'SET_WORKER_POOL', $version);
+                }
+                break;
+
+            case ControlMessage::TYPE_SET_ROUTE_TABLE:
+                // B-i: 仅观测；B-ii（routeTableAsAuthority=on）: 接管业务路由源。
+                if ($this->routeTableAsAuthority) {
+                    $this->handleSetRouteTableAsAuthority($msg);
+                } else {
+                    $this->handleSetRouteTableObservation($msg);
                 }
                 break;
 

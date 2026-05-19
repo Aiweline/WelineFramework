@@ -54,17 +54,6 @@
 设置语言失败：%{1},"Đặt ngôn ngữ thất bại: %{1}"
 客服消息翻译,"Dịch tin nhắn dịch vụ khách hàng"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"Mô-đun dịch vụ khách hàng yêu cầu dịch vụ dịch thuật thông qua sự kiện này. Dữ liệu sự kiện bao gồm văn bản cần dịch"
-"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
-"Session and message content are required.","Session and message content are required."
-"Session ID is required.","Session ID is required."
-"Language code is required.","Language code is required."
-"Language updated.","Language updated."
-"Please enter a valid email address.","Please enter a valid email address."
-"Session token is required.","Session token is required."
-"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
-"Verification email has been sent.","Verification email has been sent."
-"Customer Service Query","Customer Service Query"
-"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","Dịch vụ khách hàng - Xác minh liên kết email"
 客服系统,"Hệ thống dịch vụ khách hàng"
 客服服务,"Dịch vụ khách hàng"
@@ -72,6 +61,8 @@
 设置,"Cài đặt"
 收起,"Thu gọn"
 我的语言,"Ngôn ngữ của tôi"
+简体中文,"Trung giản thể"
+繁體中文,"Trung phồn thể"
 显示模式,"Chế độ hiển thị"
 仅显示译文,"Chỉ hiển thị bản dịch"
 原文+译文,"Nguyên bản + bản dịch"
@@ -113,8 +104,8 @@
 分钟,phút
 最长,"Dài nhất"
 秒,giây
-欢迎使用客服服务,欢迎使用客服服务
 客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
+欢迎使用客服服务,欢迎使用客服服务
 鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服","Dịch vụ khách hàng AI"
 鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
@@ -168,7 +159,6 @@ ID,ID
 启用客服服务,"Bật dịch vụ khách hàng"
 启用,Bật
 默认客服语言,"Ngôn ngữ đại lý mặc định"
-简体中文,"Trung giản thể"
 English,English
 默认客户语言,"Ngôn ngữ khách hàng mặc định"
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","Khi không có đại lý dịch vụ khách hàng trực tuyến"

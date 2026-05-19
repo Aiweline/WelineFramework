@@ -15,6 +15,7 @@
 - **Efficiency Rules**: `dev/ai/rules/efficiency_rules.md`
 
 ## Critical Constraints
+- NEVER batch-replace or run one-off scripts to mechanically rewrite multiple source files; edit file-by-file with context review (see `dev/ai/global-constraints.md` §5.1)
 - NEVER edit `generated/` directory
 - NEVER use `routes.xml` (routing is auto-discovered)
 - NEVER use JS `alert()/confirm()` (use BackendToast/BackendConfirm)

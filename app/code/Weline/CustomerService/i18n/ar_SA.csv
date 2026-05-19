@@ -54,17 +54,6 @@
 设置语言失败：%{1},"فشل تعيين اللغة: %{1}"
 客服消息翻译,"ترجمة رسائل خدمة العملاء"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"يطلب وحدة خدمة العملاء خدمة الترجمة من خلال هذا الحدث. بيانات الحدث تتضمن النص المراد ترجمته واللغة المصدر واللغة الهدف وما إلى ذلك. يمكن لوحدات الترجمة الاستماع إلى هذا الحدث وتقديم خدمات الترجمة."
-"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
-"Session and message content are required.","Session and message content are required."
-"Session ID is required.","Session ID is required."
-"Language code is required.","Language code is required."
-"Language updated.","Language updated."
-"Please enter a valid email address.","Please enter a valid email address."
-"Session token is required.","Session token is required."
-"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
-"Verification email has been sent.","Verification email has been sent."
-"Customer Service Query","Customer Service Query"
-"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","خدمة العملاء - التحقق من ربط البريد الإلكتروني"
 客服系统,"نظام خدمة العملاء"
 客服服务,"خدمة العملاء"
@@ -72,6 +61,8 @@
 设置,الإعدادات
 收起,تصغير
 我的语言,لغتي
+简体中文,"الصينية المبسطة"
+繁體中文,"الصينية التقليدية"
 显示模式,"وضع العرض"
 仅显示译文,"الترجمة فقط"
 原文+译文,"الأصل + الترجمة"
@@ -113,8 +104,8 @@
 分钟,دقائق
 最长,الأطول
 秒,ثواني
-欢迎使用客服服务,欢迎使用客服服务
 客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
+欢迎使用客服服务,欢迎使用客服服务
 鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服","خدمة العملاء بالذكاء الاصطناعي"
 鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
@@ -168,7 +159,6 @@ ID,المعرف
 启用客服服务,"تفعيل خدمة العملاء"
 启用,تفعيل
 默认客服语言,"لغة الوكيل الافتراضية"
-简体中文,"الصينية المبسطة"
 English,English
 默认客户语言,"لغة العميل الافتراضية"
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","عندما لا يكون هناك وكلاء خدمة عملاء متاحين، يمكن تفعيل الذكاء الاصطناعي للرد تلقائيًا على رسائل العملاء."

@@ -241,13 +241,9 @@ class ControllerFetchFileAfter implements ObserverInterface
         $currentContentTemplate = $contentTemplate;
         $currentContentHtml = $contentHtml;
         $renderedHtml = $contentHtml;
-        $criticalLayoutTemplates = [];
 
         try {
             for ($depth = 0; $depth < self::MAX_LAYOUT_WRAP_DEPTH; $depth++) {
-                if (!in_array($currentLayoutTemplate, $criticalLayoutTemplates, true)) {
-                    $criticalLayoutTemplates[] = $currentLayoutTemplate;
-                }
                 $contentRenderKey = $this->primeTemplateData(
                     $template,
                     $currentLayoutTemplate,
@@ -264,26 +260,12 @@ class ControllerFetchFileAfter implements ObserverInterface
                 if ($traceEnabled) {
                     RequestLifecycleTrace::pushCurrentParent($layoutFetchSpan);
                 }
-                $previousCriticalLayoutTemplate = $template->getData('layoutCriticalCurrentLayoutTemplate');
-                $previousCriticalLayoutTemplates = $template->getData('layoutCriticalLayoutTemplates');
-                $template->setData('layoutCriticalCurrentLayoutTemplate', $currentLayoutTemplate);
-                $template->setData('layoutCriticalLayoutTemplates', $criticalLayoutTemplates);
                 try {
                     $renderedHtml = (string)$template->fetch(
                         $currentLayoutTemplate,
                         $this->buildLayoutFetchData($currentLayoutTemplate, $currentContentHtml, $contentRenderKey)
                     );
                 } finally {
-                    if ($previousCriticalLayoutTemplate === null) {
-                        $template->unsetData('layoutCriticalCurrentLayoutTemplate');
-                    } else {
-                        $template->setData('layoutCriticalCurrentLayoutTemplate', $previousCriticalLayoutTemplate);
-                    }
-                    if ($previousCriticalLayoutTemplates === null) {
-                        $template->unsetData('layoutCriticalLayoutTemplates');
-                    } else {
-                        $template->setData('layoutCriticalLayoutTemplates', $previousCriticalLayoutTemplates);
-                    }
                     if ($traceEnabled) {
                         RequestLifecycleTrace::popCurrentParent();
                         RequestLifecycleTrace::recordSpan(

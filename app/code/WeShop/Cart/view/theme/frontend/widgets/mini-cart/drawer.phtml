@@ -75,7 +75,7 @@ try {
                     (<span data-cart-count><?= $cartCount ?></span>)
                 </span>
             </h3>
-            <button type="button" class="mini-cart-drawer__close" data-action="close-mini-cart" aria-label="<?= __('Close cart') ?>">
+            <button type="button" class="mini-cart-drawer__close" data-action="close-mini-cart" aria-label="<?= __('关闭购物车') ?>">
                 <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('close') ?></span>
             </button>
         </div>
@@ -95,7 +95,7 @@ try {
                     $itemId = (int)($item['cart_id'] ?? $item['id'] ?? 0);
                     $productId = (int)($item['product_id'] ?? 0);
                     $product = is_array($item['product'] ?? null) ? $item['product'] : [];
-                    $productName = (string)($product['name'] ?? __('Product') . ' #' . $productId);
+                    $productName = (string)($product['name'] ?? __('商品') . ' #' . $productId);
                     $productImage = (string)($product['image'] ?? '');
                     $price = (float)($item['price'] ?? 0);
                     $quantity = max(1, (int)($item['quantity'] ?? $item['qty'] ?? 1));
@@ -112,16 +112,16 @@ try {
                             <a href="#" class="mini-cart-item__name"><?= htmlspecialchars($productName) ?></a>
                             <div class="mini-cart-item__price"><?= $this->formatPrice($price) ?></div>
                             <div class="mini-cart-item__qty">
-                                <button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="<?= $itemId ?>" aria-label="<?= __('Decrease quantity') ?>">
+                                <button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="<?= $itemId ?>" aria-label="<?= __('减少数量') ?>">
                                     <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('minus') ?></span>
                                 </button>
                                 <span class="mini-cart-item__qty-value"><?= $quantity ?></span>
-                                <button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="<?= $itemId ?>" aria-label="<?= __('Increase quantity') ?>">
+                                <button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="<?= $itemId ?>" aria-label="<?= __('增加数量') ?>">
                                     <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('plus') ?></span>
                                 </button>
                             </div>
                         </div>
-                        <button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="<?= $itemId ?>" aria-label="<?= __('Remove item') ?>">
+                        <button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="<?= $itemId ?>" aria-label="<?= __('删除商品') ?>">
                             <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('trash') ?></span>
                         </button>
                     </div>

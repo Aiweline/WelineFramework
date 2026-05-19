@@ -464,90 +464,7 @@ class PcController extends Core
         // 触发Weline_Framework_Controller::fetch_file_after事件
         $eventData->setData('content', $content);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
-        $rendered = $eventData->getData('content');
-        if (!$this->isEmptyTemplateRender($rendered)) {
-            return $rendered;
-        }
-
-        return $this->retryEmptyTemplateRender(
-            (string)$fileName,
-            $eventData,
-            is_string($content) ? $content : '',
-            is_string($content) && $content !== '' ? 'after_event_empty' : 'template_empty'
-        );
-    }
-
-    private function retryEmptyTemplateRender(
-        string $fileName,
-        DataObject $eventData,
-        string $firstContent,
-        string $stage
-    ): mixed {
-        $this->logEmptyTemplateRender($stage, $fileName, $firstContent);
-
-        \Weline\Framework\Runtime\FiberOutputBuffer::ensureInstalled('controller_fetch_retry');
-        $retryContent = (string)$this->getTemplate()->fetch($fileName);
-        $retryEventData = new DataObject([
-            'fileName' => $fileName,
-            'content' => $retryContent,
-            'contentTemplate' => (string)($eventData->getData('contentTemplate') ?: $fileName),
-            'controller' => $this,
-            'layoutType' => $this?->layoutType,
-        ]);
-        $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $retryEventData);
-        $retryRendered = $retryEventData->getData('content');
-        if (!$this->isEmptyTemplateRender($retryRendered)) {
-            return $retryRendered;
-        }
-
-        if ($retryContent !== '') {
-            $this->logEmptyTemplateRender('retry_after_event_empty_fallback_content', $fileName, $retryContent);
-            $this->setFallbackHtmlContentType();
-            return $retryContent;
-        }
-
-        return $retryRendered;
-    }
-
-    private function isEmptyTemplateRender(mixed $content): bool
-    {
-        return is_string($content) && $content === '';
-    }
-
-    private function setFallbackHtmlContentType(): void
-    {
-        try {
-            if (isset($this->request)) {
-                $this->request->getResponse()->setHeader('Content-Type', 'text/html; charset=utf-8');
-            }
-        } catch (\Throwable) {
-        }
-    }
-
-    private function logEmptyTemplateRender(string $stage, string $fileName, string $content): void
-    {
-        if (!class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
-            return;
-        }
-
-        try {
-            \Weline\Server\Log\WlsLogger::warning_(
-                '[ControllerEmptyTemplateRender] '
-                . (string)json_encode([
-                    'stage' => $stage,
-                    'controller' => static::class,
-                    'file' => $fileName,
-                    'uri' => function_exists('w_env_request_uri') ? (string)w_env_request_uri() : (string)($_SERVER['REQUEST_URI'] ?? ''),
-                    'request_id' => \Weline\Framework\Runtime\RequestLifecycleTrace::ensureRequestId(),
-                    'content_bytes' => strlen($content),
-                    'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
-                    'peak_memory_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
-                    'fiber_output' => \Weline\Framework\Runtime\FiberOutputBuffer::debugState(),
-                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)
-            );
-        } catch (\Throwable) {
-            // Diagnostics must never break controller rendering.
-        }
+        return $eventData->getData('content');
     }
 
     /**
@@ -565,14 +482,7 @@ class PcController extends Core
             $this->getTemplate()->addData($data);
         }
         // 直接调用 Template 的 fetchHtml 方法，不触发控制器事件
-        $html = (string)$this->getTemplate()->fetchHtml($fileName);
-        if ($html !== '' || !\Weline\Framework\Runtime\Runtime::isPersistent()) {
-            return $html;
-        }
-
-        $this->logEmptyTemplateRender('direct_template_empty', $fileName, '');
-        \Weline\Framework\Runtime\FiberOutputBuffer::ensureInstalled('direct_template_retry');
-        return (string)$this->getTemplate()->fetchHtml($fileName);
+        return $this->getTemplate()->fetchHtml($fileName);
     }
 
     /**
