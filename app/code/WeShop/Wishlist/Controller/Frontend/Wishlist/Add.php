@@ -27,14 +27,14 @@ class Add extends FrontendController
             if ($this->shouldReturnJson()) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('Please log in to continue.'),
+                    'message' => __('请先登录。'),
                     'data' => [
                         'redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE),
                     ],
                 ]);
             }
 
-            $this->getMessageManager()->addError(__('Please log in to continue.'));
+            $this->getMessageManager()->addError(__('请先登录。'));
             $this->redirect(self::LOGIN_ROUTE);
             return '';
         }
@@ -43,7 +43,7 @@ class Add extends FrontendController
         if ($productId <= 0) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Product ID is required.'),
+                'message' => __('缺少商品 ID。'),
             ]);
         }
 
@@ -53,7 +53,7 @@ class Add extends FrontendController
         if ($this->shouldReturnJson()) {
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('Added to wishlist.'),
+                'message' => __('已加入心愿单。'),
                 'data' => [
                     'product_id' => $productId,
                     'wishlist_count' => $wishlistCount,
@@ -61,7 +61,7 @@ class Add extends FrontendController
             ]);
         }
 
-        $this->getMessageManager()->addSuccess(__('Added to wishlist.'));
+        $this->getMessageManager()->addSuccess(__('已加入心愿单。'));
         $this->redirect('wishlist');
         return '';
     }

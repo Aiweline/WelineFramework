@@ -29,22 +29,22 @@ class UpdateStatus extends BaseController
         );
 
         if (!$orderId) {
-            $this->getMessageManager()->addError((string) __('Order ID is required.'));
+            $this->getMessageManager()->addError((string) __('缺少订单 ID。'));
             $this->redirect($backUrl);
             return '';
         }
 
         if ($status === '' || !$this->orderService->isValidStatus($status)) {
-            $this->getMessageManager()->addError((string) __('Invalid order status.'));
+            $this->getMessageManager()->addError((string) __('无效的订单状态。'));
             $this->redirect($backUrl);
             return '';
         }
 
         try {
             $this->orderService->updateOrderStatus($orderId, $status);
-            $this->getMessageManager()->addSuccess((string) __('Order status updated.'));
+            $this->getMessageManager()->addSuccess((string) __('订单状态已更新。'));
         } catch (\Throwable $throwable) {
-            $this->getMessageManager()->addError($throwable->getMessage() ?: (string) __('Order status update failed.'));
+            $this->getMessageManager()->addError($throwable->getMessage() ?: (string) __('订单状态更新失败。'));
         }
 
         $this->redirect($backUrl);
