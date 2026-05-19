@@ -60,6 +60,20 @@ if (!\function_exists('wlsMemoryLimitToBytes')) {
         };
     }
 }
+if (!\function_exists('wlsResolveMemoryGuardBytes')) {
+    function wlsResolveMemoryGuardBytes(array $envConfig, string $key, int $defaultBytes): int
+    {
+        $value = $envConfig['wls']['memory_guard'][$key] ?? null;
+        if ($value === null || $value === '') {
+            return $defaultBytes;
+        }
+        if (\is_int($value) || \is_float($value) || (\is_string($value) && \preg_match('/^\d+(?:\.\d+)?$/', \trim($value)) === 1)) {
+            return \max(0, (int)\round((float)$value * 1024 * 1024));
+        }
+
+        return wlsMemoryLimitToBytes($value) ?: $defaultBytes;
+    }
+}
 if (!\function_exists('wlsRuntimeEffectiveUserName')) {
     function wlsRuntimeEffectiveUserName(): string
     {
@@ -1526,6 +1540,8 @@ $memoryCheckInterval = 5;
 $lastMemoryCheck = \time();
 $memoryWarningThreshold = 0.80;
 $memoryDrainThreshold = 0.88;
+$memoryWarningBytes = wlsResolveMemoryGuardBytes($envConfig, 'warning_mb', 128 * 1024 * 1024);
+$memoryDrainBytes = wlsResolveMemoryGuardBytes($envConfig, 'drain_mb', 192 * 1024 * 1024);
 $maxRequestBodyBytes = 32 * 1024 * 1024;
 $maxBufferedRequestBytes = $maxRequestBodyBytes + 128 * 1024;
 
@@ -2254,17 +2270,24 @@ while (true) {
         $lastMemoryCheck = $now;
         $currentMemory = \memory_get_usage(true);
         $memoryPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
+        $memoryDrainHit = $memoryPercent >= $memoryDrainThreshold
+            || ($memoryDrainBytes > 0 && $currentMemory >= $memoryDrainBytes);
+        $memoryWarningHit = $memoryPercent >= $memoryWarningThreshold
+            || ($memoryWarningBytes > 0 && $currentMemory >= $memoryWarningBytes);
 
-        if ($memoryPercent >= $memoryDrainThreshold) {
+        if ($memoryDrainHit) {
             $beforeMb = \round($currentMemory / 1024 / 1024, 1);
             $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
             $currentMemory = \memory_get_usage(true);
             $memoryPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
             $afterMb = \round($currentMemory / 1024 / 1024, 1);
+            $memoryDrainHitAfter = $memoryPercent >= $memoryDrainThreshold
+                || ($memoryDrainBytes > 0 && $currentMemory >= $memoryDrainBytes);
 
-            if ($memoryPercent >= $memoryDrainThreshold) {
+            if ($memoryDrainHitAfter) {
                 WlsLogger::warning_(
-                    "SSL Worker memory pressure {$afterMb}MB after compact (before={$beforeMb}MB), start drain to avoid OOM reset"
+                    "SSL Worker memory pressure {$afterMb}MB after compact (before={$beforeMb}MB, drain_mb="
+                    . \round($memoryDrainBytes / 1024 / 1024, 1) . "), start drain to avoid OOM reset"
                 );
                 $shouldExit = true;
                 $ipcDraining = true;
@@ -2274,14 +2297,18 @@ while (true) {
                     @\fclose($socket);
                     $socket = null;
                 }
-            } elseif ($memoryPercent >= $memoryWarningThreshold) {
+            } elseif ($memoryPercent >= $memoryWarningThreshold
+                || ($memoryWarningBytes > 0 && $currentMemory >= $memoryWarningBytes)) {
                 WlsLogger::warning_(
                     "SSL Worker memory high {$afterMb}MB after compact (before={$beforeMb}MB, cycles="
                     . (int)($compaction['cycles'] ?? 0) . ")"
                 );
             }
-        } elseif ($memoryPercent >= $memoryWarningThreshold) {
-            WlsLogger::warning_("SSL Worker memory high: " . \round($currentMemory / 1024 / 1024, 1) . 'MB');
+        } elseif ($memoryWarningHit) {
+            WlsLogger::warning_(
+                'SSL Worker memory high: ' . \round($currentMemory / 1024 / 1024, 1)
+                . 'MB (warning_mb=' . \round($memoryWarningBytes / 1024 / 1024, 1) . ')'
+            );
         }
     }
 
@@ -4525,6 +4552,14 @@ function handleRequest(
             || $responseLocation !== ''
             || \str_contains($responseContentType, 'text/event-stream');
         if ($responseBody === '' && !$isExpectedEmptyResponse) {
+            $emptyResponseDebug = [
+                'memory_mb' => \round(\memory_get_usage(true) / 1048576, 2),
+                'peak_memory_mb' => \round(\memory_get_peak_usage(true) / 1048576, 2),
+                'memory_limit' => (string)\ini_get('memory_limit'),
+            ];
+            if (\class_exists(\Weline\Framework\Runtime\FiberOutputBuffer::class, false)) {
+                $emptyResponseDebug['fiber_output'] = \Weline\Framework\Runtime\FiberOutputBuffer::debugState();
+            }
             WlsLogger::error_(
                 '[UnexpectedEmptyResponse] method=' . $method
                 . ' uri=' . ($request->getUri() ?: ($request->getServer('REQUEST_URI') ?? ''))
@@ -4533,6 +4568,7 @@ function handleRequest(
                 . ' location=' . ($responseLocation !== '' ? $responseLocation : '(none)')
                 . ' worker_id=' . $workerId
                 . ' worker_port=' . $port
+                . ' debug=' . \json_encode($emptyResponseDebug, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE)
             );
         }
         

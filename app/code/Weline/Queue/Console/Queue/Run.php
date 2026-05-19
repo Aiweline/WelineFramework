@@ -120,10 +120,16 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $result = $queue_execute->execute($queue);
                 // execute() 内常通过 w_query 等直接更新库里的 result；此处必须重新 load，否则会用过期内存覆盖掉过程日志
                 $queue = $this->newQueueModel()->load($id);
-                $queue->setStatus($queue::status_done)
-                    ->setPid(0)
-                    ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
-                    ->save();
+                $queue->setPid(0)
+                    ->setResult(\trim($queue->getResult() . PHP_EOL . $result));
+                $finalStatus = \trim((string)$queue->getStatus());
+                if ($finalStatus === $queue::status_pending) {
+                    $queue->setFinished(false)->save();
+                } elseif (\in_array($finalStatus, [$queue::status_stop, $queue::status_error], true)) {
+                    $queue->save();
+                } else {
+                    $queue->setStatus($queue::status_done)->save();
+                }
                 $this->printing->title(__('队列执行详情') . ' queue_id=' . $id);
                 $this->printing->note($queue->getResult());
             } catch (\Throwable $e) {

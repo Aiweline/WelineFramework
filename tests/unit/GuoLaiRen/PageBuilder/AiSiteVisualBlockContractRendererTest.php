@@ -71,6 +71,33 @@ final class AiSiteVisualBlockContractRendererTest extends TestCase
         self::assertStringContainsString('content_locale (HARD): en_US', $output);
     }
 
+    public function testRenderSectionContractIncludesVisualSignatureAndPageDesignPlan(): void
+    {
+        $output = $this->renderer->renderSectionVisualContract(
+            ['primary' => '#0f172a'],
+            ['block_goal' => 'Show product benefits'],
+            'zh_Hans_CN',
+            false,
+            [
+                'composition_pattern' => 'stacked_editorial_band',
+                'spatial_rhythm' => 'airy vertical cadence',
+                'media_strategy' => 'full_width_feature_image',
+                'surface_treatment' => 'soft elevated panels',
+                'interaction_pattern' => 'subtle hover lift',
+            ],
+            [
+                'anti_monotony_rule' => 'Alternate split, stacked, and proof-band compositions',
+                'composition_motif' => 'editorial lifestyle',
+            ]
+        );
+
+        self::assertStringContainsString('visual_signature (HARD layout contract)', $output);
+        self::assertStringContainsString('stacked_editorial_band', $output);
+        self::assertStringContainsString('page_design_plan (page-level design brief)', $output);
+        self::assertStringContainsString('Alternate split, stacked, and proof-band', $output);
+        self::assertStringContainsString('Gate compliance is not an excuse for template sameness', $output);
+    }
+
     public function testRenderSectionContractWithEmptyPaletteEmitsExplicitWarning(): void
     {
         $output = $this->renderer->renderSectionVisualContract(

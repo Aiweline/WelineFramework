@@ -66,10 +66,12 @@
 获取发货状态标签，允许其他模块扩展发货状态标签。,"Shipping status label retrieved, allowing other modules to extend shipping status labels."
 解析完整状态信息,"Parse full status information"
 解析完整状态信息，允许其他模块扩展状态信息解析。,"Parse full status information, allowing other modules to extend status information parsing."
+账户首页订单分区,"Account Homepage Orders Section"
+在顾客账户首页「我的订单」分区注入订单列表、订单状态与售后入口等内容。,"Inject order lists, order states, and after-sales entries into the My Orders section on the customer account homepage."
 订单详情页之前,"Before Order Details Page"
-在订单详情页面内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before order details page content, allowing other modules to add custom content at the top of the order details page."
+在订单详情页内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,在订单详情页内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。
 订单详情页之后,"After Order Details Page"
-在订单详情页面内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after order details page content, allowing other modules to add custom content at the bottom of the order details page."
+在订单详情页内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,在订单详情页内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。
 订单列表筛选器,"Order List Filters"
 在订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content in the filter area of the order list page, allowing other modules to add custom filter conditions."
 前端订单创建前,"Before Frontend Order Creation"
@@ -124,6 +126,10 @@
 订单管理模块安装完成,"Order Management Module Installed"
 "已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","Created the following data tables: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
 "安装失败: %{1}","Installation failed: %{1}"
+我的订单,"My Orders"
+查看订单进度与支付状态,"View order progress and payment status"
+退货,Return
+与我的订单,"and My Orders"
 编辑订单,"Edit Order"
 新建订单,"Create Order"
 系统,System
@@ -230,9 +236,3 @@ SKU,SKU
 确定要删除状态,"Are you sure you want to delete the status"
 吗？,?
 确定删除,"Confirm deletion"
-账户首页订单分区,"Account Homepage Orders Section"
-在顾客账户首页「我的订单」分区注入订单列表、订单状态与售后入口等内容。,"Inject order lists, order states, and after-sales entries into the My Orders section on the customer account homepage."
-我的订单,"My Orders"
-查看订单进度与支付状态,"View order progress and payment status"
-退货,"Return"
-与我的订单,"and My Orders"

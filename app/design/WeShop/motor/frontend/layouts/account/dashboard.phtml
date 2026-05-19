@@ -1,0 +1,204 @@
+<?php
+$this->setLayout('base');
+?>
+<style>
+.motor-account-page {
+    width: min(1360px, calc(100% - 2rem));
+    margin: 1.25rem auto 2.5rem;
+}
+
+.motor-account-shell {
+    display: grid;
+    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+}
+
+.motor-account-page__aside,
+.motor-account-page__main,
+.motor-account-page__surface {
+    min-width: 0;
+}
+
+.motor-account-page__aside {
+    position: sticky;
+    top: 1rem;
+}
+
+.motor-account-page__surface {
+    position: relative;
+    min-height: 60vh;
+    padding: 1.1rem;
+    border-radius: 1.75rem;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.88) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 0 28px 60px rgba(17, 17, 17, 0.08);
+    overflow: hidden;
+}
+
+.motor-account-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.2rem;
+    border-radius: 1.6rem;
+    background: linear-gradient(180deg, rgba(10, 10, 10, 0.94) 0%, rgba(20, 20, 20, 0.96) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color-text-light, #f5f5f5);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+}
+
+.motor-account-sidebar__header {
+    display: flex;
+    align-items: center;
+    gap: 0.95rem;
+}
+
+.motor-account-sidebar__avatar {
+    width: 3.8rem;
+    height: 3.8rem;
+    flex-shrink: 0;
+    border-radius: 1.15rem;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--color-primary, #e31837) 0%, var(--color-primary-dark, #b8122a) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.motor-account-sidebar__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.motor-account-sidebar__meta,
+.motor-account-sidebar__link-text {
+    min-width: 0;
+}
+
+.motor-account-sidebar__username,
+.motor-account-sidebar__email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.motor-account-sidebar__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.motor-account-sidebar__link,
+.motor-account-sidebar__nav .account-hook-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.78);
+    text-decoration: none;
+}
+
+.motor-account-sidebar__link-label,
+.motor-account-sidebar__nav .account-hook-nav-link__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+}
+
+.motor-account-sidebar__link--active,
+.motor-account-sidebar__nav .account-hook-nav-link.is-active {
+    background: linear-gradient(135deg, rgba(227, 24, 55, 0.18) 0%, rgba(241, 180, 76, 0.1) 100%);
+    color: var(--color-text-light, #f5f5f5);
+}
+
+.motor-account-index,
+.motor-account-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.motor-account-hero,
+.motor-account-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+    gap: 1rem;
+    align-items: stretch;
+}
+
+.motor-account-stat-grid,
+.motor-account-info-grid,
+.motor-account-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+@media (max-width: 1024px) {
+    .motor-account-shell,
+    .motor-account-hero,
+    .motor-account-grid,
+    .motor-account-stat-grid,
+    .motor-account-info-grid,
+    .motor-account-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .motor-account-page__aside {
+        position: static;
+    }
+}
+
+@media (max-width: 640px) {
+    .motor-account-page {
+        width: min(100%, calc(100% - 1rem));
+        margin: 0.75rem auto 1.5rem;
+    }
+
+    .motor-account-page__surface,
+    .motor-account-sidebar {
+        border-radius: 1.1rem;
+    }
+}
+</style>
+<theme:css>Weline_Theme::theme/frontend/assets/css/motor-account-dashboard.css</theme:css>
+<section class="motor-account-page">
+    <div class="motor-account-shell <?= htmlspecialchars(($meta['class'] ?? '')) ?>" data-layout="motor_account_shell">
+        <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+        <if condition="meta.sidebar">
+            <aside class="motor-account-page__aside">
+                {{meta.sidebar}}
+            </aside>
+        </if>
+
+        <div class="motor-account-page__main">
+            <w:hook>Weline_Theme::frontend::layouts::account::content-before</w:hook>
+            <div class="motor-account-page__surface" id="account-main-content" data-layout="motor_account_main">
+                <section data-wslot="account-main"
+                         data-wslot-name="Account Main"
+                         data-wslot-accept="content,product,banner"
+                         data-wslot-multiple="true">
+                    <if condition="meta.content">
+                        {{meta.content}}
+                        <elseif condition="content"/>
+                        {{content}}
+                        <elseif condition="meta.contentTemplate"/>
+                        <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                        <elseif condition="contentTemplate"/>
+                        <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+                        <else>
+                        <?= $this->getChildHtml('content') ?>
+                    </if>
+                </section>
+            </div>
+            <w:hook>Weline_Theme::frontend::layouts::account::content-after</w:hook>
+        </div>
+        <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    </div>
+</section>

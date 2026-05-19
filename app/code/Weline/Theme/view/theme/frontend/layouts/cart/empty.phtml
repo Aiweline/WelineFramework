@@ -23,6 +23,27 @@
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <style>
+        .cart-empty-main {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: clamp(420px, 60vh, 720px);
+            padding: clamp(3rem, 8vw, 5rem) 1rem;
+            box-sizing: border-box;
+        }
+
+        .cart-empty-container {
+            width: 100%;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        .cart-empty-content {
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
     @template(Weline_Frontend::templates/public/header.phtml)

@@ -92,16 +92,9 @@ Success,Success
 "Reset Password","Reset Password"
 "Customer profile is not linked to an auth user.","Customer profile is not linked to an auth user."
 "Unable to locate the auth user for this customer profile.","Unable to locate the auth user for this customer profile."
-金额：,Amount:
-继续支付,"Continue Payment"
 用户,User
 我的账户,"My Account"
-您好,您好
-我的订单,"My Orders"
-我的收藏,"My Favorites"
-退出登录,"Log Out"
-待支付订单,"Pending payment orders"
-查看全部订单,"View all orders"
+您好,Hello
 账户,Account
 账户及心愿单,"Account and Wishlist"
 "您好, 登录","Hello, log in"

@@ -190,6 +190,68 @@ class Template extends DataObject
         self::$scopedInstances = [];
     }
 
+    public static function clearProcessCaches(bool $aggressive = false): void
+    {
+        self::$compiledTemplateFreshnessCache = [];
+        self::pruneStaticHookCaches();
+        if ($aggressive) {
+            self::$instance = null;
+            self::$fiberInstances = null;
+            self::$scopedInstances = [];
+            self::$staticHookOutputCache = [];
+            self::$staticHookAggregateOutputCache = [];
+            self::$staticHookRuntimeCache = null;
+            self::$staticHookRuntimeCacheResolved = false;
+        }
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public static function debugCacheState(): array
+    {
+        self::pruneStaticHookCaches();
+
+        return [
+            'scoped_instances' => \count(self::$scopedInstances),
+            'compiled_freshness_entries' => \count(self::$compiledTemplateFreshnessCache),
+            'static_hook_output_entries' => \count(self::$staticHookOutputCache),
+            'static_hook_output_bytes' => self::cacheHtmlBytes(self::$staticHookOutputCache),
+            'static_hook_aggregate_entries' => \count(self::$staticHookAggregateOutputCache),
+            'static_hook_aggregate_bytes' => self::cacheHtmlBytes(self::$staticHookAggregateOutputCache),
+        ];
+    }
+
+    private static function pruneStaticHookCaches(): void
+    {
+        $now = \microtime(true);
+        foreach (self::$staticHookOutputCache as $key => $cached) {
+            if (!\is_array($cached) || (float)($cached['expires_at'] ?? 0.0) < $now) {
+                unset(self::$staticHookOutputCache[$key]);
+            }
+        }
+        foreach (self::$staticHookAggregateOutputCache as $key => $cached) {
+            if (!\is_array($cached) || (float)($cached['expires_at'] ?? 0.0) < $now) {
+                unset(self::$staticHookAggregateOutputCache[$key]);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, array{expires_at: float, html: string}> $cache
+     */
+    private static function cacheHtmlBytes(array $cache): int
+    {
+        $bytes = 0;
+        foreach ($cache as $cached) {
+            if (\is_array($cached) && \is_string($cached['html'] ?? null)) {
+                $bytes += \strlen($cached['html']);
+            }
+        }
+
+        return $bytes;
+    }
+
     private static function currentScopeKey(): ?string
     {
         try {
@@ -529,9 +591,21 @@ class Template extends DataObject
     public function getFetchFile(string $fileName, string|null $module_name = ''): string
     {
         list($comFileName, $tplFile) = $this->convertFetchFileName($fileName);
-        
+
+        /**@var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $compileDecisionData = new DataObject([
+            'comFileName' => $comFileName,
+            'tplFile' => $tplFile,
+            'fileName' => $fileName,
+            'template' => $this,
+            'force' => false,
+        ]);
+        $eventsManager->dispatch('Weline_Framework_Template::compile_decision', $compileDecisionData);
+        $forceCompile = (bool)$compileDecisionData->getData('force');
+
         // 检测编译文件，如果不符合条件则重新进行文件编译
-        if (self::shouldRecompileCompiledTemplate(
+        if ($forceCompile || self::shouldRecompileCompiledTemplate(
             $comFileName,
             $tplFile,
             DEV,
@@ -539,6 +613,15 @@ class Template extends DataObject
         )) {
             // 如果缓存文件不存在则编译，或者文件修改了也编译
             $content = file_get_contents($tplFile);
+            $beforeCompileData = new DataObject([
+                'content' => $content,
+                'comFileName' => $comFileName,
+                'tplFile' => $tplFile,
+                'fileName' => $fileName,
+                'template' => $this,
+            ]);
+            $eventsManager->dispatch('Weline_Framework_Template::before_compile', $beforeCompileData);
+            $content = (string)$beforeCompileData->getData('content');
             $repContent = $this->tmp_replace($content, $comFileName);  // 得到模板文件并替换占位符，得到替换后的文件
             
             // 检查是否显示模板位置注释（默认不显示，可通过配置 template.show_comments 控制）
@@ -562,8 +645,6 @@ class Template extends DataObject
             
             // 触发模板编译后事件，允许 Observer 处理内容（如提取 JS 模块声明和翻译词）
             // 在所有编译处理完成后、写入文件之前触发，这样观察者可以处理最终的内容
-            /**@var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
             $eventData = new DataObject([
                 'content' => $repContent,
                 'comFileName' => $comFileName,
@@ -865,7 +946,11 @@ class Template extends DataObject
             'Weline_Customer::hooks/header-account-links.phtml',
             'WeShop_Order::hooks/header-account-links.phtml',
             'Weline_Shipping::hooks/header-account-links.phtml',
-            'WeShop_Subscription::hooks/header-account-links.phtml' => $this->frontendAuthStaticHookCacheContext(),
+            'WeShop_Subscription::hooks/header-account-links.phtml',
+            'WeShop_Customer::hooks/header-account.phtml',
+            'WeShop_Cart::hooks/header-cart.phtml' => $this->frontendAuthLocalizedStaticHookCacheContext(),
+            'WeShop_Catalog::Weline_Theme/frontend/partials/header/search-form-before.phtml',
+            'WeShop_Catalog::Weline_Theme/frontend/partials/header/categories-before.phtml' => $this->frontendLocaleStaticHookCacheContext(),
             'Weline_I18n::hooks/header-language-switcher.phtml' => $this->i18nStaticHookCacheContext('Weline_I18n::header-language-switcher-data', 'language'),
             'Weline_I18n::hooks/header-currency-switcher.phtml' => $this->i18nStaticHookCacheContext('Weline_I18n::header-currency-switcher-data', 'currency'),
             'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-before.phtml',
@@ -926,6 +1011,40 @@ class Template extends DataObject
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function frontendLocaleStaticHookCacheContext(): ?string
+    {
+        $requestCacheKey = 'view.static_hook.frontend_locale_context';
+        $cached = RequestContext::get($requestCacheKey);
+        if (\is_string($cached)) {
+            return $cached;
+        }
+
+        try {
+            $context = 'frontend-locale:' . \sha1(\implode('|', [
+                (string)State::getLang(),
+                (string)State::getLangLocal(),
+                (string)State::getCurrency(),
+                (string)(\function_exists('w_env_http_host') ? \w_env_http_host() : ''),
+                (string)($this->request->getBaseUrl() ?: ''),
+            ]));
+            RequestContext::set($requestCacheKey, $context);
+            return $context;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function frontendAuthLocalizedStaticHookCacheContext(): ?string
+    {
+        $authContext = $this->frontendAuthStaticHookCacheContext();
+        $localeContext = $this->frontendLocaleStaticHookCacheContext();
+        if ($authContext === null || $localeContext === null) {
+            return null;
+        }
+
+        return 'frontend-auth-locale:' . \sha1($authContext . '|' . $localeContext);
     }
 
     private function bodyEndStaticHookCacheContext(): ?string

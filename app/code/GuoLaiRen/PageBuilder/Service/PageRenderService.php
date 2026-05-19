@@ -1052,7 +1052,10 @@ class PageRenderService
             return "<!-- Component {$code} resolved via Weline_Theme virtual theme but template is empty -->\n";
         }
 
-        $componentConfig = \array_replace($component->getDefaultConfig(), $config);
+        $componentConfig = $this->sanitizeSharedIdentityAssetConfig(
+            \array_replace($component->getDefaultConfig(), $config),
+            $region
+        );
         $vars = \array_replace($this->templateVars, $componentConfig, [
             'page' => $page,
             'style' => $styleSettings,
@@ -1078,6 +1081,116 @@ class PageRenderService
         }
 
         return $marker . $componentHtml . "\n<!-- Component {$code} rendered successfully -->\n";
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function sanitizeSharedIdentityAssetConfig(array $config, string $region): array
+    {
+        $region = \strtolower(\trim($region));
+        if (!\in_array($region, ['header', 'footer'], true)) {
+            return $config;
+        }
+
+        return $this->clearInvalidIdentityAssetReferences($config);
+    }
+
+    /**
+     * @param array<string,mixed> $value
+     * @return array<string,mixed>
+     */
+    private function clearInvalidIdentityAssetReferences(array $value): array
+    {
+        foreach ($value as $key => $item) {
+            $normalizedKey = \strtolower(\trim((string)$key));
+            if (\is_array($item)) {
+                $value[$key] = $this->clearInvalidIdentityAssetReferences($item);
+                continue;
+            }
+            if (!\is_string($item) || \trim($item) === '') {
+                continue;
+            }
+
+            if (
+                \in_array($normalizedKey, ['logo', 'logo.image', 'logo.url', 'brand.logo', 'identity.shared_logo_asset', 'shared_logo_asset'], true)
+                && $this->identityAssetUrlIsInvalidForRole($item, 'logo')
+            ) {
+                unset($value[$key]);
+                continue;
+            }
+
+            if (
+                \in_array($normalizedKey, ['icon', 'favicon', 'site.icon', 'identity.shared_icon_asset', 'shared_icon_asset'], true)
+                && $this->identityAssetUrlIsInvalidForRole($item, 'icon')
+            ) {
+                unset($value[$key]);
+            }
+        }
+
+        return $value;
+    }
+
+    private function identityAssetUrlIsInvalidForRole(string $url, string $role): bool
+    {
+        $url = \trim($url);
+        if ($url === '') {
+            return false;
+        }
+        $path = \parse_url($url, \PHP_URL_PATH);
+        $path = \is_string($path) && $path !== '' ? $path : $url;
+        $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+        $lowerPath = \strtolower($path);
+        if (!\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
+            return false;
+        }
+
+        $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
+        if (!\str_contains($lowerPath, $expectedToken) || !\str_ends_with($lowerPath, '.png')) {
+            return true;
+        }
+
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
+        if (!\is_file($absolutePath)) {
+            return true;
+        }
+        $bytes = @\file_get_contents($absolutePath);
+        if (!\is_string($bytes) || $bytes === '' || \strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) !== 0) {
+            return true;
+        }
+
+        return !$this->pngAppearsToHaveTransparentBackground($bytes);
+    }
+
+    private function pngAppearsToHaveTransparentBackground(string $bytes): bool
+    {
+        if (\function_exists('imagecreatefromstring')) {
+            $image = @\imagecreatefromstring($bytes);
+            if ($image !== false) {
+                $width = \imagesx($image);
+                $height = \imagesy($image);
+                $points = [
+                    [0, 0],
+                    [\max(0, $width - 1), 0],
+                    [0, \max(0, $height - 1)],
+                    [\max(0, $width - 1), \max(0, $height - 1)],
+                ];
+                $transparent = 0;
+                foreach ($points as [$x, $y]) {
+                    $alpha = (\imagecolorat($image, $x, $y) >> 24) & 0x7F;
+                    if ($alpha >= 80) {
+                        $transparent++;
+                    }
+                }
+                \imagedestroy($image);
+
+                return $transparent >= 3;
+            }
+        }
+
+        $colorType = \ord($bytes[25] ?? "\0");
+        return \in_array($colorType, [4, 6], true) || \str_contains($bytes, 'tRNS');
     }
 
     /**

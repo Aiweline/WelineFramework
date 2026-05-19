@@ -39,13 +39,13 @@ class OrderService
     public function getAvailableStatuses(): array
     {
         return [
-            self::STATUS_PENDING => (string) __('Pending'),
-            self::STATUS_PROCESSING => (string) __('Processing'),
-            self::STATUS_PAID => (string) __('Paid'),
-            self::STATUS_FULFILLED => (string) __('Fulfilled'),
-            self::STATUS_COMPLETED => (string) __('Completed'),
-            self::STATUS_CANCELLED => (string) __('Cancelled'),
-            self::STATUS_REFUNDED => (string) __('Refunded'),
+            self::STATUS_PENDING => (string) __('待处理'),
+            self::STATUS_PROCESSING => (string) __('处理中'),
+            self::STATUS_PAID => (string) __('已支付'),
+            self::STATUS_FULFILLED => (string) __('已发货'),
+            self::STATUS_COMPLETED => (string) __('已完成'),
+            self::STATUS_CANCELLED => (string) __('已取消'),
+            self::STATUS_REFUNDED => (string) __('已退款'),
         ];
     }
 
@@ -236,11 +236,11 @@ class OrderService
             : self::PAYMENT_STATUS_PENDING;
 
         if ($status === self::STATUS_CANCELLED || $status === self::STATUS_REFUNDED) {
-            throw new \InvalidArgumentException((string) __('Cancelled or refunded orders cannot be shipped.'));
+            throw new \InvalidArgumentException((string) __('已取消或已退款订单不能发货。'));
         }
 
         if ($paymentStatus !== self::PAYMENT_STATUS_PAID && $status !== self::STATUS_PAID) {
-            throw new \InvalidArgumentException((string) __('Only paid orders can be shipped.'));
+            throw new \InvalidArgumentException((string) __('只有已支付订单才能发货。'));
         }
 
         $now = date('Y-m-d H:i:s');
@@ -268,7 +268,7 @@ class OrderService
         $order = $this->requireOrder($orderId);
         $fulfillmentStatus = (string) ($order->getData(Order::schema_fields_fulfillment_status) ?? self::FULFILLMENT_STATUS_PENDING);
         if ($fulfillmentStatus !== self::FULFILLMENT_STATUS_SHIPPED) {
-            throw new \InvalidArgumentException((string) __('Only shipped orders can be marked as delivered.'));
+            throw new \InvalidArgumentException((string) __('只有已发货订单才能标记为送达。'));
         }
 
         $now = date('Y-m-d H:i:s');
@@ -444,13 +444,13 @@ class OrderService
     public function updateOrderStatus(int $orderId, string $status): Order
     {
         if (!$this->isValidStatus($status)) {
-            throw new \InvalidArgumentException((string) __('Unsupported order status.'));
+            throw new \InvalidArgumentException((string) __('不支持的订单状态。'));
         }
 
         $order = $this->requireOrder($orderId);
         $currentStatus = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
         if (!$this->canTransitionOrderStatus($currentStatus, $status)) {
-            throw new \InvalidArgumentException((string) __('Order status transition %{1} -> %{2} is not allowed.', [$currentStatus, $status]));
+            throw new \InvalidArgumentException((string) __('订单状态不允许从 %{1} 变更为 %{2}。', [$currentStatus, $status]));
         }
 
         $order->setData(Order::schema_fields_status, $status)
@@ -463,7 +463,7 @@ class OrderService
     public function updatePaymentStatus(int $orderId, string $paymentStatus): Order
     {
         if (!$this->isValidPaymentStatus($paymentStatus)) {
-            throw new \InvalidArgumentException((string) __('Unsupported payment status.'));
+            throw new \InvalidArgumentException((string) __('不支持的支付状态。'));
         }
 
         $order = $this->requireOrder($orderId);
@@ -490,11 +490,11 @@ class OrderService
         $order->load($orderId);
 
         if (!$order->getId()) {
-            return ['can_cancel' => false, 'reason' => __('Order does not exist.'), 'require_return' => false];
+            return ['can_cancel' => false, 'reason' => __('订单不存在。'), 'require_return' => false];
         }
 
         if ((int) ($order->getData(Order::schema_fields_customer_id) ?? 0) !== $customerId) {
-            return ['can_cancel' => false, 'reason' => __('You cannot cancel this order.'), 'require_return' => false];
+            return ['can_cancel' => false, 'reason' => __('您不能取消此订单。'), 'require_return' => false];
         }
 
         $status = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
@@ -502,22 +502,22 @@ class OrderService
         $fulfillmentStatus = $order->hasField('fulfillment_status') ? (string) $order->getData('fulfillment_status') : '';
 
         if ($status === self::STATUS_CANCELLED) {
-            return ['can_cancel' => false, 'reason' => __('The order has already been cancelled.'), 'require_return' => false];
+            return ['can_cancel' => false, 'reason' => __('该订单已经取消。'), 'require_return' => false];
         }
 
         if ($status === self::STATUS_COMPLETED) {
-            return ['can_cancel' => false, 'reason' => __('Completed orders cannot be cancelled. Please request a return instead.'), 'require_return' => false];
+            return ['can_cancel' => false, 'reason' => __('已完成订单无法直接取消，请先申请退货。'), 'require_return' => false];
         }
 
         if ($status === self::STATUS_REFUNDED) {
-            return ['can_cancel' => false, 'reason' => __('The order has already been refunded.'), 'require_return' => false];
+            return ['can_cancel' => false, 'reason' => __('该订单已经退款。'), 'require_return' => false];
         }
 
         if ($status === self::STATUS_FULFILLED || in_array($fulfillmentStatus, ['shipped', 'delivered'], true)) {
             if (!$this->checkOrderReturn($orderId)) {
                 return [
                     'can_cancel' => false,
-                    'reason' => __('This order has already shipped. Please submit a return before cancellation.'),
+                    'reason' => __('该订单已发货，请先提交退货申请后再取消。'),
                     'require_return' => true,
                 ];
             }
@@ -525,7 +525,7 @@ class OrderService
             if (!$this->checkReturnConfirmed($orderId)) {
                 return [
                     'can_cancel' => false,
-                    'reason' => __('The return is pending confirmation. Cancellation will be available after the return is received.'),
+                    'reason' => __('退货正在等待确认，待确认收货后才可取消订单。'),
                     'require_return' => true,
                 ];
             }
@@ -551,14 +551,14 @@ class OrderService
             ];
         }
 
-        return ['can_cancel' => false, 'reason' => __('The current order status does not allow cancellation.'), 'require_return' => false];
+        return ['can_cancel' => false, 'reason' => __('当前订单状态不允许取消。'), 'require_return' => false];
     }
 
     public function cancelOrder(int $orderId, int $customerId): bool
     {
         $checkResult = $this->canCancelOrder($orderId, $customerId);
         if (!$checkResult['can_cancel']) {
-            throw new \Exception((string) ($checkResult['reason'] ?? __('The order cannot be cancelled.')));
+            throw new \Exception((string) ($checkResult['reason'] ?? __('该订单无法取消。')));
         }
 
         $order = $this->requireOrder($orderId);
@@ -693,7 +693,7 @@ class OrderService
         $order = $this->newOrderModel();
         $order->load($orderId);
         if (!$order->getId()) {
-            throw new \Exception((string) __('Order does not exist.'));
+            throw new \Exception((string) __('订单不存在。'));
         }
 
         return $order;
