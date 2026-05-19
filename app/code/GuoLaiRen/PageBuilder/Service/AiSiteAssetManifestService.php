@@ -76,12 +76,13 @@ final class AiSiteAssetManifestService
         }
         $nextSignature = \trim((string)($next['planning_signature'] ?? ''));
         $samePlanning = $existingSignature !== '' && $nextSignature !== '' && \hash_equals($existingSignature, $nextSignature);
+        $existingFinalUrl = \trim((string)($existing['final_url'] ?? ''));
         if (
-            (int)($existing['locked_by_user'] ?? 0) === 1
+            ((int)($existing['locked_by_user'] ?? 0) === 1 && $existingFinalUrl !== '')
             || (
                 $samePlanning
                 && (
-                    \trim((string)($existing['final_url'] ?? '')) !== ''
+                    $existingFinalUrl !== ''
                     || \in_array($existingStatus, ['queued', 'generating', 'done', 'error', 'locked'], true)
                 )
             )
@@ -448,9 +449,9 @@ final class AiSiteAssetManifestService
         $isHeroSlot = (bool)\preg_match('/\b(hero|banner|cover)\b/i', $kind . ' ' . ((string)($slot['label'] ?? '')));
 
         if ($isFaviconLikeSlot) {
-            $parts[] = 'Title icon / favicon output requirements: generate a production-ready square 1:1 PNG icon. Keep it highly recognizable at 16-64px with one bold symbol or monogram, transparent background or a clean solid background from the confirmed theme palette only; no paragraph text, no mockup, no watermark, no screenshot frame.';
+            $parts[] = 'Title icon / favicon output requirements (HARD): generate a production-ready square 1:1 PNG with a real transparent alpha background. The symbol/monogram is isolated on transparency; there must be no white background, solid color background, rounded square tile, card, gradient backdrop, photo scene, website mockup, watermark, screenshot frame, or paragraph text. Keep it recognizable at 16-64px with one bold business-relevant symbol or monogram.';
         } elseif ($isLogoSlot) {
-            $parts[] = 'Logo output requirements: generate a PNG logo with a transparent alpha background. Keep the logo isolated on transparency; do not place it on a card, wall, photo scene, colored rectangle, gradient backdrop, website mockup, or screenshot frame.';
+            $parts[] = 'Logo output requirements (HARD): generate a production-ready PNG logo with a real transparent alpha background. Keep only the brand mark/wordmark pixels on transparency; do not place the logo on a white box, colored rectangle, rounded card, wall, photo scene, gradient backdrop, website mockup, screenshot frame, or any other background surface.';
         } elseif ($isHeroSlot) {
             $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed — cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
             $parts[] = 'Hero visual quality bar (CRITICAL): premium cinematic website banner background, very wide horizontal composition, edge-to-edge coverage, strong depth, realistic lighting, high-end commercial art direction. Do NOT generate flat vector art, SVG-like shapes, childish cartoon, icon collage, clip-art, rough geometric placeholder art, cardboard-looking cards, UI mockups, or simplistic low-detail illustration. Prefer realistic/editorial photography or photoreal premium 3D only when the subject cannot be photographed.';
@@ -917,7 +918,7 @@ final class AiSiteAssetManifestService
             $logoBriefParts[] = 'PRIMARY SUBJECT for the logo glyph (the mark MUST visually depict this exact business; derive concrete iconography only from the approved brief, products, services, materials, culture, and visual plan; never copy example industries or unrelated symbols): '
                 . $subjectAnchor;
         }
-        $logoBriefParts[] = 'Output requirements: PNG with transparent alpha background, production-ready horizontal logo or wordmark, simple brand mark, no mockup, no extra scene, no colored rectangle/backdrop, no paragraph text, no watermark, no screenshot frame.';
+        $logoBriefParts[] = 'Output requirements (HARD): PNG with real transparent alpha background, production-ready horizontal logo or wordmark, simple brand mark. Keep only logo pixels on transparency; no white box, colored rectangle, rounded card, gradient backdrop, extra scene, mockup, paragraph text, watermark, or screenshot frame.';
         if ($brandReference !== '' && $brandReference !== $subjectAnchor) {
             $logoBriefParts[] = 'Optional brand wordmark text alongside the glyph (small, secondary; never the primary subject; never invent characters out of this name): "' . $brandReference . '"';
         }
@@ -938,7 +939,7 @@ final class AiSiteAssetManifestService
             $iconBriefParts[] = 'PRIMARY SUBJECT for the favicon/title icon (one bold recognizable symbol from this exact business; choose a domain-correct object, material, service cue, or brand-initial mark from the approved brief only; never copy example industries or unrelated symbols): '
                 . $subjectAnchor;
         }
-        $iconBriefParts[] = 'Output requirements: square 1:1 composition, transparent or clean solid background, highly recognizable at 16-64px, one bold symbol or monogram only, no paragraph text, no mockup, no watermark.';
+        $iconBriefParts[] = 'Output requirements (HARD): square 1:1 PNG with real transparent alpha background. Keep only one bold symbol or monogram on transparency, highly recognizable at 16-64px; no white box, solid background, rounded tile, gradient backdrop, paragraph text, mockup, watermark, or screenshot frame.';
         if ($brandReference !== '' && $brandReference !== $subjectAnchor) {
             $iconBriefParts[] = 'Optional brand initial alongside the glyph (single letter/monogram only; never the primary subject): "' . $brandReference . '"';
         }
@@ -1424,8 +1425,36 @@ final class AiSiteAssetManifestService
         if ($value === '' || \str_starts_with(\strtolower($value), 'data:image/')) {
             return '';
         }
+        if (!$this->isExistingIdentityAssetUrlAcceptable($value, $role)) {
+            return '';
+        }
 
         return $value;
+    }
+
+    private function isExistingIdentityAssetUrlAcceptable(string $url, string $role): bool
+    {
+        $path = \parse_url($url, \PHP_URL_PATH);
+        $path = \is_string($path) && $path !== '' ? $path : $url;
+        $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+        $lowerPath = \strtolower($path);
+        if (!\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
+            return true;
+        }
+        $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
+        if (!\str_contains($lowerPath, $expectedToken) || !\str_ends_with($lowerPath, '.png')) {
+            return false;
+        }
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
+        if (!\is_file($absolutePath)) {
+            return false;
+        }
+        $bytes = @\file_get_contents($absolutePath);
+        if (!\is_string($bytes) || $bytes === '') {
+            return false;
+        }
+
+        return $this->isPngImageBytes($bytes) && $this->pngAppearsToHaveTransparentBackground($bytes);
     }
 
     /**
@@ -1438,12 +1467,62 @@ final class AiSiteAssetManifestService
         $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
         $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
         $label = \strtolower(\trim((string)($slot['label'] ?? '')));
+        $sectionCode = \strtolower(\trim((string)($slot['section_code'] ?? '')));
+        $pageType = \strtolower(\trim((string)($slot['page_type'] ?? '')));
+        $isIdentityContext = \str_starts_with($slotId, 'identity:')
+            || \in_array($sectionCode, ['identity', 'global'], true)
+            || \in_array($pageType, ['global'], true);
 
         return \in_array($field, ['logo', 'logo.image', 'brand.logo'], true)
             || \in_array($kind, ['website_logo', 'brand_logo'], true)
-            || \str_contains($slotId, 'logo')
-            || (\str_contains($slotType, 'logo') && !\str_contains($kind, 'favicon'))
-            || (\str_contains($label, 'logo') && !\str_contains($label, 'favicon'));
+            || ($isIdentityContext && \str_contains($slotId, 'logo'))
+            || ($isIdentityContext && \str_contains($slotType, 'logo') && !\str_contains($kind, 'favicon'))
+            || ($isIdentityContext && \str_contains($label, 'logo') && !\str_contains($label, 'favicon'));
+    }
+
+    private function isPngImageBytes(string $bytes): bool
+    {
+        return \strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) === 0;
+    }
+
+    private function pngAppearsToHaveTransparentBackground(string $bytes): bool
+    {
+        if (!$this->isPngImageBytes($bytes)) {
+            return false;
+        }
+        if (\function_exists('imagecreatefromstring')) {
+            $image = @\imagecreatefromstring($bytes);
+            if ($image !== false) {
+                $width = \imagesx($image);
+                $height = \imagesy($image);
+                $points = [
+                    [0, 0],
+                    [\max(0, $width - 1), 0],
+                    [0, \max(0, $height - 1)],
+                    [\max(0, $width - 1), \max(0, $height - 1)],
+                    [(int)\floor($width / 2), 0],
+                    [(int)\floor($width / 2), \max(0, $height - 1)],
+                ];
+                $transparent = 0;
+                foreach ($points as [$x, $y]) {
+                    $color = \imagecolorat($image, $x, $y);
+                    $alpha = ($color >> 24) & 0x7F;
+                    if ($alpha >= 80) {
+                        $transparent++;
+                    }
+                }
+                \imagedestroy($image);
+
+                return $transparent >= 4;
+            }
+        }
+
+        $colorType = \ord($bytes[25] ?? "\0");
+        if (\in_array($colorType, [4, 6], true)) {
+            return true;
+        }
+
+        return \str_contains($bytes, 'tRNS');
     }
 
     /**
@@ -1989,7 +2068,7 @@ final class AiSiteAssetManifestService
         if ($isLogoSlot) {
             $assetName = $isFaviconLikeSlot ? 'title icon / favicon' : 'logo';
             return 'Confirmed site theme palette (HARD): ' . $paletteLine . "\n"
-                . 'Brand asset color contract (HARD): the ' . $assetName . ' MUST visibly follow the confirmed site theme palette above for glyph, accent, shadow, or background. Do not introduce unrelated default brand colors unless the exact hex exists in this palette. If the business subject has natural colors outside the palette, express that subject through silhouette, material, texture, or composition while keeping color usage palette-compatible.';
+                . 'Brand asset color contract (HARD): the ' . $assetName . ' MUST visibly follow the confirmed site theme palette above for glyph, accent, or subtle shadow only. The canvas background stays transparent alpha, not a palette-colored tile. Do not introduce unrelated default brand colors unless the exact hex exists in this palette. If the business subject has natural colors outside the palette, express that subject through silhouette, material, texture, or composition while keeping color usage palette-compatible.';
         }
 
         return 'Confirmed site theme palette: ' . $paletteLine . "\n"

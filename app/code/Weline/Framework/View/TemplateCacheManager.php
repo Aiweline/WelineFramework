@@ -431,6 +431,17 @@ class TemplateCacheManager
     }
 
     /**
+     * @return array<string, int>
+     */
+    public function getMemoryStats(): array
+    {
+        return [
+            'memory_cache_entries' => \count(self::$memoryCache),
+            'source_key_cache_entries' => \count(self::$sourceFileKeyCache),
+        ];
+    }
+
+    /**
      * Clear cache for a specific source file
      */
     public function clearCache(string $sourceFile): void

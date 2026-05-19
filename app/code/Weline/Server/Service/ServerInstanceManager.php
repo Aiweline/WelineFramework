@@ -300,9 +300,10 @@ class ServerInstanceManager
      *
      * @return string[] 已清理的实例名称列表
      */
-    public function cleanupInactiveInstances(): array
+    public function cleanupInactiveInstances(bool $deepPidCleanup = false): array
     {
         $cleanedNames = [];
+        $nameIndex = Processer::readNameIndex();
 
         foreach ($this->listRawInstanceNames() as $name) {
             $rawData = $this->getRawInstanceData($name);
@@ -314,25 +315,115 @@ class ServerInstanceManager
                 continue;
             }
 
-            if (!$this->shouldPurgeStoppedInstanceRecord($rawData)) {
+            if (!$this->shouldCleanInactiveInstanceRecord($name, $rawData, $nameIndex)) {
                 continue;
             }
 
+            $this->cleanupZombieProcessesByInstancePrefix($name, true);
             $this->purgeInactiveInstanceArtifacts($name, $rawData);
             $cleanedNames[] = $name;
         }
 
-        if ($cleanedNames !== []) {
+        if ($cleanedNames !== [] && $deepPidCleanup) {
             Processer::cleanupStalePidFiles();
         }
 
         return $cleanedNames;
     }
 
-    private function shouldPurgeStoppedInstanceRecord(array $rawData): bool
+    public function cleanupZombieProcessesByInstancePrefix(string $name, bool $includeSharedState = true): int
     {
-        $lifecycleState = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
-        return \in_array($lifecycleState, ['stopped', 'stale_cleanup', 'master_exited'], true);
+        $prefixes = $this->collectInstanceProcessPrefixes($name, $includeSharedState);
+        if ($prefixes === []) {
+            return 0;
+        }
+
+        return Processer::killByProcessNamePrefixes($prefixes);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function collectInstanceProcessPrefixes(string $name, bool $includeSharedState = true): array
+    {
+        $scopedInstance = MasterProcess::getScopedInstanceName($name);
+        $prefixes = [
+            MasterProcess::getMasterProcessName($name),
+            MasterProcess::getMasterProcessName($name) . '-win',
+            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
+            MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
+            MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
+            MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
+            'weline-wls-worker-http-' . $scopedInstance . '-',
+            'weline-wls-worker-ssl-' . $scopedInstance . '-',
+            'weline-wls-maintenance-http-' . $scopedInstance . '-',
+            'weline-wls-maintenance-ssl-' . $scopedInstance . '-',
+            'weline-wls-worker-' . $name . '-',
+            'weline-master-' . $name . '-worker-',
+            'weline-wls-dispatcher-' . $name,
+            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+            'weline-master-' . $name . '-redirect-',
+        ];
+
+        if ($includeSharedState) {
+            $prefixes[] = MasterProcess::buildScopedProcessName('weline-wls-session', $name);
+            $prefixes[] = MasterProcess::buildScopedProcessName('weline-wls-memory', $name);
+            $prefixes[] = 'weline-wls-session-' . $name;
+            $prefixes[] = 'weline-wls-memory-' . $name;
+        }
+
+        return \array_values(\array_unique(\array_filter($prefixes)));
+    }
+
+    private function shouldCleanInactiveInstanceRecord(string $name, array $rawData, array $nameIndex): bool
+    {
+        if ($this->isStoppedInstanceRecord($rawData)) {
+            return true;
+        }
+
+        return !$this->hasManagedProcessNamePrefix($name, $nameIndex);
+    }
+
+    private function isStoppedInstanceRecord(array $rawData): bool
+    {
+        foreach (['lifecycle_state', 'startup_phase', 'runtime_state'] as $field) {
+            $state = (string)($rawData[$field] ?? '');
+            if (\in_array($state, ['stopped', 'stale_cleanup', 'master_exited', 'master_exited_children_retained', 'failed'], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasManagedProcessNamePrefix(string $name, array $nameIndex): bool
+    {
+        $prefixes = $this->collectInstanceProcessPrefixes($name, true);
+        if ($prefixes === [] || $nameIndex === []) {
+            return false;
+        }
+
+        foreach ($nameIndex as $pname => $entries) {
+            if (empty($entries)) {
+                continue;
+            }
+
+            $pname = (string)$pname;
+            $taskName = '';
+            try {
+                $taskName = Processer::getTaskName($pname);
+            } catch (\Throwable) {
+                $taskName = \str_starts_with($pname, '--name=') ? \substr($pname, 7) : $pname;
+            }
+
+            foreach ($prefixes as $prefix) {
+                if (\str_starts_with($taskName, $prefix) || \str_starts_with($pname, '--name=' . $prefix)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -790,6 +881,7 @@ class ServerInstanceManager
         if ($content === false) {
             return null;
         }
+        $content = \preg_replace('/^\xEF\xBB\xBF/', '', $content) ?? $content;
         $data = \json_decode($content, true);
         return \is_array($data) ? $data : null;
     }
@@ -1058,22 +1150,24 @@ class ServerInstanceManager
             '--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
         ];
 
-        foreach (($rawData['services'] ?? []) as $roleData) {
-            if (!\is_array($roleData)) {
-                continue;
-            }
-
-            foreach (($roleData['instances'] ?? []) as $instanceData) {
-                if (!\is_array($instanceData)) {
-                    continue;
-                }
-                if ($this->isSharedExternalServiceRecord($instanceData)) {
+        foreach ($this->collectServiceTablesForCleanup($rawData) as $serviceTable) {
+            foreach ($serviceTable as $roleData) {
+                if (!\is_array($roleData)) {
                     continue;
                 }
 
-                $processName = (string) ($instanceData['metadata']['process_name'] ?? '');
-                if ($processName !== '') {
-                    $names[] = '--name=' . $processName;
+                foreach (($roleData['instances'] ?? []) as $instanceData) {
+                    if (!\is_array($instanceData)) {
+                        continue;
+                    }
+                    if ($this->isSharedExternalServiceRecord($instanceData)) {
+                        continue;
+                    }
+
+                    $processName = (string) ($instanceData['metadata']['process_name'] ?? '');
+                    if ($processName !== '') {
+                        $names[] = '--name=' . $processName;
+                    }
                 }
             }
         }
@@ -1086,6 +1180,20 @@ class ServerInstanceManager
         }
 
         return \array_values(\array_unique(\array_filter($names)));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectServiceTablesForCleanup(array $rawData): array
+    {
+        $snapshotServices = $rawData[self::CURRENT_SNAPSHOT_KEY]['services'] ?? null;
+        if (\is_array($snapshotServices) && $snapshotServices !== []) {
+            return [$snapshotServices];
+        }
+
+        $services = $rawData['services'] ?? null;
+        return \is_array($services) && $services !== [] ? [$services] : [];
     }
 
     /**

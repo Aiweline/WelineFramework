@@ -34,6 +34,13 @@
 批量翻译后事件，在批量翻译完成后触发，允许其他模块修改翻译结果或执行后处理操作。,批量翻译后事件，在批量翻译完成后触发，允许其他模块修改翻译结果或执行后处理操作。
 批量翻译错误,批量翻译错误
 批量翻译错误事件，在批量翻译失败时触发，允许其他模块处理错误、实现降级方案等。,批量翻译错误事件，在批量翻译失败时触发，允许其他模块处理错误、实现降级方案等。
+"Unsupported translation operation: %{1}","Unsupported translation operation: %{1}"
+"Text cannot be empty.","Text cannot be empty."
+"Texts cannot be empty.","Texts cannot be empty."
+"Translation service query provider","Translation service query provider"
+"Provides frontend worker translation operations.","Provides frontend worker translation operations."
+"Translate text through configured translation service.","Translate text through configured translation service."
+"Translate multiple texts through configured translation service.","Translate multiple texts through configured translation service."
 目标语言不能为空,目标语言不能为空
 "事件处理异常: %{1}","事件处理异常: %{1}"
 请求失败：%{1},请求失败：%{1}
@@ -161,3 +168,7 @@ ID,ID
 AI翻译,AI翻译
 未找到目标输入框：%{1},未找到目标输入框：%{1}
 输入框内容为空，无法翻译,输入框内容为空，无法翻译
+Translating...,Translating...
+"Translation success","Translation success"
+"Translation failed","Translation failed"
+"Translation request failed, please try again later.","Translation request failed, please try again later."

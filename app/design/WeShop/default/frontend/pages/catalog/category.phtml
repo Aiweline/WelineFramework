@@ -252,16 +252,16 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                 href="<?= htmlspecialchars($currentPage > 1 ? $buildCategoryPageUrl($currentPage - 1) : '#') ?>"
                                 class="inline-flex items-center rounded-full border border-border-light px-4 py-2 text-sm font-semibold transition <?= $currentPage > 1 ? 'text-text-primary-light hover:border-primary hover:text-primary' : 'pointer-events-none opacity-40' ?>"
                             >
-                                <?= __('Previous') ?>
+                                <?= __('上一页') ?>
                             </a>
                             <span class="text-sm text-text-secondary-light">
-                                <?= __('Page %{1} of %{2}', [$currentPage, $totalPages]) ?>
+                                <?= __('第 %{1} 页，共 %{2} 页', [$currentPage, $totalPages]) ?>
                             </span>
                             <a
                                 href="<?= htmlspecialchars($currentPage < $totalPages ? $buildCategoryPageUrl($currentPage + 1) : '#') ?>"
                                 class="inline-flex items-center rounded-full border border-border-light px-4 py-2 text-sm font-semibold transition <?= $currentPage < $totalPages ? 'text-text-primary-light hover:border-primary hover:text-primary' : 'pointer-events-none opacity-40' ?>"
                             >
-                                <?= __('Next') ?>
+                                <?= __('下一页') ?>
                             </a>
                         </div>
                     <?php endif; ?>
