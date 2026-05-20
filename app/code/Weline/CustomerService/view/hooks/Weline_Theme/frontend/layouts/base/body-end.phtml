@@ -9,6 +9,19 @@ use Weline\CustomerService\Service\WidgetTranslationService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 
+$requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$requestPathParsed = parse_url($requestPathRaw, PHP_URL_PATH);
+$requestPath = strtolower((string)(is_string($requestPathParsed) && $requestPathParsed !== '' ? $requestPathParsed : $requestPathRaw));
+$isAccountRoute = $requestPath === '/customer/account'
+    || $requestPath === 'customer/account'
+    || str_contains($requestPath, '/customer/account/');
+$isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
+    || (string)$this->request->getGet('preview', '') === '1'
+    || str_contains($requestPath, 'workspace-preview');
+if ($isAccountRoute || $isWorkspacePreview) {
+    return;
+}
+
 $session = SessionFactory::getInstance()->createFrontendSession();
 $isLoggedIn = $session->isLoggedIn();
 $customerId = $isLoggedIn ? $session->getUserId() : null;
@@ -18,27 +31,12 @@ $urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
 $chatUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/chat');
 $bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
 
-$requestPath = strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
-$isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
-    || (string)$this->request->getGet('preview', '') === '1'
-    || str_contains($requestPath, 'workspace-preview');
-$disableCustomerServiceWidget = $isWorkspacePreview;
-$showGuestBindPrompt = !$isLoggedIn
-    && !$disableCustomerServiceWidget
-    && !str_contains($requestPath, 'customer/account/login')
-    && !str_contains($requestPath, 'customer/account/register')
-    && !str_contains($requestPath, 'customer/account/forgot-password')
-    && !str_contains($requestPath, 'customer/account/challenge')
-    && !str_contains($requestPath, 'customer/account/logout');
+$showGuestBindPrompt = !$isLoggedIn;
 
 /** @var WidgetTranslationService $widgetTranslationService */
 $widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService::class);
 $supportedLocales = $widgetTranslationService->getSupportedLocales();
 $widgetTranslations = $widgetTranslationService->getWidgetTranslations();
-
-if ($disableCustomerServiceWidget) {
-    return;
-}
 
 $customerServiceAssetVersion = '20260518-cart-overlay';
 ?>

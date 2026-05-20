@@ -28,8 +28,10 @@
     var skillListUrl = <?= \json_encode((string)($skillListUrl ?? $this->getData('skillListUrl') ?? $this->getData('skill_list_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var skillSaveUrl = <?= \json_encode((string)($skillSaveUrl ?? $this->getData('skillSaveUrl') ?? $this->getData('skill_save_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var skillDisableUrl = <?= \json_encode((string)($skillDisableUrl ?? $this->getData('skillDisableUrl') ?? $this->getData('skill_disable_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var designDirectionListUrl = <?= \json_encode((string)($designDirectionListUrl ?? $this->getData('designDirectionListUrl') ?? $this->getData('design_direction_list_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var designDirectionMatchUrl = <?= \json_encode((string)($designDirectionMatchUrl ?? $this->getData('designDirectionMatchUrl') ?? $this->getData('design_direction_match_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var initialSelectedSkillCodes = <?= \json_encode(\array_values(\array_filter(\array_map('strval', \is_array($scope['selected_skill_codes'] ?? null) ? $scope['selected_skill_codes'] : (\is_array($state['selected_skill_codes'] ?? null) ? $state['selected_skill_codes'] : (\is_array($state['scope']['selected_skill_codes'] ?? null) ? $state['scope']['selected_skill_codes'] : []))))), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var defaultSelectedSkillCodes = ['claude-design'];
+    var defaultSelectedSkillCodes = [];
     var queueUiStateByStage = {};
     /** 构建方案队列一旦终端态变为「已完成」，刷新整页以拉齐 SSE 终端、进度条与会话状态（避免已完成仍显示生成中）。 */
     var skillManagerEditingCode = '';
@@ -65,6 +67,8 @@
     skillListUrl = normalizeLocalPreviewUrlForCurrentHost(skillListUrl);
     skillSaveUrl = normalizeLocalPreviewUrlForCurrentHost(skillSaveUrl);
     skillDisableUrl = normalizeLocalPreviewUrlForCurrentHost(skillDisableUrl);
+    designDirectionListUrl = normalizeLocalPreviewUrlForCurrentHost(designDirectionListUrl);
+    designDirectionMatchUrl = normalizeLocalPreviewUrlForCurrentHost(designDirectionMatchUrl);
     sortPlanBlocksUrl = normalizeLocalPreviewUrlForCurrentHost(sortPlanBlocksUrl);
     mutatePlanBlockUrl = normalizeLocalPreviewUrlForCurrentHost(mutatePlanBlockUrl);
     refinePlanPageUrl = normalizeLocalPreviewUrlForCurrentHost(refinePlanPageUrl);
@@ -850,8 +854,8 @@
         switched: <?= \json_encode((string)__('预览页已切换'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewUnreachable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFrameTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        targetDomainRequiredLabel: <?= \json_encode((string)__('目标域名（必填）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        targetDomainRequiredPlaceholder: <?= \json_encode((string)__('请填写要绑定的目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        targetDomainRequiredLabel: <?= \json_encode((string)__('目标域名（可选）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        targetDomainRequiredPlaceholder: <?= \json_encode((string)__('可稍后填写要绑定的目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         noPageType: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         schemeRebuildButton: <?= \json_encode((string)__('方案重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSchemeRebuildConfirmTitle: <?= \json_encode((string)__('重建整个方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -866,8 +870,8 @@
         buildFailureLocaleContract: <?= \json_encode((string)__('生成组件未满足网站内容语言契约，请检查内容语言与方案文案是否一致。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         briefRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         siteTitleRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainRequiredForPlanAction: <?= \json_encode((string)__('请先填写目标域名，再确认&更新方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainRequiredForBuild: <?= \json_encode((string)__('请先填写目标域名，再确认&更新方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRequiredForPlanAction: <?= \json_encode((string)__('请先填写网站标题和一句话描述，再确认&更新方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRequiredForBuild: <?= \json_encode((string)__('请先填写目标域名，再执行发布或域名相关操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStartUnavailable: <?= \json_encode((string)__('建站方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSaving: <?= \json_encode((string)__('正在保存方案草稿...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planGenerating: <?= \json_encode((string)__('正在生成建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1874,6 +1878,7 @@
         rebuildAction: <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         deleteAction: <?= \json_encode((string)__('删除'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         addBlockAction: <?= \json_encode((string)__('新增块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        generateBlockAction: <?= \json_encode((string)__('生成块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         moveAction: <?= \json_encode((string)__('跳位'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         reorderModalRange: <?= \json_encode((string)__('（当前第 %{current} 位 / 共 %{total} 项）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         reorderContextMetaPlan: <?= \json_encode((string)__('方案块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -3664,7 +3669,7 @@
     }
 
     function isTargetDomainRequiredForPlanActionSatisfied() {
-        return getTargetDomainTrimmed() !== '';
+        return true;
     }
 
     function setTargetDomainFieldInvalid(on) {
@@ -4361,6 +4366,19 @@
         });
     }
 
+    document.addEventListener('click', function (event) {
+        var target = event && event.target ? event.target : null;
+        if (!target || !target.closest) {
+            return;
+        }
+        var viewConfirmedPlanBtn = target.closest('.pb-ai-view-confirmed-plan');
+        if (!viewConfirmedPlanBtn) {
+            return;
+        }
+        event.preventDefault();
+        showConfirmedPlanModal(String(viewConfirmedPlanBtn.getAttribute('data-plan-type') || 'stage1'));
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         bindPlanPreviewFullscreenClick();
         bindPlanModalViewSwitchers();
@@ -4541,7 +4559,7 @@
             seen[code] = true;
             out.push(code);
         });
-        return out.length > 0 ? out : defaultSelectedSkillCodes.slice();
+        return out;
     }
 
     var needsFormSkillOptions = [];
@@ -4581,7 +4599,12 @@
             page_types: pageTypes,
             page_types_user_customized: (pageTypesUserCustomized || pageTypesSelectionLocallyCustomized) ? 1 : 0,
             reference_images: readReferenceImagesFromWorkspaceState(latestWorkspaceState),
-            selected_skill_codes: normalizeSkillCodes(needsFormSelectedSkillCodes)
+            selected_skill_codes: getNeedsFormTemporarySkillCodes(),
+            design_direction_mode: String(fb.design_direction_mode || 'auto'),
+            design_direction_code: String(fb.design_direction_code || ''),
+            design_direction_snapshot: fb.design_direction_snapshot && typeof fb.design_direction_snapshot === 'object' ? fb.design_direction_snapshot : {},
+            design_direction_match_reason: String(fb.design_direction_match_reason || ''),
+            design_direction_locked: fb.design_direction_locked ? 1 : 0
         };
     }
 
@@ -4595,13 +4618,42 @@
     }
 
     function setNeedsFormSelectedSkillCodes(codes) {
-        needsFormSelectedSkillCodes = normalizeSkillCodes(codes);
+        needsFormSelectedSkillCodes = filterTemporarySkillCodes(normalizeSkillCodes(codes));
         renderNeedsFormSkillSelection();
         renderGenerationSkillSummaries();
     }
 
     function getNeedsFormSelectedSkillCodes() {
-        return normalizeSkillCodes(needsFormSelectedSkillCodes);
+        return getNeedsFormTemporarySkillCodes();
+    }
+
+    function isAutoSkillOption(option) {
+        if (!option || typeof option !== 'object') {
+            return false;
+        }
+        var bindingSource = String(option.bindingSource || option.binding_source || '').toLowerCase();
+        return option.locked === true || option.manual === true || bindingSource === 'locked' || bindingSource === 'manual';
+    }
+
+    function getAutoSkillCodes() {
+        return normalizeSkillCodes(needsFormSkillOptions.filter(isAutoSkillOption).map(function (option) {
+            return option.code;
+        }));
+    }
+
+    function filterTemporarySkillCodes(codes) {
+        var autoCodes = getAutoSkillCodes();
+        return normalizeSkillCodes(codes).filter(function (code) {
+            return autoCodes.indexOf(code) === -1;
+        });
+    }
+
+    function getNeedsFormTemporarySkillCodes() {
+        return filterTemporarySkillCodes(needsFormSelectedSkillCodes);
+    }
+
+    function getNeedsFormDisplaySkillCodes() {
+        return normalizeSkillCodes(getAutoSkillCodes().concat(getNeedsFormTemporarySkillCodes()));
     }
 
     function resolveSelectedSkillCodesFromWorkspaceState(workspaceState, fallbackCodes) {
@@ -4753,14 +4805,45 @@
                 ? scope.plan_locale
                 : (scope.default_language || ''),
             selected_skill_codes: resolveSelectedSkillCodesFromWorkspaceState(workspaceState, getNeedsFormSelectedSkillCodes()),
+            design_direction_mode: typeof scope.design_direction_mode === 'string' ? scope.design_direction_mode : (workspaceState.design_direction && workspaceState.design_direction.mode ? workspaceState.design_direction.mode : 'auto'),
+            design_direction_code: typeof scope.design_direction_code === 'string' ? scope.design_direction_code : (workspaceState.design_direction && workspaceState.design_direction.code ? workspaceState.design_direction.code : ''),
+            design_direction_snapshot: scope.design_direction_snapshot && typeof scope.design_direction_snapshot === 'object'
+                ? scope.design_direction_snapshot
+                : (workspaceState.design_direction_snapshot && typeof workspaceState.design_direction_snapshot === 'object' ? workspaceState.design_direction_snapshot : {}),
+            design_direction_match_reason: typeof scope.design_direction_match_reason === 'string'
+                ? scope.design_direction_match_reason
+                : String(workspaceState.design_direction_match_reason || ''),
+            design_direction_locked: scope.design_direction_locked ? 1 : (workspaceState.design_direction_locked ? 1 : 0),
             site_profile_manual: scope.site_profile_manual && typeof scope.site_profile_manual === 'object'
                 ? scope.site_profile_manual
                 : {}
         };
         patchGuidedScopeDefaults(patch);
         setNeedsFormSelectedSkillCodes(patch.selected_skill_codes);
+        renderDesignDirectionSummary(patch);
         siteProfileManual = normalizeSiteProfileManual(patch.site_profile_manual || {});
         hydrateGuidedProfileInputs();
+    }
+
+    function renderDesignDirectionSummary(source) {
+        var data = source && typeof source === 'object' ? source : guidedScopeDefaults();
+        var snapshot = data.design_direction_snapshot && typeof data.design_direction_snapshot === 'object'
+            ? data.design_direction_snapshot
+            : {};
+        var label = String(snapshot.name || snapshot.code || (data.design_direction_code ? data.design_direction_code : <?= \json_encode((string)__('通用设计方向'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>));
+        var reason = String(data.design_direction_match_reason || snapshot.match_reason || '');
+        var labelEl = document.getElementById('pb-ai-design-direction-label');
+        var reasonEl = document.getElementById('pb-ai-design-direction-reason');
+        var lockEl = document.getElementById('pb-ai-design-direction-lock');
+        if (labelEl) {
+            labelEl.textContent = label;
+        }
+        if (reasonEl) {
+            reasonEl.textContent = reason;
+        }
+        if (lockEl) {
+            lockEl.textContent = data.design_direction_locked ? <?= \json_encode((string)__('已冻结'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> : <?= \json_encode((string)__('生成方案时冻结'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        }
     }
 
     function normalizeSiteProfileManual(raw) {
@@ -4840,10 +4923,16 @@
             description: String(raw.description || '').trim(),
             body: String(raw.body || raw.normalized_body || '').trim(),
             source: String(raw.source || '').trim(),
+            sourceType: String(raw.source_type || '').trim(),
             status: String(raw.status || '').trim().toLowerCase() || 'active',
             localPath: String(raw.local_path || raw.path || '').trim(),
             exists: raw.exists !== false,
-            readonly: raw.readonly === true || String(raw.source || '').trim() !== 'custom_db',
+            readonly: raw.readonly === true || (String(raw.source || '').trim() !== 'custom_db' && String(raw.source_type || '').trim() !== 'custom'),
+            locked: raw.locked === true || raw.locked === 1 || raw.locked === '1',
+            manual: raw.manual === true || raw.manual === 1 || raw.manual === '1',
+            temporary: raw.temporary === true || raw.temporary === 1 || raw.temporary === '1',
+            bindingSource: String(raw.binding_source || raw.bindingSource || '').trim().toLowerCase(),
+            selectable: raw.selectable !== false && raw.selectable !== 0 && raw.selectable !== '0',
             disabled: disabled
         };
     }
@@ -4937,14 +5026,14 @@
 
     function renderGenerationSkillSummaries() {
         var planSummary = <?= \json_encode((string)__('本次方案生成将使用：%{skills}'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
-            .replace('%{skills}', summarizeSkillCodesForText(getNeedsFormSelectedSkillCodes()));
+            .replace('%{skills}', summarizeSkillCodesForText(getNeedsFormDisplaySkillCodes()));
         document.querySelectorAll('[data-pb-skill-summary-stage="plan"]').forEach(function (el) {
             el.textContent = planSummary;
         });
     }
 
     function validateSkillCodesForGeneration(codes, message) {
-        var selectedCodes = normalizeSkillCodes(codes);
+        var selectedCodes = filterTemporarySkillCodes(codes);
         if (selectedCodes.length === 0 || !String(skillListUrl || '').trim()) {
             return true;
         }
@@ -4976,16 +5065,17 @@
             return;
         }
         var selectedCodes = getNeedsFormSelectedSkillCodes();
+        var displayCodes = getNeedsFormDisplaySkillCodes();
         chipList.innerHTML = '';
-        selectedCodes.forEach(function (code) {
+        displayCodes.forEach(function (code) {
             var option = getSkillOptionByCode(code);
             var chip = document.createElement('span');
-            chip.className = 'badge rounded-pill ' + (!option || option.disabled ? 'text-bg-warning' : 'text-bg-primary');
+            chip.className = 'badge rounded-pill ' + (!option || option.disabled ? 'text-bg-warning' : (isAutoSkillOption(option) ? 'text-bg-dark' : 'text-bg-primary'));
             chip.textContent = option ? option.label : code;
             chip.setAttribute('data-skill-chip', code);
             chipList.appendChild(chip);
         });
-        if (selectedCodes.length === 0) {
+        if (displayCodes.length === 0) {
             var empty = document.createElement('span');
             empty.className = 'small text-muted';
             empty.textContent = <?= \json_encode((string)__('使用默认技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -4995,18 +5085,27 @@
         optionList.innerHTML = '';
         needsFormSkillOptions.forEach(function (option) {
             var id = 'pb-ai-skill-option-' + option.code.replace(/[^a-zA-Z0-9_-]/g, '-');
+            var autoBound = isAutoSkillOption(option);
+            var checked = displayCodes.indexOf(option.code) !== -1;
+            var canToggle = !option.disabled && !autoBound && option.selectable !== false;
             var label = document.createElement('label');
-            label.className = 'form-check-label border rounded-pill px-3 py-2 mb-0 ' + (selectedCodes.indexOf(option.code) !== -1 ? 'bg-primary text-white' : 'bg-white');
-            label.style.cursor = option.disabled ? 'not-allowed' : 'pointer';
+            label.className = 'form-check-label border rounded-pill px-3 py-2 mb-0 ' + (checked ? (autoBound ? 'bg-dark text-white' : 'bg-primary text-white') : 'bg-white');
+            label.style.cursor = canToggle ? 'pointer' : 'not-allowed';
             var input = document.createElement('input');
             input.type = 'checkbox';
             input.className = 'form-check-input me-2 pb-ai-skill-check';
             input.id = id;
             input.value = option.code;
-            input.checked = selectedCodes.indexOf(option.code) !== -1;
-            input.disabled = !!option.disabled;
+            input.checked = checked;
+            input.disabled = !canToggle;
             var text = document.createElement('span');
             text.textContent = option.label + (option.disabled ? <?= \json_encode((string)__('（已停用）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> : '');
+            if (!option.disabled && option.locked) {
+                text.textContent += ' (locked)';
+            }
+            if (!option.disabled && !option.locked && option.manual) {
+                text.textContent += ' (adapter)';
+            }
             label.appendChild(input);
             label.appendChild(text);
             optionList.appendChild(label);
@@ -5192,8 +5291,9 @@
             return Promise.resolve([]);
         }
         setSkillStatusText(<?= \json_encode((string)__('正在加载技能...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
-        return postForm(skillListUrl, {}).then(function (payload) {
+        return postForm(skillListUrl, { selected_skill_codes: getNeedsFormTemporarySkillCodes() }).then(function (payload) {
             needsFormSkillOptions = normalizeSkillListPayload(payload);
+            needsFormSelectedSkillCodes = filterTemporarySkillCodes(needsFormSelectedSkillCodes);
             renderNeedsFormSkillSelection();
             renderSkillAdminList();
             renderGenerationSkillSummaries();
@@ -10381,6 +10481,9 @@
         };
         var normalizedScope = String(scopeKind || '').trim().toLowerCase();
         var buttons = [];
+        if (String(stage || '').trim().toLowerCase() === 'plan' && normalizedScope === 'block') {
+            buttons.push(buildPreviewActionButton('generate-block', previewLabels.generateBlockAction || 'Generate', 'btn-primary', attrs));
+        }
         buttons.push(buildPreviewActionButton('refine', previewLabels.refineAction, 'btn-outline-primary', attrs));
         buttons.push(buildPreviewActionButton('rebuild', previewLabels.rebuildAction, 'btn-outline-warning', attrs));
         if (normalizedScope === 'block') {
@@ -11778,6 +11881,104 @@
         }
     }
 
+    function confirmBuildPlanOnlyForBlockGeneration() {
+        if (shouldUseBuildPlanV2Flow()) {
+            return Promise.resolve(true);
+        }
+        if (!confirmPlanUrl) {
+            toast('error', messages.planStartUnavailable);
+            return Promise.resolve(false);
+        }
+        if (!guardRetryableAiFailuresBeforeProgress('plan')) {
+            return Promise.resolve(false);
+        }
+        return persistStageOneInlineEdits(true).then(function (patched) {
+            if (!patched) {
+                toast('warning', messages.planDraftSaveFailed);
+                return false;
+            }
+            return postForm(confirmPlanUrl, {
+                public_id: publicId,
+                stage: 'plan',
+                confirm_only: '1',
+                start_build: '0'
+            }).then(function (data) {
+                if (!data || !data.success) {
+                    toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                    return false;
+                }
+                if (data.data && typeof data.data === 'object') {
+                    hydrateWorkspaceFromState(data.data);
+                }
+                buildPlanConfirmedState = true;
+                syncBuildPlanStartButtonState();
+                return true;
+            });
+        }).catch(function (error) {
+            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+            return false;
+        });
+    }
+
+    function startPlanBlockGeneration(pageType, blockKey, blockLabel, actionContext) {
+        var pt = String(pageType || '').trim();
+        var key = String(blockKey || '').trim();
+        if (!pt || !key) {
+            toast('warning', previewLabels.reorderTargetLost || messages.networkError);
+            return true;
+        }
+        if (!startRefineComponentUrl || !window.PbAiOperationRunner || typeof window.PbAiOperationRunner.startFromResponse !== 'function') {
+            toast('error', messages.refineUnavailable);
+            return true;
+        }
+        if (!guardRetryableAiFailuresBeforeProgress('plan') || !guardRetryableAiFailuresBeforeProgress('build')) {
+            return true;
+        }
+        confirmBuildPlanOnlyForBlockGeneration().then(function (confirmed) {
+            if (!confirmed) {
+                return;
+            }
+            blockRefreshState.active = true;
+            blockRefreshState.pageType = pt;
+            blockRefreshState.blockId = key;
+            if (typeof renderBlockStreamingState === 'function') {
+                renderBlockStreamingState(messages.regenerateQueued);
+            }
+            postForm(startRefineComponentUrl, {
+                public_id: publicId,
+                page_type: pt,
+                component_code: key,
+                component_label: String(blockLabel || key),
+                block_key: key,
+                block_keys: JSON.stringify([key]),
+                selected_blocks: JSON.stringify([key]),
+                target_scope: actionContext && typeof actionContext.targetScope === 'string'
+                    ? actionContext.targetScope
+                    : ('pages.' + pt + '.blocks.' + key),
+                instruction: ''
+            }).then(function (data) {
+                if (data && data.data && typeof data.data === 'object') {
+                    hydrateWorkspaceFromState(data.data);
+                }
+                if (data && data.success && window.PbAiOperationRunner.startFromResponse(data, 'block_regenerate')) {
+                    toast('success', data.message ? String(data.message) : messages.regenerateStreaming);
+                    if (shouldRedirectToWorkspaceBuildStage()) {
+                        window.setTimeout(function () {
+                            window.location.href = resolveWorkspaceRedirectUrl(data.data || null);
+                        }, 160);
+                    }
+                    return;
+                }
+                clearBlockStreamingState();
+                toast('error', data && data.message ? String(data.message) : messages.refineUnavailable);
+            }).catch(function (error) {
+                clearBlockStreamingState();
+                toast('error', error && error.message ? error.message : messages.refineUnavailable);
+            });
+        });
+        return true;
+    }
+
     function handlePreviewActionClick(button) {
         if (!button || !button.getAttribute) {
             window.__pbPreviewActionDebug = {
@@ -11816,6 +12017,10 @@
                 return true;
             }
             // 老板 2026-04-23 口径：块级跳到某位置走独立的轻量弹窗，复用 persist*Sort。
+            if (action === 'generate-block' && scopeKind === 'block') {
+                window.__pbPreviewActionDebug.mode = 'generate-block';
+                return startPlanBlockGeneration(pageType, blockKey, blockLabel, actionContext);
+            }
             if (action === 'move' && scopeKind === 'block') {
                 var moveKey = taskKey || blockKey;
                 if (moveKey === '') {
@@ -14508,7 +14713,117 @@
         });
     }
 
+    function guardDelegatedStageButtonClick(button) {
+        if (!button || button.disabled) {
+            return false;
+        }
+        if (button.dataset.pbDelegatedClickRunning === '1') {
+            return false;
+        }
+        button.dataset.pbDelegatedClickRunning = '1';
+        window.setTimeout(function () {
+            if (button && button.dataset) {
+                delete button.dataset.pbDelegatedClickRunning;
+            }
+        }, 1000);
+        return true;
+    }
+
+    function bindDelegatedStageActions() {
+        var root = document;
+        if (root.documentElement && root.documentElement.dataset.pbStageDelegatedActionsBound === '1') {
+            return;
+        }
+        if (root.documentElement) {
+            root.documentElement.dataset.pbStageDelegatedActionsBound = '1';
+        }
+        root.addEventListener('click', function (event) {
+            var rawTarget = event.target || null;
+            var target = rawTarget && rawTarget.closest
+                ? rawTarget
+                : (rawTarget && rawTarget.parentElement && rawTarget.parentElement.closest ? rawTarget.parentElement : null);
+            if (!target) {
+                return;
+            }
+            var confirmBtn = target.closest('#pb-ai-confirm-plan');
+            if (confirmBtn) {
+                event.preventDefault();
+                if (typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
+                if (guardDelegatedStageButtonClick(confirmBtn)) {
+                    confirmCurrentPlanAndMaybeBuild();
+                }
+                return;
+            }
+            var startBuildBtn = target.closest('#pb-ai-start-build-site');
+            if (startBuildBtn) {
+                event.preventDefault();
+                if (typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
+                if (!guardDelegatedStageButtonClick(startBuildBtn)) {
+                    return;
+                }
+                var selectedTypesForBuild = selectedPageTypes();
+                if (!guardRetryableAiFailuresBeforeProgress('plan')) {
+                    syncBuildPlanStartButtonState();
+                    return;
+                }
+                if (!guardRetryableAiFailuresBeforeProgress('build')) {
+                    syncBuildPlanStartButtonState();
+                    return;
+                }
+                if (isBuildActionLocked(latestWorkspaceState || initialWorkspaceState || {})) {
+                    toast('warning', messages.buildQueueBusyActionBlocked || messages.networkError);
+                    syncBuildPlanStartButtonState();
+                    return;
+                }
+                ensureBuildPlanConfirmedBeforeBuild(startBuildBtn, selectedTypesForBuild, {});
+                return;
+            }
+            var publishStageBtn = target.closest('#pb-ai-go-publish-stage');
+            if (publishStageBtn) {
+                event.preventDefault();
+                if (typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
+                if (!guardDelegatedStageButtonClick(publishStageBtn)) {
+                    return;
+                }
+                if (!guardRetryableAiFailuresBeforeProgress(null)) {
+                    syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+                    return;
+                }
+                if (isBuildActionLocked(latestWorkspaceState || initialWorkspaceState || {})) {
+                    toast('warning', messages.buildQueueBusyActionBlocked || messages.networkError);
+                    syncBuildPlanStartButtonState();
+                    syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+                    return;
+                }
+                if (publishStageBtn.disabled || !setStageUrl) {
+                    return;
+                }
+                if (!canEnterPublishStageFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})) {
+                    toast('warning', messages.publishBlockedLatestBuildFailure || messages.networkError);
+                    syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+                    return;
+                }
+                postForm(setStageUrl, { public_id: publicId, stage: 'publish' }).then(function (data) {
+                    if (data && data.success) {
+                        window.location.reload();
+                        return;
+                    }
+                    toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                }).catch(function () {
+                    toast('error', messages.networkError);
+                });
+            }
+        }, true);
+    }
+
     function bindPlanStageLogic() {
+        bindDelegatedStageActions();
         var planCloseBtn = document.getElementById('pb-ai-plan-close');
         if (planCloseBtn && planCloseBtn.dataset.pbBound !== '1') {
             planCloseBtn.dataset.pbBound = '1';
@@ -14526,11 +14841,17 @@
         }
 
         var confirmPlanBtn = document.getElementById('pb-ai-confirm-plan');
-        if (confirmPlanBtn && confirmPlanBtn.dataset.pbBound !== '1') {
+        if (confirmPlanBtn) {
             confirmPlanBtn.dataset.pbBound = '1';
-            confirmPlanBtn.addEventListener('click', function () {
+            confirmPlanBtn.onclick = function (event) {
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault();
+                }
+                if (event && typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
                 confirmCurrentPlanAndMaybeBuild();
-            });
+            };
         }
         syncConfirmPlanButtonEnabled();
         syncPlanRebuildButtonVisibility();
@@ -14571,9 +14892,15 @@
         }
 
         var startBuildSiteBtn = document.getElementById('pb-ai-start-build-site');
-        if (startBuildSiteBtn && startBuildSiteBtn.dataset.pbBound !== '1') {
+        if (startBuildSiteBtn) {
             startBuildSiteBtn.dataset.pbBound = '1';
-            startBuildSiteBtn.addEventListener('click', function () {
+            startBuildSiteBtn.onclick = function (event) {
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault();
+                }
+                if (event && typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
                 var selectedTypes = selectedPageTypes();
                 if (!guardRetryableAiFailuresBeforeProgress('plan')) {
                     syncBuildPlanStartButtonState();
@@ -14589,7 +14916,7 @@
                     return;
                 }
                 ensureBuildPlanConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});
-            });
+            };
         }
         var rebuildBuildStageBtn = document.getElementById('pb-ai-rebuild-build-stage');
         if (rebuildBuildStageBtn && rebuildBuildStageBtn.dataset.pbBound !== '1') {
@@ -14625,9 +14952,15 @@
         bindPlanStageLogic();
         syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
         var publishStageBtn = document.getElementById('pb-ai-go-publish-stage');
-        if (publishStageBtn && publishStageBtn.dataset.pbBound !== '1') {
+        if (publishStageBtn) {
             publishStageBtn.dataset.pbBound = '1';
-            publishStageBtn.addEventListener('click', function () {
+            publishStageBtn.onclick = function (event) {
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault();
+                }
+                if (event && typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
                 if (!guardRetryableAiFailuresBeforeProgress(null)) {
                     syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
                     return;
@@ -14655,7 +14988,7 @@
                 }).catch(function () {
                     toast('error', messages.networkError);
                 });
-            });
+            };
         }
         bindPublishRepairButton();
         scheduleVisualEditResumePrompt();

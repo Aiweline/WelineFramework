@@ -20,7 +20,7 @@ echo "Result: " . ($returnCode === 0 ? "SUCCESS" : "FAILED") . "\n\n";
 
 // Test: Send chat message
 echo "Testing: Send chat message...\n";
-$command = 'php bin/w http:request --method=POST --url="/ai/frontend/chat/send" --data='{"message":"Test message"}'';
+$command = 'php bin/w http:request --method=POST --url="/ai/frontend/chat/send" --data=\'{"message":"Test message"}\'';
 echo "Command: $command\n";
 system($command, $returnCode);
 echo "Result: " . ($returnCode === 0 ? "SUCCESS" : "FAILED") . "\n\n";

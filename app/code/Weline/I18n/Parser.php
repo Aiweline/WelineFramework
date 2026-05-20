@@ -56,21 +56,32 @@ class Parser
             $configured = self::normalizeLanguageList(Env::get('i18n.locales', ''));
         }
         if (\in_array('all', $configured, true)) {
-            $languages = [];
-            foreach (\glob(Env::path_TRANSLATE_FILES_PATH . '*.php') ?: [] as $file) {
-                $languages[] = \pathinfo($file, PATHINFO_FILENAME);
-            }
-            $languages[] = Env::default_LANGUAGE_CODE;
-            return \array_values(\array_unique(\array_filter($languages)));
+            return self::discoverGeneratedLanguages();
         }
 
         $languages = \array_merge(
             $configured,
+            self::discoverGeneratedLanguages(),
             self::normalizeLanguageList(Env::get('user.lang', '')),
             self::normalizeLanguageList(Env::get('locale', '')),
             self::normalizeLanguageList(Env::get('language', '')),
             [Env::default_LANGUAGE_CODE]
         );
+
+        return \array_values(\array_unique(\array_filter($languages)));
+    }
+
+    private static function discoverGeneratedLanguages(): array
+    {
+        $languages = [];
+        foreach (\glob(Env::path_TRANSLATE_FILES_PATH . '*.php') ?: [] as $file) {
+            $lang = \pathinfo($file, PATHINFO_FILENAME);
+            if ($lang === 'words') {
+                continue;
+            }
+            $languages[] = $lang;
+        }
+        $languages[] = Env::default_LANGUAGE_CODE;
 
         return \array_values(\array_unique(\array_filter($languages)));
     }

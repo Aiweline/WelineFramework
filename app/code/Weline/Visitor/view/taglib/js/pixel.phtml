@@ -183,18 +183,18 @@
             }
 
             var resources = performance.getEntriesByType ? performance.getEntriesByType('resource') : [];
-            timing.resource_summary = {
-                count: resources.length,
-                slowest: resources.slice().sort(function (a, b) {
-                    return (b.duration || 0) - (a.duration || 0);
-                }).slice(0, 8).map(function (entry) {
-                    return {
-                        name: String(entry.name || '').slice(0, 180),
-                        initiator_type: entry.initiatorType || '',
-                        duration_ms: Math.round(entry.duration || 0),
-                        transfer_size: entry.transferSize || 0
-                    };
-                })
+                timing.resource_summary = {
+                    count: resources.length,
+                    slowest: resources.slice().sort(function (a, b) {
+                        return (b.duration || 0) - (a.duration || 0);
+                    }).slice(0, 3).map(function (entry) {
+                        return {
+                            name: String(entry.name || '').slice(0, 96),
+                            initiator_type: entry.initiatorType || '',
+                            duration_ms: Math.round(entry.duration || 0),
+                            transfer_size: entry.transferSize || 0
+                        };
+                    })
             };
         } catch (e) {
         }
@@ -262,8 +262,8 @@
             since_previous_ms: previous ? Math.max(0, now - (previous.timestamp_ms || now)) : null
         };
         chain.push(item);
-        if (chain.length > 40) {
-            chain = chain.slice(chain.length - 40);
+        if (chain.length > 12) {
+            chain = chain.slice(chain.length - 12);
         }
         __safeSessionSet(__pixelFunnelKey, JSON.stringify(chain));
         return {
@@ -273,7 +273,7 @@
             step_index: chain.length,
             previous_event: previous ? previous.event : null,
             since_previous_ms: item.since_previous_ms,
-            chain: chain
+            chain: chain.slice(Math.max(0, chain.length - 8))
         };
     }
 
@@ -697,6 +697,159 @@
         return __visitorWorkerApiPromise;
     }
 
+    var __pixelSendQueue = [];
+    var __pixelSendActive = false;
+    var __pixelSendTimer = null;
+
+    function __pixelTruncate(value, length) {
+        return String(value || '').slice(0, length);
+    }
+
+    function __compactPixelFunnel(funnel) {
+        if (!funnel || typeof funnel !== 'object') {
+            return {};
+        }
+        var chain = Array.isArray(funnel.chain) ? funnel.chain.slice(-8).map(function (item) {
+            return {
+                event: __pixelTruncate(item.event, 64),
+                step: item.step || 0,
+                path: __pixelTruncate(item.path, 160),
+                page_id: __pixelTruncate(item.page_id, 48),
+                timestamp_ms: item.timestamp_ms || 0,
+                since_previous_ms: item.since_previous_ms || null
+            };
+        }) : [];
+
+        return {
+            session_id: __pixelTruncate(funnel.session_id, 64),
+            page_id: __pixelTruncate(funnel.page_id, 48),
+            step: funnel.step || 0,
+            step_index: funnel.step_index || 0,
+            previous_event: __pixelTruncate(funnel.previous_event, 64),
+            since_previous_ms: funnel.since_previous_ms || null,
+            chain: chain
+        };
+    }
+
+    function __compactPixelPerformance(performanceData) {
+        if (!performanceData || typeof performanceData !== 'object') {
+            return {};
+        }
+        var resourceSummary = performanceData.resource_summary || {};
+        var slowest = Array.isArray(resourceSummary.slowest) ? resourceSummary.slowest.slice(0, 3).map(function (entry) {
+            return {
+                name: __pixelTruncate(entry.name, 96),
+                initiator_type: __pixelTruncate(entry.initiator_type, 32),
+                duration_ms: entry.duration_ms || 0,
+                transfer_size: entry.transfer_size || 0
+            };
+        }) : [];
+
+        return {
+            page_started_at_ms: performanceData.page_started_at_ms || 0,
+            page_age_ms: performanceData.page_age_ms || 0,
+            perf_now_ms: performanceData.perf_now_ms || null,
+            time_origin_ms: performanceData.time_origin_ms || null,
+            navigation: performanceData.navigation || null,
+            paint: performanceData.paint || {},
+            resource_summary: {
+                count: resourceSummary.count || 0,
+                slowest: slowest
+            }
+        };
+    }
+
+    function __compactPixelPayloadForWorker(payload) {
+        payload = payload || {};
+        var additionalInfo = payload.additionalInfo && typeof payload.additionalInfo === 'object' ? payload.additionalInfo : {};
+        var compact = Object.assign({}, payload);
+        compact.url = __pixelTruncate(compact.url, 512);
+        compact.referrer = __pixelTruncate(compact.referrer, 512);
+        compact.userAgent = __pixelTruncate(compact.userAgent, 255);
+        compact.module = __pixelTruncate(compact.module, 128);
+        compact.name = __pixelTruncate(compact.name, 128);
+        compact.eventName = __pixelTruncate(compact.eventName || compact.event, 128);
+        compact.userLang = __pixelTruncate(compact.userLang, 64);
+        compact.currency = __pixelTruncate(compact.currency, 32);
+
+        if (compact.elementInfo && typeof compact.elementInfo === 'object') {
+            compact.elementInfo = {
+                tagName: __pixelTruncate(compact.elementInfo.tagName, 32),
+                className: __pixelTruncate(compact.elementInfo.className, 120),
+                id: __pixelTruncate(compact.elementInfo.id, 80),
+                name: __pixelTruncate(compact.elementInfo.name, 80),
+                type: __pixelTruncate(compact.elementInfo.type, 32),
+                href: __pixelTruncate(compact.elementInfo.href, 255),
+                text: __pixelTruncate(compact.elementInfo.text, 120),
+                eventType: __pixelTruncate(compact.elementInfo.eventType, 32)
+            };
+        }
+
+        compact.additionalInfo = {
+            schema: additionalInfo.schema || 'weline_behavior_timing_v1',
+            time: additionalInfo.time || {},
+            performance: __compactPixelPerformance(additionalInfo.performance),
+            funnel: __compactPixelFunnel(additionalInfo.funnel),
+            navigation: {
+                current_url: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.current_url, 512),
+                current_path: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.current_path, 160),
+                current_search: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.current_search, 160),
+                current_hash: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.current_hash, 80),
+                referrer: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.referrer, 512),
+                last_location: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.last_location, 512)
+            },
+            viewport: additionalInfo.viewport || {},
+            meta: additionalInfo.meta || {}
+        };
+
+        return compact;
+    }
+
+    function __isPassivePixelEvent(payload) {
+        var eventName = __normalizePixelEventName(payload && (payload.eventName || payload.event) || '');
+        return ['page_view', 'page_load', 'homepage', 'blog', 'category', 'account_', 'search_result_view'].some(function (name) {
+            return name.slice(-1) === '_' ? eventName.indexOf(name) === 0 : eventName === name;
+        });
+    }
+
+    function __schedulePixelDrain(delay) {
+        window.clearTimeout(__pixelSendTimer);
+        __pixelSendTimer = window.setTimeout(__drainPixelQueue, Math.max(0, delay || 0));
+    }
+
+    function __enqueuePixelPayload(payload, keepalive) {
+        var compactPayload = __compactPixelPayloadForWorker(payload);
+        __pixelSendQueue.push(compactPayload);
+        if (__pixelSendQueue.length > 16) {
+            __pixelSendQueue = __pixelSendQueue.slice(-16);
+        }
+        __schedulePixelDrain(keepalive ? 0 : (__isPassivePixelEvent(compactPayload) ? 1200 : 0));
+    }
+
+    function __drainPixelQueue() {
+        if (__pixelSendActive || __pixelSendQueue.length === 0) {
+            return;
+        }
+
+        __pixelSendActive = true;
+        var payload = __pixelSendQueue.shift();
+        __getVisitorWorkerApi()
+            .then(function (VisitorApi) {
+                return VisitorApi.trackPixel({ payload: payload }, { silent: true });
+            })
+            .catch(function (error) {
+                if (window.DEV) {
+                    console.debug('Weline Pixel worker send skipped:', error && error.message ? error.message : error);
+                }
+            })
+            .then(function () {
+                __pixelSendActive = false;
+                if (__pixelSendQueue.length > 0) {
+                    __schedulePixelDrain(250);
+                }
+            });
+    }
+
     window.WelinePixel = {
         endpoint: 'worker:visitor.trackPixel',
         env_model: __getPixelConfig('env_model', 'prod'),
@@ -734,17 +887,10 @@
         send: function (data) {
             data = data || this.initData;
             var payloadData = Object.assign({}, data);
+            var keepalive = !!payloadData.__keepalive;
             delete payloadData.__keepalive;
 
-            __getVisitorWorkerApi()
-                .then(function (VisitorApi) {
-                    return VisitorApi.trackPixel({ payload: payloadData }, { silent: true });
-                })
-                .catch(function (error) {
-                    if (window.DEV) {
-                        console.debug('Weline Pixel worker send skipped:', error && error.message ? error.message : error);
-                    }
-                });
+            __enqueuePixelPayload(payloadData, keepalive);
         },
         track: function (eventName, meta, options) {
             options = options || {};

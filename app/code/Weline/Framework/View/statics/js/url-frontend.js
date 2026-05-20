@@ -28,6 +28,34 @@
     }
     window.__WelineUrlFrontendInitialized = true;
 
+    function isIgnorableSwitchQueryParam(key) {
+        key = String(key || '').toLowerCase().trim();
+        if (!key) {
+            return false;
+        }
+        if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(key)) {
+            return true;
+        }
+        return key.startsWith('utm_') || key.startsWith('mtm_') || key.startsWith('pk_');
+    }
+
+    function sanitizeSwitchSearch(search) {
+        const raw = String(search || '');
+        if (!raw || raw === '?') {
+            return '';
+        }
+
+        const params = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
+        Array.from(params.keys()).forEach(key => {
+            if (isIgnorableSwitchQueryParam(key)) {
+                params.delete(key);
+            }
+        });
+
+        const query = params.toString();
+        return query ? '?' + query : '';
+    }
+
     /**
      * Cookie 操作函数（如果不存在则定义）
      */
@@ -316,20 +344,20 @@
      * 构建语言切换 URL
      */
     function buildUrlWithLang(path, lang, options = {}) {
-        const currentUrl = path || window.location.pathname + window.location.search;
+        const currentUrl = path || window.location.pathname + sanitizeSwitchSearch(window.location.search || '');
         const injectedPath = inject_path(currentUrl.split('?')[0], lang, 'lang');
-        const search = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
-        return injectedPath + (search ? '?' + search : '');
+        const search = currentUrl.includes('?') ? sanitizeSwitchSearch(currentUrl.split('?')[1] || '') : '';
+        return injectedPath + search;
     }
 
     /**
      * 构建货币切换 URL
      */
     function buildUrlWithCurrency(path, currency, options = {}) {
-        const currentUrl = path || window.location.pathname + window.location.search;
+        const currentUrl = path || window.location.pathname + sanitizeSwitchSearch(window.location.search || '');
         const injectedPath = inject_path(currentUrl.split('?')[0], currency, 'currency');
-        const search = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
-        return injectedPath + (search ? '?' + search : '');
+        const search = currentUrl.includes('?') ? sanitizeSwitchSearch(currentUrl.split('?')[1] || '') : '';
+        return injectedPath + search;
     }
 
     const config = getConfig();
@@ -410,7 +438,7 @@
     window.select_language = function (lang) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         setCookie('WELINE_USER_LANG', lang, 7, { path: '/' + config.area, domain: window.location.host });
-        window.location.href = inject_path(window.location.pathname, lang, 'lang') + window.location.search;
+        window.location.href = inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || '');
     };
 
     /**
@@ -419,7 +447,7 @@
     window.select_currency = function (currencyCode) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         setCookie('WELINE_USER_CURRENCY', currencyCode, 7, { path: '/', domain: window.location.host });
-        window.location.href = inject_path(window.location.pathname, currencyCode, 'currency') + window.location.search;
+        window.location.href = inject_path(window.location.pathname, currencyCode, 'currency') + sanitizeSwitchSearch(window.location.search || '');
     };
 
     /**

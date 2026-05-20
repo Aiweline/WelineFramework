@@ -14,11 +14,13 @@ namespace Weline\Framework\Runtime;
 
 use Weline\Framework\App;
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser as PhraseParser;
 use Weline\Framework\Router\Core as Router;
@@ -133,25 +135,46 @@ class WlsRuntime implements RuntimeInterface
         
         // 初始化框架核心
         App::init();
+        SchedulerSystem::yield();
         
         // 注册框架核心重置回调
         StateManager::registerFrameworkResets();
         FiberOutputBuffer::install();
+        SchedulerSystem::yield();
         
         // 预加载常用对象（进程级缓存）
-        $this->eventManager = ObjectManager::getInstance(EventsManager::class);
-        $this->router = ObjectManager::getInstance(Router::class);
-        Router::preloadGeneratedRouterFiles();
-        HookReader::preloadGeneratedHookRegistry();
-        PhraseParser::preloadWorkerDictionaries();
-        I18nParser::preloadWorkerDictionaries();
-        $this->dispatchWorkerBootstrapWarmup();
+        if ($this->shouldRunWorkerBootstrapWarmup()) {
+            $this->eventManager = ObjectManager::getInstance(EventsManager::class);
+            $this->router = ObjectManager::getInstance(Router::class);
+            Router::preloadGeneratedRouterFiles();
+            HookReader::preloadGeneratedHookRegistry();
+            PhraseParser::preloadWorkerDictionaries();
+            I18nParser::preloadWorkerDictionaries();
+            Url::preloadWorkerRoutingMetadata();
+            $this->dispatchWorkerBootstrapWarmup();
+            SchedulerSystem::yield();
+        }
         
         // Router 在 WLS 模式下是进程级单例。
         // 请求级状态由 Router::__init() 在每个请求开始时重置，
         // 无需在此注册额外回调（__init 通过 RequestContext ID 检测新请求）。
         
         $this->bootstrapped = true;
+    }
+
+    private function shouldRunWorkerBootstrapWarmup(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor'], true)) {
+            return false;
+        }
+
+        $flag = \strtolower(\trim((string)(\getenv('WLS_WORKER_BOOTSTRAP_WARMUP') ?: '')));
+        if ($flag === '') {
+            $flag = \strtolower(\trim((string)(Env::get('wls.worker_bootstrap_warmup', '') ?? '')));
+        }
+
+        return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync'], true);
     }
 
     private function dispatchWorkerBootstrapWarmup(): void
@@ -267,6 +290,11 @@ class WlsRuntime implements RuntimeInterface
                     'request_count' => $this->requestCount,
                 ];
                 WelineEnv::getInstance()->initFromRequest($request);
+                // WLS 常驻进程必须在当前 Request/$_SERVER 已就位后创建请求 ID。
+                // Template、PreparedContentStore 等请求级状态依赖 RequestContext
+                // 分片；缺失时会退回到 Fiber/连接级实例，导致模板数据跨请求串味。
+                RequestContext::init();
+                $requestMeta['request_id'] = (string)(RequestContext::getId() ?? '');
             }
             // WLS：请求入口再清一次 URL/ACL 请求级缓存，避免上一 finally 未跑全、fiber 交错或 parser 前
             // 观察者调用 getUrlPath 导致 static $url_paths / Acl 路由判定沿用旧路径，误判无权限跳 admin。
@@ -359,6 +387,26 @@ class WlsRuntime implements RuntimeInterface
             // 关键修复：Url::parser() 修改了 $_SERVER['REQUEST_URI']（去除了区域/货币/语言前缀）
             // 如果在 parser 之前有代码调用了 Request::getUri()（如 run_before 事件观察者），
             // 原始 URI 已被缓存在 Request 对象上，必须清除，否则 Router 会使用旧 URI 导致间歇性 404
+            $cachedFpcResponse = RequestContext::get('wls.fpc.cached_response');
+            if ($cachedFpcResponse instanceof Response) {
+                RequestContext::set('wls.fpc.cached_response', null);
+                $timing['fpc_hit'] = true;
+                $timing['fpc_source'] = (string)(RequestContext::get('wls.fpc.hit_source', '') ?: 'unknown');
+                $timing['fpc_process_items'] = (int)(RequestContext::get('wls.fpc.process_items', 0) ?: 0);
+                $timing['fpc_process_bytes'] = (int)(RequestContext::get('wls.fpc.process_bytes', 0) ?: 0);
+                $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
+                $timing['total_ms'] = $timing['pre_telemetry_total_ms'];
+                $cachedFpcResponse->setHeader('X-WLS-Performance-Total', (string)$timing['total_ms']);
+                $cachedFpcResponse->setHeader('X-WLS-Performance-UrlParser', (string)($timing['url_parser_call_ms'] ?? 0));
+                $cachedFpcResponse->setHeader('X-WLS-Performance-UrlParserApply', (string)($timing['process_url_parse_ms'] ?? 0));
+                $cachedFpcResponse->setHeader('X-WLS-Performance-FPC-Hit', '1');
+                $cachedFpcResponse->setHeader('X-WLS-Performance-FPC-Source', $timing['fpc_source']);
+                if (!empty($this->getPerformanceConfig()['response_headers_enabled'])) {
+                    $this->applyPerformanceHeaders($timing, $request);
+                }
+
+                return $cachedFpcResponse->toHttpString();
+            }
             $t3 = \microtime(true);
             $timing['url_parser_ms'] = \round(($t3 - $t2) * 1000, 2);
             if ($traceEnabled) {
@@ -399,6 +447,18 @@ class WlsRuntime implements RuntimeInterface
             }
             $t4 = \microtime(true);
             $timing['router_start_ms'] = \round(($t4 - $t3) * 1000, 2);
+            $accountTiming = RequestContext::get('account.index.timing');
+            if (\is_array($accountTiming) && $accountTiming !== []) {
+                $timing['account'] = $accountTiming;
+            }
+            $accountSidebarContentTiming = RequestContext::get('account.sidebar_content.timing');
+            if (\is_array($accountSidebarContentTiming) && $accountSidebarContentTiming !== []) {
+                $timing['account_sidebar_content'] = $accountSidebarContentTiming;
+            }
+            $routerProfile = RequestContext::get('router.start.profile');
+            if (\is_array($routerProfile) && $routerProfile !== []) {
+                $timing['router_profile'] = $routerProfile;
+            }
             if ($traceEnabled) {
                 RequestLifecycleTrace::recordSpan('router_start', $timing['router_start_ms'], 'framework');
             }
@@ -460,6 +520,9 @@ class WlsRuntime implements RuntimeInterface
             // WLS 多 Fiber 并发下，全局静态标记可能被其它 Fiber 的 SSE 请求短暂置为 true，
             // 若据此短路，普通 HTTP 请求会被误判为 SSE 并返回空响应。
             if ($this->isSseStreamHandledInCurrentRequest($request)) {
+                $this->logResponseDiagnostic('sse_stream_short_circuit', $request, $timing, [
+                    'result_type' => \get_debug_type($result),
+                ], false);
                 return '';  // SSE 响应已流式发送，不需要返回内容
             }
             
@@ -470,7 +533,24 @@ class WlsRuntime implements RuntimeInterface
             $resultStr = $app->broadcastTelemetry($resultStr, $request, true);
             $timing['telemetry_ms'] = \round((\microtime(true) - $telemetryStart) * 1000, 2);
             $timing['dev_tool_ms'] = RequestLifecycleTrace::sumDurationsByName('dev_tool_panel');
+            $accountTiming = RequestContext::get('account.index.timing');
+            if (\is_array($accountTiming) && $accountTiming !== []) {
+                $timing['account'] = $accountTiming;
+            }
+            $accountSidebarContentTiming = RequestContext::get('account.sidebar_content.timing');
+            if (\is_array($accountSidebarContentTiming) && $accountSidebarContentTiming !== []) {
+                $timing['account_sidebar_content'] = $accountSidebarContentTiming;
+            }
+            $routerProfile = RequestContext::get('router.start.profile');
+            if (\is_array($routerProfile) && $routerProfile !== []) {
+                $timing['router_profile'] = $routerProfile;
+            }
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
+            if ($resultStr === '') {
+                $this->logResponseDiagnostic('empty_runtime_response_body', $request, $timing, [
+                    'result_type' => \get_debug_type($result),
+                ]);
+            }
             $isDev = \defined('DEV') && DEV;
             $performanceConfig = $this->getPerformanceConfig();
             $slowThreshold = (float)($performanceConfig['slow_request_threshold_ms'] ?? 500.0);
@@ -653,6 +733,10 @@ class WlsRuntime implements RuntimeInterface
             $timing['worker_port'] = $requestMeta['worker_port'];
             $timing['pid'] = $requestMeta['pid'];
             $timing['request_count'] = $requestMeta['request_count'];
+            $queryBinTiming = RequestContext::get('query_bin.timing');
+            if (\is_array($queryBinTiming) && $queryBinTiming !== []) {
+                $timing['query_bin'] = $queryBinTiming;
+            }
             // 同步到 WelineEnv
             WelineEnv::set('request.method', $timing['method'], 'WlsRuntime finally');
             WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
@@ -1396,6 +1480,46 @@ class WlsRuntime implements RuntimeInterface
         }
         $base .= $parts['path'] ?? '';
         return $query === '' ? $base : $base . '?' . $query;
+    }
+
+    private function logResponseDiagnostic(string $event, ?Request $request, array $timing = [], array $extra = [], bool $warning = true): void
+    {
+        $logger = $warning ? 'w_log_warning' : 'w_log_info';
+        if (!\function_exists($logger)) {
+            return;
+        }
+
+        $context = $extra;
+        try {
+            $response = $request?->getResponse();
+            $router = $request?->getRouter() ?? [];
+            $context += [
+                'request_id' => RequestLifecycleTrace::ensureRequestId(),
+                'method' => $request?->getMethod() ?? '',
+                'uri' => $request?->getUri() ?: (\function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : ''),
+                'lang' => (string)State::getLang(),
+                'lang_local' => (string)State::getLangLocal(),
+                'currency' => (string)State::getCurrency(),
+                'status' => $response instanceof Response ? $response->getStatusCode() : 0,
+                'content_type' => $response instanceof Response ? (string)($response->getHeader('Content-Type') ?? '') : '',
+                'content_length_header' => $response instanceof Response ? (string)($response->getHeader('Content-Length') ?? '') : '',
+                'location' => $response instanceof Response ? (string)($response->getHeader('Location') ?? '') : '',
+                'body_length' => $response instanceof Response ? \strlen((string)$response->getBody()) : 0,
+                'module' => (string)($router['module'] ?? ($request?->getModuleName() ?? '')),
+                'controller' => (string)($router['controller'] ?? ''),
+                'action' => (string)($router['action'] ?? ''),
+                'is_sse_request' => $this->isSseRequest($request),
+                'sse_writer_started' => $this->isSseStreamHandledInCurrentRequest($request),
+            ];
+        } catch (\Throwable) {
+        }
+
+        if ($timing !== []) {
+            $context['timing'] = $timing;
+        }
+
+        $payload = \json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $logger('[WlsRuntimeResponseDiagnostics] ' . $event . ' ' . ($payload ?: '{}'));
     }
 
     private function isSseRequest(?Request $request = null): bool

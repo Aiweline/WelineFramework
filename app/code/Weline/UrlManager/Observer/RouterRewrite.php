@@ -157,6 +157,10 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         // - null: 缓存了"未找到"的结果
         // - false: 缓存未命中，需要查询数据库
         $rewriteData = $this->getProcessCache($cacheKey);
+        if ($rewriteData === false && $this->isCanonicalDirectRoute($cacheUri)) {
+            $this->setProcessCache($cacheKey, 'not_found');
+            return;
+        }
         if ($rewriteData === false) {
             $rewriteData = $cache->get($cacheKey);
             if ($rewriteData !== false) {
@@ -240,6 +244,46 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
      * @param string|null $urlId
      * @param int|null $websiteId
      */
+    private function isCanonicalDirectRoute(string $uri): bool
+    {
+        $path = \trim($this->normalizeRewriteCacheUri($uri), '/');
+        if ($path === '') {
+            return true;
+        }
+
+        $segments = \array_values(\array_filter(\explode('/', $path), static fn(string $segment): bool => $segment !== ''));
+        if ($segments === []) {
+            return true;
+        }
+
+        if (\preg_match('/^[A-Z]{3}$/i', $segments[0]) === 1) {
+            \array_shift($segments);
+        }
+        if (isset($segments[0]) && (
+            \preg_match('/^[a-z]{2}_[A-Z]{2}$/', $segments[0]) === 1
+            || \preg_match('/^[a-z]{2}_[A-Z][a-z]+_[A-Z]{2}$/', $segments[0]) === 1
+        )) {
+            \array_shift($segments);
+        }
+
+        $route = \implode('/', $segments);
+        if ($route === '') {
+            return true;
+        }
+
+        foreach ([
+            'catalog/category',
+            'customer/account',
+            'weshop/customer/account',
+        ] as $prefix) {
+            if ($route === $prefix || \str_starts_with($route, $prefix . '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function applyRewrite(Event &$event, string $path, string $uri, ?string $urlId = null, ?int $websiteId = null): void
     {
         # 读取原地址

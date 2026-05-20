@@ -9,4 +9,11 @@
                   shared="true"
                   sort="200"/>
     </event>
+    <event name="Weline_Server::dispatcher::warmup_paths">
+        <observer name="WeShop_Catalog::dispatcher_warmup_paths"
+                  instance="WeShop\Catalog\Observer\DispatcherWarmupPaths"
+                  disabled="false"
+                  shared="true"
+                  sort="200"/>
+    </event>
 </config>

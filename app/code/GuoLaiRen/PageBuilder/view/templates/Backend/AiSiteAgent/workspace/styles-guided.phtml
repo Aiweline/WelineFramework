@@ -21,8 +21,63 @@
     --pb-guided-shadow-lg: var(--backend-shadow-lg, 0 24px 64px rgba(15, 23, 42, 0.24));
 }
 .pb-guided-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.pb-guided-stage-guide {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 1.1rem 1.25rem;
+    border: 1px solid var(--pb-guided-border);
+    border-radius: 16px;
+    background:
+        linear-gradient(135deg, rgba(37, 99, 235, .08), rgba(20, 184, 166, .06)),
+        var(--pb-guided-surface);
+    box-shadow: var(--pb-guided-shadow-sm);
+}
+.pb-guided-stage-guide__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: .45rem;
+    padding: .28rem .62rem;
+    border-radius: 999px;
+    background: var(--pb-guided-primary-soft);
+    color: var(--backend-color-primary, #2563eb);
+    font-size: .76rem;
+    font-weight: 700;
+}
+.pb-guided-stage-guide__title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--backend-color-text-primary, #0f172a);
+}
+.pb-guided-stage-guide__text {
+    margin-top: .35rem;
+    color: var(--backend-color-text-secondary, #64748b);
+    font-size: .9rem;
+    line-height: 1.55;
+}
+.pb-guided-stage-guide__next {
+    min-width: 14rem;
+    padding: .85rem 1rem;
+    border-radius: 14px;
+    border: 1px solid var(--pb-guided-border-strong);
+    background: rgba(255, 255, 255, .72);
+    color: var(--backend-color-text-primary, #0f172a);
+}
+.pb-guided-stage-guide__next-label {
+    display: block;
+    margin-bottom: .25rem;
+    color: var(--backend-color-text-secondary, #64748b);
+    font-size: .74rem;
+    font-weight: 700;
+}
 .pb-guided-steps { display: flex; gap: 0; margin: 1.5rem 0 1rem; border-radius: 12px; overflow: hidden; background: var(--backend-color-bg-secondary, #f0f2f5); padding: 4px; }
 .pb-guided-header,
+.pb-guided-stage-guide,
 .pb-guided-steps,
 .pb-guided > .card.bg-soft-info {
     grid-column: 1 / -1;
@@ -229,6 +284,12 @@
     }
     .pb-guided-panel {
         order: 1;
+    }
+    .pb-guided-stage-guide {
+        grid-template-columns: 1fr;
+    }
+    .pb-guided-stage-guide__next {
+        min-width: 0;
     }
 }
 .pb-guided-preview-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; background: var(--pb-guided-surface-alt); border-radius: 16px; border: 2px dashed var(--pb-guided-border-strong); color: var(--backend-color-text-tertiary, #94a3b8); gap: .75rem; }

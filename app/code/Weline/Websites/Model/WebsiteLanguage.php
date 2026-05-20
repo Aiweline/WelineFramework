@@ -109,8 +109,21 @@ class WebsiteLanguage extends Model
                 $this->insert($data)->fetch();
             }
         }
-        
+
+        $this->clearWebsiteLanguageCaches();
+
         return $this;
+    }
+
+    private function clearWebsiteLanguageCaches(): void
+    {
+        try {
+            w_cache('website')->clear();
+            w_cache('i18n')->clear();
+            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
+            \Weline\Websites\Observer\DetectWebsite::clearProcessCache();
+        } catch (\Throwable) {
+        }
     }
 }
 
