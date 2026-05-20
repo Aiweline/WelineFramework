@@ -50,7 +50,7 @@ class Unblock extends CommandAbstract
             return;
         }
 
-        $info = MasterProcess::getMasterInfo($instanceName);
+        $info = MasterProcess::getMasterEndpoint($instanceName);
         $controlPort = (int) ($info['control_port'] ?? 0);
         if ($controlPort <= 0) {
             $this->printer->warning(__('无法获取控制端口，请检查 Master 是否运行'));

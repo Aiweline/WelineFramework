@@ -18,6 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Framework\App\Env;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\ServerInstanceManager;
@@ -206,7 +207,7 @@ class Status extends CommandAbstract
 
         $this->printer->note(__('使用 server:status <name> 查看详细状态'));
         $this->printer->note(__('使用 server:stop <name> 停止实例'));
-        $this->printer->note(__('如有残留实例文件，可执行 server:clean 清理失效记录'));
+        $this->printer->note(__('如有残留 endpoint 文件，可执行 server:clean 清理未运行记录'));
     }
     
     /**
@@ -390,22 +391,8 @@ class Status extends CommandAbstract
     protected function filterActiveInstances(array $instances, array $processInfoMap): array
     {
         $active = [];
-        $manager = $this->getInstanceManager();
         foreach ($instances as $name => $info) {
-            $rawData = $manager->getRawInstanceData($name) ?? [];
-            $masterRunning = $this->isMasterRunning($info, $processInfoMap);
-            $state = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
-            $starterPid = (int)($rawData['pid'] ?? 0);
-            $serviceStats = $this->getServiceStats($info, $processInfoMap, false);
-            if (!$masterRunning
-                && $serviceStats['running'] <= 0
-                && (
-                    \in_array($state, ['stopped', 'stale_cleanup'], true)
-                    || (empty($rawData['services']) && empty($rawData['master_enabled']) && ($starterPid <= 0 || !Processer::processExists($starterPid)))
-                )) {
-                continue;
-            }
-            if ($masterRunning || $serviceStats['running'] > 0) {
+            if ($this->isMasterRunning($info, $processInfoMap)) {
                 $active[$name] = $info;
             }
         }
@@ -419,19 +406,7 @@ class Status extends CommandAbstract
      */
     protected function buildProcessInfoMap(array $instances): array
     {
-        $pids = [];
-        foreach ($instances as $info) {
-            if ($info->masterPid > 0) {
-                $pids[$info->masterPid] = $info->masterPid;
-            }
-            foreach ($info->services as $service) {
-                foreach ($service->getManagedPids() as $pid) {
-                    $pids[$pid] = $pid;
-                }
-            }
-        }
-
-        return $pids === [] ? [] : Processer::batchGetProcessInfo(\array_values($pids));
+        return [];
     }
 
     /**
@@ -439,11 +414,12 @@ class Status extends CommandAbstract
      */
     protected function isMasterRunning(ServerInstanceInfo $info, array $processInfoMap): bool
     {
-        if ($info->masterPid <= 0) {
+        if ($info->controlPort <= 0) {
             return false;
         }
 
-        return (bool) ($processInfoMap[$info->masterPid]['exists'] ?? false);
+        $status = (new IpcControlGateway())->getStatus($info->name, 1.5);
+        return $status['success'] && (bool)($status['data']['running'] ?? false);
     }
 
     /**
@@ -453,6 +429,10 @@ class Status extends CommandAbstract
     {
         $trackingPid = $service->getTrackingPid();
         if ($trackingPid > 0) {
+            if ($processInfoMap === []) {
+                return $service->isExpectedRunningState();
+            }
+
             if ((bool) ($processInfoMap[$trackingPid]['exists'] ?? false)) {
                 return true;
             }
@@ -574,37 +554,6 @@ class Status extends CommandAbstract
     }
     
     /**
-     * 显示 Worker 内存占用（通过端口查找 PID）
-     */
-    protected function showWorkerMemory(int $port, string $prefix): void
-    {
-        $pid = Processer::getProcessIdByPort($port);
-        if ($pid <= 0) {
-            return;
-        }
-        $info = Processer::getProcessInfo($pid);
-        $memory = (string)($info['memory'] ?? '');
-        if ($memory !== '') {
-            $this->printer->note('  ' . $prefix . '  └─ ' . __('内存：') . $memory . ' (PID: ' . $pid . ')');
-        }
-    }
-    
-    /**
-     * 显示进程内存占用（通过 PID 直接获取）
-     */
-    protected function showProcessMemory(int $pid, string $prefix): void
-    {
-        if ($pid <= 0) {
-            return;
-        }
-        $info = Processer::getProcessInfo($pid);
-        $memory = (string)($info['memory'] ?? '');
-        if ($memory !== '') {
-            $this->printer->note($prefix . '└─ ' . __('内存：') . $memory);
-        }
-    }
-    
-    /**
      * 显示启动提示
      */
     protected function showStartTip(): void
@@ -640,7 +589,7 @@ class Status extends CommandAbstract
                 __('查看所有实例') => 'php bin/w server:status',
                 __('查看指定实例') => 'php bin/w server:status api-server',
                 __('实时监控（watch 模式）') => 'php bin/w server:status -w',
-                __('清理失效实例记录') => 'php bin/w server:clean',
+                __('清理未运行实例记录') => 'php bin/w server:clean',
             ]
         );
     }

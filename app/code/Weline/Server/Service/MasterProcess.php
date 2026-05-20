@@ -260,7 +260,7 @@ class MasterProcess
             $this->log(__('  已注册 Master PID'));
             $this->logger->flush(true);
 
-            // 标记/清理孤儿实例记录；保留实例 JSON 供后续控制与恢复使用。
+            // 标记/清理孤儿 endpoint；运行态恢复必须回到 Master IPC。
             $this->cleanupStaleInstanceFiles();
             $this->logger->flush(true);
 
@@ -421,7 +421,7 @@ class MasterProcess
                 WlsLogger::debug_('[Master] IPC 关闭过程中出现错误: ' . $ipcError->getMessage());
             }
 
-            // 最后再注销 Master PID，并在保留实例 JSON 的前提下标记/清理运行记录。
+            // 最后再注销 Master PID，并标记/清理 endpoint 记录。
             try {
                 $this->unregisterMasterPid();
             } catch (\Throwable $indexCleanupError) {
@@ -474,7 +474,7 @@ class MasterProcess
      * Master 退出后整理实例运行记录。
      *
      * 若子进程仍存活，则保留 instance.json，避免 stop/status 失去恢复线索。
-     * 若所有受管进程都已退出，则标记/清理当前运行记录；实例 JSON 仍保留。
+     * 若所有受管进程都已退出，则标记/清理当前 endpoint 记录。
      */
     private function finalizeInstanceRuntimeAfterMasterExit(int $masterPid): void
     {
@@ -497,14 +497,14 @@ class MasterProcess
      * 清理孤儿实例记录（启动时调用）
      *
      * 标记/清理 updated_at 超过 60 秒未更新的实例记录，
-     * 说明对应的 Master 进程已经死亡或崩溃；实例 JSON 文件保留供后续控制与恢复使用。
+     * 说明对应的 Master 进程已经死亡或崩溃；endpoint 文件只保留停止态诊断信息。
      */
     private function cleanupStaleInstanceFiles(): void
     {
         try {
             $cleaned = (new ServerInstanceManager())->cleanupStaleInstances();
             if ($cleaned > 0) {
-                $this->log(__('共清理 %{1} 个孤儿实例记录，实例 JSON 已保留', [$cleaned]));
+                $this->log(__('共清理 %{1} 个孤儿 endpoint 记录', [$cleaned]));
             }
         } catch (\Throwable $e) {
             $this->log(__('孤儿实例清理过程出错: %{1}', [$e->getMessage()]));
@@ -887,14 +887,19 @@ class MasterProcess
         // Master data is merged under the instance lock below.
         // Master 进程的状态信息
         $masterData = [
+            'schema_version' => 2,
             'master_pid' => \getmypid(),
+            'pid' => \getmypid(),
             'master_enabled' => true,
             'master_started_at' => \date('Y-m-d H:i:s'),
             'master_mode' => $this->mode,
             'main_port' => $this->mainPort,
+            'port' => $this->mainPort,
             'control_port' => $this->controlPort,
             'startup_phase' => $startupPhase,
+            'lifecycle_state' => $startupPhase === 'running' ? 'running' : 'starting',
             'instance_name' => $this->instanceName,
+            'name' => $this->instanceName,
             'orchestrator_mode' => true,
             'updated_at' => \time(),  // 心跳时间戳（用于检测 Master 是否存活）
         ];
@@ -909,12 +914,57 @@ class MasterProcess
         }
 
         $mergeMasterData = static function (array $existingData) use ($masterData): array {
-            return \array_merge($existingData, $masterData);
+            return self::normalizeMasterEndpointRecord($existingData, $masterData);
         };
 
         // Use the same read-modify-write lock as Start.php and the orchestrator.
         // This avoids overwriting runtime fields during Windows rename windows.
-        ServerInstanceManager::atomicUpdateJsonStatic($instanceFile, $mergeMasterData, 10);
+        ServerInstanceManager::updateJsonFileAtomically($instanceFile, $mergeMasterData, 10);
+    }
+
+    /**
+     * Keep only launch metadata plus the Master IPC endpoint in the instance
+     * file. Service topology is not persisted here.
+     *
+     * @param array<string, mixed> $existingData
+     * @param array<string, mixed> $masterData
+     * @return array<string, mixed>
+     */
+    private static function normalizeMasterEndpointRecord(array $existingData, array $masterData): array
+    {
+        $allowedExistingFields = [
+            'name',
+            'instance_name',
+            'host',
+            'public_host',
+            'port',
+            'main_port',
+            'count',
+            'daemon',
+            'ssl_enabled',
+            'ssl_cert',
+            'ssl_key',
+            'dispatcher_enabled',
+            'worker_port',
+            'worker_base_port',
+            'http_redirect_port',
+            'started_by',
+            'started_at',
+            'started_timestamp',
+            'php_version',
+            'os',
+            'window_mode',
+            'frontend',
+        ];
+
+        $record = [];
+        foreach ($allowedExistingFields as $field) {
+            if (\array_key_exists($field, $existingData)) {
+                $record[$field] = $existingData[$field];
+            }
+        }
+
+        return \array_merge($record, $masterData);
     }
 
     /**
@@ -1035,7 +1085,7 @@ class MasterProcess
     /**
      * 获取实例的 Master 信息
      */
-    public static function getMasterInfo(string $instanceName = 'default'): ?array
+    public static function getMasterEndpoint(string $instanceName = 'default'): ?array
     {
         $file = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         if (!\is_file($file)) {
@@ -1050,150 +1100,14 @@ class MasterProcess
             return null;
         }
 
-        $data = self::rehydrateMasterInfo($data);
-        if (empty($data['master_enabled'])) {
-            $data = self::discoverLiveMasterInfo($instanceName, $data);
-            if (empty($data['master_enabled'])) {
-                return null;
-            }
-        }
-        return $data;
-    }
-
-    /**
-     * Recover Master control metadata from current_snapshot or instance_records
-     * when the top-level instance data was partially overwritten.
-     *
-     * @param array<string, mixed> $data
-     * @return array<string, mixed>
-     */
-    private static function rehydrateMasterInfo(array $data): array
-    {
-        if (self::hasMasterControlMetadata($data) || self::isStoppedInstanceRecord($data)) {
-            return $data;
-        }
-
-        $currentSnapshot = $data['current_snapshot'] ?? null;
-        if (\is_array($currentSnapshot)
-            && !self::isStoppedInstanceRecord($currentSnapshot)
-            && self::hasMasterControlMetadata($currentSnapshot)
+        if (empty($data['master_enabled'])
+            || (int)($data['master_pid'] ?? 0) <= 0
+            || (int)($data['control_port'] ?? 0) <= 0
         ) {
-            return \array_merge($data, $currentSnapshot, ['master_enabled' => true]);
-        }
-
-        $records = $data['instance_records'] ?? [];
-        if (!\is_array($records)) {
-            return $data;
-        }
-
-        for ($i = \count($records) - 1; $i >= 0; $i--) {
-            $record = $records[$i] ?? null;
-            if (!\is_array($record)
-                || self::isStoppedInstanceRecord($record)
-                || !self::hasMasterControlMetadata($record)
-            ) {
-                continue;
-            }
-
-            return \array_merge($data, $record, ['master_enabled' => true]);
+            return null;
         }
 
         return $data;
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     */
-    private static function hasMasterControlMetadata(array $data): bool
-    {
-        return (int)($data['master_pid'] ?? 0) > 0
-            && (int)($data['control_port'] ?? 0) > 0;
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     */
-    private static function isStoppedInstanceRecord(array $data): bool
-    {
-        return ($data['lifecycle_state'] ?? null) === 'stopped'
-            || ($data['startup_phase'] ?? null) === 'stopped';
-    }
-
-    /**
-     * Last-resort recovery for a running Master whose instance JSON lost all
-     * control metadata. This path only runs after file-based metadata fails.
-     *
-     * @param array<string, mixed> $data
-     * @return array<string, mixed>
-     */
-    private static function discoverLiveMasterInfo(string $instanceName, array $data): array
-    {
-        if (self::isStoppedInstanceRecord($data)) {
-            return $data;
-        }
-
-        $masterPids = Processer::getProcessIdsByName(self::getMasterProcessName($instanceName));
-        if ($masterPids === []) {
-            return $data;
-        }
-
-        $masterPidSet = \array_fill_keys(\array_map('intval', $masterPids), true);
-        foreach (self::getControlMetadataProbeProcessNames($instanceName) as $processName) {
-            foreach (Processer::getProcessIdsByName($processName) as $pid) {
-                $commandLine = Processer::getProcessCommandLine((int)$pid);
-                $masterPid = self::extractIntCommandOption($commandLine, 'master-pid');
-                $controlPort = self::extractIntCommandOption($commandLine, 'control-port');
-                if ($masterPid <= 0 || $controlPort <= 0 || !isset($masterPidSet[$masterPid])) {
-                    continue;
-                }
-                if (!Processer::isPortInUse($controlPort)) {
-                    continue;
-                }
-
-                return \array_merge($data, [
-                    'master_enabled' => true,
-                    'master_pid' => $masterPid,
-                    'control_port' => $controlPort,
-                    'instance_name' => $instanceName,
-                    'updated_at' => \time(),
-                ]);
-            }
-        }
-
-        return $data;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function getControlMetadataProbeProcessNames(string $instanceName): array
-    {
-        return [
-            self::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
-            self::buildScopedProcessName('weline-wls-session', $instanceName),
-            self::buildScopedProcessName('weline-wls-memory', $instanceName),
-            self::buildScopedProcessName(self::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
-        ];
-    }
-
-    private static function extractIntCommandOption(string $commandLine, string $name): int
-    {
-        if ($commandLine === '' || $name === '') {
-            return 0;
-        }
-
-        $pattern = '/--' . \preg_quote($name, '/') . '(?:=|\s+)(?:"([^"]+)"|\'([^\']+)\'|([^\s]+))/i';
-        if (!\preg_match($pattern, $commandLine, $matches)) {
-            return 0;
-        }
-
-        foreach ([1, 2, 3] as $index) {
-            if (!empty($matches[$index])) {
-                return \max(0, (int)$matches[$index]);
-            }
-        }
-
-        return 0;
     }
 
     /**
@@ -1201,7 +1115,7 @@ class MasterProcess
      */
     public static function isMasterRunning(string $instanceName = 'default'): bool
     {
-        $info = self::getMasterInfo($instanceName);
+        $info = self::getMasterEndpoint($instanceName);
         if (!$info || empty($info['master_pid'])) {
             return false;
         }
@@ -1237,131 +1151,6 @@ class MasterProcess
     }
 
     /**
-     * 停机进度消息类型判定。
-     */
-    protected static function classifyStopProgressMessage(string $message): string
-    {
-        if (\str_contains($message, '✓')
-            || \str_contains($message, '已退出')
-            || \str_contains($message, '已断开')
-            || \str_contains($message, '排水完成')) {
-            return 'success';
-        }
-
-        if (\str_contains($message, '失败')
-            || \str_contains($message, '错误')
-            || \str_contains($message, '超时')) {
-            return 'error';
-        }
-
-        if (\str_contains($message, 'SHUTDOWN')
-            || \str_contains($message, '通知子进程退出')
-            || \str_contains($message, '强制')
-            || \str_contains($message, '校验子进程退出')
-            || \str_contains($message, 'Master 即将退出')
-            || \str_contains($message, 'Stopping')) {
-            return 'stop';
-        }
-
-        if (\str_contains($message, 'DRAIN')
-            || \str_contains($message, '排水')
-            || \str_contains($message, '等待排水')
-            || \str_contains($message, '阶段')) {
-            return 'drain';
-        }
-
-        return 'info';
-    }
-
-    /**
-     * 输出统一的 IPC 停机进度。
-     */
-    protected static function renderStopProgress(string $message): void
-    {
-        self::ipcMsg($message, self::classifyStopProgressMessage($message));
-    }
-
-    /**
-     * 信号停止时，自连本地控制端口并复用 IPC 停机流程。
-     */
-    private function stopWithProgressViaIpc(string $signal): bool
-    {
-        $server = $this->orchestrator?->getControlServer();
-        if ($server === null || $this->controlPort <= 0) {
-            return false;
-        }
-
-        $errno = 0;
-        $errstr = '';
-        $conn = @\stream_socket_client("tcp://127.0.0.1:{$this->controlPort}", $errno, $errstr, 3);
-        if (!$conn) {
-            return false;
-        }
-
-        $written = @\fwrite($conn, ControlMessage::command(
-            ControlMessage::ACTION_STOP,
-            '',
-            [
-                'stop_intent' => 'explicit',
-                'stop_source' => 'master:signal-bridge',
-                'stop_trace_id' => 'sig-stop-' . \getmypid() . '-' . \time(),
-            ]
-        ));
-        if ($written === false || $written === 0) {
-            @\fclose($conn);
-            return false;
-        }
-
-        \stream_set_blocking($conn, false);
-        \stream_set_timeout($conn, 0);
-
-        $deadline = \microtime(true) + 20.0;
-        $buffer = '';
-        $lastProgress = '';
-
-        if (!$this->isDaemonModeConfigured()) {
-            self::ipcMsg("收到 {$signal}，已切换到统一 IPC 停机流程", 'stop');
-        }
-
-        while (\microtime(true) < $deadline) {
-            $server->poll(0, 100000);
-
-            $chunk = @\fread($conn, 4096);
-            if ($chunk !== false && $chunk !== '') {
-                $buffer .= $chunk;
-                foreach (ControlMessage::extractMessages($buffer) as $msg) {
-                    if (($msg['type'] ?? '') !== ControlMessage::TYPE_COMMAND_RESULT) {
-                        continue;
-                    }
-
-                    $message = (string) ($msg['message'] ?? '');
-                    if ($message === '' || $message === $lastProgress) {
-                        continue;
-                    }
-
-                    if (!$this->isDaemonModeConfigured()) {
-                        self::renderStopProgress($message);
-                    }
-                    $lastProgress = $message;
-                }
-            }
-
-            if (\feof($conn)) {
-                @\fclose($conn);
-                return true;
-            }
-        }
-
-        @\fclose($conn);
-
-        if (!$this->isDaemonModeConfigured()) {
-            self::ipcMsg("等待本地 IPC 停机进度超时（signal={$signal}）", 'error');
-        }
-
-        return false;
-    }
-
-    /**
      * 通过 IPC 控制通道发送停止命令给 Master
      * 
      * @param string $instanceName 实例名称
@@ -1370,7 +1159,7 @@ class MasterProcess
      */
     public static function sendStopCommand(string $instanceName = 'default', bool $verbose = true): bool
     {
-        $info = self::getMasterInfo($instanceName);
+        $info = self::getMasterEndpoint($instanceName);
         if (!$info || empty($info['control_port'])) {
             if ($verbose) {
                 self::ipcMsg("无法获取实例 [{$instanceName}] 的控制端口信息", 'error');

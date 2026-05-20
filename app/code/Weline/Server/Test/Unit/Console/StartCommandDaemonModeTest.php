@@ -33,7 +33,7 @@ final class StartCommandDaemonModeTest extends TestCase
         $start = new class extends Start {
             public function frontendFlag(array $args): bool
             {
-                return $this->resolveFrontendFlag($args);
+                return $this->resolveWindowModeFlag($args);
             }
         };
         $start->__init();
@@ -60,7 +60,7 @@ final class StartCommandDaemonModeTest extends TestCase
         $start = new class extends Start {
             public function frontendFlag(array $args): bool
             {
-                return $this->resolveFrontendFlag($args);
+                return $this->resolveWindowModeFlag($args);
             }
         };
         $start->__init();
