@@ -10,6 +10,8 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
+use GuoLaiRen\PageBuilder\Service\AiSiteWorkflowTrace;
 use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -110,6 +112,13 @@ class AiSiteBuildQueue implements QueueInterface
             if (!$session instanceof AiSiteAgentSession) {
                 throw new \RuntimeException('会话不存在或无权访问。');
             }
+            AiSiteWorkflowTrace::log('queue_build_execute_start', [
+                'public_id' => $publicId,
+                'queue_id' => $queueId,
+                'operation' => $operation,
+                'execution_token' => $effectiveExecutionToken,
+                'force_rebuild' => $forceFullBuildRegeneration,
+            ]);
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
             $supersedingQueueRow = $this->findSupersedingQueueRow(
                 $queueId,
@@ -326,6 +335,17 @@ class AiSiteBuildQueue implements QueueInterface
 
                     return $retryMessage;
                 }
+                $this->markQueueBuildOperationPassedGate(
+                    $sessionService,
+                    $scopeService,
+                    $buildTaskService,
+                    $session,
+                    $adminId,
+                    $operation,
+                    $effectiveExecutionToken,
+                    $queueId
+                );
+            } elseif (\in_array($operation, ['block_regenerate', 'block_partial_patch'], true)) {
                 $this->markQueueBuildOperationPassedGate(
                     $sessionService,
                     $scopeService,
@@ -758,6 +778,13 @@ class AiSiteBuildQueue implements QueueInterface
             \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
             $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
         );
+        $pageTypes = $scopeService->resolveScopedPageTypes($scope);
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId > 0 && $pageTypes !== []) {
+            /** @var AiSiteVirtualThemeService $virtualThemeService */
+            $virtualThemeService = ObjectManager::getInstance(AiSiteVirtualThemeService::class);
+            $virtualThemeService->resetGeneratedPageLayoutsForRebuild($virtualThemeId, $pageTypes);
+        }
         $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
         $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope, false);
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, \array_replace($buildTaskService->extractBuildPlanDerivedScopePatch($scope), [
@@ -881,11 +908,12 @@ class AiSiteBuildQueue implements QueueInterface
         $message = $this->formatBuildCompletionGateBlockedMessage($buildTaskService, $gate, $operation);
         if ($this->shouldRetryBuildQueue($gate) && $attempt < $maxAttempts) {
             $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'requeued';
+            $retryQueueId = $this->createCompletionGateRetryQueue($queue, $content, $message);
             $scope = $buildTaskService->resetUnfinishedTasksForQueueRetry($scope, $message);
             $scope = $this->patchBuildActiveOperationForRetry(
                 $scope,
                 $operation,
-                $queueId,
+                $retryQueueId,
                 $attempt,
                 $maxAttempts,
                 $executionToken,
@@ -898,7 +926,8 @@ class AiSiteBuildQueue implements QueueInterface
                 $adminId,
                 'pagebuilder_queue_retry_scheduled',
                 [
-                    'queue_id' => $queueId,
+                    'queue_id' => $retryQueueId,
+                    'retry_of_queue_id' => $queueId,
                     'attempt' => $attempt,
                     'max_attempts' => $maxAttempts,
                     'last_gate_reason' => (string)($gate['reason'] ?? 'completion_gate_failed'),
@@ -906,11 +935,11 @@ class AiSiteBuildQueue implements QueueInterface
                 ],
                 AiSiteAgentSession::STAGE_VISUAL_EDIT
             );
-            $this->requeueQueueToPending($queue, $content, $message);
+            $this->markQueueRetryScheduled($queue, $retryQueueId, $content, $message);
 
             return [
                 'action' => 'requeued',
-                'message' => $message,
+                'message' => $message . ' Replacement queue #' . $retryQueueId . ' scheduled.',
             ];
         }
 
@@ -1010,6 +1039,12 @@ class AiSiteBuildQueue implements QueueInterface
             $buildSummary['last_generated_at'] = $now;
             $scope['build_summary'] = $buildSummary;
         } elseif ($isScopedBuildOperation) {
+            $scope = $this->clearResolvedScopedBuildOperationFailureState(
+                $scope,
+                $operation,
+                $executionToken,
+                $buildTaskService
+            );
             $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
             $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
             $buildSummary['active_operation'] = $operation;
@@ -1018,6 +1053,57 @@ class AiSiteBuildQueue implements QueueInterface
         }
 
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function clearResolvedScopedBuildOperationFailureState(
+        array $scope,
+        string $operation,
+        string $executionToken,
+        AiSiteBuildTaskService $buildTaskService
+    ): array {
+        if (isset($scope['retryable_ai_failures']['build']['items'][$operation])) {
+            unset($scope['retryable_ai_failures']['build']['items'][$operation]);
+        }
+        $scope = $buildTaskService->clearResolvedRetryableAiFailures($scope);
+        $buildLedger = $buildTaskService->getRetryableAiFailures($scope, 'build');
+        $items = \is_array($buildLedger['build']['items'] ?? null) ? $buildLedger['build']['items'] : [];
+        if ($items !== []) {
+            foreach ($items as $itemKey => $item) {
+                if (!\is_array($item)) {
+                    unset($items[$itemKey]);
+                    continue;
+                }
+                $itemOperation = \trim((string)($item['operation'] ?? ''));
+                $retryOperation = \trim((string)($item['retry_operation'] ?? ''));
+                $failureToken = \trim((string)($item['execution_token'] ?? ''));
+                if (
+                    $itemKey === $operation
+                    || $itemOperation === $operation
+                    || $retryOperation === $operation
+                    || ($failureToken !== '' && $this->executionTokenMatches($failureToken, $executionToken))
+                ) {
+                    unset($items[$itemKey]);
+                }
+            }
+        }
+        $scope = $buildTaskService->replaceRetryableAiFailures($scope, 'build', $items);
+
+        $latestFailure = \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [];
+        $latestOperation = \trim((string)($latestFailure['operation'] ?? ''));
+        if ($latestOperation === $operation && $items === []) {
+            $scope['latest_build_failed'] = 0;
+            $scope['latest_build_failure'] = [];
+            $scope['publish_blocked_by_latest_ai_failure'] = 0;
+            $scope['publish_blocked_reason'] = '';
+            $scope['next_stage_blocked_by_ai_failures'] = 0;
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+        }
+
+        return $scope;
     }
 
     /**
@@ -1147,6 +1233,15 @@ class AiSiteBuildQueue implements QueueInterface
         $activeOperations[$operation] = $operationState;
         $scope['active_operations'] = $activeOperations;
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+        $scope['_queue_force_build'] = [
+            'active' => 0,
+            'consumed_at' => $now,
+            'failure_queue_id' => $queueId,
+        ];
+        $scope['_build_regeneration'] = [
+            'active' => 0,
+            'finished_at' => $now,
+        ];
 
         return $scope;
     }
@@ -1587,6 +1682,56 @@ class AiSiteBuildQueue implements QueueInterface
             ->setData(Queue::schema_fields_start_at, null)
             ->setData(Queue::schema_fields_end_at, null)
             ->setContent($this->encodeQueueContent($content))
+            ->setProcess($message)
+            ->setResult($this->appendQueueMessage((string)$queue->getResult(), $line))
+            ->save();
+        $this->mirrorToCli($line);
+    }
+
+    /**
+     * The framework runner marks the current row done after execute() returns.
+     * For scheduler-owned retries, create a replacement pending row instead of
+     * relying on same-row status changes that the runner would overwrite.
+     *
+     * @param array<string, mixed> $content
+     */
+    private function createCompletionGateRetryQueue(Queue &$queue, array $content, string $message): int
+    {
+        $queueId = (int)$queue->getId();
+        $content['retry_of_queue_id'] = $queueId;
+        $content['retry_reason'] = $message;
+        $content['retry_scheduled_at'] = \date('Y-m-d H:i:s');
+        $content['execution_token'] = \trim((string)($content['execution_token'] ?? ''));
+        $name = \trim((string)$queue->getName());
+        if ($name === '') {
+            $name = 'PageBuilder build retry';
+        }
+        $created = w_query('queue', 'create', [
+            'class' => self::class,
+            'name' => $name . ' retry',
+            'module' => 'GuoLaiRen_PageBuilder',
+            'content' => $content,
+            'status' => Queue::status_pending,
+            'auto' => true,
+            'biz_key' => $queue->getBizKey(),
+        ]);
+        $retryQueueId = (int)($created['queue_id'] ?? 0);
+        if ($retryQueueId <= 0) {
+            throw new \RuntimeException('Unable to schedule PageBuilder build retry queue after completion gate block.');
+        }
+
+        return $retryQueueId;
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function markQueueRetryScheduled(Queue &$queue, int $retryQueueId, array $content, string $message): void
+    {
+        $line = '[' . \date('H:i:s') . '] QUEUE_REQUEUE replacement_queue=' . $retryQueueId . ' ' . $message;
+        $queue->setContent($this->encodeQueueContent($content))
+            ->setFinished(false)
+            ->setPid(0)
             ->setProcess($message)
             ->setResult($this->appendQueueMessage((string)$queue->getResult(), $line))
             ->save();

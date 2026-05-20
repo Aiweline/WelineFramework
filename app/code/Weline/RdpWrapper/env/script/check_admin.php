@@ -45,7 +45,7 @@ if ($action === 'install') {
     echo "\n";
     echo "请按以下方式以管理员身份运行：\n";
     echo "  1. 右键点击 PowerShell 或命令提示符\n";
-    echo "  2. 选择"以管理员身份运行"\n";
+    echo "  2. 选择\"以管理员身份运行\"\n";
     echo "  3. 在管理员窗口中启动 Weline Server\n";
     exit(1);
 }

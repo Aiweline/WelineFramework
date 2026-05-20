@@ -4,18 +4,22 @@ declare(strict_types=1);
 namespace Weline\Server\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\App\Env;
-use Weline\Server\IPC\ControlMessage;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Console\Server\Hosts\Add as HostsAddCommand;
+use Weline\Server\Model\AttackLog;
 use Weline\Server\Model\SslCertificate as CertModel;
 use Weline\Server\Service\Control\BackendStatusService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Service\Control\SharedStateAdminService;
+use Weline\Server\Service\HealthAllowCookieService;
 use Weline\Server\Service\HostsFileManager;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\OptimizationGuideService;
 use Weline\Server\Service\SslCertificateService;
-use Weline\Server\Service\Control\SharedStateAdminService;
 
 /**
  * Weline Server 统一查询器
@@ -31,7 +35,9 @@ class ServerQueryProvider implements QueryProviderInterface
         private readonly IpcControlGateway $ipcControlGateway,
         private readonly BroadcastControlDispatchService $broadcastControlDispatchService,
         private readonly SharedStateAdminService $sharedStateAdminService,
-        private readonly CertModel $sslCertModel
+        private readonly CertModel $sslCertModel,
+        private readonly ?AttackLog $attackLog = null,
+        private readonly ?HealthAllowCookieService $healthAllowCookieService = null
     ) {
     }
 
@@ -68,6 +74,8 @@ class ServerQueryProvider implements QueryProviderInterface
             'memoryKeyDelete' => $this->memoryKeyDelete($params),
             'memoryPersist' => $this->memoryPersist(),
             'memoryGc' => $this->memoryGc($params),
+            'attackStats' => $this->attackStats($params),
+            'setHealthAllowCookie' => $this->setHealthAllowCookie(),
             'optimizationData' => $this->optimizationData(),
             'listCertificates' => $this->listCertificates(),
             'certificateDetail' => $this->certificateDetail($params),
@@ -213,6 +221,31 @@ class ServerQueryProvider implements QueryProviderInterface
                         ['name' => 'handle', 'type' => 'string', 'required' => false],
                         ['name' => 'is_home_page', 'type' => 'bool', 'required' => true],
                     ],
+                ],
+                [
+                    'name' => 'attackStats',
+                    'description' => __('读取 WLS 攻击统计'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        ['name' => 'instance', 'type' => 'string', 'required' => false, 'description' => __('实例名')],
+                        ['name' => 'days', 'type' => 'int', 'required' => false, 'description' => __('统计天数')],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Load WLS attack stats',
+                ],
+                [
+                    'name' => 'setHealthAllowCookie',
+                    'description' => __('为当前后台浏览器设置 WLS 健康检查放行 Cookie'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Set WLS health allow cookie',
                 ],
             ],
         ];
@@ -662,6 +695,26 @@ class ServerQueryProvider implements QueryProviderInterface
         ];
     }
 
+    private function attackStats(array $params): array
+    {
+        if (!$this->isBackendLoggedIn()) {
+            return ['success' => false, 'message' => __('请先登录后台')];
+        }
+
+        $instance = (string)($params['instance'] ?? '');
+        $days = (int)($params['days'] ?? 7);
+
+        return [
+            'success' => true,
+            'data' => $this->attackLog()->getStatistics($instance, $days),
+        ];
+    }
+
+    private function setHealthAllowCookie(): array
+    {
+        return $this->healthAllowCookieService()->issue();
+    }
+
     private function optimizationData(): array
     {
         return [
@@ -1007,6 +1060,21 @@ class ServerQueryProvider implements QueryProviderInterface
         $payload['covers_hostname'] = $cert->coversHostname($hostname);
 
         return $payload;
+    }
+
+    private function isBackendLoggedIn(): bool
+    {
+        return SessionFactory::getInstance()->createBackendSession()->isLoggedIn();
+    }
+
+    private function attackLog(): AttackLog
+    {
+        return $this->attackLog ?? ObjectManager::getInstance(AttackLog::class);
+    }
+
+    private function healthAllowCookieService(): HealthAllowCookieService
+    {
+        return $this->healthAllowCookieService ?? ObjectManager::getInstance(HealthAllowCookieService::class);
     }
 
     private function isEligibleWelineLocalHostDomain(string $domain): bool

@@ -22,7 +22,6 @@ use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\ServerInstanceManager;
-use Weline\Server\Service\SharedStateServiceManager;
 
 /**
  * server:status - 查看服务器状态
@@ -203,7 +202,6 @@ class Status extends CommandAbstract
             $index++;
         }
 
-        $this->showSharedDependencies();
 
         $this->printer->note(__('使用 server:status <name> 查看详细状态'));
         $this->printer->note(__('使用 server:stop <name> 停止实例'));
@@ -268,7 +266,6 @@ class Status extends CommandAbstract
         
         // 显示所有服务实例（按优先级排序，使用预取的内存信息）
         $this->showServicesTree($info, $processInfoMap);
-        $this->showSharedDependencies();
 
         // 总结
         $stats = $this->getServiceStats($info, $processInfoMap);
@@ -498,51 +495,6 @@ class Status extends CommandAbstract
     {
         return $service->role === ControlMessage::ROLE_SESSION_SERVER
             || $service->role === ControlMessage::ROLE_MEMORY_SERVER;
-    }
-
-    protected function showSharedDependencies(): void
-    {
-        $manager = new SharedStateServiceManager();
-
-        echo "\n";
-        $this->printer->note(__('全局共享依赖：'));
-        $this->showSharedDependencyStatus(
-            __('Session Server'),
-            $manager->status(ControlMessage::ROLE_SESSION_SERVER)
-        );
-        $this->showSharedDependencyStatus(
-            __('Memory Service'),
-            $manager->status(ControlMessage::ROLE_MEMORY_SERVER)
-        );
-    }
-
-    /**
-     * @param array<string, mixed> $status
-     */
-    protected function showSharedDependencyStatus(string $label, array $status): void
-    {
-        if (($status['enabled'] ?? true) === false) {
-            $this->printer->note('  ' . $label . ': ' . __('disabled'));
-
-            return;
-        }
-
-        $healthy = (bool) ($status['healthy'] ?? false);
-        $color = $healthy ? 'success' : 'warning';
-        $summary = $label
-            . ': '
-            . ($healthy ? __('运行中') : __('不可用'))
-            . ' '
-            . (string) ($status['host'] ?? '127.0.0.1')
-            . ':'
-            . (int) ($status['port'] ?? 0)
-            . ' (PID:'
-            . (int) ($status['pid'] ?? 0)
-            . ', token:'
-            . (string) ($status['token_file_name'] ?? '')
-            . ')';
-
-        $this->printer->$color('  ' . $summary);
     }
 
     /**

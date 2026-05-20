@@ -25,6 +25,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
@@ -92,14 +93,22 @@ class Template extends DataObject
     private const REQUEST_CACHEABLE_HOOKS = [
         'header-account-links' => true,
     ];
+    private const DIAGNOSTIC_HOOKS = [
+        'account.sidebar' => true,
+        'account.sidebar.content' => true,
+    ];
     private const STATIC_HOOK_OUTPUT_CACHE_TTL = 60.0;
     private const STATIC_HOOK_AGGREGATE_CACHE_TTL = 30.0;
+    private const STATIC_HOOK_STALE_TTL = 300;
+    private const STATIC_HOOK_REFRESH_LOCK_TTL = 10;
     /** @var array<string, true> */
     private const STATIC_HOOK_AGGREGATE_CACHEABLE_HOOKS = [
-        'header-account' => true,
+        'account.sidebar' => true,
         'header-account-links' => true,
+        'header-orders' => true,
         'header-language-switcher' => true,
         'header-currency-switcher' => true,
+        'Weline_Customer::frontend::account::login::providers' => true,
         'Weline_Theme::frontend::layouts::base::body-end' => true,
     ];
     private const STATIC_HOOK_OUTPUT_CACHEABLE_FILES = [
@@ -113,15 +122,16 @@ class Template extends DataObject
         'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-after.phtml' => true,
         'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/body-start.phtml' => true,
         'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/footer-after.phtml' => true,
+        'WeShop_GoogleAuth::hooks/Weline_Customer/frontend/account/login/providers.phtml' => true,
         'Weline_CustomerService::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
         'Weline_Location::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
         'WeShop_Product::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
         'Weline_Shipping::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
         'WeShop_Filters::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
     ];
-    /** @var array<string, array{expires_at: float, html: string}> */
+    /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $staticHookOutputCache = [];
-    /** @var array<string, array{expires_at: float, html: string}> */
+    /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $staticHookAggregateOutputCache = [];
     private static ?MemoryStateFacade $staticHookRuntimeCache = null;
     private static bool $staticHookRuntimeCacheResolved = false;
@@ -190,9 +200,22 @@ class Template extends DataObject
         self::$scopedInstances = [];
     }
 
+    public static function clearStaticHookCaches(): void
+    {
+        self::$staticHookOutputCache = [];
+        self::$staticHookAggregateOutputCache = [];
+        self::$staticHookRuntimeCache = null;
+        self::$staticHookRuntimeCacheResolved = false;
+    }
+
     private static function currentScopeKey(): ?string
     {
         try {
+            $requestId = RequestContext::getId();
+            if ($requestId !== null && $requestId !== '') {
+                return 'req:' . $requestId;
+            }
+
             $scopeId = RequestContext::getStorageScopeId();
         } catch (\Throwable) {
             return null;
@@ -674,19 +697,11 @@ class Template extends DataObject
             return $result;
         };
 
-        // Factor 2: Try TemplateCacheManager for content-based validation (fastest path)
-        try {
-            $cacheManager = TemplateCacheManager::getInstance();
-            $cachedFile = $cacheManager->getCachedFile($templateFile, $isDev);
-            if ($cachedFile !== null && is_file($cachedFile)) {
-                // Cache hit - no recompile needed
-                return $rememberFreshness(false);
-            }
-        } catch (\Throwable) {
-            // CacheManager unavailable, fall through to mtime check
-        }
-
-        // Factor 3: Content hash validation (precise, cross-platform)
+        // Factor 2: Content hash validation (precise, cross-platform).
+        // The enhanced TemplateCacheManager stores a second compiled copy under
+        // var/cache/template, but this method returns whether the per-locale
+        // com_*.phtml file itself is fresh. Do not let an enhanced-cache hit
+        // mask a stale compiled file in the language directory.
         $currentHash = md5_file($templateFile) . '-' . $templateSize;
 
         // Check for embedded hash in compiled file (our new format)
@@ -702,6 +717,20 @@ class Template extends DataObject
                 // Content changed - needs recompile
                 return $rememberFreshness(true);
             }
+        }
+
+        // Factor 3: Try TemplateCacheManager as an auxiliary positive signal
+        // only after the active compiled file has proven it has no embedded
+        // hash. This keeps legacy compiled files fast while preserving
+        // correctness for modern hash-tagged compiled templates.
+        try {
+            $cacheManager = TemplateCacheManager::getInstance();
+            $cachedFile = $cacheManager->getCachedFile($templateFile, $isDev);
+            if ($cachedFile !== null && is_file($cachedFile)) {
+                return $rememberFreshness(false);
+            }
+        } catch (\Throwable) {
+            // CacheManager unavailable, fall through to mtime check
         }
 
         // Factor 4: Mtime fallback (for backward compatibility and dev rapid iteration)
@@ -819,44 +848,106 @@ class Template extends DataObject
 
         $ttl = $this->staticHookOutputCacheTtl();
         $cacheKey = 'hook.output.' . \sha1($hookFile . '|' . $compiledFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . $baseUrl . '|' . $cacheContext);
-        $now = \microtime(true);
-        $cached = self::$staticHookOutputCache[$cacheKey] ?? null;
-        if (\is_array($cached)
-            && isset($cached['expires_at'], $cached['html'])
-            && (float)$cached['expires_at'] >= $now
-            && \is_string($cached['html'])) {
+        $cached = $this->readStaticHookOutputCache($cacheKey, $ttl);
+        if ($cached['status'] !== 'miss') {
+            if ($this->isEmptyCacheHtml((string)$cached['html'])) {
+                unset(self::$staticHookOutputCache[$cacheKey]);
+                $this->logHookCacheDiagnostic('skip_empty_static_hook_output_cache', [
+                    'hook_file' => $hookFile,
+                    'cache_key' => $cacheKey,
+                    'status' => (string)$cached['status'],
+                ]);
+            } else {
+            if ($cached['status'] === 'stale') {
+                $this->queueStaticHookOutputRefresh($cacheKey, $compiledFile, $ttl);
+            }
             if ($analyticsRenderFlag !== null) {
                 $GLOBALS[$analyticsRenderFlag] = true;
             }
-            return $cached['html'];
+            return (string)$cached['html'];
+            }
         }
 
-        $runtimeCached = self::runtimeHookCacheGet($cacheKey);
-        if (\is_string($runtimeCached)) {
-            $this->rememberStaticHookOutput($cacheKey, $runtimeCached, $ttl);
+        $runtimeCached = $this->readRuntimeHookCache($cacheKey, $ttl);
+        if ($runtimeCached['status'] !== 'miss') {
+            if ($this->isEmptyCacheHtml((string)$runtimeCached['html'])) {
+                self::runtimeHookCacheDelete($cacheKey);
+                $this->logHookCacheDiagnostic('skip_empty_runtime_hook_output_cache', [
+                    'hook_file' => $hookFile,
+                    'cache_key' => $cacheKey,
+                    'status' => (string)$runtimeCached['status'],
+                ]);
+            } else {
+            $this->rememberStaticHookOutput($cacheKey, (string)$runtimeCached['html'], $ttl, (string)$runtimeCached['status']);
+            if ($runtimeCached['status'] === 'stale') {
+                $this->queueStaticHookOutputRefresh($cacheKey, $compiledFile, $ttl);
+            }
             if ($analyticsRenderFlag !== null) {
                 $GLOBALS[$analyticsRenderFlag] = true;
             }
-            return $runtimeCached;
+            return (string)$runtimeCached['html'];
+            }
         }
 
         $html = $this->ob_file($compiledFile);
+        if ($this->isEmptyCacheHtml($html)) {
+            $this->logHookCacheDiagnostic('skip_empty_static_hook_output_store', [
+                'hook_file' => $hookFile,
+                'cache_key' => $cacheKey,
+            ]);
+            return $html;
+        }
         $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
         self::runtimeHookCacheSet($cacheKey, $html, $ttl);
 
         return $html;
     }
 
-    private function rememberStaticHookOutput(string $cacheKey, string $html, int $ttl): void
+    private function rememberStaticHookOutput(string $cacheKey, string $html, int $ttl, string $status = 'fresh'): void
     {
         if (\count(self::$staticHookOutputCache) > 128) {
             self::$staticHookOutputCache = [];
         }
 
-        self::$staticHookOutputCache[$cacheKey] = [
-            'expires_at' => \microtime(true) + \max(1, $ttl),
-            'html' => $html,
-        ];
+        self::$staticHookOutputCache[$cacheKey] = $this->makeStaticSwrEntry($html, $ttl, $status);
+    }
+
+    /**
+     * @return array{status: string, html: ?string}
+     */
+    private function readStaticHookOutputCache(string $cacheKey, int $ttl): array
+    {
+        $entry = $this->normalizeStaticSwrEntry(self::$staticHookOutputCache[$cacheKey] ?? null, $ttl);
+        if ($entry === null) {
+            unset(self::$staticHookOutputCache[$cacheKey]);
+            return ['status' => 'miss', 'html' => null];
+        }
+        self::$staticHookOutputCache[$cacheKey] = $entry;
+
+        return $this->staticSwrEntryStatus($entry);
+    }
+
+    private function queueStaticHookOutputRefresh(string $cacheKey, string $compiledFile, int $ttl): void
+    {
+        if (!$this->acquireRuntimeHookRefreshLock($cacheKey)) {
+            return;
+        }
+
+        PostResponseTaskQueue::enqueue('theme-hook-output:' . $cacheKey, function () use ($cacheKey, $compiledFile, $ttl): void {
+            $html = $this->ob_file($compiledFile);
+            if (!\is_string($html)) {
+                return;
+            }
+            if ($this->isEmptyCacheHtml($html)) {
+                $this->logHookCacheDiagnostic('skip_empty_static_hook_output_refresh', [
+                    'cache_key' => $cacheKey,
+                    'compiled_file' => $compiledFile,
+                ]);
+                return;
+            }
+            $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
+            self::runtimeHookCacheSet($cacheKey, $html, $ttl);
+        });
     }
 
     private function resolveStaticHookOutputCacheContext(string $hookFile): ?string
@@ -872,6 +963,7 @@ class Template extends DataObject
             'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-after.phtml' => $this->analyticsStaticHookCacheContext('head'),
             'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/body-start.phtml' => $this->analyticsStaticHookCacheContext('body'),
             'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/footer-after.phtml' => $this->analyticsStaticHookCacheContext('footer'),
+            'WeShop_GoogleAuth::hooks/Weline_Customer/frontend/account/login/providers.phtml' => $this->loginProviderHookCacheContext(),
             'Weline_CustomerService::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => $this->bodyEndStaticHookCacheContext(),
             default => 'static',
         };
@@ -891,6 +983,11 @@ class Template extends DataObject
     private function analyticsStaticHookCacheContext(string $slot): ?string
     {
         try {
+            $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+            if ($this->isAccountAuthRequestPath($requestPath)) {
+                return null;
+            }
+
             $envFile = BP . 'app' . DS . 'etc' . DS . 'env.php';
             return 'analytics:' . $slot . ':' . \sha1(\implode('|', [
                 (string)@filemtime($envFile),
@@ -928,10 +1025,43 @@ class Template extends DataObject
         }
     }
 
+    private function loginProviderHookCacheContext(): ?string
+    {
+        $requestCacheKey = 'view.static_hook.login_provider_context';
+        $cached = RequestContext::get($requestCacheKey);
+        if (\is_string($cached)) {
+            return $cached;
+        }
+
+        try {
+            $redirectUrl = (string)($this->getData('redirect_url')
+                ?? $this->request->getGet('redirect_url', '')
+                ?? $this->request->getGet('redirect', '')
+                ?? (\function_exists('w_env_get') ? \w_env_get('redirect_url', '') : ''));
+            $clientId = trim((string)(Env::getInstance()->getConfig('google_auth.client_id', '') ?: \getenv('WESHOP_GOOGLE_CLIENT_ID') ?: ''));
+            $clientSecret = trim((string)(Env::getInstance()->getConfig('google_auth.client_secret', '') ?: \getenv('WESHOP_GOOGLE_CLIENT_SECRET') ?: ''));
+            $context = 'login-providers:' . \sha1(\implode('|', [
+                Url::getPrefix(),
+                $redirectUrl,
+                $clientId !== '' ? 'client:1' : 'client:0',
+                $clientSecret !== '' ? 'secret:1' : 'secret:0',
+            ]));
+            RequestContext::set($requestCacheKey, $context);
+
+            return $context;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     private function bodyEndStaticHookCacheContext(): ?string
     {
         try {
             $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+            if ($this->isAccountAuthRequestPath($requestPath)) {
+                return null;
+            }
+
             $isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
                 || (string)$this->request->getGet('preview', '') === '1'
                 || \str_contains($requestPath, 'workspace-preview');
@@ -954,6 +1084,11 @@ class Template extends DataObject
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function isAccountAuthRequestPath(string $requestPath): bool
+    {
+        return \preg_match('#(^|/)customer/account/(login|register|forgot-password|challenge|logout)(/|$)#', $requestPath) === 1;
     }
 
     private function i18nStaticHookCacheContext(string $eventName, string $type): ?string
@@ -988,9 +1123,20 @@ class Template extends DataObject
     {
         // 每次渲染都重新执行 init，确保请求级状态始终绑定当前请求。
         $this->init();
+        $this->init();
         // WLS swaps the request instance per incoming request. Refresh the legacy
         // `$this->request` reference so older templates using that property stay correct.
         $this->request = ObjectManager::getInstance(Request::class);
+        $traceAccountSidebar = $this->shouldTraceAccountSidebarTemplate($filename);
+        if ($traceAccountSidebar) {
+            $this->logAccountSidebarTemplateTrace('template_ob_begin', [
+                'filename' => $filename,
+                'exists' => \is_file($filename),
+                'size' => \is_file($filename) ? (int)@filesize($filename) : 0,
+                'template_id' => \spl_object_id($this),
+                'buffer' => FiberOutputBuffer::debugState(),
+            ]);
+        }
         FiberOutputBuffer::beginCapture();
         try {
             if ($dictionary) {
@@ -1005,7 +1151,21 @@ class Template extends DataObject
                 extract($this->getData(), EXTR_SKIP);
             }
             self::cooperativeTemplateYield();
+            if ($traceAccountSidebar) {
+                $this->logAccountSidebarTemplateTrace('template_ob_before_include', [
+                    'filename' => $filename,
+                    'template_id' => \spl_object_id($this),
+                    'buffer' => FiberOutputBuffer::debugState(),
+                ]);
+            }
             include $filename;
+            if ($traceAccountSidebar) {
+                $this->logAccountSidebarTemplateTrace('template_ob_after_include', [
+                    'filename' => $filename,
+                    'template_id' => \spl_object_id($this),
+                    'buffer' => FiberOutputBuffer::debugState(),
+                ]);
+            }
             self::cooperativeTemplateYield();
         } catch (\Throwable $exception) {
             FiberOutputBuffer::discardCapture();
@@ -1013,7 +1173,60 @@ class Template extends DataObject
         }
         /** Get output buffer. */
         $result = FiberOutputBuffer::endCapture();
+        if ($traceAccountSidebar) {
+            $this->logAccountSidebarTemplateTrace('template_ob_end', [
+                'filename' => $filename,
+                'template_id' => \spl_object_id($this),
+                'result_len' => \strlen($result),
+                'has_sidebar_wrapper' => \str_contains($result, 'account-sidebar-wrapper'),
+                'has_sidebar_hook_link' => \str_contains($result, 'account-hook-nav-link'),
+                'buffer' => FiberOutputBuffer::debugState(),
+            ]);
+        }
         return $result;
+    }
+
+    private function shouldTraceAccountSidebarTemplate(string $filename): bool
+    {
+        $normalized = \str_replace('\\', '/', $filename);
+        if (!\str_contains($normalized, '/account/sidebar/com_side.phtml')) {
+            return false;
+        }
+
+        return $this->isAccountSidebarDebugRequest();
+    }
+
+    private function shouldTraceAccountSidebarHook(string $name): bool
+    {
+        if ($name !== 'account.sidebar') {
+            return false;
+        }
+
+        return $this->isAccountSidebarDebugRequest();
+    }
+
+    private function isAccountSidebarDebugRequest(): bool
+    {
+        try {
+            return (string)ObjectManager::getInstance(Request::class)->getGet('debug_sidebar', '') === '1';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function logAccountSidebarTemplateTrace(string $stage, array $context): void
+    {
+        try {
+            $context += [
+                'request_id' => RequestContext::getId(),
+                'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
+                'lang' => State::getLang(),
+                'lang_local' => State::getLangLocal(),
+            ];
+        } catch (\Throwable) {
+        }
+
+        \error_log('[AccountSidebarTrace] ' . $stage . ' ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
     }
 
     public function writeJsonForScript(mixed $value): void
@@ -1084,6 +1297,10 @@ class Template extends DataObject
             return;
         }
 
+        if (!FiberOutputBuffer::flushBeforeYield()) {
+            return;
+        }
+
         self::$fiberRenderYieldAt[$fiber] = $now;
         SchedulerSystem::yield();
     }
@@ -1149,11 +1366,20 @@ class Template extends DataObject
      * @throws Exception
      * @throws Core
      */
-    public function getHook(string $name): string
+    public function getHook(string $name, bool $forceRefresh = false): string
     {
+        $traceAccountSidebarHook = $this->shouldTraceAccountSidebarHook($name);
+        if ($traceAccountSidebarHook) {
+            $this->logAccountSidebarTemplateTrace('hook_begin', [
+                'hook' => $name,
+                'force_refresh' => $forceRefresh,
+                'template_id' => \spl_object_id($this),
+                'buffer' => FiberOutputBuffer::debugState(),
+            ]);
+        }
         $requestCacheKey = null;
         $aggregateCacheKey = null;
-        if (isset(self::REQUEST_CACHEABLE_HOOKS[$name])) {
+        if (!$forceRefresh && isset(self::REQUEST_CACHEABLE_HOOKS[$name])) {
             $context = Context::current();
             $requestId = RequestContext::getId();
             if ($requestId === null || $requestId === '') {
@@ -1162,6 +1388,13 @@ class Template extends DataObject
             $requestCacheKey = 'view.hook.output.' . sha1($requestId . ':' . $name);
             $cachedHookHtml = RequestContext::get($requestCacheKey);
             if (\is_string($cachedHookHtml)) {
+                if ($traceAccountSidebarHook) {
+                    $this->logAccountSidebarTemplateTrace('hook_request_cache_hit', [
+                        'hook' => $name,
+                        'output_bytes' => \strlen($cachedHookHtml),
+                        'buffer' => FiberOutputBuffer::debugState(),
+                    ]);
+                }
                 return $cachedHookHtml;
             }
         }
@@ -1171,25 +1404,63 @@ class Template extends DataObject
             if ($aggregateContext !== null) {
                 $aggregateCacheKey = 'view.hook.aggregate.' . \sha1($name . '|' . $this->baseUrlCacheContext() . '|' . $aggregateContext);
                 $aggregateTtl = $this->staticHookAggregateCacheTtl();
-                $now = \microtime(true);
-                $cachedAggregateHtml = self::$staticHookAggregateOutputCache[$aggregateCacheKey] ?? null;
-                if (\is_array($cachedAggregateHtml)
-                    && isset($cachedAggregateHtml['expires_at'], $cachedAggregateHtml['html'])
-                    && (float)$cachedAggregateHtml['expires_at'] >= $now
-                    && \is_string($cachedAggregateHtml['html'])) {
-                    if ($requestCacheKey !== null) {
-                        RequestContext::set($requestCacheKey, $cachedAggregateHtml['html']);
+                if (!$forceRefresh) {
+                    $cachedAggregateHtml = $this->readStaticHookAggregateCache($aggregateCacheKey, $aggregateTtl);
+                    if ($cachedAggregateHtml['status'] !== 'miss') {
+                        if ($this->isEmptyCacheHtml((string)$cachedAggregateHtml['html'])) {
+                            unset(self::$staticHookAggregateOutputCache[$aggregateCacheKey]);
+                            $this->logHookCacheDiagnostic('skip_empty_static_hook_aggregate_cache', [
+                                'hook' => $name,
+                                'cache_key' => $aggregateCacheKey,
+                                'status' => (string)$cachedAggregateHtml['status'],
+                            ]);
+                        } else {
+                        if ($cachedAggregateHtml['status'] === 'stale') {
+                            $this->queueStaticHookAggregateRefresh($name, $aggregateCacheKey, $aggregateTtl);
+                        }
+                        if ($requestCacheKey !== null) {
+                            RequestContext::set($requestCacheKey, $cachedAggregateHtml['html']);
+                        }
+                        if ($traceAccountSidebarHook) {
+                            $this->logAccountSidebarTemplateTrace('hook_aggregate_cache_hit', [
+                                'hook' => $name,
+                                'status' => (string)$cachedAggregateHtml['status'],
+                                'output_bytes' => \strlen((string)$cachedAggregateHtml['html']),
+                                'buffer' => FiberOutputBuffer::debugState(),
+                            ]);
+                        }
+                        return (string)$cachedAggregateHtml['html'];
+                        }
                     }
-                    return $cachedAggregateHtml['html'];
-                }
 
-                $runtimeCachedAggregate = self::runtimeHookCacheGet($aggregateCacheKey);
-                if (\is_string($runtimeCachedAggregate)) {
-                    $this->rememberStaticHookAggregate($aggregateCacheKey, $runtimeCachedAggregate, $aggregateTtl);
-                    if ($requestCacheKey !== null) {
-                        RequestContext::set($requestCacheKey, $runtimeCachedAggregate);
+                    $runtimeCachedAggregate = $this->readRuntimeHookCache($aggregateCacheKey, $aggregateTtl);
+                    if ($runtimeCachedAggregate['status'] !== 'miss') {
+                        if ($this->isEmptyCacheHtml((string)$runtimeCachedAggregate['html'])) {
+                            self::runtimeHookCacheDelete($aggregateCacheKey);
+                            $this->logHookCacheDiagnostic('skip_empty_runtime_hook_aggregate_cache', [
+                                'hook' => $name,
+                                'cache_key' => $aggregateCacheKey,
+                                'status' => (string)$runtimeCachedAggregate['status'],
+                            ]);
+                        } else {
+                        $this->rememberStaticHookAggregate($aggregateCacheKey, (string)$runtimeCachedAggregate['html'], $aggregateTtl, (string)$runtimeCachedAggregate['status']);
+                        if ($runtimeCachedAggregate['status'] === 'stale') {
+                            $this->queueStaticHookAggregateRefresh($name, $aggregateCacheKey, $aggregateTtl);
+                        }
+                        if ($requestCacheKey !== null) {
+                            RequestContext::set($requestCacheKey, $runtimeCachedAggregate['html']);
+                        }
+                        if ($traceAccountSidebarHook) {
+                            $this->logAccountSidebarTemplateTrace('hook_runtime_aggregate_cache_hit', [
+                                'hook' => $name,
+                                'status' => (string)$runtimeCachedAggregate['status'],
+                                'output_bytes' => \strlen((string)$runtimeCachedAggregate['html']),
+                                'buffer' => FiberOutputBuffer::debugState(),
+                            ]);
+                        }
+                        return (string)$runtimeCachedAggregate['html'];
+                        }
                     }
-                    return $runtimeCachedAggregate;
                 }
             }
         }
@@ -1255,6 +1526,22 @@ class Template extends DataObject
         if ($soloHook !== null) {
             $hookFiles = [$soloHook => $hookFiles[$soloHook]];
         }
+
+        $hookOutputBytes = 0;
+        $emptyHookFiles = 0;
+        if ($hookFiles === [] && $this->shouldLogHookDiagnostics($name)) {
+            $this->logHookCacheDiagnostic('empty_hook_file_list', [
+                'hook' => $name,
+            ]);
+        }
+        if ($traceAccountSidebarHook) {
+            $this->logAccountSidebarTemplateTrace('hook_file_list', [
+                'hook' => $name,
+                'files' => $hookFiles,
+                'meta_modules' => \array_keys($hookFilesWithMeta),
+                'buffer' => FiberOutputBuffer::debugState(),
+            ]);
+        }
         
         // 按顺序遍历hook文件（HookReader已按优先级和排序顺序排序）
         $decorateHookOutput = \defined('DEV') && DEV && $this->shouldDecorateHookOutput();
@@ -1274,9 +1561,18 @@ class Template extends DataObject
             // 直接使用，不需要再次构建路径
             $fileTraceName = 'view::hook_file::' . substr((string)$module . '::' . $name, 0, 180);
             $fileTraceStart = 0.0;
+            $hookHtml = '';
             if ($traceEnabled) {
                 $fileTraceStart = microtime(true);
                 RequestLifecycleTrace::pushCurrentParent($fileTraceName);
+            }
+            if ($traceAccountSidebarHook) {
+                $this->logAccountSidebarTemplateTrace('hook_file_before', [
+                    'hook' => $name,
+                    'module' => (string)$module,
+                    'file' => (string)$hooker_file,
+                    'buffer' => FiberOutputBuffer::debugState(),
+                ]);
             }
             try {
                 $hookHtml = $this->fetchHookHtml((string)$hooker_file);
@@ -1287,8 +1583,34 @@ class Template extends DataObject
                         'hook' => $name,
                         'module' => (string)$module,
                         'file' => (string)$hooker_file,
+                        'output_bytes' => \strlen($hookHtml),
+                        'empty_output' => \trim($hookHtml) === '',
                     ]);
                 }
+            }
+            if ($traceAccountSidebarHook) {
+                $this->logAccountSidebarTemplateTrace('hook_file_after', [
+                    'hook' => $name,
+                    'module' => (string)$module,
+                    'file' => (string)$hooker_file,
+                    'output_bytes' => \strlen($hookHtml),
+                    'empty_output' => \trim($hookHtml) === '',
+                    'buffer' => FiberOutputBuffer::debugState(),
+                ]);
+            }
+            $hookHtmlBytes = \strlen($hookHtml);
+            $hookOutputBytes += $hookHtmlBytes;
+            if (\trim($hookHtml) === '') {
+                $emptyHookFiles++;
+            }
+            if ($this->shouldLogHookDiagnostics($name)) {
+                $this->logHookCacheDiagnostic('hook_file_output', [
+                    'hook' => $name,
+                    'module' => (string)$module,
+                    'file' => (string)$hooker_file,
+                    'output_bytes' => $hookHtmlBytes,
+                    'empty_output' => \trim($hookHtml) === '',
+                ], \trim($hookHtml) === '');
             }
             
             // 检查是否是solo hook
@@ -1385,6 +1707,8 @@ class Template extends DataObject
             RequestLifecycleTrace::recordSpan($traceName, (microtime(true) - $traceStart) * 1000, 'view', null, [
                 'hook' => $name,
                 'files' => count($hookFiles),
+                'output_bytes' => $hookOutputBytes,
+                'empty_files' => $emptyHookFiles,
             ]);
         }
 
@@ -1393,35 +1717,266 @@ class Template extends DataObject
         }
         if ($aggregateCacheKey !== null) {
             $aggregateTtl = $this->staticHookAggregateCacheTtl();
-            $this->rememberStaticHookAggregate($aggregateCacheKey, $hooker_content, $aggregateTtl);
-            self::runtimeHookCacheSet($aggregateCacheKey, $hooker_content, $aggregateTtl);
+            if ($this->isEmptyCacheHtml($hooker_content) && $hookFiles !== []) {
+                $this->logHookCacheDiagnostic('skip_empty_static_hook_aggregate_store', [
+                    'hook' => $name,
+                    'cache_key' => $aggregateCacheKey,
+                    'files' => count($hookFiles),
+                ]);
+            } else {
+                $this->rememberStaticHookAggregate($aggregateCacheKey, $hooker_content, $aggregateTtl);
+                self::runtimeHookCacheSet($aggregateCacheKey, $hooker_content, $aggregateTtl);
+            }
+        }
+
+        if ($traceAccountSidebarHook) {
+            $this->logAccountSidebarTemplateTrace('hook_end', [
+                'hook' => $name,
+                'output_bytes' => \strlen($hooker_content),
+                'empty_files' => $emptyHookFiles,
+                'buffer' => FiberOutputBuffer::debugState(),
+            ]);
         }
 
         return $hooker_content;
     }
 
-    private function rememberStaticHookAggregate(string $cacheKey, string $html, int $ttl): void
+    private function rememberStaticHookAggregate(string $cacheKey, string $html, int $ttl, string $status = 'fresh'): void
     {
         if (\count(self::$staticHookAggregateOutputCache) > 64) {
             self::$staticHookAggregateOutputCache = [];
         }
 
-        self::$staticHookAggregateOutputCache[$cacheKey] = [
-            'expires_at' => \microtime(true) + \max(1, $ttl),
+        self::$staticHookAggregateOutputCache[$cacheKey] = $this->makeStaticSwrEntry($html, $ttl, $status);
+    }
+
+    /**
+     * @return array{status: string, html: ?string}
+     */
+    private function readStaticHookAggregateCache(string $cacheKey, int $ttl): array
+    {
+        $entry = $this->normalizeStaticSwrEntry(self::$staticHookAggregateOutputCache[$cacheKey] ?? null, $ttl);
+        if ($entry === null) {
+            unset(self::$staticHookAggregateOutputCache[$cacheKey]);
+            return ['status' => 'miss', 'html' => null];
+        }
+        self::$staticHookAggregateOutputCache[$cacheKey] = $entry;
+
+        return $this->staticSwrEntryStatus($entry);
+    }
+
+    private function queueStaticHookAggregateRefresh(string $name, string $cacheKey, int $ttl): void
+    {
+        if (!$this->acquireRuntimeHookRefreshLock($cacheKey)) {
+            return;
+        }
+
+        PostResponseTaskQueue::enqueue('theme-hook-aggregate:' . $cacheKey, function () use ($name): void {
+            $this->getHook($name, true);
+        });
+    }
+
+    /**
+     * @return array{status: string, html: ?string}
+     */
+    private function readRuntimeHookCache(string $cacheKey, int $ttl): array
+    {
+        $entry = $this->normalizeStaticSwrEntry(self::runtimeHookCacheGet($cacheKey), $ttl);
+        if ($entry === null) {
+            return ['status' => 'miss', 'html' => null];
+        }
+
+        return $this->staticSwrEntryStatus($entry);
+    }
+
+    /**
+     * @return array{fresh_until: float, stale_until: float, html: string}|null
+     */
+    private function normalizeStaticSwrEntry(mixed $entry, int $ttl): ?array
+    {
+        $now = \microtime(true);
+        if (\is_string($entry)) {
+            return [
+                'fresh_until' => $now + \max(1, $ttl),
+                'stale_until' => $now + \max(1, $ttl) + $this->staticHookStaleTtl($ttl),
+                'html' => $entry,
+            ];
+        }
+
+        if (!\is_array($entry)) {
+            return null;
+        }
+
+        $html = $entry['html'] ?? $entry['value'] ?? null;
+        if (!\is_string($html)) {
+            return null;
+        }
+
+        $freshUntil = (float)($entry['fresh_until'] ?? $entry['expires_at'] ?? 0);
+        if ($freshUntil <= 0) {
+            $freshUntil = $now + \max(1, $ttl);
+        }
+        $staleUntil = (float)($entry['stale_until'] ?? ($freshUntil + $this->staticHookStaleTtl($ttl)));
+        if ($staleUntil < $freshUntil) {
+            $staleUntil = $freshUntil;
+        }
+
+        return [
+            'fresh_until' => $freshUntil,
+            'stale_until' => $staleUntil,
             'html' => $html,
         ];
+    }
+
+    /**
+     * @param array{fresh_until: float, stale_until: float, html: string} $entry
+     * @return array{status: string, html: ?string}
+     */
+    private function staticSwrEntryStatus(array $entry): array
+    {
+        $html = (string)($entry['html'] ?? '');
+
+        $now = \microtime(true);
+        if ((float)$entry['fresh_until'] >= $now) {
+            return ['status' => 'fresh', 'html' => $html];
+        }
+        if ((float)$entry['stale_until'] >= $now) {
+            return ['status' => 'stale', 'html' => $html];
+        }
+
+        return ['status' => 'miss', 'html' => null];
+    }
+
+    /**
+     * @return array{fresh_until: float, stale_until: float, html: string}
+     */
+    private function makeStaticSwrEntry(string $html, int $ttl, string $status = 'fresh'): array
+    {
+        $ttl = \max(1, $ttl);
+        $now = \microtime(true);
+        $freshUntil = $status === 'stale' ? $now - 0.001 : $now + $ttl;
+
+        return [
+            'fresh_until' => $freshUntil,
+            'stale_until' => $freshUntil + $this->staticHookStaleTtl($ttl),
+            'html' => $html,
+        ];
+    }
+
+    private function isEmptyCacheHtml(string $html): bool
+    {
+        return \trim($html) === '';
+    }
+
+    private function shouldLogHookDiagnostics(string $name): bool
+    {
+        if (isset(self::DIAGNOSTIC_HOOKS[$name])) {
+            return true;
+        }
+
+        try {
+            return (string)$this->request->getGet('debug_hooks', '') === '1';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function logHookCacheDiagnostic(string $event, array $context = [], bool $warning = true): void
+    {
+        $logger = $warning ? 'w_log_warning' : 'w_log_info';
+        if (!\function_exists($logger)) {
+            return;
+        }
+
+        try {
+            $context += [
+                'request_id' => (string)(RequestContext::getId() ?? ''),
+                'uri' => \function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : '',
+                'lang' => (string)State::getLang(),
+                'lang_local' => (string)State::getLangLocal(),
+                'currency' => (string)State::getCurrency(),
+            ];
+        } catch (\Throwable) {
+        }
+
+        $payload = \json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $logger('[HookCacheDiagnostics] ' . $event . ' ' . ($payload ?: '{}'));
+    }
+
+    private function staticHookStaleTtl(int $ttl): int
+    {
+        return self::cachePolicy()->ttl('theme.hook_stale_ttl', \max(self::STATIC_HOOK_STALE_TTL, $ttl * 10), 1, 86400);
+    }
+
+    private function staticHookRefreshLockTtl(): int
+    {
+        return self::cachePolicy()->ttl('theme.hook_refresh_lock_ttl', self::STATIC_HOOK_REFRESH_LOCK_TTL, 1, 300);
+    }
+
+    private function acquireRuntimeHookRefreshLock(string $cacheKey): bool
+    {
+        $cache = self::runtimeHookCache();
+        $lockKey = $cacheKey . '.refresh_lock';
+        if ($cache !== null) {
+            try {
+                return $cache->incr('theme_runtime', $lockKey, 1, $this->staticHookRefreshLockTtl()) === 1;
+            } catch (\Throwable) {
+                self::$staticHookRuntimeCache = null;
+                self::$staticHookRuntimeCacheResolved = true;
+            }
+        }
+
+        static $localLocks = [];
+        $now = \microtime(true);
+        $expiresAt = (float)($localLocks[$lockKey] ?? 0);
+        if ($expiresAt >= $now) {
+            return false;
+        }
+        $localLocks[$lockKey] = $now + $this->staticHookRefreshLockTtl();
+
+        return true;
     }
 
     private function resolveStaticHookAggregateCacheContext(string $name): ?string
     {
         return match ($name) {
-            'header-account',
+            'account.sidebar' => $this->accountSidebarStaticHookCacheContext(),
             'header-account-links' => $this->frontendAuthStaticHookCacheContext(),
+            'header-orders' => $this->headerActionStaticHookCacheContext($name),
             'header-language-switcher' => $this->i18nStaticHookCacheContext('Weline_I18n::header-language-switcher-data', 'language'),
             'header-currency-switcher' => $this->i18nStaticHookCacheContext('Weline_I18n::header-currency-switcher-data', 'currency'),
+            'Weline_Customer::frontend::account::login::providers' => $this->loginProviderHookCacheContext(),
             'Weline_Theme::frontend::layouts::base::body-end' => $this->bodyEndStaticHookCacheContext(),
             default => null,
         };
+    }
+
+    private function accountSidebarStaticHookCacheContext(): ?string
+    {
+        try {
+            return 'account-sidebar:' . \sha1(\json_encode([
+                'base_url' => $this->baseUrlCacheContext(),
+                'lang' => (string)State::getLang(),
+                'lang_local' => (string)State::getLangLocal(),
+                'currency' => (string)State::getCurrency(),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: 'account-sidebar');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function headerActionStaticHookCacheContext(string $name): ?string
+    {
+        try {
+            return 'header-action:' . $name . ':' . \sha1(\json_encode([
+                'base_url' => $this->baseUrlCacheContext(),
+                'lang' => (string)State::getLang(),
+                'lang_local' => (string)State::getLangLocal(),
+                'currency' => (string)State::getCurrency(),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $name);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function baseUrlCacheContext(): string
@@ -1512,7 +2067,29 @@ class Template extends DataObject
         }
 
         try {
-            $cache->set('theme_runtime', $key, $value, \max(1, $ttl));
+            $ttl = \max(1, $ttl);
+            $staleTtl = self::cachePolicy()->ttl('theme.hook_stale_ttl', \max(self::STATIC_HOOK_STALE_TTL, $ttl * 10), 1, 86400);
+            $now = \microtime(true);
+            $cache->set('theme_runtime', $key, [
+                'fresh_until' => $now + $ttl,
+                'stale_until' => $now + $ttl + $staleTtl,
+                'value' => $value,
+            ], $ttl + $staleTtl);
+        } catch (\Throwable) {
+            self::$staticHookRuntimeCache = null;
+            self::$staticHookRuntimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeHookCacheDelete(string $key): void
+    {
+        $cache = self::runtimeHookCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->delete('theme_runtime', $key);
         } catch (\Throwable) {
             self::$staticHookRuntimeCache = null;
             self::$staticHookRuntimeCacheResolved = true;

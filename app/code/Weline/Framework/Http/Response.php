@@ -361,15 +361,50 @@ class Response implements ResponseInterface
             return $this;
         }
 
+        if ($this->getHeader('Content-Encoding') !== null) {
+            return $this;
+        }
+
+        $contentType = \strtolower((string)($this->getHeader('Content-Type') ?? ''));
+        if ($contentType !== ''
+            && !\str_starts_with($contentType, 'text/')
+            && !\str_contains($contentType, 'application/json')
+            && !\str_contains($contentType, 'application/javascript')
+            && !\str_contains($contentType, 'application/xml')
+            && !\str_contains($contentType, 'application/xhtml+xml')
+            && !\str_contains($contentType, 'image/svg+xml')) {
+            return $this;
+        }
+
         if (\stripos($acceptEncoding, 'gzip') !== false && \function_exists('gzencode')) {
             $compressed = \gzencode($this->body, 6);
             if ($compressed !== false) {
                 $this->body = $compressed;
                 $this->setHeader('Content-Encoding', 'gzip');
+                $this->setHeader('Content-Length', (string)\strlen($this->body));
+                $this->ensureVaryAcceptEncoding();
             }
         }
 
         return $this;
+    }
+
+    private function ensureVaryAcceptEncoding(): void
+    {
+        $vary = $this->getHeader('Vary');
+        $varyValue = \is_array($vary) ? \implode(', ', \array_map('strval', $vary)) : (string)($vary ?? '');
+        if ($varyValue === '') {
+            $this->setHeader('Vary', 'Accept-Encoding');
+            return;
+        }
+
+        foreach (\array_map('trim', \explode(',', $varyValue)) as $part) {
+            if (\strcasecmp($part, 'Accept-Encoding') === 0) {
+                return;
+            }
+        }
+
+        $this->setHeader('Vary', $varyValue . ', Accept-Encoding');
     }
 
     public function send(): never

@@ -9,6 +9,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Service\PreviewRequestInspector;
@@ -175,7 +176,41 @@ class LayoutSlotRenderer implements ObserverInterface
         // }
 
         // 澶勭悊鎻掓Ы鏇挎崲
+        $accountSidebarBefore = $this->htmlHasAccountSidebar($html);
         $processedHtml = $this->slotRenderer->processSlots($html, $themeId, $pageType, $status);
+        $accountSidebarAfter = $this->htmlHasAccountSidebar($processedHtml);
+        if ($this->isAccountHtml($html) || $this->isAccountHtml($processedHtml)) {
+            RequestLifecycleTrace::recordSpan('theme::layoutSlotRenderer::accountHtml', 0.0, 'theme', null, [
+                'input_len' => \strlen($html),
+                'output_len' => \strlen($processedHtml),
+                'has_sidebar_before' => $accountSidebarBefore,
+                'has_sidebar_after' => $accountSidebarAfter,
+                'has_slot_markers' => $hasSlotMarkers,
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+                'status' => $status,
+            ]);
+            $this->logAccountSidebarDebug('layout_slot_renderer', [
+                'template' => $template,
+                'input_len' => \strlen($html),
+                'output_len' => \strlen($processedHtml),
+                'has_sidebar_before' => $accountSidebarBefore,
+                'has_sidebar_after' => $accountSidebarAfter,
+                'has_slot_markers' => $hasSlotMarkers,
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+                'status' => $status,
+            ]);
+            if ($accountSidebarBefore && !$accountSidebarAfter && \function_exists('w_log_warning')) {
+                \w_log_warning('[AccountSidebar] slot renderer removed account sidebar', [
+                    'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
+                    'input_len' => \strlen($html),
+                    'output_len' => \strlen($processedHtml),
+                    'theme_id' => $themeId,
+                    'page_type' => $pageType,
+                ], 'account_sidebar');
+            }
+        }
         // 妫€鏌ユ槸鍚︽湁瀛ゅ効閮ㄤ欢锛堟壘涓嶅埌瀵瑰簲鎻掓Ы鐨勯儴浠讹級
         // 杩欎簺閮ㄤ欢鐨勯厤缃暟鎹笉浼氳鍒犻櫎锛屽彧鏄棤娉曞湪褰撳墠甯冨眬涓樉绀?
         if ($this->slotRenderer->hasOrphanWidgets()) {
@@ -197,6 +232,48 @@ class LayoutSlotRenderer implements ObserverInterface
 
         // 鏇存柊浜嬩欢鏁版嵁锛坒etch_file_after 浜嬩欢浣跨敤 content锛?
         $event->setData('content', $processedHtml);
+    }
+
+    private function shouldDebugAccountSidebar(): bool
+    {
+        try {
+            return (string)$this->request->getGet('debug_sidebar', '') === '1';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function logAccountSidebarDebug(string $stage, array $context = []): void
+    {
+        if (!$this->shouldDebugAccountSidebar()) {
+            return;
+        }
+
+        try {
+            $context += [
+                'request_id' => (string)(\Weline\Framework\Runtime\RequestContext::getId() ?? ''),
+                'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
+                'lang' => (string)\Weline\Framework\App\State::getLang(),
+                'lang_local' => (string)\Weline\Framework\App\State::getLangLocal(),
+                'currency' => (string)\Weline\Framework\App\State::getCurrency(),
+            ];
+        } catch (\Throwable) {
+        }
+
+        \error_log('[AccountSidebarTrace] ' . $stage . ' ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
+    }
+
+    private function isAccountHtml(string $html): bool
+    {
+        return \str_contains($html, 'account-dashboard-layout')
+            || \str_contains($html, 'account-main-content')
+            || \str_contains($html, 'account-index');
+    }
+
+    private function htmlHasAccountSidebar(string $html): bool
+    {
+        return \str_contains($html, 'class="account-sidebar')
+            || \str_contains($html, "class='account-sidebar");
     }
 
     private function collectMissingSlotWarnings(string $area): array

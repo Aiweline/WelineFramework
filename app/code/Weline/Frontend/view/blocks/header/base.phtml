@@ -265,22 +265,50 @@ endif;
         return pre_path + path;
     }
 
+    function isIgnorableSwitchQueryParam(key) {
+        key = String(key || '').toLowerCase().trim();
+        if (!key) {
+            return false;
+        }
+        if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(key)) {
+            return true;
+        }
+        return key.startsWith('utm_') || key.startsWith('mtm_') || key.startsWith('pk_');
+    }
+
+    function sanitizeSwitchSearch(search) {
+        const raw = String(search || '');
+        if (!raw || raw === '?') {
+            return '';
+        }
+
+        const params = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
+        Array.from(params.keys()).forEach(key => {
+            if (isIgnorableSwitchQueryParam(key)) {
+                params.delete(key);
+            }
+        });
+
+        const query = params.toString();
+        return query ? '?' + query : '';
+    }
+
     function select_language(lang) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         setCookie('WELINE_USER_LANG', lang, 7, {path: '/{{area}}', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, lang, 'lang') + window.location.search
+        window.location.href = inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || '')
     }
 
     function select_currency(currency_code) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         setCookie('WELINE_USER_CURRENCY', currency_code, 7, {path: '/', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, currency_code, 'currency') + window.location.search
+        window.location.href = inject_path(window.location.pathname, currency_code, 'currency') + sanitizeSwitchSearch(window.location.search || '')
     }
 
     function select_site(url) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         setCookie('WELINE_WEBSITE_URL', url, 7, {path: '/', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, url, 'website') + window.location.search
+        window.location.href = inject_path(window.location.pathname, url, 'website') + sanitizeSwitchSearch(window.location.search || '')
     }
 
     /**

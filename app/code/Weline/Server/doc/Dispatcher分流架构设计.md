@@ -66,9 +66,9 @@ app/code/Weline/Server/
 
 ### 4.1 DispatcherCore.php
 
-- **职责**：统一事件循环、接受新连接、转发请求、回传响应、Master 心跳检查
+- **职责**：统一事件循环、接受新连接、转发请求、回传响应、Master IPC/PID 生命租约检查
 - **依赖**：监听 `$serverSocket`、Worker 端口列表 `$workerPorts`、`LoadBalancer`
-- **要点**：`run()` 内 `checkMasterHeartbeat()` + `selectAndProcess()`（如 `stream_select` 多路复用）
+- **要点**：`run()` 内按 Master IPC 连接与启动参数中的 Master PID 判断生命租约，然后执行 `selectAndProcess()`（如 `stream_select` 多路复用）；不再读取实例 JSON 做运行态共识。
 
 ### 4.2 LoadBalancer.php
 

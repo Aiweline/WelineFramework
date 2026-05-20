@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Adapter;
 
+use Weline\Ai\Interface\AdapterSkillBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
 /**
@@ -24,8 +25,13 @@ use Weline\Ai\Interface\ScenarioAdapterInterface;
  * - 组件配置字段生成
  * - HTML结构和CSS样式生成
  */
-class ComponentGenerationAdapter implements ScenarioAdapterInterface
+class ComponentGenerationAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface
 {
+    public function getDefaultSkillCodes(): array
+    {
+        return ['claude-design', 'weline-pixel-events'];
+    }
+
     /**
      * 获取适配器代码
      * 

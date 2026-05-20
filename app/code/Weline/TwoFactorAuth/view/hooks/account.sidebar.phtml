@@ -11,12 +11,7 @@ if (!$user) {
     return;
 }
 
-$userId = $user->getId();
-
 try {
-    /** @var \Weline\TwoFactorAuth\Service\TwoFactorAuthService $twoFactorService */
-    $twoFactorService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\TwoFactorAuth\Service\TwoFactorAuthService::class);
-    $isEnabled = $twoFactorService->isEnabled($userId);
     $accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
     if (!is_string($accountIndexPath) || $accountIndexPath === '') {
         $accountIndexPath = '/customer/account/index';
@@ -35,10 +30,6 @@ try {
         </span>
     </span>
     <span class="account-hook-nav-link__arrow" aria-hidden="true">
-        <?php if ($isEnabled): ?>
-            <span class="badge badge-success" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;"><?= __('已启用') ?></span>
-        <?php else: ?>
-            <span class="badge badge-secondary" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;"><?= __('未启用') ?></span>
-        <?php endif; ?>
+        <i class="fa fa-angle-right"></i>
     </span>
 </a>

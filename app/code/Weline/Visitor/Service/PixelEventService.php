@@ -11,9 +11,217 @@ use Weline\Visitor\Model\PixelAdditional;
 
 class PixelEventService
 {
+    private const PASSIVE_EVENTS_WITH_BROWSER_INFO = [
+        'page_view' => true,
+        'page_load' => true,
+        'homepage' => true,
+        'blog' => true,
+        'category' => true,
+        'search_result_view' => true,
+    ];
+
     public function __construct(
         private readonly Request $request
     ) {
+    }
+
+    /**
+     * @param array<string, mixed> $post
+     */
+    private function shouldPersistAdditional(array $post): bool
+    {
+        foreach (['testId', 'variant', 'test_id', 'testVariant', 'items', 'product_id', 'order_id', 'transaction_id'] as $key) {
+            if (isset($post[$key]) && $post[$key] !== '' && $post[$key] !== []) {
+                return true;
+            }
+        }
+
+        $event = (string)($post['eventName'] ?? $post['event'] ?? '');
+        if (\str_starts_with($event, 'account_')) {
+            return false;
+        }
+
+        return !isset(self::PASSIVE_EVENTS_WITH_BROWSER_INFO[$event]);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function compactPayload(array $payload): array
+    {
+        foreach (['url', 'referrer', 'referer', 'userAgent'] as $key) {
+            if (isset($payload[$key])) {
+                $payload[$key] = $this->truncateScalar($payload[$key], 512);
+            }
+        }
+        foreach (['module', 'name', 'eventName', 'event'] as $key) {
+            if (isset($payload[$key])) {
+                $payload[$key] = $this->truncateScalar($payload[$key], 128);
+            }
+        }
+        foreach (['userLang', 'lang', 'currency'] as $key) {
+            if (isset($payload[$key])) {
+                $payload[$key] = $this->truncateScalar($payload[$key], 64);
+            }
+        }
+
+        if (isset($payload['elementInfo']) && \is_array($payload['elementInfo'])) {
+            $payload['elementInfo'] = $this->compactElementInfo($payload['elementInfo']);
+        }
+        if (isset($payload['additionalInfo']) && \is_array($payload['additionalInfo'])) {
+            $payload['additionalInfo'] = $this->compactAdditionalInfo($payload['additionalInfo']);
+        }
+        if (isset($payload['screen']) && \is_array($payload['screen'])) {
+            $payload['screen'] = $this->compactLooseArray($payload['screen'], 1);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $elementInfo
+     * @return array<string, mixed>
+     */
+    private function compactElementInfo(array $elementInfo): array
+    {
+        return [
+            'tagName' => $this->truncateScalar($elementInfo['tagName'] ?? '', 32),
+            'className' => $this->truncateScalar($elementInfo['className'] ?? '', 120),
+            'id' => $this->truncateScalar($elementInfo['id'] ?? '', 80),
+            'name' => $this->truncateScalar($elementInfo['name'] ?? '', 80),
+            'type' => $this->truncateScalar($elementInfo['type'] ?? '', 32),
+            'href' => $this->truncateScalar($elementInfo['href'] ?? '', 255),
+            'text' => $this->truncateScalar($elementInfo['text'] ?? '', 120),
+            'eventType' => $this->truncateScalar($elementInfo['eventType'] ?? '', 32),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $info
+     * @return array<string, mixed>
+     */
+    private function compactAdditionalInfo(array $info): array
+    {
+        $navigation = \is_array($info['navigation'] ?? null) ? $info['navigation'] : [];
+
+        return [
+            'schema' => $this->truncateScalar($info['schema'] ?? 'weline_behavior_timing_v1', 64),
+            'time' => \is_array($info['time'] ?? null) ? $this->compactLooseArray($info['time'], 2) : [],
+            'performance' => \is_array($info['performance'] ?? null) ? $this->compactPerformance($info['performance']) : [],
+            'funnel' => \is_array($info['funnel'] ?? null) ? $this->compactFunnel($info['funnel']) : [],
+            'navigation' => [
+                'current_url' => $this->truncateScalar($navigation['current_url'] ?? '', 512),
+                'current_path' => $this->truncateScalar($navigation['current_path'] ?? '', 160),
+                'current_search' => $this->truncateScalar($navigation['current_search'] ?? '', 160),
+                'current_hash' => $this->truncateScalar($navigation['current_hash'] ?? '', 80),
+                'referrer' => $this->truncateScalar($navigation['referrer'] ?? '', 512),
+                'last_location' => $this->truncateScalar($navigation['last_location'] ?? '', 512),
+            ],
+            'viewport' => \is_array($info['viewport'] ?? null) ? $this->compactLooseArray($info['viewport'], 1) : [],
+            'meta' => \is_array($info['meta'] ?? null) ? $this->compactLooseArray($info['meta'], 3) : [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $performance
+     * @return array<string, mixed>
+     */
+    private function compactPerformance(array $performance): array
+    {
+        $resourceSummary = \is_array($performance['resource_summary'] ?? null) ? $performance['resource_summary'] : [];
+        $slowest = \is_array($resourceSummary['slowest'] ?? null) ? \array_slice($resourceSummary['slowest'], 0, 3) : [];
+        $slowest = \array_map(function (mixed $entry): array {
+            $entry = \is_array($entry) ? $entry : [];
+            return [
+                'name' => $this->truncateScalar($entry['name'] ?? '', 96),
+                'initiator_type' => $this->truncateScalar($entry['initiator_type'] ?? '', 32),
+                'duration_ms' => (int)($entry['duration_ms'] ?? 0),
+                'transfer_size' => (int)($entry['transfer_size'] ?? 0),
+            ];
+        }, $slowest);
+
+        return [
+            'page_started_at_ms' => (int)($performance['page_started_at_ms'] ?? 0),
+            'page_age_ms' => (int)($performance['page_age_ms'] ?? 0),
+            'perf_now_ms' => isset($performance['perf_now_ms']) ? (int)$performance['perf_now_ms'] : null,
+            'time_origin_ms' => isset($performance['time_origin_ms']) ? (int)$performance['time_origin_ms'] : null,
+            'navigation' => \is_array($performance['navigation'] ?? null) ? $this->compactLooseArray($performance['navigation'], 2) : null,
+            'paint' => \is_array($performance['paint'] ?? null) ? $this->compactLooseArray($performance['paint'], 1) : [],
+            'resource_summary' => [
+                'count' => (int)($resourceSummary['count'] ?? 0),
+                'slowest' => $slowest,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $funnel
+     * @return array<string, mixed>
+     */
+    private function compactFunnel(array $funnel): array
+    {
+        $chain = \is_array($funnel['chain'] ?? null) ? \array_slice($funnel['chain'], -8) : [];
+        $chain = \array_map(function (mixed $item): array {
+            $item = \is_array($item) ? $item : [];
+            return [
+                'event' => $this->truncateScalar($item['event'] ?? '', 64),
+                'step' => (int)($item['step'] ?? 0),
+                'path' => $this->truncateScalar($item['path'] ?? '', 160),
+                'page_id' => $this->truncateScalar($item['page_id'] ?? '', 48),
+                'timestamp_ms' => (int)($item['timestamp_ms'] ?? 0),
+                'since_previous_ms' => isset($item['since_previous_ms']) ? (int)$item['since_previous_ms'] : null,
+            ];
+        }, $chain);
+
+        return [
+            'session_id' => $this->truncateScalar($funnel['session_id'] ?? '', 64),
+            'page_id' => $this->truncateScalar($funnel['page_id'] ?? '', 48),
+            'step' => (int)($funnel['step'] ?? 0),
+            'step_index' => (int)($funnel['step_index'] ?? 0),
+            'previous_event' => $this->truncateScalar($funnel['previous_event'] ?? '', 64),
+            'since_previous_ms' => isset($funnel['since_previous_ms']) ? (int)$funnel['since_previous_ms'] : null,
+            'chain' => $chain,
+        ];
+    }
+
+    /**
+     * @param array<mixed> $data
+     * @return array<mixed>
+     */
+    private function compactLooseArray(array $data, int $depth): array
+    {
+        if ($depth <= 0) {
+            return [];
+        }
+
+        $result = [];
+        $count = 0;
+        foreach ($data as $key => $value) {
+            if (++$count > 32) {
+                break;
+            }
+
+            if (\is_array($value)) {
+                $result[$key] = $this->compactLooseArray($value, $depth - 1);
+                continue;
+            }
+
+            $result[$key] = \is_scalar($value) || $value === null
+                ? $this->truncateScalar($value, 512)
+                : null;
+        }
+
+        return $result;
+    }
+
+    private function truncateScalar(mixed $value, int $length): string|int|float|bool|null
+    {
+        if ($value === null || \is_int($value) || \is_float($value) || \is_bool($value)) {
+            return $value;
+        }
+
+        return \mb_substr((string)$value, 0, $length);
     }
 
     /**
@@ -22,7 +230,7 @@ class PixelEventService
      */
     public function track(array $payload): array
     {
-        $post = $this->normalizePayload($payload);
+        $post = $this->compactPayload($this->normalizePayload($payload));
         $post['source'] = $post['source'] ?? 'worker';
 
         $ip = $post['ip'] ?? $this->request->clientIP();
@@ -58,7 +266,7 @@ class PixelEventService
             'browser_info' => json_encode([
                 'additionalInfo' => is_array($post['additionalInfo'] ?? null) ? $post['additionalInfo'] : [],
                 'screen' => is_array($post['screen'] ?? null) ? $post['screen'] : [],
-            ], JSON_UNESCAPED_UNICODE),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
         ];
 
         /** @var Pixel $pixel */
@@ -73,14 +281,14 @@ class PixelEventService
         $pixelAdditionalId = null;
         $additionalData = $post;
 
-        if ($pixelId) {
+        if ($pixelId && $this->shouldPersistAdditional($post)) {
             try {
                 $this->normalizeAbTestFields($post, $additionalData);
 
                 /** @var PixelAdditional $pixelAdditional */
                 $pixelAdditional = ObjectManager::make(PixelAdditional::class);
                 $pixelAdditional->setPixelId((int)$pixelId)
-                    ->setTotalEventData(json_encode($additionalData, JSON_UNESCAPED_UNICODE) ?: '{}')
+                    ->setTotalEventData(json_encode($additionalData, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}')
                     ->save();
 
                 $pixelAdditionalId = $pixelAdditional->getId() ?: null;

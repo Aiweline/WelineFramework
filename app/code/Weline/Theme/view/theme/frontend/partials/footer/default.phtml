@@ -259,11 +259,19 @@ $theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
 if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
     try {
-        $jsUrl = $assetsManager->getJsUrl($area, $layoutType, $layoutOption, $theme, $this);
+        $layoutAssetsEnabled = (bool)\Weline\Framework\App\Env::getInstance()
+            ->getConfig('theme.layout_assets.enabled', false);
+        $jsPath = $layoutAssetsEnabled
+            ? $assetsManager->getGeneratedJsPath($area, $layoutType, $layoutOption, $theme)
+            : '';
+        $hasLayoutJs = $jsPath !== '' && is_file($jsPath) && (filesize($jsPath) ?: 0) > 0;
+        if ($hasLayoutJs) {
+            $jsUrl = $assetsManager->getJsUrl($area, $layoutType, $layoutOption, $theme, $this);
         ?>
 <!-- 布局JS（包含所有partials的JavaScript）：<?= htmlspecialchars($layoutType) ?>/<?= htmlspecialchars($layoutOption) ?> -->
 <script src="<?= htmlspecialchars($jsUrl) ?>"></script>
 <?php
+        }
     } catch (\Exception $e) {
         // 如果获取URL失败，记录错误
         if (defined('DEV') && DEV) {

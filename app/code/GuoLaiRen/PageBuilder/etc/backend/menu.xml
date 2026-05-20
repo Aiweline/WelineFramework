@@ -33,6 +33,14 @@
           icon="mdi mdi-robot-outline"
           order="15"/>
 
+    <menu source="GuoLaiRen_PageBuilder::ai_site_design_direction"
+          name="ai_site_design_direction"
+          title="AI 设计方向"
+          action="pagebuilder/backend/ai-site-agent/design-directions"
+          parent="Weline_Backend::page_builder_group"
+          icon="mdi mdi-compass-outline"
+          order="16"/>
+
     <menu source="GuoLaiRen_PageBuilder::website_management"
           name="website_management"
           title="网站管理"

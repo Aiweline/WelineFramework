@@ -20,7 +20,7 @@ echo "Result: " . ($returnCode === 0 ? "SUCCESS" : "FAILED") . "\n\n";
 
 // Test: Set default model
 echo "Testing: Set default model...\n";
-$command = 'php bin/w http:request --method=POST --url="/ai/backend/defaultmodel/setDefault" --data='{"service_type":"chat","model_code":"gpt-4"}'';
+$command = 'php bin/w http:request --method=POST --url="/ai/backend/defaultmodel/setDefault" --data=\'{"service_type":"chat","model_code":"gpt-4"}\'';
 echo "Command: $command\n";
 system($command, $returnCode);
 echo "Result: " . ($returnCode === 0 ? "SUCCESS" : "FAILED") . "\n\n";

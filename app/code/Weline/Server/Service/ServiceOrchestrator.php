@@ -629,6 +629,7 @@ class ServiceOrchestrator
             ControlMessage::ACTION_RELOAD_WAIT,
             ControlMessage::ACTION_STOP,
             ControlMessage::ACTION_CACHE_CLEAR,
+            ControlMessage::ACTION_ROUTING_CACHE_CLEAR,
             ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE,
             ControlMessage::ACTION_SSL_CERT_RELOAD,
             ControlMessage::ACTION_MAINTENANCE_ENABLE,
@@ -879,6 +880,7 @@ class ServiceOrchestrator
             ControlMessage::ACTION_MAINTENANCE_ENABLE => 'Maintenance enable queued',
             ControlMessage::ACTION_MAINTENANCE_DISABLE => 'Maintenance disable queued',
             ControlMessage::ACTION_CACHE_CLEAR => 'Cache clear queued',
+            ControlMessage::ACTION_ROUTING_CACHE_CLEAR => 'Routing cache clear queued',
             ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE => 'PageBuilder page invalidate queued',
             ControlMessage::ACTION_SSL_CERT_RELOAD => 'SSL cert reload queued',
             ControlMessage::ACTION_SECURITY_UNBLOCK => 'Security unblock queued',
@@ -1303,6 +1305,10 @@ class ServiceOrchestrator
                 return;
 
             case ControlMessage::ACTION_CACHE_CLEAR:
+                $this->broadcastCacheClear();
+                return;
+
+            case ControlMessage::ACTION_ROUTING_CACHE_CLEAR:
                 $this->broadcastCacheClear();
                 return;
 
@@ -1765,7 +1771,6 @@ class ServiceOrchestrator
     public function startAll(ServiceContext $context): void
     {
         $this->bootstrapControlPlane($context);
-        $this->cleanupStartupInterferenceProcesses($context);
         $this->startAllChildServices($context);
     }
 
@@ -1782,16 +1787,21 @@ class ServiceOrchestrator
 
         $instanceName = (string) ($context->instanceName ?: 'default');
         $prefixes = $this->getInstanceScopedChildProcessPrefixes($instanceName);
+        $startedAt = \microtime(true);
 
         $killed = Processer::killByProcessNamePrefixes($prefixes);
-        $staleRemoved = Processer::cleanupStalePidFiles();
 
-        if ($killed > 0 || $staleRemoved > 0) {
+        if ($killed > 0) {
             WlsLogger::warning_(
-                "[Orchestrator] 启动前清场完成: instance={$instanceName}, killed={$killed}, stale_pid_files={$staleRemoved}"
+                '[Orchestrator] 启动前清场完成: instance=' . $instanceName
+                . ', killed=' . $killed
+                . ', elapsed_ms=' . \max(0, (int) \round((\microtime(true) - $startedAt) * 1000))
             );
         } else {
-            WlsLogger::debug_("[Orchestrator] 启动前清场：未发现当前实例遗留子进程 instance={$instanceName}");
+            WlsLogger::debug_(
+                '[Orchestrator] 启动前清场：未发现当前实例遗留子进程 instance=' . $instanceName
+                . ', elapsed_ms=' . \max(0, (int) \round((\microtime(true) - $startedAt) * 1000))
+            );
         }
     }
 
@@ -1821,9 +1831,8 @@ class ServiceOrchestrator
 
         $instanceName = (string) ($this->context->instanceName ?: 'default');
         $killed = Processer::killByProcessNamePrefixes($this->getInstanceScopedChildProcessPrefixes($instanceName));
-        $staleRemoved = Processer::cleanupStalePidFiles();
         WlsLogger::warning_(
-            "[Orchestrator] 当前实例子进程前缀扫尾完成: reason={$reason}, instance={$instanceName}, killed={$killed}, stale_pid_files={$staleRemoved}"
+            "[Orchestrator] 当前实例子进程前缀扫尾完成: reason={$reason}, instance={$instanceName}, killed={$killed}"
         );
     }
 
@@ -1834,6 +1843,7 @@ class ServiceOrchestrator
     {
         $this->childServicesBootstrapInProgress = true;
         try {
+            $this->cleanupStartupInterferenceProcesses($context);
             $this->startAllChildServicesBody($context);
         } finally {
             $this->childServicesBootstrapInProgress = false;
@@ -1911,10 +1921,9 @@ class ServiceOrchestrator
                 $allInstances[$role] ?? [],
                 static fn (mixed $instance): bool => $instance instanceof ServiceInstance
             ));
-            if (
-                $plannedCount > 0
-                && ($context->windowMode || $provider->requiresStartupReadyBarrier() || $provider->isCriticalRole())
-            ) {
+            if ($plannedCount > 0 && $role !== ControlMessage::ROLE_MAINTENANCE) {
+                // Maintenance slots are standby/repair capacity; they must not
+                // block the business endpoint from reaching running state.
                 $startupAcceptance[$role] = [
                     'displayName' => $displayName,
                     'expected' => $plannedCount,
@@ -9618,20 +9627,23 @@ class ServiceOrchestrator
             }
         }
 
+        $instanceIds = [];
         for ($slot = 1; $slot <= $desired; $slot++) {
-            if ($this->shouldYieldPeriodicWork(true)) {
-                return;
-            }
             $old = $this->registry->getInstance('worker', $slot);
             if ($old !== null) {
                 $this->cleanupInstancePidFile($old);
                 $this->registry->removeInstance('worker', $slot);
             }
-            $newInst = $this->startInstance($provider, $slot, $this->context);
-            if ($newInst !== null) {
-                $newInst->restarts = 0;
-                $this->registry->updateInstance($newInst);
+            $instanceIds[] = $slot;
+        }
+
+        $newInstances = $this->startInstanceIdsBatch($provider, $instanceIds, $this->context);
+        foreach ($newInstances as $newInst) {
+            if (!$newInst instanceof ServiceInstance) {
+                continue;
             }
+            $newInst->restarts = 0;
+            $this->registry->updateInstance($newInst);
         }
         $this->controlServer?->poll(0, 200000);
         WlsLogger::warning_("[Orchestrator] Worker 紧急拉起已提交（{$desired} 槽位）");
@@ -9730,16 +9742,17 @@ class ServiceOrchestrator
     }
 
     /**
-     * Dispatcher 负载池整体替换（维护切换）
+     * Publish the complete route table to dispatchers.
      *
      * @param int[] $ports
      */
-    private function publishDispatcherRouteTableFromPorts(array $ports, string $role = ControlMessage::ROLE_WORKER): void
+    private function publishDispatcherRouteTableFromPorts(array $ports, string $role = ControlMessage::ROLE_WORKER): int
     {
         $dispatchers = $this->registry->getInstancesByRole('dispatcher');
         if ($dispatchers === [] || $this->controlServer === null) {
-            return;
+            return 0;
         }
+
         $portSet = \array_fill_keys(\array_map('intval', $ports), true);
         $workers = [];
         foreach ($this->registry->getInstancesByRole($role) as $instance) {
@@ -9749,15 +9762,16 @@ class ServiceOrchestrator
             }
             $workers[] = $this->buildWorkerDescriptor($instance);
         }
+
         $epoch = $this->context !== null ? $this->context->epoch : 0;
         $portsStr = \implode(',', $ports);
 
         if ($role === ControlMessage::ROLE_MAINTENANCE || $this->maintenanceMode) {
             $this->logMaintenanceOperation(
-                "向 Dispatcher 发布 Worker 池：role={$role}, ports=" . ($portsStr !== '' ? $portsStr : '(empty)')
-                . '，' . $this->formatMaintenanceOperationContext(),
+                'Publish dispatcher route table: role=' . $role . ', ports=' . ($portsStr !== '' ? $portsStr : '(empty)')
+                . ', ' . $this->formatMaintenanceOperationContext(),
                 $role === ControlMessage::ROLE_MAINTENANCE ? 'WARN' : 'INFO',
-                'dispatcher_pool_publish:' . $role . ':' . $portsStr . ':' . $this->formatMaintenanceOperationContext(),
+                'dispatcher_route_table_publish:' . $role . ':' . $portsStr . ':' . $this->formatMaintenanceOperationContext(),
                 0.0
             );
         }
@@ -9773,9 +9787,8 @@ class ServiceOrchestrator
             $this->lastDispatcherRouteTableSignature = '';
         }
 
-        $this->publishDispatcherRouteTable($dispatchers, $ports, $role, $workers, $epoch);
+        return $this->publishDispatcherRouteTable($dispatchers, $ports, $role, $workers, $epoch);
     }
-
     /**
      * 向所有 Dispatcher 下发版本化路由表。
      *
@@ -9783,10 +9796,10 @@ class ServiceOrchestrator
      * @param int[]             $ports
      * @param array<int, array<string, mixed>> $workers 已由 buildWorkerDescriptor() 构造
      */
-    private function publishDispatcherRouteTable(array $dispatchers, array $ports, string $role, array $workers, int $epoch): void
+    private function publishDispatcherRouteTable(array $dispatchers, array $ports, string $role, array $workers, int $epoch): int
     {
         if ($dispatchers === [] || $this->controlServer === null) {
-            return;
+            return 0;
         }
 
         $msg = ControlMessage::setRouteTable(
@@ -9806,7 +9819,7 @@ class ServiceOrchestrator
         if ($checksum !== '' && isset($this->lastDispatcherRouteTablePublish[$cacheKey])
             && $this->lastDispatcherRouteTablePublish[$cacheKey]['checksum'] === $checksum
             && $this->lastDispatcherRouteTablePublish[$cacheKey]['route_version'] === $this->routeTableVersion) {
-            return;
+            return 0;
         }
 
         $sentCount = 0;
@@ -9818,7 +9831,7 @@ class ServiceOrchestrator
             $sentCount++;
         }
 
-        if ($checksum !== '') {
+        if ($sentCount > 0 && $checksum !== '') {
             $normalizedPorts = \array_values(\array_map('intval', $ports));
             \sort($normalizedPorts, \SORT_NUMERIC);
             $this->lastDispatcherRouteTablePublish[$cacheKey] = [
@@ -9842,13 +9855,12 @@ class ServiceOrchestrator
                 $checksum !== '' ? \substr($checksum, 0, 12) : 'n/a'
             ));
         }
+
+        return $sentCount;
     }
 
     /**
-     * 用 Registry 中当前所有 READY Worker 端口重写 Dispatcher 负载池并广播路由策略。
-     *
-     * 多 Worker 滚动/热重载（se:rel、server:maintenance rolling）在 maintenanceMode=false 时
-     * 不再逐条增删 Worker；结束后以 SET_ROUTE_TABLE 全量对齐。
+     * Rewrite dispatcher worker routes from the current READY worker registry.
      */
     private function syncDispatcherFullWorkerPoolFromRegistry(): void
     {
@@ -9871,11 +9883,17 @@ class ServiceOrchestrator
         }
 
         $this->routeTableVersion++;
-        $this->publishDispatcherRouteTableFromPorts($ports);
+        $sentCount = $this->publishDispatcherRouteTableFromPorts($ports);
+        if ($sentCount <= 0) {
+            $this->lastDispatcherRouteTableSignature = '';
+            WlsLogger::warning_('[Orchestrator] Dispatcher route table sync skipped: no connected dispatcher accepted publish for ' . $signature);
+            return;
+        }
+
         $this->controlServer->poll(0, 150000);
         $this->broadcastRoutingPolicyToWorkers();
         $this->lastDispatcherRouteTableSignature = $signature;
-        WlsLogger::info_('[Orchestrator] Dispatcher 全量 Worker 池已对齐 Registry: ' . $signature);
+        WlsLogger::info_('[Orchestrator] Dispatcher route table is aligned with Registry: ' . $signature);
     }
 
     private function notifyDispatcherRemoveWorker(?int $port): void

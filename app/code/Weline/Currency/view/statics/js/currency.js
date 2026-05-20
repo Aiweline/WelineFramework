@@ -15,6 +15,34 @@
         return;
     }
 
+    function isIgnorableSwitchQueryParam(key) {
+        key = String(key || '').toLowerCase().trim();
+        if (!key) {
+            return false;
+        }
+        if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(key)) {
+            return true;
+        }
+        return key.startsWith('utm_') || key.startsWith('mtm_') || key.startsWith('pk_');
+    }
+
+    function sanitizeSwitchSearch(search) {
+        const raw = String(search || '');
+        if (!raw || raw === '?') {
+            return '';
+        }
+
+        const params = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
+        Array.from(params.keys()).forEach(key => {
+            if (isIgnorableSwitchQueryParam(key)) {
+                params.delete(key);
+            }
+        });
+
+        const query = params.toString();
+        return query ? '?' + query : '';
+    }
+
     /**
      * 获取当前货币代码
      */
@@ -96,7 +124,7 @@
             }
 
             // 获取当前 URL 和货币配置
-            const currentPath = window.location.pathname + window.location.search;
+            const currentPath = window.location.pathname + sanitizeSwitchSearch(window.location.search || '');
             const config = window.__WelineThemeConfig || {};
             const availableCurrencies = config.availableCurrencies || [
                 { code: 'CNY', name: 'CNY (¥)' },
@@ -171,7 +199,7 @@
 
         // 次优先使用 urlWithCurrency 函数（来自 url-frontend 模块，会自动保持语言）
         if (typeof window.urlWithCurrency === 'function') {
-            const currentPath = window.location.pathname + window.location.search;
+            const currentPath = window.location.pathname + sanitizeSwitchSearch(window.location.search || '');
             const currencyUrl = window.urlWithCurrency(currentPath, currency);
 
             // 保存货币偏好到 localStorage
@@ -189,7 +217,7 @@
 
         // 降级方案：使用 inject_path（会自动保持语言）
         if (typeof window.inject_path === 'function') {
-            const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + window.location.search;
+            const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + sanitizeSwitchSearch(window.location.search || '');
 
             // 保存货币偏好
             localStorage.setItem('weline_user_currency', currency);
@@ -226,7 +254,7 @@
         const cleanPath = '/' + filteredParts.join('/');
 
         // 构建新 URL：/[currency]/[lang]/path（保持语言）
-        const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + window.location.search;
+        const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + sanitizeSwitchSearch(window.location.search || '');
 
         // 保存货币偏好
         localStorage.setItem('weline_user_currency', currency);
