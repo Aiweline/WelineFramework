@@ -180,50 +180,12 @@ WlsLogger::info_("Config: max_sessions=" . ($sessionConfig['max_sessions'] ?? 50
     ", session_ttl=" . ($sessionConfig['session_ttl'] ?? 3600) . "s");
 WlsLogger::info_("Persist file: " . ($sessionConfig['persist_file_name'] ?? 'wls_session_store.dat'));
 
-/**
- * 更新实例 JSON 中的服务端口信息
- * 供 Worker 启动时动态发现 Session/Memory 服务端口
- */
-$updateServicePortInInstanceJson = static function (string $serviceRole, int $servicePort) use ($instanceName): void {
-    $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-    if (!\is_file($instanceFile)) {
-        WlsLogger::warning_("[SharedState] Instance file missing, skip persisting {$serviceRole} port: {$servicePort}");
-        return;
-    }
-
-    // 读取现有数据并合并
-    $content = @\file_get_contents($instanceFile);
-    $existingData = \is_string($content) ? (\json_decode($content, true) ?: []) : [];
-    if (!\is_array($existingData)
-        || (!isset($existingData['name']) && !isset($existingData['host']) && !\array_key_exists('ssl_enabled', $existingData))) {
-        WlsLogger::warning_("[SharedState] Instance file incomplete, skip persisting {$serviceRole} port: {$servicePort}");
-        return;
-    }
-
-    // 根据不同的角色，更新对应的字段
-    \Weline\Server\Service\ServerInstanceManager::atomicUpdateJsonStatic(
-        $instanceFile,
-        static function (array $data) use ($serviceRole, $servicePort): array {
-            if ($serviceRole === 'session_server') {
-                $data['session_port'] = $servicePort;
-                $data['session_service_updated_at'] = \time();
-            } elseif ($serviceRole === 'memory_server') {
-                $data['memory_port'] = $servicePort;
-                $data['memory_service_updated_at'] = \time();
-            }
-
-            return $data;
-        }
-    );
-};
-
 $ipcReceivedShutdown = false;
 $kernel = null;
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 $lastSharedOrphanSuppressedAt = 0;
-// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
-// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
-// 共享侧车没有独立实例 JSON；无显式控制端口时跳过 30s 解析等待，交由 token/consumer 自治。
+// IPC control port. Shared sidecars without an explicit control port stay
+// token/consumer managed instead of publishing runtime state through files.
 $shouldResolveControlPort = !$sharedService || $controlPort > 0 || $supervisorEnabled;
 if ($shouldResolveControlPort && $controlPort <= 0) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 30);
@@ -261,9 +223,6 @@ if ($controlPort > 0 || $supervisorEnabled) {
     );
     if ($kernel->connectAndRegister($controlPort)) {
         WlsLogger::info_("Connected to Master IPC on port {$controlPort}");
-        // 更新实例 JSON 中的服务端口信息，供 Worker 启动时发现
-        $updateServicePortInInstanceJson($role, $port);
-        WlsLogger::info_("Service port {$role}={$port} registered to instance JSON");
         if (\Weline\Server\Log\LogConfig::isDevMode() || $isFrontend) {
             $client = $kernel->getClient();
             if ($client !== null) {
@@ -276,8 +235,6 @@ if ($controlPort > 0 || $supervisorEnabled) {
         }
     } else {
         WlsLogger::warning_("Failed to connect to Master IPC on port {$controlPort}");
-        // 即使连接失败也需要注册端口，供 Worker 查询
-        $updateServicePortInInstanceJson($role, $port);
     }
 }
 

@@ -49,15 +49,6 @@ class ControlMessage
     /** Master → Dispatcher：将指定端口从黑名单移除 */
     public const TYPE_UNDRAIN = 'undrain';
 
-    /** Master → Dispatcher：动态添加 Worker 端口到负载均衡池 */
-    public const TYPE_ADD_WORKER = 'add_worker';
-
-    /** Master → Dispatcher：从负载均衡池移除端口 */
-    public const TYPE_REMOVE_WORKER = 'remove_worker';
-
-    /** Master → Dispatcher：一次性替换负载均衡端口列表（维护模式切换用） */
-    public const TYPE_SET_WORKER_POOL = 'set_worker_pool';
-
     /** Master → Dispatcher：设置 HTTP 重定向端口（用于明文 HTTP 请求转发） */
     public const TYPE_SET_REDIRECT_PORT = 'set_redirect_port';
 
@@ -107,19 +98,10 @@ class ControlMessage
     /** Dispatcher → Master：Worker 入池检查回执（闭环确认） */
     public const TYPE_WORKER_POOL_ACK = 'worker_pool_ack';
 
-    /**
-     * Master → Dispatcher：版本化全量路由表（B-i 阶段引入，与 SET_WORKER_POOL 并行下发）。
-     *
-     * 与 SET_WORKER_POOL 的差异：
-     * - 携带 checksum 字段，对 (version + workers 身份) 做幂等校验；
-     * - Dispatcher 收到后 B-i 阶段仅回 ROUTE_TABLE_ACK，不切换业务路由源（保持 SET_WORKER_POOL 为唯一权威）。
-     * - B-ii 阶段会让 Dispatcher 改为只信本消息，SET_WORKER_POOL/ADD_WORKER 降级为兼容信号。
-     */
+    /** Master → Dispatcher：版本化全量路由表，是 Dispatcher 唯一路由权威输入。 */
     public const TYPE_SET_ROUTE_TABLE = 'set_route_table';
 
-    /**
-     * Dispatcher → Master：路由表版本回执（B-i：仅观测日志，不联动 Worker 生死）。
-     */
+    /** Dispatcher → Master：路由表版本回执。 */
     public const TYPE_ROUTE_TABLE_ACK = 'route_table_ack';
 
     /**
@@ -507,49 +489,10 @@ class ControlMessage
     }
 
     /**
-     * @param int[] $ports
-     */
-    public static function setWorkerPool(
-        array $ports,
-        string $role = self::ROLE_WORKER,
-        array $workers = [],
-        int $version = 0,
-        string $traceId = '',
-        int $epoch = 0
-    ): string
-    {
-        $data = [
-            'type'  => self::TYPE_SET_WORKER_POOL,
-            'ports' => \array_values(\array_map('intval', $ports)),
-            'role' => $role,
-        ];
-        if ($workers !== []) {
-            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
-        }
-        if ($version > 0) {
-            $data['version'] = $version;
-        }
-        if ($epoch > 0) {
-            $data['epoch'] = $epoch;
-        }
-        self::appendTraceId($data, $traceId);
-        return self::encode($data);
-    }
-
-    /**
-     * 构建 set_route_table 消息（B-i 阶段引入，与 SET_WORKER_POOL 并行）
-     *
-     * 形态与 SET_WORKER_POOL 一致，区别：
-     * - 新增 `route_version` 字段（显式命名，避免和 SET_WORKER_POOL 的 version 字段语义混淆）。
-     * - 新增 `checksum` 字段，对 (route_version + 规范化 workers + ports) 做 sha1 摘要，
-     *   Dispatcher 端做幂等去重；为后续多 Dispatcher / 双跑场景留出收敛点。
-     * - role 默认 worker，业务/维护池都可以复用同一消息类型，靠 role 区分。
-     *
-     * B-i 阶段 Dispatcher 收到后**仅回 ROUTE_TABLE_ACK，不切换业务路由源**；
-     * 等 B-ii 阶段再把业务路由源切换到本消息。
+     * 构建 Master 下发给 Dispatcher 的权威路由表。
      *
      * @param int[] $ports
-     * @param array<int, array<string, mixed>> $workers 与 setWorkerPool 同构（role/slot_id/lease_id/generation/port/state）
+     * @param array<int, array<string, mixed>> $workers 规范化 worker 描述（role/slot_id/lease_id/generation/port/state）
      */
     public static function setRouteTable(
         array $ports,
@@ -694,25 +637,6 @@ class ControlMessage
             'type'  => self::TYPE_UNDRAIN,
             'ports' => $ports,
         ]);
-    }
-
-    /**
-     * 构建 remove_worker 消息
-     */
-    public static function removeWorker(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string
-    {
-        $data = [
-            'type'  => self::TYPE_REMOVE_WORKER,
-            'ports' => $ports,
-            'role' => $role,
-        ];
-        if ($workers !== []) {
-            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
-        }
-        if ($version > 0) {
-            $data['version'] = $version;
-        }
-        return self::encode($data);
     }
 
     /**
@@ -1196,10 +1120,6 @@ class ControlMessage
 
     /**
      * 把 traceId 写入消息 payload。
-     *
-     * 历史遗留：`setWorkerPool()` 等多处调用此方法但实际未定义，
-     * 一旦 traceId 非空会触发 `Call to undefined method`。
-     * 这里补齐定义，行为对齐 appendLeaseIdentity（空值跳过）。
      */
     private static function appendTraceId(array &$data, string $traceId): void
     {

@@ -12,11 +12,11 @@ use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 
 final class HybridControlPlaneServerTest extends TestCase
 {
-    public function testHybridServerAcceptsArrayCallablesForLegacyCallbacks(): void
+    public function testHybridServerAcceptsArrayCallablesForControlCallbacks(): void
     {
-        $legacy = new MasterControlServer();
+        $controlServer = new MasterControlServer();
         $hybrid = new HybridControlPlaneServer(
-            legacyServer: $legacy,
+            controlServer: $controlServer,
             endpointResolver: new ControlEndpointResolver(BP, 28200, 1000),
             supervisorEnabled: false,
         );
@@ -69,9 +69,9 @@ final class HybridControlPlaneServerTest extends TestCase
 
     public function testHybridServerBridgesSupervisorHelloReadyAndDisconnect(): void
     {
-        $legacy = new MasterControlServer();
+        $controlServer = new MasterControlServer();
         $hybrid = new HybridControlPlaneServer(
-            legacyServer: $legacy,
+            controlServer: $controlServer,
             endpointResolver: new ControlEndpointResolver(BP, 28000, 1000),
             supervisorEnabled: true,
             channelId: 'channel-ut-instance',
@@ -151,9 +151,9 @@ final class HybridControlPlaneServerTest extends TestCase
 
     public function testHybridServerCountServiceClientsIncludesSupervisorSessions(): void
     {
-        $legacy = new MasterControlServer();
+        $controlServer = new MasterControlServer();
         $hybrid = new HybridControlPlaneServer(
-            legacyServer: $legacy,
+            controlServer: $controlServer,
             endpointResolver: new ControlEndpointResolver(BP, 28100, 1000),
             supervisorEnabled: true,
             channelId: 'channel-ut-instance',
