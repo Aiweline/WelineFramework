@@ -83,7 +83,7 @@ class SharedStateServiceRegistry
         $role = $this->normalizeRole($role);
         $file = $this->getRegistryFile();
 
-        ServerInstanceManager::atomicUpdateJsonStatic($file, static function (array $data) use ($role, $record): array {
+        ServerInstanceManager::updateJsonFileAtomically($file, static function (array $data) use ($role, $record): array {
             $services = \is_array($data['services'] ?? null) ? $data['services'] : [];
             $services[$role] = $record;
             $data['services'] = $services;
@@ -103,7 +103,7 @@ class SharedStateServiceRegistry
         $file = $this->getRegistryFile();
         $updatedRecord = [];
 
-        ServerInstanceManager::atomicUpdateJsonStatic($file, static function (array $data) use ($role, $updater, &$updatedRecord): array {
+        ServerInstanceManager::updateJsonFileAtomically($file, static function (array $data) use ($role, $updater, &$updatedRecord): array {
             $services = \is_array($data['services'] ?? null) ? $data['services'] : [];
             $record = \is_array($services[$role] ?? null) ? $services[$role] : [];
             $nextRecord = $updater($record);
@@ -123,7 +123,7 @@ class SharedStateServiceRegistry
         $role = $this->normalizeRole($role);
         $file = $this->getRegistryFile();
 
-        ServerInstanceManager::atomicUpdateJsonStatic($file, static function (array $data) use ($role): array {
+        ServerInstanceManager::updateJsonFileAtomically($file, static function (array $data) use ($role): array {
             $services = \is_array($data['services'] ?? null) ? $data['services'] : [];
             unset($services[$role]);
             $data['services'] = $services;
