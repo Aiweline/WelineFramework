@@ -309,7 +309,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
 
         $method = new \ReflectionMethod(Dispatcher::class, 'updateMaintenanceFallbackState');
         $method->setAccessible(true);
-        $method->invoke($dispatcher, true, 'SET_WORKER_POOL accepted=0, rejected=0');
+        $method->invoke($dispatcher, true, 'SET_ROUTE_TABLE accepted=0, rejected=0');
 
         self::assertTrue((bool) $this->getProperty($dispatcher, 'maintenanceFallbackActive'));
     }

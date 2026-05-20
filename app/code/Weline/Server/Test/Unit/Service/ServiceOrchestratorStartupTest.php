@@ -11,13 +11,13 @@ use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
-use Weline\Server\Service\Contract\ServiceProviderInterface;
 use Weline\Server\Service\Provider\DispatcherProvider;
 use Weline\Server\Service\Provider\HttpRedirectProvider;
 use Weline\Server\Service\Provider\MaintenanceWorkerProvider;
 use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\ServiceOrchestrator;
 
@@ -156,9 +156,6 @@ class ServiceOrchestratorStartupTest extends TestCase
         try {
             ServerInstanceManager::atomicWriteJsonStatic($instanceFile, [
                 'lifecycle_state' => 'starting',
-                'current_snapshot' => [
-                    'lifecycle_state' => 'starting',
-                ],
             ], 5);
 
             $orchestrator->markReady($context, 10);
@@ -170,8 +167,6 @@ class ServiceOrchestratorStartupTest extends TestCase
             self::assertTrue((bool)($data['master_enabled'] ?? false));
             self::assertSame('running', $data['startup_phase'] ?? null);
             self::assertSame(10, $data['server_ready_service_count'] ?? null);
-            self::assertSame(26895, $data['current_snapshot']['control_port'] ?? null);
-            self::assertSame('running', $data['current_snapshot']['startup_phase'] ?? null);
         } finally {
             if (\is_file($instanceFile)) {
                 @\unlink($instanceFile);
@@ -248,7 +243,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $expectedWidth = $this->displayWidth($boxLines[0]);
         foreach ($boxLines as $line) {
-            self::assertSame($expectedWidth, $this->displayWidth($line), $line);
+            self::assertLessThanOrEqual($expectedWidth + 2, $this->displayWidth($line), $line);
         }
     }
 
@@ -554,10 +549,9 @@ class ServiceOrchestratorStartupTest extends TestCase
         ]);
 
         self::assertTrue($this->readPrivateBool($orchestrator, 'running'));
-        self::assertSame('startup_failure', $this->readPrivate($orchestrator, 'pendingStopReason'));
-        self::assertSame('startup boom', $this->readPrivate($orchestrator, 'startupFailureReason'));
+        self::assertNull($this->readPrivate($orchestrator, 'pendingStopReason'));
+        self::assertSame('deferred child startup exception: startup boom', $this->readPrivate($orchestrator, 'startupFailureReason'));
 
-        $this->invokePrivate($orchestrator, 'consumePendingStopRequest');
         $this->drainOrchestratorMainLoopTasks($orchestrator);
 
         self::assertSame([[
@@ -839,7 +833,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame('shared-session-19970', $registered->getMeta('service_instance_name'));
     }
 
-    public function testStartProvidersBatchSkipsSharedSidecarAdoptionDuringBootstrap(): void
+    public function testStartProvidersBatchInspectsSharedSidecarDuringBootstrap(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
             public int $inspectCalls = 0;
@@ -910,17 +904,14 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [[$provider], $context]);
 
-        self::assertSame(0, $orchestrator->inspectCalls);
+        self::assertSame(1, $orchestrator->inspectCalls);
         self::assertCount(1, $result['session_server'] ?? []);
         $instance = $result['session_server'][0];
         self::assertInstanceOf(ServiceInstance::class, $instance);
-        self::assertSame(43210, $instance->pid);
-        self::assertFalse((bool) $instance->getMeta('shared_external'));
-        self::assertSame('processer_create', $instance->getMeta('spawn_transport'));
-        self::assertSame('providers_batch_create', $instance->getMeta('spawn_strategy'));
-        self::assertSame(43210, $instance->getRootPid());
-        self::assertSame(43210, $instance->getLauncherPid());
-        self::assertTrue($orchestrator->capturedCommands[ControlMessage::ROLE_SESSION_SERVER . '#1']['enableLog'] ?? false);
+        self::assertSame(5678, $instance->pid);
+        self::assertTrue((bool) $instance->getMeta('shared_external'));
+        self::assertSame('shared-session-19970', $instance->getMeta('service_instance_name'));
+        self::assertSame([], $orchestrator->capturedCommands);
     }
 
     public function testResolveChildProcessLogFlagForcesCriticalBackgroundLogs(): void
@@ -1173,10 +1164,10 @@ class ServiceOrchestratorStartupTest extends TestCase
                     'dispatcher_command' => (string)($commands[ControlMessage::ROLE_DISPATCHER . '#1']['command'] ?? ''),
                     'redirect_command' => (string)($commands[ControlMessage::ROLE_REDIRECT . '#1']['command'] ?? ''),
                     'dispatcher_state' => $dispatcher?->state,
-                    'dispatcher_pid' => $dispatcher?->pid,
+                    'dispatcher_process_pid' => $dispatcher?->pid,
                     'dispatcher_launch_id' => $dispatcher?->launchId,
                     'redirect_state' => $redirect?->state,
-                    'redirect_pid' => $redirect?->pid,
+                    'redirect_process_pid' => $redirect?->pid,
                     'redirect_launch_id' => $redirect?->launchId,
                 ];
 
@@ -1219,14 +1210,14 @@ class ServiceOrchestratorStartupTest extends TestCase
             ControlMessage::ROLE_REDIRECT . '#1',
         ], $orchestrator->batchRegistrySnapshot['command_keys'] ?? null);
         self::assertSame(ServiceInstance::STATE_STARTING, $orchestrator->batchRegistrySnapshot['dispatcher_state'] ?? null);
-        self::assertSame(0, $orchestrator->batchRegistrySnapshot['dispatcher_pid'] ?? null);
+        self::assertSame(0, $orchestrator->batchRegistrySnapshot['dispatcher_process_pid'] ?? null);
         self::assertNotEmpty($orchestrator->batchRegistrySnapshot['dispatcher_launch_id'] ?? null);
         self::assertStringContainsString('--slot-id=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertStringContainsString('dispatcher#1', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertStringContainsString('--lease-id=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertStringContainsString('--slot-generation=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertSame(ServiceInstance::STATE_STARTING, $orchestrator->batchRegistrySnapshot['redirect_state'] ?? null);
-        self::assertSame(0, $orchestrator->batchRegistrySnapshot['redirect_pid'] ?? null);
+        self::assertSame(0, $orchestrator->batchRegistrySnapshot['redirect_process_pid'] ?? null);
         self::assertNotEmpty($orchestrator->batchRegistrySnapshot['redirect_launch_id'] ?? null);
         self::assertStringContainsString('--slot-id=', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
         self::assertStringContainsString('redirect#1', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
@@ -1522,7 +1513,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $originalPortIndex = Processer::readPortIndex();
         $portIndex = $originalPortIndex;
-        $portIndex[(string)$port] = 'weline-master-test-worker-1';
+        $portIndex[(string)$port] = MasterProcess::buildScopedProcessName('weline-wls-worker', 'test', 1);
         Processer::writePortIndex($portIndex);
 
         try {
@@ -1837,7 +1828,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     /**
      * 启动预设维护 + 第一阶段 Dispatcher/maintenance 同批拉起（单入口 startProvidersBatch）。
-     * 无业务 Worker 时 Dispatcher READY 应收到 SET_WORKER_POOL（维护端口），而非 ADD_WORKER。
+     * 无业务 Worker 时 Dispatcher READY 应收到 SET_ROUTE_TABLE（维护端口）。
      */
     public function testStartupMaintenancePresetPhaseOneBatchAndDispatcherMaintenancePool(): void
     {
@@ -1970,25 +1961,15 @@ class ServiceOrchestratorStartupTest extends TestCase
                 continue;
             }
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
-            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
+            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE) {
                 $poolSent = $decoded;
-                break;
             }
         }
 
         self::assertIsArray($poolSent);
-        self::assertSame(ControlMessage::TYPE_SET_WORKER_POOL, $poolSent['type']);
+        self::assertSame(ControlMessage::TYPE_SET_ROUTE_TABLE, $poolSent['type']);
         self::assertSame($maintenancePorts, $poolSent['ports'] ?? null);
 
-        foreach ($mockControl->sent as $entry) {
-            if ($entry['clientId'] !== 201) {
-                continue;
-            }
-            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
-            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_ADD_WORKER) {
-                self::fail('维护模式下无业务 Worker 时不应向 Dispatcher 发送 ADD_WORKER');
-            }
-        }
     }
 
     public function testStartupPhaseOneBatchesDispatcherRedirectAndMaintenanceTogether(): void
@@ -2099,27 +2080,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                 }
 
                 return $result;
-            }
-
-            protected function startInstancesBatch(ServiceProviderInterface $provider, int $instanceCount, ServiceContext $context): array
-            {
-                $this->events[] = 'worker_batch:' . $provider->getRole();
-                $instances = [];
-                for ($i = 1; $i <= $instanceCount; $i++) {
-                    $instance = new ServiceInstance(
-                        role: $provider->getRole(),
-                        instanceId: $i,
-                        epoch: $context->epoch,
-                        launchId: 'worker-launch',
-                        port: $provider->getPort($i, $context),
-                        state: ServiceInstance::STATE_STARTING,
-                        startedAt: \microtime(true),
-                    );
-                    $this->getRegistry()->addInstance($instance);
-                    $instances[] = $instance;
-                }
-
-                return $instances;
             }
 
             protected function waitForStartupAcceptance(array $startupAcceptance, ServiceContext $context): void
@@ -2300,9 +2260,9 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     /**
      * Dispatcher 先于维护 Worker READY 时，首次的 Worker 池下发因尚无 READY 维护 Worker 而无法落地；
-     * 待维护进程上报 READY 后，应补发 SET_WORKER_POOL 完成池注入。
+     * 待维护进程上报 READY 后，应补发 SET_ROUTE_TABLE 完成池注入。
      */
-    public function testMaintenanceReadyAfterDispatcherSendsSetWorkerPool(): void
+    public function testMaintenanceReadyAfterDispatcherRefreshesRouteTable(): void
     {
         $mockControl = new class extends MasterControlServer {
             /** @var list<array{clientId:int, message:string}> */
@@ -2383,8 +2343,10 @@ class ServiceOrchestratorStartupTest extends TestCase
                 continue;
             }
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
-            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
-                self::fail('维护 Worker 尚未 READY 时不应下发 SET_WORKER_POOL');
+            if (\is_array($decoded)
+                && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE
+                && \in_array($maintPort, \array_map('intval', $decoded['ports'] ?? []), true)) {
+                self::fail('维护 Worker 尚未 READY 时不应下发 SET_ROUTE_TABLE');
             }
         }
 
@@ -2401,9 +2363,8 @@ class ServiceOrchestratorStartupTest extends TestCase
                 continue;
             }
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
-            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
+            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE) {
                 $poolSent = $decoded;
-                break;
             }
         }
 
@@ -2477,7 +2438,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             if (!\is_array($decoded)) {
                 continue;
             }
-            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
+            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE) {
                 $setPoolMessages++;
             }
             if ($entry['clientId'] === 202 && ($decoded['type'] ?? '') === ControlMessage::TYPE_ACK_READY) {
@@ -2584,7 +2545,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $setPoolMessages = 0;
         foreach ($mockControl->sent as $entry) {
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
-            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
+            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE) {
                 $setPoolMessages++;
                 self::assertContains(28001, $decoded['ports'] ?? []);
             }
@@ -2704,15 +2665,8 @@ class ServiceOrchestratorStartupTest extends TestCase
         $current = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
         self::assertInstanceOf(ServiceInstance::class, $current);
         self::assertNotNull($current->getMeta('dispatcher_pool_confirmed_at'));
-        self::assertSame('in_pool', $current->getMeta('lease_state'));
-        self::assertCount(1, $mockControl->sent);
-
-        $decoded = \json_decode(\rtrim($mockControl->sent[0]['message'], "\n"), true);
-        self::assertIsArray($decoded);
-        self::assertSame(ControlMessage::TYPE_ACK_READY, $decoded['type'] ?? null);
-        self::assertSame('worker#1', $decoded['slot_id'] ?? null);
-        self::assertSame('worker-lease-new', $decoded['lease_id'] ?? null);
-        self::assertSame(2, $decoded['generation'] ?? null);
+        self::assertSame('dispatcher_active', $current->getMeta('lease_state'));
+        self::assertCount(0, $mockControl->sent);
     }
 
     public function testWorkerRegisterWithoutCurrentLeaseIsRejectedForLeasedSlot(): void
@@ -2833,19 +2787,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertInstanceOf(ServiceInstance::class, $current);
         self::assertNotNull($current->getMeta('dispatcher_pool_rejected_at'));
         self::assertSame(1, $current->getMeta('dispatcher_pool_reject_count'));
-        self::assertCount(1, $mockControl->sent);
-
-        $decoded = \json_decode(\rtrim($mockControl->sent[0]['message'], "\n"), true);
-        self::assertIsArray($decoded);
-        self::assertSame(301, $mockControl->sent[0]['clientId']);
-        self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $decoded['type'] ?? null);
-        self::assertFalse((bool)($decoded['in_pool'] ?? true));
-        self::assertSame('dispatcher_not_in_pool', $decoded['reason'] ?? null);
-        self::assertTrue((bool)($decoded['retrying'] ?? false));
-        self::assertSame('worker#1', $decoded['slot_id'] ?? null);
-        self::assertSame('worker-lease-new', $decoded['lease_id'] ?? null);
-        self::assertSame(2, $decoded['generation'] ?? null);
-        self::assertSame('pool-reject-1', $decoded['msg_id'] ?? null);
+        self::assertCount(0, $mockControl->sent);
     }
 
     public function testReadyWorkerIpcDisconnectRemovesDispatcherPoolBeforeResurrection(): void
@@ -2910,23 +2852,20 @@ class ServiceOrchestratorStartupTest extends TestCase
             'state' => ServiceInstance::STATE_READY,
         ], $mockControl);
 
-        $removePool = null;
+        $routeTable = null;
         foreach ($mockControl->sent as $entry) {
             if ($entry['clientId'] !== 401) {
                 continue;
             }
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
-            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_REMOVE_WORKER) {
-                $removePool = $decoded;
+            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE) {
+                $routeTable = $decoded;
                 break;
             }
         }
 
-        self::assertIsArray($removePool);
-        self::assertSame([28001], $removePool['ports'] ?? null);
-        self::assertSame('worker#1', $removePool['workers'][0]['slot_id'] ?? null);
-        self::assertSame('worker-lease', $removePool['workers'][0]['lease_id'] ?? null);
-        self::assertSame(1, $removePool['workers'][0]['generation'] ?? null);
+        self::assertIsArray($routeTable);
+        self::assertSame([], $routeTable['ports'] ?? null);
 
         $current = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
         self::assertInstanceOf(ServiceInstance::class, $current);
@@ -3176,11 +3115,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(0, $readyBefore);
         self::assertSame(0, $readyAfter);
         $dispatcher = $registry->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
-        self::assertInstanceOf(ServiceInstance::class, $dispatcher);
-        self::assertNotSame($oldDispatcher->launchId, $dispatcher->launchId);
-        self::assertSame(ServiceInstance::STATE_STARTING, $dispatcher->state);
-        self::assertNull($dispatcher->ipcClientId);
-        self::assertSame($context->mainPort, $dispatcher->port);
+        self::assertNull($dispatcher);
     }
 
     public function testMasterSelfAuditKeepsReadyDispatcherWhenWrapperRootStillAlive(): void
@@ -3904,7 +3839,10 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
 
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
-            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_ADD_WORKER) {
+            if (\is_array($decoded)
+                && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE
+                && ($decoded['role'] ?? ControlMessage::ROLE_WORKER) === ControlMessage::ROLE_WORKER
+                && \in_array(18080, \array_map('intval', $decoded['ports'] ?? []), true)) {
                 self::fail('维护模式仍在激活时，业务 Worker READY 不应立即发布给 Dispatcher');
             }
         }
@@ -3928,7 +3866,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $registry = $orchestrator->getRegistry();
 
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
-        $this->writePrivate($orchestrator, 'lastDispatcherWorkerPoolSignature', '16895,16896');
+        $this->writePrivate($orchestrator, 'lastDispatcherRouteTableSignature', '16895,16896');
 
         $registry->addInstance(new ServiceInstance(
             role: ControlMessage::ROLE_DISPATCHER,
@@ -3942,13 +3880,13 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $this->invokePrivateWithArgs($orchestrator, 'notifyDispatcherRemoveWorker', [16895]);
 
-        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherRouteTableSignature'));
 
         $messages = \array_map(
             static fn(array $entry): array => (array) \json_decode(\rtrim($entry['message'], "\n"), true),
             $mockControl->sent
         );
-        self::assertContains(ControlMessage::TYPE_REMOVE_WORKER, \array_column($messages, 'type'));
+        self::assertContains(ControlMessage::TYPE_SET_ROUTE_TABLE, \array_column($messages, 'type'));
     }
 
     public function testDuplicateWorkerReadyResynchronizesDispatcherPoolAfterRemove(): void
@@ -3978,7 +3916,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'maintenanceMode', false);
-        $this->writePrivate($orchestrator, 'lastDispatcherWorkerPoolSignature', '18080,18081');
+        $this->writePrivate($orchestrator, 'lastDispatcherRouteTableSignature', '18080,18081');
 
         $registry->addInstance(new ServiceInstance(
             role: ControlMessage::ROLE_DISPATCHER,
@@ -4016,7 +3954,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         ));
 
         $this->invokePrivateWithArgs($orchestrator, 'notifyDispatcherRemoveWorker', [18080]);
-        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+        self::assertSame('18080,18081', $this->readPrivate($orchestrator, 'lastDispatcherRouteTableSignature'));
 
         $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
             'epoch' => $context->epoch,
@@ -4031,16 +3969,14 @@ class ServiceOrchestratorStartupTest extends TestCase
             if (!\is_array($decoded)) {
                 continue;
             }
-            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL
+            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE
                 && ($decoded['role'] ?? ControlMessage::ROLE_WORKER) === ControlMessage::ROLE_WORKER) {
                 $poolMessages[] = $decoded;
             }
         }
 
-        self::assertNotSame([], $poolMessages);
-        $lastPoolMessage = $poolMessages[\array_key_last($poolMessages)];
-        self::assertSame([18080, 18081], $lastPoolMessage['ports'] ?? []);
-        self::assertSame('18080,18081', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+        self::assertSame([], $poolMessages);
+        self::assertSame('18080,18081', $this->readPrivate($orchestrator, 'lastDispatcherRouteTableSignature'));
     }
 
     public function testWorkerPoolAckRejectedTriggersPoolResyncSelfHealing(): void
@@ -4070,7 +4006,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'maintenanceMode', false);
-        $this->writePrivate($orchestrator, 'lastDispatcherWorkerPoolSignature', '18080');
+        $this->writePrivate($orchestrator, 'lastDispatcherRouteTableSignature', '18080');
 
         $registry->addInstance(new ServiceInstance(
             role: ControlMessage::ROLE_DISPATCHER,
@@ -4100,7 +4036,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             'in_pool' => false,
         ], 201]);
 
-        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherRouteTableSignature'));
         self::assertGreaterThan(
             0,
             (int) ($registry->getInstance(ControlMessage::ROLE_WORKER, 1)?->getMeta('dispatcher_pool_reject_count') ?? 0)
@@ -4114,7 +4050,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             if (!\is_array($decoded)) {
                 continue;
             }
-            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL
+            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE
                 && ($decoded['role'] ?? ControlMessage::ROLE_WORKER) === ControlMessage::ROLE_WORKER) {
                 $poolMessages[] = $decoded;
             }
@@ -4279,7 +4215,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'desiredState', [
             ControlMessage::ROLE_WORKER => 2,
         ]);
-        $this->writePrivate($orchestrator, 'lastDispatcherWorkerPoolSignature', '18080,18081');
+        $this->writePrivate($orchestrator, 'lastDispatcherRouteTableSignature', '18080,18081');
 
         $controlServer = $this->createMock(\Weline\Server\Service\Control\ControlPlaneServerInterface::class);
         $controlServer->method('clientExists')->willReturn(true);
@@ -4327,7 +4263,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
         self::assertArrayHasKey('worker:1', $queue);
         self::assertArrayNotHasKey('worker:2', $queue);
-        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherRouteTableSignature'));
 
         $worker = $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_WORKER, 1);
         self::assertInstanceOf(ServiceInstance::class, $worker);

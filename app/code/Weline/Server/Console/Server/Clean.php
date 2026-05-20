@@ -22,18 +22,18 @@ class Clean extends CommandAbstract
      */
     public function execute(array $args = [], array $data = []): void
     {
-        $this->printer->setup(__('清理失效的 WLS 实例记录'));
+        $this->printer->setup(__('清理未运行的 WLS 实例记录'));
 
         $cleanedNames = $this->instanceManager->cleanupInactiveInstances();
         $cleaned = \count($cleanedNames);
 
         if ($cleaned === 0) {
-            $this->printer->info(__('未发现需要清理的失效实例记录。'));
+            $this->printer->info(__('未发现需要清理的未运行实例记录。'));
             $this->printer->note(__('可使用 server:status 或 server:listing 查看当前实例状态。'));
             return;
         }
 
-        $this->printer->success(__('已清理 %{1} 个失效实例记录。', [$cleaned]));
+        $this->printer->success(__('已清理 %{1} 个未运行实例记录。', [$cleaned]));
         if ($cleanedNames !== []) {
             $this->printer->note(__('已处理实例：%{1}', [\implode(', ', $cleanedNames)]));
         }
@@ -55,7 +55,7 @@ class Clean extends CommandAbstract
             ],
             [],
             [
-                __('清理失效实例记录') => 'php bin/w server:clean',
+                __('清理未运行实例记录') => 'php bin/w server:clean',
                 __('清理后查看实例状态') => 'php bin/w server:status --all',
             ]
         );

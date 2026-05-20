@@ -508,7 +508,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
 
     private function resolveControlPort(string $instanceName): int
     {
-        $master = MasterProcess::getMasterInfo($instanceName);
+        $master = MasterProcess::getMasterEndpoint($instanceName);
         return (int)($master['control_port'] ?? 0);
     }
 

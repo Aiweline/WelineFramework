@@ -91,7 +91,7 @@ final class StatusCommandTest extends TestCase
             ]
         );
 
-        self::assertSame(['default'], \array_keys($active));
+        self::assertSame([], \array_keys($active));
     }
 
     public function testFilterActiveInstancesKeepsStoppedMetadataWhenManagedServicePidStillExists(): void
@@ -148,7 +148,7 @@ final class StatusCommandTest extends TestCase
             [1001 => ['pid' => 1001, 'exists' => true]]
         );
 
-        self::assertSame(['default'], \array_keys($active));
+        self::assertSame([], \array_keys($active));
     }
 
     public function testGetServiceStatsAlwaysExcludesSharedStateDependenciesFromInstanceCounts(): void
@@ -323,6 +323,39 @@ final class StatusCommandTest extends TestCase
             4321 => ['pid' => 4321, 'exists' => true],
             999999 => ['pid' => 999999, 'exists' => false],
         ]));
+    }
+
+    public function testServiceRunningTrustsIpcStateWhenProcessProbeIsDisabled(): void
+    {
+        $status = new class extends Status {
+            /**
+             * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
+             */
+            public function running(ServiceInfo $service, array $processInfoMap): bool
+            {
+                return $this->isServiceRunning($service, $processInfoMap);
+            }
+        };
+
+        $ready = new ServiceInfo(
+            role: 'worker',
+            displayName: 'HTTP Worker',
+            instanceId: 1,
+            pid: 4321,
+            port: 9527,
+            state: ServiceInstance::STATE_READY,
+        );
+        $stopped = new ServiceInfo(
+            role: 'worker',
+            displayName: 'HTTP Worker',
+            instanceId: 1,
+            pid: 4321,
+            port: 9527,
+            state: ServiceInstance::STATE_STOPPED,
+        );
+
+        self::assertTrue($status->running($ready, []));
+        self::assertFalse($status->running($stopped, []));
     }
 
     /**
