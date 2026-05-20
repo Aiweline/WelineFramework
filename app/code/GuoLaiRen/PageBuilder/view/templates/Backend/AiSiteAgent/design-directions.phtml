@@ -1,0 +1,263 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$items = $this->getData('design_direction_items') ?? [];
+$items = \is_array($items) ? $items : [];
+$listUrl = (string)($this->getData('design_direction_list_url') ?? '');
+$saveUrl = (string)($this->getData('design_direction_save_url') ?? '');
+$disableUrl = (string)($this->getData('design_direction_disable_url') ?? '');
+$cloneBuiltinUrl = (string)($this->getData('design_direction_clone_builtin_url') ?? '');
+$backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backend/ai-site-agent/index'));
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><i class="mdi mdi-compass-outline me-1"></i><?= htmlspecialchars((string)($this->getData('title') ?? __('AI 设计方向模板')), ENT_QUOTES, 'UTF-8') ?></h4>
+            <a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8') ?>">
+                <i class="mdi mdi-arrow-left me-1"></i><?= htmlspecialchars((string)__('返回工作台'), ENT_QUOTES, 'UTF-8') ?>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h5 class="card-title mb-0"><?= htmlspecialchars((string)__('方向列表'), ENT_QUOTES, 'UTF-8') ?></h5>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="pb-dd-refresh"><?= htmlspecialchars((string)__('刷新'), ENT_QUOTES, 'UTF-8') ?></button>
+            </div>
+            <div class="card-body">
+                <div class="list-group" id="pb-dd-list"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= htmlspecialchars((string)__('自定义方向'), ENT_QUOTES, 'UTF-8') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-5">
+                        <label class="form-label" for="pb-dd-code"><?= htmlspecialchars((string)__('编码'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <input class="form-control" id="pb-dd-code" placeholder="premium-law-firm">
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label" for="pb-dd-name"><?= htmlspecialchars((string)__('名称'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <input class="form-control" id="pb-dd-name" placeholder="<?= htmlspecialchars((string)__('高端律师事务所'), ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="pb-dd-description"><?= htmlspecialchars((string)__('说明'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <textarea class="form-control" id="pb-dd-description" rows="2"></textarea>
+                    </div>
+                    <?php
+                    $textareaFields = [
+                        'match_keywords' => __('关键词匹配规则'),
+                        'visual_keywords' => __('视觉关键词'),
+                        'layout_patterns' => __('布局模式'),
+                        'image_strategy' => __('图片策略'),
+                        'forbidden_patterns' => __('禁止模式'),
+                        'qa_rules' => __('QA 规则'),
+                    ];
+                    foreach ($textareaFields as $field => $label): ?>
+                        <div class="col-12">
+                            <label class="form-label" for="pb-dd-<?= htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></label>
+                            <textarea class="form-control pb-dd-array" id="pb-dd-<?= htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" data-field="<?= htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" rows="3" placeholder="<?= htmlspecialchars((string)__('一行一条，也支持 JSON 数组'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+                        </div>
+                    <?php endforeach; ?>
+                    <div class="col-12">
+                        <label class="form-label" for="pb-dd-color-system"><?= htmlspecialchars((string)__('色彩倾向 JSON'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <textarea class="form-control" id="pb-dd-color-system" rows="3" placeholder='{"base":"#111","accent":"#f6a500"}'></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="pb-dd-block-rules"><?= htmlspecialchars((string)__('Block 设计规则 JSON'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <textarea class="form-control" id="pb-dd-block-rules" rows="4" placeholder='{"hero":"...","faq":"..."}'></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="pb-dd-cta-style"><?= htmlspecialchars((string)__('CTA 风格'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <textarea class="form-control" id="pb-dd-cta-style" rows="2"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="pb-dd-supplemental"><?= htmlspecialchars((string)__('补充说明'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <textarea class="form-control" id="pb-dd-supplemental" rows="2"></textarea>
+                        <div class="form-text"><?= htmlspecialchars((string)__('补充说明只是辅助，保存时必须有结构化字段。'), ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <div class="col-12 d-flex gap-2 align-items-center">
+                        <button type="button" class="btn btn-primary" id="pb-dd-save"><?= htmlspecialchars((string)__('保存方向'), ENT_QUOTES, 'UTF-8') ?></button>
+                        <button type="button" class="btn btn-outline-secondary" id="pb-dd-clear"><?= htmlspecialchars((string)__('清空'), ENT_QUOTES, 'UTF-8') ?></button>
+                        <span class="small text-muted" id="pb-dd-status"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var listUrl = <?= json_encode($listUrl, JSON_THROW_ON_ERROR) ?>;
+    var saveUrl = <?= json_encode($saveUrl, JSON_THROW_ON_ERROR) ?>;
+    var disableUrl = <?= json_encode($disableUrl, JSON_THROW_ON_ERROR) ?>;
+    var cloneBuiltinUrl = <?= json_encode($cloneBuiltinUrl, JSON_THROW_ON_ERROR) ?>;
+    var initialItems = <?= json_encode($items, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR) ?>;
+    var listEl = document.getElementById('pb-dd-list');
+    var statusEl = document.getElementById('pb-dd-status');
+
+    function post(url, payload) {
+        var body = Object.keys(payload || {}).map(function (key) {
+            var value = payload[key];
+            if (typeof value === 'object') {
+                value = JSON.stringify(value);
+            }
+            return encodeURIComponent(key) + '=' + encodeURIComponent(String(value == null ? '' : value));
+        }).join('&');
+        return fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest'},
+            credentials: 'same-origin',
+            body: body
+        }).then(function (r) { return r.json(); });
+    }
+
+    function parseLines(value) {
+        var raw = String(value || '').trim();
+        if (!raw) {
+            return [];
+        }
+        try {
+            var parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) || (parsed && typeof parsed === 'object')) {
+                return parsed;
+            }
+        } catch (e) {}
+        return raw.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean);
+    }
+
+    function parseObject(value) {
+        var raw = String(value || '').trim();
+        if (!raw) {
+            return {};
+        }
+        try {
+            var parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (e) {
+            return parseLines(raw);
+        }
+    }
+
+    function setStatus(text) {
+        if (statusEl) {
+            statusEl.textContent = String(text || '');
+        }
+    }
+
+    function render(items) {
+        if (!listEl) {
+            return;
+        }
+        listEl.innerHTML = '';
+        (Array.isArray(items) ? items : []).forEach(function (item) {
+            var row = document.createElement('div');
+            row.className = 'list-group-item';
+            row.innerHTML = '<div class="d-flex justify-content-between gap-2">'
+                + '<div><div class="fw-semibold"></div><div class="small text-muted"></div><div class="small mt-1"></div></div>'
+                + '<div class="d-flex flex-column gap-1"></div></div>';
+            row.querySelector('.fw-semibold').textContent = String(item.name || item.code || '');
+            row.querySelector('.text-muted').textContent = String(item.code || '') + ' · ' + String(item.source_type || '') + ' · v' + String(item.version || 1);
+            row.querySelector('.small.mt-1').textContent = String(item.description || '').slice(0, 180);
+            var actions = row.querySelector('.d-flex.flex-column');
+            if (item.source_type === 'builtin') {
+                var cloneBtn = document.createElement('button');
+                cloneBtn.type = 'button';
+                cloneBtn.className = 'btn btn-outline-primary btn-sm';
+                cloneBtn.textContent = <?= json_encode(__('复制内置'), JSON_THROW_ON_ERROR) ?>;
+                cloneBtn.addEventListener('click', function () {
+                    post(cloneBuiltinUrl, {code: item.code}).then(refresh);
+                });
+                actions.appendChild(cloneBtn);
+            } else {
+                var editBtn = document.createElement('button');
+                editBtn.type = 'button';
+                editBtn.className = 'btn btn-outline-secondary btn-sm';
+                editBtn.textContent = <?= json_encode(__('编辑'), JSON_THROW_ON_ERROR) ?>;
+                editBtn.addEventListener('click', function () { fillEditor(item); });
+                actions.appendChild(editBtn);
+                var disableBtn = document.createElement('button');
+                disableBtn.type = 'button';
+                disableBtn.className = 'btn btn-outline-danger btn-sm';
+                disableBtn.textContent = <?= json_encode(__('停用'), JSON_THROW_ON_ERROR) ?>;
+                disableBtn.addEventListener('click', function () {
+                    post(disableUrl, {code: item.code}).then(refresh);
+                });
+                actions.appendChild(disableBtn);
+            }
+            listEl.appendChild(row);
+        });
+    }
+
+    function fillEditor(item) {
+        document.getElementById('pb-dd-code').value = String(item.code || '');
+        document.getElementById('pb-dd-name').value = String(item.name || '');
+        document.getElementById('pb-dd-description').value = String(item.description || '');
+        document.querySelectorAll('.pb-dd-array').forEach(function (el) {
+            var field = el.getAttribute('data-field') || '';
+            el.value = Array.isArray(item[field]) ? item[field].join("\n") : JSON.stringify(item[field] || [], null, 2);
+        });
+        document.getElementById('pb-dd-color-system').value = JSON.stringify(item.color_system || {}, null, 2);
+        document.getElementById('pb-dd-block-rules').value = JSON.stringify(item.block_rules || {}, null, 2);
+        document.getElementById('pb-dd-cta-style').value = String(item.cta_style || '');
+        document.getElementById('pb-dd-supplemental').value = String(item.supplemental_prompt || '');
+    }
+
+    function collect() {
+        var payload = {
+            code: document.getElementById('pb-dd-code').value,
+            name: document.getElementById('pb-dd-name').value,
+            description: document.getElementById('pb-dd-description').value,
+            color_system: parseObject(document.getElementById('pb-dd-color-system').value),
+            block_rules: parseObject(document.getElementById('pb-dd-block-rules').value),
+            cta_style: document.getElementById('pb-dd-cta-style').value,
+            supplemental_prompt: document.getElementById('pb-dd-supplemental').value,
+            status: 'active'
+        };
+        document.querySelectorAll('.pb-dd-array').forEach(function (el) {
+            payload[el.getAttribute('data-field') || ''] = parseLines(el.value);
+        });
+        return payload;
+    }
+
+    function refresh() {
+        return post(listUrl, {include_disabled: 1}).then(function (data) {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) || 'load failed');
+            }
+            render(data.items || []);
+            setStatus(<?= json_encode(__('已刷新'), JSON_THROW_ON_ERROR) ?>);
+        }).catch(function (err) {
+            setStatus(err && err.message ? err.message : 'error');
+        });
+    }
+
+    document.getElementById('pb-dd-save').addEventListener('click', function () {
+        post(saveUrl, collect()).then(function (data) {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) || 'save failed');
+            }
+            setStatus(<?= json_encode(__('已保存'), JSON_THROW_ON_ERROR) ?>);
+            refresh();
+        }).catch(function (err) {
+            setStatus(err && err.message ? err.message : 'error');
+        });
+    });
+    document.getElementById('pb-dd-clear').addEventListener('click', function () {
+        fillEditor({});
+        setStatus('');
+    });
+    document.getElementById('pb-dd-refresh').addEventListener('click', refresh);
+    render(initialItems);
+}());
+</script>

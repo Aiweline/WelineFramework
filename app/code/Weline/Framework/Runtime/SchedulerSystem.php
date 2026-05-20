@@ -107,6 +107,10 @@ class SchedulerSystem
             \sleep($seconds);
             return;
         }
+        if (!self::prepareCurrentFiberForSuspend()) {
+            \sleep($seconds);
+            return;
+        }
 
         self::dispatchWait('sleep', ['seconds' => $seconds]);
         self::suspendCurrentFiber();
@@ -124,6 +128,10 @@ class SchedulerSystem
         }
 
         if (!self::$schedulerActive || !\Fiber::getCurrent()) {
+            \usleep($microseconds);
+            return;
+        }
+        if (!self::prepareCurrentFiberForSuspend()) {
             \usleep($microseconds);
             return;
         }
@@ -164,6 +172,9 @@ class SchedulerSystem
         if (!self::$schedulerActive || !\Fiber::getCurrent()) {
             return;
         }
+        if (!self::prepareCurrentFiberForSuspend()) {
+            return;
+        }
 
         self::dispatchWait('yield', []);
         self::suspendCurrentFiber();
@@ -185,9 +196,22 @@ class SchedulerSystem
             \usleep($milliseconds * 1000);
             return;
         }
+        if (!self::prepareCurrentFiberForSuspend()) {
+            \usleep($milliseconds * 1000);
+            return;
+        }
 
         self::dispatchWait('yield_delay', ['milliseconds' => $milliseconds]);
         self::suspendCurrentFiber();
+    }
+
+    private static function prepareCurrentFiberForSuspend(): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return true;
+        }
+
+        return FiberOutputBuffer::flushBeforeYield();
     }
 
     private static function suspendCurrentFiber(): void

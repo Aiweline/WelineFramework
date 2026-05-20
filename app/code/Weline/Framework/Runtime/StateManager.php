@@ -397,6 +397,9 @@ class StateManager
         if (\class_exists(\Weline\Theme\Service\PreviewTokenService::class, false)) {
             \Weline\Theme\Service\PreviewTokenService::resetRequestState();
         }
+        if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
+            \Weline\Websites\Data\WebsiteData::resetRequestState();
+        }
         if (\class_exists(\Weline\Admin\Service\MenuRenderService::class, false)) {
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Admin\Service\MenuRenderService::class);
         }
@@ -425,7 +428,6 @@ class StateManager
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Taglib::class);
         }
         if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class, false)) {
-            \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Config\HookReader::class);
         }
         if (\class_exists(\Weline\Framework\Hook\Hooker::class, false)) {
@@ -578,6 +580,12 @@ class StateManager
         self::registerResetCallback('sse_context', function () {
             if (\class_exists(\Weline\Framework\Http\Sse\SseContext::class, false)) {
                 \Weline\Framework\Http\Sse\SseContext::reset();
+            }
+        });
+
+        self::registerResetCallback('website_data_request_state', function () {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
+                \Weline\Websites\Data\WebsiteData::resetRequestState();
             }
         });
         
@@ -834,7 +842,6 @@ class StateManager
                 \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Taglib::class);
             }
             if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class, false)) {
-                \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
                 \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Config\HookReader::class);
             }
             if (\class_exists(\Weline\Framework\Hook\Hooker::class, false)) {

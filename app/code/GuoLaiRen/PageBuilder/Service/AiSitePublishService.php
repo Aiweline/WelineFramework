@@ -318,10 +318,8 @@ class AiSitePublishService
     {
         try {
             w_cache('website')->clear();
-            w_cache('website_detect')->clear();
-            w_cache('website_detect')->set('websites.url.parser_sites_version.v1', (string)\microtime(true), 86400);
+            Url::bumpWebsiteParserSitesVersion();
             DetectWebsite::clearProcessCache();
-            Url::resetWebsiteParserSites();
         } catch (\Throwable) {
             // Cache refresh is best-effort; the domain row remains the source of truth.
         }

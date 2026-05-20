@@ -446,7 +446,7 @@ final class AiSiteAssetManifestService
             $parts[] = 'Asset kind: ' . $kind;
         }
 
-        $isHeroSlot = (bool)\preg_match('/\b(hero|banner|cover)\b/i', $kind . ' ' . ((string)($slot['label'] ?? '')));
+        $isHeroSlot = $this->slotDeclaresStrictHeroImage($slot);
 
         if ($isFaviconLikeSlot) {
             $parts[] = 'Title icon / favicon output requirements (HARD): generate a production-ready square 1:1 PNG with a real transparent alpha background. The symbol/monogram is isolated on transparency; there must be no white background, solid color background, rounded square tile, card, gradient backdrop, photo scene, website mockup, watermark, screenshot frame, or paragraph text. Keep it recognizable at 16-64px with one bold business-relevant symbol or monogram.';
@@ -482,6 +482,42 @@ final class AiSiteAssetManifestService
         }
 
         return \trim(\implode("\n", $parts));
+    }
+
+    /**
+     * @param array<string, mixed> $slot
+     */
+    private function slotDeclaresStrictHeroImage(array $slot): bool
+    {
+        if ((int)($slot['strict_hero_cover'] ?? 0) === 1) {
+            return true;
+        }
+
+        $pageType = \strtolower(\trim((string)($slot['page_type'] ?? '')));
+        $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+
+        return $pageType === 'home_page'
+            && $slotType === 'hero_image'
+            && \in_array($kind, ['hero_banner_background', 'hero_image'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function blockDeclaresStrictHeroSlot(string $pageType, array $block): bool
+    {
+        if (\trim($pageType) !== 'home_page') {
+            return false;
+        }
+
+        $blockType = $this->normalizeSlotId($this->firstString([
+            $block['block_type'] ?? null,
+            $block['type'] ?? null,
+            $block['template'] ?? null,
+        ]));
+
+        return \in_array($blockType, ['hero', 'banner', 'home_hero', 'hero_banner', 'above_fold'], true);
     }
 
     /**
@@ -581,6 +617,8 @@ final class AiSiteAssetManifestService
         $manifest = $this->dropLegacyUnscopedBlockSlots(
             $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [])
         );
+        $currentBuildPlanSlots = $this->buildRequiredContentBlockSlots($scope);
+        $manifest = $this->dropStaleBuildPlanScopedSlots($manifest, $currentBuildPlanSlots);
         foreach ($this->extractSlotsFromScope($scope) as $slot) {
             $slot = $this->attachPlanningContextToSlot($slot, $scope);
             $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
@@ -593,7 +631,7 @@ final class AiSiteAssetManifestService
             $slot = $this->attachPlanningContextToSlot($slot, $scope);
             $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
         }
-        foreach ($this->buildRequiredContentBlockSlots($scope) as $slot) {
+        foreach ($currentBuildPlanSlots as $slot) {
             $slot = $this->attachPlanningContextToSlot($slot, $scope);
             $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
         }
@@ -717,6 +755,53 @@ final class AiSiteAssetManifestService
     }
 
     /**
+     * @param array<string,mixed> $manifest
+     * @param list<array<string,mixed>> $currentSlots
+     * @return array<string,mixed>
+     */
+    private function dropStaleBuildPlanScopedSlots(array $manifest, array $currentSlots): array
+    {
+        if ($currentSlots === []) {
+            return $manifest;
+        }
+
+        $current = [];
+        foreach ($currentSlots as $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $slotId = $this->normalizeSlotId((string)($slot['slot_id'] ?? ''));
+            if ($slotId !== '') {
+                $current[$slotId] = true;
+            }
+        }
+        if ($current === []) {
+            return $manifest;
+        }
+
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        foreach ($slots as $slotId => $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $normalizedSlotId = $this->normalizeSlotId((string)($slot['slot_id'] ?? $slotId));
+            if (!$this->isScopedSlotId($normalizedSlotId)) {
+                continue;
+            }
+            $pageType = \trim((string)($slot['page_type'] ?? ''));
+            if ($pageType === '' || !\str_starts_with($normalizedSlotId, 'page:')) {
+                continue;
+            }
+            if (!isset($current[$normalizedSlotId])) {
+                unset($slots[$slotId]);
+            }
+        }
+        $manifest['slots'] = $slots;
+
+        return $manifest;
+    }
+
+    /**
      * @param array<string, mixed> $manifest
      * @return array<string, string>
      */
@@ -743,14 +828,16 @@ final class AiSiteAssetManifestService
     private function extractSlotsFromScope(array $scope): array
     {
         $slots = [];
-        $sources = [
-            $scope['plan_json'] ?? [],
-            $scope['plan_structured'] ?? [],
-            $scope['execution_blueprint'] ?? [],
-            $scope['build_plan_v2'] ?? [],
-            $scope['plan_projection'] ?? [],
-            $scope['content_manifest'] ?? [],
-        ];
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $sources = $buildPlan !== []
+            ? [$buildPlan]
+            : [
+                $scope['plan_json'] ?? [],
+                $scope['plan_structured'] ?? [],
+                $scope['execution_blueprint'] ?? [],
+                $scope['plan_projection'] ?? [],
+                $scope['content_manifest'] ?? [],
+            ];
         foreach ($sources as $source) {
             if (\is_array($source)) {
                 $this->collectSlotsRecursive($source, $slots, []);
@@ -1040,6 +1127,7 @@ final class AiSiteAssetManifestService
                 'label' => 'Hero banner background',
                 'target_size' => '1920x750',
                 'aspect_ratio' => '1920:750',
+                'strict_hero_cover' => 1,
                 'brief' => $brief,
                 'prompt_brief' => $brief,
                 'status' => 'pending',
@@ -1055,9 +1143,9 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * Every non-hero block needs a page-scoped visual candidate. Otherwise the
-     * renderer falls back to the first image on the page and separate blocks
-     * become visually identical.
+     * Build page-scoped image slots from build_plan_v2 only. The confirmed
+     * build plan is the execution contract; older execution blueprints must
+     * not create or preserve image slots for blocks the plan did not request.
      *
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
@@ -1065,72 +1153,144 @@ final class AiSiteAssetManifestService
     private function buildRequiredContentBlockSlots(array $scope): array
     {
         $slots = [];
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($buildPlan === []) {
+            return [];
+        }
+
         $businessContext = $this->firstBusinessContextString([
             $scope['website_profile']['brief_description'] ?? null,
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
         ]);
-        $pages = \is_array($scope['execution_blueprint']['pages'] ?? null) ? $scope['execution_blueprint']['pages'] : [];
-        foreach ($pages as $pageType => $page) {
-            if (!\is_array($page)) {
+        $contentItems = \is_array($buildPlan['content_manifest']['items'] ?? null)
+            ? $buildPlan['content_manifest']['items']
+            : [];
+        foreach (\is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [] as $block) {
+            if (!\is_array($block)) {
                 continue;
             }
-            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
-                if (!\is_array($block)) {
-                    continue;
-                }
-                $blockKey = $this->normalizeSlotId($this->firstString([$block['block_key'] ?? null, $block['key'] ?? null]));
-                if ($blockKey === '' || \preg_match('/hero|banner|opening/i', $blockKey) === 1) {
-                    continue;
-                }
-                $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
-                if ($imageIntent !== [] && !$this->imageIntentNeedsImage($imageIntent)) {
-                    continue;
-                }
-                $sectionCode = $this->buildSectionCodeFromBlockKey((string)$pageType, $blockKey);
-                $slotId = $this->normalizeSlotId('page:' . (string)$pageType . ':' . \str_replace('/', '-', $sectionCode));
-                $brief = $this->buildContentBlockImageSubjectBrief($blockKey, $block, $imageIntent, $businessContext);
-                $briefParts = [];
-                if ($businessContext !== '') {
-                    $briefParts[] = 'PRIMARY SUBJECT: ' . $businessContext;
-                }
-                $briefParts[] = 'Block visual for "' . $blockKey . '": ' . ($brief !== '' ? $brief : $blockKey);
-                if ($imageIntent !== []) {
-                    $briefParts[] = 'Stage-1 image intent: role=' . $this->firstString([$imageIntent['image_role'] ?? null])
-                        . '; subject=' . $this->firstString([$imageIntent['image_subject'] ?? null])
-                        . '; placement=' . $this->firstString([$imageIntent['placement'] ?? null])
-                        . '; reuse_policy=' . $this->firstString([$imageIntent['reuse_policy'] ?? null]);
-                }
-                $briefParts[] = $this->buildBlockImageArtifactContract(false);
-                $brief = \implode("\n", $briefParts);
-                $slotType = \preg_match('/trust|badge|testimonial|review|client|rating|certificate/i', $blockKey . ' ' . $brief) === 1
-                    ? 'trust_brand_image'
-                    : 'section_image';
-                $required = $this->blockShouldRequireGeneratedImage($block, $imageIntent) ? 1 : 0;
-                $slots[] = [
-                    'slot_id' => $slotId,
-                    'slot_type' => $slotType,
-                    'kind' => $slotType,
-                    'page_type' => (string)$pageType,
-                    'block_key' => $blockKey,
-                    'field' => 'image',
-                    'task_key' => 'page:' . (string)$pageType . ':' . $blockKey,
-                    'section_code' => $sectionCode,
-                    'label' => $this->firstString([$block['goal'] ?? null, $blockKey]),
-                    'brief' => $brief,
-                    'prompt_brief' => $brief,
-                    'status' => 'pending',
-                    'source' => 'planned',
-                    'final_url' => '',
-                    'required' => $required,
-                    'desired_image' => 1,
-                    'image_intent' => $imageIntent,
-                    'locked_by_user' => 0,
-                ];
+            $pageType = \trim((string)($block['page_type'] ?? $block['page_id'] ?? ''));
+            $blockKey = $this->normalizeSlotId($this->firstString([
+                $block['section_key'] ?? null,
+                $block['block_key'] ?? null,
+                $block['block_id'] ?? null,
+            ]));
+            if ($pageType === '' || $blockKey === '') {
+                continue;
             }
+            $imageIntent = \is_array($block['image_intent'] ?? null)
+                ? $block['image_intent']
+                : (\is_array($block['visual']['image_intent'] ?? null) ? $block['visual']['image_intent'] : []);
+            if (!$this->blockShouldRequireGeneratedImage($block, $imageIntent)) {
+                continue;
+            }
+
+            $sectionCode = $this->buildSectionCodeFromBlockKey($pageType, $blockKey);
+            $slotId = $this->normalizeSlotId('page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode));
+            $titleCopy = $this->extractBuildPlanBlockContentText($block, $contentItems);
+            $brief = $this->buildContentBlockImageSubjectBrief($blockKey, $block, $imageIntent, $businessContext);
+            $briefParts = [];
+            if ($businessContext !== '') {
+                $briefParts[] = 'PRIMARY SUBJECT: ' . $businessContext;
+            }
+            if ($titleCopy !== '') {
+                $briefParts[] = 'Block copy context (do not render readable text inside image): ' . $titleCopy;
+            }
+            $briefParts[] = 'Block visual for "' . $blockKey . '": ' . ($brief !== '' ? $brief : $blockKey);
+            if ($imageIntent !== []) {
+                $briefParts[] = 'Stage-1 image intent: role=' . $this->firstString([$imageIntent['image_role'] ?? null])
+                    . '; subject=' . $this->firstString([$imageIntent['image_subject'] ?? null])
+                    . '; placement=' . $this->firstString([$imageIntent['placement'] ?? null])
+                    . '; reuse_policy=' . $this->firstString([$imageIntent['reuse_policy'] ?? null]);
+            }
+            $briefParts[] = 'Stage-1 visual signature: ' . $this->firstString([
+                $block['visual_signature']['composition_pattern'] ?? null,
+                $block['visual']['visual_signature']['composition_pattern'] ?? null,
+            ]) . '; media=' . $this->firstString([
+                $block['visual_signature']['media_strategy'] ?? null,
+                $block['visual']['visual_signature']['media_strategy'] ?? null,
+            ]);
+            $isStrictHero = (int)($block['visual']['strict_hero_cover'] ?? $block['strict_hero_cover'] ?? 0) === 1;
+            $briefParts[] = $this->buildBlockImageArtifactContract($isStrictHero);
+            $brief = \implode("\n", \array_filter($briefParts, static fn(string $part): bool => \trim($part) !== ''));
+            $slotType = $isStrictHero || \in_array($this->firstString([$imageIntent['image_role'] ?? null]), ['hero_image', 'hero_banner'], true)
+                ? 'hero_image'
+                : (\preg_match('/trust|badge|testimonial|review|client|rating|certificate/i', $blockKey . ' ' . $brief) === 1
+                    ? 'trust_brand_image'
+                    : 'section_image');
+            $slots[] = [
+                'slot_id' => $slotId,
+                'slot_type' => $slotType,
+                'kind' => $slotType,
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+                'field' => 'image',
+                'task_key' => $this->firstString([\is_array($block['task_ids'] ?? null) ? ($block['task_ids'][0] ?? null) : null])
+                    ?: ('page:' . $pageType . ':' . $blockKey),
+                'section_code' => $sectionCode,
+                'label' => $this->firstString([$titleCopy, $block['goal'] ?? null, $blockKey]),
+                'brief' => $brief,
+                'prompt_brief' => $brief,
+                'status' => 'pending',
+                'source' => 'build_plan_v2',
+                'final_url' => '',
+                'required' => 1,
+                'desired_image' => 1,
+                'image_intent' => $imageIntent,
+                'visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
+                'locked_by_user' => 0,
+            ];
         }
 
         return $slots;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string|int, mixed> $contentItems
+     */
+    private function extractBuildPlanBlockContentText(array $block, array $contentItems): string
+    {
+        $parts = [];
+        foreach (\is_array($block['content_keys'] ?? null) ? $block['content_keys'] : [] as $key) {
+            $key = \trim((string)$key);
+            if ($key === '' || !\array_key_exists($key, $contentItems)) {
+                continue;
+            }
+            $text = $this->extractContentManifestItemText($contentItems[$key]);
+            if ($text !== '') {
+                $parts[] = $text;
+            }
+        }
+
+        return $this->clipText(\implode(' ', \array_unique($parts)), 260);
+    }
+
+    private function extractContentManifestItemText(mixed $value): string
+    {
+        if (\is_scalar($value) || (\is_object($value) && \method_exists($value, '__toString'))) {
+            return \trim((string)$value);
+        }
+        if (!\is_array($value)) {
+            return '';
+        }
+        foreach (['text', 'value', 'copy', 'primary_text', 'content'] as $field) {
+            $text = \trim((string)($value[$field] ?? ''));
+            if ($text !== '') {
+                return $text;
+            }
+        }
+        if (\is_array($value['locales'] ?? null)) {
+            foreach ($value['locales'] as $localeValue) {
+                $text = \trim((string)$localeValue);
+                if ($text !== '') {
+                    return $text;
+                }
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -1327,6 +1487,9 @@ final class AiSiteAssetManifestService
                 continue;
             }
             $pageTypeString = \trim((string)$pageType);
+            if ($pageTypeString !== 'home_page') {
+                continue;
+            }
             foreach (\is_array($pb['sections'] ?? null) ? $pb['sections'] : [] as $section) {
                 if (!\is_array($section)) {
                     continue;
@@ -1358,34 +1521,41 @@ final class AiSiteAssetManifestService
             if (!\is_scalar($pageType) || !\is_array($page)) {
                 continue;
             }
-            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
-            if ($blocks === [] || !\is_array($blocks[0] ?? null)) {
+            if (\trim((string)$pageType) !== 'home_page') {
                 continue;
             }
-            $block = $blocks[0];
-            $blockKey = \trim((string)($block['block_key'] ?? $block['source_block_key'] ?? $block['key'] ?? ''));
-            if ($blockKey === '') {
-                $blockKey = 'block_1';
+            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            if ($blocks === []) {
+                continue;
             }
-            $sectionSlug = $this->slugifySectionToken($blockKey);
-            $sectionCode = 'content/' . $this->slugifySectionToken((string)$pageType) . '-' . $sectionSlug;
-
-            $title = '';
-            foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
-                if (!\is_array($field)) {
+            foreach ($blocks as $blockIndex => $block) {
+                if (!\is_array($block) || !$this->blockDeclaresStrictHeroSlot((string)$pageType, $block)) {
                     continue;
                 }
-                $fieldKey = \strtolower(\trim((string)($field['field'] ?? '')));
-                if (\str_contains($fieldKey, 'title') || \str_contains($fieldKey, 'headline')) {
-                    $title = \trim((string)($field['sample'] ?? ''));
-                    break;
+                $blockKey = \trim((string)($block['block_key'] ?? $block['source_block_key'] ?? $block['key'] ?? ''));
+                if ($blockKey === '') {
+                    $blockKey = 'block_' . ((int)$blockIndex + 1);
                 }
-            }
-            if ($title === '') {
-                $title = \trim((string)($block['title'] ?? $block['goal'] ?? $block['content'] ?? ''));
-            }
+                $sectionSlug = $this->slugifySectionToken($blockKey);
+                $sectionCode = 'content/' . $this->slugifySectionToken((string)$pageType) . '-' . $sectionSlug;
 
-            $append(\trim((string)$pageType), $sectionCode, $title);
+                $title = '';
+                foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
+                    if (!\is_array($field)) {
+                        continue;
+                    }
+                    $fieldKey = \strtolower(\trim((string)($field['field'] ?? '')));
+                    if (\str_contains($fieldKey, 'title') || \str_contains($fieldKey, 'headline')) {
+                        $title = \trim((string)($field['sample'] ?? ''));
+                        break;
+                    }
+                }
+                if ($title === '') {
+                    $title = \trim((string)($block['title'] ?? $block['goal'] ?? $block['content'] ?? ''));
+                }
+
+                $append(\trim((string)$pageType), $sectionCode, $title);
+            }
         }
 
         return $out;
@@ -1534,7 +1704,7 @@ final class AiSiteAssetManifestService
             static fn($value): string => \is_scalar($value) ? (string)$value : '',
             $row
         )));
-        if (\preg_match('/\b(hero|banner|cover)\b/i', $text) === 1) {
+        if ((int)($row['strict_hero_cover'] ?? 0) === 1) {
             return 'hero_image';
         }
         if (\preg_match('/\b(logo|icon|mark)\b/i', $text) === 1) {

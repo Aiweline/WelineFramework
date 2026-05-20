@@ -587,6 +587,17 @@ class CountryLocaleLifecycleService
             w_cache('phrase')->clear();
         } catch (\Throwable) {
         }
+
+        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+        \Weline\I18n\Parser::clearWorkerCaches();
+
+        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
+        if (class_exists($dispatchClass)) {
+            try {
+                ObjectManager::getInstance($dispatchClass)->cacheClear();
+            } catch (\Throwable) {
+            }
+        }
     }
 
     private function findActiveInstalledLocaleCode(string $countryCode): ?string

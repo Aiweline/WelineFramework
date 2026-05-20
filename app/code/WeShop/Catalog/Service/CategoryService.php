@@ -280,6 +280,20 @@ class CategoryService
         return $data;
     }
 
+    public function buildCategoryPublicPath(array $category, string $parentPath = ''): string
+    {
+        $handle = trim((string)($category['handle'] ?? ''), '/');
+        if ($handle === '') {
+            return 'catalog/category/view';
+        }
+
+        $normalizedParentPath = trim($parentPath, '/');
+        $segments = $normalizedParentPath === '' ? [] : array_values(array_filter(explode('/', $normalizedParentPath), static fn (string $segment): bool => $segment !== ''));
+        $segments[] = rawurlencode($handle);
+
+        return 'catalog/category/' . implode('/', $segments);
+    }
+
     private function buildHeaderMenuItem(array $category, string $categoryBaseUrl, string $parentPath = ''): ?array
     {
         if (empty($category['is_active']) || (int)$category['is_active'] !== 1) {

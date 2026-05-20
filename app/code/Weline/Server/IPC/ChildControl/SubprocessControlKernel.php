@@ -11,6 +11,7 @@ use Weline\Server\IPC\MasterResurrectionCoordinator;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 final class SubprocessControlKernel
 {
@@ -20,6 +21,7 @@ final class SubprocessControlKernel
     private const CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC = 30;
     private const CONTROL_PORT_POLL_USEC = 100000;
     private const CONTROL_CONNECT_SELF_HEAL_TIMEOUT_MS = 30000;
+    private const IPC_FLUSH_BUDGET_SEC = 0.05;
 
     /** 最近一次 connect 成功使用的 control port，供 onDisconnect 自愈用 */
     private int $lastControlPort = 0;
@@ -90,7 +92,7 @@ final class SubprocessControlKernel
                 break;
             }
 
-            \usleep(self::CONTROL_PORT_POLL_USEC);
+            SchedulerSystem::usleep(self::CONTROL_PORT_POLL_USEC);
         } while (\microtime(true) < $deadline);
 
         return 0;
@@ -121,7 +123,7 @@ final class SubprocessControlKernel
         return \min($delayMs, self::E2E_READY_DELAY_LIMIT_MS);
     }
 
-    public function connectAndRegister(int $controlPort): bool
+    public function connectAndRegister(int $controlPort, bool $sendReady = true): bool
     {
         if ($controlPort <= 0 && !$this->shouldUseSupervisorTransport() && !\is_callable($this->clientFactory)) {
             return false;
@@ -153,7 +155,7 @@ final class SubprocessControlKernel
                 $this->instanceCode,
                 $this->identity->launchId !== '' ? $this->identity->launchId : ''
             );
-            $client->markReadyState(true);
+            $client->markReadyState($sendReady);
             $kernel = $this;
             $client->onMessage(static function (array $msg, ChildControlClientInterface $client) use ($kernel): void {
                 $kernel->handler->onMessage($msg, $kernel);
@@ -168,7 +170,7 @@ final class SubprocessControlKernel
                 $lastError = "[连接失败]";
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("连接 Master 失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
@@ -191,21 +193,26 @@ final class SubprocessControlKernel
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("向 Master 注册失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
             }
             
-            if (!$client->flushPendingWrites(2.0)) {
+            if (!$client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC)) {
                 $lastError = "[刷新缓冲失败]";
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("向 Master 发送消息失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
+            }
+
+            if (!$sendReady) {
+                $this->log("Connected to Master and registered; READY will be sent after async child bootstrap completes (attempt {$retryAttempt})");
+                return true;
             }
 
             $this->applyE2EReadyDelayIfNeeded();
@@ -223,18 +230,18 @@ final class SubprocessControlKernel
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("发送 Ready 消息失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
             }
             
-            if (!$client->flushPendingWrites(2.0)) {
+            if (!$client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC)) {
                 $lastError = "[Ready 刷新失败]";
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("发送 Ready 消息后刷新失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
@@ -249,6 +256,27 @@ final class SubprocessControlKernel
         return false;
     }
 
+    public function sendReady(): bool
+    {
+        if ($this->client === null || !$this->client->isConnected()) {
+            return false;
+        }
+
+        $this->applyE2EReadyDelayIfNeeded();
+        if (!$this->client->sendReady(
+            $this->identity->role,
+            $this->identity->workerId,
+            $this->identity->port,
+            $this->identity->epoch,
+            $this->identity->launchId,
+            $this->identity->launchId !== '' ? $this->identity->launchId : ''
+        )) {
+            return false;
+        }
+
+        return $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
+    }
+
     private function applyE2EReadyDelayIfNeeded(): void
     {
         $delayMs = self::resolveReadyDelayMilliseconds($this->identity->role);
@@ -257,7 +285,7 @@ final class SubprocessControlKernel
         }
 
         $this->log("E2E startup hook: delaying READY by {$delayMs}ms");
-        \usleep($delayMs * 1000);
+        SchedulerSystem::usleep($delayMs * 1000);
     }
 
     public function tick(): void

@@ -410,10 +410,8 @@ class Stop extends CommandAbstract
         if (!$this->isMasterProcessAvailableForStop($instanceInfo)) {
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
             $this->showInstanceInfo($instanceInfo);
-            $includeSharedStateCleanup = $force
-                || $fastLocal
-                || $this->shouldBypassGracefulStopDuringBootstrap($startupPhase)
-                || $this->hasPendingStartupServices($instanceInfo);
+            // Master 失联后子进程脱离 Orchestrator/IPC；必须含 Session/Memory，否则会残留为「逃逸」进程。
+            $includeSharedStateCleanup = $this->resolveMasterGoneResidualIncludeSharedState($instanceInfo);
 
             if ($this->isControlPortAvailableForStop($instanceInfo)) {
                 $this->printer->note(__('Master PID 缺失但控制端口仍可用，先尝试通过 IPC 自停...'));
@@ -434,10 +432,12 @@ class Stop extends CommandAbstract
                 }
             }
 
+            $this->terminateKnownSubprocessesAfterMasterGone($instanceInfo);
+
             // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $includeSharedStateCleanup);
             if (!$this->wasLastResidualCleanupComplete()) {
-                $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
+                $this->printer->warning(__('实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。', [$name]));
                 return;
             }
             $this->releaseSharedStateConsumersForInstance($name);
@@ -461,26 +461,7 @@ class Stop extends CommandAbstract
 
         if ($fastLocal) {
             $this->printer->note(__('快速清场模式：跳过 IPC 排水，并发终止旧实例子进程...'));
-            $terminated = $this->terminateDirectForceStopCandidatePids($instanceInfo);
-            if ($terminated > 0) {
-                SchedulerSystem::usleep(500000);
-                $this->cleanupStaleRecoverableProcessPidFilesForPids(
-                    $this->collectDirectForceStopCandidatePids($instanceInfo)
-                );
-                $this->releaseSharedStateConsumersForInstance($name);
-                $manager->deleteInstance($name);
-                $this->cleanupPidFiles($name, $instanceInfo);
-                $this->releaseStartLock($name);
-                echo "\n";
-                $this->printer->success(
-                    $force
-                        ? __('实例 [%{1}] 已停止（-f 强制模式） ✓', [$name])
-                        : __('实例 [%{1}] 已停止（快速清场） ✓', [$name])
-                );
-                $this->printGoodbye(true);
-                return;
-            }
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
+            $this->runFastLocalResidualCleanup($name, $instanceInfo);
             if (!$this->wasLastResidualCleanupComplete()) {
                 echo "\n";
                 $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
@@ -1099,6 +1080,117 @@ class Stop extends CommandAbstract
         );
 
         return $killedByPid;
+    }
+
+    /**
+     * Master 已退出时，残留清理必须包含 Session/Memory 共享侧车（否则子进程会脱离 WLS 管理残留）。
+     */
+    protected function resolveMasterGoneResidualIncludeSharedState(ServerInstanceInfo $info): bool
+    {
+        unset($info);
+
+        return true;
+    }
+
+    /**
+     * Master 已退出时的快速清场：先杀实例快照中的已知 PID（含 Session/Memory），再交给前缀/端口复核。
+     */
+    protected function terminateKnownSubprocessesAfterMasterGone(ServerInstanceInfo $info): void
+    {
+        $this->printer->note(__('Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）...'));
+        $terminated = $this->terminateDirectForceStopCandidatePids($info);
+        if ($terminated > 0) {
+            SchedulerSystem::usleep(300000);
+            $this->printer->note(__('  已发送终止信号 %{1} 个已知子进程', [$terminated]));
+        }
+    }
+
+    protected function runFastLocalResidualCleanup(string $name, ServerInstanceInfo $info): void
+    {
+        $this->lastResidualCleanupComplete = false;
+
+        $prefixes = $this->collectResidualCleanupPrefixes($name, true);
+        $candidatePids = \array_values(\array_unique(\array_filter(
+            \array_map(
+                'intval',
+                \array_merge(
+                    $this->collectDirectForceStopCandidatePids($info),
+                    $this->collectPidsFromProcessNamePrefixes($prefixes)
+                )
+            ),
+            static fn (int $pid): bool => $pid > 0 && $pid !== \getmypid()
+        )));
+
+        $killed = 0;
+        if ($candidatePids !== []) {
+            $result = Processer::dispatchBatchKillProcessTrees($candidatePids, true);
+            $killed = (int) ($result['killed'] ?? 0);
+            $this->invalidateStopRuntimeState();
+        }
+
+        if ($killed > 0) {
+            SchedulerSystem::usleep(200000);
+        }
+
+        $this->cleanupStaleRecoverableProcessPidFilesForPids($candidatePids);
+        $remaining = $this->collectRunningResidualPids($candidatePids, $candidatePids);
+        if ($remaining !== []) {
+            $this->printer->warning(__('  Fast-local cleanup still has residual process ids: %{1}', [
+                \implode(',', $remaining),
+            ]));
+            return;
+        }
+
+        if ($killed > 0) {
+            $this->printer->success(__('  Fast-local cleanup terminated %{1} residual processes.', [$killed]));
+        } else {
+            $this->printer->note(__('  Fast-local cleanup found no residual processes.'));
+        }
+        $this->lastResidualCleanupComplete = true;
+    }
+
+    /**
+     * @param list<string>|array<int, string> $prefixes
+     * @return list<int>
+     */
+    private function collectPidsFromProcessNamePrefixes(array $prefixes): array
+    {
+        $prefixes = \array_values(\array_unique(\array_filter(
+            \array_map('strval', $prefixes),
+            static fn (string $prefix): bool => $prefix !== ''
+        )));
+        if ($prefixes === []) {
+            return [];
+        }
+
+        $pids = [];
+        $currentPid = \getmypid();
+        foreach (Processer::readNameIndex() as $pname => $entries) {
+            $taskName = '';
+            try {
+                $taskName = Processer::getTaskName((string) $pname);
+            } catch (\Throwable) {
+                $taskName = \str_starts_with((string) $pname, '--name=')
+                    ? \substr((string) $pname, 7)
+                    : (string) $pname;
+            }
+
+            foreach ($prefixes as $prefix) {
+                if (!\str_starts_with($taskName, $prefix) && !\str_starts_with((string) $pname, '--name=' . $prefix)) {
+                    continue;
+                }
+
+                foreach ((array) $entries as $entry) {
+                    $pid = (int) ($entry['pid'] ?? 0);
+                    if ($pid > 0 && $pid !== $currentPid) {
+                        $pids[$pid] = true;
+                    }
+                }
+                break;
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
     }
 
     /**

@@ -81,7 +81,7 @@ if ($action === 'install') {
 
     // 非管理员：使用 Start-Process -Verb RunAs 自动提权执行
     echo "当前非管理员权限，正在请求提权安装...\n";
-    echo "系统将弹出 UAC 提权确认窗口，请点击"是"。\n\n";
+    echo "系统将弹出 UAC 提权确认窗口，请点击\"是\"。\n\n";
 
     // 构建提权命令：用 Start-Process 以管理员身份启动 PowerShell 执行安装脚本
     $escapedScript = str_replace("'", "''", $installScript);

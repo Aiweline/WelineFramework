@@ -11,6 +11,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 class WorkerBootstrapWarmup implements ObserverInterface
 {
@@ -23,20 +24,26 @@ class WorkerBootstrapWarmup implements ObserverInterface
         $this->tryWarm(function (): void {
             $this->warmCategoryData();
         });
+        SchedulerSystem::yield();
         $this->tryWarm(function (): void {
             $this->warmHookRegistries();
         });
+        SchedulerSystem::yield();
     }
 
     private function warmCategoryData(): void
     {
         ObjectManager::getInstance(Category::class);
+        SchedulerSystem::yield();
 
         /** @var CategoryService $categoryService */
         $categoryService = ObjectManager::getInstance(CategoryService::class);
         $categoryService->getCategoryTree(0);
+        SchedulerSystem::yield();
         $categoryService->getRightMenuCategoryTree(0);
+        SchedulerSystem::yield();
         $categoryService->getHeaderSearchCategoryOptions(0);
+        SchedulerSystem::yield();
     }
 
     private function warmHookRegistries(): void
@@ -53,6 +60,7 @@ class WorkerBootstrapWarmup implements ObserverInterface
             $reader->setPath($hookName);
             $reader->getFileListWithMeta();
             $reader->getFileList();
+            SchedulerSystem::yield();
         }
     }
 

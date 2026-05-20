@@ -287,6 +287,7 @@ class AiSiteBuildTaskService
             'materialized_pages_by_type',
             'page_type_layouts',
             'pending_generation_page_types',
+            self::BUILD_PAGE_PROGRESS_SCOPE_KEY,
             'build_summary',
             'build_task_summary',
             'build_workbench',
@@ -800,11 +801,41 @@ class AiSiteBuildTaskService
                     ? \ucfirst($region)
                     : ($sectionKey !== '' ? \ucfirst(\str_replace(['_', '-'], ' ', $sectionKey)) : $taskId);
             }
+            $blockType = $this->normalizeBuildPlanRoleToken((string)(
+                $block['block_type']
+                ?? $block['type']
+                ?? $block['template']
+                ?? $contractTask['block_type']
+                ?? $inputScope['block_type']
+                ?? ''
+            ));
+            $pageFlowRole = $this->normalizeBuildPlanRoleToken((string)(
+                $block['page_flow_role']
+                ?? $contractTask['page_flow_role']
+                ?? $inputScope['page_flow_role']
+                ?? ''
+            ));
+            $visualSignature = \is_array($block['visual_signature'] ?? null)
+                ? $block['visual_signature']
+                : (\is_array($contractTask['visual_signature'] ?? null) ? $contractTask['visual_signature'] : []);
             $stylePlan = \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [];
             foreach (['design_tags', 'visual_signature', 'image_intent'] as $planKey) {
                 if (\is_array($block[$planKey] ?? null) && $block[$planKey] !== []) {
                     $stylePlan[$planKey] = $block[$planKey];
                 }
+            }
+            if ($pageFlowRole !== '') {
+                $stylePlan['page_flow_role'] = $pageFlowRole;
+            }
+            $planContext = $promptContextAssembler->assemble($contract, $contractTask);
+            if ($blockType !== '') {
+                $planContext['block_type'] = $blockType;
+            }
+            if ($pageFlowRole !== '') {
+                $planContext['page_flow_role'] = $pageFlowRole;
+            }
+            if ($visualSignature !== []) {
+                $planContext['block_visual_signature'] = $visualSignature;
             }
 
             $tasks[] = [
@@ -819,6 +850,9 @@ class AiSiteBuildTaskService
                 'section_code' => $sectionCode,
                 'section_key' => $sectionKey,
                 'block_key' => $sectionKey,
+                'block_type' => $blockType,
+                'page_flow_role' => $pageFlowRole,
+                'visual_signature' => $visualSignature,
                 'label' => $label,
                 'sort_order' => 100 + ((int)$sortIndex * 10),
                 'dependencies' => $this->normalizeBuildPlanStringList($contractTask['depends_on'] ?? []),
@@ -846,7 +880,7 @@ class AiSiteBuildTaskService
                         'asset_context_ref' => 'scope.asset_manifest',
                     ],
                 ]),
-                'plan_context' => $promptContextAssembler->assemble($contract, $contractTask),
+                'plan_context' => $planContext,
                 'task_script' => [
                     'component_type' => $isShared ? $region : 'section',
                     'data_contract' => [
@@ -859,9 +893,12 @@ class AiSiteBuildTaskService
                     'acceptance_rule_ids' => $this->normalizeBuildPlanStringList($contractTask['acceptance_rule_ids'] ?? []),
                 ],
                 'block_task' => [
+                    'block_type' => $blockType,
+                    'page_flow_role' => $pageFlowRole,
                     'task_goal' => $this->contentValueForBuildPlanKey($contentItems, $contentKeys[1] ?? ''),
                     'content_plan' => $this->sliceBuildPlanContentItems($contentItems, $contentKeys),
                     'style_plan' => $stylePlan,
+                    'visual_signature' => $visualSignature,
                 ],
                 'implementation_contract' => [
                     'source' => 'build_plan_v2',
@@ -884,7 +921,7 @@ class AiSiteBuildTaskService
             ), static fn(string $value): bool => $value !== ''));
         }
 
-        return [
+        $blueprint = [
             'version' => self::BLUEPRINT_VERSION,
             'source' => 'build_plan_v2',
             'workspace_track' => $workspaceTrack,
@@ -902,6 +939,23 @@ class AiSiteBuildTaskService
                 'tasks' => $tasks,
             ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
         ];
+        AiSiteWorkflowTrace::log('build_blueprint_from_plan_v2', [
+            'contract_id' => (string)($meta['id'] ?? ''),
+            'workspace_track' => $workspaceTrack,
+            'page_types' => $pageTypes,
+            'task_count' => \count($tasks),
+            'signature' => (string)($blueprint['signature'] ?? ''),
+        ]);
+        AiSiteWorkflowTrace::taskList('build_blueprint_tasks_split', $tasks, [
+            'contract_id' => (string)($meta['id'] ?? ''),
+        ]);
+        if (AiSiteWorkflowTrace::verbose()) {
+            AiSiteWorkflowTrace::json('build_blueprint_task_details', ['tasks' => $tasks], [
+                'contract_id' => (string)($meta['id'] ?? ''),
+            ]);
+        }
+
+        return $blueprint;
     }
 
     /**
@@ -1249,6 +1303,18 @@ class AiSiteBuildTaskService
         return \array_values(\array_unique($result));
     }
 
+    private function normalizeBuildPlanRoleToken(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        if ($value === '') {
+            return '';
+        }
+        $value = \preg_replace('/[^a-z0-9_-]+/', '_', $value) ?? $value;
+        $value = \preg_replace('/_+/', '_', $value) ?? $value;
+
+        return \trim($value, '_-');
+    }
+
     private function resolveBuildPlanSectionCode(string $pageType, string $sectionKey, string $blockId): string
     {
         $section = $sectionKey;
@@ -1260,6 +1326,59 @@ class AiSiteBuildTaskService
         $sectionSlug = $this->slugifyForTask($section);
 
         return 'content/' . $this->slugifyForTask($pageType !== '' ? $pageType : 'page') . '-' . $sectionSlug;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolveStageBlockTypeForBuild(array $block): string
+    {
+        foreach ([
+            $block['block_type'] ?? null,
+            $block['type'] ?? null,
+            $block['template'] ?? null,
+            $block['display_role'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $token = $this->normalizeBuildPlanRoleToken((string)$candidate);
+            if ($token !== '' && $token !== 'page_block') {
+                return $token;
+            }
+        }
+
+        return 'section';
+    }
+
+    /**
+     * @param array<string, mixed> $visualSignature
+     */
+    private function resolveSectionTemplateFromPlannedIdentity(
+        string $blockType,
+        string $pageFlowRole,
+        array $visualSignature = []
+    ): string {
+        $blockType = $this->normalizeBuildPlanRoleToken($blockType);
+        $pageFlowRole = $this->normalizeBuildPlanRoleToken($pageFlowRole);
+        $composition = $this->normalizeBuildPlanRoleToken((string)($visualSignature['composition_pattern'] ?? ''));
+
+        if (\in_array($blockType, ['hero', 'banner', 'home_hero', 'hero_banner', 'above_fold'], true)) {
+            return 'hero';
+        }
+        if (\in_array($blockType, ['cta', 'final_cta', 'download_cta', 'conversion_cta'], true)
+            || \in_array($pageFlowRole, ['conversion', 'final_cta'], true)
+            || \in_array($composition, ['cta_band', 'download_band', 'conversion_band'], true)
+        ) {
+            return 'cta';
+        }
+        if (\in_array($blockType, ['checklist', 'feature_grid', 'features', 'values', 'proof_grid', 'trust_grid', 'cards'], true)
+            || \in_array($composition, ['feature_grid', 'feature_rail', 'proof_band', 'badge_wall', 'metric_strip'], true)
+        ) {
+            return 'checklist';
+        }
+
+        return 'section';
     }
 
     /**
@@ -1375,14 +1494,22 @@ class AiSiteBuildTaskService
                 $sectionSlug = $this->slugifyForTask($blockKey);
                 $sectionCode = 'content/' . $this->slugifyForTask($pageType) . '-' . $sectionSlug;
                 $title = $this->firstStageBlockTitle($block, $blockKey);
+                $blockType = $this->resolveStageBlockTypeForBuild($block);
+                $pageFlowRole = $this->normalizeBuildPlanRoleToken((string)($block['page_flow_role'] ?? ''));
+                $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+                $sectionTemplate = $this->resolveSectionTemplateFromPlannedIdentity($blockType, $pageFlowRole, $visualSignature);
                 $sections[] = [
                     'key' => $blockKey,
                     'code' => $sectionCode,
                     'name' => $title,
-                    'template' => $blockIndex === 0 ? 'hero' : (\str_contains($sectionSlug, 'cta') ? 'cta' : 'section'),
+                    'template' => $sectionTemplate,
+                    'block_type' => $blockType,
+                    'page_flow_role' => $pageFlowRole,
+                    'visual_signature' => $visualSignature,
                     'config' => [
                         'section_title' => $title,
                         'description' => $this->firstStageBlockDescription($block),
+                        'page_flow_role' => $pageFlowRole,
                     ],
                     'sort_order' => (int)($block['sort_order'] ?? $block['order'] ?? (10 + ((int)$blockIndex * 10))),
                     'source_block_key' => $blockKey,
@@ -1431,6 +1558,9 @@ class AiSiteBuildTaskService
                     'section_code' => $sectionCode,
                     'section_key' => $blockKey,
                     'block_key' => $blockKey,
+                    'block_type' => $blockType,
+                    'page_flow_role' => $pageFlowRole,
+                    'visual_signature' => $visualSignature,
                     'label' => $title,
                     'sort_order' => 1000 + ($pageIndex * 100) + ((int)($block['sort_order'] ?? $blockIndex * 10)),
                     'dependencies' => ['shared:header', 'shared:footer'],
@@ -1443,7 +1573,8 @@ class AiSiteBuildTaskService
                         'stage1_style_direction' => $blockStyleDirection,
                         'source_page_type' => $pageType,
                         'source_block_key' => $blockKey,
-                        'page_flow_role' => (string)($block['page_flow_role'] ?? ''),
+                        'block_type' => $blockType,
+                        'page_flow_role' => $pageFlowRole,
                         'page_goal' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),
                         'block_goal' => $blockGoal,
                         'stage1_visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
@@ -1461,6 +1592,8 @@ class AiSiteBuildTaskService
                         'field_content_requirements' => $fieldContentRequirements,
                     ],
                     'block_task' => [
+                        'block_type' => $blockType,
+                        'page_flow_role' => $pageFlowRole,
                         'task_goal' => $blockGoal,
                         'content_plan' => $this->extractContentPlanFromStageOneBlock($block),
                         'style_plan' => $this->extractStylePlanFromStageOneBlock($block),
@@ -2965,7 +3098,7 @@ class AiSiteBuildTaskService
                 if ($sectionCode === '' || !\is_array($eligibleSections[$pageType][$sectionCode] ?? null)) {
                     continue;
                 }
-                $text = $this->normalizeGeneratedArtifactVisibleText($section);
+                $text = $this->normalizeGeneratedArtifactVisibleText($scope, $section);
                 if (\mb_strlen($text) < 80) {
                     continue;
                 }
@@ -3012,13 +3145,20 @@ class AiSiteBuildTaskService
     /**
      * @param array<string, mixed> $section
      */
-    private function normalizeGeneratedArtifactVisibleText(array $section): string
+    private function normalizeGeneratedArtifactVisibleText(array $scope, array $section): string
     {
         $parts = [];
+        $sectionCode = $this->resolveLayoutSectionCode($section);
+        if ($sectionCode !== '' && $this->requiresPersistedVirtualThemeLayoutCheck($scope)) {
+            $persistedTemplate = $this->loadVirtualThemeComponentArtifactPayload($scope, $sectionCode);
+            if ($persistedTemplate !== '') {
+                $parts[] = $this->extractVisitorTextFromGeneratedTemplate($persistedTemplate);
+            }
+        }
         foreach (['html', 'html_content', 'template', 'template_content'] as $key) {
             $value = $section[$key] ?? null;
             if (\is_scalar($value) && \trim((string)$value) !== '') {
-                $parts[] = (string)$value;
+                $parts[] = $this->extractVisitorTextFromGeneratedTemplate((string)$value);
             }
         }
         if ($parts === [] && \is_array($section['config'] ?? null)) {
@@ -3034,6 +3174,19 @@ class AiSiteBuildTaskService
         $text = (string)\preg_replace('/\s+/', ' ', $text);
 
         return \mb_strtolower(\trim($text));
+    }
+
+    private function extractVisitorTextFromGeneratedTemplate(string $payload): string
+    {
+        if ($payload === '') {
+            return '';
+        }
+
+        $payload = (string)\preg_replace('/<\?php[\s\S]*?\?>/u', ' ', $payload);
+        $payload = (string)\preg_replace('/<style\b[^>]*>[\s\S]*?<\/style>/iu', ' ', $payload);
+        $payload = (string)\preg_replace('/<script\b[^>]*>[\s\S]*?<\/script>/iu', ' ', $payload);
+
+        return $payload;
     }
 
     private function buildGeneratedArtifactLeadFingerprint(string $text): string
@@ -3596,8 +3749,8 @@ class AiSiteBuildTaskService
      */
     private function isGeneratedArtifactAvailableForTask(array $scope, array $task, bool $allowActiveRegenerationArtifacts = false): bool
     {
-        $regeneration = \is_array($scope['_build_regeneration'] ?? null) ? $scope['_build_regeneration'] : [];
-        if ((int)($regeneration['active'] ?? 0) === 1 && !$allowActiveRegenerationArtifacts) {
+        $activeRegeneration = $this->isActiveBuildRegeneration($scope);
+        if ($activeRegeneration && !$allowActiveRegenerationArtifacts) {
             return false;
         }
 
@@ -3606,6 +3759,27 @@ class AiSiteBuildTaskService
             $region = \trim((string)($task['region'] ?? ''));
             $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
             $sharedComponent = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
+            $componentCode = $this->resolveSharedComponentCodeForArtifactCheck($region, $task, $sharedComponent);
+            if ($activeRegeneration) {
+                if ($region === '' || !$this->isBuiltSharedComponentArtifact($sharedComponent)) {
+                    return false;
+                }
+
+                $payload = \json_encode($sharedComponent, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+                if (\is_string($payload) && $this->containsGeneratedArtifactPromptTrace($payload)) {
+                    return false;
+                }
+
+                return $componentCode === '' || !$this->virtualThemeComponentHasPromptTrace($scope, $componentCode);
+            }
+            if (
+                $region !== ''
+                && $componentCode !== ''
+                && $this->requiresPersistedVirtualThemeLayoutCheck($scope)
+                && $this->virtualThemeComponentArtifactAvailable($scope, $componentCode)
+            ) {
+                return true;
+            }
             if ($region === '' || !$this->isBuiltSharedComponentArtifact($sharedComponent)) {
                 return false;
             }
@@ -3615,7 +3789,6 @@ class AiSiteBuildTaskService
                 return false;
             }
 
-            $componentCode = $this->resolveSharedComponentCodeForArtifactCheck($region, $task, $sharedComponent);
             return $componentCode === '' || !$this->virtualThemeComponentHasPromptTrace($scope, $componentCode);
         }
 
@@ -3648,6 +3821,9 @@ class AiSiteBuildTaskService
 
             return true;
         }
+        if ($activeRegeneration) {
+            return false;
+        }
         if ($this->persistedVirtualThemeLayoutContainsSectionCode($scope, $pageType, $sectionCode)) {
             return !$this->virtualThemeComponentHasPromptTrace($scope, $sectionCode);
         }
@@ -3670,14 +3846,52 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * During a forced rebuild, persisted virtual-theme rows belong to the old
+     * generation until the current scope records the regenerated artifact.
+     *
      * @param array<string, mixed> $scope
      */
-    private function virtualThemeComponentHasPromptTrace(array $scope, string $componentCode): bool
+    private function isActiveBuildRegeneration(array $scope): bool
+    {
+        $regeneration = \is_array($scope['_build_regeneration'] ?? null) ? $scope['_build_regeneration'] : [];
+        return (int)($regeneration['active'] ?? 0) === 1;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function virtualThemeComponentArtifactAvailable(array $scope, string $componentCode): bool
+    {
+        $artifact = $this->loadVirtualThemeComponentArtifact($scope, $componentCode);
+        if ($artifact === [] || \trim((string)($artifact['template_content'] ?? '')) === '') {
+            return false;
+        }
+
+        $payload = \json_encode($artifact, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+        return !\is_string($payload) || !$this->containsGeneratedArtifactPromptTrace($payload);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function loadVirtualThemeComponentArtifactPayload(array $scope, string $componentCode): string
+    {
+        $artifact = $this->loadVirtualThemeComponentArtifact($scope, $componentCode);
+
+        return \trim((string)($artifact['template_content'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{template_content:string, default_config:array<string,mixed>}|array{}
+     */
+    private function loadVirtualThemeComponentArtifact(array $scope, string $componentCode): array
     {
         $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
         $componentCode = \trim($componentCode);
         if ($virtualThemeId <= 0 || $componentCode === '') {
-            return false;
+            return [];
         }
 
         try {
@@ -3692,18 +3906,31 @@ class AiSiteBuildTaskService
                 ->find()
                 ->fetch();
             if ((int)$component->getId() <= 0) {
-                return false;
+                return [];
             }
 
-            $payload = \json_encode([
+            return [
                 'template_content' => $component->getTemplateContent(),
                 'default_config' => $component->getDefaultConfig(),
-            ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
-
-            return \is_string($payload) && $this->containsGeneratedArtifactPromptTrace($payload);
+            ];
         } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function virtualThemeComponentHasPromptTrace(array $scope, string $componentCode): bool
+    {
+        $artifact = $this->loadVirtualThemeComponentArtifact($scope, $componentCode);
+        if ($artifact === []) {
             return false;
         }
+
+        $payload = \json_encode($artifact, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+        return \is_string($payload) && $this->containsGeneratedArtifactPromptTrace($payload);
     }
 
     private function containsGeneratedArtifactPromptTrace(string $payload): bool

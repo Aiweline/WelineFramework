@@ -32,7 +32,9 @@ final class UrlParserRequestState
 class Url implements UrlInterface
 {
     private const PARSER_SITES_VERSION_CACHE_KEY = 'websites.url.parser_sites_version.v1';
-    private const PARSER_SITES_VERSION_CHECK_INTERVAL_SECONDS = 2.0;
+    private const PARSER_SITES_VERSION_CHECK_INTERVAL_SECONDS = 300.0;
+    private const PARSER_SITES_REMOTE_VERSION_CHECK_INTERVAL_SECONDS = 300.0;
+    private const PARSER_SITES_VERSION_FILE = 'var/cache/website_detect/parser_sites.version';
     private const PROCESS_DECODE_CACHE_TTL = 300;
     private const PROCESS_DECODE_CACHE_MAX_ITEMS = 4096;
 
@@ -96,33 +98,38 @@ class Url implements UrlInterface
      */
     public static function detectLanguage(string &$uri, string $code): bool
     {
-        if (isset(self::$parserLanguages[$code])) {
+        $parserCacheKey = self::parserValidationStaticKey('language', $code);
+        if (isset(self::$parserLanguages[$parserCacheKey])) {
             if (str_starts_with($uri, '/' . $code)) {
                 $uri = substr($uri, strlen('/' . $code));
             }
             self::$parserServer['WELINE_USER_LANG'] = $code;
-            self::$parserLanguages[$code] = $code;
+            self::rememberParserLanguage($code);
+            self::traceLanguageValidation('static_hit', $code, $uri, ['parser_key' => $parserCacheKey]);
             return true;
         }
 
         // 优化：使用语言缓存，避免重复数据库查询
         $cache = w_cache('i18n');
-        $checkCacheKey = 'lang_check_' . strtolower($code);
+        $checkCacheKey = self::validationCacheKey('lang_check', $code);
         $checkResult = $cache->get($checkCacheKey);
         
-        if ($checkResult !== false) {
+        if ($checkResult !== null && $checkResult !== false) {
             if ((bool)$checkResult) {
                 // 找到语言，更新URI并设置
                 if (str_starts_with($uri, '/' . $code)) {
                     $uri = substr($uri, strlen('/' . $code));
                 }
                 self::$parserServer['WELINE_USER_LANG'] = $code;
-                self::$parserLanguages[$code] = $code;
+                self::rememberParserLanguage($code);
+                self::traceLanguageValidation('remote_hit_allow', $code, $uri, ['cache_key' => $checkCacheKey]);
                 return true;
             }
             // 明确知道语言不存在，直接返回
+            self::traceLanguageValidation('remote_hit_deny', $code, $uri, ['cache_key' => $checkCacheKey]);
             return false;
         }
+        self::traceLanguageValidation('remote_miss', $code, $uri, ['cache_key' => $checkCacheKey]);
         
         // 缓存未命中，分发事件查询数据库
         # 必须有前两个字符是否都是小写字母,且第三个字符必须是_
@@ -136,19 +143,51 @@ class Url implements UrlInterface
         $eventManager->dispatch('Weline_Framework_Url::detect_language', $data);
         
         $result = $data->getData('result');
+        self::traceLanguageValidation('event_result', $code, $uri, [
+            'cache_key' => $checkCacheKey,
+            'result' => (bool)$result,
+            'error' => (string)$data->getData('error'),
+        ]);
         
         // 保存检查结果到缓存
-        $cache->set($checkCacheKey, $result ? 1 : 0);
+        $cache->set($checkCacheKey, $result ? 1 : 0, $result ? 86400 : 300);
         
         if ($result) {
             if (str_starts_with($uri, '/' . $code)) {
                 $uri = substr($uri, strlen('/' . $code));
             }
             self::$parserServer['WELINE_USER_LANG'] = $code;
-            self::$parserLanguages[$code] = $code;
+            self::rememberParserLanguage($code);
+            self::traceLanguageValidation('event_allow', $code, $uri, ['cache_key' => $checkCacheKey]);
             return true;
         }
+        self::traceLanguageValidation('event_deny', $code, $uri, ['cache_key' => $checkCacheKey]);
         return false;
+    }
+
+    private static function traceLanguageValidation(string $stage, string $code, string $uri, array $extra = []): void
+    {
+        $requestUri = (string)(
+            self::$parserServer['WELINE_FULL_REQUEST_URI']
+            ?? self::$parserServer['REQUEST_URI']
+            ?? ($_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '')
+        );
+        if ($requestUri === '' || (!str_contains($requestUri, 'debug_sidebar=1') && !str_contains($requestUri, 'ai_url_debug=1'))) {
+            return;
+        }
+
+        $context = [
+            'stage' => $stage,
+            'code' => $code,
+            'uri' => $uri,
+            'request_uri' => $requestUri,
+            'scope' => self::currentWebsiteValidationScope(),
+            'parser_lang' => (string)(self::$parserServer['WELINE_USER_LANG'] ?? ''),
+            'website_id' => (string)(self::$parserServer['WELINE_WEBSITE_ID'] ?? ''),
+            'website_code' => (string)(self::$parserServer['WELINE_WEBSITE_CODE'] ?? ''),
+        ] + $extra;
+
+        \error_log('[UrlDetectLanguageTrace] ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
     }
 
     /**
@@ -160,7 +199,8 @@ class Url implements UrlInterface
     {
         // 优化：使用静态缓存，避免重复查询
         $codeUpper = strtoupper($code);
-        if (isset(self::$parserCurrencies[$codeUpper])) {
+        $parserCacheKey = self::parserValidationStaticKey('currency', $codeUpper);
+        if (isset(self::$parserCurrencies[$parserCacheKey])) {
             if (str_starts_with($uri, '/' . $code)) {
                 $uri = substr($uri, strlen('/' . $code));
             }
@@ -170,17 +210,38 @@ class Url implements UrlInterface
         
         // 优化：使用货币缓存，避免重复数据库查询
         $cache = w_cache('currency');
-        $currencyCacheKey = 'currency_code_' . $codeUpper;
+        $currencyCacheKey = self::validationCacheKey('currency_code', $codeUpper);
         $currency = $cache->get($currencyCacheKey);
         
-        if ($currency !== false && is_array($currency) && isset($currency['code'])) {
+        if ($currency !== null && $currency !== false) {
+            $isAllowed = $currency === 1
+                || $currency === '1'
+                || $currency === true
+                || (\is_array($currency) && isset($currency['code']));
+            if (!$isAllowed) {
+                if ($currency === 0 || $currency === '0' || $currency === []) {
+                    return false;
+                }
+            } else {
+                if (str_starts_with($uri, '/' . $code)) {
+                    $uri = substr($uri, strlen('/' . $code));
+                }
+                self::$parserServer['WELINE_USER_CURRENCY'] = $codeUpper;
+                self::rememberParserCurrency($codeUpper);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (is_array($currency) && isset($currency['code'])) {
             // 找到货币，更新URI并设置
             if (str_starts_with($uri, '/' . $code)) {
                 $uri = substr($uri, strlen('/' . $code));
             }
             self::$parserServer['WELINE_USER_CURRENCY'] = $codeUpper;
             // 缓存成功的货币代码到静态缓存
-            self::$parserCurrencies[$codeUpper] = $codeUpper;
+            self::rememberParserCurrency($codeUpper);
             return true;
         }
         
@@ -194,16 +255,229 @@ class Url implements UrlInterface
         $eventManager = w_obj(EventsManager::class);
         $eventManager->dispatch('Weline_Framework_Url::detect_currency', $detect_currency_data);
         $uri_ = $detect_currency_data->getData('uri');
+        $result = (bool)$detect_currency_data->getData('result');
 
-        if ($detect_currency_data->getData('result')) {
+        $cache->set($currencyCacheKey, $result ? 1 : 0, $result ? 86400 : 300);
+
+        if ($result) {
             if (str_starts_with($uri_, '/' . $code)) {
                 $uri = substr($uri_, strlen('/' . $code));
             }
             self::$parserServer['WELINE_USER_CURRENCY'] = $codeUpper;
             // 缓存成功的货币代码到静态缓存
-            self::$parserCurrencies[$codeUpper] = $codeUpper;
+            self::rememberParserCurrency($codeUpper);
         }
-        return (bool)$detect_currency_data->getData('result');
+        return $result;
+    }
+
+    private static function validationCacheKey(string $prefix, string $code): string
+    {
+        return $prefix . ':v4:' . self::currentWebsiteValidationScope() . ':' . strtolower($code);
+    }
+
+    private static function parserValidationStaticKey(string $prefix, string $code): string
+    {
+        return $prefix . ':' . self::currentWebsiteValidationScope() . ':' . strtolower($code);
+    }
+
+    private static function rememberParserLanguage(string $code): void
+    {
+        self::$parserLanguages[self::parserValidationStaticKey('language', $code)] = $code;
+    }
+
+    private static function hasRememberedParserLanguage(string $code): bool
+    {
+        return isset(self::$parserLanguages[self::parserValidationStaticKey('language', $code)]);
+    }
+
+    private static function rememberParserCurrency(string $code): void
+    {
+        $codeUpper = strtoupper($code);
+        self::$parserCurrencies[self::parserValidationStaticKey('currency', $codeUpper)] = $codeUpper;
+    }
+
+    public static function preloadWorkerRoutingMetadata(): void
+    {
+        $previousParserServer = self::$parserServer;
+
+        try {
+            self::ensureParserSitesLoaded();
+            $scopes = self::knownWebsiteValidationScopes();
+            $currencyCodes = self::loadKnownCurrencyCodes();
+            $languageCodes = self::loadKnownLanguageCodes();
+
+            foreach ($scopes as $scope => $defaults) {
+                $defaultCurrency = (string)($defaults['currency'] ?? '');
+                if ($defaultCurrency !== '') {
+                    $currencyCodes[\strtoupper($defaultCurrency)] = \strtoupper($defaultCurrency);
+                }
+
+                $defaultLanguage = (string)($defaults['language'] ?? '');
+                if ($defaultLanguage !== '') {
+                    $languageCodes[$defaultLanguage] = $defaultLanguage;
+                }
+
+                foreach ($currencyCodes as $currencyCode) {
+                    $currencyCode = \strtoupper((string)$currencyCode);
+                    if ($currencyCode !== '') {
+                        self::$parserCurrencies[self::parserValidationStaticKeyForScope('currency', $scope, $currencyCode)] = $currencyCode;
+                    }
+                }
+
+                foreach ($languageCodes as $languageCode) {
+                    $languageCode = (string)$languageCode;
+                    if ($languageCode !== '') {
+                        self::$parserLanguages[self::parserValidationStaticKeyForScope('language', $scope, $languageCode)] = $languageCode;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[UrlParserWarmup] ' . $e->getMessage());
+            }
+        } finally {
+            self::$parserServer = $previousParserServer;
+        }
+    }
+
+    /**
+     * @return array<string, array{currency?: string, language?: string}>
+     */
+    private static function knownWebsiteValidationScopes(): array
+    {
+        $scopes = ['global' => []];
+        foreach (self::$parserSites as $site) {
+            if (!\is_array($site)) {
+                continue;
+            }
+
+            $defaults = [
+                'currency' => (string)($site['default_currency'] ?? ''),
+                'language' => (string)($site['default_language'] ?? ''),
+            ];
+
+            $websiteId = (int)($site['website_id'] ?? 0);
+            if ($websiteId > 0) {
+                $scopes['website:' . $websiteId] = $defaults;
+            }
+
+            $websiteCode = (string)($site['code'] ?? '');
+            if ($websiteCode !== '') {
+                $scopes['website_code:' . \sha1(\strtolower($websiteCode))] = $defaults;
+            }
+        }
+
+        return $scopes;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function loadKnownCurrencyCodes(): array
+    {
+        $codes = [];
+        try {
+            if (!\class_exists(\Weline\Currency\Model\Currency::class)) {
+                return $codes;
+            }
+
+            $currencyModel = ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
+            $rows = $currencyModel->clear()->select()->fetchArray();
+            foreach ((array)$rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $code = \strtoupper(\trim((string)($row[\Weline\Currency\Model\Currency::schema_fields_CODE] ?? '')));
+                if ($code !== '') {
+                    $codes[$code] = $code;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $codes;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function loadKnownLanguageCodes(): array
+    {
+        $codes = [];
+        try {
+            if (!\class_exists(\Weline\I18n\Model\Locals::class)) {
+                return $codes;
+            }
+
+            $localModel = ObjectManager::getInstance(\Weline\I18n\Model\Locals::class);
+            $rows = $localModel->clear()
+                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_INSTALL, 1)
+                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
+                ->select()
+                ->fetchArray();
+            foreach ((array)$rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $code = \trim((string)($row[\Weline\I18n\Model\Locals::schema_fields_CODE] ?? ''));
+                if ($code !== '') {
+                    $codes[$code] = $code;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $codes;
+    }
+
+    private static function parserValidationStaticKeyForScope(string $prefix, string $scope, string $code): string
+    {
+        return $prefix . ':' . $scope . ':' . \strtolower($code);
+    }
+
+    private static function currentWebsiteValidationScope(): string
+    {
+        $parserWebsiteId = (int)(self::$parserServer['WELINE_WEBSITE_ID'] ?? 0);
+        if ($parserWebsiteId > 0) {
+            return 'website:' . $parserWebsiteId;
+        }
+
+        $parserWebsiteCode = (string)(self::$parserServer['WELINE_WEBSITE_CODE'] ?? '');
+        if ($parserWebsiteCode !== '') {
+            return 'website_code:' . sha1(strtolower($parserWebsiteCode));
+        }
+
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
+                $website = \Weline\Websites\Data\WebsiteData::getWebsite();
+                if ($website !== null && \method_exists($website, 'getWebsiteId')) {
+                    $websiteId = (int)$website->getWebsiteId();
+                    if ($websiteId > 0) {
+                        return 'website:' . $websiteId;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $context = Context::getCurrent();
+        $websiteId = (int)($context?->get('route.website_id', 0) ?? 0);
+        if ($websiteId > 0) {
+            return 'website:' . $websiteId;
+        }
+
+        $websiteCode = (string)($context?->get('route.website_code', '') ?? '');
+        if ($websiteCode !== '') {
+            return 'website_code:' . sha1(strtolower($websiteCode));
+        }
+
+        $host = (string)(
+            $context?->get('input.host', '')
+            ?: ($context?->server('HTTP_HOST', '') ?? '')
+            ?: ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '')
+        );
+
+        return $host !== '' ? 'host:' . sha1(strtolower($host)) : 'global';
     }
 
     public function getApiUrl(string $path = '', array $params = [], bool $merge_url_params = true): string
@@ -1253,20 +1527,26 @@ class Url implements UrlInterface
         $data['language'] = '';
         $data['timezone'] = ($data['website'] ?? [])['timezone'] ?? 'Asia/Shanghai';
         # 匹配货币 self::$parserCurrencies 最长倒序
-        foreach (self::$parserCurrencies as $currency) {
+        foreach (\array_unique(self::$parserCurrencies) as $currency) {
             if (str_starts_with($url, '/' . $currency)) {
-                $url = str_replace('/' . $currency, '', $url);
-                $data['currency'] = $currency;
-                break;
+                $candidateUrl = $url;
+                if (self::detectCurrency($candidateUrl, (string)$currency)) {
+                    $url = $candidateUrl;
+                    $data['currency'] = $currency;
+                    break;
+                }
             }
         }
 
         # 匹配语言 self::$parserLanguages 最长倒序
-        foreach (self::$parserLanguages as $language) {
+        foreach (\array_unique(self::$parserLanguages) as $language) {
             if (str_starts_with($url, '/' . $language)) {
-                $url = substr($url, strlen('/' . $language));
-                $data['language'] = $language;
-                break;
+                $candidateUrl = $url;
+                if (self::detectLanguage($candidateUrl, (string)$language)) {
+                    $url = $candidateUrl;
+                    $data['language'] = $language;
+                    break;
+                }
             }
         }
 
@@ -1278,17 +1558,29 @@ class Url implements UrlInterface
             && \strlen($quickCurrency) === 3
             && \ctype_upper($quickCurrency)
         ) {
-            $data['currency'] = $quickCurrency;
-            self::$parserCurrencies[$quickCurrency] = $quickCurrency;
+            $candidateUrl = $url;
+            if (self::detectCurrency($candidateUrl, $quickCurrency)) {
+                $url = $candidateUrl;
+                $data['currency'] = $quickCurrency;
+                self::rememberParserCurrency($quickCurrency);
+            }
         }
         if ($data['language'] === '' && $quickLanguage !== '') {
-            $knownLanguage = isset(self::$parserLanguages[$quickLanguage])
-                || $quickLanguage === (self::$parserServer['WELINE_WEBSITE_LANGUAGE'] ?? null)
-                || $quickLanguage === (self::$parserServer['WELINE_USER_LANG'] ?? null)
+            $looksLanguage = (bool)\preg_match('/^[a-z]{2}_[A-Z]{2}$/', $quickLanguage)
                 || (bool)\preg_match('/^[a-z]{2}_[A-Z][a-z]+_[A-Z]{2}$/', $quickLanguage);
+            if ($looksLanguage) {
+                $candidateUrl = $url;
+                $knownLanguage = self::detectLanguage($candidateUrl, $quickLanguage);
+            } else {
+                $candidateUrl = $url;
+                $knownLanguage = self::hasRememberedParserLanguage($quickLanguage)
+                    || $quickLanguage === (self::$parserServer['WELINE_WEBSITE_LANGUAGE'] ?? null)
+                    || $quickLanguage === (self::$parserServer['WELINE_USER_LANG'] ?? null);
+            }
             if ($knownLanguage) {
+                $url = $candidateUrl;
                 $data['language'] = $quickLanguage;
-                self::$parserLanguages[$quickLanguage] = $quickLanguage;
+                self::rememberParserLanguage($quickLanguage);
             }
         }
 
@@ -1309,7 +1601,7 @@ class Url implements UrlInterface
                         $has_currency = self::detectCurrency($url, $pre_path_1);
                         if ($has_currency) {
                             $data['currency'] = $pre_path_1;
-                            self::$parserCurrencies[$pre_path_1] = $pre_path_1;
+                            self::rememberParserCurrency($pre_path_1);
                         }
                     }
                     if (!$has_currency && strlen($pre_path_1) > 3 && strlen($pre_path_1) <= 10 && ctype_lower(substr($pre_path_1, 0, 2)) && $pre_path_1[2] === '_') {
@@ -1317,7 +1609,7 @@ class Url implements UrlInterface
                         $has_language = self::detectLanguage($url, $pre_path_1);
                         if ($has_language) {
                             $data['language'] = $pre_path_1;
-                            self::$parserLanguages[$pre_path_1] = $pre_path_1;
+                            self::rememberParserLanguage($pre_path_1);
                         }
                     }
                 }
@@ -1327,7 +1619,7 @@ class Url implements UrlInterface
                         $has_language = self::detectLanguage($url, $pre_path_2);
                         if ($has_language) {
                             $data['language'] = $pre_path_2;
-                            self::$parserLanguages[$pre_path_2] = $pre_path_2;
+                            self::rememberParserLanguage($pre_path_2);
                         }
                     }
 
@@ -1336,7 +1628,7 @@ class Url implements UrlInterface
                         $has_currency = self::detectCurrency($url, $pre_path_2);
                         if ($has_currency) {
                             $data['currency'] = $pre_path_2;
-                            self::$parserCurrencies[$pre_path_2] = $pre_path_2;
+                            self::rememberParserCurrency($pre_path_2);
                         }
                     }
                 }
@@ -1570,10 +1862,30 @@ class Url implements UrlInterface
     public static function resetWebsiteParserSites(): void
     {
         self::$parserSites = [];
+        self::$parserCurrencies = [];
+        self::$parserLanguages = [];
         self::$parserSiteMatchs = [];
         self::$parserSiteMatchUrlCache = [];
         self::$parserMatchs = [];
         self::$parserSitesVersion = '';
+    }
+
+    public static function bumpWebsiteParserSitesVersion(?string $version = null): string
+    {
+        $version = $version !== null && $version !== '' ? $version : (string)\microtime(true);
+        self::writeParserSitesVersionFile($version);
+
+        try {
+            $cache = w_cache('website_detect');
+            $cache->clear();
+            $cache->set(self::PARSER_SITES_VERSION_CACHE_KEY, $version, 86400);
+        } catch (\Throwable) {
+        }
+
+        self::resetWebsiteParserSites();
+        self::$parserSitesVersion = $version;
+
+        return $version;
     }
 
     /**
@@ -1631,11 +1943,9 @@ class Url implements UrlInterface
         }
         self::$parserSitesVersionCheckedAt = $now;
 
-        $version = '';
-        try {
-            $cached = w_cache('website_detect')->get(self::PARSER_SITES_VERSION_CACHE_KEY);
-            $version = \is_scalar($cached) ? (string)$cached : '';
-        } catch (\Throwable) {
+        $version = self::readParserSitesVersionFile();
+        if ($version === '' && empty(self::$parserSites)) {
+            $version = self::readParserSitesVersionFromSharedCache($now);
         }
 
         if ($version === '') {
@@ -1647,6 +1957,61 @@ class Url implements UrlInterface
         }
 
         self::$parserSitesVersion = $version;
+    }
+
+    private static function readParserSitesVersionFile(): string
+    {
+        $path = self::parserSitesVersionFilePath();
+        if ($path === '' || !\is_file($path)) {
+            return '';
+        }
+
+        $version = @\file_get_contents($path);
+        return \is_string($version) ? \trim($version) : '';
+    }
+
+    private static function writeParserSitesVersionFile(string $version): void
+    {
+        $path = self::parserSitesVersionFilePath();
+        if ($path === '') {
+            return;
+        }
+
+        $dir = \dirname($path);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0775, true);
+        }
+
+        @\file_put_contents($path, $version, \LOCK_EX);
+    }
+
+    private static function parserSitesVersionFilePath(): string
+    {
+        if (!\defined('BP')) {
+            return '';
+        }
+
+        return \rtrim((string)BP, "\\/") . \DIRECTORY_SEPARATOR . \str_replace('/', \DIRECTORY_SEPARATOR, self::PARSER_SITES_VERSION_FILE);
+    }
+
+    private static function readParserSitesVersionFromSharedCache(float $now): string
+    {
+        static $lastRemoteCheckAt = 0.0;
+
+        if (
+            $lastRemoteCheckAt > 0
+            && ($now - $lastRemoteCheckAt) < self::PARSER_SITES_REMOTE_VERSION_CHECK_INTERVAL_SECONDS
+        ) {
+            return '';
+        }
+        $lastRemoteCheckAt = $now;
+
+        try {
+            $cached = w_cache('website_detect')->get(self::PARSER_SITES_VERSION_CACHE_KEY);
+            return \is_scalar($cached) ? (string)$cached : '';
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**

@@ -179,7 +179,7 @@ class ThemeContextService
     {
         $theme = $this->newThemeModel();
         try {
-            $theme->load($this->getActivationField($area), 1);
+            $theme->getActiveTheme($this->normalizeActivationArea($area));
         } catch (\Throwable) {
             return null;
         }

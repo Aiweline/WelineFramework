@@ -130,7 +130,7 @@ class OrphanGuard
             return $alive;
         }
 
-        if (\defined('IS_WIN') && IS_WIN) {
+        if ($this->isWindows()) {
             return Processer::isRunningByPid($masterPid);
         }
 
@@ -140,5 +140,14 @@ class OrphanGuard
 
         @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
         return $code === 0;
+    }
+
+    private function isWindows(): bool
+    {
+        if (\defined('PHP_OS_FAMILY')) {
+            return \PHP_OS_FAMILY === 'Windows';
+        }
+
+        return \stripos(\PHP_OS, 'WIN') === 0;
     }
 }

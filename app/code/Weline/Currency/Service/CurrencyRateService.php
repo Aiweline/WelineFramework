@@ -114,6 +114,22 @@ class CurrencyRateService
         return $currentCurrency !== '' ? $currentCurrency : $this->getBaseCurrency();
     }
 
+    public function getCurrentRate(): float
+    {
+        $baseCurrency = $this->getBaseCurrency();
+        $currentCurrency = $this->getCurrentCurrency();
+        if ($currentCurrency === '' || $currentCurrency === $baseCurrency) {
+            return 1.0;
+        }
+
+        $rate = $this->getCurrencyRateRelativeToBase($currentCurrency, $baseCurrency);
+        if ($rate === null || $rate <= 0.0) {
+            return 1.0;
+        }
+
+        return 1.0 / $rate;
+    }
+
     public function convert(float $amount, ?string $sourceCurrency = null, ?string $targetCurrency = null): float
     {
         $sourceCurrency = $this->normalizeCurrencyCode($sourceCurrency ?: $this->getBaseCurrency());

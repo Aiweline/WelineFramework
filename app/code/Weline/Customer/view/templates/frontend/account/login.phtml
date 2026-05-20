@@ -707,7 +707,20 @@ html.dark .auth-form__input:-webkit-autofill:active {
             });
         }
 
+        function canUseAccountApi() {
+            return !!(
+                window.Weline && (
+                    (window.Weline.Api && typeof window.Weline.Api.resource === 'function') ||
+                    typeof window.Weline.load === 'function'
+                )
+            );
+        }
+
         form.addEventListener('submit', function(e) {
+            if (!canUseAccountApi()) {
+                return;
+            }
+
             e.preventDefault();
 
             var existingErr = document.getElementById('errorMessage');

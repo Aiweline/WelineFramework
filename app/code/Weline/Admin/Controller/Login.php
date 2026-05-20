@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Controller;
 
-use WeShop\GoogleAuth\Service\BackendWebAuthService;
 use Weline\Admin\Helper\Data;
 use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Admin\Service\BackendVerificationCodeGate;
@@ -19,6 +18,8 @@ use Weline\Backend\Service\MenuService;
 use Weline\Backend\Service\MenuServiceInterface;
 use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
+use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Response;
@@ -44,7 +45,6 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     private Data $helper;
     private MessageManager $messageManager;
     private MenuServiceInterface $menuService;
-    private ?BackendWebAuthService $backendWebAuthService;
     private BackendVerificationCodeGate $backendVerificationCodeGate;
 
     public function __construct(
@@ -52,14 +52,12 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         MessageManager        $messageManager,
         Data                  $helper,
         MenuService           $menuService,
-        ?BackendWebAuthService $backendWebAuthService,
         BackendVerificationCodeGate $backendVerificationCodeGate
     ) {
         $this->adminUser = $adminUser;
         $this->helper = $helper;
         $this->messageManager = $messageManager;
         $this->menuService = $menuService;
-        $this->backendWebAuthService = $backendWebAuthService;
         $this->backendVerificationCodeGate = $backendVerificationCodeGate;
     }
 
@@ -80,7 +78,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->redirectReferer();
             $this->redirect($this->getBackendUrlSameOrigin($targetPath));
         }
-        //        $this->session->delete('backend_disable_login');
+        //$this->session->delete('backend_disable_login');
         $this->assign('post_url', $this->_url->getBackendUrl('admin/login/post'));
         // 无权限重定向原因：仅当次请求通过 GET 传入，显示一次即不再保留，刷新后不显示
         $noAccessReason = $this->request->getParam('no_access_reason');
@@ -259,49 +257,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $storedPassword = $adminUsernameUser->getPassword();
         $passwordVerifyResult = $storedPassword && password_verify($password, $storedPassword);
         if ($passwordVerifyResult) {
-            if ($this->backendWebAuthService !== null) {
-                try {
-                    $result = $this->backendWebAuthService->beginLoginForBackendUser(
-                        $adminUsernameUser,
-                        'password',
-                        (bool) $this->request->getParam('remember'),
-                        ''
-                    );
-                } catch (\Throwable $throwable) {
-                    w_auth_log('login_post_exception', 'Backend web auth failed during password login', [
-                        'user_id' => $adminUsernameUser->getId(),
-                        'message' => $throwable->getMessage(),
-                        'session' => $this->getSessionDataForLog()
-                    ]);
-                    MessageManager::error($throwable->getMessage());
-                    $this->redirect($this->_url->getBackendUrl('/admin/login'));
-                    return;
-                }
-
-                if (($result['status'] ?? '') === 'challenge_required') {
-                    $challengeToken = (string) ($result['challenge_token'] ?? '');
-                    w_auth_log('login_post_challenge_required', 'Backend login requires two-factor verification', [
-                        'user_id' => $adminUsernameUser->getId(),
-                        'challenge_token' => $challengeToken,
-                        'session' => $this->getSessionDataForLog()
-                    ]);
-                    $this->getMessageManager()->addWarning(__('Please complete two-factor verification to finish sign in.'));
-                    $this->redirect($this->_url->getFrontendUrl('weshop_googleauth/frontend/auth/backend-challenge', [
-                        'challenge_token' => $challengeToken,
-                    ]));
-                    return;
-                }
-
-                $redirectUrl = (string) ($result['redirect_url'] ?? '');
-                if ($redirectUrl === '') {
-                    $redirectUrl = $this->getBackendUrlSameOrigin($this->resolveDefaultRedirectTarget($adminUsernameUser));
-                }
-                w_auth_log('login_post_redirect', 'Backend login authenticated and redirecting', [
-                    'user_id' => $adminUsernameUser->getId(),
-                    'target_url' => $redirectUrl,
-                    'session' => $this->getSessionDataForLog()
-                ]);
-                $this->redirect($redirectUrl);
+            if ($this->dispatchPasswordVerifiedLoginExtension($adminUsernameUser)) {
                 return;
             }
             # SESSION登录用户
@@ -694,6 +650,79 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $response->setHeader('Expires', '0');
         $response->setBody($png);
         $response->send();
+    }
+
+    /**
+     * 派发密码校验通过事件，由集成模块（如 WeShop GoogleAuth）接管 WebAuth/2FA。
+     *
+     * @return bool 已处理并完成响应（含重定向）时返回 true
+     */
+    private function dispatchPasswordVerifiedLoginExtension(BackendUser $adminUsernameUser): bool
+    {
+        $loginEventData = new DataObject([
+            'user' => $adminUsernameUser,
+            'auth_method' => 'password',
+            'remember' => (bool) $this->request->getParam('remember'),
+            'redirect_url' => '',
+            'handled' => false,
+            'result' => null,
+            'error' => null,
+        ]);
+
+        /** @var EventsManager $eventManager */
+        $eventManager = ObjectManager::getInstance(EventsManager::class);
+        $eventManager->dispatch('Weline_Admin_Login::password_verified', $loginEventData);
+
+        if (!$loginEventData->getData('handled')) {
+            return false;
+        }
+
+        $error = $loginEventData->getData('error');
+        if ($error instanceof \Throwable) {
+            w_auth_log('login_post_exception', '后台扩展登录流程失败', [
+                'user_id' => $adminUsernameUser->getId(),
+                'message' => $error->getMessage(),
+                'session' => $this->getSessionDataForLog(),
+            ]);
+            MessageManager::error($error->getMessage());
+            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+            return true;
+        }
+
+        $result = $loginEventData->getData('result');
+        if (!is_array($result)) {
+            return false;
+        }
+
+        if (($result['status'] ?? '') === 'challenge_required') {
+            $challengeToken = (string) ($result['challenge_token'] ?? '');
+            w_auth_log('login_post_challenge_required', '后台登录需完成两步验证', [
+                'user_id' => $adminUsernameUser->getId(),
+                'challenge_token' => $challengeToken,
+                'session' => $this->getSessionDataForLog(),
+            ]);
+            $this->getMessageManager()->addWarning(__('请完成两步验证以完成登录。'));
+            $this->redirect($this->_url->getFrontendUrl('weshop_googleauth/frontend/auth/backend-challenge', [
+                'challenge_token' => $challengeToken,
+            ]));
+            return true;
+        }
+
+        if (($result['status'] ?? '') !== 'authenticated') {
+            return false;
+        }
+
+        $redirectUrl = (string) ($result['redirect_url'] ?? '');
+        if ($redirectUrl === '') {
+            $redirectUrl = $this->getBackendUrlSameOrigin($this->resolveDefaultRedirectTarget($adminUsernameUser));
+        }
+        w_auth_log('login_post_redirect', '后台扩展登录成功并重定向', [
+            'user_id' => $adminUsernameUser->getId(),
+            'target_url' => $redirectUrl,
+            'session' => $this->getSessionDataForLog(),
+        ]);
+        $this->redirect($redirectUrl);
+        return true;
     }
 
     private function clearBackendVerificationCodeState(): void

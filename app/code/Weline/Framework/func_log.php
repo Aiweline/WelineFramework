@@ -201,6 +201,39 @@ if (!function_exists('w_logger')) {
     }
 }
 
+if (!function_exists('w_log_exception_build_context')) {
+    /**
+     * 构建异常日志上下文。
+     *
+     * LogFormatter 对 `_` 前缀键仅作结构化附加，不参与 {placeholder} 插值，故标量字段双写。
+     *
+     * @return array<string, mixed>
+     */
+    function w_log_exception_build_context(\Throwable $exception): array
+    {
+        $scalarFields = [
+            'exception_class' => get_class($exception),
+            'exception_message' => (string) $exception->getMessage(),
+            'exception_code' => $exception->getCode(),
+            'exception_file' => $exception->getFile(),
+            'exception_line' => $exception->getLine(),
+        ];
+
+        $context = ['_exception_trace' => $exception->getTraceAsString()];
+        foreach ($scalarFields as $key => $value) {
+            $context['_' . $key] = $value;
+            $context[$key] = $value;
+        }
+
+        $previous = $exception->getPrevious();
+        if ($previous !== null) {
+            $context['_previous_exception'] = get_class($previous) . ': ' . $previous->getMessage();
+        }
+
+        return $context;
+    }
+}
+
 if (!function_exists('w_log_exception')) {
     /**
      * 记录异常日志
@@ -218,44 +251,9 @@ if (!function_exists('w_log_exception')) {
      */
     function w_log_exception(\Throwable $exception, ?string $message = null, ?string $channel = null): void
     {
-        $exceptionMessage = (string)$exception->getMessage();
-        $lowerMessage = \strtolower($exceptionMessage);
-        $is402BalanceError = \str_contains($lowerMessage, 'http 402')
-            || \str_contains($lowerMessage, 'insufficient balance')
-            || \str_contains($lowerMessage, '余额不足')
-            || \str_contains($lowerMessage, '额度不足');
-        if ($is402BalanceError) {
-            static $last402ExceptionLogAt = 0.0;
-            $now = \microtime(true);
-            if (($now - $last402ExceptionLogAt) < 45.0) {
-                return;
-            }
-            $last402ExceptionLogAt = $now;
-        }
-
-        $context = [
-            '_exception_class' => get_class($exception),
-            '_exception_message' => $exceptionMessage,
-            '_exception_code' => $exception->getCode(),
-            '_exception_file' => $exception->getFile(),
-            '_exception_line' => $exception->getLine(),
-            '_exception_trace' => $exception->getTraceAsString(),
-        ];
-
-        if ($exception->getPrevious()) {
-            $context['_previous_exception'] = get_class($exception->getPrevious()) . ': ' . $exception->getPrevious()->getMessage();
-        }
-
-        // 兼容日志占位符替换：异常助手保留 underscore 上下文，同时提供可插值的 plain key
-        $context['exception_class'] = $context['_exception_class'];
-        $context['exception_message'] = $context['_exception_message'];
-        $context['exception_code'] = $context['_exception_code'];
-        $context['exception_file'] = $context['_exception_file'];
-        $context['exception_line'] = $context['_exception_line'];
-
         $logMessage = $message ?? 'Exception occurred: {exception_class} in {exception_file}:{exception_line}';
-        
-        w_log('error', $logMessage, $context, $channel ?? 'exception');
+
+        w_log('error', $logMessage, w_log_exception_build_context($exception), $channel ?? 'exception');
     }
 }
 

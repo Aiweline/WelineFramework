@@ -17,13 +17,7 @@ use Weline\Framework\Session\SessionFactory;
 $cartCount = 0;
 
 try {
-    $session = SessionFactory::getInstance()->createFrontendSession();
-    $customerId = (int)($session->getUserId() ?? 0);
-    
-    if ($customerId > 0) {
-        $cartService = ObjectManager::getInstance(CartService::class);
-        $cartCount = $cartService->getCartItemCount($customerId);
-    }
+    $customerId = 0;
 } catch (\Exception $e) {
     // 忽略错误，使用默认值
 }

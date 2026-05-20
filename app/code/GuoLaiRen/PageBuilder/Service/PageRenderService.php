@@ -1596,15 +1596,26 @@ class PageRenderService
             $path = $this->publicPagePath($page, $query);
         }
         $segments = \array_values(\array_filter(\explode('/', \trim($path, '/')), static fn(string $segment): bool => $segment !== ''));
+        $currencySegment = '';
+        if ($segments !== [] && $this->isCurrencyPathSegment((string)$segments[0])) {
+            $currencySegment = (string)\array_shift($segments);
+        }
+        $hadLocaleSegment = false;
         while ($segments !== [] && $this->isLocalePathSegment((string)$segments[0])) {
             \array_shift($segments);
+            $hadLocaleSegment = true;
         }
 
         $currentLocale = $this->normalizeLocaleCode($currentLocale);
         $defaultLocale = $this->normalizeLocaleCode($defaultLocale) ?: 'zh_Hans_CN';
-        if ($currentLocale !== '' && $currentLocale !== $defaultLocale && $currentLocale !== 'zh_Hans_CN') {
-            \array_unshift($segments, $currentLocale);
+        $prefixSegments = [];
+        if ($currencySegment !== '') {
+            $prefixSegments[] = $currencySegment;
         }
+        if ($currentLocale !== '' && ($hadLocaleSegment || ($currentLocale !== $defaultLocale && $currentLocale !== 'zh_Hans_CN'))) {
+            $prefixSegments[] = $currentLocale;
+        }
+        $segments = \array_merge($prefixSegments, $segments);
 
         if ($query !== []) {
             unset(
@@ -1616,6 +1627,7 @@ class PageRenderService
                 $query['preview'],
                 $query['style_code']
             );
+            $query = $this->removeIgnorableCanonicalQueryParams($query);
         }
 
         $scheme = (string)($parts['scheme'] ?? 'https');
@@ -1654,9 +1666,34 @@ class PageRenderService
         return $segment !== '' && (bool)\preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(?:_[A-Z]{2})?$/', $segment);
     }
 
+    private function isCurrencyPathSegment(string $segment): bool
+    {
+        return (bool)\preg_match('/^[A-Z]{3}$/', \trim($segment));
+    }
+
     private function normalizeLocaleCode(string $locale): string
     {
         return \str_replace('-', '_', \trim($locale));
+    }
+
+    /**
+     * @param array<string,mixed> $query
+     * @return array<string,mixed>
+     */
+    private function removeIgnorableCanonicalQueryParams(array $query): array
+    {
+        foreach (\array_keys($query) as $key) {
+            $normalized = \strtolower(\trim((string)$key));
+            if ($normalized === '_'
+                || \in_array($normalized, ['ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'], true)
+                || \str_starts_with($normalized, 'utm_')
+                || \str_starts_with($normalized, 'mtm_')
+                || \str_starts_with($normalized, 'pk_')) {
+                unset($query[$key]);
+            }
+        }
+
+        return $query;
     }
 
     /**

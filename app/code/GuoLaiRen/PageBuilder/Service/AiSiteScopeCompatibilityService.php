@@ -38,6 +38,19 @@ class AiSiteScopeCompatibilityService
         $normalized[self::SELECTED_SKILL_CODES_KEY] = $this->normalizeSelectedSkillCodes(
             $scope[self::SELECTED_SKILL_CODES_KEY] ?? []
         );
+        $normalized['design_direction_mode'] = $this->normalizeDesignDirectionMode(
+            (string)($scope['design_direction_mode'] ?? 'auto')
+        );
+        $normalized['design_direction_code'] = $this->normalizeDesignDirectionCode(
+            (string)($scope['design_direction_code'] ?? '')
+        );
+        $normalized['design_direction_custom_id'] = \max(0, (int)($scope['design_direction_custom_id'] ?? 0));
+        $normalized['design_direction'] = \is_array($scope['design_direction'] ?? null) ? $scope['design_direction'] : [];
+        $normalized['design_direction_snapshot'] = \is_array($scope['design_direction_snapshot'] ?? null) ? $scope['design_direction_snapshot'] : [];
+        $normalized['design_direction_version'] = \max(0, (int)($scope['design_direction_version'] ?? 0));
+        $normalized['design_direction_hash'] = \trim((string)($scope['design_direction_hash'] ?? ''));
+        $normalized['design_direction_match_reason'] = \trim((string)($scope['design_direction_match_reason'] ?? ''));
+        $normalized['design_direction_locked'] = $this->normalizeTruthyFlag($scope['design_direction_locked'] ?? 0) ? 1 : 0;
         $normalized['page_types'] = $this->resolveScopedPageTypes($scope);
         $normalized['page_type_layouts'] = $this->normalizePageTypeLayouts(
             $scope['page_type_layouts'] ?? [],
@@ -351,6 +364,11 @@ class AiSiteScopeCompatibilityService
 
     public function normalizePageTypesUserCustomized(mixed $raw): bool
     {
+        return $this->normalizeTruthyFlag($raw);
+    }
+
+    private function normalizeTruthyFlag(mixed $raw): bool
+    {
         if (\is_bool($raw)) {
             return $raw;
         }
@@ -364,6 +382,21 @@ class AiSiteScopeCompatibilityService
         }
 
         return false;
+    }
+
+    private function normalizeDesignDirectionMode(string $mode): string
+    {
+        $mode = \strtolower(\trim($mode));
+        return \in_array($mode, ['auto', 'manual', 'none'], true) ? $mode : 'auto';
+    }
+
+    private function normalizeDesignDirectionCode(string $code): string
+    {
+        $code = \strtolower(\trim($code));
+        $code = (string)\preg_replace('/[^a-z0-9_-]+/', '-', $code);
+        $code = \trim($code, '-_');
+
+        return \strlen($code) > 96 ? \substr($code, 0, 96) : $code;
     }
 
     /**

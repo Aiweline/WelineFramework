@@ -613,7 +613,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         }
 
         self::assertSame(['default'], $manager->deleted);
-        self::assertSame(['show', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
+        self::assertSame(['show', 'kill', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
     }
 
     public function testDirectForceStopCandidateKillDoesNotRunPrefixBatchTwice(): void

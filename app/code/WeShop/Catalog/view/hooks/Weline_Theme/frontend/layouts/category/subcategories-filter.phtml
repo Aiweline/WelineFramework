@@ -16,6 +16,9 @@
 
 /** @var \Weline\Framework\View\Template $this */
 
+/** @var \WeShop\Catalog\Service\CategoryService $categoryUrlService */
+$categoryUrlService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Catalog\Service\CategoryService::class);
+
 
 // 优先从模板数据中获取分类信息
 $category = $this->getData('category') ?? null;
@@ -84,9 +87,17 @@ if (!empty($breadcrumbs)) {
     // 取最后一个 breadcrumb（直接父分类）
     $parentCategory = end($breadcrumbs);
     if (is_array($parentCategory) && !empty($parentCategory['path'])) {
-        // 构建父分类 URL
-        $parentPath = $parentCategory['path'];
-        $parentUrl = $this->getUrl('catalog/category/' . $parentPath);
+        $parentPath = trim((string)($parentCategory['path'] ?? ''), '/');
+        $parentHandle = trim((string)($parentCategory['handle'] ?? ''), '/');
+        if ($parentHandle !== '') {
+            $parentParentPath = '';
+            if ($parentPath !== '' && str_ends_with($parentPath, $parentHandle)) {
+                $parentParentPath = trim(substr($parentPath, 0, -strlen($parentHandle)), '/');
+            }
+            $parentUrl = $this->getUrl($categoryUrlService->buildCategoryPublicPath([
+                'handle' => $parentHandle,
+            ], $parentParentPath));
+        }
     }
 } elseif (false && !empty($category['parent_id']) && (int)$category['parent_id'] > 0) {
     // 如果没有 breadcrumbs，但有 parent_id，尝试查询父分类
@@ -102,7 +113,9 @@ if (!empty($breadcrumbs)) {
                     'name' => $parentCat->getData(\WeShop\Catalog\Model\Category::fields_NAME) ?? '',
                     'handle' => $parentHandle,
                 ];
-                $parentUrl = $this->getUrl('catalog/category/' . rawurlencode($parentHandle));
+                $parentUrl = $this->getUrl($categoryUrlService->buildCategoryPublicPath([
+                    'handle' => $parentHandle,
+                ]));
             }
         }
     } catch (\Exception $e) {
@@ -148,7 +161,7 @@ if (empty($childCategories) && empty($parentCategory)) {
                     <?php
                     // 递归渲染子分类的函数
                     $template = $this; // 保存模板实例引用
-                    $renderCategoryItem = function($cat, $level = 0, $parentPath = '') use (&$renderCategoryItem, $category, $template) {
+                    $renderCategoryItem = function($cat, $level = 0, $parentPath = '') use (&$renderCategoryItem, $category, $template, $categoryUrlService) {
                         $catHandle = trim((string)($cat['handle'] ?? ''), '/');
                         if ($catHandle === '') {
                             return '';
@@ -165,7 +178,7 @@ if (empty($childCategories) && empty($parentCategory)) {
                         
                         // 构建完整的层级路径
                         $catPath = $currentPath !== '' ? $currentPath . '/' . rawurlencode($catHandle) : rawurlencode($catHandle);
-                        $catUrl = $template->getUrl('catalog/category/' . $catPath);
+                        $catUrl = $template->getUrl($categoryUrlService->buildCategoryPublicPath($cat, $currentPath));
                         $catName = htmlspecialchars($cat['name'] ?? '');
                         
                         // 获取分类图标（优先从已加载的数据中获取，如果没有则从 EAV 属性获取）

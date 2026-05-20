@@ -11,8 +11,13 @@ final class FrontendWorkerSessionService
     private const SESSION_TTL = 600;
     private const NONCE_TTL = 180;
     private const STREAM_TICKET_TTL = 60;
+    private const CLEANUP_INTERVAL_SECONDS = 15;
+    private const STORE_FORCE_CLEANUP_BYTES = 131072;
+    private const MAX_ACTIVE_SESSIONS = 256;
+    private const MAX_NONCES_PER_SCOPE = 128;
     private const STORE_FILE = BP . 'var' . DS . 'cache' . DS . 'frontend_worker_store.json';
     private const LOCK_FILE = BP . 'var' . DS . 'cache' . DS . 'frontend_worker_store.lock';
+    private const META_KEY = '_meta';
 
     /**
      * @return array{worker_session_token:string, signing_secret:string, expires_at:int, deploy_version:string, worker_build_id:string}
@@ -26,6 +31,7 @@ final class FrontendWorkerSessionService
         return $this->withStore(function (array &$store) use ($deployVersion, $workerBuildId, $now, $token, $secret): array {
             $sessions = $this->getStoreArray($store, self::SESSION_KEY);
             $this->cleanupSessions($sessions, $now);
+            $this->trimSessions($sessions);
 
             $sessions[$this->hash($token)] = [
                 'secret' => $secret,
@@ -62,21 +68,7 @@ final class FrontendWorkerSessionService
             $this->cleanupSessions($sessions, $now);
             $store[self::SESSION_KEY] = $sessions;
 
-            $session = $sessions[$this->hash($token)] ?? null;
-            if (!\is_array($session)) {
-                throw new FrontendQueryException('auth_error', 'Invalid worker session token.', 401);
-            }
-            if ((int)($session['expires_at'] ?? 0) < $now) {
-                throw new FrontendQueryException('auth_error', 'Expired worker session token.', 401);
-            }
-            if ((string)($session['deploy_version'] ?? '') !== $deployVersion) {
-                throw new FrontendQueryException('auth_error', 'Worker session deployment mismatch.', 401);
-            }
-            if ((string)($session['worker_build_id'] ?? '') !== $workerBuildId) {
-                throw new FrontendQueryException('auth_error', 'Worker build mismatch.', 401);
-            }
-
-            return $session;
+            return $this->assertSession($sessions[$this->hash($token)] ?? null, $deployVersion, $workerBuildId, $now);
         });
     }
 
@@ -92,11 +84,7 @@ final class FrontendWorkerSessionService
             $allNonces = $this->getStoreArray($store, self::NONCE_KEY);
             $nonces = \is_array($allNonces[$scope] ?? null) ? $allNonces[$scope] : [];
 
-            foreach ($nonces as $storedNonce => $expiresAt) {
-                if ((int)$expiresAt < $now) {
-                    unset($nonces[$storedNonce]);
-                }
-            }
+            $this->cleanupNonceScope($nonces, $now);
 
             if (isset($nonces[$nonce])) {
                 $allNonces[$scope] = $nonces;
@@ -105,8 +93,63 @@ final class FrontendWorkerSessionService
             }
 
             $nonces[$nonce] = $now + self::NONCE_TTL;
+            $this->trimNonceScope($nonces);
             $allNonces[$scope] = $nonces;
             $store[self::NONCE_KEY] = $allNonces;
+        });
+    }
+
+    public function cleanupExpired(): void
+    {
+        $now = \time();
+        $this->withStore(function (array &$store) use ($now): void {
+            $this->cleanupStoreIfNeeded($store, $now);
+        });
+    }
+
+    /**
+     * Validate the worker session and consume the nonce under a single store lock.
+     *
+     * @return array{secret:string, deploy_version:string, worker_build_id:string, created_at:int, expires_at:int}
+     */
+    public function validateSessionAndConsumeNonce(
+        string $token,
+        string $deployVersion,
+        string $workerBuildId,
+        string $nonce
+    ): array {
+        if ($token === '') {
+            throw new FrontendQueryException('auth_error', 'Missing worker session token.', 401);
+        }
+        if ($nonce === '' || \strlen($nonce) > 128) {
+            throw new FrontendQueryException('auth_error', 'Invalid worker nonce.', 401);
+        }
+
+        $now = \time();
+        $scope = $this->hash($token);
+
+        return $this->withStore(function (array &$store) use ($scope, $deployVersion, $workerBuildId, $nonce, $now): array {
+            $this->cleanupStoreIfNeeded($store, $now);
+
+            $sessions = $this->getStoreArray($store, self::SESSION_KEY);
+            $session = $this->assertSession($sessions[$scope] ?? null, $deployVersion, $workerBuildId, $now);
+
+            $allNonces = $this->getStoreArray($store, self::NONCE_KEY);
+            $nonces = \is_array($allNonces[$scope] ?? null) ? $allNonces[$scope] : [];
+            $this->cleanupNonceScope($nonces, $now);
+
+            if (isset($nonces[$nonce])) {
+                $allNonces[$scope] = $nonces;
+                $store[self::NONCE_KEY] = $allNonces;
+                throw new FrontendQueryException('auth_error', 'Worker nonce has already been used.', 401);
+            }
+
+            $nonces[$nonce] = $now + self::NONCE_TTL;
+            $this->trimNonceScope($nonces);
+            $allNonces[$scope] = $nonces;
+            $store[self::NONCE_KEY] = $allNonces;
+
+            return $session;
         });
     }
 
@@ -197,6 +240,113 @@ final class FrontendWorkerSessionService
             if (!\is_array($session) || (int)($session['expires_at'] ?? 0) < $now) {
                 unset($sessions[$key]);
             }
+        }
+    }
+
+    /**
+     * @return array{secret:string, deploy_version:string, worker_build_id:string, created_at:int, expires_at:int}
+     */
+    private function assertSession(mixed $session, string $deployVersion, string $workerBuildId, int $now): array
+    {
+        if (!\is_array($session)) {
+            throw new FrontendQueryException('auth_error', 'Invalid worker session token.', 401);
+        }
+        if ((int)($session['expires_at'] ?? 0) < $now) {
+            throw new FrontendQueryException('auth_error', 'Expired worker session token.', 401);
+        }
+        if ((string)($session['deploy_version'] ?? '') !== $deployVersion) {
+            throw new FrontendQueryException('auth_error', 'Worker session deployment mismatch.', 401);
+        }
+        if ((string)($session['worker_build_id'] ?? '') !== $workerBuildId) {
+            throw new FrontendQueryException('auth_error', 'Worker build mismatch.', 401);
+        }
+
+        return [
+            'secret' => (string)($session['secret'] ?? ''),
+            'deploy_version' => (string)($session['deploy_version'] ?? ''),
+            'worker_build_id' => (string)($session['worker_build_id'] ?? ''),
+            'created_at' => (int)($session['created_at'] ?? 0),
+            'expires_at' => (int)($session['expires_at'] ?? 0),
+        ];
+    }
+
+    private function cleanupStoreIfNeeded(array &$store, int $now): void
+    {
+        $meta = $this->getStoreArray($store, self::META_KEY);
+        $lastCleanup = (int)($meta['last_cleanup_at'] ?? 0);
+        $forceCleanup = \is_file(self::STORE_FILE) && \filesize(self::STORE_FILE) > self::STORE_FORCE_CLEANUP_BYTES;
+        if (!$forceCleanup && $lastCleanup > 0 && ($now - $lastCleanup) < self::CLEANUP_INTERVAL_SECONDS) {
+            return;
+        }
+
+        $sessions = $this->getStoreArray($store, self::SESSION_KEY);
+        $this->cleanupSessions($sessions, $now);
+        $this->trimSessions($sessions);
+        $store[self::SESSION_KEY] = $sessions;
+
+        $allNonces = $this->getStoreArray($store, self::NONCE_KEY);
+        foreach ($allNonces as $scope => $nonces) {
+            if (!isset($sessions[$scope]) || !\is_array($nonces)) {
+                unset($allNonces[$scope]);
+                continue;
+            }
+
+            $this->cleanupNonceScope($nonces, $now);
+            $this->trimNonceScope($nonces);
+            if ($nonces === []) {
+                unset($allNonces[$scope]);
+                continue;
+            }
+
+            $allNonces[$scope] = $nonces;
+        }
+        $store[self::NONCE_KEY] = $allNonces;
+
+        $meta['last_cleanup_at'] = $now;
+        $store[self::META_KEY] = $meta;
+    }
+
+    private function cleanupNonceScope(array &$nonces, int $now): void
+    {
+        foreach ($nonces as $storedNonce => $expiresAt) {
+            if ((int)$expiresAt < $now) {
+                unset($nonces[$storedNonce]);
+            }
+        }
+    }
+
+    private function trimSessions(array &$sessions): void
+    {
+        if (\count($sessions) <= self::MAX_ACTIVE_SESSIONS) {
+            return;
+        }
+
+        \uasort($sessions, static function (mixed $left, mixed $right): int {
+            return (int)($left['expires_at'] ?? 0) <=> (int)($right['expires_at'] ?? 0);
+        });
+
+        while (\count($sessions) > self::MAX_ACTIVE_SESSIONS) {
+            $oldest = \array_key_first($sessions);
+            if ($oldest === null) {
+                return;
+            }
+            unset($sessions[$oldest]);
+        }
+    }
+
+    private function trimNonceScope(array &$nonces): void
+    {
+        if (\count($nonces) <= self::MAX_NONCES_PER_SCOPE) {
+            return;
+        }
+
+        \asort($nonces, SORT_NUMERIC);
+        while (\count($nonces) > self::MAX_NONCES_PER_SCOPE) {
+            $oldest = \array_key_first($nonces);
+            if ($oldest === null) {
+                return;
+            }
+            unset($nonces[$oldest]);
         }
     }
 

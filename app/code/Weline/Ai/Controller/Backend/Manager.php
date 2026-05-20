@@ -26,6 +26,7 @@ class Manager extends BackendController
         $map = [
             'model' => 'ai/backend/model',
             'adapter' => 'ai/backend/adapter',
+            'skill' => 'ai/backend/skill',
             'account' => 'ai/backend/provider',
         ];
         $path = $map[$tab] ?? $map['model'];

@@ -569,6 +569,10 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
         }
     }
 
+    function submitNative(form) {
+        HTMLFormElement.prototype.submit.call(form);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         var form = document.querySelector('form[action="/customer/account/register"]');
         var passwordEl = document.getElementById('password');
@@ -675,6 +679,11 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                     showRegisterError(clientError, (data && data.message) || '<lang>娉ㄥ唽澶辫触锛岃绋嶅悗閲嶈瘯</lang>', null);
                 })
                 .catch(function(error) {
+                    if (error && error.message === 'Weline.Api is unavailable.') {
+                        submitNative(form);
+                        return;
+                    }
+
                     setRegisterLoading(form, false);
                     if (!error || !error.message) {
                         error = new Error('Registration request failed, please try again later.');

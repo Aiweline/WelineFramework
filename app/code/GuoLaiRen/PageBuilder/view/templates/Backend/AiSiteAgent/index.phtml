@@ -21,6 +21,10 @@
 $recent_sessions = $this->getData('recent_sessions') ?? [];
 $createUrl = $this->getBackendUrl('*/backend/ai-site-agent/post-create-session');
 $deleteSessionUrl = $this->getBackendUrl('*/backend/ai-site-agent/post-delete-workspace');
+$designDirectionOptions = $this->getData('design_direction_options') ?? [];
+$designDirectionOptions = \is_array($designDirectionOptions) ? $designDirectionOptions : [];
+$designDirectionMatchUrl = (string)($this->getData('design_direction_match_url') ?? '');
+$designDirectionManageUrl = (string)($this->getData('design_direction_manage_url') ?? '');
 $workbenchHomeUrl = (string)($this->getData('workbench_home_url') ?? '');
 $showAllSessions = (bool)($this->getData('show_all_sessions') ?? false);
 $showAllToggleUrl = $showAllSessions
@@ -97,6 +101,46 @@ $showAllToggleUrl = $showAllSessions
             </div>
             <div class="card-body">
                 <p class="text-muted small mb-3"><lang>创建后会直接进入工作台，可继续完善站点信息、构建、审核和发布流程。</lang></p>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="pb-ai-create-site-title"><lang>网站标题</lang></label>
+                        <input type="text" class="form-control" id="pb-ai-create-site-title" placeholder="BharatPlay">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="pb-ai-create-direction-mode"><lang>设计方向模式</lang></label>
+                        <select class="form-select" id="pb-ai-create-direction-mode">
+                            <option value="auto" selected><lang>自动推荐</lang></option>
+                            <option value="manual"><lang>手动选择</lang></option>
+                            <option value="none"><lang>通用方向</lang></option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="pb-ai-create-brief"><lang>一句话描述</lang></label>
+                        <textarea class="form-control" id="pb-ai-create-brief" rows="3" placeholder="例如：印度棋牌官网，下载印度棋牌 app，暗色游戏发行页"></textarea>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label" for="pb-ai-create-design-direction"><lang>设计方向</lang></label>
+                        <select class="form-select" id="pb-ai-create-design-direction">
+                            <option value=""><lang>通用设计方向</lang></option>
+                            <?php foreach ($designDirectionOptions as $direction): ?>
+                                <?php if (!\is_array($direction) || (string)($direction['status'] ?? 'active') !== 'active') { continue; } ?>
+                                <option value="<?= htmlspecialchars((string)($direction['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= htmlspecialchars((string)($direction['name'] ?? $direction['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <?php if ($designDirectionManageUrl !== ''): ?>
+                            <a class="btn btn-outline-secondary w-100" href="<?= htmlspecialchars($designDirectionManageUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                                <i class="mdi mdi-compass-outline me-1"></i><lang>方向管理</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-12">
+                        <div class="small text-muted" id="pb-ai-create-direction-reason"><lang>填写标题和描述后自动推荐方向；也可以手动选择。</lang></div>
+                    </div>
+                </div>
                 <button type="button" class="btn btn-primary" id="pb-ai-site-create">
                     <i class="mdi mdi-creation me-1"></i>
                     <lang>创建会话</lang>
@@ -308,6 +352,12 @@ $showAllToggleUrl = $showAllSessions
 (function () {
     var createBtn = document.getElementById('pb-ai-site-create');
     var msgBox = document.getElementById('pb-ai-site-msg');
+    var createTitleEl = document.getElementById('pb-ai-create-site-title');
+    var createBriefEl = document.getElementById('pb-ai-create-brief');
+    var directionModeEl = document.getElementById('pb-ai-create-direction-mode');
+    var directionSelectEl = document.getElementById('pb-ai-create-design-direction');
+    var directionReasonEl = document.getElementById('pb-ai-create-direction-reason');
+    var directionMatchUrl = <?= json_encode($designDirectionMatchUrl, JSON_THROW_ON_ERROR) ?>;
     var selectAllBtn = document.getElementById('pb-ai-session-select-all');
     var checkAllEl = document.getElementById('pb-ai-session-check-all');
     var batchDeleteBtn = document.getElementById('pb-ai-session-batch-delete');
@@ -387,6 +437,85 @@ $showAllToggleUrl = $showAllSessions
         }).then(function (response) { return response.json(); });
     }
 
+    function setDirectionReason(text) {
+        if (directionReasonEl) {
+            directionReasonEl.textContent = String(text || '');
+        }
+    }
+
+    function collectCreatePayload() {
+        var mode = directionModeEl ? String(directionModeEl.value || 'auto') : 'auto';
+        var code = directionSelectEl ? String(directionSelectEl.value || '') : '';
+        return {
+            site_title: createTitleEl ? String(createTitleEl.value || '').trim() : '',
+            brief_description: createBriefEl ? String(createBriefEl.value || '').trim() : '',
+            design_direction_mode: mode,
+            design_direction_code: mode === 'manual' ? code : ''
+        };
+    }
+
+    var directionMatchTimer = 0;
+    function scheduleDirectionMatch() {
+        if (!directionMatchUrl || !directionModeEl || directionModeEl.value !== 'auto') {
+            return;
+        }
+        window.clearTimeout(directionMatchTimer);
+        directionMatchTimer = window.setTimeout(function () {
+            var payload = collectCreatePayload();
+            var body = 'site_title=' + encodeURIComponent(payload.site_title)
+                + '&brief_description=' + encodeURIComponent(payload.brief_description);
+            fetch(directionMatchUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: body
+            }).then(function (response) {
+                return response.json();
+            }).then(function (data) {
+                if (!data || !data.success) {
+                    return;
+                }
+                if (data.matched && data.item && directionSelectEl) {
+                    directionSelectEl.value = String(data.item.code || '');
+                } else if (directionSelectEl) {
+                    directionSelectEl.value = '';
+                }
+                setDirectionReason(data.reason || '');
+            }).catch(function () {});
+        }, 350);
+    }
+
+    [createTitleEl, createBriefEl].forEach(function (el) {
+        if (el) {
+            el.addEventListener('input', scheduleDirectionMatch);
+        }
+    });
+    if (directionModeEl) {
+        directionModeEl.addEventListener('change', function () {
+            if (directionModeEl.value === 'none' && directionSelectEl) {
+                directionSelectEl.value = '';
+                setDirectionReason(<?= json_encode(__('使用通用设计方向，不套用垂直行业模板。'), JSON_THROW_ON_ERROR) ?>);
+                return;
+            }
+            if (directionModeEl.value === 'manual') {
+                setDirectionReason(<?= json_encode(__('手动选择会覆盖自动推荐。'), JSON_THROW_ON_ERROR) ?>);
+                return;
+            }
+            scheduleDirectionMatch();
+        });
+    }
+    if (directionSelectEl) {
+        directionSelectEl.addEventListener('change', function () {
+            if (directionModeEl && String(directionSelectEl.value || '') !== '' && directionModeEl.value === 'auto') {
+                directionModeEl.value = 'manual';
+                setDirectionReason(<?= json_encode(__('已切换为手动选择方向。'), JSON_THROW_ON_ERROR) ?>);
+            }
+        });
+    }
+
     if (createBtn) {
         createBtn.addEventListener('click', function () {
             if (msgBox) {
@@ -394,10 +523,18 @@ $showAllToggleUrl = $showAllSessions
                 msgBox.textContent = '';
             }
             createBtn.disabled = true;
+            var payload = collectCreatePayload();
+            var createBody = Object.keys(payload).map(function (key) {
+                return encodeURIComponent(key) + '=' + encodeURIComponent(payload[key]);
+            }).join('&');
             fetch(<?= json_encode($createUrl, JSON_THROW_ON_ERROR) ?>, {
                 method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                credentials: 'same-origin'
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: createBody
             }).then(function (r) { return r.json(); }).then(function (data) {
                 if (data && data.success && data.workspace_url) {
                     window.location.href = data.workspace_url;

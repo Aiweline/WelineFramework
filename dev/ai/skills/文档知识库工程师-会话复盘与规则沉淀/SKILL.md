@@ -109,6 +109,11 @@ Use one of these shapes when rewriting lessons:
 - When the user asks for a broad capability such as "complete e-commerce" in this repo, inspect the existing module matrix, theme pages, and acceptance docs first; default to closing the highest-leverage missing chain instead of proposing a greenfield rebuild.
 - If the repo already contains the major storefront/account/checkout modules, narrow the work to the real visible breakage and keep moving through the next blocker rather than restating the entire platform scope.
 
+## Repo work traceability
+
+- For repository work, do not rely on chat history alone. Initialize or reopen the matching `dev/ai/codex/tasks/...` workspace before substantial analysis or edits, keep `progress.md` current during execution, and leave `result.md` with the resume point.
+- Only treat transient non-repo Q&A or one-shot system lookups as exceptions; code, docs, debugging, verification, and rule changes all require persistent task records.
+
 ## Hook-shell contract
 
 - When the user says a personal-center feature should behave like addresses or other in-page sections, keep the account page as the host shell and inject feature UI through `account.sidebar` plus `account.sidebar.content` instead of linking out to standalone module pages.
@@ -126,6 +131,11 @@ Use one of these shapes when rewriting lessons:
 ## Stale reference before template rewrite
 
 - For cart or list rows that lose image, name, or SKU, verify first whether the row points at a stale or deleted product record before rewriting templates. A durable fix may require snapshot fields or rebinding logic in the service layer, not another placeholder branch in the view.
+
+## Quality gate before one-off output patching
+
+- When generated PageBuilder output looks weak in Browser, fix the shared generation contract, recovery prompt, selector coverage, or completion gate first; do not hardcode one bad page or one bad block into a special-case output patch.
+- If the real build flow is scheduler- or queue-owned, validate fixes by re-running that owned flow and Browser-checking the generated pages instead of shortcutting with a manual queue execution path and claiming whole-flow completion.
 
 # Output Format
 

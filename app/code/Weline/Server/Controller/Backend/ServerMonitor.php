@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Weline\Server\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\App\Env;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Security\AttackDetector;
 use Weline\Server\Model\AttackLog;
@@ -21,6 +20,7 @@ use Weline\Server\Model\ServerStatusLog;
 use Weline\Server\Service\Benchmark\ServerBenchmarkService;
 use Weline\Server\Service\Control\BackendStatusService;
 use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Service\HealthAllowCookieService;
 use Weline\Server\Service\Telemetry\MetricsFlushScheduler;
 use Weline\Server\Service\OptimizationGuideService;
 
@@ -49,6 +49,7 @@ class ServerMonitor extends BackendController
     private IpcControlGateway $ipcGateway;
     private ServerBenchmarkService $benchmarkService;
     private MetricsFlushScheduler $metricsFlushScheduler;
+    private HealthAllowCookieService $healthAllowCookieService;
     
     /**
      * 构造函数
@@ -60,7 +61,8 @@ class ServerMonitor extends BackendController
         BackendStatusService $backendStatusService,
         IpcControlGateway $ipcGateway,
         ServerBenchmarkService $benchmarkService,
-        MetricsFlushScheduler $metricsFlushScheduler
+        MetricsFlushScheduler $metricsFlushScheduler,
+        HealthAllowCookieService $healthAllowCookieService
     ) {
         $this->statusLog = $statusLog;
         $this->attackLog = $attackLog;
@@ -69,6 +71,7 @@ class ServerMonitor extends BackendController
         $this->ipcGateway = $ipcGateway;
         $this->benchmarkService = $benchmarkService;
         $this->metricsFlushScheduler = $metricsFlushScheduler;
+        $this->healthAllowCookieService = $healthAllowCookieService;
     }
     
     /**
@@ -77,38 +80,7 @@ class ServerMonitor extends BackendController
      */
     public function getSetHealthAllowCookie(): array
     {
-        if (!$this->session->isLoggedIn()) {
-            return ['success' => false, 'message' => __('请先登录后台')];
-        }
-        $deploy = (string) (Env::getInstance()->getConfig('deploy') ?? 'prod');
-        if ($deploy !== 'dev' && $deploy !== 'development') {
-            return ['success' => false, 'message' => __('仅开发模式可用，当前部署模式：%{1}', [$deploy])];
-        }
-        $secret = Env::getInstance()->getConfig('wls.health_cookie_secret');
-        if ($secret === null || $secret === '') {
-            return [
-                'success' => false,
-                'message' => __('请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）'),
-            ];
-        }
-        $slot = (string) \floor(\time() / 3600);
-        $token = \hash_hmac('sha256', 'wls_health_' . $slot, (string) $secret);
-        $expire = \time() + 7200;
-        $secure = $this->request->isSecure();
-        $this->request->getResponse()->setCookie(
-            'wls_health_allow',
-            $token,
-            $expire,
-            '/',
-            '',
-            $secure,
-            true,
-            'Lax'
-        );
-        return [
-            'success' => true,
-            'message' => __('已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效'),
-        ];
+        return $this->healthAllowCookieService->issue();
     }
 
     /**

@@ -22,7 +22,7 @@ class FrontendController extends PcController
 
     public function __init()
     {
-        if (!isset($this->session)) {
+        if (!isset($this->session) || \Weline\Framework\Runtime\Runtime::isPersistent()) {
             $this->session = SessionFactory::getInstance()->createFrontendSession();
         }
         

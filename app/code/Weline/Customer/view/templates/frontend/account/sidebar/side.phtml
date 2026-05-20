@@ -1,16 +1,31 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Customer\Model\Customer $user */
-$avatar = $user->getAvatar();
-$username = $user->getUsername();
-$email = $user->getEmail();
-$avatarInitial = strtoupper(mb_substr($username, 0, 1));
+$user = $user ?? $this->getData('user');
+if (!$user instanceof \Weline\Customer\Model\Customer) {
+    try {
+        $sessionUser = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession()->getUser();
+        if ($sessionUser instanceof \Weline\Customer\Model\Customer) {
+            $user = $sessionUser;
+        }
+    } catch (\Throwable) {
+    }
+}
+$avatar = is_object($user) && method_exists($user, 'getAvatar') ? (string)($user->getAvatar() ?? '') : '';
+$username = is_object($user) && method_exists($user, 'getUsername') ? (string)($user->getUsername() ?? '') : '';
+$email = is_object($user) && method_exists($user, 'getEmail') ? (string)($user->getEmail() ?? '') : '';
+if ($username === '' && $email !== '') {
+    $username = $email;
+}
+$avatarInitial = $username !== '' ? strtoupper(mb_substr($username, 0, 1)) : '?';
 $accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
 if (!is_string($accountIndexPath) || $accountIndexPath === '') {
     $accountIndexPath = '/customer/account/index';
 }
 $accountIndexPath = rtrim($accountIndexPath, '/');
+$accountSidebarAssetVersion = '20260520-wls-account-assets-1';
 ?>
+<link rel="stylesheet" href="@static(Weline_Customer::css/account-sidebar.css)?v=<?= $accountSidebarAssetVersion ?>">
 <div class="account-sidebar-wrapper">
     <header class="account-sidebar__header">
         <div class="account-sidebar__avatar">
@@ -41,6 +56,7 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
     </nav>
 </div>
 
+<?php if (false): ?>
 <style>
 .account-sidebar-wrapper {
     --as-border-radius: var(--border-radius-lg, 0.75rem);
@@ -355,3 +371,4 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
     color: var(--color-error);
 }
 </style>
+<?php endif; ?>

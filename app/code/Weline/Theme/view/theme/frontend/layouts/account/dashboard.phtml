@@ -36,7 +36,7 @@ $this->assign('meta', $meta);
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="minimal"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
     <style>
@@ -129,7 +129,7 @@ $this->assign('meta', $meta);
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::account::header-before</w:hook>
-            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="minimal" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::account::header-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
@@ -143,13 +143,27 @@ $this->assign('meta', $meta);
                 <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
             </div>
             <main class="account-main-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-main-content" data-layout="account">
-                <if condition="meta.sidebar">
+                <?php $accountSidebarHtml = (string)($meta['sidebar'] ?? $this->getData('sidebar') ?? ''); ?>
+                <?php if (trim($accountSidebarHtml) === '' && function_exists('w_log_warning')) {
+                    try {
+                        $rootSidebar = $this->getData('sidebar');
+                        w_log_warning('[AccountSidebar] dashboard layout sidebar empty at template render', [
+                            'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
+                            'meta_sidebar_len' => is_string($meta['sidebar'] ?? null) ? strlen(trim($meta['sidebar'])) : 0,
+                            'root_sidebar_len' => is_string($rootSidebar) ? strlen(trim($rootSidebar)) : 0,
+                            'meta_keys' => array_keys(is_array($meta) ? $meta : []),
+                            'template_id' => spl_object_id($this),
+                        ], 'account_sidebar');
+                    } catch (\Throwable) {
+                    }
+                } ?>
+                <?php if (trim($accountSidebarHtml) !== ''): ?>
                     <w:hook>Weline_Theme::frontend::layouts::account::sidebar-before</w:hook>
                     <aside class="account-sidebar <?= !empty($meta['sidebarCollapsed']) ? 'collapsed' : '' ?>">
-                        {{meta.sidebar}}
+                        <?= $accountSidebarHtml ?>
                     </aside>
                     <w:hook>Weline_Theme::frontend::layouts::account::sidebar-after</w:hook>
-                </if>
+                <?php endif; ?>
 
                 <div class="account-main">
                     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
@@ -174,13 +188,12 @@ $this->assign('meta', $meta);
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::account::footer-before</w:hook>
-            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="minimal" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
             <w:hook>Weline_Theme::frontend::layouts::account::footer-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
         </if>
     </div>
 
     <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>

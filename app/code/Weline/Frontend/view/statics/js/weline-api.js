@@ -42,6 +42,51 @@
 
     const isDevMode = () => !!(window.DEV || window.WELINE_ENV === 'DEV');
 
+    const summarizeApiPayload = (payload) => {
+        if (!payload || typeof payload !== 'object') {
+            return 'unknown';
+        }
+        if (payload.type === 'call') {
+            return `call ${payload.provider}.${payload.operation}`;
+        }
+        if (payload.type === 'graph') {
+            return 'graph';
+        }
+        if (payload.type === 'stream-ticket') {
+            return `stream-ticket ${payload.channel || ''}`.trim();
+        }
+        if (payload.type === 'upload') {
+            return `upload ${payload.provider}.${payload.operation}`;
+        }
+        return String(payload.type || 'request');
+    };
+
+    const cloneDevLogValue = (value) => {
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (error) {
+            return value;
+        }
+    };
+
+    const isBusinessFailure = (data) => {
+        return !!(data && typeof data === 'object' && !Array.isArray(data) && data.success === false);
+    };
+
+    const extractBusinessMessage = (data, fallback) => {
+        if (!isBusinessFailure(data)) {
+            return '';
+        }
+        const message = String(
+            data.message
+            || data.msg
+            || (data.error && data.error.message)
+            || fallback
+            || ''
+        ).trim();
+        return message || String(fallback || '请求失败');
+    };
+
     const withDevCacheBust = (url) => {
         const isDev = isDevMode() || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         if (!isDev) {
@@ -172,6 +217,7 @@
             this.worker = null;
             this.requestId = 0;
             this.pending = new Map();
+            this.devTraces = new Map();
             this.autoRequestsEnabled = false;
 
             this.handleWorkerMessage = this.handleWorkerMessage.bind(this);
@@ -230,6 +276,14 @@
                 throw new Error('[Weline.Api] upload ticket response is invalid.');
             }
 
+            const uploadTraceStartedAt = isDevMode() ? performance.now() : 0;
+            const uploadRequestPayload = {
+                type: 'upload',
+                provider,
+                operation,
+                ticketUrl: ticket.url,
+            };
+
             const headers = Object.assign({}, ticket.headers || {}, {
                 'X-Weline-Upload-Ticket': String(ticket.ticket),
                 'X-Weline-Upload-Provider': String(provider),
@@ -248,6 +302,12 @@
                 : { code: response.ok ? 200 : response.status, msg: await response.text(), data: null };
 
             const failed = !response.ok || (body && typeof body.code !== 'undefined' && Number(body.code) >= 400) || body?.success === false;
+            this.finishDevTrace(null, {
+                ok: !failed,
+                status: response.status,
+                statusText: response.statusText || '',
+                data: body,
+            }, uploadRequestPayload, uploadTraceStartedAt);
             if (failed) {
                 const error = new Error((body && (body.message || body.msg)) || response.statusText || 'Weline upload failed.');
                 error.code = body?.error?.code || 'business_error';
@@ -259,7 +319,7 @@
                     data: body,
                     maintenance: false,
                 };
-                this.reportDevError(error, { type: 'upload', provider, operation, options });
+                this.reportDevError(error, { type: 'upload', provider, operation, options, skipConsole: true });
                 this.handleHttpError(error.status, error, options && options.silent, options);
                 throw error;
             }
@@ -321,11 +381,16 @@
                     this.pending.delete(messageId);
                     const error = new Error('[Weline.Api] worker request timed out.');
                     error.code = 'worker_timeout';
-                    this.reportDevError(error, { type: 'timeout', request: pending && pending.payload });
+                    this.finishDevTrace(messageId, {
+                        ok: false,
+                        error: { code: error.code, message: error.message },
+                    });
+                    this.reportDevError(error, { type: 'timeout', request: pending && pending.payload, skipConsole: true });
                     reject(error);
                 }, timeoutMs);
                 this.pending.set(messageId, { resolve, reject, payload, timeoutId });
                 const workerPayload = sanitizePayloadForWorker(payload);
+                this.beginDevTrace(messageId, payload);
                 this.worker.postMessage(Object.assign({}, workerPayload, {
                     id: messageId,
                     config: {
@@ -372,6 +437,52 @@
 
             const wrapper = data.body || {};
             if (data.ok === true && wrapper.ok === true) {
+                const businessData = wrapper.data;
+                const businessFailed = isBusinessFailure(businessData);
+                const requestOptions = pending.payload && pending.payload.options;
+                const keepBusinessResult = !!(requestOptions && requestOptions.keepBusinessResult);
+
+                if (businessFailed && !keepBusinessResult) {
+                    const bizMessage = extractBusinessMessage(businessData, '请求失败');
+                    const error = new Error(bizMessage);
+                    error.code = (businessData.error && businessData.error.code) || businessData.code || 'business_error';
+                    error.status = data.status || 200;
+                    error.response = {
+                        ok: false,
+                        status: data.status || 200,
+                        statusText: data.statusText || '',
+                        data: wrapper,
+                        maintenance: !!data.maintenance,
+                    };
+                    this.finishDevTrace(data.id, {
+                        ok: false,
+                        status: error.status,
+                        statusText: data.statusText || '',
+                        error: { code: error.code, message: bizMessage },
+                        data: businessData,
+                        headers: data.headers || {},
+                    });
+                    this.reportDevError(error, {
+                        status: error.status,
+                        silent: !!(requestOptions && requestOptions.silent),
+                        request: pending.payload,
+                        workerMessage: data,
+                        skipConsole: true,
+                    });
+                    this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions);
+                    pending.reject(error);
+                    return;
+                }
+
+                this.finishDevTrace(data.id, {
+                    ok: !businessFailed,
+                    status: data.status || 200,
+                    statusText: data.statusText || '',
+                    data: wrapper.data,
+                    request_id: wrapper.request_id || '',
+                    headers: data.headers || {},
+                    ...(businessFailed ? { error: { message: extractBusinessMessage(businessData, '请求失败') } } : {}),
+                });
                 pending.resolve(wrapper.data);
                 return;
             }
@@ -388,11 +499,20 @@
                 maintenance: !!data.maintenance,
             };
             const requestOptions = pending.payload && pending.payload.options;
+            this.finishDevTrace(data.id, {
+                ok: false,
+                status: error.status,
+                statusText: data.statusText || '',
+                error: serverError,
+                body: wrapper,
+                headers: data.headers || {},
+            });
             this.reportDevError(error, {
                 status: error.status,
                 silent: !!(requestOptions && requestOptions.silent),
                 request: pending.payload,
                 workerMessage: data,
+                skipConsole: true,
             });
             this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions);
             pending.reject(error);
@@ -414,7 +534,17 @@
                 }
                 const error = new Error(message);
                 error.code = 'worker_error';
-                this.reportDevError(error, Object.assign({ type: 'worker_crash', requestId: id, request: pending.payload }, workerDetail));
+                this.finishDevTrace(id, {
+                    ok: false,
+                    error: { code: error.code, message: error.message },
+                    worker: workerDetail,
+                });
+                this.reportDevError(error, Object.assign({
+                    type: 'worker_crash',
+                    requestId: id,
+                    request: pending.payload,
+                    skipConsole: true,
+                }, workerDetail));
                 pending.reject(error);
             }
         }
@@ -449,7 +579,53 @@
                 return;
             }
             error._welineApiDevLogged = true;
+            if (detail && detail.skipConsole) {
+                return;
+            }
             this.logDevError('request failed', error, detail);
+        }
+
+        beginDevTrace(messageId, payload) {
+            if (!isDevMode() || !messageId) {
+                return;
+            }
+            this.devTraces.set(messageId, {
+                startedAt: performance.now(),
+                payload: payload || {},
+            });
+        }
+
+        finishDevTrace(messageId, responseMeta, requestPayloadOverride, startedAtOverride) {
+            if (!isDevMode()) {
+                return;
+            }
+
+            let trace = null;
+            if (messageId) {
+                trace = this.devTraces.get(messageId);
+                this.devTraces.delete(messageId);
+            }
+
+            const requestPayload = requestPayloadOverride || (trace && trace.payload) || {};
+            const startedAt = startedAtOverride || (trace && trace.startedAt) || performance.now();
+            const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+            const summary = summarizeApiPayload(requestPayload);
+            const ok = !!(responseMeta && responseMeta.ok === true);
+            const status = responseMeta && responseMeta.status ? ` ${responseMeta.status}` : '';
+            const label = `[Weline.Api] ${ok ? '✓' : '✗'} ${summary}${status} · ${durationMs}ms`;
+
+            const requestLog = cloneDevLogValue(sanitizePayloadForWorker(requestPayload));
+            const responseLog = cloneDevLogValue(responseMeta || {});
+
+            if (typeof console.groupCollapsed === 'function') {
+                console.groupCollapsed(label);
+                console.log('endpoint:', this.config.endpoint);
+                console.log('request:', requestLog);
+                console.log('response:', responseLog);
+                console.groupEnd();
+                return;
+            }
+            console.log(label, { endpoint: this.config.endpoint, request: requestLog, response: responseLog });
         }
 
         logDevError(context, error, detail) {

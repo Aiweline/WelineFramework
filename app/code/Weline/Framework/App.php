@@ -188,6 +188,15 @@ class App
         if (!\is_array($server)) {
             $server = [];
         }
+        $rawRequestUri = Url::decode_url($this->normalizeParsedUri(
+            $server['WELINE_ORIGIN_REQUEST_URI'] ?? $server['REQUEST_URI'] ?? $this->getCurrentRequestUri()
+        ));
+        if ($rawRequestUri === '') {
+            $rawRequestUri = '/';
+        }
+        if (!\str_starts_with($rawRequestUri, '/')) {
+            $rawRequestUri = '/' . $rawRequestUri;
+        }
 
         $area = (string)($parse['area'] ?? $parse['server']['WELINE_AREA'] ?? $server['WELINE_AREA'] ?? '');
         $isBackendArea = $area === 'backend' || $area === 'rest_backend';
@@ -245,17 +254,24 @@ class App
 
         $scheme = (string)WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http'));
         $host = (string)WelineEnv::get('server.http_host', Context::current()->get('input.host', 'localhost'));
-        WelineEnv::set('origin_request_uri', $currentUri, 'App applyParsedUrl');
-        WelineEnv::set('full_request_uri', $scheme . '://' . $host . $currentUri, 'App applyParsedUrl');
+        $fullRequestUri = $scheme . '://' . $host . $rawRequestUri;
+        Context::current()->set('input.server.WELINE_ORIGIN_REQUEST_URI', $rawRequestUri);
+        Context::current()->set('input.server.WELINE_FULL_REQUEST_URI', $fullRequestUri);
+        WelineEnv::set('origin_request_uri', $rawRequestUri, 'App applyParsedUrl');
+        WelineEnv::set('full_request_uri', $fullRequestUri, 'App applyParsedUrl');
+
+        $shouldDispatchUrlParsedAfter = (PROD || Runtime::isPersistent()) && !WelineEnv::get('is_backend', false);
+        if ($shouldDispatchUrlParsedAfter) {
+            $this->resolveEventManager()->dispatch('Weline_Framework::App::url_parsed_after');
+            if (Runtime::isPersistent() && RequestContext::get('wls.fpc.cached_response') instanceof Response) {
+                return;
+            }
+        }
 
         $this->syncCookieRouteStateFromServer();
         self::syncCurrentContextFromGlobals();
         RequestContext::syncFromContext();
         $this->invalidateCurrentRequestUriCache();
-
-        if (PROD && !WelineEnv::get('is_backend', false)) {
-            $this->resolveEventManager()->dispatch('Weline_Framework::App::url_parsed_after');
-        }
     }
 
     public function initializeRouter(): Router
@@ -268,6 +284,17 @@ class App
     public function startSessionIfNeeded(): void
     {
         if (WelineEnv::get('is_static_file', false)) {
+            return;
+        }
+
+        $requestUri = (string)WelineEnv::get('request.uri', '/');
+        $requestMethod = (string)WelineEnv::get('request.method', 'GET');
+        $protocol = (string)WelineEnv::server('HTTP_X_WELINE_PROTOCOL', '');
+        if (
+            $requestMethod === 'POST'
+            && $requestUri === '/api/framework/query-bin'
+            && $protocol === 'worker-query-bin-v1'
+        ) {
             return;
         }
 

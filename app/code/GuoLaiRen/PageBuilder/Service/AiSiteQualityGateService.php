@@ -283,7 +283,8 @@ final class AiSiteQualityGateService
         $combined = $html . "\n" . $layoutJson;
         $badMatches = \array_merge(
             $this->matchBadContent($this->stripNonVisibleQualityGateHtml($html)),
-            $this->matchMalformedGeneratedHtml($html)
+            $this->matchMalformedGeneratedHtml($html),
+            $this->matchPolicyPageBodyCtaViolations($pageType, $html)
         );
         if (\preg_match('/\bai-site-fallback\b|<svg\s+[^>]*viewBox=["\']0 0 520 360["\']|Image Placeholder|Text-to-image is not connected yet/iu', $html) === 1) {
             $badMatches[] = 'plan-derived fallback visual';
@@ -486,6 +487,95 @@ final class AiSiteQualityGateService
         $combined = \html_entity_decode($combined, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
 
         return \preg_replace('/\s+/u', ' ', $combined) ?? $combined;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function matchPolicyPageBodyCtaViolations(string $pageType, string $html): array
+    {
+        if (!$this->isPolicyPageType($pageType) || \trim($html) === '') {
+            return [];
+        }
+
+        $blocks = [];
+        if (\preg_match_all('/<section\b(?=[^>]*class\s*=\s*(["\'])(?:(?!\1).)*\bpb-c-root\b(?:(?!\1).)*\1)[^>]*>[\s\S]*?<\/section>/iu', $html, $matches) > 0) {
+            $blocks = \array_map('strval', $matches[0] ?? []);
+        }
+        if ($blocks === []) {
+            $blocks = [$html];
+        }
+
+        $violations = [];
+        foreach ($blocks as $blockHtml) {
+            foreach ($this->extractGeneratedCtaTexts($blockHtml) as $ctaText) {
+                if ($this->isPolicyUnsafeCtaLabel($ctaText)) {
+                    $violations[] = 'policy page body CTA leaked app/download action: ' . $this->clipText($ctaText, 80);
+                }
+            }
+        }
+
+        return \array_values(\array_unique($violations));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractGeneratedCtaTexts(string $html): array
+    {
+        $texts = [];
+        $matchCount = \preg_match_all(
+            '/<(?P<tag>a|button|div|span)\b(?P<attrs>(?=[^>]*(?:class\s*=\s*(["\'])(?:(?!\3).)*(?:cta|button|action)(?:(?!\3).)*\3|role\s*=\s*(["\'])button\4))[^>]*)>(?P<body>[\s\S]*?)<\/\k<tag>>/iu',
+            $html,
+            $matches,
+            \PREG_SET_ORDER
+        );
+        if ($matchCount === false || $matchCount < 1) {
+            return [];
+        }
+
+        foreach ($matches as $match) {
+            $text = \trim((string)\preg_replace('/\s+/u', ' ', \html_entity_decode(\strip_tags((string)($match['body'] ?? '')), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')));
+            if ($text !== '') {
+                $texts[] = $text;
+            }
+        }
+
+        return \array_values(\array_unique($texts));
+    }
+
+    private function isPolicyUnsafeCtaLabel(string $label): bool
+    {
+        $label = \trim((string)\preg_replace('/\s+/u', ' ', $label));
+        if ($label === '') {
+            return false;
+        }
+
+        return \preg_match(
+            '/\b(?:download|apk|app|install|play|bonus|reward|casino|rummy|ludo|teen\s*patti|claim|coins?)\b|(?:免费)?下载|立即下载|下载安装|安装|领取|奖励|奖金|筹码|棋牌|游戏|畅玩|试玩|开局|新人注册|注册即送/iu',
+            $label
+        ) === 1;
+    }
+
+    private function clipText(string $value, int $limit): string
+    {
+        $value = \trim((string)\preg_replace('/\s+/u', ' ', $value));
+        if ($value === '' || \mb_strlen($value) <= $limit) {
+            return $value;
+        }
+
+        return \mb_substr($value, 0, \max(1, $limit - 1)) . '…';
+    }
+
+    private function isPolicyPageType(string $pageType): bool
+    {
+        return \in_array($pageType, [
+            Page::TYPE_PRIVACY_POLICY,
+            Page::TYPE_TERMS_OF_SERVICE,
+            Page::TYPE_REFUND_POLICY,
+            Page::TYPE_SHIPPING_POLICY,
+            Page::TYPE_COOKIE_POLICY,
+        ], true);
     }
 
     /**
@@ -1344,41 +1434,64 @@ final class AiSiteQualityGateService
     private function collectStageOneSamples(array $scope, string $pageType): array
     {
         $samples = [];
-        $pages = \is_array($scope['execution_blueprint']['pages'] ?? null) ? $scope['execution_blueprint']['pages'] : [];
-        $pagePlans = \is_array($scope['execution_blueprint']['page_plans'] ?? null) ? $scope['execution_blueprint']['page_plans'] : [];
-        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        if ($page === [] && \is_array($pagePlans[$pageType] ?? null)) {
-            $page = $pagePlans[$pageType];
-        }
-        $blocks = $this->collectCanonicalStageOnePageBlocks($page);
-        foreach ($blocks as $block) {
-            if (!\is_array($block)) {
-                continue;
+        foreach ($this->collectStageOneBlueprintCandidates($scope) as $blueprint) {
+            $pages = \is_array($blueprint['pages'] ?? null) ? $blueprint['pages'] : [];
+            $pagePlans = \is_array($blueprint['page_plans'] ?? null) ? $blueprint['page_plans'] : [];
+            $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
+            if ($page === [] && \is_array($pagePlans[$pageType] ?? null)) {
+                $page = $pagePlans[$pageType];
             }
-            foreach (['title', 'heading', 'headline', 'label', 'summary', 'description'] as $key) {
-                if (\is_scalar($block[$key] ?? null)) {
-                    $samples[] = \trim((string)$block[$key]);
+            $blocks = $this->collectCanonicalStageOnePageBlocks($page);
+            foreach ($blocks as $block) {
+                if (!\is_array($block)) {
+                    continue;
                 }
-            }
-            foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
-                if (\is_array($field) && \is_scalar($field['sample'] ?? null)) {
-                    $samples[] = \trim((string)$field['sample']);
+                foreach (['title', 'heading', 'headline', 'label', 'summary', 'description'] as $key) {
+                    if (\is_scalar($block[$key] ?? null)) {
+                        $samples[] = \trim((string)$block[$key]);
+                    }
                 }
-            }
-            $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
-            foreach (['headline'] as $key) {
-                if (\is_scalar($realtime[$key] ?? null)) {
-                    $samples[] = \trim((string)$realtime[$key]);
+                foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
+                    if (\is_array($field) && \is_scalar($field['sample'] ?? null)) {
+                        $samples[] = \trim((string)$field['sample']);
+                    }
                 }
-            }
-            foreach (\is_array($realtime['supporting_copy'] ?? null) ? $realtime['supporting_copy'] : [] as $copy) {
-                if (\is_scalar($copy)) {
-                    $samples[] = \trim((string)$copy);
+                $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
+                foreach (['headline'] as $key) {
+                    if (\is_scalar($realtime[$key] ?? null)) {
+                        $samples[] = \trim((string)$realtime[$key]);
+                    }
+                }
+                foreach (\is_array($realtime['supporting_copy'] ?? null) ? $realtime['supporting_copy'] : [] as $copy) {
+                    if (\is_scalar($copy)) {
+                        $samples[] = \trim((string)$copy);
+                    }
                 }
             }
         }
 
         return \array_values(\array_filter(\array_unique($samples), static fn(string $value): bool => $value !== ''));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function collectStageOneBlueprintCandidates(array $scope): array
+    {
+        $candidates = [];
+        foreach (['execution_blueprint', 'execution_blueprint_draft', 'plan_structured', 'plan_json'] as $key) {
+            $candidate = \is_array($scope[$key] ?? null) ? $scope[$key] : [];
+            if ($candidate === []) {
+                continue;
+            }
+            if (!\is_array($candidate['pages'] ?? null) && !\is_array($candidate['page_plans'] ?? null)) {
+                continue;
+            }
+            $candidates[] = $candidate;
+        }
+
+        return $candidates;
     }
 
     /**
@@ -1916,11 +2029,12 @@ final class AiSiteQualityGateService
      */
     private function collectExpectedBlocksFromExecutionBlueprint(array $scope): array
     {
-        $blueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
         $sources = [];
-        foreach (['pages', 'page_plans'] as $key) {
-            if (\is_array($blueprint[$key] ?? null)) {
-                $sources[] = $blueprint[$key];
+        foreach ($this->collectStageOneBlueprintCandidates($scope) as $blueprint) {
+            foreach (['pages', 'page_plans'] as $key) {
+                if (\is_array($blueprint[$key] ?? null)) {
+                    $sources[] = $blueprint[$key];
+                }
             }
         }
         $expected = [];
@@ -2180,6 +2294,9 @@ final class AiSiteQualityGateService
         $visibleFactsById = [];
         foreach ($linter->visibleMustIncludeFacts($sourceTruth) as $fact) {
             if (\is_array($fact)) {
+                if ($this->isNonVisitorSourceTruthFact($fact)) {
+                    continue;
+                }
                 $id = \trim((string)($fact['id'] ?? ''));
                 if ($id !== '') {
                     $visibleFactIds[$id] = true;
@@ -2222,6 +2339,39 @@ final class AiSiteQualityGateService
         }
 
         return $filtered;
+    }
+
+    /**
+     * @param array<string, mixed> $fact
+     */
+    private function isNonVisitorSourceTruthFact(array $fact): bool
+    {
+        $source = \mb_strtolower(\trim((string)($fact['source'] ?? '')));
+        if (\in_array($source, ['instruction', 'runtime', 'system', 'operator', 'control'], true)) {
+            return true;
+        }
+
+        $text = \mb_strtolower(\trim((string)($fact['text'] ?? '')));
+        if ($text === '') {
+            return false;
+        }
+
+        foreach ([
+            '继续补齐中断内容',
+            '已保存的工作台信息',
+            '不要从零抛弃',
+            '阶段一上下文',
+            'resume',
+            'continue from',
+            'do not start over',
+            'workspace state',
+        ] as $marker) {
+            if (\mb_stripos($text, $marker) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function collectSourceTruthCoverageTextFromScope(array $scope): string
