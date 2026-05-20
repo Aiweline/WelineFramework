@@ -23,7 +23,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     private bool $started = false;
 
     public function __construct(
-        private readonly MasterControlServer $legacyServer,
+        private readonly MasterControlServer $controlServer,
         private readonly ControlEndpointResolver $endpointResolver,
         private readonly bool $supervisorEnabled = false,
         private readonly ?string $channelId = null,
@@ -36,30 +36,30 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     public function setWindowsNativeSocketBridgeEnabled(bool $enabled): void
     {
         $this->windowsNativeSocketBridgeEnabled = $enabled;
-        $this->legacyServer->setWindowsNativeSocketBridgeEnabled($enabled);
+        $this->controlServer->setWindowsNativeSocketBridgeEnabled($enabled);
     }
 
     public function isUsingWindowsNativeSocketBridge(): bool
     {
-        return $this->legacyServer->isUsingWindowsNativeSocketBridge();
+        return $this->controlServer->isUsingWindowsNativeSocketBridge();
     }
 
     public function start(string $host, int $port): bool
     {
-        if (!$this->legacyServer->start($host, $port)) {
+        if (!$this->controlServer->start($host, $port)) {
             return false;
         }
 
-        $this->legacyServer->setLogToConsole($this->logToConsole);
+        $this->controlServer->setLogToConsole($this->logToConsole);
         if ($this->expectedInstanceCode !== null) {
-            $this->legacyServer->setExpectedInstanceCode($this->expectedInstanceCode);
+            $this->controlServer->setExpectedInstanceCode($this->expectedInstanceCode);
         }
-        $this->legacyServer->onMessage(function (array $msg, int $clientId, MasterControlServer $server): void {
+        $this->controlServer->onMessage(function (array $msg, int $clientId, MasterControlServer $server): void {
             if ($this->messageHandler !== null) {
                 ($this->messageHandler)($msg, $clientId, $this);
             }
         });
-        $this->legacyServer->onDisconnect(function (int $clientId, array $clientInfo, MasterControlServer $server): void {
+        $this->controlServer->onDisconnect(function (int $clientId, array $clientInfo, MasterControlServer $server): void {
             if ($this->disconnectHandler !== null) {
                 ($this->disconnectHandler)($clientId, $clientInfo, $this);
             }
@@ -85,14 +85,14 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
 
     public function getPort(): int
     {
-        return $this->legacyServer->getPort();
+        return $this->controlServer->getPort();
     }
 
     public function onMessage(callable $handler): void
     {
         $this->messageHandler = $handler;
         if ($this->started) {
-            $this->legacyServer->onMessage(function (array $msg, int $clientId, MasterControlServer $server): void {
+            $this->controlServer->onMessage(function (array $msg, int $clientId, MasterControlServer $server): void {
                 if ($this->messageHandler !== null) {
                     ($this->messageHandler)($msg, $clientId, $this);
                 }
@@ -104,7 +104,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     {
         $this->disconnectHandler = $handler;
         if ($this->started) {
-            $this->legacyServer->onDisconnect(function (int $clientId, array $clientInfo, MasterControlServer $server): void {
+            $this->controlServer->onDisconnect(function (int $clientId, array $clientInfo, MasterControlServer $server): void {
                 if ($this->disconnectHandler !== null) {
                     ($this->disconnectHandler)($clientId, $clientInfo, $this);
                 }
@@ -115,18 +115,18 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     public function setLogToConsole(bool $enable): void
     {
         $this->logToConsole = $enable;
-        $this->legacyServer->setLogToConsole($enable);
+        $this->controlServer->setLogToConsole($enable);
     }
 
     public function setExpectedInstanceCode(string $instanceCode): void
     {
         $this->expectedInstanceCode = $instanceCode;
-        $this->legacyServer->setExpectedInstanceCode($instanceCode);
+        $this->controlServer->setExpectedInstanceCode($instanceCode);
     }
 
     public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
     {
-        $events = $this->legacyServer->poll($timeoutSec, $timeoutUsec);
+        $events = $this->controlServer->poll($timeoutSec, $timeoutUsec);
         if ($this->supervisorServer !== null) {
             $events += $this->pollSupervisor(0, 0);
         }
@@ -140,12 +140,12 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             return $this->sendToSupervisor($clientId, $message);
         }
 
-        return $this->legacyServer->sendTo($clientId, $message);
+        return $this->controlServer->sendTo($clientId, $message);
     }
 
     public function sendToRole(string $role, string $message): void
     {
-        $this->legacyServer->sendToRole($role, $message);
+        $this->controlServer->sendToRole($role, $message);
         if ($this->supervisorServer === null) {
             return;
         }
@@ -165,7 +165,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             return $this->supervisorServer?->hasSession($this->fromSupervisorClientId($clientId)) ?? false;
         }
 
-        return $this->legacyServer->clientExists($clientId);
+        return $this->controlServer->clientExists($clientId);
     }
 
     public function closeClient(int $clientId): void
@@ -180,12 +180,12 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             return;
         }
 
-        $this->legacyServer->closeClient($clientId);
+        $this->controlServer->closeClient($clientId);
     }
 
     public function countServiceClients(?int $excludeClientId = null): int
     {
-        $count = $this->legacyServer->countServiceClients(
+        $count = $this->controlServer->countServiceClients(
             $excludeClientId !== null && !$this->isSupervisorClientId($excludeClientId) ? $excludeClientId : null
         );
         if ($this->supervisorServer === null) {
@@ -208,7 +208,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
 
     public function flushPendingWrites(float $maxSeconds = 2.0): void
     {
-        $this->legacyServer->flushPendingWrites($maxSeconds);
+        $this->controlServer->flushPendingWrites($maxSeconds);
         if ($this->supervisorServer !== null) {
             $deadline = \microtime(true) + \max(0.0, $maxSeconds);
             do {
@@ -223,7 +223,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     public function close(): void
     {
         $this->supervisorServer?->close();
-        $this->legacyServer->close();
+        $this->controlServer->close();
         $this->started = false;
     }
 
@@ -438,11 +438,11 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
                 'channel' => $session->channel,
                 'port' => (int)($message['port'] ?? $session->port),
             ]),
-            ControlMessage::TYPE_SET_WORKER_POOL => SupervisorMessage::poolSnapshot(
-                workers: $this->translateLegacyPoolPortsToSnapshotWorkers($message),
-                version: (int)($message['version'] ?? 1),
-                scope: (string)($message['scope'] ?? 'business'),
-                msgId: (string)($message['msg_id'] ?? ''),
+            ControlMessage::TYPE_SET_ROUTE_TABLE => SupervisorMessage::poolSnapshot(
+                workers: $this->translateRouteTableToSnapshotWorkers($message),
+                version: (int)($message['route_version'] ?? 1),
+                scope: (string)($message['scope'] ?? (((string)($message['role'] ?? '')) === ControlMessage::ROLE_WORKER ? 'business' : (string)($message['role'] ?? ''))),
+                msgId: (string)($message['trace_id'] ?? $message['msg_id'] ?? ''),
                 channel: $session->channel,
             ),
             ControlMessage::TYPE_SHUTDOWN => ControlMessage::shutdown(),
@@ -455,7 +455,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
      * @param array<string, mixed> $message
      * @return array<int, array<string, int|string>>
      */
-    private function translateLegacyPoolPortsToSnapshotWorkers(array $message): array
+    private function translateRouteTableToSnapshotWorkers(array $message): array
     {
         $workers = [];
         if (\is_array($message['workers'] ?? null)) {

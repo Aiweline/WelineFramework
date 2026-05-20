@@ -107,10 +107,10 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
 
             protected function warmupWorkerTrustingMasterReady(int $port): array
             {
-                return $this->warmupWorker($port);
+                return $this->fakeWarmupWorker($port);
             }
 
-            protected function warmupWorker(int $port): array
+            protected function fakeWarmupWorker(int $port): array
             {
                 $result = $this->warmupResults[$port] ?? true;
                 if ($result === true) {

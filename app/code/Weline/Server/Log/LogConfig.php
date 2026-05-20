@@ -80,7 +80,7 @@ class LogConfig
     }
 
     /**
-     * 设置运行时 verbose 标志（与实例 JSON enable_log / 命令行 -log / 前台启动 一致；影响开发态 stdout 等，不再压低主链日志级别）。
+     * 设置运行时 verbose 标志（与 endpoint enable_log / 命令行 -log / 前台启动一致；影响开发态 stdout 等，不再压低主链日志级别）。
      */
     public static function bootstrapVerbose(bool $verbose): void
     {

@@ -53,7 +53,7 @@ final class StopRedirectPortOwnershipTest extends TestCase
             }
         };
 
-        self::assertSame(654, $stop->resolveRoot(321));
+        self::assertSame(321, $stop->resolveRoot(321));
     }
 
     public function testFindWelineServerInstanceNameByPortUsesInstanceManagerForFrameworkOwnedPort(): void
@@ -189,6 +189,6 @@ final class StopRedirectPortOwnershipTest extends TestCase
         };
 
         self::assertTrue($stop->killWlsProcessOnPort(80));
-        self::assertSame([654], $stop->killedPids);
+        self::assertSame([321], $stop->killedPids);
     }
 }

@@ -158,11 +158,6 @@ class WlsErrorScanner extends CommandAbstract
         return false;
     }
 
-    private function getTaskPoolService(): void
-    {
-        // 已废弃：任务直接写入 tasks.json，不再依赖 AutoTaskGeneratorService
-    }
-
     /**
      * 扫描所有目标日志文件，提取匹配错误模式的行
      *
