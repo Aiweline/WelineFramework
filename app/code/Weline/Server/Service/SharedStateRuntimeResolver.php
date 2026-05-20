@@ -41,7 +41,7 @@ class SharedStateRuntimeResolver
             $sessionHost = '127.0.0.1';
         }
 
-        $sessionPort = (int) ($config['session_server_port'] ?? $config['session_port'] ?? $session['port']);
+        $sessionPort = (int) ($config['session_server_port'] ?? $session['port']);
         if ($sessionPort <= 0) {
             $sessionPort = 19970 + MasterProcess::getProjectPortOffset();
             // 如果探测失败,使用项目偏移量计算默认端口
@@ -69,7 +69,7 @@ class SharedStateRuntimeResolver
             $memoryHost = '127.0.0.1';
         }
 
-        $memoryPort = (int) ($config['memory_server_port'] ?? $config['memory_port'] ?? $memory['port']);
+        $memoryPort = (int) ($config['memory_server_port'] ?? $memory['port']);
         if ($memoryPort <= 0) {
             $memoryPort = 19971 + MasterProcess::getProjectPortOffset();
             // 如果探测失败,使用项目偏移量计算默认端口
@@ -185,44 +185,4 @@ class SharedStateRuntimeResolver
         return $name . '.' . $port . '.' . $ext;
     }
 
-    /**
-     * @param array<string, mixed> $config
-     * @param array<string, mixed> $envConfig
-     * @return array<string, mixed>
-     */
-    protected function probeRuntime(string $role, array $config, array $envConfig): array
-    {
-        $probe = (new SharedStateServiceManager())->probe($role, $config, $envConfig);
-        return \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
-    }
-
-    /**
-     * @param array<string, mixed> $config
-     * @param array<string, mixed> $envConfig
-     * @return array<string, mixed>
-     */
-    private function probeRuntimeWithTelemetry(
-        string $role,
-        array $config,
-        array $envConfig,
-        string $reason,
-        ?string $instanceName = null,
-        ?int $resolvedPort = null
-    ): array {
-        $startedAt = \microtime(true);
-        $runtime = $this->probeRuntime($role, $config, $envConfig);
-        $elapsedMs = \max(0, (int) \round((\microtime(true) - $startedAt) * 1000));
-
-        WlsLogger::info_(
-            '[SharedStateRuntimeResolver] probe role=' . $role
-            . ' reason=' . $reason
-            . ' instance=' . ($instanceName ?? 'auto')
-            . ($resolvedPort !== null ? ' port=' . $resolvedPort : '')
-            . ' elapsed=' . $elapsedMs . 'ms'
-            . ' result_port=' . (int) ($runtime['port'] ?? 0)
-            . ' result_token=' . (string) ($runtime['token_file_name'] ?? '')
-        );
-
-        return $runtime;
-    }
 }

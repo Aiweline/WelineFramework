@@ -44,7 +44,7 @@ class DispatcherHttpsDetectionFallbackTest extends TestCase
         $instanceName = 'dispatcher-https-config-fallback';
         $this->writeJson(
             BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json',
-            ['session_port' => 26422]
+            ['master_enabled' => true]
         );
         $this->writeJson(
             BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . $instanceName . '.json',
