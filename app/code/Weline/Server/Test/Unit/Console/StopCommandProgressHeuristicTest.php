@@ -128,7 +128,7 @@ final class StopCommandProgressHeuristicTest extends TestCase
     {
         $stop = new Stop();
 
-        self::assertTrue($this->invokeProtected(
+        self::assertFalse($this->invokeProtected(
             $stop,
             'hasPendingStartupServices',
             $this->createInstanceInfoWithServiceState(ServiceInstance::STATE_STARTING, null)

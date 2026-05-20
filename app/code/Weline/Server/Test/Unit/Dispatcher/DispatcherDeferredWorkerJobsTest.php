@@ -99,7 +99,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', [[
             'type' => 'homepage_warmup',
             'claims' => [['port' => 19001, 'ticket' => 7]],
-            'source' => 'ADD_WORKER',
+            'source' => 'SET_ROUTE_TABLE',
         ]]);
         $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', null);
         $this->setProperty($dispatcher, 'deferredWorkerPoolFiberKind', null);
@@ -196,7 +196,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertSame([19002], $alert['business_pool'] ?? null);
     }
 
-    public function testMaintenanceSetWorkerPoolDoesNotQueueBusinessSetPoolJob(): void
+    public function testMaintenanceRouteTableDoesNotQueueBusinessSetPoolJob(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
@@ -221,15 +221,16 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
         $method->setAccessible(true);
         $method->invoke($dispatcher, [
-            'type' => ControlMessage::TYPE_SET_WORKER_POOL,
+            'type' => ControlMessage::TYPE_SET_ROUTE_TABLE,
             'role' => ControlMessage::ROLE_MAINTENANCE,
             'ports' => [16999],
+            'route_version' => 1,
         ]);
 
         self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
     }
 
-    public function testMaintenanceSetWorkerPoolAcknowledgesDispatcherTakeover(): void
+    public function testMaintenanceRouteTableAcknowledgesDispatcherTakeover(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
@@ -283,12 +284,13 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
         $method->setAccessible(true);
         $method->invoke($dispatcher, [
-            'type' => ControlMessage::TYPE_SET_WORKER_POOL,
+            'type' => ControlMessage::TYPE_SET_ROUTE_TABLE,
             'role' => ControlMessage::ROLE_MAINTENANCE,
             'ports' => [16999],
+            'route_version' => 1,
         ]);
 
-        self::assertCount(1, $client->sent);
+        self::assertCount(2, $client->sent);
         $ack = \json_decode(\trim($client->sent[0]), true);
         self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $ack['type'] ?? null);
         self::assertSame(ControlMessage::ROLE_MAINTENANCE, $ack['role'] ?? null);
@@ -296,70 +298,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertTrue((bool) ($ack['in_pool'] ?? false));
     }
 
-    /**
-     * 协议演进后契约：ADD_WORKER 已废弃，Dispatcher 端 switch 不再有对应 case，
-     * 收到此消息时应静默丢弃——既不入池、不发 worker_pool_ack，也不入 deferredWorkerPoolJobs 队列。
-     *
-     * 作为护栏防止未来回退：若有人误加回 `case TYPE_ADD_WORKER` 的入池逻辑，此用例会立即捕获。
-     */
-    public function testDuplicateWorkerAddTriggersAuditInsteadOfAddingAgain(): void
-    {
-        $dispatcher = $this->newDispatcherWithoutConstructor();
-        $core = $this->getMockBuilder(PassthroughCore::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getWorkerPorts'])
-            ->getMock();
-
-        $core->method('getWorkerPorts')->willReturn([19001]);
-
-        $client = new class implements ChildControlClientInterface {
-            public array $sent = [];
-
-            public function connect(string $host, int $port): bool { return true; }
-            public function isConnected(): bool { return true; }
-            public function getSocket() { return null; }
-            public function hasPendingWrites(): bool { return false; }
-            public function hasReceivedShutdown(): bool { return false; }
-            public function isReadyStateConfirmed(): bool { return true; }
-            public function onMessage(callable $handler): void {}
-            public function onDisconnect(callable $handler): void {}
-            public function setVerboseLog(bool $verbose): void {}
-            public function setSelfTag(string $tag): void {}
-            public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return true; }
-            public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
-            public function markReadyState(bool $isReady = true): void {}
-            public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return true; }
-            public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return true; }
-            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return true; }
-            public function sendStatusReport(int $connections, int $memory, int $requests): bool { return true; }
-            public function sendLogLine(string $line, string $level, string $processTag): bool { return true; }
-            public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { $this->sent[] = $message; return true; }
-            public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return true; }
-            public function handleReadable(): array { return []; }
-            public function handleWritable(): bool { return true; }
-            public function tryReconnect(): bool { return true; }
-            public function close(): void {}
-            public function getResurrectionPriority(): int { return 0; }
-        };
-
-        $this->setProperty($dispatcher, 'passthroughCore', $core);
-        $this->setProperty($dispatcher, 'ipcClient', $client);
-        $this->setProperty($dispatcher, 'port', 9443);
-        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
-
-        $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
-        $method->setAccessible(true);
-        $method->invoke($dispatcher, [
-            'type' => ControlMessage::TYPE_ADD_WORKER,
-            'role' => ControlMessage::ROLE_WORKER,
-            'ports' => [19001],
-        ]);
-
-        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
-        self::assertSame([], $client->sent, 'Dispatcher 不应再为已废弃的 ADD_WORKER 发送任何响应');
-    }
-
-    public function testBusinessSetWorkerPoolTrustsMasterReadyAndAcknowledgesImmediately(): void
+    public function testBusinessRouteTableTrustsMasterReadyAndAcknowledgesImmediately(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
@@ -404,9 +343,10 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
         $method->setAccessible(true);
         $method->invoke($dispatcher, [
-            'type' => ControlMessage::TYPE_SET_WORKER_POOL,
+            'type' => ControlMessage::TYPE_SET_ROUTE_TABLE,
             'role' => ControlMessage::ROLE_WORKER,
             'ports' => [19001, 19002],
+            'route_version' => 1,
             'workers' => [
                 ['slot_id' => 'worker#1', 'lease_id' => 'lease-1', 'generation' => 1, 'port' => 19001, 'state' => 'ready'],
                 ['slot_id' => 'worker#2', 'lease_id' => 'lease-2', 'generation' => 1, 'port' => 19002, 'state' => 'ready'],
@@ -414,7 +354,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         ]);
 
         self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
-        self::assertCount(2, $sent);
+        self::assertCount(3, $sent);
         $ack = \json_decode(\trim($sent[0]), true);
         self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $ack['type'] ?? null);
         self::assertSame(19001, $ack['port'] ?? null);
@@ -422,7 +362,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertSame('worker#1', $ack['slot_id'] ?? null);
     }
 
-    public function testBusinessSetWorkerPoolQueuesHomepageWarmupForJoinedWorkers(): void
+    public function testBusinessRouteTableQueuesHomepageWarmupForJoinedWorkers(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
@@ -470,9 +410,10 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
         $method->setAccessible(true);
         $method->invoke($dispatcher, [
-            'type' => ControlMessage::TYPE_SET_WORKER_POOL,
+            'type' => ControlMessage::TYPE_SET_ROUTE_TABLE,
             'role' => ControlMessage::ROLE_WORKER,
             'ports' => [19001, 19002],
+            'route_version' => 1,
             'workers' => [
                 ['slot_id' => 'worker#1', 'lease_id' => 'lease-1', 'generation' => 1, 'port' => 19001, 'state' => 'ready'],
                 ['slot_id' => 'worker#2', 'lease_id' => 'lease-2', 'generation' => 1, 'port' => 19002, 'state' => 'ready'],
@@ -485,12 +426,12 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
                 ['port' => 19001, 'ticket' => 1],
                 ['port' => 19002, 'ticket' => 2],
             ],
-            'source' => 'SET_WORKER_POOL',
+            'source' => 'SET_ROUTE_TABLE',
         ]], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
-        self::assertCount(2, $sent);
+        self::assertCount(3, $sent);
     }
 
-    public function testDeferredSetWorkerPoolKeepsMaintenanceFallbackInactiveWhenPreviousPoolIsRetained(): void
+    public function testDeferredRouteTableKeepsMaintenanceFallbackInactiveWhenPreviousPoolIsRetained(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
@@ -796,10 +737,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $reflector = new \ReflectionClass(Dispatcher::class);
         /** @var Dispatcher $dispatcher */
         $dispatcher = $reflector->newInstanceWithoutConstructor();
-        // B-iii: 默认让本套测试走 B-i / B-ii flag=off 兼容回退路径（SET_WORKER_POOL 仍是业务路由权威），
-        // 保护历史用例对 SET_WORKER_POOL 真实业务行为的回归覆盖。
-        // 要测 B-iii 新默认路径（SET_ROUTE_TABLE 作为权威）请在用例内显式 setProperty('routeTableAsAuthority', true)。
-        $this->setProperty($dispatcher, 'routeTableAsAuthority', false);
+        $this->setProperty($dispatcher, 'routeTableAsAuthority', true);
         return $dispatcher;
     }
 

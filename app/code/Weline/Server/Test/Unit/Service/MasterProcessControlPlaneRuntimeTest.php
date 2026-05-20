@@ -92,10 +92,10 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
         $instanceName = 'ut-master-runtime-' . \bin2hex(\random_bytes(4));
         $master = new MasterProcess();
 
-        $legacy = new MasterControlServer();
-        self::assertTrue($legacy->start('127.0.0.1', 0));
+        $controlServer = new MasterControlServer();
+        self::assertTrue($controlServer->start('127.0.0.1', 0));
         $hybrid = new HybridControlPlaneServer(
-            legacyServer: $legacy,
+            controlServer: $controlServer,
             endpointResolver: new ControlEndpointResolver(BP, 28600, 1000),
             supervisorEnabled: true,
             channelId: 'channel-' . $instanceName,
@@ -138,9 +138,9 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
         }
     }
 
-    public function testGetMasterInfoFallsBackToCurrentSnapshotControlMetadata(): void
+    public function testGetMasterInfoReadsMasterEndpointMetadata(): void
     {
-        $instanceName = 'ut-master-info-' . \bin2hex(\random_bytes(4));
+        $instanceName = 'ut-master-endpoint-' . \bin2hex(\random_bytes(4));
         $manager = new ServerInstanceManager();
         $instanceFile = $manager->getInstanceFile($instanceName);
 
@@ -148,15 +148,12 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             ServerInstanceManager::atomicWriteJsonStatic($instanceFile, [
                 'lifecycle_state' => 'running',
                 'startup_phase' => 'running',
-                'current_snapshot' => [
-                    'master_pid' => 60284,
-                    'control_port' => 26895,
-                    'lifecycle_state' => 'running',
-                    'startup_phase' => 'running',
-                ],
+                'master_enabled' => true,
+                'master_pid' => 60284,
+                'control_port' => 26895,
             ], 5);
 
-            $info = MasterProcess::getMasterInfo($instanceName);
+            $info = MasterProcess::getMasterEndpoint($instanceName);
 
             self::assertIsArray($info);
             self::assertTrue((bool)($info['master_enabled'] ?? false));

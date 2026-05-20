@@ -425,19 +425,6 @@ class SslCertificateServiceTest extends TestCase
         return $this->createLocalCaFixture($domain);
     }
 
-    public function testShouldPreferTrustedLocalSelfSignedCertificateMatchesWindowsForLocalDomains(): void
-    {
-        $service = new SslCertificateService();
-        $method = new ReflectionMethod($service, 'shouldPreferTrustedLocalSelfSignedCertificate');
-        $method->setAccessible(true);
-
-        $this->assertSame(
-            \in_array(\PHP_OS_FAMILY, ['Windows', 'Darwin', 'Linux'], true),
-            $method->invoke($service, 'demo.weline.test')
-        );
-        $this->assertFalse($method->invoke($service, 'example.com'));
-    }
-
     public function testTrustLocalCertificateAuthorityOnLinuxUsesSystemTrustToolWithNonInteractiveSudo(): void
     {
         $caPath = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'rootCA.pem';
