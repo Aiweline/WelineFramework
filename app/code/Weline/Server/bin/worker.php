@@ -97,15 +97,13 @@ if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
 
-// 统一自动加载必须早于 resolveControlPort：
-// 该 helper 位于框架命名空间，且内部依赖 BP 常量读取实例文件。
+// Autoload before resolving the Master bootstrap endpoint.
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
-// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
-// 优先使用 --control-port= 参数，否则从实例文件自动发现
-// resolveControlPort 会轮询等待 Master 写入实例信息（最多 30 秒）
+// IPC control port. Prefer the explicit Master-provided argument; the endpoint
+// file is only a bootstrap pointer when the argument is absent.
 if (!isset($controlPort)) {
     $controlPort = 0;
 }
@@ -292,32 +290,8 @@ try {
         $memoryTokenFileName = 'memory_server.token';
     }
 
-    $resolvedSessionPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
-        $instanceName,
-        'session_port',
-        0
-    );
-    if ($resolvedSessionPort > 0) {
-        $sessionPort = $resolvedSessionPort;
-        WlsLogger::info_("[Session] Detected session service port from instance json {$sessionHost}:{$sessionPort}");
-    } else {
-        WlsLogger::warning_("[Session] Session service port not found in instance json; temporarily using runtime/env fallback {$sessionHost}:{$sessionPort}");
-    }
-
-    $resolvedMemoryPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
-        $instanceName,
-        'memory_port',
-        0
-    );
-    if ($resolvedMemoryPort > 0) {
-        $memoryPort = $resolvedMemoryPort;
-        WlsLogger::info_("[Memory] Detected memory service port from instance json {$memoryHost}:{$memoryPort}");
-    } else {
-        WlsLogger::warning_("[Memory] Memory service port not found in instance json; temporarily using runtime/env fallback {$memoryHost}:{$memoryPort}");
-    }
-
-    WlsLogger::info_("[Session] Session service address preconfigured {$sessionHost}:{$sessionPort}");
-    WlsLogger::info_("[Memory] Memory service address preconfigured {$memoryHost}:{$memoryPort}");
+    WlsLogger::info_("[Session] Session service address configured {$sessionHost}:{$sessionPort}");
+    WlsLogger::info_("[Memory] Memory service address configured {$memoryHost}:{$memoryPort}");
     // Worker 仍保持 Session/Memory 预热长连接；消费者令牌由 Master 管理，连接池只负责 TCP 复用。
     try {
         \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, [
@@ -720,7 +694,6 @@ if ($isMaintenanceWorker) {
 
 // 获取控制端口
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
-$instanceInfoGateway = new \Weline\Server\IPC\ChildControl\InstanceInfoGateway($instanceName);
 $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false
@@ -1274,13 +1247,6 @@ while (true) {
     // 如果初始连接失败，定期尝试与 Master 重新连接（自愈机制）
     if (isset($ipcReconnectDueTime) && \microtime(true) >= $ipcReconnectDueTime && $ipcReconnectAttempts < $ipcReconnectMaxAttempts) {
         $ipcReconnectAttempts++;
-        
-        // 🔑 每次重连都读取最新的 instance 信息，以获得 Master 可能更新的 control_port
-        $latestControlPort = $instanceInfoGateway->getLatestControlPort($controlPort);
-        if ($latestControlPort !== $controlPort) {
-            WlsLogger::warning_("[IPC] 检测到 control_port 已更新: {$controlPort} → {$latestControlPort}");
-            $controlPort = $latestControlPort;
-        }
         
         WlsLogger::warning_("[IPC] 第 {$ipcReconnectAttempts}/{$ipcReconnectMaxAttempts} 次尝试与 Master 重新连接 (端口: {$controlPort})");
         if ($kernel->connectAndRegister($controlPort)) {

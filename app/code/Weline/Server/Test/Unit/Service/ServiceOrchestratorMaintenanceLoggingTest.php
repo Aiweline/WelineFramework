@@ -172,12 +172,12 @@ final class ServiceOrchestratorMaintenanceLoggingTest extends TestCase
         self::assertSame(11, $worker->ipcClientId);
         self::assertSame('current-launch', $worker->launchId);
 
-        $setPoolMessages = \array_values(\array_filter(
+        $routeTableMessages = \array_values(\array_filter(
             $server->sent,
-            static fn(array $entry): bool => ($entry['message']['type'] ?? null) === ControlMessage::TYPE_SET_WORKER_POOL
+            static fn(array $entry): bool => ($entry['message']['type'] ?? null) === ControlMessage::TYPE_SET_ROUTE_TABLE
         ));
-        self::assertNotSame([], $setPoolMessages);
-        self::assertSame([19001], $setPoolMessages[0]['message']['ports'] ?? null);
+        self::assertNotSame([], $routeTableMessages);
+        self::assertSame([19001], $routeTableMessages[0]['message']['ports'] ?? null);
     }
 
     public function testRejectUntrustedChildHandlesMissingPort(): void
