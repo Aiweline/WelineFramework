@@ -1,0 +1,312 @@
+.account-sidebar-wrapper {
+    --as-border-radius: var(--border-radius-lg, 0.75rem);
+    --as-transition: var(--transition-base, 0.2s ease);
+}
+
+.account-sidebar__header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.account-sidebar__avatar {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+}
+
+.account-sidebar__avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--color-primary);
+}
+
+.account-sidebar__avatar-img[hidden],
+.account-sidebar__avatar-fallback[hidden] {
+    display: none !important;
+}
+
+.account-sidebar__avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    color: var(--color-text-dark);
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.account-sidebar__user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.account-sidebar__username {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-sidebar__email {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    margin: 0.25rem 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-sidebar__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.account-sidebar__nav-link[data-section="profile"] {
+    order: 10;
+}
+
+.account-sidebar__nav-link[data-section="security"] {
+    order: 20;
+}
+
+.account-sidebar__nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    border-radius: var(--as-border-radius);
+    transition: var(--as-transition);
+}
+
+.account-sidebar__nav-link i {
+    font-size: 1.125rem;
+    color: var(--color-text-secondary);
+    transition: var(--as-transition);
+}
+
+.account-sidebar__nav-link:hover {
+    background: var(--color-bg-secondary);
+    color: var(--color-primary-dark);
+}
+
+.account-sidebar__nav-link:hover i {
+    color: var(--color-primary);
+}
+
+.account-sidebar__nav-link--active {
+    background: var(--color-primary);
+    color: var(--color-text-dark);
+    font-weight: 600;
+}
+
+.account-sidebar__nav-link--active i {
+    color: var(--color-text-dark);
+}
+
+.account-sidebar__nav-link--active:hover {
+    background: var(--color-primary-dark);
+    color: var(--color-text-dark);
+}
+
+.account-hook-nav-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0.75rem 0;
+}
+
+.account-hook-nav-title {
+    padding: 0 1rem 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.04em;
+}
+
+.account-hook-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid transparent;
+    border-radius: var(--as-border-radius);
+    background: transparent;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    transition: var(--as-transition);
+    order: 30;
+}
+
+.account-hook-nav-link:hover {
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--color-text-primary);
+    text-decoration: none;
+}
+
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) {
+    background: var(--color-primary);
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--color-text-dark);
+    font-weight: 700;
+    transform: none;
+}
+
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__label i,
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__text strong {
+    color: var(--color-text-dark);
+}
+
+.account-hook-nav-link.is-active:not([data-account-nav-parent]):hover {
+    background: var(--color-primary-dark);
+    color: var(--color-text-dark);
+}
+
+.account-hook-nav-link[data-account-nav-parent] {
+    order: 21;
+    width: calc(100% - 1.75rem);
+    margin-left: 1.75rem;
+    padding: 0.625rem 0.75rem;
+    color: var(--color-text-secondary);
+}
+
+.account-hook-nav-link[data-account-nav-parent]:hover {
+    transform: none;
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--color-primary-dark);
+}
+
+.account-hook-nav-link[data-account-nav-parent].is-active {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--color-primary-dark);
+    font-weight: 700;
+    transform: none;
+}
+
+.account-hook-nav-link[data-account-nav-parent].is-active .account-hook-nav-link__label i,
+.account-hook-nav-link[data-account-nav-parent].is-active .account-hook-nav-link__text strong {
+    color: var(--color-primary-dark);
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__label {
+    gap: 0.5rem;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__label i {
+    display: inline-block;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__text strong {
+    font-size: 0.875rem;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__text span {
+    display: none;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__arrow {
+    display: inline-flex;
+    margin-left: auto;
+    flex-shrink: 0;
+    opacity: 1;
+}
+
+.account-hook-nav-link[data-account-nav-parent] .badge {
+    white-space: nowrap;
+}
+
+.account-hook-nav-link__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+}
+
+.account-hook-nav-link__label i {
+    display: none;
+    width: 1.125rem;
+    font-size: 1rem;
+    text-align: center;
+    color: inherit;
+}
+
+.account-hook-nav-link__text {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+.account-hook-nav-link__text strong {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.account-hook-nav-link__text span {
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.account-hook-nav-link:hover .account-hook-nav-link__text span {
+    color: inherit;
+}
+
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__text span {
+    color: var(--color-text-dark);
+    opacity: 0.78;
+}
+
+.account-hook-nav-link[data-account-nav-parent].is-active .account-hook-nav-link__text span {
+    color: var(--color-primary-dark);
+    opacity: 0.72;
+}
+
+.account-hook-nav-link__arrow {
+    display: none;
+    color: inherit;
+    font-size: 0.875rem;
+    opacity: 0.68;
+}
+
+.account-sidebar__nav-link--logout {
+    order: 100;
+    margin-top: 0.5rem;
+    color: var(--color-error);
+}
+
+.account-sidebar__nav-link--logout i {
+    color: var(--color-error);
+}
+
+.account-sidebar__nav-link--logout:hover {
+    background: var(--color-error-light);
+    color: var(--color-error);
+}
+
+.account-sidebar__nav-link--logout:hover i {
+    color: var(--color-error);
+}

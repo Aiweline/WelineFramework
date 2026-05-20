@@ -42,6 +42,7 @@ final class BuildPlanContentManifestLinter
         if ($primaryLocale !== '' && $i18nPrimaryLocale !== '' && $primaryLocale !== $i18nPrimaryLocale) {
             $errors[] = 'content_manifest.primary_locale must match i18n.primary_locale';
         }
+        $sourceText = $this->normalizeSourceTextForExactContactChecks($contract);
 
         foreach ($this->normalizeRecordSet($contract['pages'] ?? [], ['page_id', 'id']) as $pageId => $page) {
             foreach (['title_key', 'description_key'] as $field) {
@@ -52,7 +53,8 @@ final class BuildPlanContentManifestLinter
             }
         }
 
-        foreach ($this->normalizeRecordSet($contract['blocks'] ?? [], ['block_id', 'id']) as $blockId => $block) {
+        $blocksById = $this->normalizeRecordSet($contract['blocks'] ?? [], ['block_id', 'id']);
+        foreach ($blocksById as $blockId => $block) {
             foreach ($this->stringList($block['content_keys'] ?? []) as $key) {
                 if (!isset($items[$key])) {
                     $errors[] = 'Block ' . $blockId . ' references missing content key: ' . $key;
@@ -69,6 +71,25 @@ final class BuildPlanContentManifestLinter
             }
             if ($this->looksLikeLocaleLeak($value, $primaryLocale, $key)) {
                 $errors[] = 'content_manifest.items contains non-locale visible copy: ' . $key;
+            }
+            if ($this->containsInventedExactContact($value, $sourceText)) {
+                $errors[] = 'content_manifest.items contains exact contact value not present in source truth: ' . $key;
+            }
+        }
+
+        foreach ($blocksById as $blockId => $block) {
+            $pageType = \trim((string)($block['page_type'] ?? ''));
+            if (!$this->isPolicyPageType($pageType)) {
+                continue;
+            }
+            foreach ($this->stringList($block['content_keys'] ?? []) as $key) {
+                $value = $items[$key] ?? '';
+                if ($value === '') {
+                    continue;
+                }
+                if ($this->isPolicyUnsafeContentKey($key, $value)) {
+                    $errors[] = 'Policy page block ' . $blockId . ' contains app/download/reward CTA copy: ' . $key;
+                }
             }
         }
 
@@ -127,7 +148,58 @@ final class BuildPlanContentManifestLinter
             }
         }
 
-        return \trim((string)\json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+        return \implode(' ', $this->collectVisibleTextLeaves($value));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectVisibleTextLeaves(mixed $value): array
+    {
+        if (\is_scalar($value) || (\is_object($value) && \method_exists($value, '__toString'))) {
+            $text = \trim((string)$value);
+            return $text !== '' ? [$text] : [];
+        }
+        if (!\is_array($value)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($value as $key => $item) {
+            $keyText = \strtolower(\trim((string)$key));
+            if ($this->isStructuralTextField($keyText) && (\is_scalar($item) || (\is_object($item) && \method_exists($item, '__toString')))) {
+                continue;
+            }
+            foreach ($this->collectVisibleTextLeaves($item) as $text) {
+                $result[] = $text;
+            }
+        }
+
+        return \array_values(\array_unique($result));
+    }
+
+    private function isStructuralTextField(string $key): bool
+    {
+        if ($key === '') {
+            return false;
+        }
+
+        return \in_array($key, [
+            'key',
+            'content_key',
+            'id',
+            'field',
+            'name',
+            'type',
+            'role',
+            'page_id',
+            'page_type',
+            'block_id',
+            'block_key',
+            'section_key',
+            'task_id',
+            'task_key',
+        ], true);
     }
 
     /**
@@ -244,6 +316,90 @@ final class BuildPlanContentManifestLinter
         return false;
     }
 
+    private function isPolicyPageType(string $pageType): bool
+    {
+        return \in_array($pageType, [
+            'privacy_policy',
+            'terms_of_service',
+            'refund_policy',
+            'shipping_policy',
+            'cookie_policy',
+        ], true);
+    }
+
+    /**
+     * @param array<string,mixed> $contract
+     */
+    private function normalizeSourceTextForExactContactChecks(array $contract): string
+    {
+        $source = [
+            'source_of_truth' => $contract['source_of_truth'] ?? [],
+            'source_truth_contract' => $contract['source_truth_contract'] ?? [],
+            'user_requirements' => $contract['user_requirements'] ?? [],
+        ];
+
+        return \mb_strtolower((string)\json_encode($source, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+    }
+
+    private function containsInventedExactContact(string $value, string $sourceText): bool
+    {
+        if (\trim($value) === '') {
+            return false;
+        }
+        if (\preg_match_all('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/iu', $value, $emails) > 0) {
+            foreach ($emails[0] ?? [] as $email) {
+                if (!\str_contains($sourceText, \mb_strtolower((string)$email))) {
+                    return true;
+                }
+            }
+        }
+        if (\preg_match_all('/(?<!\d)(?:\+?\d[\d\s().-]{6,}\d)(?!\d)/u', $value, $phones) > 0) {
+            $sourceDigits = \preg_replace('/\D+/', '', $sourceText) ?? '';
+            foreach ($phones[0] ?? [] as $phone) {
+                $digits = \preg_replace('/\D+/', '', (string)$phone) ?? '';
+                if (\strlen($digits) >= 8 && !\str_contains($sourceDigits, $digits)) {
+                    return true;
+                }
+            }
+        }
+        if ($this->containsSupportHoursClaim($value) && !$this->containsSupportHoursClaim($sourceText)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function containsSupportHoursClaim(string $value): bool
+    {
+        return \preg_match('/(?:24\s*\/\s*7|24\s*(?:h|hours?)|\x{0032}\x{0034}\s*\x{5C0F}\x{65F6}|\x{4E8C}\x{5341}\x{56DB}\x{5C0F}\x{65F6}|\x{5168}\x{5929}\x{5019}|\x{5168}\x{65F6})/iu', $value) === 1;
+    }
+
+    private function isPolicyUnsafeContentKey(string $key, string $value): bool
+    {
+        $normalized = \mb_strtolower(\trim((string)\preg_replace('/\s+/u', ' ', $value)));
+        if ($normalized === '') {
+            return false;
+        }
+
+        $isCtaKey = \preg_match('/(?:^|\.)cta$|cta(?:_|-)?(?:text|label|copy)?$/iu', $key) === 1;
+        if ($isCtaKey) {
+            return \preg_match(
+                '/\b(?:download|apk|app|install|play|bonus|reward|casino|rummy|ludo|teen\s*patti|claim|coins?)\b|\x{4E0B}\x{8F7D}|\x{5B89}\x{88C5}|\x{9886}\x{53D6}|\x{5956}\x{52B1}|\x{5956}\x{91D1}|\x{7B79}\x{7801}|\x{6E38}\x{620F}|\x{5F00}\x{59CB}|\x{6CE8}\x{518C}\x{5373}\x{9001}/iu',
+                $normalized
+            ) === 1;
+        }
+
+        $downloadPattern = '/\b(?:download|apk|install)\b|\x{4E0B}\x{8F7D}|\x{5B89}\x{88C5}/iu';
+        if (\preg_match($downloadPattern, $normalized) === 1) {
+            return true;
+        }
+
+        return \preg_match(
+            '/\b(?:claim|bonus|coins?)\b|\x{9886}\x{53D6}.{0,12}(?:\x{5956}\x{52B1}|\x{5956}\x{91D1}|\x{7B79}\x{7801})|\x{6CE8}\x{518C}\x{5373}\x{9001}/iu',
+            $normalized
+        ) === 1;
+    }
+
     private function isCjkLocale(string $locale): bool
     {
         return $locale === 'zh'
@@ -262,22 +418,56 @@ final class BuildPlanContentManifestLinter
         $allowed = \array_fill_keys(['apk', 'app', 'seo', 'ios', 'android', 'upi', 'ssl', 'vip', 'faq', 'url', 'www'], true);
         \preg_match_all('/\b[A-Za-z][A-Za-z0-9\'-]{2,}\b/u', $value, $matches);
         $words = [];
+        $nonProperWords = [];
+        $properNounOnly = true;
         foreach ($matches[0] ?? [] as $word) {
+            $rawWord = \trim((string)$word, " \t\n\r\0\x0B'\"-");
             $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
             if ($normalized !== '' && !isset($allowed[$normalized])) {
                 $words[] = $normalized;
+                if (\preg_match('/^[A-Z][A-Za-z0-9\'-]*$/', $rawWord) !== 1) {
+                    $properNounOnly = false;
+                    $nonProperWords[] = $normalized;
+                }
             }
         }
         if ($words === []) {
             return false;
         }
 
-        $letterCount = 0;
-        foreach ($words as $word) {
-            $letterCount += \strlen($word);
+        if (!$this->hasMeaningfulCjkCopy($value)) {
+            $letterCount = 0;
+            foreach ($words as $word) {
+                $letterCount += \strlen($word);
+            }
+
+            return \count($words) >= 3 && $letterCount >= 16;
         }
 
-        return \count($words) >= 3 && $letterCount >= 16;
+        if ($properNounOnly) {
+            return false;
+        }
+        if (\count($nonProperWords) <= 2) {
+            return false;
+        }
+
+        $letterCount = 0;
+        foreach ($nonProperWords as $word) {
+            $letterCount += \strlen($word);
+        }
+        $cjkCount = $this->countCjkCharacters($value);
+
+        return \count($nonProperWords) >= 8
+            && $letterCount >= \max(40, (int)\ceil($cjkCount * 0.75));
+    }
+
+    private function countCjkCharacters(string $value): int
+    {
+        if (\preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value, $matches) <= 0) {
+            return 0;
+        }
+
+        return \count($matches[0] ?? []);
     }
 
     private function hasMeaningfulCjkCopy(string $value): bool

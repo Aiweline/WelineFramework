@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Adapter;
 
+use Weline\Ai\Interface\AdapterSkillBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
-class AiSiteAssetsAdapter implements ScenarioAdapterInterface
+class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface
 {
+    public function getDefaultSkillCodes(): array
+    {
+        return ['claude-design'];
+    }
+
     public function getCode(): string
     {
         return 'pagebuilder_ai_site_assets';

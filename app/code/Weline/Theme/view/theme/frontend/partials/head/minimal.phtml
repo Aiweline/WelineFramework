@@ -1,0 +1,127 @@
+<?php
+/**
+ * Minimal frontend head partial for account-style layouts.
+ *
+ * Keeps global runtime configuration and theme assets, while avoiding the
+ * heavier storefront-only inline style/bootstrap block from head/default.
+ */
+$themeData = $this->getData('theme') ?? [];
+$frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+
+$area = $themeData['area'] ?? 'frontend';
+$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null;
+?>
+<base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
+<?php echo \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Service\Head\HeadRenderer::class)->render($this, ['slot' => 'title']); ?>
+<w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
+<link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+</w:hook>
+<w:seo slot="head"/>
+<w:geo slot="head"/>
+<theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
+<?php
+if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
+    try {
+        $layoutAssetsEnabled = (bool)\Weline\Framework\App\Env::getInstance()
+            ->getConfig('theme.layout_assets.enabled', false);
+
+        if ($layoutAssetsEnabled) {
+            $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+            $assetsManager->ensureLayoutCssGenerated($area, $layoutType, $layoutOption, $theme);
+            $cssPath = $assetsManager->getGeneratedCssPath($area, $layoutType, $layoutOption, $theme);
+            $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme, $this);
+            $inlineLayoutCss = '';
+
+            if (is_file($cssPath)) {
+                $cssSize = filesize($cssPath);
+                if ($cssSize !== false && $cssSize > 0 && $cssSize <= 16384) {
+                    $inlineLayoutCss = (string)file_get_contents($cssPath);
+                    $inlineLayoutCss = preg_match('/<\?(?:php|=|\s)/i', $inlineLayoutCss)
+                        ? ''
+                        : str_replace('</style', '<\\/style', $inlineLayoutCss);
+                }
+            }
+            ?>
+<?php if ($inlineLayoutCss !== ''): ?>
+<style data-no-extract="true" data-layout-critical="true">
+<?= $inlineLayoutCss ?>
+</style>
+<?php endif; ?>
+<link href="<?= htmlspecialchars($cssUrl) ?>" rel="stylesheet" type="text/css"/>
+<?php
+        } else {
+            $cssVariableInjector = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\CssVariableInjector::class);
+            $themeVariablesCss = $cssVariableInjector->generateCssVariables($area, $theme);
+            if ($themeVariablesCss !== '' && !preg_match('/<\?(?:php|=|\s)/i', $themeVariablesCss)) {
+                $themeVariablesCss = str_replace('</style', '<\\/style', $themeVariablesCss);
+                ?>
+<style data-no-extract="true" data-theme-variables="true">
+<?= $themeVariablesCss ?>
+</style>
+<?php
+            }
+        }
+    } catch (\Throwable) {
+    }
+}
+
+$isDev = defined('DEV') && DEV;
+$baseUrl = $this->request->getBaseUrl();
+$modulesConfigUrl = $isDev
+    ? '/Weline/Frontend/view/statics/base/weline.modules.js'
+    : '/static/Weline/Frontend/base/weline.modules.js';
+$modulesBaseUrl = $isDev
+    ? '/Weline/Frontend/view/statics/js/weline-api'
+    : '/static/Weline/Frontend/js/weline-api';
+$siteName = $this->getData('site_name') ?? __('Weline Framework');
+$themeConfigPayload = [
+    'env' => [
+        'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
+        'DEV' => DEV,
+        'PROD' => !DEV,
+    ],
+    'baseUrl' => $baseUrl,
+    'modulesConfigUrl' => $modulesConfigUrl,
+    'modulesBaseUrl' => $modulesBaseUrl,
+    'api' => [
+        'workerUrl' => $isDev
+            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+            : '/static/Weline/Frontend/js/weline-api-worker.js',
+        'endpoint' => '/api/framework/query-bin',
+        'queryBinUrl' => '/api/framework/query-bin',
+    ],
+    'currentLang' => \w_env('user.lang', 'zh_Hans_CN'),
+    'currentCurrency' => \w_env('user.currency', 'CNY'),
+    'debug' => DEV,
+    'site' => [
+        'name' => $siteName,
+    ],
+    'theme' => [
+        'area' => $area,
+        'colorMode' => $welineThemeColorMode,
+        'layoutType' => $layoutType,
+        'layoutOption' => $layoutOption,
+    ],
+];
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$this->setData('envConfig', $themeConfigPayload['env']);
+?>
+<script data-no-extract="true">
+    (function() {
+        if (!window.__WelineThemeConfig) {
+            window.__WelineThemeConfig = {};
+        }
+        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        Object.assign(window.__WelineThemeConfig, themeConfig);
+        if (window.__WelineThemeConfig.modulesConfigUrl) {
+            window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        }
+    })();
+</script>
+<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260518-api-worker-5"></script>
+<w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

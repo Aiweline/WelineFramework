@@ -334,8 +334,41 @@ class LanguageSwitcher implements TaglibInterface
             array_push($out, ...$remain);
         }
 
-        $normalizedSearch = trim($search, '?');
+        $normalizedSearch = self::sanitizeLanguageSearch($search);
         return '/' . implode('/', $out) . ($normalizedSearch !== '' ? '?' . $normalizedSearch : '');
+    }
+
+    private static function sanitizeLanguageSearch(string $search): string
+    {
+        $search = trim($search, '?');
+        if ($search === '') {
+            return '';
+        }
+
+        parse_str($search, $params);
+        foreach (array_keys($params) as $key) {
+            if (self::isIgnorableLanguageQueryParam((string)$key)) {
+                unset($params[$key]);
+            }
+        }
+
+        return $params === [] ? '' : http_build_query($params);
+    }
+
+    private static function isIgnorableLanguageQueryParam(string $key): bool
+    {
+        $key = strtolower(trim($key));
+        if ($key === '') {
+            return false;
+        }
+
+        if (in_array($key, ['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'], true)) {
+            return true;
+        }
+
+        return str_starts_with($key, 'utm_')
+            || str_starts_with($key, 'mtm_')
+            || str_starts_with($key, 'pk_');
     }
 
     public static function tag_self_close(): bool

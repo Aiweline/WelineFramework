@@ -10,6 +10,7 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSiteWorkflowTrace;
 use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -91,6 +92,12 @@ class AiSitePlanQueue implements QueueInterface
             if (!$session instanceof AiSiteAgentSession) {
                 throw new \RuntimeException('会话不存在或无权访问。');
             }
+            AiSiteWorkflowTrace::log('queue_plan_execute_start', [
+                'public_id' => $publicId,
+                'queue_id' => $queueId,
+                'execution_token' => $effectiveExecutionToken,
+                'force_rebuild' => $forceRebuild,
+            ]);
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
 
             $hasQueuedPlanMutation = $this->hasQueuedPlanMutationRequest($content);

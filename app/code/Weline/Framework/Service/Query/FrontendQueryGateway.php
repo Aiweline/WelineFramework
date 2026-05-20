@@ -174,24 +174,16 @@ final class FrontendQueryGateway
             throw new FrontendQueryException('capability_denied', 'Provider is not exposed to frontend worker API.', 403);
         }
 
-        foreach ($this->registry->getAllDescriptors() as $providerDescriptor) {
-            if (($providerDescriptor['provider'] ?? '') !== $provider) {
-                continue;
+        $operationDescriptor = $this->registry->getOperationDescriptor($provider, $operation);
+        if ($operationDescriptor !== null) {
+            if (($operationDescriptor['frontend'] ?? false) !== true) {
+                throw new FrontendQueryException('capability_denied', 'Operation is not exposed to frontend worker API.', 403);
+            }
+            if (!isset($operationDescriptor['mode']) || (string)$operationDescriptor['mode'] === '') {
+                throw new FrontendQueryException('capability_denied', 'Frontend operation is missing explicit mode.', 403);
             }
 
-            foreach (($providerDescriptor['operations'] ?? []) as $operationDescriptor) {
-                if (($operationDescriptor['name'] ?? '') !== $operation) {
-                    continue;
-                }
-                if (($operationDescriptor['frontend'] ?? false) !== true) {
-                    throw new FrontendQueryException('capability_denied', 'Operation is not exposed to frontend worker API.', 403);
-                }
-                if (!isset($operationDescriptor['mode']) || (string)$operationDescriptor['mode'] === '') {
-                    throw new FrontendQueryException('capability_denied', 'Frontend operation is missing explicit mode.', 403);
-                }
-
-                return $operationDescriptor;
-            }
+            return $operationDescriptor;
         }
 
         throw new FrontendQueryException('capability_denied', 'Frontend worker operation is not allowed.', 403);

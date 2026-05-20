@@ -138,6 +138,9 @@ class ResponseRedirectBefore implements ObserverInterface
             }
 
             $path = $parsedUrl['path'] ?? '';
+            if ($this->isStatefulFrontendRedirectPath($path)) {
+                return;
+            }
 
             if (strlen($path) > 1 && !str_ends_with($path, '/')) {
                 $pathInfo = pathinfo($path);
@@ -172,8 +175,8 @@ class ResponseRedirectBefore implements ObserverInterface
             
             // 闃叉寮€鏀鹃噸瀹氬悜鏀诲嚮
             if (isset($parsedUrl['host'])) {
-                $host = $parsedUrl['host'];
-                $currentHost = (string)\w_env('server.http_host', '');
+                $host = \strtolower((string)$parsedUrl['host']);
+                $currentHost = \strtolower((string)(\strtok((string)\w_env('server.http_host', ''), ':') ?: ''));
                 
                 // 鍙厑璁搁噸瀹氬悜鍒板綋鍓嶅煙鍚嶆垨鐧藉悕鍗曞煙鍚?
                 if ($host !== $currentHost && !$this->isAllowedHost($host)) {
@@ -272,6 +275,44 @@ class ResponseRedirectBefore implements ObserverInterface
         }
 
         return false;
+    }
+
+    private function isStatefulFrontendRedirectPath(string $path): bool
+    {
+        $normalized = '/' . \trim($path, '/');
+        $normalized = \strtolower($this->stripCurrencyLocalePrefixes($normalized));
+
+        foreach ([
+            '/customer/account',
+            '/cart',
+            '/checkout',
+            '/wishlist',
+            '/rma',
+        ] as $prefix) {
+            if ($normalized === $prefix || \str_starts_with($normalized, $prefix . '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function stripCurrencyLocalePrefixes(string $path): string
+    {
+        $segments = \array_values(\array_filter(\explode('/', \trim($path, '/')), static fn(string $segment): bool => $segment !== ''));
+        while ($segments !== []) {
+            $segment = (string)$segments[0];
+            if (\preg_match('/^[A-Z]{3}$/i', $segment) === 1
+                || \preg_match('/^[a-z]{2}(?:[-_][a-z0-9]{2,5}){1,2}$/i', $segment) === 1
+            ) {
+                \array_shift($segments);
+                continue;
+            }
+
+            break;
+        }
+
+        return $segments === [] ? '/' : '/' . \implode('/', $segments);
     }
 
     private function buildUrl(array $parts): string

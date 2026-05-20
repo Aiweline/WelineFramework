@@ -553,22 +553,17 @@ class SharedStateServiceManager
         $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $this->readRuntimeFile($role));
         $definition = $this->buildStatusProbeDefinition($role, $config, $envConfig, $runtime);
         $healthy = $this->probeRunningSharedService($definition, (string) $definition['token_file_name']);
-        $pid = (int) ($runtime['pid'] ?? 0);
-        if ($healthy && $pid <= 0) {
-            $occupant = Processer::inspectPortOccupantWithHistory((int) $definition['port']);
-            $pid = (int) ($occupant['pid'] ?? 0);
-            if ($pid <= 0) {
-                $pid = Processer::getProcessIdByPort((int) $definition['port']);
-            }
-        }
+        $pid = $healthy
+            ? $this->resolveLivePortOwnerPid($definition)
+            : (int) ($runtime['pid'] ?? 0);
         $runtime = \array_merge(
+            $runtime,
             $this->buildRuntimeMetadata(
                 $definition,
                 $pid,
                 \is_string($runtime['started_at'] ?? null) ? (string) $runtime['started_at'] : null,
                 $healthy ? \date('c') : (\is_string($runtime['healthy_at'] ?? null) ? (string) $runtime['healthy_at'] : null)
-            ),
-            $runtime
+            )
         );
 
         return [
@@ -826,9 +821,10 @@ class SharedStateServiceManager
         $healthy = $this->probeRunningSharedService($definition, $configuredTokenFileName);
 
         if ($healthy) {
+            $runtimePid = (int) ($runtimeFile['pid'] ?? 0);
             $runtime = $this->buildRuntimeMetadata(
                 $definition,
-                (int) ($runtimeFile['pid'] ?? 0),
+                $runtimePid > 0 ? $runtimePid : $this->resolveLivePortOwnerPid($definition),
                 \is_string($runtimeFile['started_at'] ?? null) ? (string) $runtimeFile['started_at'] : null,
                 \date('c')
             );
@@ -1507,6 +1503,7 @@ class SharedStateServiceManager
                 $registry->touchConsumer($role, $requesterInstanceName);
             }
 
+            $this->publishRuntimeRecord($role, $runtime, $registry);
             $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $runtime, $registry);
             if ($runtime !== []) {
                 $this->ensureSharedProcessLogVisible($runtime, $requesterInstanceName);
@@ -1558,6 +1555,88 @@ class SharedStateServiceManager
         $runtime['shutdown_due_at'] = $record['shutdown_due_at'] ?? null;
 
         return $runtime;
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private function resolveLivePortOwnerPid(array $definition): int
+    {
+        $port = (int) ($definition['port'] ?? 0);
+        if ($port <= 0) {
+            return 0;
+        }
+
+        Processer::clearPortCache($port);
+        $pid = Processer::getProcessIdByPort($port);
+        if ($pid > 0) {
+            return $pid;
+        }
+
+        $occupant = Processer::inspectPortOccupantWithHistory($port);
+        $pid = (int) ($occupant['pid'] ?? 0);
+        return $pid > 0 ? $pid : 0;
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     */
+    private function publishRuntimeRecord(
+        string $role,
+        array $runtime,
+        SharedStateServiceRegistry $registry
+    ): void {
+        $role = $this->normalizeRoleName($role);
+        $pid = (int) ($runtime['pid'] ?? 0);
+        $port = (int) ($runtime['port'] ?? 0);
+        if ($pid <= 0 || $port <= 0) {
+            return;
+        }
+
+        $recordFields = [];
+        foreach ([
+            'role',
+            'host',
+            'port',
+            'pid',
+            'token_file_name',
+            'started_at',
+            'healthy_at',
+            'process_name',
+            'instance_name',
+            'service_instance_name',
+            'shared_service',
+        ] as $key) {
+            if (!\array_key_exists($key, $runtime)) {
+                continue;
+            }
+            $value = $runtime[$key];
+            if (($key === 'pid' || $key === 'port') && (int) $value <= 0) {
+                continue;
+            }
+            if (\is_string($value) && \trim($value) === '') {
+                continue;
+            }
+            $recordFields[$key] = $value;
+        }
+
+        if ($recordFields === []) {
+            return;
+        }
+        $recordFields['role'] = $role;
+        $recordFields['shared_service'] = true;
+
+        $registry->updateRecord(
+            $role,
+            static function (array $record) use ($recordFields): array {
+                $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
+                $record = \array_merge($record, $recordFields);
+                $record['consumers'] = $consumers;
+                unset($record['shutdown_due_at'], $record['shutdown_requested_at']);
+
+                return $record;
+            }
+        );
     }
 
     /**

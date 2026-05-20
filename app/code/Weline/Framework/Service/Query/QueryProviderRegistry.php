@@ -21,6 +21,12 @@ class QueryProviderRegistry
 
     private bool $definitionsLoaded = false;
 
+    /** @var array<string, list<array<string, mixed>>> */
+    private static array $descriptorCache = [];
+
+    /** @var array<string, array<string, array<string, mixed>>> */
+    private static array $operationDescriptorCache = [];
+
     private function loadDefinitions(): void
     {
         if ($this->definitionsLoaded) {
@@ -249,10 +255,74 @@ class QueryProviderRegistry
 
     public function getAllDescriptors(): array
     {
-        $descriptors = [];
-        foreach ($this->getAllProviders() as $provider) {
-            $descriptors[] = $provider->getDescriptor();
+        $scope = $this->descriptorCacheScope();
+        if (isset(self::$descriptorCache[$scope])) {
+            return self::$descriptorCache[$scope];
         }
+
+        $descriptors = [];
+        $operationIndex = [];
+        foreach ($this->getAllProviders() as $provider) {
+            $descriptor = $provider->getDescriptor();
+            if (!\is_array($descriptor)) {
+                continue;
+            }
+
+            $descriptors[] = $descriptor;
+            $providerName = (string)($descriptor['provider'] ?? $provider->getProviderName());
+            if ($providerName === '') {
+                continue;
+            }
+
+            foreach (($descriptor['operations'] ?? []) as $operationDescriptor) {
+                if (!\is_array($operationDescriptor)) {
+                    continue;
+                }
+                $operationName = (string)($operationDescriptor['name'] ?? '');
+                if ($operationName === '') {
+                    continue;
+                }
+                $operationIndex[$providerName][$operationName] = $operationDescriptor;
+            }
+        }
+
+        self::$descriptorCache[$scope] = $descriptors;
+        self::$operationDescriptorCache[$scope] = $operationIndex;
+
         return $descriptors;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getOperationDescriptor(string $providerName, string $operationName): ?array
+    {
+        if ($providerName === '' || $operationName === '') {
+            return null;
+        }
+
+        $scope = $this->descriptorCacheScope();
+        if (!isset(self::$operationDescriptorCache[$scope])) {
+            $this->getAllDescriptors();
+        }
+
+        $descriptor = self::$operationDescriptorCache[$scope][$providerName][$operationName] ?? null;
+        return \is_array($descriptor) ? $descriptor : null;
+    }
+
+    public static function resetDescriptorCaches(): void
+    {
+        self::$descriptorCache = [];
+        self::$operationDescriptorCache = [];
+    }
+
+    private function descriptorCacheScope(): string
+    {
+        $language = \function_exists('w_env') ? (string)\w_env('user.lang', '') : '';
+        if ($language === '') {
+            $language = (string)($_COOKIE['WELINE_LANGUAGE'] ?? $_COOKIE['language'] ?? 'default');
+        }
+
+        return $language !== '' ? $language : 'default';
     }
 }

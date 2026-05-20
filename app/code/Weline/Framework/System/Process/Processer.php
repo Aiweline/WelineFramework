@@ -2979,9 +2979,9 @@ class Processer
             } while (\microtime(true) < $deadline);
         }
 
-        if (($status['running'] ?? false) === false) {
-            @\proc_close($process);
-        }
+        // Do not call proc_close() here on Windows detached helpers. In
+        // practice proc_close() can wait behind the detached child process and
+        // turn an async launch into a multi-second synchronous stall.
     }
 
     /**
@@ -6084,7 +6084,9 @@ POWERSHELL;
             return [];
         }
 
-        $pids = [];
+        $candidatePids = [];
+        $pidExpectedNames = [];
+        $pidExpectedPnames = [];
         $currentPid = \getmypid();
         $nameIndex = self::readNameIndex();
         foreach ($nameIndex as $pname => $entries) {
@@ -6105,11 +6107,34 @@ POWERSHELL;
                     continue;
                 }
 
-                if (self::canOperateOnRegisteredPid($pid, $taskName !== '' ? $taskName : null, '', $pname)) {
-                    $pids[$pid] = true;
-                }
+                $candidatePids[$pid] = true;
+                $pidExpectedNames[$pid] = $taskName !== '' ? $taskName : null;
+                $pidExpectedPnames[$pid] = $pname;
             }
         }
+
+        if ($candidatePids === []) {
+            return [];
+        }
+
+        $processInfo = self::batchGetProcessInfo(\array_map('intval', \array_keys($candidatePids)));
+        $pids = [];
+        foreach (\array_keys($candidatePids) as $pid) {
+            $pid = (int) $pid;
+            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+            if (!(bool) ($info['exists'] ?? false) || (bool) ($info['is_zombie'] ?? false)) {
+                continue;
+            }
+            if (self::isManagedProcessRunning(
+                $pid,
+                $pidExpectedNames[$pid] ?? null,
+                '',
+                (string) ($pidExpectedPnames[$pid] ?? '')
+            )) {
+                $pids[$pid] = true;
+            }
+        }
+
         return \array_map('intval', \array_keys($pids));
     }
 

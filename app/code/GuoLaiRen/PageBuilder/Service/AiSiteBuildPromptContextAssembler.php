@@ -22,11 +22,22 @@ final class AiSiteBuildPromptContextAssembler
         $items = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
         $block = \is_array($blocks[$blockId] ?? null) ? $blocks[$blockId] : [];
         $page = \is_array($pages[$pageId] ?? null) ? $pages[$pageId] : [];
+        $pageType = \trim((string)($page['page_type'] ?? $inputScope['page_type'] ?? ''));
+        $pageIdentity = $this->resolvePageIdentityContract($page, $items, $pageType);
+        $blockFlowRole = $this->firstNonEmpty([
+            $block['page_flow_role'] ?? null,
+            $task['page_flow_role'] ?? null,
+            $inputScope['page_flow_role'] ?? null,
+        ]);
 
-        return [
+        $assembled = [
             'contract_id' => (string)($contract['contract_meta']['id'] ?? ''),
             'task' => $task,
             'page' => $page,
+            'page_goal' => (string)($pageIdentity['page_goal'] ?? ''),
+            'page_flow_role' => $blockFlowRole,
+            'page_identity_contract' => $pageIdentity,
+            'page_design_plan' => \is_array($pageIdentity['page_design_plan'] ?? null) ? $pageIdentity['page_design_plan'] : [],
             'block' => $block,
             'content_items' => $this->sliceContentItems($items, $this->stringList($block['content_keys'] ?? [])),
             'design_manifest' => \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [],
@@ -35,6 +46,97 @@ final class AiSiteBuildPromptContextAssembler
             'policy_slices' => $this->stringList($task['policy_slices'] ?? []),
             'acceptance_rule_ids' => $this->stringList($task['acceptance_rule_ids'] ?? []),
         ];
+        AiSiteWorkflowTrace::json('prompt_context_assembled', $assembled, [
+            'contract_id' => (string)($contract['contract_meta']['id'] ?? ''),
+            'task_id' => (string)($task['task_id'] ?? $task['id'] ?? ''),
+            'page_type' => $pageType,
+            'block_id' => $blockId,
+        ]);
+
+        return $assembled;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @param array<string, mixed> $contentItems
+     * @return array<string, mixed>
+     */
+    private function resolvePageIdentityContract(array $page, array $contentItems, string $pageType): array
+    {
+        if ($pageType === '') {
+            return [];
+        }
+
+        $pageDesignPlan = \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : [];
+        $title = $this->firstNonEmpty([
+            $this->contentItemValue($contentItems, (string)($page['title_key'] ?? '')),
+            $page['title'] ?? null,
+            $page['page_title'] ?? null,
+            $pageDesignPlan['page_title'] ?? null,
+        ]);
+        $description = $this->firstNonEmpty([
+            $this->contentItemValue($contentItems, (string)($page['description_key'] ?? '')),
+            $page['description'] ?? null,
+            $page['summary'] ?? null,
+            $pageDesignPlan['summary'] ?? null,
+        ]);
+        $pageGoal = $this->firstNonEmpty([
+            $page['page_goal'] ?? null,
+            $page['goal'] ?? null,
+            $pageDesignPlan['page_role'] ?? null,
+            $pageDesignPlan['content_focus'] ?? null,
+            $description,
+        ]);
+        $contentFocus = $this->firstNonEmpty([
+            $page['content_focus'] ?? null,
+            $pageDesignPlan['content_focus'] ?? null,
+            $description,
+        ]);
+        $conversionRole = $this->firstNonEmpty([
+            $page['conversion_role'] ?? null,
+            $pageDesignPlan['conversion_role'] ?? null,
+        ]);
+
+        return [
+            'page_type' => $pageType,
+            'title' => $title,
+            'description' => $description,
+            'page_goal' => $pageGoal,
+            'content_focus' => $contentFocus,
+            'conversion_role' => $conversionRole,
+            'page_flow_role' => $this->firstNonEmpty([$page['page_flow_role'] ?? null]),
+            'page_design_plan' => $pageDesignPlan,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $items
+     */
+    private function contentItemValue(array $items, string $key): string
+    {
+        if ($key === '' || !\array_key_exists($key, $items)) {
+            return '';
+        }
+
+        return \trim((string)$items[$key]);
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmpty(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $text = \trim((string)$value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '';
     }
 
     /**

@@ -26,6 +26,7 @@ use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
 use Weline\Ai\Service\Provider\ImageGenerationResponseNormalizer;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
+use Weline\Ai\Service\Skill\AdapterSkillResolver;
 use Weline\Ai\Interface\AgentInterface;
 use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
@@ -846,7 +847,70 @@ class AiService
             throw new Exception('参数验证失败: ' . implode(', ', $validationErrors));
         }
 
+        $prompt = $this->injectAdapterSkills($prompt, $scenarioCode, $params);
+
         return $adapter->adaptPrompt($prompt, $params);
+    }
+
+    private function injectAdapterSkills(string $prompt, string $scenarioCode, array $params): string
+    {
+        if (!empty($params['disable_skill_prompt_injection'])) {
+            return $prompt;
+        }
+        if (\str_contains($prompt, 'AI ADAPTER SKILL CAPABILITY')
+            || \str_contains($prompt, 'AI BUILDER SKILL CAPABILITY')) {
+            return $prompt;
+        }
+
+        /** @var AdapterSkillResolver $resolver */
+        $resolver = ObjectManager::getInstance(AdapterSkillResolver::class);
+        $resolved = $resolver->resolveSkillBindings($scenarioCode, $this->extractTemporarySkillCodes($params));
+        if (empty($resolved['items'])) {
+            return $prompt;
+        }
+
+        $guide = $resolver->buildPromptGuideText($resolved['items']);
+        if ($guide === '') {
+            return $prompt;
+        }
+
+        $prompt = \ltrim($prompt);
+        return $prompt === '' ? $guide : $guide . "\n\n" . $prompt;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractTemporarySkillCodes(array $params): array
+    {
+        $candidates = [
+            $params['temporary_skill_codes'] ?? null,
+            $params['selected_skill_codes'] ?? null,
+            $params['skill_codes'] ?? null,
+            $params['scope']['selected_skill_codes'] ?? null,
+            $params['contract_context']['selected_skill_codes'] ?? null,
+        ];
+        $codes = [];
+        foreach ($candidates as $candidate) {
+            if (\is_string($candidate)) {
+                $decoded = \json_decode($candidate, true);
+                $candidate = \is_array($decoded) ? $decoded : \preg_split('/[\s,;]+/', $candidate);
+            }
+            if (!\is_array($candidate)) {
+                continue;
+            }
+            foreach ($candidate as $item) {
+                if (!\is_scalar($item)) {
+                    continue;
+                }
+                $code = \trim((string)$item);
+                if ($code !== '' && !\in_array($code, $codes, true)) {
+                    $codes[] = $code;
+                }
+            }
+        }
+
+        return $codes;
     }
 
     /**

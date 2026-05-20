@@ -12,8 +12,8 @@
 @param.title {default="登录",name="页面标题",description="页面标题"}
 @param.content {default="",name="认证表单内容",description="认证表单内容（HTML字符串）"}
 @param.class {default="",name="额外CSS类",description="根容器额外 class"}
-@param.showHeader {default=true,name="是否显示header",description="是否显示顶栏"}
-@param.showFooter {default=true,name="是否显示footer",description="是否显示底栏"}
+@param.showHeader {default=false,name="是否显示header",description="认证页默认不渲染商城顶栏"}
+@param.showFooter {default=false,name="是否显示footer",description="认证页默认不渲染商城底栏"}
 @param.showSearch {default=true,name="顶栏搜索",description="顶栏是否展示搜索（Partials）"}
 @param.showUserMenu {default=true,name="用户菜单",description="顶栏是否展示用户菜单（Partials）"}
 
@@ -21,33 +21,89 @@
 -->
 <?php
 $meta = $this->getData('meta') ?? [];
-$meta['showHeader'] = true;
-$meta['showFooter'] = true;
+$meta['showHeader'] = false;
+$meta['showFooter'] = false;
 $this->assign('meta', $meta);
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
-    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
-    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
-    <theme:css>Weline_Theme::theme/frontend/assets/css/auth-form-wflash.css</theme:css>
+    <?php
+    $pageTitle = trim((string)($this->getData('title') ?: ($meta['title'] ?? 'Login')));
+    $pageDescription = trim((string)($this->getData('description') ?: ($meta['description'] ?? '')));
+    ?>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= htmlspecialchars($pageTitle !== '' ? $pageTitle : 'Login', ENT_QUOTES, 'UTF-8') ?></title>
+    <?php if ($pageDescription !== ''): ?>
+        <meta name="description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
+    <link rel="icon" type="image/svg+xml" href="/Weline/Theme/view/statics/theme/frontend/assets/img/favicon.svg">
+    <link href="/Weline/Theme/view/theme/frontend/assets/css/theme.css" rel="stylesheet" type="text/css">
+    <link href="/Weline/Theme/view/theme/frontend/assets/css/auth-form-wflash.css" rel="stylesheet" type="text/css">
+    <style data-auth-theme-vars>
+        :root {
+            --color-primary: #f0c14b;
+            --color-primary-dark: #d99a05;
+            --color-primary-border: #a88734;
+            --color-text-primary: #111827;
+            --color-text-secondary: #64748b;
+            --color-text-tertiary: #94a3b8;
+            --color-text-light: #fff;
+            --color-bg-primary: #fff;
+            --color-bg-secondary: #f8fafc;
+            --color-border-default: #d1d5db;
+            --color-border-focus: #f59e0b;
+            --color-border-light: #e5e7eb;
+            --color-link: #0f62ba;
+            --color-link-hover: #b45309;
+            --color-success: #22c55e;
+            --color-accent-light: rgba(59, 130, 246, .12);
+            --spacing-xs: .25rem;
+            --spacing-sm: .5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+            --spacing-xl: 2rem;
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --shadow-md: 0 12px 32px rgba(15, 23, 42, .12);
+            --font-size-sm: .875rem;
+            --font-size-base: 1rem;
+            --font-size-xl: 1.5rem;
+            --font-size-xxl: 1.875rem;
+            --font-weight-medium: 500;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+            --auth-input-height: 44px;
+            --auth-input-padding-y: .75rem;
+            --auth-input-radius: 8px;
+            --auth-input-border-width: 2px;
+        }
+        body.account-auth-layout {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+            font-family: "Segoe UI", sans-serif;
+            color: var(--color-text-primary);
+        }
+        .weline-page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            box-sizing: border-box;
+        }
+        .weline-main-content,
+        .auth-container {
+            width: 100%;
+        }
+    </style>
 </head>
 <body class="account-auth-layout">
-    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::account::body-start</w:hook>
-
     <div class="account-auth <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth" data-layout="account_auth">
         <div class="weline-page-wrapper">
-            <if condition="meta.showHeader">
-                <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::account::header-before</w:hook>
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
-                <w:hook>Weline_Theme::frontend::layouts::account::header-after</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
-            </if>
-
             <div class="weline-main-content">
                 <main class="account-auth__main" id="account-auth-content" data-layout="account_auth_content">
                     <div class="auth-container">
@@ -61,18 +117,7 @@ $this->assign('meta', $meta);
                     </div>
                 </main>
             </div>
-
-            <if condition="meta.showFooter">
-                <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::account::footer-before</w:hook>
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
-                <w:hook>Weline_Theme::frontend::layouts::account::footer-after</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
-            </if>
         </div>
     </div>
-
-    <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>

@@ -1,12 +1,49 @@
 ﻿<?php
 /** @var \Weline\Framework\View\Template $this */
 /**@var \Weline\Customer\Model\Customer $user */
-$avatar = $user->getAvatar();
-$username = $user->getUsername();
+$user = $user ?? $this->getData('user');
+if (!$user instanceof \Weline\Customer\Model\Customer) {
+    try {
+        $sessionUser = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession()->getUser();
+        if ($sessionUser instanceof \Weline\Customer\Model\Customer) {
+            $user = $sessionUser;
+        }
+    } catch (\Throwable) {
+    }
+}
+$avatar = is_object($user) && method_exists($user, 'getAvatar') ? (string)($user->getAvatar() ?? '') : '';
+$username = is_object($user) && method_exists($user, 'getUsername') ? (string)($user->getUsername() ?? '') : '';
 $displayName = $username !== '' ? ucfirst($username) : '';
-$email = $user->getEmail();
-$avatarInitial = strtoupper(mb_substr($username, 0, 1));
+$email = is_object($user) && method_exists($user, 'getEmail') ? (string)($user->getEmail() ?? '') : '';
+if ($username === '' && $email !== '') {
+    $username = $email;
+    $displayName = ucfirst($email);
+}
+$avatarInitial = $username !== '' ? strtoupper(mb_substr($username, 0, 1)) : '?';
+$userId = is_object($user) && method_exists($user, 'getId') ? $user->getId() : '';
+$loginIp = is_object($user) && method_exists($user, 'getLoginIp') ? (string)($user->getLoginIp() ?? '') : '';
+$sessionId = is_object($user) && method_exists($user, 'getSessionId') ? (string)($user->getSessionId() ?? '') : '';
+$accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/sidebar-content');
+$accountIndexAssetVersion = '20260520-wls-account-assets-1';
+$accountIndexConfigJson = json_encode([
+    'i18n' => [
+        'saving' => (string) __('保存中...'),
+        'changing' => (string) __('修改中...'),
+        'profileUpdateFailed' => (string) __('更新失败，请稍后重试'),
+        'securityUpdateFailed' => (string) __('修改失败，请稍后重试'),
+        'fillAllFields' => (string) __('请填写所有字段'),
+        'passwordTooShort' => (string) __('新密码长度不能少于 6 位'),
+        'passwordMismatch' => (string) __('两次输入的新密码不一致'),
+        'invalidServerResponse' => (string) __('服务器返回了无效响应，请稍后重试'),
+        'endpointNotFound' => (string) __('保存接口不存在，页面脚本或路由需要同步修复'),
+    ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
+    $accountIndexConfigJson = '{}';
+}
 ?>
+<link rel="stylesheet" href="@static(Weline_Customer::css/account-index.css)?v=<?= $accountIndexAssetVersion ?>">
+<script id="weline-account-index-config" type="application/json"><?= $accountIndexConfigJson ?></script>
 <!-- 主内容区 -->
 <section class="account-index">
     <!-- 个人资料头部 -->
@@ -45,7 +82,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                     <div class="account-form__group account-form__group--wide">
                         <label class="account-form__label"><lang>账户标识</lang></label>
                         <div class="account-identity" id="accountIdentity">
-                            <span class="account-identity__badge">#<?= $user->getId() ?></span>
+                            <span class="account-identity__badge">#<?= htmlspecialchars((string)$userId) ?></span>
                             <strong class="account-identity__name"><?= htmlspecialchars($displayName) ?></strong>
                         </div>
                         <span class="account-form__hint"><lang>用户名和用户 ID 为系统标识，不可修改</lang></span>
@@ -55,7 +92,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                         <label for="avatar" class="account-form__label"><lang>头像 URL</lang></label>
                         <div class="account-form__input-group">
                             <input type="url" class="account-form__input" id="avatar" name="avatar"
-                                   value="<?= htmlspecialchars($user->getAvatar() ?: '') ?>"
+                                   value="<?= htmlspecialchars($avatar) ?>"
                                    placeholder="https://example.com/avatar.jpg">
                         </div>
                         <span class="account-form__hint"><lang>输入头像图片的完整 URL 地址，顶部头像会自动预览</lang></span>
@@ -123,8 +160,9 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         </div>
     </div>
 
-    <!-- 扩展分区：其他模块通过 account.sidebar.content 注入 -->
-    <w:hook name="account.sidebar.content"/>
+    <!-- 扩展分区：其他模块通过 account.sidebar.content 延迟注入 -->
+    <div data-account-sidebar-content-mount
+         data-account-sidebar-content-url="<?= htmlspecialchars((string)$accountSidebarContentUrlJs, ENT_QUOTES, 'UTF-8') ?>"></div>
 
     <div class="account-index__section d-none" id="login-info-section" data-account-section="login-info" hidden>
         <div class="account-card">
@@ -136,7 +174,6 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                     <div class="account-info-item">
                         <label class="account-info-item__label"><lang>最后登录 IP</lang></label>
                         <div class="account-info-item__value">
-                            <?php $loginIp = $user->getLoginIp(); ?>
                             <?php if ($loginIp): ?>
                                 <?= htmlspecialchars($loginIp) ?>
                             <?php else: ?>
@@ -147,9 +184,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
                     <div class="account-info-item">
                         <label class="account-info-item__label"><lang>会话 ID</lang></label>
                         <div class="account-info-item__value">
-                            <?php $sessionId = $user->getSessionId(); ?>
                             <?php if ($sessionId): ?>
-                                <?= htmlspecialchars($user->getSessionId()) ?>
+                                <?= htmlspecialchars($sessionId) ?>
                             <?php else: ?>
                                 <lang>未知</lang>
                             <?php endif; ?>
@@ -161,6 +197,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     </div>
 </section>
 
+<script src="@static(Weline_Customer::js/account-index.js)?v=<?= $accountIndexAssetVersion ?>" defer></script>
+<?php if (false): ?>
 <style>
 .account-index {
     --ai-border-radius: var(--border-radius-xl, 1rem);
@@ -701,7 +739,70 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     }
 
     var navLinks = document.querySelectorAll('[data-account-nav-link][data-section]');
+    var sidebarContentMount = document.querySelector('[data-account-sidebar-content-mount]');
+    var sidebarContentLoaded = !sidebarContentMount;
+    var sidebarContentLoading = null;
 
+    function executeInsertedScripts(container) {
+        Array.prototype.slice.call(container.querySelectorAll('script')).forEach(function(oldScript) {
+            var script = document.createElement('script');
+            Array.prototype.slice.call(oldScript.attributes).forEach(function(attribute) {
+                script.setAttribute(attribute.name, attribute.value);
+            });
+            script.text = oldScript.textContent || '';
+            oldScript.parentNode.replaceChild(script, oldScript);
+        });
+    }
+
+    function loadSidebarContent() {
+        if (!sidebarContentMount || sidebarContentLoaded) {
+            return Promise.resolve(true);
+        }
+
+        if (sidebarContentLoading) {
+            return sidebarContentLoading;
+        }
+
+        var url = sidebarContentMount.getAttribute('data-account-sidebar-content-url') || '';
+        if (!url) {
+            sidebarContentLoaded = true;
+            return Promise.resolve(false);
+        }
+
+        sidebarContentLoading = fetch(url, {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function(response) {
+            if (!response.ok) {
+                throw new Error('Account sections request failed: ' + response.status);
+            }
+            return response.json();
+        }).then(function(payload) {
+            if (!payload || payload.success === false) {
+                if (payload && payload.redirect) {
+                    window.location.href = payload.redirect;
+                }
+                return false;
+            }
+
+            sidebarContentMount.innerHTML = payload.html || '';
+            executeInsertedScripts(sidebarContentMount);
+            sidebarContentLoaded = true;
+            window.dispatchEvent(new CustomEvent('weline:account-sidebar-content-loaded', {
+                detail: { length: payload.length || 0 }
+            }));
+            return true;
+        }).catch(function(error) {
+            sidebarContentLoading = null;
+            console.error(error);
+            return false;
+        });
+
+        return sidebarContentLoading;
+    }
 
     function parseHash(inputHash) {
         var rawHash = String(inputHash || '');
@@ -817,6 +918,11 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         var targetSection = document.querySelector('[data-account-section="' + targetId + '"]');
         if (!targetSection) {
             targetSection = document.getElementById(targetId + '-section');
+        }
+        if (!targetSection && sidebarContentMount && !sidebarContentLoaded) {
+            return loadSidebarContent().then(function() {
+                showAccountSection(targetId);
+            });
         }
         sections.forEach(function(section) {
             section.classList.add('d-none');
@@ -1035,3 +1141,4 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     }
 })();
 </script>
+<?php endif; ?>

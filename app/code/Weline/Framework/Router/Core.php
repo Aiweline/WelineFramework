@@ -23,6 +23,7 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 
@@ -281,6 +282,61 @@ class Core
         $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: $uri);
 
         return \trim($path, '/') === '';
+    }
+
+    private function shouldUseDirectGeneratedRouteFastPath(bool $hasPreviewTheme, bool $isFrontendRootRequest): bool
+    {
+        if ($this->is_backend || $hasPreviewTheme || $isFrontendRootRequest) {
+            return false;
+        }
+
+        if ($this->request_area !== \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND) {
+            return false;
+        }
+
+        if ($this->isStaticFile()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function resolveDirectGeneratedRouteUrl(): ?string
+    {
+        $url = $this->normalizeUrlTail($this->getStrippedUrlPath());
+        if ($url === '') {
+            return null;
+        }
+
+        if (!$this->hasGeneratedPcRoute($url, false)) {
+            return null;
+        }
+
+        return $url;
+    }
+
+    private function hasGeneratedPcRoute(string $url, bool $isPcAdmin): bool
+    {
+        $url = $this->normalizeRouterUrlPathSegments($url);
+        $routerFilepath = $isPcAdmin ? Env::path_BACKEND_PC_ROUTER_FILE : Env::path_FRONTEND_PC_ROUTER_FILE;
+        $routers = self::loadGeneratedRouterFile($routerFilepath);
+        if ($routers === []) {
+            return false;
+        }
+
+        $requestMethod = strtoupper($this->request->getMethod() ?: 'GET');
+        $method = '::' . $requestMethod;
+        $getFallback = $requestMethod === 'HEAD' ? '::GET' : '';
+        $defaultRoute = $isPcAdmin ? 'admin' : 'index/index';
+
+        return isset($routers[$url])
+            || isset($routers[$url . $method])
+            || ($getFallback !== '' && isset($routers[$url . $getFallback]))
+            || ($url === '' && (
+                isset($routers[$defaultRoute])
+                || isset($routers[$defaultRoute . $method])
+                || ($getFallback !== '' && isset($routers[$defaultRoute . $getFallback]))
+            ));
     }
 
     private static function isStaleEmptyRootRouterCache(
@@ -570,6 +626,33 @@ class Core
             # ----------事件：处理url之前 结束------------
 
             return $this->normalizeUrlTail($url);
+        }
+
+        if ($this->shouldUseDirectGeneratedRouteFastPath($hasPreviewTheme, $isFrontendRootRequest)) {
+            $fastPathStart = RequestLifecycleTrace::isEnabled() ? \microtime(true) : 0.0;
+            $directRouteUrl = $this->resolveDirectGeneratedRouteUrl();
+            if ($directRouteUrl !== null) {
+                $this->routerGeneratedGetParams = [];
+                $this->request->setRule([]);
+                $this->request->setData([]);
+                if ($fastPathStart > 0) {
+                    RequestLifecycleTrace::recordSpan(
+                        'router::direct_generated_route_fast_path',
+                        (\microtime(true) - $fastPathStart) * 1000,
+                        'framework',
+                        null,
+                        ['url' => $directRouteUrl]
+                    );
+                }
+                return $directRouteUrl;
+            }
+            if ($fastPathStart > 0) {
+                RequestLifecycleTrace::recordSpan(
+                    'router::direct_generated_route_fast_path_miss',
+                    (\microtime(true) - $fastPathStart) * 1000,
+                    'framework'
+                );
+            }
         }
         
         // 性能优化：复用已读取的统一缓存数据
@@ -1208,6 +1291,38 @@ class Core
      */
     public function route()
     {
+        $routeProfileStart = \microtime(true);
+        $routeProfileLast = $routeProfileStart;
+        $profileUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
+        $routeProfile = [
+            'uri' => $profileUri,
+            'method' => (string)($this->request->getMethod() ?: ''),
+            'area' => $this->request_area,
+            'area_router' => $this->area_router,
+            'backend' => $this->is_backend ? 1 : 0,
+        ];
+        $routeProfileMark = static function (string $name) use (&$routeProfile, &$routeProfileLast, $routeProfileStart): void {
+            $now = \microtime(true);
+            $routeProfile[$name . '_ms'] = \round(($now - $routeProfileLast) * 1000, 2);
+            $routeProfileLast = $now;
+            $routeProfile['elapsed_ms'] = \round(($now - $routeProfileStart) * 1000, 2);
+        };
+        $routeProfilePublish = static function (string $stage = 'return') use (&$routeProfile, $routeProfileStart, $profileUri): void {
+            $now = \microtime(true);
+            $routeProfile['stage'] = $stage;
+            $routeProfile['total_ms'] = \round(($now - $routeProfileStart) * 1000, 2);
+            if (\class_exists(RequestContext::class, false) && RequestContext::isInitialized()) {
+                RequestContext::set('router.start.profile', $routeProfile);
+            }
+            $uriForLog = $profileUri !== '' ? $profileUri : (string)($routeProfile['uri'] ?? '');
+            if (
+                ($routeProfile['total_ms'] ?? 0) >= 100.0
+                || \str_contains($uriForLog, 'customer/account')
+                || \str_contains($uriForLog, 'query-bin')
+            ) {
+                \error_log('[RouterPerf] route ' . \json_encode($routeProfile, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+            }
+        };
         // 安全检查：确保 router 存在且格式正确
         if (empty($this->router) || !\is_array($this->router)) {
             $this->request->getResponse()->noRouter();
@@ -1235,11 +1350,19 @@ class Core
         $fpcBuildLock = null;
 
         try {
-            if (!$this->is_backend && PROD && $routerCacheEnabled && $frontendCacheEnabled) {
+            if (!$this->is_backend && $routerCacheEnabled && $frontendCacheEnabled) {
                 $fpcCoordinator = $this->getFullPageCacheCoordinator();
+                if (!$fpcCoordinator->canServeCachedResponse($this->request->getMethod() ?: 'GET')) {
+                    $fpcCoordinator = null;
+                }
+            }
+
+            if ($fpcCoordinator !== null) {
                 $cachedResponse = $fpcCoordinator->getCachedResponse($this->request->getMethod() ?: 'GET');
                 if ($cachedResponse !== null) {
                     $this->is_match = true;
+                    $routeProfile['fpc'] = 'hit';
+                    $routeProfilePublish('fpc_hit');
                     return $cachedResponse;
                 }
 
@@ -1248,6 +1371,8 @@ class Core
                     $cachedResponse = $fpcCoordinator->waitForPublishedResponse($this->request->getMethod() ?: 'GET');
                     if ($cachedResponse !== null) {
                         $this->is_match = true;
+                        $routeProfile['fpc'] = 'wait_hit';
+                        $routeProfilePublish('fpc_wait_hit');
                         return $cachedResponse;
                     }
                 }
@@ -1255,6 +1380,8 @@ class Core
         
         # 方法体方法和请求方法不匹配时 禁止访问
         # HEAD 请求应该被允许访问 GET 方法的路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
+        $routeProfile['fpc'] = $fpcCoordinator === null ? 'disabled' : ($fpcBuildLock === null ? 'wait_miss' : 'build_lock');
+        $routeProfileMark('fpc_probe');
         $routeMethod = $this->router['class']['request_method'] ?? '';
         $currentRequestMethod = $this->request->getMethod();
         if ('' !== $routeMethod) {
@@ -1268,6 +1395,10 @@ class Core
         $this->request->setRouter($this->router);
         
         list($dispatch, $method) = $this->getController($this->router);
+        $routeProfile['module'] = (string)($this->router['module'] ?? '');
+        $routeProfile['controller'] = (string)$dispatch;
+        $routeProfile['action'] = (string)$method;
+        $routeProfileMark('controller_resolve');
         $originalUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
         if (
             Env::get('wls.debug.hot_path_logs', false)
@@ -1296,10 +1427,13 @@ class Core
             if (method_exists($dispatchAttribute, 'execute')) {
                 $result = $dispatchAttribute->execute();
                 if ($result) {
+                    $routeProfileMark('attribute_execute');
+                    $routeProfilePublish('attribute_return');
                     return $this->resolveRequestScopedResponse($result, '');
                 }
             }
         }
+        $routeProfileMark('reflection_attrs');
         
         /**@var \Weline\Framework\Controller\Core $dispatch */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
@@ -1310,6 +1444,7 @@ class Core
             RequestLifecycleTrace::pushCurrentParent('controller_chain::route_before');
         }
         $eventManager->dispatch('Weline_Framework_Router::route_before', $eventData);
+        $routeProfileMark('route_before');
         if (RequestLifecycleTrace::isEnabled()) {
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan('controller_chain::route_before', (microtime(true) - $t0) * 1000, 'controller');
@@ -1318,6 +1453,7 @@ class Core
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         $dispatch = ObjectManager::getInstance((string)$dispatch);
         $dispatch->__setModuleInfo($this->router);
+        $routeProfileMark('controller_init');
         if (RequestLifecycleTrace::isEnabled()) {
             RequestLifecycleTrace::recordSpan('controller_chain::controller_init', (microtime(true) - $t0) * 1000, 'controller');
         }
@@ -1335,11 +1471,13 @@ class Core
         }
         try {
             $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
+            $routeProfileMark('action_execute');
             // 检测是否是流式响应（SSE）- 如果是，直接返回，不进行后续处理
             // 仅依赖 headers_list 在部分 FPM 场景会失效，因此优先检查 SseContext 开关。
             if (SseContext::isSseEnabled()) {
                 FiberOutputBuffer::discardCapture();
                 $this->is_match = true;
+                $routeProfilePublish('sse_context_return');
                 return;
             }
             $currentHeaders = headers_list();
@@ -1350,6 +1488,7 @@ class Core
                     // 清理输出缓冲区并直接返回（流式响应已经发送）
                     FiberOutputBuffer::discardCapture();
                     $this->is_match = true;
+                    $routeProfilePublish('sse_accept_return');
                     return;
                 }
             }
@@ -1362,29 +1501,35 @@ class Core
             $resultData = new DataObject(['result' => $result, 'route' => $this]);
             $eventData = ['data' => $resultData];
             $eventManager->dispatch('Weline_Framework_Router::route_after', $eventData);
+            $routeProfileMark('route_after');
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::popCurrentParent();
                 RequestLifecycleTrace::recordSpan('controller_chain::route_after', (microtime(true) - $t0) * 1000, 'controller');
             }
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
             $output = FiberOutputBuffer::endCapture();
+            $routeProfileMark('end_capture');
             // 如果控制器返回了结果，优先使用返回值；否则使用输出缓冲区内容
             $fpcHtml = !empty($result) ? (is_string($result) ? $result : $output) : $output;
             
             $response = $this->resolveRequestScopedResponse($result, $output);
             $fpcHtml = $response->getBody();
+            $routeProfileMark('response_resolve');
         } catch (\Weline\Framework\Http\RedirectException $redirectEx) {
             // 重定向异常：直接重新抛出，让 WlsRuntime 处理
             // 异常情况下清理输出缓冲区
             FiberOutputBuffer::discardCapture();
+            $routeProfilePublish('redirect_exception');
             throw $redirectEx;
         } catch (\Exception $e) {
             // 异常情况下清理输出缓冲区
             FiberOutputBuffer::discardCapture();
+            $routeProfilePublish('exception');
             throw $e;
         } catch (\Throwable $e) {
             // 异常情况下清理输出缓冲区
             FiberOutputBuffer::discardCapture();
+            $routeProfilePublish('throwable');
             throw $e;
         } finally {
             if (RequestLifecycleTrace::isEnabled()) {
@@ -1398,6 +1543,7 @@ class Core
         if (is_null($this->request->uri_cache_url_path_data)) {
             $this->request->cache->set($this->request->uri_cache_key, $this->request->getUri());
         }
+        $routeProfileMark('uri_cache');
         
         // 后端请求不缓存，只缓存前端请求
         // 检查全页缓存是否启用（检查 router_cache 和 frontend_cache 配置）
@@ -1414,6 +1560,7 @@ class Core
             && !empty($fpcHtml)
             && $fpcCoordinator !== null
             && $fpcBuildLock !== null
+            && $fpcCoordinator->canPublishResponse($response, $this->request->getMethod() ?: 'GET')
         ) {
             $fpcCoordinator->publishResponse(
                 $response,
@@ -1425,6 +1572,7 @@ class Core
             );
         }
         // 兼容性：如果 url_cache_data 为空，也保存到旧的缓存键
+        $routeProfileMark('fpc_publish');
         if (!$this->url_cache_data) {
             $ruleCachePayload = [
                 self::RULE_CACHE_RULE_KEY => $this->request->getRule(),
@@ -1434,6 +1582,8 @@ class Core
             $this->cache->set($this->url_cache_key, $this->url);
         }
         // 返回结果（如果控制器返回了值）或输出缓冲区内容
+        $routeProfileMark('rule_cache');
+        $routeProfilePublish('return');
         return $response ?? $this->resolveRequestScopedResponse(!empty($result) ? $result : $fpcHtml, '');
         } finally {
             if ($fpcCoordinator !== null) {

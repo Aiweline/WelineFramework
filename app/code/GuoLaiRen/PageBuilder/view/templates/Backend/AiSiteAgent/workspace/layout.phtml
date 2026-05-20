@@ -1,5 +1,5 @@
 <style>
-    /* AI 建站契约：目标域名（必填）是阶段一确认与更新方案的前端硬门闩。 */
+    /* AI 建站契约：阶段一以标题、需求与设计方向为主；目标域名仅作为可选发布信息。 */
     .pb-ai-expert-main-grid > [class*="col-"] {
         display: flex;
         flex-direction: column;
@@ -591,6 +591,32 @@
 <input type="hidden" id="site-builder-api-recommend-domain" value="<?= htmlspecialchars($recommendDomainUrl, ENT_QUOTES, 'UTF-8') ?>">
 <input type="hidden" id="site-builder-api-check-domain" value="<?= htmlspecialchars($checkDomainUrl, ENT_QUOTES, 'UTF-8') ?>">
 
+<?php
+$pbAiStageGuide = match ((string)$currentStage) {
+    'visual_edit' => [
+        'icon' => 'mdi-monitor-eye',
+        'eyebrow' => (string)__('阶段 2 / 虚拟主题'),
+        'title' => (string)__('检查每个页面的真实生成效果'),
+        'text' => (string)__('在这里切换页面和设备预览，发现某个区块不合格时优先使用区块级微调或重建，让 AI 按已确认方案修正，不直接硬改最终内容。'),
+        'next' => (string)__('确认 PC 与手机预览都过关后，进入发布确认。'),
+    ],
+    'publish' => [
+        'icon' => 'mdi-rocket-launch-outline',
+        'eyebrow' => (string)__('阶段 3 / 发布确认'),
+        'title' => (string)__('最后核对并发布本地可访问站点'),
+        'text' => (string)__('先打开预览检查关键页面，再运行发布前预检。预检通过后发布，系统会给出可交付的本地访问地址。'),
+        'next' => (string)__('拿到站点 URL 后进行人工验收。'),
+    ],
+    default => [
+        'icon' => 'mdi-file-document-edit-outline',
+        'eyebrow' => (string)__('阶段 1 / 需求与方案'),
+        'title' => (string)__('先把方向、页面和内容契约锁清楚'),
+        'text' => (string)__('标题、一句话描述和设计方向会进入方案契约；确认方案后会冻结方向版本，后续区块必须按真实方案逐一生成。'),
+        'next' => (string)__('生成方案后先审方案，再进入虚拟主题构建。'),
+    ],
+};
+?>
+
 <div class="pb-guided">
     <?php /* 顶栏 */ ?>
     <div class="pb-guided-header">
@@ -606,6 +632,21 @@
     </div>
 
     <?php /* 引导步骤 */ ?>
+    <div class="pb-guided-stage-guide" aria-live="polite">
+        <div>
+            <span class="pb-guided-stage-guide__eyebrow">
+                <i class="mdi <?= htmlspecialchars((string)$pbAiStageGuide['icon'], ENT_QUOTES, 'UTF-8') ?>" aria-hidden="true"></i>
+                <?= htmlspecialchars((string)$pbAiStageGuide['eyebrow'], ENT_QUOTES, 'UTF-8') ?>
+            </span>
+            <h5 class="pb-guided-stage-guide__title"><?= htmlspecialchars((string)$pbAiStageGuide['title'], ENT_QUOTES, 'UTF-8') ?></h5>
+            <div class="pb-guided-stage-guide__text"><?= htmlspecialchars((string)$pbAiStageGuide['text'], ENT_QUOTES, 'UTF-8') ?></div>
+        </div>
+        <div class="pb-guided-stage-guide__next">
+            <span class="pb-guided-stage-guide__next-label"><?= htmlspecialchars((string)__('下一步'), ENT_QUOTES, 'UTF-8') ?></span>
+            <strong><?= htmlspecialchars((string)$pbAiStageGuide['next'], ENT_QUOTES, 'UTF-8') ?></strong>
+        </div>
+    </div>
+
     <div class="pb-guided-steps" role="list">
         <?php foreach ($guidedSteps as $i => $step):
             $isActive = ($i === $activeStepIndex);
@@ -664,7 +705,7 @@
                             <i class="mdi mdi-account-voice text-primary"></i>
                             <?= htmlspecialchars((string)__('建站需求'), ENT_QUOTES, 'UTF-8') ?>
                         </h5>
-                        <p class="text-muted small mb-3"><?= htmlspecialchars((string)__('填写网站名称、定位、目标域名和页面范围，AI 会据此生成可落地的建站方案。'), ENT_QUOTES, 'UTF-8') ?></p>
+                        <p class="text-muted small mb-3"><?= htmlspecialchars((string)__('填写网站名称、定位、设计方向和页面范围，AI 会据此生成可落地的建站方案。'), ENT_QUOTES, 'UTF-8') ?></p>
                         <div class="row g-3">
                         <div class="col-md-8">
                             <label class="form-label" for="pb-ai-site-title"><?= htmlspecialchars((string)__('网站名称'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -675,7 +716,7 @@
                         <div class="col-md-4">
                             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
                                 <div class="d-flex align-items-center gap-1 min-w-0">
-                                    <label class="form-label mb-0" for="pb-ai-target-domain"><?= htmlspecialchars((string)__('目标域名（必填）'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    <label class="form-label mb-0" for="pb-ai-target-domain"><?= htmlspecialchars((string)__('目标域名（可选）'), ENT_QUOTES, 'UTF-8') ?></label>
                                     <button type="button" class="btn btn-link p-0 text-muted lh-1 align-middle border-0 shadow-none" style="min-width:auto;" id="pb-ai-target-domain-help" title="<?= htmlspecialchars($pbAiTargetDomainHelpTitle, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($pbAiTargetDomainHelpTitle, ENT_QUOTES, 'UTF-8') ?>">
                                         <i class="mdi mdi-help-circle-outline" style="font-size:1.15rem;" aria-hidden="true"></i>
                                     </button>
@@ -686,7 +727,7 @@
                             </div>
                             <input class="form-control pb-ai-target-domain-sync" id="pb-ai-target-domain" type="text" list="pb-ai-target-domain-options"
                                    value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                   placeholder="@lang{请填写要绑定的目标域名}">
+                                   placeholder="@lang{可稍后填写要绑定的目标域名}">
                             <datalist id="pb-ai-target-domain-options">
                                 <?php foreach ($recommendedDomainList as $recommendedDomain): ?>
                                     <option value="<?= htmlspecialchars((string)$recommendedDomain, ENT_QUOTES, 'UTF-8') ?>"></option>
@@ -743,6 +784,36 @@
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded p-3 bg-body" id="pb-ai-design-direction-panel">
+                                <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                                    <div>
+                                        <label class="form-label mb-1"><?= htmlspecialchars((string)__('设计方向'), ENT_QUOTES, 'UTF-8') ?></label>
+                                        <div class="fw-semibold" id="pb-ai-design-direction-label"><?= htmlspecialchars((string)($designDirectionLabel ?? __('通用设计方向')), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="small text-muted" id="pb-ai-design-direction-reason"><?= htmlspecialchars((string)($designDirectionReason ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                                        <span class="badge bg-soft-secondary text-secondary" id="pb-ai-design-direction-lock">
+                                            <?= !empty($guidedScopeDefaults['design_direction_locked'] ?? 0)
+                                                ? htmlspecialchars((string)__('已冻结'), ENT_QUOTES, 'UTF-8')
+                                                : htmlspecialchars((string)__('生成方案时冻结'), ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
+                                        <?php if (!empty($designDirectionManageUrl ?? '')): ?>
+                                            <a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars((string)$designDirectionManageUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                                                <?= htmlspecialchars((string)__('方向管理'), ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php if (\is_array($designDirectionSnapshot ?? null) && $designDirectionSnapshot !== []): ?>
+                                    <div class="d-flex flex-wrap gap-2 mt-2 small" id="pb-ai-design-direction-rules">
+                                        <?php foreach (\array_slice((array)($designDirectionSnapshot['visual_keywords'] ?? []), 0, 6) as $keyword): ?>
+                                            <span class="badge bg-soft-info text-info"><?= htmlspecialchars((string)$keyword, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <div class="col-12">
@@ -868,12 +939,12 @@
 
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4">
                         <div class="small">
-                            <div class="text-muted pb-ai-primary-action-hint"><?= htmlspecialchars((string)__('The form autosaves. Stage 1 runs through the backend queue and this panel keeps showing live status.'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="text-muted" data-pb-skill-summary-stage="plan"><?= htmlspecialchars((string)__('Stage 1 uses default skills unless you select custom ones.'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="text-muted" data-pb-queue-state-detail="plan"><?= htmlspecialchars((string)__('Stage 1 plan: idle'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted pb-ai-primary-action-hint"><?= htmlspecialchars((string)__('表单会自动保存；方案生成会进入后台队列，右侧会同步显示进度。'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted" data-pb-skill-summary-stage="plan"><?= htmlspecialchars((string)__('默认启用通用设计能力；选择的技能和设计方向会一起进入方案契约。'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted" data-pb-queue-state-detail="plan"><?= htmlspecialchars((string)__('阶段一方案：待生成'), ENT_QUOTES, 'UTF-8') ?></div>
                         </div>
                         <button type="button" class="btn btn-primary btn-lg pb-ai-run-virtual-theme">
-                            <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('Confirm and Generate Plan'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('生成建站方案'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                     </div>
 

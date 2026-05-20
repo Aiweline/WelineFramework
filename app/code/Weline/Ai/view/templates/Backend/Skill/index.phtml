@@ -1,0 +1,174 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array<int,array<string,mixed>> $skills
+ */
+$skills = \is_array($skills ?? null) ? $skills : [];
+$catalogUrl = $this->getBackendUrl('ai/backend/skill/post-catalog');
+$saveUrl = $this->getBackendUrl('ai/backend/skill/post-save');
+$importUrl = $this->getBackendUrl('ai/backend/skill/post-import-url');
+$disableUrl = $this->getBackendUrl('ai/backend/skill/post-disable');
+?>
+<?php if (empty($embed)): ?>
+    <?= $this->fetch('Weline_Ai::Backend/Manager/tabs.phtml', ['activeTab' => 'skill']) ?>
+<?php endif; ?>
+
+<div class="container-fluid py-3 weline-ai-skill-page">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+        <div>
+            <h4 class="mb-1"><i class="mdi mdi-shape-outline me-1"></i>AI Skills</h4>
+            <div class="text-muted small">Govern module, custom, imported, and adapter-bound prompt skills.</div>
+        </div>
+        <button class="btn btn-outline-primary btn-sm" type="button" id="ai-skill-refresh">Refresh catalog</button>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong>Skill catalog</strong>
+                    <span class="small text-muted" id="ai-skill-status"><?= count($skills) ?> skills</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Source</th>
+                                <th>Status</th>
+                                <th>Binding</th>
+                                <th></th>
+                            </tr>
+                            </thead>
+                            <tbody id="ai-skill-table-body">
+                            <?php foreach ($skills as $skill): ?>
+                                <tr>
+                                    <td><code><?= htmlspecialchars((string)($skill['code'] ?? '')) ?></code></td>
+                                    <td>
+                                        <div class="fw-semibold"><?= htmlspecialchars((string)($skill['name'] ?? $skill['code'] ?? '')) ?></div>
+                                        <div class="small text-muted"><?= htmlspecialchars((string)($skill['description'] ?? '')) ?></div>
+                                    </td>
+                                    <td><?= htmlspecialchars((string)($skill['source'] ?? $skill['source_type'] ?? '')) ?></td>
+                                    <td><span class="badge text-bg-<?= (string)($skill['status'] ?? '') === 'active' ? 'success' : 'secondary' ?>"><?= htmlspecialchars((string)($skill['status'] ?? '')) ?></span></td>
+                                    <td class="small text-muted">-</td>
+                                    <td><a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars($this->getBackendUrl('ai/backend/skill/get-export') . '?code=' . rawurlencode((string)($skill['code'] ?? ''))) ?>">Export</a></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header"><strong>Import from URL</strong></div>
+                <div class="card-body">
+                    <input type="url" class="form-control form-control-sm mb-2" id="ai-skill-import-url" placeholder="https://example.com/SKILL.md">
+                    <button class="btn btn-primary btn-sm" type="button" id="ai-skill-import-btn">Import as pending</button>
+                    <div class="small text-muted mt-2">Only public http/https URLs are allowed. Limit: 256KB, 8s timeout, Markdown/text/JSON.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><strong>Custom skill</strong></div>
+                <div class="card-body">
+                    <input type="text" class="form-control form-control-sm mb-2" id="ai-skill-code" placeholder="skill-code">
+                    <input type="text" class="form-control form-control-sm mb-2" id="ai-skill-name" placeholder="Name">
+                    <textarea class="form-control form-control-sm mb-2" id="ai-skill-description" rows="2" placeholder="Description"></textarea>
+                    <textarea class="form-control form-control-sm mb-2" id="ai-skill-body" rows="8" placeholder="Skill markdown body"></textarea>
+                    <button class="btn btn-success btn-sm" type="button" id="ai-skill-save-btn">Save active custom skill</button>
+                    <div class="small mt-2" id="ai-skill-form-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var catalogUrl = <?= json_encode($catalogUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var saveUrl = <?= json_encode($saveUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var importUrl = <?= json_encode($importUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var disableUrl = <?= json_encode($disableUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var tableBody = document.getElementById('ai-skill-table-body');
+    var status = document.getElementById('ai-skill-status');
+    var formStatus = document.getElementById('ai-skill-form-status');
+
+    function post(url, data) {
+        var body = new URLSearchParams();
+        Object.keys(data || {}).forEach(function (key) { body.append(key, data[key]); });
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: body.toString()
+        }).then(function (res) { return res.json(); });
+    }
+
+    function setFormStatus(text, isError) {
+        if (!formStatus) return;
+        formStatus.className = 'small mt-2 ' + (isError ? 'text-danger' : 'text-success');
+        formStatus.textContent = text || '';
+    }
+
+    function render(items) {
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+        (items || []).forEach(function (skill) {
+            var tr = document.createElement('tr');
+            var binding = skill.locked ? 'locked' : (skill.manual ? 'adapter' : (skill.temporary ? 'temporary' : ''));
+            tr.innerHTML = '<td><code></code></td><td><div class="fw-semibold"></div><div class="small text-muted"></div></td><td></td><td></td><td class="small text-muted"></td><td></td>';
+            tr.children[0].querySelector('code').textContent = skill.code || '';
+            tr.children[1].querySelector('.fw-semibold').textContent = skill.name || skill.code || '';
+            tr.children[1].querySelector('.small').textContent = skill.description || '';
+            tr.children[2].textContent = skill.source || skill.source_type || '';
+            tr.children[3].innerHTML = '<span class="badge ' + (skill.status === 'active' ? 'text-bg-success' : 'text-bg-secondary') + '"></span>';
+            tr.children[3].querySelector('span').textContent = skill.status || '';
+            tr.children[4].textContent = binding;
+            tr.children[5].innerHTML = '<a class="btn btn-outline-secondary btn-sm">Export</a>';
+            tr.children[5].querySelector('a').href = <?= json_encode($this->getBackendUrl('ai/backend/skill/get-export'), JSON_UNESCAPED_SLASHES) ?> + '?code=' + encodeURIComponent(skill.code || '');
+            tableBody.appendChild(tr);
+        });
+        if (status) status.textContent = String((items || []).length) + ' skills';
+    }
+
+    function refresh() {
+        return post(catalogUrl, { include_inactive: 1 }).then(function (payload) {
+            if (!payload || payload.success === false) throw new Error((payload && payload.message) || 'catalog failed');
+            render(payload.items || []);
+        }).catch(function (err) {
+            if (status) status.textContent = err && err.message ? err.message : 'Catalog load failed';
+        });
+    }
+
+    document.getElementById('ai-skill-refresh')?.addEventListener('click', refresh);
+    document.getElementById('ai-skill-save-btn')?.addEventListener('click', function () {
+        setFormStatus('Saving...', false);
+        post(saveUrl, {
+            code: document.getElementById('ai-skill-code')?.value || '',
+            name: document.getElementById('ai-skill-name')?.value || '',
+            description: document.getElementById('ai-skill-description')?.value || '',
+            body: document.getElementById('ai-skill-body')?.value || '',
+            status: 'active'
+        }).then(function (payload) {
+            if (!payload || payload.success === false) throw new Error((payload && payload.message) || 'save failed');
+            setFormStatus('Saved.', false);
+            refresh();
+        }).catch(function (err) { setFormStatus(err && err.message ? err.message : 'Save failed', true); });
+    });
+    document.getElementById('ai-skill-import-btn')?.addEventListener('click', function () {
+        setFormStatus('Importing...', false);
+        post(importUrl, { url: document.getElementById('ai-skill-import-url')?.value || '' }).then(function (payload) {
+            if (!payload || payload.success === false) throw new Error((payload && payload.message) || 'import failed');
+            setFormStatus('Imported as pending.', false);
+            refresh();
+        }).catch(function (err) { setFormStatus(err && err.message ? err.message : 'Import failed', true); });
+    });
+    void disableUrl;
+})();
+</script>

@@ -30,10 +30,13 @@ class HookReader extends ModuleFileReader
      * @var array|null generated/hooks.php registry cache for the current WLS request.
      */
     private static ?array $registryCache = null;
+    private static ?int $registryCacheMtime = null;
 
     public static function clearStaticCache(): void
     {
         self::$staticFileListCache = [];
+        self::$registryCache = null;
+        self::$registryCacheMtime = null;
     }
 
     public static function preloadGeneratedHookRegistry(): void
@@ -50,7 +53,7 @@ class HookReader extends ModuleFileReader
     public function getFileList(?\Closure $callback = null): array
     {
         $hookName = $this->getHookNameFromPath();
-        $cache_key = 'hooks::' . $this->getPath();
+        $cache_key = 'hooks::' . self::getGeneratedHookRegistrySignature() . '::' . $this->getPath();
         
         // 优化1：先检查静态缓存（同一请求内）
         if (isset(self::$staticFileListCache[$cache_key])) {
@@ -123,20 +126,36 @@ class HookReader extends ModuleFileReader
 
     private static function getGeneratedHookRegistry(): array
     {
-        if (self::$registryCache !== null) {
+        $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+        $registryMtime = self::getGeneratedHookRegistryMtime();
+
+        if (self::$registryCache !== null && self::$registryCacheMtime === $registryMtime) {
             return self::$registryCache;
         }
 
-        $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
         if (!is_file($registryFile)) {
             self::$registryCache = [];
+            self::$registryCacheMtime = null;
             return self::$registryCache;
         }
 
         $registry = include $registryFile;
         self::$registryCache = is_array($registry) ? $registry : [];
+        self::$registryCacheMtime = $registryMtime;
 
         return self::$registryCache;
+    }
+
+    private static function getGeneratedHookRegistryMtime(): ?int
+    {
+        $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+        return is_file($registryFile) ? (int) @filemtime($registryFile) : null;
+    }
+
+    private static function getGeneratedHookRegistrySignature(): string
+    {
+        $mtime = self::getGeneratedHookRegistryMtime();
+        return $mtime === null ? 'missing' : (string) $mtime;
     }
     
     /**
@@ -310,15 +329,15 @@ class HookReader extends ModuleFileReader
     public function getFileListWithMeta(): array
     {
         $hookName = $this->getHookNameFromPath();
-        $cache_key = 'hooks::meta::' . $this->getPath();
+        $cache_key = 'hooks::meta_raw::' . self::getGeneratedHookRegistrySignature() . '::' . $this->getPath();
         
         // 检查静态缓存
         if (isset(self::$staticFileListCache[$cache_key])) {
-            return self::$staticFileListCache[$cache_key];
+            $data = self::$staticFileListCache[$cache_key];
+        } else {
+            $data = $this->getHookFilesFromRegistry($hookName);
+            self::$staticFileListCache[$cache_key] = $data;
         }
-        
-        // 从注册表读取
-        $data = $this->getHookFilesFromRegistry($hookName);
         
         // 过滤掉禁用的模块
         $env = \Weline\Framework\App\Env::getInstance();
@@ -362,9 +381,6 @@ class HookReader extends ModuleFileReader
             // 4. 按模块名排序
             return strcmp($moduleA, $moduleB);
         });
-        
-        // 更新静态缓存
-        self::$staticFileListCache[$cache_key] = $result;
         
         return $result;
     }

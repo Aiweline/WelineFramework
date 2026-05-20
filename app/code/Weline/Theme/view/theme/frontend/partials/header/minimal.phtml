@@ -52,6 +52,47 @@ $baseUrl = $this->request->getBaseUrl();
                 </ul>
             </nav>
         <?php endif; ?>
+
+        <div class="minimal-header-actions">
+            <w:hook>header-language-switcher</w:hook>
+            <w:hook>header-currency-switcher</w:hook>
+            <w:hook>header-account</w:hook>
+        </div>
     </div>
 </header>
 
+<style>
+    .minimal-header .header-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        min-height: 64px;
+    }
+    .minimal-header .minimal-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-left: auto;
+    }
+    .minimal-header .header-logo a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .minimal-header .header-logo img {
+        max-height: 40px;
+        width: auto;
+    }
+    @media (max-width: 720px) {
+        .minimal-header .header-container {
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .minimal-header .minimal-header-actions {
+            width: 100%;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+        }
+    }
+</style>
