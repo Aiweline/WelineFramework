@@ -16,9 +16,9 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\PrintInterface as OutputPrintInterface;
-use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\CliServerService;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\ServerInstanceManager;
@@ -124,14 +124,7 @@ class Listing extends CommandAbstract
      */
     protected function buildProcessInfoMap(array $instances): array
     {
-        $pids = [];
-        foreach ($instances as $info) {
-            if ($info->masterPid > 0) {
-                $pids[$info->masterPid] = $info->masterPid;
-            }
-        }
-
-        return $pids === [] ? [] : Processer::batchGetProcessInfo(\array_values($pids));
+        return [];
     }
 
     /**
@@ -139,21 +132,12 @@ class Listing extends CommandAbstract
      */
     protected function isInstanceRunning(ServerInstanceInfo $info, array $processInfoMap): bool
     {
-        if ($info->masterPid > 0 && (bool) ($processInfoMap[$info->masterPid]['exists'] ?? false)) {
-            return true;
+        if ($info->controlPort <= 0) {
+            return false;
         }
 
-        foreach ($info->services as $service) {
-            if ($this->isSharedDependencyService($service) || $this->isSharedExternalService($service)) {
-                continue;
-            }
-
-            if ($service->isRunning()) {
-                return true;
-            }
-        }
-
-        return false;
+        $status = (new IpcControlGateway())->getStatus($info->name, 1.5);
+        return $status['success'] && (bool)($status['data']['running'] ?? false);
     }
 
     protected function isSharedDependencyService(ServiceInfo $service): bool
@@ -200,82 +184,6 @@ class Listing extends CommandAbstract
     protected function getInstanceManager(): ServerInstanceManager
     {
         return ObjectManager::getInstance(ServerInstanceManager::class);
-    }
-    
-    /**
-     * 显示简洁列表
-     */
-    protected function showSimpleListLegacy(array $instances, bool $runningOnly): void
-    {
-        $this->printer->note(__(''));
-        $this->printer->note(__('┌──────────────────────────────────────────────────────────────────────────────────────┐'));
-        $this->printer->note(__('│                           服务器实例列表                                             │'));
-        $this->printer->note(__('├──────────────────────────────────────────────────────────────────────────────────────┤'));
-        
-        if (empty($instances)) {
-            $this->printer->note(__('│  没有找到任何服务器实例                                                               │'));
-            $this->printer->note(__('│  使用 php bin/w server:start [name] 启动 Weline Server                                │'));
-            $this->printer->note(__('│  使用 php bin/w server:start --cli 启动 CLI 服务器                                    │'));
-            $this->printer->note(__('└──────────────────────────────────────────────────────────────────────────────────────┘'));
-            return;
-        }
-        
-        $welineRunning = 0;
-        $welineStopped = 0;
-        $cliRunning = 0;
-        
-        foreach ($instances as $name => $status) {
-            $isRunning = ($status['status'] ?? '') === 'running' || ($status['is_running'] ?? false);
-            $type = $status['type'] ?? 'weline';
-            
-            if ($isRunning) {
-                $statusIcon = '●';
-                $statusText = __('运行中');
-                if ($type === 'cli') {
-                    $cliRunning++;
-                } else {
-                    $welineRunning++;
-                }
-            } else {
-                $statusIcon = '○';
-                $statusText = __('已停止');
-                $welineStopped++;
-            }
-            
-            $typeLabel = $type === 'cli' ? '[CLI]' : '[WLS]';
-            
-            $line = sprintf(
-                '│  %s %s %-12s  %s  Port: %-5s  PID: %-7s  %s',
-                $statusIcon,
-                $typeLabel,
-                $name,
-                $statusText,
-                $status['port'] ?? '-',
-                $status['pid'] ?? '-',
-                str_pad($status['running_time'] ?? '-', 12)
-            );
-            
-            $line = str_pad($line, 91) . '│';
-            $this->printer->note($line);
-        }
-        
-        $this->printer->note(__('├──────────────────────────────────────────────────────────────────────────────────────┤'));
-        
-        $total = count($instances);
-        $totalRunning = $welineRunning + $cliRunning;
-        $summaryLine = '│  ' . __('总计：%{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}', [
-            'total' => $total,
-            'wrun' => $welineRunning,
-            'wstop' => $welineStopped,
-            'clirun' => $cliRunning,
-        ]);
-        $summaryLine = \str_pad($summaryLine, 91) . '│';
-        $this->printer->note($summaryLine);
-        
-        $this->printer->note(__('└──────────────────────────────────────────────────────────────────────────────────────┘'));
-        $this->printer->note(__(''));
-        $this->printer->note(__('[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器 (开发)'));
-        $this->printer->note(__(''));
     }
     
     /**

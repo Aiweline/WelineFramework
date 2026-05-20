@@ -901,12 +901,6 @@ CNF;
         return $this->isLocalDomain($domain) || $this->resolvesToLoopback($domain);
     }
 
-    protected function shouldPreferTrustedLocalSelfSignedCertificate(string $domain): bool
-    {
-        return \in_array($this->getOsFamily(), ['Windows', 'Darwin', 'Linux'], true)
-            && $this->shouldUseTrustedLocalCertificateAuthority($domain);
-    }
-
     protected function getLocalCaDir(): string
     {
         $dir = Env::VAR_DIR . 'server' . DS . self::LOCAL_CA_DIRNAME . DS;
@@ -1118,37 +1112,6 @@ CNF;
         $normalized = @\inet_ntop($packed);
 
         return \is_string($normalized) && $normalized !== '' ? \strtolower($normalized) : $ip;
-    }
-
-    protected function ensureReusableLocalCaCertificate(string $domain, string $certPath, int $websiteId = 0): array
-    {
-        if (!$this->shouldUseTrustedLocalCertificateAuthority($domain)) {
-            return [
-                'usable' => false,
-                'regenerated' => false,
-                'cert_path' => $certPath,
-                'key_path' => '',
-            ];
-        }
-
-        if ($this->prepareExistingLocalCaCertificateForReuse($certPath)) {
-            return [
-                'usable' => true,
-                'regenerated' => false,
-                'cert_path' => $certPath,
-                'key_path' => $this->getCertificateDir($domain) . 'privkey.pem',
-            ];
-        }
-
-        $generated = $this->generateLocalCaSignedCertificate($domain, $websiteId);
-
-        return [
-            'usable' => (bool)($generated['success'] ?? false),
-            'regenerated' => (bool)($generated['success'] ?? false),
-            'cert_path' => (string)($generated['cert_path'] ?? ''),
-            'key_path' => (string)($generated['key_path'] ?? ''),
-            'message' => (string)($generated['message'] ?? ''),
-        ];
     }
 
     protected function ensureLocalCertificateAuthority(): array
@@ -4063,15 +4026,6 @@ CNF;
         return (bool) \file_put_contents($this->accountKeyPath, $privateKey);
     }
     
-    protected function getServerPort(): int
-    {
-        $config = Env::getInstance()->getConfig('wls');
-        if (\is_array($config)) {
-            return (int)($config['port'] ?? 80);
-        }
-        return 80;
-    }
-
     /**
      * 是否可使用 HTTP-01 验证（ACME 需访问 http://domain/.well-known/...）
      * 主端口 80 可直接用；主端口 443 时 WLS 会起 80 重定向监听，也可用 HTTP-01。
@@ -5799,7 +5753,7 @@ CNF;
                 continue;
             }
             foreach ($files as $file) {
-                ServerInstanceManager::atomicUpdateJsonStatic((string) $file, $clearModifier);
+                ServerInstanceManager::updateJsonFileAtomically((string) $file, $clearModifier);
             }
         }
     }

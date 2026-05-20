@@ -49,28 +49,9 @@ final class SharedStateRuntimeResolverTest extends TestCase
         self::assertNotSame(9524, $runtime['memory']['port']);
     }
 
-    public function testResolvePrefersProbedSessionTokenWhenTokenNotExplicit(): void
+    public function testResolveDerivesImplicitTokenNamesWhenTokenNotExplicit(): void
     {
-        $resolver = new class extends SharedStateRuntimeResolver {
-            protected function probeRuntime(string $role, array $config, array $envConfig): array
-            {
-                if ($role === 'session_server') {
-                    return [
-                        'host' => '127.0.0.1',
-                        'port' => 26425,
-                        'token_file_name' => 'session_server.26425.token',
-                    ];
-                }
-                if ($role === 'memory_server') {
-                    return [
-                        'host' => '127.0.0.1',
-                        'port' => 26424,
-                        'token_file_name' => 'memory_server.26424.token',
-                    ];
-                }
-                return [];
-            }
-        };
+        $resolver = new SharedStateRuntimeResolver();
 
         $runtime = $resolver->resolve(
             [

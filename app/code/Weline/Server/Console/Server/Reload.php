@@ -126,7 +126,7 @@ class Reload extends CommandAbstract
      */
     protected function executeReloadAndWait(string $instanceName, int $totalWorkers, string $reloadType): void
     {
-        $info = MasterProcess::getMasterInfo($instanceName);
+        $info = MasterProcess::getMasterEndpoint($instanceName);
         $controlPort = (int)($info['control_port'] ?? 0);
         $waitTimeout = $this->estimateWaitTimeout($totalWorkers);
         
