@@ -13,7 +13,16 @@ final class StaticRequestBypassDecider
             return false;
         }
 
-        return \str_contains($candidateUri, '/view/theme/frontend/')
+        $isThemeViewAsset = \str_contains($candidateUri, '/view/theme/frontend/')
             || \str_contains($candidateUri, '/view/theme/backend/');
+        if ($isThemeViewAsset) {
+            return true;
+        }
+
+        if (\str_starts_with($candidateUri, 'static/') || \str_starts_with($candidateUri, 'pub/static/')) {
+            return false;
+        }
+
+        return false;
     }
 }

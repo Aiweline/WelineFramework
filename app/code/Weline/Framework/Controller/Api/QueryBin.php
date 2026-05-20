@@ -6,6 +6,7 @@ namespace Weline\Framework\Controller\Api;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendQueryGateway;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
@@ -29,7 +30,13 @@ class QueryBin extends FrontendController
         $requestId = \bin2hex(\random_bytes(8));
         $guard = $this->beginBinaryOutputGuard();
         $payload = null;
+        $requestSummary = [
+            'type' => '',
+            'provider' => '',
+            'operation' => '',
+        ];
         $statusCode = 200;
+        $startedAt = \microtime(true);
 
         try {
             $this->assertProtocolHeaders();
@@ -45,6 +52,8 @@ class QueryBin extends FrontendController
             if (!\is_array($payload)) {
                 throw new FrontendQueryException('protocol_error', 'Worker request payload must be a map.', 400);
             }
+            $requestSummary = $this->summarizeRequestPayload($payload);
+            RequestContext::set('query_bin.summary', $requestSummary);
 
             if (($payload['type'] ?? '') === 'handshake') {
                 $payload = $this->handleHandshake($payload, $requestId);
@@ -99,6 +108,14 @@ class QueryBin extends FrontendController
 
         $this->endBinaryOutputGuard($guard);
 
+        $elapsedMs = \round((\microtime(true) - $startedAt) * 1000, 2);
+        RequestContext::set('query_bin.timing', $requestSummary + [
+            'request_id' => $requestId,
+            'status' => $statusCode,
+            'duration_ms' => $elapsedMs,
+        ]);
+        $this->logSlowQueryBin($requestId, $requestSummary, $statusCode, $elapsedMs);
+
         return $this->binaryResponse(\is_array($payload) ? $payload : [
             'ok' => false,
             'data' => null,
@@ -107,7 +124,7 @@ class QueryBin extends FrontendController
                 'message' => 'Empty query-bin payload.',
             ],
             'request_id' => $requestId,
-        ], $statusCode);
+        ], $statusCode, $requestSummary, $elapsedMs);
     }
 
     /**
@@ -160,18 +177,17 @@ class QueryBin extends FrontendController
      */
     private function validateSignedRequest(array $headers, string $rawBody): void
     {
-        $session = $this->sessionService->validateSession(
+        $session = $this->sessionService->validateSessionAndConsumeNonce(
             $headers['session'],
             $headers['deploy_version'],
-            $headers['worker_build_id']
+            $headers['worker_build_id'],
+            $headers['nonce']
         );
 
         $timestamp = (int)$headers['timestamp'];
         if ($timestamp <= 0 || \abs(\time() - $timestamp) > self::TIMESTAMP_WINDOW) {
             throw new FrontendQueryException('auth_error', 'Worker timestamp is outside allowed window.', 401);
         }
-
-        $this->sessionService->consumeNonce($headers['session'], $headers['nonce']);
 
         $bodyHash = \hash('sha256', $rawBody);
         if (!\hash_equals($bodyHash, $headers['body_hash'])) {
@@ -245,7 +261,56 @@ class QueryBin extends FrontendController
     /**
      * @param array<string, mixed> $payload
      */
-    private function binaryResponse(array $payload, int $statusCode): Response
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{type:string,provider:string,operation:string}
+     */
+    private function summarizeRequestPayload(array $payload): array
+    {
+        $type = (string)($payload['type'] ?? '');
+        $provider = '';
+        $operation = '';
+        if ($type === 'call') {
+            $provider = (string)($payload['provider'] ?? '');
+            $operation = (string)($payload['operation'] ?? '');
+        } elseif ($type === 'stream-ticket') {
+            $channel = (string)($payload['channel'] ?? '');
+            if (\str_contains($channel, '.')) {
+                [$provider, $operation] = \explode('.', $channel, 2);
+            }
+        }
+
+        return [
+            'type' => $type,
+            'provider' => $provider,
+            'operation' => $operation,
+        ];
+    }
+
+    /**
+     * @param array{type:string,provider:string,operation:string} $summary
+     */
+    private function logSlowQueryBin(string $requestId, array $summary, int $statusCode, float $elapsedMs): void
+    {
+        if ($elapsedMs < 100.0 || !\function_exists('w_log_warning')) {
+            return;
+        }
+
+        \w_log_warning('[QueryBinTiming] slow request', [
+            'request_id' => $requestId,
+            'type' => $summary['type'],
+            'provider' => $summary['provider'],
+            'operation' => $summary['operation'],
+            'status' => $statusCode,
+            'duration_ms' => $elapsedMs,
+        ], 'query_bin');
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array{type:string,provider:string,operation:string} $summary
+     */
+    private function binaryResponse(array $payload, int $statusCode, array $summary, float $elapsedMs): Response
     {
         $response = Response::fromContent(
             $this->codec->encodePacket($payload),
@@ -254,6 +319,16 @@ class QueryBin extends FrontendController
         );
         $response->setHeader('Cache-Control', 'no-store');
         $response->setHeader('X-Content-Type-Options', 'nosniff');
+        $response->setHeader('X-Weline-Query-Bin-Time', (string)$elapsedMs);
+        if ($summary['type'] !== '') {
+            $response->setHeader('X-Weline-Query-Bin-Type', $summary['type']);
+        }
+        if ($summary['provider'] !== '') {
+            $response->setHeader('X-Weline-Query-Bin-Provider', $summary['provider']);
+        }
+        if ($summary['operation'] !== '') {
+            $response->setHeader('X-Weline-Query-Bin-Operation', $summary['operation']);
+        }
 
         return $response;
     }

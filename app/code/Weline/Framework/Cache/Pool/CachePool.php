@@ -267,6 +267,9 @@ class CachePool implements CachePoolInterface, RemembererInterface
                 'adapter_misses' => $this->adapter->getMisses(),
                 'adapter_hit_ratio' => $this->adapter->getHitRatio(),
             ];
+            if (\method_exists($this->adapter, 'getDetailedStats')) {
+                $adapterStats['adapter_details'] = $this->adapter->getDetailedStats();
+            }
         }
 
         $total = $this->hits + $this->misses;

@@ -209,7 +209,9 @@ final class AiSiteStageOneContractService
                 'needs_image_true_requires_role_subject_placement' => true,
                 'needs_image_false_requires_css_motif_or_rationale' => true,
                 'opening_or_media_asset_blocks_default_to_needs_image' => true,
-                'planned_image_without_verified_asset_blocks_placeholder_rendering' => true,
+                'non_policy_pages_require_at_least_one_generated_image_intent' => true,
+                'planned_image_without_verified_asset_must_fail_not_placeholder' => true,
+                'placeholder_image_assets_forbidden' => true,
             ],
             'visual_quality_rules' => [
                 'non_generic_visual_direction' => true,

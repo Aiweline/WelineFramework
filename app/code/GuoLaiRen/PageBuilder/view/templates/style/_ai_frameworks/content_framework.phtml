@@ -400,6 +400,25 @@ try {
 
 {{CSS_EXTRA}}
 
+<?php if ({{CONTENT_OWNS_AI_SHELL}}): ?>
+#<?= $componentId ?> {
+    padding: 0;
+    background: transparent;
+    color: inherit;
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    display: none;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-container {
+    max-width: 100%;
+    padding: 0;
+    text-align: initial;
+}
+<?php endif; ?>
+
 @media (max-width: 768px) {
     #<?= $componentId ?> {
         padding: <?= max(48, (int)($paddingTop * 0.6)) ?>px 20px <?= max(48, (int)($paddingBottom * 0.6)) ?>px;
@@ -434,6 +453,17 @@ try {
     }
 
     {{CSS_RESPONSIVE}}
+
+    <?php if ({{CONTENT_OWNS_AI_SHELL}}): ?>
+    #<?= $componentId ?> {
+        padding: 0;
+    }
+
+    #<?= $componentId ?> .<?= $cls ?>-container {
+        max-width: 100%;
+        padding: 0;
+    }
+    <?php endif; ?>
 }
 </style>
 

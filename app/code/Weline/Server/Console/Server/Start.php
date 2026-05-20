@@ -1857,10 +1857,6 @@ class Start extends CommandAbstract
             : \max($maxWaitMs, $hardMaxWaitMs);
         $waited = 0;
         $lastData = $this->readBackgroundStartupData($instanceFile);
-        // 无进展时的首轮截止：应为软超时 maxWaitMs，而非 min(hard, max)。
-        // 旧逻辑在默认 hard=8s、max=15s 时 8 秒就判失败，与"默认等 15 秒"矛盾，
-        // 并发启动（8 个子进程批量 READY）时尤其容易误报超时。
-        $progressDeadlineMs = $maxWaitMs;
         $lastProgressToken = $this->buildBackgroundStartupProgressToken($lastData);
         $lastProgress = $this->formatBackgroundStartupProgress($lastData, $waited);
 
@@ -1872,7 +1868,7 @@ class Start extends CommandAbstract
             $this->emitBackgroundStartupProgress($lastProgress, '');
         }
 
-        while ($waited < $hardMaxWaitMs && $waited < $progressDeadlineMs) {
+        while ($waited < $hardMaxWaitMs) {
             SchedulerSystem::usleep($waitStepMs * 1000);
             $waited += $waitStepMs;
             $lastData = $this->readBackgroundStartupData($instanceFile);
@@ -1885,7 +1881,6 @@ class Start extends CommandAbstract
             $progressToken = $this->buildBackgroundStartupProgressToken($lastData);
             if ($progressToken !== $lastProgressToken) {
                 $lastProgressToken = $progressToken;
-                $progressDeadlineMs = \min($hardMaxWaitMs, $waited + $maxWaitMs);
             }
 
             if ($this->isBackgroundStartupReady($lastData)) {
@@ -1923,7 +1918,62 @@ class Start extends CommandAbstract
      */
     protected function isBackgroundStartupReady(array $instanceData): bool
     {
-        return \trim((string) ($instanceData['startup_phase'] ?? '')) === 'running';
+        if (\trim((string) ($instanceData['startup_phase'] ?? '')) === 'running') {
+            return true;
+        }
+
+        $instanceName = \trim((string) ($instanceData['instance_name'] ?? $instanceData['name'] ?? ''));
+        if ($instanceName === '' || (int) ($instanceData['control_port'] ?? 0) <= 0) {
+            return false;
+        }
+
+        try {
+            $status = (new IpcControlGateway())->getStatus($instanceName, 0.3);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if (empty($status['success']) || !\is_array($status['data'] ?? null)) {
+            return false;
+        }
+
+        return $this->isBackgroundStartupIpcReady($status['data']);
+    }
+
+    /**
+     * @param array<string, mixed> $statusData
+     */
+    protected function isBackgroundStartupIpcReady(array $statusData): bool
+    {
+        if (!(bool) ($statusData['running'] ?? false) || (bool) ($statusData['shutting_down'] ?? false)) {
+            return false;
+        }
+
+        $services = $statusData['services'] ?? [];
+        if (!\is_array($services) || $services === []) {
+            return false;
+        }
+
+        foreach ($services as $roleData) {
+            if (!\is_array($roleData)) {
+                continue;
+            }
+            $instances = $roleData['instances'] ?? [];
+            if (!\is_array($instances) || $instances === []) {
+                return false;
+            }
+            foreach ($instances as $instance) {
+                if (!\is_array($instance)) {
+                    return false;
+                }
+                $state = \strtolower(\trim((string) ($instance['state'] ?? '')));
+                if ($state !== 'ready' && $state !== 'running') {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     protected function normalizeBackgroundStartupPhase(string $phase): string
@@ -2749,6 +2799,38 @@ class Start extends CommandAbstract
             $config['source'] = __('命令行参数');
             $hasCliOverride = true;
         }
+        $sessionPortArg = $args['session-port']
+            ?? $args['session_port']
+            ?? null;
+        if ($sessionPortArg !== null) {
+            $config['session_server_port'] = (int)$sessionPortArg;
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
+        $sessionTokenArg = $args['session-token-file-name']
+            ?? $args['session_token_file_name']
+            ?? null;
+        if ($sessionTokenArg !== null) {
+            $config['session_server_token_file_name'] = (string)$sessionTokenArg;
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
+        $memoryPortArg = $args['memory-port']
+            ?? $args['memory_port']
+            ?? null;
+        if ($memoryPortArg !== null) {
+            $config['memory_server_port'] = (int)$memoryPortArg;
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
+        $memoryTokenArg = $args['memory-token-file-name']
+            ?? $args['memory_token_file_name']
+            ?? null;
+        if ($memoryTokenArg !== null) {
+            $config['memory_server_token_file_name'] = (string)$memoryTokenArg;
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
         // 默认一律后台运行；仅显式传入 --no-daemon 时前台运行（忽略 env 中的 daemon 配置）
         // 带 -r/--restart 时强制后台，避免被框架或 env 误判为前台
         $requestNoDaemon = (isset($args['no-daemon']) || isset($args['no_daemon']))
@@ -3551,6 +3633,14 @@ class Start extends CommandAbstract
             'dispatcher_memory_limit',
             'dispatcher-memory',
             'dispatcher_memory',
+            'session-port',
+            'session_port',
+            'session-token-file-name',
+            'session_token_file_name',
+            'memory-port',
+            'memory_port',
+            'memory-token-file-name',
+            'memory_token_file_name',
         ];
         foreach ($valueOptions as $opt) {
             if (isset($args[$opt])) {
@@ -4247,19 +4337,8 @@ class Start extends CommandAbstract
         }
 
         foreach ($this->getRestartCleanupProcessPrefixes($instanceName) as $prefix) {
-            foreach (Processer::getProcessNamesByPrefix($prefix) as $pname) {
-                $pname = (string) $pname;
-                if ($pname === '') {
-                    continue;
-                }
-
-                $processName = \str_starts_with($pname, '--name=')
-                    ? \substr($pname, 7)
-                    : $pname;
-                $pid = (int) Processer::getData($pname, 'pid');
-                if ($pid > 0 && Processer::isManagedProcessRunning($pid, $processName, '', $pname)) {
-                    return true;
-                }
+            if (Processer::getProcessIdsByPrefix($prefix) !== []) {
+                return true;
             }
         }
 

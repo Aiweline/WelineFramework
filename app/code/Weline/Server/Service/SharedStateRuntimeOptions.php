@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
-use Weline\Framework\App\Env;
-
 /**
  * Resolves instance-local shared-state endpoints for child processes.
  *
  * Runtime precedence:
  * 1. Explicit child-process CLI arguments
- * 2. Persisted instance file shared_state/session/memory metadata
+ * 2. Master-provided in-memory env runtime
  * 3. Disk env.php defaults
  */
 class SharedStateRuntimeOptions
@@ -32,11 +30,10 @@ class SharedStateRuntimeOptions
     public static function fromCliArgs(array $argv, string $instanceName, array $envConfig = []): self
     {
         $args = self::parseCliOptions($argv);
-        $instanceRuntime = self::readInstanceRuntime($instanceName);
 
         return new self(
-            self::resolveSession($args, $instanceRuntime, $envConfig),
-            self::resolveMemory($args, $instanceRuntime, $envConfig),
+            self::resolveSession($args, $envConfig),
+            self::resolveMemory($args, $envConfig),
         );
     }
 
@@ -134,45 +131,11 @@ class SharedStateRuntimeOptions
     }
 
     /**
-     * @return array{session?: array<string, mixed>, memory?: array<string, mixed>}
-     */
-    private static function readInstanceRuntime(string $instanceName): array
-    {
-        $instanceName = \trim($instanceName);
-        if ($instanceName === '') {
-            return [];
-        }
-
-        $instanceFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-        if (!\is_file($instanceFile)) {
-            return [];
-        }
-
-        $raw = @\file_get_contents($instanceFile);
-        if ($raw === false || $raw === '') {
-            return [];
-        }
-
-        $data = \json_decode($raw, true);
-        if (!\is_array($data)) {
-            return [];
-        }
-
-        $sharedState = \is_array($data['shared_state'] ?? null) ? $data['shared_state'] : [];
-
-        return [
-            'session' => \is_array($sharedState['session'] ?? null) ? $sharedState['session'] : [],
-            'memory' => \is_array($sharedState['memory'] ?? null) ? $sharedState['memory'] : [],
-        ];
-    }
-
-    /**
      * @param array<string, string> $args
-     * @param array{session?: array<string, mixed>, memory?: array<string, mixed>} $instanceRuntime
      * @param array<string, mixed> $envConfig
      * @return array{host: string, port: int, token_file_name: string}
      */
-    private static function resolveSession(array $args, array $instanceRuntime, array $envConfig): array
+    private static function resolveSession(array $args, array $envConfig): array
     {
         $sharedStateRuntime = \is_array(($envConfig['wls'] ?? [])['shared_state']['runtime'] ?? null)
             ? $envConfig['wls']['shared_state']['runtime']
@@ -185,11 +148,9 @@ class SharedStateRuntimeOptions
             : [];
         $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
         $envSession = \is_array($envConfig['session'] ?? null) ? $envConfig['session'] : [];
-        $instanceSession = \is_array($instanceRuntime['session'] ?? null) ? $instanceRuntime['session'] : [];
 
         $host = (string) (
             $args['session-host']
-            ?? $instanceSession['host']
             ?? $runtimeSession['host']
             ?? $wlsSession['host']
             ?? $envSession['server_host']
@@ -202,7 +163,6 @@ class SharedStateRuntimeOptions
         $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
         $port = (int) (
             $args['session-port']
-            ?? $instanceSession['port']
             ?? $runtimeSession['port']
             ?? $envSession['server_port']
             ?? $wlsSession['port']
@@ -215,7 +175,6 @@ class SharedStateRuntimeOptions
 
         $tokenFileName = (string) (
             $args['session-token-file-name']
-            ?? $instanceSession['token_file_name']
             ?? $runtimeSession['token_file_name']
             ?? $wlsSession['token_file_name']
             ?? $wlsServer['token_file_name']
@@ -234,20 +193,24 @@ class SharedStateRuntimeOptions
 
     /**
      * @param array<string, string> $args
-     * @param array{session?: array<string, mixed>, memory?: array<string, mixed>} $instanceRuntime
      * @param array<string, mixed> $envConfig
      * @return array{host: string, port: int, token_file_name: string}
      */
-    private static function resolveMemory(array $args, array $instanceRuntime, array $envConfig): array
+    private static function resolveMemory(array $args, array $envConfig): array
     {
+        $sharedStateRuntime = \is_array(($envConfig['wls'] ?? [])['shared_state']['runtime'] ?? null)
+            ? $envConfig['wls']['shared_state']['runtime']
+            : [];
+        $runtimeMemory = \is_array($sharedStateRuntime['memory'] ?? null)
+            ? $sharedStateRuntime['memory']
+            : [];
         $memoryConfig = \is_array(($envConfig['wls'] ?? [])['memory_service'] ?? null)
             ? $envConfig['wls']['memory_service']
             : [];
-        $instanceMemory = \is_array($instanceRuntime['memory'] ?? null) ? $instanceRuntime['memory'] : [];
 
         $host = (string) (
             $args['memory-host']
-            ?? $instanceMemory['host']
+            ?? $runtimeMemory['host']
             ?? $memoryConfig['host']
             ?? '127.0.0.1'
         );
@@ -257,7 +220,7 @@ class SharedStateRuntimeOptions
         $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
         $port = (int) (
             $args['memory-port']
-            ?? $instanceMemory['port']
+            ?? $runtimeMemory['port']
             ?? $memoryConfig['port']
             ?? $defaultPort
         );
@@ -267,7 +230,7 @@ class SharedStateRuntimeOptions
 
         $tokenFileName = (string) (
             $args['memory-token-file-name']
-            ?? $instanceMemory['token_file_name']
+            ?? $runtimeMemory['token_file_name']
             ?? $memoryConfig['token_file_name']
             ?? 'memory_server.token'
         );

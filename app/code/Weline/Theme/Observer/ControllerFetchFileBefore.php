@@ -86,6 +86,29 @@ class ControllerFetchFileBefore implements ObserverInterface
         self::resetCurrentRequestCacheState();
     }
 
+    private function resolveFastAccountAuthLayout(DataObject $eventData, Template $template, string $contentTemplateFileName): void
+    {
+        $layoutTemplate = 'Weline_Theme::theme/frontend/layouts/account/auth.phtml';
+        $eventData->setData('contentTemplate', $contentTemplateFileName);
+        $eventData->setData('layoutTemplate', $layoutTemplate);
+        $eventData->setData('fileName', $contentTemplateFileName);
+        $eventData->setData('layoutType', 'account');
+        $eventData->setData('layoutOption', 'auth');
+
+        $template->setData('contentTemplate', $contentTemplateFileName);
+        $template->setData('layoutTemplate', $layoutTemplate);
+        $template->setData('fileName', $contentTemplateFileName);
+        $meta = $template->getData('meta');
+        if (!\is_array($meta)) {
+            $meta = [];
+        }
+        $meta['layoutType'] = 'account';
+        $meta['layoutOption'] = 'auth';
+        $meta['showHeader'] = false;
+        $meta['showFooter'] = false;
+        $template->setData('meta', $meta);
+    }
+
     public function execute(Event &$event): void
     {
         /** @var DataObject $eventData */
@@ -114,6 +137,11 @@ class ControllerFetchFileBefore implements ObserverInterface
             return;
         }
         $fileName = $eventData->getData('fileName');
+        $contentTemplateFileName = $fileName;
+        if ((string)$layoutType === 'account.auth') {
+            $this->resolveFastAccountAuthLayout($eventData, Template::getInstance(), (string)$contentTemplateFileName);
+            return;
+        }
         $contentTemplateFileName = $fileName; // 统一用初始控制器模板路径作为内容模板
 
         // 判断区域（frontend/backend）
@@ -320,14 +348,14 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $runtimeParamsCacheKey = null;
                 $cachedLayoutParams = null;
                 if ($compiledLayoutFresh && isset($requestCache->layoutParamsRequestCache[$paramsCacheKey])) {
-                    $cachedLayoutParams = $requestCache->layoutParamsRequestCache[$paramsCacheKey];
+                    $cachedLayoutParams = $this->sanitizeRuntimeLayoutParams($requestCache->layoutParamsRequestCache[$paramsCacheKey]);
                 } elseif ($compiledLayoutFresh && $runtimeCacheAllowed) {
                     $runtimeParamsCacheKey = 'layout_params|' . $paramsCacheKey
                         . '|' . filemtime((string)$sourcePath)
                         . '|' . filemtime((string)$compiledPath);
                     $runtimeParams = self::runtimeCacheGet($runtimeParamsCacheKey);
                     if ($runtimeParams[0] && is_array($runtimeParams[1])) {
-                        $cachedLayoutParams = $runtimeParams[1];
+                        $cachedLayoutParams = $this->sanitizeRuntimeLayoutParams($runtimeParams[1]);
                         $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $cachedLayoutParams;
                     }
                 }
@@ -441,7 +469,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $existingMeta = [];
                 }
                 $existingMeta = $this->preserveAssignedTitleInMeta($existingMeta, $template, $request);
-                $metaData = array_merge($layoutMetaIdentity, $layoutParams, $existingMeta);
+                $layoutStaticMeta = array_merge($layoutMetaIdentity, $layoutParams);
                 // 关于主题的元数据传递给模板数据（performanceLoad 已在前面统一调用）
                 // 注意：必须使用 getMeta() 而不是 get()
                 // get() 方法用于获取 .value 格式的配置值，对于非 .value 格式会调用 MetaData::get()
@@ -450,15 +478,17 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $themeMetaDataObj = ThemeData::getMeta("theme.{$area}.layouts.{$layoutType}");
                 if ($themeMetaDataObj && !empty($themeMetaDataObj['meta_data'])) {
                     // 合并 meta_data 中的配置值到 metaData
-                    $metaData = array_merge($metaData, $themeMetaDataObj['meta_data']);
-                    $metaData = $this->mergeLayoutMetaIdentity($metaData, $themeMetaDataObj['meta_data']);
+                    $layoutStaticMeta = array_merge($layoutStaticMeta, $themeMetaDataObj['meta_data']);
+                    $layoutStaticMeta = $this->mergeLayoutMetaIdentity($layoutStaticMeta, $themeMetaDataObj['meta_data']);
                 }
+                $layoutStaticMeta = $this->sanitizeRuntimeLayoutParams($layoutStaticMeta);
+                $metaData = array_merge($layoutStaticMeta, $existingMeta);
                 
                 // 将 meta 数据设置到模板中（转义处理由模板自行决定）
                 $template->setData('meta', $metaData);
-                $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $metaData;
+                $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $layoutStaticMeta;
                 if ($runtimeCacheAllowed && $runtimeParamsCacheKey !== null) {
-                    self::runtimeCacheSet($runtimeParamsCacheKey, $metaData);
+                    self::runtimeCacheSet($runtimeParamsCacheKey, $layoutStaticMeta);
                 }
 
                 // 如果控制器没有设置标题，则从 meta 中获取默认标题并设置
@@ -581,6 +611,33 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
 
         return trim((string)$value);
+    }
+
+    /**
+     * Layout parameter caches are process-level in WLS. Keep only layout/static
+     * values there; controller/request data must be merged fresh per request.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function sanitizeRuntimeLayoutParams(array $params): array
+    {
+        foreach ([
+            'sidebar',
+            'user',
+            'content',
+            'contentTemplate',
+            'contentRenderKey',
+            'controller',
+            'request',
+            'req',
+            'session',
+            'child_html',
+        ] as $key) {
+            unset($params[$key]);
+        }
+
+        return $params;
     }
 
     /**

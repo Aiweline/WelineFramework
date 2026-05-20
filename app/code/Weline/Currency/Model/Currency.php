@@ -272,6 +272,7 @@ class Currency extends Model
         // 清除货币缓存
         try {
             w_cache('currency')->clear();
+            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
         } catch (\Throwable $e) {
             // 缓存清除失败，静默处理
         }

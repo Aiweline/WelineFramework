@@ -12,6 +12,8 @@ namespace Weline\Framework\Phrase;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\Contract\RememberOptions;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -319,11 +321,12 @@ class Parser
         }
         $modules = \array_values(\array_unique(\array_filter($modules)));
 
+        $includeGlobalDictionary = !Runtime::isPersistent();
         foreach ($languages as $lang) {
-            self::getLayeredWords($lang, [], false);
+            self::getLayeredWords($lang, [], $includeGlobalDictionary);
             foreach ($modules as $moduleName) {
                 self::loadModuleWords($moduleName, $lang);
-                self::getLayeredWords($lang, [$moduleName], false);
+                self::getLayeredWords($lang, [$moduleName], $includeGlobalDictionary);
             }
         }
     }
@@ -499,7 +502,11 @@ class Parser
     {
         $languages = [];
         foreach (\glob(Env::path_TRANSLATE_FILES_PATH . '*.php') ?: [] as $file) {
-            $languages[] = \pathinfo($file, PATHINFO_FILENAME);
+            $lang = \pathinfo($file, PATHINFO_FILENAME);
+            if ($lang === 'words') {
+                continue;
+            }
+            $languages[] = $lang;
         }
         $languages[] = Env::default_LANGUAGE_CODE;
 
@@ -521,6 +528,7 @@ class Parser
 
         $languages = \array_merge(
             $configured,
+            Runtime::isPersistent() ? self::discoverGeneratedLanguages() : [],
             self::normalizeLanguageList(Env::get('user.lang', '')),
             self::normalizeLanguageList(Env::get('locale', '')),
             self::normalizeLanguageList(Env::get('language', '')),
@@ -766,6 +774,62 @@ class Parser
             return self::$workerGlobalDictionaryWordsCache[$lang] = [];
         }
 
+        $cachePool = self::getSharedPhraseCachePool();
+        $cacheKey = 'global_dictionary_words|' . $lang . '|v1';
+        if ($cachePool !== null) {
+            try {
+                $cached = $cachePool->get($cacheKey);
+                if (\is_array($cached)) {
+                    return self::$workerGlobalDictionaryWordsCache[$lang] = $cached;
+                }
+
+                $words = $cachePool->remember(
+                    $cacheKey,
+                    3600,
+                    static fn(): ?array => self::loadGlobalDictionaryWordsFromDatabase($lang, $dictionaryClass),
+                    new RememberOptions(
+                        nullTtl: 5,
+                        jitter: true,
+                        jitterRatio: 0.10,
+                        singleFlight: true,
+                        singleFlightTimeoutMs: 10000
+                    )
+                );
+
+                return self::$workerGlobalDictionaryWordsCache[$lang] = \is_array($words) ? $words : [];
+            } catch (\Throwable) {
+                if (Runtime::isPersistent()) {
+                    return self::$workerGlobalDictionaryWordsCache[$lang] = [];
+                }
+                // CLI / non-persistent fallback can still read DB directly.
+            }
+        }
+
+        if (Runtime::isPersistent()) {
+            return self::$workerGlobalDictionaryWordsCache[$lang] = [];
+        }
+
+        return self::$workerGlobalDictionaryWordsCache[$lang] =
+            self::loadGlobalDictionaryWordsFromDatabase($lang, $dictionaryClass) ?? [];
+    }
+
+    private static function getSharedPhraseCachePool(): ?\Weline\Framework\Cache\Contract\CachePoolInterface
+    {
+        try {
+            /** @var CacheManager $cacheManager */
+            $cacheManager = ObjectManager::getInstance(CacheManager::class);
+            return $cacheManager->pool('phrase');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param class-string $dictionaryClass
+     * @return array<string,string>|null null means the DB read failed and should only be cached briefly.
+     */
+    private static function loadGlobalDictionaryWordsFromDatabase(string $lang, string $dictionaryClass): ?array
+    {
         try {
             /** @var object $localeDictionary */
             $localeDictionary = ObjectManager::getInstance($dictionaryClass);
@@ -774,8 +838,13 @@ class Parser
                 ->where($dictionaryClass::schema_fields_TRANSLATE, '', '!=')
                 ->select()
                 ->fetchArray();
-        } catch (\Throwable) {
-            return self::$workerGlobalDictionaryWordsCache[$lang] = [];
+        } catch (\Throwable $throwable) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[Phrase] global dictionary DB load failed: ' . $throwable->getMessage(), [
+                    'lang' => $lang,
+                ], 'phrase');
+            }
+            return null;
         }
 
         $words = [];
@@ -787,7 +856,7 @@ class Parser
             }
         }
 
-        return self::$workerGlobalDictionaryWordsCache[$lang] = $words;
+        return $words;
     }
 
     /**

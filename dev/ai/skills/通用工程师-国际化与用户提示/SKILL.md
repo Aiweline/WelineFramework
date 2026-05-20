@@ -1,7 +1,7 @@
 ---
 name: 通用工程师-国际化与用户提示
 description: Shared engineering skill for i18n-compliant user text, translation files, and framework-safe user notification patterns.
-version: 1.1.2
+version: 1.1.3
 ---
 
 # Role
@@ -54,6 +54,7 @@ This shared skill owns user-facing copy, translation wiring, and friendly notifi
 - Use `@lang` forms in custom-tag attributes instead of embedded PHP.
 - Do not use JavaScript `alert`, `confirm`, or `prompt`.
 - Keep placeholders in `%{1}` or `%{name}` style where interpolation is required.
+- **`__()` 第二参数（与 `Weline\Framework\Phrase\Parser::parse` 一致）**：类型为 `array|string|int`。文案里**只有单个 `%{1}`（或框架会归一成 `%{}` 的占位）**时，第二参数可以传**字符串或数字**（例如 `__('库存不足：%{1}', $stock)`）。**多个占位**（如 `%{1}` 与 `%{2}`，或 `%{name}`）时，第二参数应传**关联数组或顺序数组**。不要把「第二参数必须数组」当成铁律；也不要把 **`Parse error: syntax error, unexpected token …`** 误判为翻译表坏了——这类报错多半是 **`__()` 调用本身括号/逗号/方括号写错**（多参却未用数组、多余的 `]`、少写 `)` 等），先按 PHP 语法检查再查 CSV。
 - Do not edit generated translation templates or packs directly; fix the source template / source CSV, then collect or reload through the standard flow.
 - When runtime output disagrees with source files, treat request/module registration plus `var/cache/phrase`, `var/cache/template`, and `var/cache/taglib` as first-class suspects.
 

@@ -376,16 +376,12 @@ class DetectWebsite implements ObserverInterface
         $currentHost = \parse_url($requestUrl, PHP_URL_HOST);
         if (\is_string($currentHost) && $currentHost !== '') {
             $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel);
-            if ($matchedSite === null) {
-                $this->invalidateDetectionCachesForRetry($requestUrl);
-                $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel);
-            }
-            if ($matchedSite === null) {
-                $matchedSite = $this->findSiteByWebsiteDomainDirect($requestUrl, $currentHost, $websiteModel);
-            }
         }
         if ($matchedSite === null) {
             $matchedSite = $this->findSiteByWebsiteUrl($requestUrl, $websiteModel);
+        }
+        if ($matchedSite === null && \is_string($currentHost) && $currentHost !== '') {
+            $matchedSite = $this->findSiteByWebsiteDomainDirect($requestUrl, $currentHost, $websiteModel);
         }
 
         $cachedValue = $matchedSite ?? false;
@@ -393,26 +389,6 @@ class DetectWebsite implements ObserverInterface
         $this->setProcessValueCache($processKey, $cachedValue);
 
         return $matchedSite;
-    }
-
-    private function invalidateDetectionCachesForRetry(string $requestUrl): void
-    {
-        foreach ([
-            self::REQUEST_CACHE_PREFIX . 'website_rows',
-            self::REQUEST_CACHE_PREFIX . 'website_domains',
-            self::REQUEST_CACHE_PREFIX . 'expanded_sites',
-            self::REQUEST_CACHE_PREFIX . 'website_rows_by_id',
-            self::REQUEST_CACHE_PREFIX . 'match.' . sha1($requestUrl),
-        ] as $requestKey) {
-            RequestContext::remove($requestKey);
-        }
-
-        self::clearProcessCache();
-
-        try {
-            $this->getCache()->clear();
-        } catch (\Throwable) {
-        }
     }
 
     /**

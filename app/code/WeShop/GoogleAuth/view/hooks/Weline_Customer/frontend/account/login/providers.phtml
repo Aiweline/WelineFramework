@@ -5,13 +5,33 @@
  * @hook-solo false
  */
 /** @var \Weline\Framework\View\Template $this */
-$googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', [
-    'redirect_url' => (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect_url', '') ?: \w_env_get('redirect', ''))),
-]));
-
-if ($googleLoginButton === '') {
+if (!\WeShop\GoogleAuth\Service\GoogleOAuthService::isConfiguredFast()) {
     return;
 }
+$redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect_url', '') ?: \w_env_get('redirect', '')));
+$query = [
+    'area' => 'frontend',
+    'mode' => 'login',
+    'redirect_url' => $redirectUrl,
+];
+$prefix = \Weline\Framework\Http\Url::getPrefix();
+$startUrl = ($prefix !== '' ? $prefix : '') . '/weshop_googleauth/frontend/auth/start?' . http_build_query($query);
+ob_start();
+?>
+<a href="<?= htmlspecialchars($startUrl, ENT_QUOTES) ?>"
+   class="social-login__btn">
+    <span class="social-login__icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#EA4335" d="M9 7.364v3.49h4.852c-.213 1.122-.852 2.071-1.81 2.709l2.924 2.27c1.703-1.57 2.684-3.882 2.684-6.631 0-.639-.057-1.252-.164-1.838H9z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.469-.806 5.958-2.167l-2.924-2.27c-.806.54-1.838.86-3.034.86-2.332 0-4.31-1.575-5.016-3.694H.96v2.34A8.999 8.999 0 0 0 9 18z"/>
+            <path fill="#4A90E2" d="M3.984 10.729A5.41 5.41 0 0 1 3.704 9c0-.6.102-1.181.28-1.729V4.931H.96A9 9 0 0 0 0 9c0 1.451.348 2.824.96 4.069l3.024-2.34z"/>
+            <path fill="#FBBC05" d="M9 3.578c1.323 0 2.512.455 3.447 1.347l2.587-2.586C13.465.879 11.428 0 9 0A8.999 8.999 0 0 0 .96 4.931l3.024 2.34C4.69 5.153 6.668 3.578 9 3.578z"/>
+        </svg>
+    </span>
+    <span><lang>使用 Google 账户继续</lang></span>
+</a>
+<?php
+$googleLoginButton = (string)ob_get_clean();
 ?>
 <p class="auth-form__social-title"><lang>或</lang></p>
 <div class="auth-form__social-buttons">

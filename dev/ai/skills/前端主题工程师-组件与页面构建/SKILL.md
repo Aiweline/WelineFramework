@@ -55,6 +55,8 @@ This skill builds frontend components and page assembly units such as blocks, ta
 - Prefer small, isolated, testable UI changes.
 - Do not edit generated component registries such as collected taglib output; regenerate them from source definitions.
 - When designing reusable cascades, prefer the smallest stable contract. If one grouping key already defines scope, do not keep redundant attributes alive.
+- When Browser review exposes weak or broken generated PageBuilder sections, strengthen the shared section contract, recovery outline, selector coverage, or quality gate instead of patching one generated page or one block instance by hand.
+- If the visible flow is owned by a scheduler or queue build path, use that owned path for final verification; do not replace whole-flow acceptance with a shortcut run that bypasses the real orchestration boundary.
 
 # Inputs Required
 

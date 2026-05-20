@@ -29,14 +29,14 @@ class DetectLanguage implements ObserverInterface
         // 先检查单个语言代码的缓存
         $checkCacheKey = self::CACHE_KEY_PREFIX_CHECK . $codeLower;
         $checkResult = $cache->get($checkCacheKey);
-        if ($checkResult !== false) {
+        if ($checkResult !== null && $checkResult !== false) {
             $data->setData('result', (bool)$checkResult);
             return;
         }
         
         // 缓存未命中，检查所有语言列表缓存
         $languages = $cache->get(self::CACHE_KEY_ALL_LANGUAGES);
-        if ($languages === false || !is_array($languages)) {
+        if ($languages === null || !is_array($languages)) {
             // 查询数据库
             /**@var Locals $local */
             $local = ObjectManager::getInstance(Locals::class);
@@ -56,7 +56,7 @@ class DetectLanguage implements ObserverInterface
         }
         
         // 检查语言代码是否存在
-        $exists = in_array($codeLower, $languages);
+        $exists = in_array($codeLower, $languages, true);
         
         // 保存单个语言代码的检查结果
         $cache->set($checkCacheKey, $exists ? 1 : 0);

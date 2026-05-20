@@ -21,4 +21,11 @@
           action="ai/backend/adapter" 
           icon="mdi mdi-puzzle-outline"
           order="20"/>
+    <menu source="Weline_Ai::ai_skill_list"
+          name="ai_skill_governance"
+          title="AI Skills"
+          parent="Weline_Backend::ai_group"
+          action="ai/backend/skill"
+          icon="mdi mdi-shape-outline"
+          order="30"/>
 </menus>

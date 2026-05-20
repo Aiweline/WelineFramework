@@ -9,6 +9,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 class WorkerBootstrapWarmup implements ObserverInterface
 {
@@ -23,6 +24,7 @@ class WorkerBootstrapWarmup implements ObserverInterface
             $storeContext = ObjectManager::getInstance(StoreContextService::class);
             foreach (['CNY', 'USD'] as $currency) {
                 $storeContext->getCurrentStore(null, 'zh_Hans_CN', $currency);
+                SchedulerSystem::yield();
             }
         } catch (\Throwable $e) {
             if (\function_exists('w_log_warning')) {

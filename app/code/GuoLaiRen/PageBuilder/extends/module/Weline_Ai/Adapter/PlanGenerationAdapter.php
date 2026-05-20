@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Adapter;
 
+use Weline\Ai\Interface\AdapterSkillBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
-class PlanGenerationAdapter implements ScenarioAdapterInterface
+class PlanGenerationAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface
 {
+    public function getDefaultSkillCodes(): array
+    {
+        return ['claude-design', 'weline-pixel-events'];
+    }
+
     public function getCode(): string
     {
         return 'pagebuilder_plan_generation';

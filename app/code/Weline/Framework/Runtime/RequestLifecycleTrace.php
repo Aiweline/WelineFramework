@@ -108,8 +108,7 @@ class RequestLifecycleTrace
 
         if (\class_exists(Runtime::class, false)
             && Runtime::isPersistent()
-            && (!\class_exists(\Weline\Framework\App\Env::class, false)
-                || !(bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', false))
+            && !self::isPersistentRequestTraceAllowed()
         ) {
             self::$enabledCache = false;
             return false;
@@ -122,6 +121,17 @@ class RequestLifecycleTrace
 
         self::$enabledCache = true;
         return true;
+    }
+
+    private static function isPersistentRequestTraceAllowed(): bool
+    {
+        if (!\class_exists(\Weline\Framework\App\Env::class, false)) {
+            return false;
+        }
+
+        $panelEnabled = (bool)\Weline\Framework\App\Env::get('wls.debug.dev_tool_panel', false);
+
+        return (bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', $panelEnabled);
     }
 
     public static function shouldSkipForCurrentRequest(): bool

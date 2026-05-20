@@ -409,6 +409,10 @@ $this->assign('title', $title);
         width: 100%;
     }
 
+    .category-layout__products > * + * {
+        margin-top: var(--spacing-8, 2.75rem);
+    }
+
     /* ---- 占位符 ---- */
     .category-layout__placeholder {
         display: flex;
@@ -615,6 +619,10 @@ $this->assign('title', $title);
             gap: var(--spacing-3, 0.75rem);
         }
 
+        .category-layout__products > * + * {
+            margin-top: var(--spacing-6, 1.75rem);
+        }
+
         .category-layout__filter-toggle {
             bottom: var(--spacing-5, 1.25rem);
             right: var(--spacing-3, 0.75rem);
@@ -629,6 +637,10 @@ $this->assign('title', $title);
         .category-layout__container {
             padding: 0 var(--spacing-2, 0.5rem);
             gap: var(--spacing-2, 0.5rem);
+        }
+
+        .category-layout__products > * + * {
+            margin-top: var(--spacing-5, 1.25rem);
         }
 
         .category-layout__filter-toggle {

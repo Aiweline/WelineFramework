@@ -31,6 +31,13 @@ return [
             'description' => '智能体扩展点，用于扩展 AI 智能体功能（支持 Tool 调用编排）',
             'required' => true,
             'multiple' => true
+        ],
+        'Skill' => [
+            'path' => 'extends/module/Weline_Ai/Skill',
+            'interface' => 'Weline\Ai\Interface\SkillProviderInterface',
+            'description' => 'AI skill provider extension point for governed prompt skills',
+            'required' => false,
+            'multiple' => true
         ]
     ]
 ];

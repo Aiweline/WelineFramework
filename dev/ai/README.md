@@ -8,7 +8,7 @@
 - `skills/`：唯一有效技能源，按角色和场景组织。
 - `skills/_index.md`：唯一技能路由表，只负责技能路由。
 - `agent/`：智能体 Markdown 名录，包含指令和 Skill 绑定。
-- `codex/`：任务工作区与过程记录。
+- `codex/`：统一任务工作区与过程记录（强制；默认所有仓库任务都要落这里的单任务目录）。
 - `agents/`：agent 协议与配置。
 - `scripts/`：脚本工具。
 - `archive/`：历史兼容资料，不再作为主入口。
@@ -49,7 +49,7 @@
 - 智能体名录：`agent/README.md`
 - 完整开发技能映射：`skills/_index.md`
 - 团队协作流程：`skills/TEAM_WORKFLOW.md`
-- Codex 任务工作区：`codex/`
+- Codex 任务工作区：`codex/`（所有仓库内任务默认都要记录）
 
 ## 新增技能
 
