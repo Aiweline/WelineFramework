@@ -631,6 +631,9 @@ class View extends BaseController
             if (!is_string($key) || in_array($key, ['id', 'handle', 'page', 'page_id', 'website_id'], true)) {
                 continue;
             }
+            if ($this->isIgnorablePaginationQueryParam($key)) {
+                continue;
+            }
             if ($value === null || $value === '' || is_array($value)) {
                 continue;
             }
@@ -638,6 +641,22 @@ class View extends BaseController
         }
 
         return $params;
+    }
+
+    private function isIgnorablePaginationQueryParam(string $key): bool
+    {
+        $key = strtolower(trim($key));
+        if ($key === '') {
+            return false;
+        }
+
+        if (in_array($key, ['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'], true)) {
+            return true;
+        }
+
+        return str_starts_with($key, 'utm_')
+            || str_starts_with($key, 'mtm_')
+            || str_starts_with($key, 'pk_');
     }
 
     /**

@@ -46,6 +46,7 @@ class PublicApiAuthRouteMatcher
 
     private const DEMO_PATH_PATTERNS = [
         'dev/tool/rest/v1/trace',
+        'dev/tool/rest/v1/panel',
         'dev/tool/rest/v1/routes',
         'dev/tool/rest/v1/document/modules',
         'dev/tool/rest/v1/document/search',

@@ -22,6 +22,9 @@ use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillProvider;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillNormalizer;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSelectionResolver;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSnapshotBuilder;
+use Weline\Ai\Service\Skill\AdapterSkillResolver;
+use Weline\Ai\Service\Skill\SkillRegistry as CoreSkillRegistry;
+use Weline\Framework\Manager\ObjectManager;
 
 final class AiSiteSkillRegistry
 {
@@ -44,13 +47,17 @@ final class AiSiteSkillRegistry
     private readonly CustomSkillProvider $customProvider;
     private readonly SkillSelectionResolver $selectionResolver;
     private readonly SkillSnapshotBuilder $snapshotBuilder;
+    private readonly ?CoreSkillRegistry $coreSkillRegistry;
+    private readonly ?AdapterSkillResolver $adapterSkillResolver;
 
     public function __construct(
         ?SkillNormalizer $normalizer = null,
         ?BuiltinSkillProvider $builtinProvider = null,
         ?CustomSkillProvider $customProvider = null,
         ?SkillSelectionResolver $selectionResolver = null,
-        ?SkillSnapshotBuilder $snapshotBuilder = null
+        ?SkillSnapshotBuilder $snapshotBuilder = null,
+        ?CoreSkillRegistry $coreSkillRegistry = null,
+        ?AdapterSkillResolver $adapterSkillResolver = null
     ) {
         $this->normalizer = $normalizer ?? new SkillNormalizer();
         $this->builtinProvider = $builtinProvider ?? new BuiltinSkillProvider($this->normalizer);
@@ -59,6 +66,8 @@ final class AiSiteSkillRegistry
             ?? new SkillSelectionResolver($this->builtinProvider, $this->customProvider);
         $this->snapshotBuilder = $snapshotBuilder
             ?? new SkillSnapshotBuilder($this->selectionResolver, $this->normalizer);
+        $this->coreSkillRegistry = $coreSkillRegistry;
+        $this->adapterSkillResolver = $adapterSkillResolver;
     }
 
     /**
@@ -66,7 +75,12 @@ final class AiSiteSkillRegistry
      */
     public function getDefaultSkillCodes(): array
     {
-        return self::DEFAULT_SKILL_CODES;
+        try {
+            $codes = $this->adapterSkillResolver()->getLockedSkillCodes('pagebuilder_component_generation');
+            return $codes !== [] ? $codes : self::DEFAULT_SKILL_CODES;
+        } catch (\Throwable) {
+            return self::DEFAULT_SKILL_CODES;
+        }
     }
 
     /**
@@ -76,7 +90,21 @@ final class AiSiteSkillRegistry
      */
     public function listAvailableSkills(): array
     {
-        return $this->selectionResolver->listAvailableSkills();
+        $skills = [];
+        try {
+            $skills = $this->coreSkillRegistry()->listAvailableSkills(true);
+        } catch (\Throwable) {
+            $skills = [];
+        }
+
+        foreach ($this->selectionResolver->listAvailableSkills() as $code => $skill) {
+            if (!isset($skills[$code])) {
+                $skills[$code] = $skill;
+            }
+        }
+        \ksort($skills);
+
+        return $skills;
     }
 
     /**
@@ -113,7 +141,21 @@ final class AiSiteSkillRegistry
      */
     public function buildSkillSnapshots(array $selectedCodes = []): array
     {
-        return $this->snapshotBuilder->buildSnapshots($selectedCodes);
+        $requestedCodes = $this->normalizeSkillCodeList($selectedCodes);
+        if ($requestedCodes === []) {
+            $requestedCodes = self::DEFAULT_SKILL_CODES;
+        }
+        try {
+            $snapshots = $this->coreSkillRegistry()->buildSkillSnapshots($requestedCodes);
+            $snapshotCodes = \array_map(static fn(array $snapshot): string => (string)($snapshot['code'] ?? ''), $snapshots);
+            $missingCodes = \array_diff($requestedCodes, $snapshotCodes);
+            if ($missingCodes === []) {
+                return $snapshots;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $this->snapshotBuilder->buildSnapshots($requestedCodes);
     }
 
     /**
@@ -122,7 +164,21 @@ final class AiSiteSkillRegistry
      */
     public function resolveSelectedSkillCodes(array $selectedCodes = []): array
     {
-        return $this->selectionResolver->resolveCodes($selectedCodes);
+        $codes = $this->normalizeSkillCodeList($selectedCodes);
+        if ($codes === []) {
+            return [];
+        }
+
+        $skills = $this->listAvailableSkills();
+        $resolved = [];
+        foreach ($codes as $code) {
+            $skill = $skills[$code] ?? null;
+            if (\is_array($skill) && !empty($skill['exists']) && (string)($skill['status'] ?? 'active') === 'active') {
+                $resolved[] = $code;
+            }
+        }
+
+        return $resolved;
     }
 
     /**
@@ -136,8 +192,7 @@ final class AiSiteSkillRegistry
     public function buildPromptGuideLines(string $stage, array $extraCodes = [], array $skillSnapshots = []): array
     {
         $codes = \array_values(\array_unique(\array_merge(
-            $this->getDefaultSkillCodes(),
-            $extraCodes,
+            $this->resolveAdapterSkillCodesForStage($stage, $extraCodes),
             $this->extractCodesFromSnapshots($skillSnapshots)
         )));
         $skills = $this->listAvailableSkills();
@@ -214,7 +269,7 @@ final class AiSiteSkillRegistry
             }
         }
 
-        return $this->resolveSelectedSkillCodes([]);
+        return [];
     }
 
     /**
@@ -344,8 +399,12 @@ final class AiSiteSkillRegistry
             $lookupCodes[] = $code;
         }
         if ($lookupCodes !== []) {
-            foreach ($this->selectionResolver->resolveSelectedSkills(\array_values(\array_unique($lookupCodes))) as $skill) {
-                $validatedSkills[(string)$skill['code']] = $skill;
+            $availableSkills = $this->listAvailableSkills();
+            foreach (\array_values(\array_unique($lookupCodes)) as $lookupCode) {
+                $skill = $availableSkills[$lookupCode] ?? null;
+                if (\is_array($skill) && !empty($skill['exists']) && (string)($skill['status'] ?? 'active') === 'active') {
+                    $validatedSkills[(string)$skill['code']] = $skill;
+                }
             }
         }
 
@@ -499,6 +558,50 @@ final class AiSiteSkillRegistry
         }
 
         return $body;
+    }
+
+    /**
+     * @param list<string> $temporaryCodes
+     * @return list<string>
+     */
+    private function resolveAdapterSkillCodesForStage(string $stage, array $temporaryCodes): array
+    {
+        $adapterCode = $this->adapterCodeForStage($stage);
+        try {
+            $resolved = $this->adapterSkillResolver()->resolveSkillBindings($adapterCode, $temporaryCodes);
+            $codes = $resolved['codes'];
+            $availableSkills = $this->listAvailableSkills();
+            foreach ($temporaryCodes as $temporaryCode) {
+                $skill = $availableSkills[$temporaryCode] ?? null;
+                if (\is_array($skill) && !empty($skill['exists']) && (string)($skill['status'] ?? 'active') === 'active') {
+                    $codes[] = $temporaryCode;
+                }
+            }
+            return \array_values(\array_unique($codes));
+        } catch (\Throwable $throwable) {
+            if (\str_contains($throwable->getMessage(), 'Locked adapter skill')) {
+                throw $throwable;
+            }
+            return \array_values(\array_unique(\array_merge($this->getDefaultSkillCodes(), $temporaryCodes)));
+        }
+    }
+
+    private function adapterCodeForStage(string $stage): string
+    {
+        $stage = \strtolower(\trim($stage));
+        return \in_array($stage, ['stage1', 'profile', 'build_plan', 'plan'], true)
+            ? 'pagebuilder_plan_generation'
+            : 'pagebuilder_component_generation';
+    }
+
+    private function coreSkillRegistry(): CoreSkillRegistry
+    {
+        return $this->coreSkillRegistry ?? ObjectManager::getInstance(CoreSkillRegistry::class);
+    }
+
+    private function adapterSkillResolver(): AdapterSkillResolver
+    {
+        return $this->adapterSkillResolver ?? ObjectManager::getInstance(AdapterSkillResolver::class);
     }
 
     private function resolveSkillsAbsoluteRoot(): string

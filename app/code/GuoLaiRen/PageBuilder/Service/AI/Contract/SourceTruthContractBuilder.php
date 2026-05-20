@@ -40,9 +40,6 @@ final class SourceTruthContractBuilder
         $requiredBlocks = $this->resolveRequiredHomeBlocks($brief, $instruction);
 
         $siteName = \trim((string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? ''));
-        if ($siteName === '') {
-            $siteName = $this->fallbackSiteNameFromBrief($brief);
-        }
 
         $frozenFields = [
             'site_identity',
@@ -103,18 +100,6 @@ final class SourceTruthContractBuilder
         ];
     }
 
-    private function fallbackSiteNameFromBrief(string $brief): string
-    {
-        foreach (\explode("\n", $brief) as $line) {
-            $line = \trim($line);
-            if ($line !== '' && !\str_starts_with($line, '#')) {
-                return \mb_substr($line, 0, 80);
-            }
-        }
-
-        return 'Site';
-    }
-
     /**
      * @return list<array{id:string, source:string, text:string, visible_copy_requirement:string, weight:int}>
      */
@@ -169,18 +154,6 @@ final class SourceTruthContractBuilder
                 'text' => $instruction,
                 'visible_copy_requirement' => 'Must be reflected in page content and design decisions',
                 'weight' => 9,
-            ];
-        }
-
-        if ($facts === []) {
-            $facts[] = [
-                'id' => 'f01',
-                'source' => 'fallback_requirement',
-                'text' => 'Create a complete website plan with clear positioning, navigation, content strategy, and conversion goals.',
-                'visible_copy_requirement' => $inputLocale !== $contentLocale
-                    ? "Translate meaning into {$contentLocale}, preserve core intent"
-                    : 'Use as the minimum planning requirement when no user brief was provided',
-                'weight' => 6,
             ];
         }
 

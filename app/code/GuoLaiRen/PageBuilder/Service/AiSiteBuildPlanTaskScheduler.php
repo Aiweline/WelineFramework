@@ -20,6 +20,7 @@ final class AiSiteBuildPlanTaskScheduler
      */
     public function buildConfirmationScopePatch(array $scope, array $websiteProfile = [], string $workspaceTrack = ''): array
     {
+        $scope = $this->sanitizeScopeSourceTruthContract($scope);
         $service = $this->buildPlanService();
         $contract = $service->confirm($service->buildFromScope($scope, $websiteProfile));
         $validation = $service->validate($contract);
@@ -32,10 +33,28 @@ final class AiSiteBuildPlanTaskScheduler
         }
 
         $confirmedAt = (string)($contract['contract_meta']['confirmed_at'] ?? \date('Y-m-d H:i:s'));
+        $projection = $service->projection($contract);
+        AiSiteWorkflowTrace::log('build_plan_confirmed', [
+            'contract_id' => (string)($contract['contract_meta']['id'] ?? ''),
+            'confirmed_at' => $confirmedAt,
+            'task_count' => \count(\is_array($contract['tasks'] ?? null) ? $contract['tasks'] : []),
+            'build_order' => \is_array($contract['build_order'] ?? null) ? $contract['build_order'] : [],
+            'workspace_track' => $workspaceTrack !== '' ? $workspaceTrack : (string)($scope['workspace_track'] ?? ''),
+        ]);
+        AiSiteWorkflowTrace::json('build_plan_projection', $projection, [
+            'contract_id' => (string)($contract['contract_meta']['id'] ?? ''),
+        ]);
+        if (AiSiteWorkflowTrace::verbose()) {
+            AiSiteWorkflowTrace::taskList(
+                'build_plan_confirmed_tasks',
+                \is_array($contract['tasks'] ?? null) ? $contract['tasks'] : [],
+                ['contract_id' => (string)($contract['contract_meta']['id'] ?? '')]
+            );
+        }
 
         return [
             'build_plan_v2' => $contract,
-            'plan_projection' => $service->projection($contract),
+            'plan_projection' => $projection,
             'content_manifest' => \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [],
             'build_plan_confirmed' => 1,
             'build_plan_confirmed_at' => $confirmedAt,
@@ -178,8 +197,47 @@ final class AiSiteBuildPlanTaskScheduler
         return $sourceTruth;
     }
 
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function sanitizeScopeSourceTruthContract(array $scope): array
+    {
+        if (\is_array($scope['source_truth_contract'] ?? null)) {
+            $scope['source_truth_contract'] = $this->sanitizeSourceTruthContract($scope['source_truth_contract']);
+            $scope['source_truth_contract_hash'] = \sha1((string)\json_encode($scope['source_truth_contract'], \JSON_UNESCAPED_UNICODE));
+        }
+
+        return $scope;
+    }
+
     private function isInternalControlFact(string $text): bool
     {
-        return \preg_match('/(?:^\s*\[FORCE\]|queue:run|--force|\s-f\b|强制重建建站方案|重新跑队列)/iu', $text) === 1;
+        if (\preg_match('/(?:^\s*\[FORCE\]|queue:run|--force|\s-f\b|强制重建建站方案|重新跑队列)/iu', $text) === 1) {
+            return true;
+        }
+
+        $normalized = \mb_strtolower(\trim($text));
+        foreach ([
+            'resume_plan',
+            'resume failed',
+            'resume interrupted',
+            'checkpoint',
+            'continue from saved progress',
+            'do not start from scratch',
+            '当前阶段一上下文',
+            '当前方案草稿',
+            '继续补齐中断内容',
+            '优先复用已完成部分',
+            '不要从零抛弃已有进度',
+            '保留已完成部分',
+            '只修复缺失',
+        ] as $marker) {
+            if (\str_contains($normalized, \mb_strtolower($marker))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

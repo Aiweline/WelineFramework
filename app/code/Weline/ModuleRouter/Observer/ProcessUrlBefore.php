@@ -156,6 +156,12 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
         }
 
         foreach ([
+            'customer',
+            'customer/account',
+            'checkout',
+            'cart',
+            'wishlist',
+            'search',
             'weshop/product',
             'weshop/catalog',
             'weshop/blog',

@@ -9,6 +9,16 @@
  */
 ?>
 <?php
+$__request_path_raw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$__request_path_parsed = parse_url($__request_path_raw, PHP_URL_PATH);
+$__request_path = strtolower((string)(is_string($__request_path_parsed) && $__request_path_parsed !== '' ? $__request_path_parsed : $__request_path_raw));
+if ($__request_path === '/customer/account'
+    || $__request_path === 'customer/account'
+    || str_contains($__request_path, '/customer/account/')
+) {
+    return;
+}
+
 $__pixel_name = 'weshop_storefront_behavior';
 $__tp = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\View\Template::class);
 $__data = new \Weline\Framework\DataObject\DataObject([

@@ -29,6 +29,8 @@ final class FiberOutputBuffer
 
     private static ?int $memoryLimitBytes = null;
 
+    private static int $missingFrameWarnings = 0;
+
     public static function install(): void
     {
         self::ensureInstalled('install');
@@ -48,7 +50,7 @@ final class FiberOutputBuffer
         $previousLevel = self::$installedLevel;
 
         if ($wasMarkedInstalled) {
-            self::resetInstalledState();
+            self::resetInstalledState(false);
         }
 
         \ob_start([self::class, 'handleOutputChunk'], 1);
@@ -80,7 +82,7 @@ final class FiberOutputBuffer
             && self::$installedLevel > 0
             && \ob_get_level() === self::$installedLevel;
 
-        self::resetInstalledState();
+        self::resetInstalledState(true);
 
         if ($shouldCloseActiveBuffer) {
             \ob_end_clean();
@@ -95,6 +97,7 @@ final class FiberOutputBuffer
         }
 
         self::ensureInstalled('begin_capture');
+        self::flushInstalledBufferIntoCurrentFrame();
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
             self::$mainBufferStack[] = new FiberOutputCaptureFrame();
@@ -113,9 +116,12 @@ final class FiberOutputBuffer
             return (string)\ob_get_clean();
         }
 
+        self::flushInstalledBufferIntoCurrentFrame();
+
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
             if (self::$mainBufferStack === []) {
+                self::logMissingFrame('end_capture_main_empty');
                 return '';
             }
 
@@ -123,12 +129,14 @@ final class FiberOutputBuffer
         }
 
         if (self::$fiberBufferStacks === null || !isset(self::$fiberBufferStacks[$fiber])) {
+            self::logMissingFrame('end_capture_fiber_missing');
             return '';
         }
 
         $stack = self::$fiberBufferStacks[$fiber];
         if ($stack === []) {
             unset(self::$fiberBufferStacks[$fiber]);
+            self::logMissingFrame('end_capture_fiber_empty');
             return '';
         }
 
@@ -191,6 +199,67 @@ final class FiberOutputBuffer
         }
     }
 
+    public static function flushBeforeYield(): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return true;
+        }
+
+        return self::flushInstalledBufferIntoCurrentFrame();
+    }
+
+    public static function hasActiveCapture(): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return \ob_get_level() > 0;
+        }
+
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return self::$mainBufferStack !== [];
+        }
+
+        return self::$fiberBufferStacks !== null
+            && isset(self::$fiberBufferStacks[$fiber])
+            && self::$fiberBufferStacks[$fiber] !== [];
+    }
+
+    public static function debugState(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        $stackDepth = 0;
+        $topBytes = 0;
+        if ($fiber === null) {
+            $stackDepth = \count(self::$mainBufferStack);
+            if (self::$mainBufferStack !== []) {
+                $topBytes = self::$mainBufferStack[\array_key_last(self::$mainBufferStack)]->bytes;
+            }
+        } elseif (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+            $stack = self::$fiberBufferStacks[$fiber];
+            $stackDepth = \count($stack);
+            if ($stack !== []) {
+                $topBytes = $stack[\array_key_last($stack)]->bytes;
+            }
+        }
+
+        $statuses = \ob_get_status(true);
+        $topStatus = $statuses !== [] ? $statuses[\array_key_last($statuses)] : [];
+
+        return [
+            'persistent' => Runtime::isPersistent(),
+            'installed' => self::$installed,
+            'installed_level' => self::$installedLevel,
+            'installed_active' => self::isInstalledBufferActive(),
+            'ob_level' => \ob_get_level(),
+            'ob_length' => \ob_get_length(),
+            'ob_top_name' => \is_array($topStatus) ? (string)($topStatus['name'] ?? '') : '',
+            'fiber_id' => $fiber instanceof \Fiber ? \spl_object_id($fiber) : null,
+            'stack_depth' => $stackDepth,
+            'top_bytes' => $topBytes,
+            'main_depth' => \count(self::$mainBufferStack),
+        ];
+    }
+
     private static function handleChunk(string $chunk): string
     {
         if (!Runtime::isPersistent()) {
@@ -213,6 +282,23 @@ final class FiberOutputBuffer
         }
 
         return '';
+    }
+
+    private static function flushInstalledBufferIntoCurrentFrame(): bool
+    {
+        if (!self::isInstalledBufferActive()) {
+            return true;
+        }
+
+        // Only flush when our process-level handler is the top buffer. If a
+        // legacy native ob_start() is above it, flushing here would drain that
+        // caller's private buffer into the wrong template capture.
+        if (\ob_get_level() !== self::$installedLevel) {
+            return false;
+        }
+
+        @\ob_flush();
+        return true;
     }
 
     private static function appendToFrame(FiberOutputCaptureFrame $frame, string $chunk): void
@@ -283,12 +369,14 @@ final class FiberOutputBuffer
         return (string)($status['name'] ?? '') === self::handlerName();
     }
 
-    private static function resetInstalledState(): void
+    private static function resetInstalledState(bool $clearCaptureStacks = true): void
     {
         self::$installed = false;
         self::$installedLevel = 0;
-        self::$fiberBufferStacks = null;
-        self::$mainBufferStack = [];
+        if ($clearCaptureStacks) {
+            self::$fiberBufferStacks = null;
+            self::$mainBufferStack = [];
+        }
     }
 
     private static function getMemoryLimitBytes(): int
@@ -336,6 +424,29 @@ final class FiberOutputBuffer
         } catch (\Throwable) {
             // Recovery must not fail because diagnostics are unavailable.
         }
+    }
+
+    private static function logMissingFrame(string $reason): void
+    {
+        if (self::$missingFrameWarnings >= 50) {
+            return;
+        }
+        self::$missingFrameWarnings++;
+
+        $message = '[FiberOutputBufferMissingFrame] reason=' . $reason
+            . ' request_id=' . (string)(RequestContext::getId() ?? '')
+            . ' uri=' . (string)($_SERVER['REQUEST_URI'] ?? '(none)')
+            . ' state=' . (\json_encode(self::debugState(), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}');
+
+        if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
+            try {
+                \Weline\Server\Log\WlsLogger::warning_($message);
+                return;
+            } catch (\Throwable) {
+            }
+        }
+
+        \error_log($message);
     }
 }
 

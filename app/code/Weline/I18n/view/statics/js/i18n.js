@@ -79,6 +79,34 @@
         return langCode.substring(0, 2).toUpperCase();
     }
 
+    function isIgnorableLanguageQueryParam(key) {
+        const normalized = String(key || '').trim().toLowerCase();
+        if (!normalized) {
+            return false;
+        }
+        if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(normalized)) {
+            return true;
+        }
+        return normalized.startsWith('utm_') || normalized.startsWith('mtm_') || normalized.startsWith('pk_');
+    }
+
+    function sanitizeLanguageSearch(search) {
+        const raw = typeof search === 'string' ? search : '';
+        if (!raw) {
+            return '';
+        }
+
+        const params = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
+        Array.from(params.keys()).forEach(key => {
+            if (isIgnorableLanguageQueryParam(key)) {
+                params.delete(key);
+            }
+        });
+
+        const query = params.toString();
+        return query ? '?' + query : '';
+    }
+
     /**
      * 更新当前语言显示
      */
@@ -117,7 +145,7 @@
         }
 
         const safePathname = (pathname || window.location.pathname || '/').split('?')[0];
-        const safeSearch = typeof search === 'string' ? search : (window.location.search || '');
+        const safeSearch = sanitizeLanguageSearch(typeof search === 'string' ? search : (window.location.search || ''));
         const pathParts = safePathname.split('/').filter(Boolean);
         if (pathParts.length === 0) {
             const currency = (fallbackCurrency || 'CNY').toUpperCase();

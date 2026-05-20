@@ -1941,10 +1941,10 @@ class AiSiteBlockPartialPatchService
     {
         $normalized = \strtolower($blockKey . ' ' . $pageFlowRole . ' ' . $blockGoal);
         if (\str_contains($normalized, 'contact_cta') || (\str_contains($normalized, 'cta') && \str_contains($normalized, 'contact'))) {
-            return 'This is a final contact/download CTA band. Do not render channel cards, office/email grids, FAQ rows, or a support form.';
+            return 'This is a final contact/download CTA band. Do not render channel cards, office/email grids, FAQ rows, a support form, placeholder emails, fake phone numbers, or invented contact handles.';
         }
         if (\str_contains($normalized, 'contact_methods') || \str_contains($normalized, 'support hours')) {
-            return 'This is a contact-method hub. Render visible contact channels with separated labels and values; do not collapse into a generic hero or final CTA strip.';
+            return 'This is a contact-method hub. Render visible contact channels with separated labels and values; use exact email/phone/address/hours/WhatsApp values only when source facts provide them, otherwise use localized support promises. Do not collapse into a generic hero or final CTA strip.';
         }
         if (\str_contains($normalized, 'faq')) {
             return 'This block must render distinct question-answer rows, not cards, not hero copy, and not contact-method tiles.';

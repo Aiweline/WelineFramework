@@ -40,9 +40,14 @@ use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
 use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
+use GuoLaiRen\PageBuilder\Service\AI\DesignDirection\DesignDirectionService;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillRepository;
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
+use Weline\Ai\Model\AiSkill;
 use Weline\Ai\Service\AiService;
+use Weline\Ai\Service\Skill\AdapterSkillResolver;
+use Weline\Ai\Service\Skill\SkillRegistry as CoreSkillRegistry;
+use Weline\Ai\Service\Skill\SkillRepository as AiSkillRepository;
 use Weline\Framework\App\State;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
@@ -197,11 +202,16 @@ class AiSiteAgent extends BaseController
 
         $adminId = (int)$this->getLoginUserId();
         $recent = $adminId > 0 ? $this->sessionService->listRecentSessionsForAdmin($adminId, $showAll ? 200 : 30) : [];
+        $directionOptions = $adminId > 0 ? \array_values($this->designDirectionService()->listDirections($adminId, false)) : [];
 
         $this->assign('title', __('PageBuilder AI 建站工作台'));
         $this->assign('recent_sessions', $recent);
         $this->assign('workbench_home_url', $workbenchHomeUrl);
         $this->assign('show_all_sessions', $showAll);
+        $this->assign('design_direction_options', $directionOptions);
+        $this->assign('design_direction_list_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/list'));
+        $this->assign('design_direction_match_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/match'));
+        $this->assign('design_direction_manage_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/design-directions'));
 
         $html = $this->fetch();
         $this->logHotPathStage('index.total', $startedAt, [
@@ -287,6 +297,12 @@ class AiSiteAgent extends BaseController
         $this->assign('skill_list_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-skill-list'));
         $this->assign('skill_save_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-skill-save'));
         $this->assign('skill_disable_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-skill-disable'));
+        $this->assign('design_direction_list_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/list'));
+        $this->assign('design_direction_save_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/save'));
+        $this->assign('design_direction_disable_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/disable'));
+        $this->assign('design_direction_clone_builtin_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/clone-builtin'));
+        $this->assign('design_direction_match_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/match'));
+        $this->assign('design_direction_manage_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/design-directions'));
         $this->assign('confirm_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-plan'));
         $this->assign('sort_plan_blocks_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-plan-blocks'));
         $this->assign('mutate_plan_block_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-plan-block'));
@@ -359,6 +375,22 @@ class AiSiteAgent extends BaseController
         ]);
 
         return $html;
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_index', 'AI design directions', 'mdi-compass-outline', 'Manage AI site design directions', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function designDirections(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $items = $adminId > 0 ? \array_values($this->designDirectionService()->listDirections($adminId, true)) : [];
+        $this->assign('title', __('AI 设计方向模板'));
+        $this->assign('design_direction_items', $items);
+        $this->assign('design_direction_list_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/list'));
+        $this->assign('design_direction_save_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/save'));
+        $this->assign('design_direction_disable_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/disable'));
+        $this->assign('design_direction_clone_builtin_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/design-direction/clone-builtin'));
+        $this->assign('back_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/index'));
+
+        return $this->fetch('design-directions');
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站工作台预览', 'mdi-eye-outline', '在 AI 建站工作台中渲染可视化预览', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -767,6 +799,27 @@ class AiSiteAgent extends BaseController
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '禁用 AI 建站技能', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postSkillDisable(): string { return $this->handleSkillDisable(); }
 
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'List AI site design directions', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postDesignDirectionList(): string { return $this->handleDesignDirectionList(); }
+
+    public function getPostDesignDirectionList(): string { return $this->handleDesignDirectionList(); }
+
+    public function getDesignDirectionList(): string { return $this->handleDesignDirectionList(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'Save AI site design direction', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postDesignDirectionSave(): string { return $this->handleDesignDirectionSave(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'Disable AI site design direction', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postDesignDirectionDisable(): string { return $this->handleDesignDirectionDisable(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'Clone builtin AI site design direction', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postDesignDirectionCloneBuiltin(): string { return $this->handleDesignDirectionCloneBuiltin(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'Match AI site design direction', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postDesignDirectionMatch(): string { return $this->handleDesignDirectionMatch(); }
+
+    public function getPostDesignDirectionMatch(): string { return $this->handleDesignDirectionMatch(); }
+
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '生成建站方案书', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartPlan(): string { return $this->handleStartPlan(); }
 
@@ -914,18 +967,30 @@ class AiSiteAgent extends BaseController
             || $fakeMode === 1
             || $fakeMode === '1'
             || $fakeMode === 'true';
+        $siteTitle = \trim((string)$this->getRequestBodyValue('site_title', ''));
+        $briefDescription = \trim((string)$this->getRequestBodyValue('brief_description', $this->getRequestBodyValue('user_description', '')));
+        $directionMode = $this->designDirectionService()->normalizeMode(
+            (string)$this->getRequestBodyValue('design_direction_mode', DesignDirectionService::MODE_AUTO)
+        );
+        $directionCode = \trim((string)$this->getRequestBodyValue('design_direction_code', ''));
 
         try {
-            $session = $this->sessionService->createSession($adminId, [
+            $directionPatch = $this->designDirectionService()->resolveSelectionForScope([
+                'site_title' => $siteTitle,
+                'brief_description' => $briefDescription,
+                'design_direction_mode' => $directionMode,
+                'design_direction_code' => $directionCode,
+            ], $adminId, false);
+            $session = $this->sessionService->createSession($adminId, \array_replace([
                 'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING,
                 'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
                 'fake_mode' => $fakeModeEnabled ? 1 : 0,
-                'site_title' => '',
+                'site_title' => $siteTitle,
                 'site_tagline' => '',
                 'target_domain' => '',
                 'selected_domain' => '',
-                'brief_description' => '',
-                'user_description' => '',
+                'brief_description' => $briefDescription,
+                'user_description' => $briefDescription,
                 'default_locale' => '',
                 'plan_locale' => '',
                 'recommended_domain_list' => [],
@@ -945,6 +1010,12 @@ class AiSiteAgent extends BaseController
                 'events' => [],
                 'preview_page_id' => 0,
                 'preview_page_type' => '',
+            ], $directionPatch));
+        } catch (\InvalidArgumentException $invalidArgumentException) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'DESIGN_DIRECTION_INVALID',
+                'message' => $invalidArgumentException->getMessage(),
             ]);
         } catch (\Throwable $throwable) {
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
@@ -1014,15 +1085,71 @@ class AiSiteAgent extends BaseController
     {
         try {
             $includeBody = $this->isTruthyRequestFlag('include_body');
+            $includeInactive = $this->isTruthyRequestFlag('include_inactive') || $this->isTruthyRequestFlag('include_disabled');
+            $temporaryCodes = $this->normalizeSkillCodeListForApi($this->getRequestBodyValue(
+                'temporary_skill_codes',
+                $this->getRequestBodyValue('selected_skill_codes', [])
+            ));
+            try {
+                $catalog = $this->adapterSkillResolver()->buildSkillCatalog(
+                    'pagebuilder_component_generation',
+                    $temporaryCodes,
+                    $includeInactive
+                );
+            } catch (\Throwable $catalogThrowable) {
+                $catalog = [
+                    'items' => [],
+                    'default_skill_codes' => $this->aiSiteSkillRegistry()->getDefaultSkillCodes(),
+                    'warnings' => [$catalogThrowable->getMessage()],
+                ];
+            }
+            $catalogByCode = [];
+            foreach (($catalog['items'] ?? []) as $catalogItem) {
+                if (!\is_array($catalogItem)) {
+                    continue;
+                }
+                $code = (string)($catalogItem['code'] ?? '');
+                if ($code !== '') {
+                    $catalogByCode[$code] = $catalogItem;
+                }
+            }
+
             $items = [];
+            $defaultSkillCodes = \is_array($catalog['default_skill_codes'] ?? null)
+                ? \array_values(\array_filter(\array_map('strval', $catalog['default_skill_codes'])))
+                : $this->aiSiteSkillRegistry()->getDefaultSkillCodes();
             foreach ($this->aiSiteSkillRegistry()->listAvailableSkills() as $skill) {
-                $items[] = $this->formatSkillApiItem($skill, $includeBody);
+                $code = (string)($skill['code'] ?? '');
+                $merged = isset($catalogByCode[$code]) ? \array_replace($skill, $catalogByCode[$code]) : $skill;
+                if (\in_array($code, $defaultSkillCodes, true)) {
+                    $merged['locked'] = true;
+                    $merged['binding_source'] = 'locked';
+                    $merged['selectable'] = false;
+                    $merged['readonly'] = true;
+                }
+                if (!$includeInactive && (string)($merged['status'] ?? 'active') !== 'active') {
+                    continue;
+                }
+                $items[] = $this->formatSkillApiItem($merged, $includeBody);
+            }
+            foreach ($catalogByCode as $code => $catalogItem) {
+                $alreadyAdded = false;
+                foreach ($items as $item) {
+                    if ((string)($item['code'] ?? '') === $code) {
+                        $alreadyAdded = true;
+                        break;
+                    }
+                }
+                if (!$alreadyAdded) {
+                    $items[] = $this->formatSkillApiItem($catalogItem, $includeBody);
+                }
             }
 
             return $this->fetchJson([
                 'success' => true,
                 'items' => $items,
-                'default_skill_codes' => $this->aiSiteSkillRegistry()->getDefaultSkillCodes(),
+                'default_skill_codes' => $defaultSkillCodes,
+                'warnings' => $catalog['warnings'] ?? [],
             ]);
         } catch (ResponseTerminateException $terminate) {
             throw $terminate;
@@ -1051,16 +1178,12 @@ class AiSiteAgent extends BaseController
         ];
 
         try {
-            $saved = $this->customSkillRepository()->saveFromArray($data);
-            $item = $this->customSkillRepository()->findArrayByCode($saved->getCode()) ?? [
-                'code' => $saved->getCode(),
-                'name' => (string)$saved->getData('name'),
-                'description' => (string)$saved->getData('description'),
-                'body' => (string)$saved->getData('body'),
-                'status' => $saved->getStatus(),
-                'source' => 'custom_db',
-                'exists' => true,
-            ];
+            $code = (string)($data['code'] ?? '');
+            if ($this->coreSkillRegistry()->isReservedCode($code)) {
+                throw new \InvalidArgumentException('Custom skill code "' . $code . '" conflicts with a system/module skill.');
+            }
+            $saved = $this->aiSkillRepository()->saveFromArray($data + ['source_type' => AiSkill::SOURCE_CUSTOM], AiSkill::SOURCE_CUSTOM);
+            $item = $this->aiSkillRepository()->modelToArray($saved);
 
             return $this->fetchJson([
                 'success' => true,
@@ -1095,6 +1218,15 @@ class AiSiteAgent extends BaseController
         }
 
         try {
+            $existing = $this->aiSkillRepository()->findArrayByCode($code);
+            if (\is_array($existing)) {
+                $saved = $this->aiSkillRepository()->disable($code);
+                return $this->fetchJson([
+                    'success' => true,
+                    'item' => $this->formatSkillApiItem($saved ? $this->aiSkillRepository()->modelToArray($saved) : $existing, true),
+                ]);
+            }
+
             $existing = $this->customSkillRepository()->findArrayByCode($code);
             if (!\is_array($existing)) {
                 $builtin = $this->aiSiteSkillRegistry()->getSkill($code);
@@ -1134,6 +1266,16 @@ class AiSiteAgent extends BaseController
     {
         $status = (string)($skill['status'] ?? 'active');
         $source = (string)($skill['source'] ?? '');
+        $sourceType = (string)($skill['source_type'] ?? $source);
+        $locked = !empty($skill['locked']);
+        $manual = !empty($skill['manual']);
+        $temporary = !empty($skill['temporary']);
+        $readonly = \array_key_exists('readonly', $skill)
+            ? !empty($skill['readonly'])
+            : ($source !== 'custom_db' && $sourceType !== AiSkill::SOURCE_CUSTOM);
+        $selectable = \array_key_exists('selectable', $skill)
+            ? !empty($skill['selectable'])
+            : (!empty($skill['exists']) && $status === 'active' && !$locked && !$manual);
         $item = [
             'id' => (int)($skill['id'] ?? 0),
             'code' => (string)($skill['code'] ?? ''),
@@ -1141,11 +1283,17 @@ class AiSiteAgent extends BaseController
             'description' => (string)($skill['description'] ?? ''),
             'status' => $status,
             'source' => $source,
+            'source_type' => $sourceType,
             'body_hash' => (string)($skill['body_hash'] ?? ''),
             'local_path' => (string)($skill['local_path'] ?? ''),
-            'readonly' => $source !== 'custom_db',
-            'selectable' => !empty($skill['exists']) && $status === 'active',
+            'tags' => \array_values(\array_filter(\array_map('strval', \is_array($skill['tags'] ?? null) ? $skill['tags'] : []))),
+            'readonly' => $readonly,
+            'selectable' => $selectable,
             'exists' => !empty($skill['exists']),
+            'locked' => $locked,
+            'manual' => $manual,
+            'temporary' => $temporary,
+            'binding_source' => (string)($skill['binding_source'] ?? ($locked ? 'locked' : ($manual ? 'manual' : ($temporary ? 'temporary' : '')))),
         ];
         if ($includeBody) {
             $item['body'] = (string)($skill['body'] ?? $skill['normalized_body'] ?? '');
@@ -1162,6 +1310,209 @@ class AiSiteAgent extends BaseController
     private function customSkillRepository(): CustomSkillRepository
     {
         return ObjectManager::getInstance(CustomSkillRepository::class);
+    }
+
+    private function aiSkillRepository(): AiSkillRepository
+    {
+        return ObjectManager::getInstance(AiSkillRepository::class);
+    }
+
+    private function coreSkillRegistry(): CoreSkillRegistry
+    {
+        return ObjectManager::getInstance(CoreSkillRegistry::class);
+    }
+
+    private function adapterSkillResolver(): AdapterSkillResolver
+    {
+        return ObjectManager::getInstance(AdapterSkillResolver::class);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeSkillCodeListForApi(mixed $raw): array
+    {
+        if (\is_string($raw)) {
+            $decoded = \json_decode($raw, true);
+            $raw = \is_array($decoded) ? $decoded : \preg_split('/[\s,;]+/', $raw);
+        }
+        if (!\is_array($raw)) {
+            return [];
+        }
+
+        $codes = [];
+        foreach ($raw as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $code = \trim((string)$item);
+            if ($code !== '' && !\in_array($code, $codes, true)) {
+                $codes[] = $code;
+            }
+        }
+
+        return $codes;
+    }
+
+    private function designDirectionService(): DesignDirectionService
+    {
+        return ObjectManager::getInstance(DesignDirectionService::class);
+    }
+
+    private function handleDesignDirectionList(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        if ($adminId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
+        }
+
+        try {
+            $includeDisabled = $this->isTruthyRequestFlag('include_disabled');
+            $items = \array_values($this->designDirectionService()->listDirections($adminId, $includeDisabled));
+            return $this->fetchJson([
+                'success' => true,
+                'items' => $items,
+                'builtin_code' => DesignDirectionService::BUILTIN_CARD_GAME_CODE,
+            ]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'DESIGN_DIRECTION_LIST_FAILED',
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    private function handleDesignDirectionSave(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        if ($adminId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
+        }
+
+        $error = '';
+        $payload = $this->getRequestJsonObject('direction', $error);
+        if ($error !== '') {
+            return $this->fetchJson(['success' => false, 'message' => $error]);
+        }
+        $data = \array_replace($payload, [
+            'code' => $this->getRequestBodyValue('code', $payload['code'] ?? ''),
+            'name' => $this->getRequestBodyValue('name', $payload['name'] ?? ''),
+            'description' => $this->getRequestBodyValue('description', $payload['description'] ?? ''),
+            'status' => $this->getRequestBodyValue('status', $payload['status'] ?? 'active'),
+            'cta_style' => $this->getRequestBodyValue('cta_style', $payload['cta_style'] ?? ''),
+            'supplemental_prompt' => $this->getRequestBodyValue('supplemental_prompt', $payload['supplemental_prompt'] ?? ''),
+        ]);
+        foreach ([
+            'industry_tags',
+            'match_keywords',
+            'visual_keywords',
+            'color_system',
+            'layout_patterns',
+            'image_strategy',
+            'forbidden_patterns',
+            'block_rules',
+            'qa_rules',
+            'example_refs',
+        ] as $field) {
+            $data[$field] = $this->getRequestBodyValue($field, $payload[$field] ?? []);
+        }
+
+        try {
+            $item = $this->designDirectionService()->saveCustom($data, $adminId);
+            return $this->fetchJson(['success' => true, 'item' => $item]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\InvalidArgumentException $invalidArgumentException) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'VALIDATION_ERROR',
+                'message' => $invalidArgumentException->getMessage(),
+            ]);
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'DESIGN_DIRECTION_SAVE_FAILED',
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    private function handleDesignDirectionDisable(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $code = \trim((string)$this->getRequestBodyValue('code', ''));
+        if ($adminId <= 0 || $code === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'INVALID_PARAMS',
+                'message' => 'Design direction code is required.',
+            ]);
+        }
+
+        try {
+            $item = $this->designDirectionService()->disableCustom($code, $adminId);
+            return $this->fetchJson(['success' => true, 'item' => $item]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'DESIGN_DIRECTION_DISABLE_FAILED',
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    private function handleDesignDirectionCloneBuiltin(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $code = \trim((string)$this->getRequestBodyValue('code', ''));
+        if ($adminId <= 0 || $code === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'INVALID_PARAMS',
+                'message' => 'Builtin design direction code is required.',
+            ]);
+        }
+
+        try {
+            $item = $this->designDirectionService()->cloneBuiltin($code, $adminId);
+            return $this->fetchJson(['success' => true, 'item' => $item]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'DESIGN_DIRECTION_CLONE_FAILED',
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    private function handleDesignDirectionMatch(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        if ($adminId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
+        }
+
+        $title = \trim((string)$this->getRequestBodyValue('site_title', $this->getRequestBodyValue('title', '')));
+        $brief = \trim((string)$this->getRequestBodyValue('brief_description', $this->getRequestBodyValue('brief', '')));
+        try {
+            $match = $this->designDirectionService()->matchDirection($title, $brief, $adminId);
+            return $this->fetchJson(\array_replace(['success' => true], $match));
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'DESIGN_DIRECTION_MATCH_FAILED',
+                'message' => $throwable->getMessage(),
+            ]);
+        }
     }
 
     private function handleStartPlan(): string
@@ -1184,6 +1535,12 @@ class AiSiteAgent extends BaseController
         if (isset($scopePatch['page_types'])) {
             $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
+        foreach (['design_direction_mode', 'design_direction_code', 'design_direction_custom_id'] as $directionRequestKey) {
+            $directionRequestValue = $this->getRequestBodyValue($directionRequestKey, null);
+            if ($directionRequestValue !== null) {
+                $scopePatch[$directionRequestKey] = $directionRequestValue;
+            }
+        }
         $requestedSelectedSkillCodes = $this->getRequestBodyValue(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, null);
         if ($requestedSelectedSkillCodes !== null || \array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $scopePatch)) {
             $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] = $this->scopeCompatibilityService->normalizeSelectedSkillCodes(
@@ -1200,13 +1557,6 @@ class AiSiteAgent extends BaseController
             $scopePatch['page_types'] = $scope['page_types'];
             $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
-        if (\trim((string)($scope['target_domain'] ?? '')) === '') {
-            return $this->jsonError(
-                'TARGET_DOMAIN_REQUIRED',
-                (string)__('请先填写目标域名，再确认&更新方案。'),
-                ['target_domain']
-            );
-        }
         $confirmRegenerate = \in_array(\strtolower(\trim((string)$this->getRequestBodyValue('confirm_regenerate', '0'))), ['1', 'true', 'yes', 'on'], true);
         $requestedPlanLocale = \trim((string)$this->getRequestBodyValue('plan_locale', ''));
         if ($requestedPlanLocale !== '') {
@@ -1217,6 +1567,17 @@ class AiSiteAgent extends BaseController
             $scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? []
         );
         $scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] = $selectedSkillCodes;
+        try {
+            $directionPatch = $this->designDirectionService()->resolveSelectionForScope($scope, $adminId, false);
+        } catch (\InvalidArgumentException $invalidArgumentException) {
+            return $this->jsonError(
+                'DESIGN_DIRECTION_INVALID',
+                $invalidArgumentException->getMessage(),
+                ['design_direction_code']
+            );
+        }
+        $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $directionPatch));
+        $scopePatch = \array_replace($scopePatch, $directionPatch);
         // 方案生成开始时先持久化用户本轮输入（域名/一句话描述/语言/页面类型等），再入队生成任务。
         $persistPatch = \array_replace($scopePatch, [
             'plan_locale' => (string)$scope['plan_locale'],
@@ -1344,6 +1705,10 @@ class AiSiteAgent extends BaseController
                 'round' => $requestedRound,
                 'plan_locale' => (string)$scope['plan_locale'],
                 AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
+                'design_direction_mode' => (string)($scope['design_direction_mode'] ?? DesignDirectionService::MODE_AUTO),
+                'design_direction_code' => (string)($scope['design_direction_code'] ?? ''),
+                'design_direction_snapshot' => \is_array($scope['design_direction_snapshot'] ?? null) ? $scope['design_direction_snapshot'] : [],
+                'design_direction_hash' => (string)($scope['design_direction_hash'] ?? ''),
             ],
         ]), '', AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING, $planOperationDetails);
         if (empty($result['success'])) {
@@ -1388,6 +1753,10 @@ class AiSiteAgent extends BaseController
                         'round' => $requestedRound,
                         'plan_locale' => (string)$scope['plan_locale'],
                         AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
+                        'design_direction_mode' => (string)($scope['design_direction_mode'] ?? DesignDirectionService::MODE_AUTO),
+                        'design_direction_code' => (string)($scope['design_direction_code'] ?? ''),
+                        'design_direction_snapshot' => \is_array($scope['design_direction_snapshot'] ?? null) ? $scope['design_direction_snapshot'] : [],
+                        'design_direction_hash' => (string)($scope['design_direction_hash'] ?? ''),
                     ],
                 ]), '', AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING, $planOperationDetails);
                 if (empty($result['success'])) {
@@ -1481,12 +1850,6 @@ class AiSiteAgent extends BaseController
             ? $scope['execution_blueprint_draft']
             : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
         $existingBuildPlanV2 = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        if ($executionBlueprintDraft === [] && $hasStageOnePayload) {
-            $executionBlueprintDraft = $this->buildExecutionBlueprintFallbackFromStageOnePayload($scope);
-            if ($executionBlueprintDraft !== []) {
-                $scope['execution_blueprint_draft'] = $executionBlueprintDraft;
-            }
-        }
         if ($executionBlueprintDraft === [] && $existingBuildPlanV2 === []) {
             if ($hasStageOnePayload) {
                 try {
@@ -1504,12 +1867,6 @@ class AiSiteAgent extends BaseController
                     $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null)
                         ? $scope['execution_blueprint_draft']
                         : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
-                    if ($executionBlueprintDraft === []) {
-                        $executionBlueprintDraft = $this->buildExecutionBlueprintFallbackFromStageOnePayload($scope);
-                        if ($executionBlueprintDraft !== []) {
-                            $scope['execution_blueprint_draft'] = $executionBlueprintDraft;
-                        }
-                    }
                 } catch (\Throwable) {
                 }
             }
@@ -1528,9 +1885,19 @@ class AiSiteAgent extends BaseController
             );
         }
 
-        $scopePatch = [
+        try {
+            $directionLockPatch = $this->designDirectionService()->resolveSelectionForScope($scope, $adminId, true);
+        } catch (\InvalidArgumentException $invalidArgumentException) {
+            return $this->jsonError(
+                'DESIGN_DIRECTION_INVALID',
+                $invalidArgumentException->getMessage(),
+                ['design_direction_code']
+            );
+        }
+
+        $scopePatch = \array_replace($directionLockPatch, [
             'plan_confirmed' => 1,
-        ];
+        ]);
         if ($executionBlueprintDraft !== []) {
             $scopePatch['execution_blueprint'] = $executionBlueprintDraft;
             $scopePatch['execution_blueprint_confirmed_at'] = \date('Y-m-d H:i:s');
@@ -1598,8 +1965,14 @@ class AiSiteAgent extends BaseController
             'build_plan_contract_id' => (string)($scopePatch['build_plan_v2']['contract_meta']['id'] ?? ''),
         ];
 
+        $confirmOnly = (int)$this->getRequestBodyValue('confirm_only', 0) === 1
+            || (int)$this->getRequestBodyValue('build_deferred', 0) === 1
+            || \strtolower(\trim((string)$this->getRequestBodyValue('start_build', '1'))) === '0';
+
         $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-        $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        if (!$confirmOnly) {
+            $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        }
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $this->appendWorkspaceEvent(
             $session->getId(),
@@ -1616,6 +1989,17 @@ class AiSiteAgent extends BaseController
                 ],
             ]
         );
+
+        if ($confirmOnly) {
+            $state = $this->buildWorkspaceState($fresh, $adminId, 24, true);
+            return $this->fetchJson([
+                'success' => true,
+                'message' => (string)__('Build plan confirmed; you can generate a selected block first.'),
+                'start_sse' => false,
+                'operation' => 'plan_confirm',
+                'data' => $this->buildWorkspaceOperationPayload($state, 'plan_confirm'),
+            ]);
+        }
 
         $buildStartResult = $this->startOperation(
             $fresh,
@@ -3621,10 +4005,12 @@ class AiSiteAgent extends BaseController
             ];
         }
 
-        $normalizedBlockId = $componentCode;
-        if (\str_starts_with($normalizedBlockId, 'content/')) {
-            $normalizedBlockId = \substr($normalizedBlockId, \strlen('content/'));
+        $ordinalTask = $this->resolveSectionTaskKeyByPageBlockOrdinal($scope, $pageType, $componentCode);
+        if ($ordinalTask !== []) {
+            return $ordinalTask;
         }
+
+        $requestAliases = $this->buildBlockIdentifierAliasMap([$componentCode]);
 
         foreach ($this->buildTaskService->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
             $definition = $this->buildTaskService->getTaskDefinition($scope, $taskKey);
@@ -3635,13 +4021,184 @@ class AiSiteAgent extends BaseController
             if ($sectionCode === '') {
                 continue;
             }
-            $blockId = \str_replace(['content/', '/'], ['', '-'], $sectionCode);
-            if ($componentCode === $sectionCode || $componentCode === $blockId || $normalizedBlockId === $blockId) {
+            $definitionAliases = $this->buildTaskDefinitionIdentifierAliasMap($definition, $taskKey);
+            if (\array_intersect_key($requestAliases, $definitionAliases) !== []) {
                 return ['task_key' => $taskKey, 'section_code' => $sectionCode, 'shared_region' => ''];
             }
         }
 
         throw new \RuntimeException((string)__('未找到组件对应的构建任务：%{1}', [$componentCode]));
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     * @return array<string, true>
+     */
+    /**
+     * Plan preview block buttons use page-local ordinal ids such as block_3.
+     * Map that contract back to the confirmed build task order for the page.
+     *
+     * @param array<string, mixed> $scope
+     * @return array{task_key:string,section_code:string,shared_region:string}|array{}
+     */
+    private function resolveSectionTaskKeyByPageBlockOrdinal(array $scope, string $pageType, string $componentCode): array
+    {
+        $componentCode = \trim($componentCode);
+        if ($componentCode === '') {
+            return [];
+        }
+
+        $candidates = [$componentCode];
+        foreach ([':', '.', '/', '\\'] as $separator) {
+            if (\str_contains($componentCode, $separator)) {
+                $parts = \array_values(\array_filter(\explode($separator, $componentCode), static fn(string $part): bool => \trim($part) !== ''));
+                if ($parts !== []) {
+                    $candidates[] = (string)\end($parts);
+                }
+            }
+        }
+
+        $ordinal = 0;
+        foreach ($candidates as $candidate) {
+            if (\preg_match('/^block[_-](\d+)$/i', \trim((string)$candidate), $matches) === 1) {
+                $ordinal = (int)($matches[1] ?? 0);
+                break;
+            }
+        }
+        if ($ordinal <= 0) {
+            return [];
+        }
+
+        $taskKeys = \array_values($this->buildTaskService->listTaskKeysByPageType($scope, $pageType));
+        $taskKey = \trim((string)($taskKeys[$ordinal - 1] ?? ''));
+        if ($taskKey === '') {
+            return [];
+        }
+
+        $definition = $this->buildTaskService->getTaskDefinition($scope, $taskKey);
+        if (!\is_array($definition)) {
+            return [];
+        }
+        $sectionCode = \trim((string)($definition['section_code'] ?? ''));
+        if ($sectionCode === '') {
+            return [];
+        }
+
+        return ['task_key' => $taskKey, 'section_code' => $sectionCode, 'shared_region' => ''];
+    }
+
+    private function buildTaskDefinitionIdentifierAliasMap(array $definition, string $taskKey): array
+    {
+        $runtimeContext = \is_array($definition['runtime_context'] ?? null) ? $definition['runtime_context'] : [];
+        $candidates = [
+            $taskKey,
+            $definition['task_key'] ?? null,
+            $definition['section_code'] ?? null,
+            $definition['section_key'] ?? null,
+            $definition['block_key'] ?? null,
+            $definition['source_block_key'] ?? null,
+        ];
+
+        foreach ([
+            $definition['prompt_variables'] ?? null,
+            $definition['result_ref'] ?? null,
+            $definition['plan_context'] ?? null,
+            $definition['block_task'] ?? null,
+            $definition['implementation_contract'] ?? null,
+            $runtimeContext['context_refs'] ?? null,
+        ] as $bucket) {
+            if (!\is_array($bucket)) {
+                continue;
+            }
+            foreach ([
+                'task_id',
+                'task_key',
+                'section_code',
+                'section_key',
+                'block_key',
+                'source_block_key',
+                'block_id',
+                'source_block_id',
+                'block_context_ref',
+            ] as $key) {
+                $candidates[] = $bucket[$key] ?? null;
+            }
+        }
+
+        return $this->buildBlockIdentifierAliasMap($candidates);
+    }
+
+    /**
+     * @param array<int, mixed> $values
+     * @return array<string, true>
+     */
+    private function buildBlockIdentifierAliasMap(array $values): array
+    {
+        $aliases = [];
+        foreach ($values as $value) {
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $raw = \trim((string)$value);
+            if ($raw === '') {
+                continue;
+            }
+            $this->appendBlockIdentifierAliases($aliases, $raw);
+        }
+
+        return $aliases;
+    }
+
+    /**
+     * @param array<string, true> $aliases
+     */
+    private function appendBlockIdentifierAliases(array &$aliases, string $value): void
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return;
+        }
+
+        $variants = [$value];
+        if (\str_starts_with($value, 'content/')) {
+            $variants[] = \substr($value, \strlen('content/'));
+        }
+        foreach ([':', '.', '/', '\\'] as $separator) {
+            if (\str_contains($value, $separator)) {
+                $parts = \array_values(\array_filter(\explode($separator, $value), static fn(string $part): bool => \trim($part) !== ''));
+                if ($parts !== []) {
+                    $variants[] = (string)\end($parts);
+                }
+            }
+        }
+
+        foreach ($variants as $variant) {
+            $variant = \trim((string)$variant);
+            if ($variant === '') {
+                continue;
+            }
+            $lower = \strtolower($variant);
+            foreach ([$variant, $lower] as $candidate) {
+                $candidate = \trim($candidate);
+                if ($candidate !== '') {
+                    $aliases[$candidate] = true;
+                }
+            }
+            foreach ([
+                \preg_replace('/[^a-z0-9]+/i', '-', $lower),
+                \preg_replace('/[^a-z0-9]+/i', '_', $lower),
+                \str_replace(['/', '\\', '.'], '-', $lower),
+                \str_replace(['/', '\\', '.', '-'], '_', $lower),
+            ] as $candidate) {
+                if (!\is_string($candidate)) {
+                    continue;
+                }
+                $candidate = \trim($candidate, "-_ \t\n\r\0\x0B");
+                if ($candidate !== '') {
+                    $aliases[$candidate] = true;
+                }
+            }
+        }
     }
 
     private function resolveSharedComponentRegionForComponentCode(string $pageType, string $componentCode): string
@@ -3677,6 +4234,37 @@ class AiSiteAgent extends BaseController
         return '';
     }
 
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function ensureVirtualThemeWorkspaceForScopedBuildOperation(AiSiteAgentSession $session, int $adminId, array $scope): array
+    {
+        $websiteProfile = \is_array($scope['website_profile'] ?? null)
+            ? $scope['website_profile']
+            : $this->profileGenerationService->generate($scope);
+        $scope['website_profile'] = $websiteProfile;
+
+        $draftWebsite = $this->draftWebsiteService->ensureDraftWebsite($scope, $websiteProfile);
+        $websiteId = (int)($draftWebsite['website_id'] ?? 0);
+        if ($websiteId > 0) {
+            $scope['draft_website_id'] = $websiteId;
+            $scope['website_id'] = $websiteId;
+            $scope['selected_website_id'] = $websiteId;
+        }
+
+        $themeShell = $this->virtualThemeService->ensureThemeShell($scope, $websiteProfile, $session->getId());
+        $virtualThemeId = (int)($themeShell['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId <= 0) {
+            throw new \RuntimeException((string)__('Unable to prepare virtual theme workspace for scoped build operation.'));
+        }
+
+        $scope['virtual_theme_id'] = $virtualThemeId;
+        $this->sessionService->bindVirtualTheme($session->getId(), $adminId, $virtualThemeId);
+
+        return $scope;
+    }
+
     private function runRegenerateBlockOperation(
         SseWriter $sse,
         AiSiteAgentSession $session,
@@ -3706,6 +4294,10 @@ class AiSiteAgent extends BaseController
         $scope = $this->buildTaskService->markTaskRunning($scope, $taskKey);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+        if ($workspaceTrack !== AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
+            $scope = $this->ensureVirtualThemeWorkspaceForScopedBuildOperation($session, $adminId, $scope);
+            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        }
         $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
         $affectedPageTypes = [$pageType];
 
@@ -4052,7 +4644,6 @@ class AiSiteAgent extends BaseController
                 $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
                 $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
                 $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
-                $layout = $this->virtualThemeService->mergePersistedContentIntoGeneratedLayout((int)$scope['virtual_theme_id'], $pageType, $layout);
                 $layout = $this->virtualThemeService->mergePersistedContentIntoGeneratedLayout((int)$scope['virtual_theme_id'], $pageType, $layout);
                 $this->virtualThemeService->saveGeneratedContentComponent((int)($scope['virtual_theme_id'] ?? 0), $pageType, $sectionComponent);
                 $layout = $this->virtualThemeService->mergeGeneratedContentIntoLayout($layout, $sectionComponent);
@@ -9148,6 +9739,7 @@ class AiSiteAgent extends BaseController
         $clientScope = $normalized;
         $clientScope['virtual_pages_by_type'] = $clientVirtualPagesByType;
         $clientScope['reference_images'] = $referenceImages;
+        $designDirectionState = $this->designDirectionService()->buildWorkspaceDirectionState($normalized);
         unset($clientScope['_ai_generated_shared_components']);
         if (\is_array($clientScope['shared_components'] ?? null)) {
             foreach ($clientScope['shared_components'] as $region => $component) {
@@ -9178,6 +9770,11 @@ class AiSiteAgent extends BaseController
             'website_id' => $draftWebsiteId,
             'virtual_theme_id' => $virtualThemeId,
             'website_profile' => \is_array($normalized['website_profile']) ? $normalized['website_profile'] : [],
+            'design_direction' => $designDirectionState,
+            'design_direction_snapshot' => \is_array($designDirectionState['snapshot'] ?? null) ? $designDirectionState['snapshot'] : [],
+            'design_direction_match_reason' => (string)($designDirectionState['match_reason'] ?? ''),
+            'design_direction_locked' => !empty($designDirectionState['locked']) ? 1 : 0,
+            'design_direction_code' => (string)($designDirectionState['code'] ?? ''),
             'draft_website_id' => $draftWebsiteId,
             'pagebuilder_pages_by_type' => $pagesByType,
             'page_type_layouts' => \is_array($normalized['page_type_layouts'] ?? null) ? $normalized['page_type_layouts'] : [],
@@ -9257,10 +9854,8 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 部分会话在确认后会把阶段一结构化内容压缩/迁移，导致 plan_markdown 仍在，
-     * 但 plan_json / plan_structured 为空数组，前端只能退化成 markdown 只读视图。
-     * 这里在工作区态做只读兜底：当 execution_blueprint 含 page_plans/pages 时，
-     * 反填一份 stage1 structured，使前端继续走块级可编辑预览。
+     * Project the confirmed execution blueprint back to the workspace plan view when
+     * the original structured plan payload was intentionally compacted after confirm.
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
@@ -9327,55 +9922,11 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 当前工作区若在 visual_edit/publish 阶段，建站方案可能仅保存在 plan 作用域。
-     * 这里做一次跨阶段只读兜底，避免“方案已存在但当前页无法渲染”。
+     * Copy the already persisted plan-stage payload into the current workspace stage.
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function buildExecutionBlueprintFallbackFromStageOnePayload(array $scope): array
-    {
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $source = $planStructured !== [] ? $planStructured : $planJson;
-        if ($source === []) {
-            return [];
-        }
-
-        $executionBlueprint = [];
-        foreach ([
-            'pages',
-            'page_plans',
-            'navigation_plan',
-            'footer_plan',
-            'shared_components',
-            'plan_blocks',
-            'page_types',
-            'content_locale',
-            'theme_context_snapshot',
-            'shared_prompt_context',
-            'requirement_expansion',
-        ] as $key) {
-            if (\array_key_exists($key, $source) && $source[$key] !== [] && $source[$key] !== '' && $source[$key] !== null) {
-                $executionBlueprint[$key] = $source[$key];
-            }
-        }
-
-        if ($executionBlueprint === []) {
-            return [];
-        }
-
-        if (!isset($executionBlueprint['signature']) || \trim((string)$executionBlueprint['signature']) === '') {
-            $executionBlueprint['signature'] = \sha1(\json_encode($executionBlueprint, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}');
-        }
-
-        return $executionBlueprint;
-    }
-
     private function hydrateStageOnePlanPayloadFromPlanStageScope(
         AiSiteAgentSession $session,
         int $adminId,
@@ -13716,17 +14267,18 @@ class AiSiteAgent extends BaseController
             }
             $slotType = \trim((string)($visualContract['slot_type'] ?? ''));
             if ($slotType === '') {
-                $slotType = $this->isHeroLikeSection($sectionCode, $sectionName) ? 'hero_banner' : 'section_image';
+                $slotType = (int)($visualContract['strict_hero_cover'] ?? 0) === 1 ? 'hero_image' : 'section_image';
             }
             $slotSeed = [
                 'slot_id' => $slotId,
                 'slot_type' => $slotType,
-                'kind' => $slotType === 'hero_banner' ? 'hero_banner' : 'section_visual',
+                'kind' => $slotType === 'hero_image' ? 'hero_banner_background' : 'section_visual',
                 'page_type' => $pageType,
                 'section_code' => $sectionCode,
                 'label' => $sectionName !== '' ? $sectionName : $sectionCode,
                 'prompt_brief' => $promptBrief,
                 'visual_contract' => $visualContract,
+                'strict_hero_cover' => (int)($visualContract['strict_hero_cover'] ?? 0) === 1 ? 1 : 0,
                 'status' => 'pending',
                 'source' => 'planned',
                 'final_url' => '',
@@ -13764,11 +14316,6 @@ class AiSiteAgent extends BaseController
         if ($patch !== []) {
             $this->sessionService->mergeScope((int)$session->getId(), $adminId, $patch);
         }
-    }
-
-    private function isHeroLikeSection(string $sectionCode, string $sectionName): bool
-    {
-        return \preg_match('/hero|banner|cover|first[-_ ]screen/i', $sectionCode . ' ' . $sectionName) === 1;
     }
 
     /**
@@ -14147,6 +14694,9 @@ class AiSiteAgent extends BaseController
         $this->assertBuildImageAssetsReady($autoAssetResult['failed_slots']);
         $themeShell = $this->virtualThemeService->ensureThemeShell($scope, $scope['website_profile'], $session->getId());
         $scope['virtual_theme_id'] = (int)$themeShell['virtual_theme_id'];
+        if ($queueForcedAiRebuild) {
+            $this->virtualThemeService->resetGeneratedPageLayoutsForRebuild((int)$scope['virtual_theme_id'], $pageTypes);
+        }
 
         /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);

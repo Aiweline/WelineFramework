@@ -325,6 +325,17 @@ class PcController extends Core
     protected function getTemplate(): Template
     {
         $requestId = RequestContext::getId();
+        if (\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            if (
+                !isset($this->_template)
+                || ($requestId !== null && $this->_templateRequestId !== $requestId)
+            ) {
+                $this->_template = Template::getInstance();
+                $this->_templateRequestId = $requestId;
+            }
+            return $this->_template;
+        }
+
         if (
             !isset($this->_template)
             || ($requestId !== null && $this->_templateRequestId !== $requestId)
@@ -449,22 +460,60 @@ class PcController extends Core
      */
     protected function fetchTemplateWithEvents(string $fileName): mixed
     {
+        $fetchProfileStart = \microtime(true);
+        $fetchProfileBeforeStart = $fetchProfileStart;
         // 触发Weline_Framework_Controller::fetch_file_before事件
         $eventData = new DataObject([
             'fileName' => $fileName,
             'content' => '',
             'contentTemplate' => $fileName,
             'controller' => $this,
-            'layoutType' => $this?->layoutType
+            'layoutType' => $this?->layoutType,
+            'templateSnapshot' => $this->buildTemplateRenderSnapshot()
         ]);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_before', $eventData);
+        $fetchProfileBeforeMs = \round((\microtime(true) - $fetchProfileBeforeStart) * 1000, 2);
+        $eventData->setData(
+            'templateSnapshot',
+            $this->mergeTemplateRenderSnapshots(
+                $eventData->getData('templateSnapshot'),
+                $this->buildTemplateRenderSnapshot()
+            )
+        );
         /**@var DataObject $eventData */
         $fileName = $eventData->getData('fileName');
+        $fetchProfileTemplateStart = \microtime(true);
         $content = $this->getTemplate()->fetch($fileName);
+        $fetchProfileTemplateMs = \round((\microtime(true) - $fetchProfileTemplateStart) * 1000, 2);
         // 触发Weline_Framework_Controller::fetch_file_after事件
         $eventData->setData('content', $content);
+        $fetchProfileAfterStart = \microtime(true);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
-        return $eventData->getData('content');
+        $fetchProfileAfterMs = \round((\microtime(true) - $fetchProfileAfterStart) * 1000, 2);
+        $finalContent = $eventData->getData('content');
+        $fetchProfileTotalMs = \round((\microtime(true) - $fetchProfileStart) * 1000, 2);
+        $uri = (string)(\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
+        if ($fetchProfileTotalMs >= 20.0 || \str_contains($uri, 'customer/account')) {
+            $entry = [
+                'file' => (string)$fileName,
+                'uri' => $uri,
+                'before_ms' => $fetchProfileBeforeMs,
+                'template_ms' => $fetchProfileTemplateMs,
+                'after_ms' => $fetchProfileAfterMs,
+                'total_ms' => $fetchProfileTotalMs,
+                'content_bytes' => \is_string($finalContent) ? \strlen($finalContent) : 0,
+            ];
+            if (\class_exists(RequestContext::class, false) && RequestContext::isInitialized()) {
+                $profile = RequestContext::get('template.fetch.profile', []);
+                if (!\is_array($profile)) {
+                    $profile = [];
+                }
+                $profile[] = $entry;
+                RequestContext::set('template.fetch.profile', $profile);
+            }
+            \error_log('[TemplatePerf] fetch ' . \json_encode($entry, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        }
+        return $finalContent;
     }
 
     /**
@@ -476,6 +525,76 @@ class PcController extends Core
      * @return string 渲染后的HTML内容
      * @throws Exception
      */
+    /**
+     * Request-local render data that must survive the content-template fetch.
+     *
+     * WLS keeps workers resident and Template instances may be refreshed during
+     * nested rendering. Keep only small request-local values here; never persist
+     * this snapshot outside the current controller fetch event.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildTemplateRenderSnapshot(): array
+    {
+        try {
+            $template = $this->getTemplate();
+            $meta = $template->getData('meta');
+            if (!\is_array($meta)) {
+                $meta = [];
+            }
+
+            $snapshot = [];
+            $sidebar = $template->getData('sidebar');
+            if (\is_string($sidebar) && \trim($sidebar) !== '') {
+                $snapshot['sidebar'] = $sidebar;
+            }
+            $metaSidebar = $meta['sidebar'] ?? null;
+            if (\is_string($metaSidebar) && \trim($metaSidebar) !== '') {
+                $snapshot['meta_sidebar'] = $metaSidebar;
+            }
+            $title = $template->getData('title');
+            if (\is_string($title) && \trim($title) !== '') {
+                $snapshot['title'] = $title;
+            }
+            if (isset($meta['title']) && \trim((string)$meta['title']) !== '') {
+                $snapshot['meta_title'] = (string)$meta['title'];
+            }
+            foreach (['showHeader', 'showFooter', 'sidebarCollapsed'] as $key) {
+                if (\array_key_exists($key, $meta)) {
+                    $snapshot['meta'][$key] = $meta[$key];
+                }
+            }
+
+            return $snapshot;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param mixed $base
+     * @param array<string, mixed> $fresh
+     * @return array<string, mixed>
+     */
+    private function mergeTemplateRenderSnapshots(mixed $base, array $fresh): array
+    {
+        $snapshot = \is_array($base) ? $base : [];
+        foreach ($fresh as $key => $value) {
+            if ($key === 'meta' && \is_array($value)) {
+                $snapshot['meta'] = \array_merge(
+                    \is_array($snapshot['meta'] ?? null) ? $snapshot['meta'] : [],
+                    $value
+                );
+                continue;
+            }
+            if (!\array_key_exists($key, $snapshot) || $snapshot[$key] === '' || $snapshot[$key] === null) {
+                $snapshot[$key] = $value;
+            }
+        }
+
+        return $snapshot;
+    }
+
     protected function template(string $fileName, array $data = []): string
     {
         if ($data) {

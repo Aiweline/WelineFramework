@@ -190,6 +190,17 @@ final class BuildPlanContractValidator
                     $errors[] = 'Block ' . $blockId . ' is missing required field: ' . $field;
                 }
             }
+            if (\trim((string)($block['page_id'] ?? '')) !== '') {
+                if (\trim((string)($block['page_flow_role'] ?? '')) === '') {
+                    $errors[] = 'Block ' . $blockId . ' is missing stage-one page_flow_role';
+                }
+                $signature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+                foreach (['composition_pattern', 'spatial_rhythm', 'media_strategy', 'surface_treatment'] as $field) {
+                    if (\trim((string)($signature[$field] ?? '')) === '') {
+                        $errors[] = 'Block ' . $blockId . ' is missing visual_signature.' . $field;
+                    }
+                }
+            }
         }
 
         return $errors;
@@ -226,6 +237,18 @@ final class BuildPlanContractValidator
             $executor = \trim((string)($task['executor'] ?? ''));
             if ($executor !== '' && !\in_array($executor, $allowedExecutors, true)) {
                 $errors[] = 'Task ' . $taskId . ' has unsupported executor: ' . $executor;
+            }
+            $inputScope = \is_array($task['input_scope'] ?? null) ? $task['input_scope'] : [];
+            if (\trim((string)($inputScope['page_type'] ?? '')) !== '') {
+                if (\trim((string)($task['page_flow_role'] ?? $inputScope['page_flow_role'] ?? '')) === '') {
+                    $errors[] = 'Task ' . $taskId . ' is missing stage-one page_flow_role';
+                }
+                $signature = \is_array($task['visual_signature'] ?? null) ? $task['visual_signature'] : [];
+                foreach (['composition_pattern', 'spatial_rhythm', 'media_strategy', 'surface_treatment'] as $field) {
+                    if (\trim((string)($signature[$field] ?? '')) === '') {
+                        $errors[] = 'Task ' . $taskId . ' is missing visual_signature.' . $field;
+                    }
+                }
             }
         }
 

@@ -54,6 +54,15 @@ class WebsiteData
         self::$currencies = null;
     }
 
+    public static function resetRequestState(): void
+    {
+        self::$website = null;
+        self::$data = null;
+        self::$currencyCodes = null;
+        self::$languageCodes = null;
+        self::$currencies = null;
+    }
+
     /**
      * 获取当前网站实例
      * 
@@ -360,7 +369,7 @@ class WebsiteData
                 ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
-            return $locale->getId() !== null;
+            return (string)$locale->getData(\Weline\I18n\Model\Locals::schema_fields_CODE) !== '';
         }
         
         // 如果限定了关联语言，只允许这些语言

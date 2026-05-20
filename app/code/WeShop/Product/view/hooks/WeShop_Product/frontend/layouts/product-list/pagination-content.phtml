@@ -38,12 +38,26 @@ if ($endPage - $startPage + 1 < $maxVisiblePages) {
 }
 
 // 获取当前URL参数
-$currentUrl = parse_url(\w_env_request_uri(), PHP_URL_PATH);
+$currentRequestUri = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? \w_env_request_uri() ?? '/');
+$currentUrl = parse_url($currentRequestUri, PHP_URL_PATH);
+if (!is_string($currentUrl) || $currentUrl === '') {
+    $currentUrl = '/';
+}
 $queryParams = \w_env_get();
 if (!is_array($queryParams)) {
     $queryParams = [];
 }
-unset($queryParams['page']);
+foreach (array_keys($queryParams) as $queryKey) {
+    $normalizedQueryKey = strtolower(trim((string)$queryKey));
+    if ($normalizedQueryKey === 'page'
+        || $normalizedQueryKey === '_'
+        || in_array($normalizedQueryKey, ['ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'], true)
+        || str_starts_with($normalizedQueryKey, 'utm_')
+        || str_starts_with($normalizedQueryKey, 'mtm_')
+        || str_starts_with($normalizedQueryKey, 'pk_')) {
+        unset($queryParams[$queryKey]);
+    }
+}
 $baseQuery = http_build_query($queryParams);
 $baseUrl = $currentUrl . ($baseQuery ? '?' . $baseQuery . '&' : '?');
 ?>

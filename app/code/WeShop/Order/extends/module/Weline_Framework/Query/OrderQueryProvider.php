@@ -14,6 +14,11 @@ use WeShop\Order\Service\OrderService;
 
 class OrderQueryProvider implements QueryProviderInterface
 {
+    private const FRONTEND_SUMMARY_CACHE_TTL = 5;
+
+    /** @var array<int, array{expires_at:float, data:array<string, mixed>}> */
+    private static array $frontendUnpaidSummaryCache = [];
+
     public function __construct(
         private readonly OrderService $orderService,
         private readonly OrderItem $orderItemModel,
@@ -34,7 +39,7 @@ class OrderQueryProvider implements QueryProviderInterface
             'addOrderItems' => $this->addOrderItems($params),
             'getCustomerDashboardOrders' => $this->getCustomerDashboardOrders($params),
             'dashboard' => $this->getFrontendDashboardOrders($params),
-            'unpaidSummary' => $this->getFrontendDashboardOrders($params),
+            'unpaidSummary' => $this->getFrontendUnpaidSummary(),
             'cancel' => $this->cancel($params),
             default => throw new \InvalidArgumentException((string) __('订单查询器不支持的操作：%{1}', [$operation])),
         };
@@ -52,6 +57,11 @@ class OrderQueryProvider implements QueryProviderInterface
             return null;
         }
 
+        $customerId = (int)($order->getData(Order::schema_fields_customer_id) ?? 0);
+        if ($customerId > 0) {
+            self::resetFrontendSummaryCache($customerId);
+        }
+
         return $this->orderToArray($order);
     }
 
@@ -63,7 +73,10 @@ class OrderQueryProvider implements QueryProviderInterface
             return [];
         }
 
-        return $this->orderService->addOrderItems($orderId, $items);
+        $result = $this->orderService->addOrderItems($orderId, $items);
+        self::resetFrontendSummaryCache();
+
+        return $result;
     }
 
     /**
@@ -127,6 +140,51 @@ class OrderQueryProvider implements QueryProviderInterface
         ];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function getFrontendUnpaidSummary(): array
+    {
+        $customerId = $this->getFrontendCustomerId();
+        if ($customerId <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('Please login.'),
+                'data' => [
+                    'recent_orders' => [],
+                    'unpaid_orders' => [],
+                    'order_count' => 0,
+                    'unpaid_count' => 0,
+                    'redirect_url' => $this->getUrl()->getUrl('customer/account/login'),
+                ],
+            ];
+        }
+
+        $now = \microtime(true);
+        $cached = self::$frontendUnpaidSummaryCache[$customerId] ?? null;
+        if (\is_array($cached) && ($cached['expires_at'] ?? 0.0) >= $now) {
+            return $cached['data'];
+        }
+
+        $summary = [
+            'success' => true,
+            'message' => (string)__('Orders loaded.'),
+            'data' => [
+                'recent_orders' => [],
+                'unpaid_orders' => [],
+                'order_count' => 0,
+                'unpaid_count' => $this->orderService->getUnpaidOrderCount($customerId),
+            ],
+        ];
+
+        self::$frontendUnpaidSummaryCache[$customerId] = [
+            'expires_at' => $now + self::FRONTEND_SUMMARY_CACHE_TTL,
+            'data' => $summary,
+        ];
+
+        return $summary;
+    }
+
     private function cancel(array $params): array
     {
         $customerId = $this->getFrontendCustomerId();
@@ -156,6 +214,7 @@ class OrderQueryProvider implements QueryProviderInterface
         }
 
         $this->orderService->cancelOrder($orderId, $customerId);
+        self::resetFrontendSummaryCache($customerId);
 
         return [
             'success' => true,
@@ -164,6 +223,16 @@ class OrderQueryProvider implements QueryProviderInterface
                 : (string)__('订单已取消。'),
             'data' => ['order_id' => $orderId],
         ];
+    }
+
+    public static function resetFrontendSummaryCache(?int $customerId = null): void
+    {
+        if ($customerId !== null && $customerId > 0) {
+            unset(self::$frontendUnpaidSummaryCache[$customerId]);
+            return;
+        }
+
+        self::$frontendUnpaidSummaryCache = [];
     }
 
     private function getFrontendCustomerId(): int

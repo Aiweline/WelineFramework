@@ -9,10 +9,12 @@
 
 namespace Weline\Framework\App;
 
+use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+
 class State extends DataObject
 {
     public const area_backend = 'backend';
@@ -25,6 +27,8 @@ class State extends DataObject
 
     /** 请求级缓存：getLangLocal() 结果，同请求内只触发一次事件，WLS 下由 StateManager 重置 */
     private static ?string $langLocalCache = null;
+
+    private const LANG_LOCAL_CONTEXT_CACHE = 'state.lang_local_cache';
 
     /**
      * State 初始函数...
@@ -112,13 +116,25 @@ class State extends DataObject
      */
     public static function getLangLocal(): string
     {
-        if (self::$langLocalCache !== null) {
+        $lang = self::getLang();
+        $currency = self::getCurrency();
+        $cacheKey = $lang . '|' . $currency;
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $cached = $context->get(self::LANG_LOCAL_CONTEXT_CACHE, null);
+            if (\is_array($cached)
+                && (string)($cached['key'] ?? '') === $cacheKey
+                && \array_key_exists('value', $cached)
+            ) {
+                return (string)$cached['value'];
+            }
+        } elseif (self::$langLocalCache !== null) {
             return self::$langLocalCache;
         }
         $data = new DataObject();
-        $data->setData('lang', self::getLang());
-        $data->setData('currency', self::getCurrency());
-        $data->setData('lang_local', self::getLang());
+        $data->setData('lang', $lang);
+        $data->setData('currency', $currency);
+        $data->setData('lang_local', $lang);
 
         try {
             \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
@@ -127,7 +143,16 @@ class State extends DataObject
             // 如果事件系统未初始化，静默处理
         }
 
-        self::$langLocalCache = $data->getData('lang_local');
-        return self::$langLocalCache;
+        $langLocal = (string)$data->getData('lang_local');
+        if ($context !== null) {
+            $context->set(self::LANG_LOCAL_CONTEXT_CACHE, [
+                'key' => $cacheKey,
+                'value' => $langLocal,
+            ]);
+        } else {
+            self::$langLocalCache = $langLocal;
+        }
+
+        return $langLocal;
     }
 }

@@ -107,7 +107,7 @@ final class AiSiteBuildPlanService
             $contentItems
         );
 
-        return [
+        $contract = [
             'contract_meta' => [
                 'id' => $contractId,
                 'version' => BuildPlanContractSchema::VERSION,
@@ -167,6 +167,24 @@ final class AiSiteBuildPlanService
                 'summary_key' => 'site.primary_goal',
             ],
         ];
+
+        AiSiteWorkflowTrace::log('build_plan_v2_contract_built', [
+            'contract_id' => $contractId,
+            'page_count' => \count($pages),
+            'block_count' => \count($blocks),
+            'task_count' => \count($tasks),
+            'build_order' => $buildOrder,
+            'locale' => $locale,
+            'site_name' => $siteName,
+            'primary_goal' => $primaryGoal,
+        ]);
+        if (AiSiteWorkflowTrace::verbose()) {
+            AiSiteWorkflowTrace::json('build_plan_v2_contract_detail', $contract, [
+                'contract_id' => $contractId,
+            ]);
+        }
+
+        return $contract;
     }
 
     /**
@@ -271,7 +289,7 @@ final class AiSiteBuildPlanService
             )
         );
         $locale = $this->firstNonEmpty([$scope['plan_locale'] ?? null, $scope['default_locale'] ?? null, $profile['default_locale'] ?? null, 'zh_Hans_CN']);
-        [, , , , $freshContentItems] = $this->buildPageBlockTaskGraph(
+        [$freshPages, $freshBlocks, $freshTasks, $freshBuildOrder, $freshContentItems] = $this->buildPageBlockTaskGraph(
             $scope,
             $sourcePlan,
             $executionBlueprint,
@@ -279,6 +297,10 @@ final class AiSiteBuildPlanService
             $primaryGoal,
             $locale
         );
+        $contract['pages'] = $freshPages;
+        $contract['blocks'] = $freshBlocks;
+        $contract['tasks'] = $freshTasks;
+        $contract['build_order'] = $freshBuildOrder;
         $contract['content_manifest'] = [
             'primary_locale' => $locale,
             'items' => \array_replace(
@@ -693,7 +715,7 @@ final class AiSiteBuildPlanService
         }
 
         return \preg_match(
-            '/(?:合同字段|提示词|JSON|可见页面|不要出现|禁止|不得|不能|必须使用|除了?.+以外|language|locale|prompt|contract|field|visible copy|do not|must not|forbidden)/iu',
+            '/(?:合同字段|提示词|JSON|可见页面|不要出现|禁止(?:输出|生成|使用|出现)|不得(?:输出|生成|使用|出现)|不能(?:输出|生成|使用|出现)|必须使用|除了?.+以外|language|locale|prompt|contract|field|visible copy|do not|must not|forbidden)/iu',
             $value
         ) === 1;
     }
@@ -704,7 +726,12 @@ final class AiSiteBuildPlanService
      */
     private function buildBlockVisualImplementationContract(array $block, string $blockType, string $blockKey): array
     {
+        $visualSignature = $this->normalizeBlockVisualSignatureForBuildPlan($block['visual_signature'] ?? []);
+        $imageIntent = $this->normalizeBlockImageIntentForBuildPlan($block['image_intent'] ?? []);
+
         return [
+            'visual_signature' => $visualSignature,
+            'image_intent' => $imageIntent,
             'image_integration' => 'Integrate imagery as part of the section composition, with responsive crop and readable overlays when needed.',
             'responsive_layout_contract' => $this->buildBlockResponsiveContract($blockType, $blockKey),
             'implementation_slices' => $this->buildBlockImplementationSlices($blockType, $blockKey),
@@ -722,11 +749,108 @@ final class AiSiteBuildPlanService
     /**
      * @return array<string, mixed>
      */
+    private function normalizeBlockVisualSignatureForBuildPlan(mixed $value): array
+    {
+        if (!\is_array($value)) {
+            return [];
+        }
+
+        $signature = [];
+        foreach ([
+            'composition_pattern',
+            'spatial_rhythm',
+            'media_strategy',
+            'surface_treatment',
+            'interaction_pattern',
+        ] as $key) {
+            $text = \trim((string)($value[$key] ?? ''));
+            if ($text !== '') {
+                $signature[$key] = $text;
+            }
+        }
+
+        return $signature;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function normalizeBlockImageIntentForBuildPlan(mixed $value): array
+    {
+        if (!\is_array($value)) {
+            return [];
+        }
+
+        $intent = [];
+        foreach ([
+            'needs_image',
+            'image_role',
+            'image_subject',
+            'placement',
+            'reuse_policy',
+            'css_motif',
+        ] as $key) {
+            if (!\array_key_exists($key, $value)) {
+                continue;
+            }
+            $raw = $value[$key];
+            if (\is_bool($raw)) {
+                $intent[$key] = $raw;
+                continue;
+            }
+            if (\is_scalar($raw)) {
+                $text = \trim((string)$raw);
+                if ($text !== '') {
+                    $intent[$key] = $text;
+                }
+            }
+        }
+
+        return $intent;
+    }
+
+    private function normalizePlanRoleToken(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        if ($value === '') {
+            return '';
+        }
+        $value = \preg_replace('/[^a-z0-9_-]+/', '_', $value) ?? $value;
+        $value = \preg_replace('/_+/', '_', $value) ?? $value;
+
+        return \trim($value, '_-');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function buildBlockResponsiveContract(string $blockType, string $blockKey): array
     {
-        $identity = \strtolower($blockType . ' ' . $blockKey);
-        $hasFormOrSupport = \preg_match('/contact|form|support|faq|lead|query|consult/i', $identity) === 1;
-        $isHeroOrCta = \preg_match('/hero|banner|cta|download|conversion|final/i', $identity) === 1;
+        unset($blockKey);
+
+        $blockType = $this->normalizePlanRoleToken($blockType);
+        $hasFormOrSupport = \in_array($blockType, [
+            'contact',
+            'contact_methods',
+            'contact_form',
+            'support',
+            'support_form',
+            'support_faq',
+            'faq',
+            'lead_form',
+            'query_form',
+            'consult_form',
+        ], true);
+        $isHeroOrCta = \in_array($blockType, [
+            'hero',
+            'banner',
+            'home_hero',
+            'hero_banner',
+            'cta',
+            'final_cta',
+            'download_cta',
+            'conversion_cta',
+        ], true);
 
         return [
             'breakpoints' => [
@@ -763,7 +887,9 @@ final class AiSiteBuildPlanService
      */
     private function buildBlockImplementationSlices(string $blockType, string $blockKey): array
     {
-        $identity = \strtolower($blockType . ' ' . $blockKey);
+        unset($blockKey);
+
+        $blockType = $this->normalizePlanRoleToken($blockType);
         $slices = [
             'copy: headline, supporting copy, proof/detail row, CTA labels',
             'layout: root shell, safe inner container, responsive grid/flex structure',
@@ -771,10 +897,28 @@ final class AiSiteBuildPlanService
             'interaction: hover/focus states and reduced-motion-safe animation',
             'responsive: desktop/tablet/mobile layout with no overflow',
         ];
-        if (\preg_match('/contact|form|support|lead|query|consult/i', $identity) === 1) {
+        if (\in_array($blockType, [
+            'contact',
+            'contact_methods',
+            'contact_form',
+            'support',
+            'support_form',
+            'lead_form',
+            'query_form',
+            'consult_form',
+        ], true)) {
             $slices[] = 'form: labels, inputs, textarea, submit CTA, support contact details, stacked mobile state';
         }
-        if (\preg_match('/hero|banner|download|cta|conversion|final/i', $identity) === 1) {
+        if (\in_array($blockType, [
+            'hero',
+            'banner',
+            'home_hero',
+            'hero_banner',
+            'cta',
+            'final_cta',
+            'download_cta',
+            'conversion_cta',
+        ], true)) {
             $slices[] = 'conversion: primary action cluster, trust cue, readable image overlay, mobile first-screen stacking';
         }
 
@@ -801,7 +945,6 @@ final class AiSiteBuildPlanService
         $tasks = [];
         $buildOrder = [];
         $contentItems = [];
-        $primaryCta = $this->resolveBuildPlanPrimaryCta($sourcePlan, $executionBlueprint, $locale);
 
         $sharedTasks = [
             [
@@ -855,10 +998,7 @@ final class AiSiteBuildPlanService
             $pageBlockIds = [];
             $pageBlocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
             if ($pageBlocks === []) {
-                $pageBlocks = [['block_key' => 'hero', 'title' => $pageTitle, 'goal' => $pageDescription, 'block_type' => 'hero']];
-            }
-            if ($pageType === Page::TYPE_HOME) {
-                $pageBlocks = $this->ensureHomeConversionBlocks($pageBlocks, $siteName, $pageTitle, $pageDescription);
+                throw new \RuntimeException('BuildPlan contract failed: page ' . $pageType . ' has no stage-one blocks. Regenerate the plan instead of injecting fallback blocks.');
             }
 
             foreach ($pageBlocks as $blockIndex => $rawBlock) {
@@ -871,19 +1011,33 @@ final class AiSiteBuildPlanService
                 $titleKey = 'block.' . $blockId . '.title';
                 $copyKey = 'block.' . $blockId . '.copy';
                 $ctaKey = 'block.' . $blockId . '.cta';
-                $blockTitle = $this->extractBlockTitle($rawBlock, $blockKey, $pageTitle, $locale);
-                $blockCopy = $this->extractBlockCopy($rawBlock, $pageDescription, $locale);
-                $blockCta = $this->extractBlockCta($rawBlock, $siteName, $locale, $primaryCta, $blockKey, $pageType);
+                $blockType = $this->resolveBlockType($rawBlock, $blockIndex, $blockKey);
+                $pageFlowRole = $this->normalizePlanRoleToken((string)($rawBlock['page_flow_role'] ?? ''));
+                $blockTitle = $this->extractBlockTitle($rawBlock, $blockKey, $locale);
+                $blockCopy = $this->extractBlockCopy($rawBlock, $blockKey, $locale);
+                $blockCta = $this->extractBlockCta($rawBlock, $locale);
+                $contentKeys = [$titleKey, $copyKey];
                 $contentItems[$titleKey] = $blockTitle;
                 $contentItems[$copyKey] = $blockCopy;
-                $contentItems[$ctaKey] = $blockCta;
-                $blockType = $this->resolveBlockType($rawBlock, $blockIndex);
+                if ($blockCta !== '') {
+                    $contentItems[$ctaKey] = $blockCta;
+                    $contentKeys[] = $ctaKey;
+                }
+                $visualSignature = $this->normalizeBlockVisualSignatureForBuildPlan($rawBlock['visual_signature'] ?? []);
+                $designTags = \is_array($rawBlock['design_tags'] ?? null) ? $rawBlock['design_tags'] : [];
+                $imageIntent = $this->normalizeBlockImageIntentForBuildPlan($rawBlock['image_intent'] ?? []);
 
                 $blocks[] = [
                     'block_id' => $blockId,
                     'page_id' => $pageId,
+                    'page_type' => $pageType,
+                    'section_key' => $blockKey,
                     'block_type' => $blockType,
-                    'content_keys' => [$titleKey, $copyKey, $ctaKey],
+                    'page_flow_role' => $pageFlowRole,
+                    'visual_signature' => $visualSignature,
+                    'design_tags' => $designTags,
+                    'image_intent' => $imageIntent,
+                    'content_keys' => $contentKeys,
                     'task_ids' => [$taskId],
                     'visual' => $this->buildBlockVisualImplementationContract($rawBlock, $blockType, $blockKey),
                     'sort_order' => 1000 + ((int)$pageIndex * 100) + ((int)$blockIndex * 10),
@@ -899,7 +1053,12 @@ final class AiSiteBuildPlanService
                         'block_id' => $blockId,
                         'block_type' => $blockType,
                         'section_key' => $blockKey,
+                        'page_flow_role' => $pageFlowRole,
                     ],
+                    'page_flow_role' => $pageFlowRole,
+                    'visual_signature' => $visualSignature,
+                    'design_tags' => $designTags,
+                    'image_intent' => $imageIntent,
                     'policy_slices' => ['layout.4_8_spacing', 'typography.refined_font_stack', 'image.integrated_not_pasted', 'responsive.no_horizontal_scroll'],
                     'context_budget' => ['max_tokens' => 1800],
                     'implementation_slices' => $this->buildBlockImplementationSlices($blockType, $blockKey),
@@ -915,6 +1074,11 @@ final class AiSiteBuildPlanService
                 'page_type' => $pageType,
                 'title_key' => $pageTitleKey,
                 'description_key' => $pageDescriptionKey,
+                'page_goal' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),
+                'content_focus' => (string)($page['content_focus'] ?? ''),
+                'conversion_role' => (string)($page['conversion_role'] ?? ''),
+                'theme_alignment_summary' => (string)($page['theme_alignment_summary'] ?? ''),
+                'page_design_plan' => \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : [],
                 'blocks' => $pageBlockIds,
                 'sort_order' => 100 + ((int)$pageIndex * 10),
             ];
@@ -944,29 +1108,7 @@ final class AiSiteBuildPlanService
             }
         }
 
-        $pageTypes = $this->resolvePageTypes($scope, $sourcePlan, $executionBlueprint);
-        $pages = [];
-        foreach ($pageTypes as $pageType) {
-            $pageTitle = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
-            $pages[] = [
-                'page_type' => $pageType,
-                'title' => $pageTitle,
-                'page_goal' => match ($pageType) {
-                    Page::TYPE_HOME => 'Capture core intent, explain value, and surface primary conversion actions.',
-                    Page::TYPE_ABOUT => 'Build trust by explaining brand background and delivery capability.',
-                    Page::TYPE_CONTACT => 'Reduce friction and collect qualified leads quickly.',
-                    Page::TYPE_REFUND_POLICY => 'Explain refund eligibility, timing, and request steps so customers can act with confidence.',
-                    Page::TYPE_PRIVACY_POLICY => 'Explain what data is collected, how it is used, and what control visitors keep.',
-                    Page::TYPE_TERMS_OF_SERVICE => 'Clarify usage rules, responsibilities, and account expectations before purchase or signup.',
-                    Page::TYPE_SHIPPING_POLICY => 'Set delivery timing, shipping regions, and exception handling expectations clearly.',
-                    Page::TYPE_COOKIE_POLICY => 'Explain what cookies are used, why they exist, and how visitors can manage consent.',
-                    default => $pageTitle . ' gives visitors specific context, useful proof, and a clear route to continue.',
-                },
-                'blocks' => [['block_key' => 'hero', 'block_type' => 'hero']],
-            ];
-        }
-
-        return $pages;
+        throw new \RuntimeException('BuildPlan contract failed: stage-one page plans are missing. Regenerate the plan instead of injecting fallback pages.');
     }
 
     /**
@@ -1048,7 +1190,7 @@ final class AiSiteBuildPlanService
             }
         }
 
-        return ['home_page', 'about_page'];
+        return [];
     }
 
     /**
@@ -1061,68 +1203,39 @@ final class AiSiteBuildPlanService
             $block['source_block_key'] ?? null,
             $block['key'] ?? null,
             $block['id'] ?? null,
-            $block['type'] ?? null,
-            'block_' . ((int)$index + 1),
         ]);
-
-        return $key !== '' ? $key : 'block_' . ((int)$index + 1);
-    }
-
-    /**
-     * @param list<array<string, mixed>> $pageBlocks
-     * @return list<array<string, mixed>>
-     */
-    private function ensureHomeConversionBlocks(array $pageBlocks, string $siteName, string $pageTitle, string $pageDescription): array
-    {
-        // Strong-contract build must preserve the Stage-1 block tree exactly.
-        // Missing conversion sections should be fixed in Stage-1 planning, not injected here.
-        return \array_values($pageBlocks);
-    }
-
-    /**
-     * @param list<array<string, mixed>> $pageBlocks
-     */
-    private function pageBlocksContainKind(array $pageBlocks, string $kind): bool
-    {
-        $kind = \strtolower(\trim($kind));
-        foreach ($pageBlocks as $index => $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $blockKey = \strtolower($this->slugify($this->resolveBlockKey($block, (int)$index)));
-            $blockType = \strtolower($this->slugify($this->resolveBlockType($block, (int)$index)));
-            if ($kind === 'hero' && ($blockType === 'hero' || \str_contains($blockKey, 'hero'))) {
-                return true;
-            }
-            if ($kind === 'final_cta' && (\str_contains($blockKey, 'final_cta') || \str_contains($blockKey, 'cta') || $blockType === 'cta')) {
-                return true;
-            }
+        if ($key === '') {
+            throw new \RuntimeException('BuildPlan contract failed: stage-one block at index ' . ((int)$index + 1) . ' is missing block_key.');
         }
 
-        return false;
+        return $key;
     }
 
     /**
      * @param array<string, mixed> $block
      */
-    private function resolveBlockType(array $block, int $index): string
+    private function resolveBlockType(array $block, int $index, string $blockKey): string
     {
         $type = \strtolower($this->firstNonEmpty([
             $block['block_type'] ?? null,
             $block['type'] ?? null,
             $block['template'] ?? null,
-            $index === 0 ? 'hero' : 'section',
+            $blockKey,
         ]));
         $type = \preg_replace('/[^a-z0-9_-]+/', '_', $type) ?? $type;
         $type = \trim($type, '_-');
 
-        return $type !== '' ? $type : ($index === 0 ? 'hero' : 'section');
+        if ($type === '') {
+            throw new \RuntimeException('BuildPlan contract failed: stage-one block ' . ((int)$index + 1) . ' is missing block_type.');
+        }
+
+        return $type;
     }
 
     /**
      * @param array<string, mixed> $block
      */
-    private function extractBlockTitle(array $block, string $fallbackKey, string $pageTitle, string $locale): string
+    private function extractBlockTitle(array $block, string $blockKey, string $locale): string
     {
         $fieldTitle = $this->extractFieldPlanText($block, [
             'title',
@@ -1143,7 +1256,7 @@ final class AiSiteBuildPlanService
         $execution = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
         $featurePoints = \is_array($execution['feature_points'] ?? null) ? $execution['feature_points'] : [];
 
-        return $this->firstSafeLocalizedVisibleCopy([
+        $title = $this->firstSafeLocalizedVisibleCopy([
             $fieldTitle,
             $realtime['headline'] ?? null,
             $block['title'] ?? null,
@@ -1153,26 +1266,37 @@ final class AiSiteBuildPlanService
             $this->extractFirstFieldPlanSample($block, ['cta', 'button', 'action', 'image', 'media', 'icon', 'logo']),
             $featurePoints[0] ?? null,
             $this->shortTitleFromCopy((string)($block['content'] ?? '')),
-            $this->localizedBlockTitleFallback($fallbackKey, $pageTitle, $locale),
         ], $locale);
+        if ($title === '') {
+            throw new \RuntimeException('BuildPlan contract failed: stage-one block ' . $blockKey . ' is missing visible title content.');
+        }
+
+        return $title;
     }
 
     /**
      * @param array<string, mixed> $block
      */
-    private function extractBlockCopy(array $block, string $fallback, string $locale): string
+    private function extractBlockCopy(array $block, string $blockKey, string $locale): string
     {
-        $fieldCopy = $this->extractFieldPlanText($block, ['description', 'body', 'copy', 'subtitle']);
+        $fieldCopy = $this->extractFieldPlanText($block, ['description', 'body', 'copy', 'subtitle', 'supporting_copy', 'intro', 'paragraph']);
         $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
         $supporting = \is_array($realtime['supporting_copy'] ?? null) ? \implode(' ', \array_map('strval', $realtime['supporting_copy'])) : '';
+        $execution = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+        $featurePoints = \is_array($execution['feature_points'] ?? null) ? \implode(' ', \array_map('strval', $execution['feature_points'])) : '';
 
-        return $this->firstSafeLocalizedVisibleCopy([
-            $block['execution_script']['core_copy'] ?? null,
+        $copy = $this->firstSafeVisibleCopy([
+            $execution['core_copy'] ?? null,
             $fieldCopy,
             $supporting,
-            $fallback,
-            $this->localizedDefaultCopy($locale),
+            $featurePoints,
+            $block['content'] ?? null,
         ], $locale);
+        if ($copy === '') {
+            throw new \RuntimeException('BuildPlan contract failed: stage-one block ' . $blockKey . ' is missing visible body content.');
+        }
+
+        return $copy;
     }
 
     /**
@@ -1180,14 +1304,19 @@ final class AiSiteBuildPlanService
      */
     private function extractBlockCta(
         array $block,
-        string $siteName,
-        string $locale,
-        string $primaryCta,
-        string $blockKey,
-        string $pageType
+        string $locale
     ): string
     {
-        $fieldCta = $this->extractFieldPlanText($block, ['cta', 'button', 'action', 'button_text']);
+        $fieldCta = $this->extractFieldPlanText($block, [
+            'cta',
+            'cta_label',
+            'button',
+            'button_text',
+            'action',
+            'action_label',
+            'form_label',
+            'submit_label',
+        ]);
         $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
         $ctas = \is_array($realtime['ctas'] ?? null) ? $realtime['ctas'] : [];
         $candidates = [$fieldCta];
@@ -1201,89 +1330,7 @@ final class AiSiteBuildPlanService
             }
         }
 
-        $candidates[] = $this->isCjkLocale($locale) ? '立即咨询' : 'Start now';
-
-        \array_pop($candidates);
-        if ($primaryCta !== '') {
-            $candidates = \array_values(\array_filter(
-                $candidates,
-                fn(string $label): bool => !$this->isGenericBuildPlanConsultCta($label)
-            ));
-            \array_unshift($candidates, $this->selectBuildPlanCtaForBlock($primaryCta, $blockKey, $pageType));
-        }
-        $candidates[] = $primaryCta !== ''
-            ? $this->selectBuildPlanCtaForBlock($primaryCta, $blockKey, $pageType)
-            : ($this->isCjkLocale($locale) ? $this->unicodeText('\u4e86\u89e3\u8be6\u60c5') : 'Learn more');
-
         return $this->firstSafeLocalizedVisibleCopy($candidates, $locale);
-    }
-
-    /**
-     * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
-     */
-    private function resolveBuildPlanPrimaryCta(array $sourcePlan, array $executionBlueprint, string $locale): string
-    {
-        $requirementExpansion = \is_array($sourcePlan['requirement_expansion'] ?? null) ? $sourcePlan['requirement_expansion'] : [];
-        $siteStrategy = \is_array($sourcePlan['site_strategy'] ?? null) ? $sourcePlan['site_strategy'] : [];
-        $sharedContext = \is_array($executionBlueprint['shared_prompt_context'] ?? null) ? $executionBlueprint['shared_prompt_context'] : [];
-        $sharedRequirementExpansion = \is_array($sharedContext['requirement_expansion'] ?? null) ? $sharedContext['requirement_expansion'] : [];
-        $sharedSiteStrategy = \is_array($sharedContext['site_strategy'] ?? null) ? $sharedContext['site_strategy'] : [];
-        $ctaStrategy = \is_array($sharedContext['shared_cta_strategy'] ?? null)
-            ? $sharedContext['shared_cta_strategy']
-            : (\is_array($sharedContext['cta_strategy'] ?? null) ? $sharedContext['cta_strategy'] : []);
-
-        return $this->firstSafeLocalizedVisibleCopy([
-            $requirementExpansion['primary_cta'] ?? null,
-            $sharedRequirementExpansion['primary_cta'] ?? null,
-            $siteStrategy['primary_cta'] ?? null,
-            $sharedSiteStrategy['primary_cta'] ?? null,
-            $ctaStrategy['primary_action'] ?? null,
-            $ctaStrategy['primary_cta'] ?? null,
-            $sharedContext['primary_cta'] ?? null,
-        ], $locale);
-    }
-
-    private function selectBuildPlanCtaForBlock(string $primaryCta, string $blockKey, string $pageType): string
-    {
-        $parts = \preg_split('/\s*(?:\/|\||,|\x{FF0C}|\x{3001})\s*/u', $primaryCta, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
-        $labels = [];
-        foreach ($parts as $part) {
-            $label = $this->cleanVisibleCopy((string)$part);
-            if ($label !== '' && !\in_array($label, $labels, true)) {
-                $labels[] = $label;
-            }
-        }
-        if ($labels === []) {
-            return $primaryCta;
-        }
-
-        $identity = \strtolower($blockKey . ' ' . $pageType);
-        $preferOrder = \preg_match('/order|shop|store|menu|product|catalog|buy|purchase|\x{8BA2}\x{8D2D}|\x{8D2D}\x{4E70}|\x{83DC}\x{5355}|\x{4EA7}\x{54C1}/u', $identity) === 1;
-        $preferReservation = \preg_match('/reserve|reservation|booking|appointment|visit|experience|\x{9884}\x{7EA6}|\x{4F53}\x{9A8C}|\x{5230}\x{5E97}/u', $identity) === 1;
-        foreach ($labels as $label) {
-            if ($preferOrder && \preg_match('/order|buy|shop|purchase|\x{8BA2}\x{8D2D}|\x{8D2D}\x{4E70}/iu', $label) === 1) {
-                return $label;
-            }
-            if ($preferReservation && \preg_match('/reserve|book|appointment|experience|\x{9884}\x{7EA6}|\x{4F53}\x{9A8C}/iu', $label) === 1) {
-                return $label;
-            }
-        }
-
-        return $labels[0];
-    }
-
-    private function isGenericBuildPlanConsultCta(string $label): bool
-    {
-        $label = $this->cleanVisibleCopy($label);
-        if ($label === '') {
-            return false;
-        }
-
-        return \preg_match(
-            '/^(?:start\s+now|learn\s+more|contact\s+us|download\s+now|\x{7ACB}\x{5373}\x{54A8}\x{8BE2}|\x{8054}\x{7CFB}\x{6211}\x{4EEC}|\x{54A8}\x{8BE2}|\x{7ACB}\x{5373}\x{4E0B}\x{8F7D}|\x{4E86}\x{89E3}\x{8BE6}\x{60C5})$/iu',
-            $label
-        ) === 1;
     }
 
     /**
@@ -1381,36 +1428,6 @@ final class AiSiteBuildPlanService
         return $siteName !== '' ? $siteName : '页面';
     }
 
-    private function localizedBlockTitleFallback(string $blockKey, string $pageTitle, string $locale): string
-    {
-        if (!$this->isCjkLocale($locale)) {
-            return $this->humanizeIdentifier($blockKey) ?: $pageTitle;
-        }
-
-        $identity = \strtolower($blockKey);
-        $rules = [
-            '安全下载入口' => ['hero', 'download', 'apk', 'banner'],
-            '玩法亮点' => ['game', 'feature', 'showcase', 'highlight'],
-            '奖励活动' => ['reward', 'promotion', 'bonus', 'offer'],
-            '安全与信任' => ['trust', 'security', 'safe', 'proof'],
-            '品牌故事' => ['origin', 'story', 'about', 'mission', 'value'],
-            '咨询表单' => ['form', 'consult', 'query', 'lead'],
-            '联系渠道' => ['contact', 'method', 'support'],
-            '常见问题' => ['faq', 'question'],
-            '精选内容' => ['article', 'blog', 'resource', 'grid', 'list'],
-            '立即行动' => ['cta', 'final', 'conversion'],
-        ];
-        foreach ($rules as $title => $needles) {
-            foreach ($needles as $needle) {
-                if (\str_contains($identity, $needle)) {
-                    return $title;
-                }
-            }
-        }
-
-        return $pageTitle !== '' ? $pageTitle : '页面内容';
-    }
-
     private function localizedDefaultCopy(string $locale): string
     {
         return $this->isCjkLocale($locale)
@@ -1460,13 +1477,21 @@ final class AiSiteBuildPlanService
         $allowed = \array_fill_keys(['apk', 'app', 'seo', 'ios', 'android', 'upi', 'ssl', 'vip', 'faq', 'url', 'www'], true);
         \preg_match_all('/\b[A-Za-z][A-Za-z0-9\'-]{2,}\b/u', $value, $matches);
         $words = [];
+        $properNounOnly = true;
         foreach ($matches[0] ?? [] as $word) {
+            $rawWord = \trim((string)$word, " \t\n\r\0\x0B'\"-");
             $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
             if ($normalized !== '' && !isset($allowed[$normalized])) {
                 $words[] = $normalized;
+                if (\preg_match('/^[A-Z][A-Za-z0-9\'-]*$/', $rawWord) !== 1) {
+                    $properNounOnly = false;
+                }
             }
         }
         if ($words === []) {
+            return false;
+        }
+        if ($properNounOnly && $this->hasMeaningfulCjkCopy($value)) {
             return false;
         }
 
@@ -1475,7 +1500,7 @@ final class AiSiteBuildPlanService
             $letterCount += \strlen($word);
         }
 
-        return \count($words) >= 3 && $letterCount >= 16;
+        return \count($words) >= 5 && $letterCount >= 28;
     }
 
     private function hasMeaningfulCjkCopy(string $value): bool

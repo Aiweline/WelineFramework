@@ -31,7 +31,7 @@ class Login extends BaseController
         $this->assign('forgot_password_url', $this->getUrl('weshop/customer/account/forgot-password'));
         $this->assign('title', __('登录'));
 
-        return $this->fetch();
+        return $this->fetch('Weline_Customer::templates/frontend/account/login.phtml');
     }
 
     public function postIndex(): string

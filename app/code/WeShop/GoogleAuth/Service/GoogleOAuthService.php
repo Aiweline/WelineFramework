@@ -14,6 +14,7 @@ class GoogleOAuthService
 {
     private const STATE_PREFIX = 'weshop_googleauth_state_';
     private const STATE_TTL = 600;
+    private static ?bool $isConfiguredCache = null;
 
     public function __construct(
         private readonly Url $url
@@ -22,7 +23,20 @@ class GoogleOAuthService
 
     public function isConfigured(): bool
     {
-        return $this->getClientId() !== '' && $this->getClientSecret() !== '';
+        return self::isConfiguredFast();
+    }
+
+    public static function isConfiguredFast(): bool
+    {
+        if (self::$isConfiguredCache !== null) {
+            return self::$isConfiguredCache;
+        }
+
+        $clientId = trim((string) (Env::getInstance()->getConfig('google_auth.client_id', '') ?: getenv('WESHOP_GOOGLE_CLIENT_ID') ?: ''));
+        $clientSecret = trim((string) (Env::getInstance()->getConfig('google_auth.client_secret', '') ?: getenv('WESHOP_GOOGLE_CLIENT_SECRET') ?: ''));
+        self::$isConfiguredCache = $clientId !== '' && $clientSecret !== '';
+
+        return self::$isConfiguredCache;
     }
 
     public function getClientId(): string

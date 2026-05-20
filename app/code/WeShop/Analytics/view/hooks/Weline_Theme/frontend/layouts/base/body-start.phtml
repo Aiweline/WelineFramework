@@ -10,6 +10,11 @@ if (!empty($GLOBALS[$renderFlag])) {
 }
 $GLOBALS[$renderFlag] = true;
 
+$requestPath = strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+if (preg_match('#(^|/)customer/account/(login|register|forgot-password|challenge|logout)(/|$)#', $requestPath)) {
+    return;
+}
+
 $snippets = w_query('analytics', 'getFrontendPixelSnippetsBySlot', [
     'slot' => 'body',
 ]);

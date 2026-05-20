@@ -215,6 +215,8 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                     ],
                 ]
             );
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             if (defined('DEV') && DEV) {
                 w_log_error('登录失败: ' . $e->getMessage() . "\n" . $e->getTraceAsString());

@@ -2,18 +2,33 @@
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Customer\Model\Customer $user */
 $this->setData('title', __('个人中心'));
-$avatar = $user->getAvatar();
-$username = $user->getUsername();
-$email = $user->getEmail();
-$avatarInitial = strtoupper(mb_substr($username, 0, 1));
-$loginIp = (string) ($user->getLoginIp() ?: __('未知'));
-$sessionId = (string) ($user->getSessionId() ?: __('未知'));
+$user = $user ?? $this->getData('user');
+if (!$user instanceof \Weline\Customer\Model\Customer) {
+    try {
+        $sessionUser = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession()->getUser();
+        if ($sessionUser instanceof \Weline\Customer\Model\Customer) {
+            $user = $sessionUser;
+        }
+    } catch (\Throwable) {
+    }
+}
+$avatar = is_object($user) && method_exists($user, 'getAvatar') ? (string)($user->getAvatar() ?? '') : '';
+$username = is_object($user) && method_exists($user, 'getUsername') ? (string)($user->getUsername() ?? '') : '';
+$email = is_object($user) && method_exists($user, 'getEmail') ? (string)($user->getEmail() ?? '') : '';
+if ($username === '' && $email !== '') {
+    $username = $email;
+}
+$avatarInitial = $username !== '' ? strtoupper(mb_substr($username, 0, 1)) : '?';
+$loginIp = is_object($user) && method_exists($user, 'getLoginIp') ? (string)($user->getLoginIp() ?: __('未知')) : (string)__('未知');
+$sessionId = is_object($user) && method_exists($user, 'getSessionId') ? (string)($user->getSessionId() ?: __('未知')) : (string)__('未知');
+$userId = is_object($user) && method_exists($user, 'getId') ? (int)$user->getId() : 0;
 $emailStatus = $email ? __('已绑定') : __('待完善');
 $accountIndexPathJs = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
 if (!is_string($accountIndexPathJs) || $accountIndexPathJs === '') {
     $accountIndexPathJs = '/customer/account/index';
 }
 $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
+$accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/sidebar-content');
 ?>
 <section class="motor-account-index">
     <section class="motor-account-section" id="overview-section" data-account-section="overview">
@@ -65,7 +80,7 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
                         <strong><lang>暂未绑定邮箱</lang></strong>
                     <?php endif; ?>
                     <br>
-                    <lang>账户 ID：</lang><?= (int) $user->getId() ?>
+                    <lang>账户 ID：</lang><?= $userId ?>
                 </div>
             </aside>
         </div>
@@ -73,7 +88,7 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
         <div class="motor-account-stat-grid">
             <article class="motor-account-stat">
                 <div class="motor-account-stat__label"><lang>账户 ID</lang></div>
-                <div class="motor-account-stat__value"><?= (int) $user->getId() ?></div>
+                <div class="motor-account-stat__value"><?= $userId ?></div>
                 <div class="motor-account-stat__meta"><lang>用于区分你的唯一账户档案</lang></div>
             </article>
 
@@ -163,7 +178,7 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
                                     <span class="motor-account-form__label-hint"><lang>用于标识唯一账户</lang></span>
                                 </label>
                                 <div class="motor-account-form__input-wrap">
-                                    <input class="motor-account-form__input" type="text" id="account_id" value="<?= (int) $user->getId() ?>" disabled>
+                                    <input class="motor-account-form__input" type="text" id="account_id" value="<?= $userId ?>" disabled>
                                     <i class="motor-account-form__input-icon fa fa-id-badge"></i>
                                 </div>
                                 <div class="motor-account-form__hint"><lang>这个编号会跟随你的账户长期保留。</lang></div>
@@ -380,7 +395,9 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
             </div>
         </article>
     </section>
-    <w:hook name="account.sidebar.content"/>
+    <div class="motor-account-section-mount"
+         data-account-sidebar-content-mount
+         data-account-sidebar-content-url="<?= htmlspecialchars((string)$accountSidebarContentUrlJs, ENT_QUOTES, 'UTF-8') ?>"></div>
 </section>
 
 <script>
@@ -403,6 +420,76 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
     var hidePasswordText = <?= json_encode((string) __('隐藏密码'), JSON_UNESCAPED_UNICODE) ?>;
     var updateFailedText = <?= json_encode((string) __('更新失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>;
     var securityUpdateFailedText = <?= json_encode((string) __('修改失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>;
+
+    var sidebarContentMount = document.querySelector('[data-account-sidebar-content-mount]');
+    var sidebarContentLoaded = !sidebarContentMount;
+    var sidebarContentLoading = null;
+
+    function refreshAccountSections() {
+        sections = Array.prototype.slice.call(document.querySelectorAll('[data-account-section]'));
+    }
+
+    function executeInsertedScripts(container) {
+        Array.prototype.slice.call(container.querySelectorAll('script')).forEach(function(oldScript) {
+            var script = document.createElement('script');
+            Array.prototype.slice.call(oldScript.attributes).forEach(function(attribute) {
+                script.setAttribute(attribute.name, attribute.value);
+            });
+            script.text = oldScript.textContent || '';
+            oldScript.parentNode.replaceChild(script, oldScript);
+        });
+    }
+
+    function loadSidebarContent() {
+        if (!sidebarContentMount || sidebarContentLoaded) {
+            return Promise.resolve(true);
+        }
+
+        if (sidebarContentLoading) {
+            return sidebarContentLoading;
+        }
+
+        var url = sidebarContentMount.getAttribute('data-account-sidebar-content-url') || '';
+        if (!url) {
+            sidebarContentLoaded = true;
+            return Promise.resolve(false);
+        }
+
+        sidebarContentLoading = fetch(url, {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function(response) {
+            if (!response.ok) {
+                throw new Error('Account sections request failed: ' + response.status);
+            }
+            return response.json();
+        }).then(function(payload) {
+            if (!payload || payload.success === false) {
+                if (payload && payload.redirect) {
+                    window.location.href = payload.redirect;
+                }
+                return false;
+            }
+
+            sidebarContentMount.innerHTML = payload.html || '';
+            executeInsertedScripts(sidebarContentMount);
+            sidebarContentLoaded = true;
+            refreshAccountSections();
+            window.dispatchEvent(new CustomEvent('weline:account-sidebar-content-loaded', {
+                detail: { length: payload.length || 0 }
+            }));
+            return true;
+        }).catch(function(error) {
+            sidebarContentLoading = null;
+            console.error(error);
+            return false;
+        });
+
+        return sidebarContentLoading;
+    }
 
     function decodeHtmlEntities(message) {
         var s = String(message || '');
@@ -642,6 +729,12 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
     function showSection(sectionName, shouldScroll, query) {
         sectionName = sectionName || 'overview';
 
+        if (!hasNavSection(sectionName) && sidebarContentMount && !sidebarContentLoaded) {
+            return loadSidebarContent().then(function() {
+                return showSection(sectionName, shouldScroll, query);
+            });
+        }
+
         if (!hasNavSection(sectionName)) {
             sectionName = 'overview';
         }
@@ -678,7 +771,7 @@ $accountIndexPathJs = rtrim($accountIndexPathJs, '/');
     function syncFromHash() {
         var parsed = parseAccountState();
         var targetId = parsed.section || 'overview';
-        if (!hasNavSection(targetId)) {
+        if (!hasNavSection(targetId) && (!sidebarContentMount || sidebarContentLoaded)) {
             targetId = 'overview';
         }
 

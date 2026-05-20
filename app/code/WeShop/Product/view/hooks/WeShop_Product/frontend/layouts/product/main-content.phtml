@@ -875,6 +875,7 @@ var productDetailCurrencyConfig = {
     locale: <?= json_encode(str_replace('_', '-', \Weline\Framework\App\State::getLangLocal()), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
 };
 var productDetailConfigurableVariants = <?= json_encode($configurableVariants, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
+var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
 (function() {
     var productDetailRoot = document.querySelector('.product-detail-view[data-product-id="<?= (int)$productId ?>"]');
@@ -1139,6 +1140,15 @@ var productDetailConfigurableVariants = <?= json_encode($configurableVariants, J
         button.classList.toggle('is-loading', loading);
     }
 
+    function redirectToProductDetailCheckout() {
+        var checkoutUrl = String(productDetailCheckoutUrl || '').trim();
+        if (!checkoutUrl) {
+            throw new Error('结算页地址未配置');
+        }
+
+        window.location.href = checkoutUrl;
+    }
+
     function addProductDetailToCart(button, productId, qty, selectedOptions, selectedOptionLabels) {
         setProductDetailCartButtonLoading(button, true);
         return getProductDetailCartApi()
@@ -1272,7 +1282,8 @@ var productDetailConfigurableVariants = <?= json_encode($configurableVariants, J
     // 立即购买
     if (productDetailRoot) productDetailRoot.querySelectorAll('.product-actions .btn-buy-now').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            var productId = this.dataset.productId;
+            var button = this;
+            var productId = button.dataset.productId;
             var qtyInput = document.getElementById('product-qty');
             var qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
             var optionState = getProductOptionState();
@@ -1280,17 +1291,31 @@ var productDetailConfigurableVariants = <?= json_encode($configurableVariants, J
                 updateVariantState();
                 return;
             }
-            
-            // 触发自定义事件
-            var event = new CustomEvent('weshop:buyNow', {
-                detail: {
-                    productId: productId,
-                    qty: qty,
-                    selectedOptions: optionState.selectedOptions,
-                    selectedOptionLabels: optionState.labels
-                }
-            });
-            document.dispatchEvent(event);
+
+            var textNode = button.querySelector('.btn-text');
+            var originalText = textNode ? textNode.textContent : '';
+            if (textNode) {
+                textNode.textContent = '<?= __('跳转结算中') ?>...';
+            }
+
+            addProductDetailToCart(button, productId, qty, optionState.selectedOptions, optionState.labels)
+                .then(function() {
+                    document.dispatchEvent(new CustomEvent('weshop:buyNow', {
+                        detail: {
+                            productId: Number(productId),
+                            qty: qty,
+                            selectedOptions: optionState.selectedOptions,
+                            selectedOptionLabels: optionState.labels,
+                            checkoutUrl: productDetailCheckoutUrl
+                        }
+                    }));
+                    redirectToProductDetailCheckout();
+                })
+                .catch(function() {
+                    if (textNode) {
+                        textNode.textContent = originalText || '<?= __('立即购买') ?>';
+                    }
+                });
         });
     });
     
