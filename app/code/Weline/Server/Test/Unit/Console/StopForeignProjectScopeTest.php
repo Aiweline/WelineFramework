@@ -10,40 +10,28 @@ use Weline\Server\Console\Server\Stop;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 
-/**
- * 验证 Stop 命令对端口归属做严格的项目作用域校验，不会冒充自家实例名去停外项目。
- *
- * @group server-cross-project-isolation
- */
 final class StopForeignProjectScopeTest extends TestCase
 {
     public function testFindWelineServerInstanceNameByPortReturnsNullForForeignScope(): void
     {
-        $stop = $this->createStop(
-            inspect: [
-                'pid_running' => true,
-                'is_weline' => true,
-                'pname' => '--name=weline-wls-dispatcher-default-pAAAAAAAA',
-                'scope' => 'pAAAAAAAA',
-            ]
-        );
+        $stop = $this->createStop([
+            'pid_running' => true,
+            'is_weline' => true,
+            'pname' => '--name=weline-wls-dispatcher-default-pAAAAAAAA',
+            'scope' => 'pAAAAAAAA',
+        ]);
 
-        self::assertNull(
-            $stop->findByPort(9981),
-            '外项目作用域的 WLS 占用端口时，不得以"自家实例名"返回，避免 -r -f 流程误停外项目。'
-        );
+        self::assertNull($stop->findByPort(9981));
     }
 
     public function testFindForeignWelineServerScopeByPortReturnsScopeForForeignScopeOnly(): void
     {
-        $stop = $this->createStop(
-            inspect: [
-                'pid_running' => true,
-                'is_weline' => true,
-                'pname' => '--name=weline-wls-dispatcher-default-pAAAAAAAA',
-                'scope' => 'pAAAAAAAA',
-            ]
-        );
+        $stop = $this->createStop([
+            'pid_running' => true,
+            'is_weline' => true,
+            'pname' => '--name=weline-wls-dispatcher-default-pAAAAAAAA',
+            'scope' => 'pAAAAAAAA',
+        ]);
 
         self::assertSame('pAAAAAAAA', $stop->findForeign(9981));
     }
@@ -51,47 +39,38 @@ final class StopForeignProjectScopeTest extends TestCase
     public function testFindForeignWelineServerScopeByPortReturnsNullForOwnScope(): void
     {
         $own = MasterProcess::getProjectScopeToken();
-        $stop = $this->createStop(
-            inspect: [
-                'pid_running' => true,
-                'is_weline' => true,
-                'pname' => '--name=weline-wls-dispatcher-default-' . $own,
-                'scope' => $own,
-            ]
-        );
+        $stop = $this->createStop([
+            'pid_running' => true,
+            'is_weline' => true,
+            'pname' => '--name=weline-wls-dispatcher-default-' . $own,
+            'scope' => $own,
+        ]);
 
         self::assertNull($stop->findForeign(9981));
     }
 
     public function testFindForeignWelineServerScopeByPortReturnsNullWhenPortFree(): void
     {
-        $stop = $this->createStop(
-            inspect: [
-                'pid_running' => false,
-                'is_weline' => false,
-                'pname' => '',
-                'scope' => '',
-            ]
-        );
+        $stop = $this->createStop([
+            'pid_running' => false,
+            'is_weline' => false,
+            'pname' => '',
+            'scope' => '',
+        ]);
 
         self::assertNull($stop->findForeign(9981));
     }
 
-    public function testFindForeignWelineServerScopeByPortReturnsNullForLegacyScopelessProcess(): void
+    public function testFindForeignWelineServerScopeByPortReturnsNullForUnscopedProcess(): void
     {
-        $stop = $this->createStop(
-            inspect: [
-                'pid_running' => true,
-                'is_weline' => true,
-                'pname' => '--name=weline-master-default-worker-1',
-                'scope' => '',
-            ]
-        );
+        $stop = $this->createStop([
+            'pid_running' => true,
+            'is_weline' => true,
+            'pname' => '--name=weline-wls-worker-default',
+            'scope' => '',
+        ]);
 
-        self::assertNull(
-            $stop->findForeign(9981),
-            '老版本无作用域段的 weline 进程不算外项目，留给现有兼容路径处理。'
-        );
+        self::assertNull($stop->findForeign(9981));
     }
 
     /**

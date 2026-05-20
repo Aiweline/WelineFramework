@@ -592,7 +592,7 @@ class PassthroughCore
             }
         }
 
-        // 4.5 Keep-Alive / SNI / IP 粘连里的端口若已不在当前 Worker 池（reload 换端口、缩容、SET_WORKER_POOL 变更），
+        // 4.5 Keep-Alive / SNI / IP 粘连里的端口若已不在当前 Worker 池（reload 换端口、缩容、路由表变更），
         //    视为失效：清缓存并走池内分配，避免对「已不存在」的端口 connect + recordWorkerFailure 污染健康度。
         if ($workerPort !== null && !$this->isWorkerPortInPool((int)$workerPort)) {
             $this->routingCache->removeConnection($connId);
@@ -1453,7 +1453,7 @@ class PassthroughCore
     }
     
     /**
-     * 动态添加 Worker 端口到负载均衡池（IPC add_worker 命令）
+     * 动态添加 Worker 端口到负载均衡池（内部探活工具）。
      *
      * @return array{accepted: bool, error: string}
      */
@@ -1510,7 +1510,7 @@ class PassthroughCore
 
         $this->applyWorkerPoolTransition($candidatePorts, $acceptedHealth);
         $this->writeStderr(
-            '[PassthroughCore] SET_WORKER_POOL 信任 Master READY，跳过启动探活，当前列表: '
+            '[PassthroughCore] SET_ROUTE_TABLE 信任 Master READY，跳过启动探活，当前列表: '
             . (\implode(',', $this->workerPorts) ?: '(空)') . "\n"
         );
 
@@ -1575,7 +1575,7 @@ class PassthroughCore
     }
 
     /**
-     * Master 已收到 Worker READY 后的轻量探活（ADD_WORKER / SET_WORKER_POOL）。
+     * Master 已收到 Worker READY 后的轻量探活（SET_ROUTE_TABLE）。
      * 连接与重试更紧，避免重复等待「Worker 尚未 listen」的长窗口。
      *
      * 入池语义采用双条件：
@@ -1681,56 +1681,6 @@ class PassthroughCore
             . "Host: localhost\r\n"
             . InternalRequestLabel::buildHeaderLine(InternalRequestLabel::HOMEPAGE_WARMUP)
             . "Connection: close\r\n\r\n";
-    }
-
-    /**
-     * 严格预热（较长连接/响应窗口，多次重试）。供非 IPC 就绪语义场景或子类测试桩覆盖。
-     */
-    protected function warmupWorker(int $port): array
-    {
-        $maxRetries = 3;
-        $retryDelay = 100000; // 100ms in microseconds
-        $lastError = 'warmup failed';
-        $connectTimeout = \max(2.0, \min((float)$this->connectTimeout, 4.0));
-        $responseTimeout = 4.0;
-
-        $this->logWarmup(
-            "开始预热 Worker:{$port} path=" . self::WORKER_HEALTH_PATH
-            . " protocol=" . ($this->workerSslEnabled ? 'ssl' : 'tcp')
-            . " connect_timeout={$connectTimeout}s response_timeout={$responseTimeout}s",
-            'INFO'
-        );
-
-        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
-            $this->warmupYield();
-            $probe = $this->requestWorkerHealth($port, $connectTimeout, $responseTimeout);
-            if ($probe['success']) {
-                $elapsed = $probe['elapsed'] ?? 0.0;
-                $statusLine = (string)($probe['status_line'] ?? 'HTTP/1.1 200 OK');
-                $this->logWarmup(
-                    "Worker:{$port} 预热成功 (耗时 {$elapsed}s, 尝试 {$attempt}/{$maxRetries}, response=\"{$statusLine}\")",
-                    'INFO'
-                );
-                if (isset($this->workerHealth[$port])) {
-                    $this->workerHealth[$port]['last_success'] = \microtime(true);
-                }
-                return ['success' => true, 'error' => ''];
-            }
-
-            $lastError = (string)($probe['error'] ?? $lastError);
-            $elapsed = $probe['elapsed'] ?? 0.0;
-            $this->logWarmup(
-                "Worker:{$port} 预热失败 (尝试 {$attempt}/{$maxRetries}, 耗时 {$elapsed}s): {$lastError}",
-                $attempt === $maxRetries ? 'ERROR' : 'WARNING'
-            );
-            if ($attempt < $maxRetries) {
-                $this->warmupYield();
-                $this->warmupDelayUsec($retryDelay);
-                continue;
-            }
-        }
-
-        return ['success' => false, 'error' => $lastError];
     }
 
     /**
@@ -2276,7 +2226,7 @@ class PassthroughCore
     }
     
     /**
-     * 从负载均衡池移除 Worker 端口（IPC remove_worker 命令）
+     * 从负载均衡池移除 Worker 端口。
      *
      * @param int $port Worker 端口
      * @return int[] 受影响的客户端连接 ID 列表（需要在 Dispatcher 层关闭）
@@ -2307,7 +2257,7 @@ class PassthroughCore
     }
 
     /**
-     * SET_WORKER_POOL 渐进发布：每预热成功一个端口即更新池，使维护 Worker 不必等待后续业务 Worker。
+     * SET_ROUTE_TABLE 渐进发布：每预热成功一个端口即更新池，使维护 Worker 不必等待后续业务 Worker。
      *
      * @param int[] $newPorts
      * @param array<int, array{failures: int, blacklisted_at: float, last_success: float, total_failures: int}> $newHealth
@@ -2443,7 +2393,7 @@ class PassthroughCore
                     unset($rejectedPorts[$port]);
                     $this->applyWorkerPoolTransition($acceptedPorts, $acceptedHealth);
                     $this->logWarmup(
-                        'SET_WORKER_POOL 保留旧池端口: ' . $port . '（瞬时探活失败但此前已在池中） error=' . $warmup['error'],
+                        'SET_ROUTE_TABLE 保留旧池端口: ' . $port . '（瞬时探活失败但此前已在池中） error=' . $warmup['error'],
                         'WARNING'
                     );
                     continue;
@@ -2492,7 +2442,7 @@ class PassthroughCore
             }
             if ($acceptedPorts !== []) {
                 $this->logWarmup(
-                    'SET_WORKER_POOL 首轮快速探活未通过，已通过兜底探活入池: '
+                    'SET_ROUTE_TABLE 首轮快速探活未通过，已通过兜底探活入池: '
                     . \implode(',', $acceptedPorts),
                     'WARNING'
                 );
@@ -2504,14 +2454,14 @@ class PassthroughCore
         if ($preservePreviousOnTotalReject && $candidatePorts !== [] && $acceptedPorts === [] && $previousPorts !== []) {
             $this->applyWorkerPoolTransition($previousPorts, $previousHealth);
             $this->logWarmup(
-                'SET_WORKER_POOL 新端口全量预热失败，保留旧池: ' . \implode(',', $previousPorts),
+                'SET_ROUTE_TABLE 新端口全量预热失败，保留旧池: ' . \implode(',', $previousPorts),
                 'WARNING'
             );
         } else {
             $this->applyWorkerPoolTransition($acceptedPorts, $acceptedHealth);
         }
         $this->writeStderr(
-            '[PassthroughCore] SET_WORKER_POOL 当前列表: ' . (\implode(',', $this->workerPorts) ?: '(空)') . "\n"
+            '[PassthroughCore] SET_ROUTE_TABLE 当前列表: ' . (\implode(',', $this->workerPorts) ?: '(空)') . "\n"
         );
         if ($rejectedPorts !== []) {
             $items = [];
@@ -2519,7 +2469,7 @@ class PassthroughCore
                 $items[] = "{$port}: {$reason}";
             }
             $this->writeStderr(
-                '[PassthroughCore] SET_WORKER_POOL 预热拒绝端口: ' . \implode('; ', $items) . "\n"
+                '[PassthroughCore] SET_ROUTE_TABLE 预热拒绝端口: ' . \implode('; ', $items) . "\n"
             );
         }
 

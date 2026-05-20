@@ -38,30 +38,9 @@ final class ServerInstanceManagerMasterExitRetentionTest extends TestCase
             'name' => $this->instanceName,
             'pid' => 11111,
             'master_pid' => 11111,
+            'launcher_pid' => $currentPid,
             'count' => 1,
             'port' => 443,
-            'worker_pids' => [$currentPid],
-            'services' => [
-                'worker' => [
-                    'display_name' => 'HTTP Worker',
-                    'instances' => [[
-                        'role' => 'worker',
-                        'display_name' => 'HTTP Worker',
-                        'instance_id' => 1,
-                        'pid' => $currentPid,
-                        'port' => 10443,
-                        'state' => 'ready',
-                        'priority' => 20,
-                        'worker_id' => 1,
-                        'name' => 'worker-1',
-                        'started_at' => 0.0,
-                        'ipc_client_id' => null,
-                        'metadata' => [
-                            'process_name' => 'weline-wls-worker-' . $this->instanceName . '-1',
-                        ],
-                    ]],
-                ],
-            ],
         ]);
 
         $retained = $this->manager->finalizeAfterMasterExit($this->instanceName, 11111);
@@ -85,8 +64,6 @@ final class ServerInstanceManagerMasterExitRetentionTest extends TestCase
             'master_pid' => 22222,
             'count' => 1,
             'port' => 443,
-            'worker_pids' => [],
-            'services' => [],
         ]);
 
         $retained = $this->manager->finalizeAfterMasterExit($this->instanceName, 22222);

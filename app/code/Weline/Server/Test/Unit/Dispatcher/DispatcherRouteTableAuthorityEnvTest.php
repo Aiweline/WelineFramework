@@ -96,12 +96,12 @@ final class DispatcherRouteTableAuthorityEnvTest extends TestCase
     /**
      * @dataProvider falsyEnvValuesProvider
      */
-    public function testReturnsFalseForExplicitFalsyEnvValues(string $rawValue): void
+    public function testReturnsTrueForExplicitFalsyEnvValues(string $rawValue): void
     {
         \putenv('WLS_ROUTE_TABLE_AS_AUTHORITY=' . $rawValue);
-        self::assertFalse(
+        self::assertTrue(
             Dispatcher::resolveRouteTableAuthorityFromEnv(),
-            "Expected falsy resolution (B-i emergency rollback) for env value '{$rawValue}'"
+            "Route table authority is mandatory; env rollback is ignored for '{$rawValue}'"
         );
     }
 

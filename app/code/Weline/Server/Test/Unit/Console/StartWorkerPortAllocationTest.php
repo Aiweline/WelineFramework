@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
+use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -59,6 +60,24 @@ final class StartWorkerPortAllocationTest extends TestCase
         self::assertSame(
             19982,
             $this->invokeProtected($start, 'findAvailableWorkerPortBase', 19982, 2)
+        );
+    }
+
+    public function testSingleWorkerWithoutDispatcherUsesMainPort(): void
+    {
+        $start = new Start();
+
+        self::assertSame(
+            9527,
+            $this->invokeProtected($start, 'resolveInitialWorkerPort', 9527, 10000, 1, false, false)
+        );
+        self::assertSame(
+            19527,
+            $this->invokeProtected($start, 'resolveInitialWorkerPort', 9527, 10000, 2, false, false)
+        );
+        self::assertSame(
+            19527,
+            $this->invokeProtected($start, 'resolveInitialWorkerPort', 9527, 10000, 1, true, false)
         );
     }
 
@@ -127,42 +146,36 @@ final class StartWorkerPortAllocationTest extends TestCase
         );
     }
 
-    public function testRuntimeRecordedPortsIncludeInstancePortsAndSkipSharedStateServices(): void
+    public function testRuntimeRecordedPortsComeFromEndpointFields(): void
     {
-        $runtimeDir = $this->createTempDir();
-        $runtimeFile = $runtimeDir . DIRECTORY_SEPARATOR . 'default.json';
-        $this->pathsToDelete[] = $runtimeFile;
-        \file_put_contents(
-            $runtimeFile,
-            (string) \json_encode([
-                'port' => 443,
-                'control_port' => 26895,
-                'http_redirect_port' => 80,
-                'worker_port' => 16895,
-                'count' => 2,
-                'worker_ports' => [16895, 16896],
-                'services' => [
-                    'worker' => [
-                        'instances' => [
-                            ['port' => 16897, 'pid' => 11200, 'state' => 'stopped'],
-                        ],
-                    ],
-                    'session_server' => [
-                        'instances' => [
-                            ['port' => 26422, 'pid' => 3336, 'state' => 'ready'],
-                        ],
-                    ],
-                    'memory_server' => [
-                        'instances' => [
-                            ['port' => 26423, 'pid' => 9124, 'state' => 'ready'],
-                        ],
-                    ],
-                ],
-            ], JSON_PRETTY_PRINT)
-        );
+        $manager = new class extends ServerInstanceManager {
+            public function getInstanceInfo(string $name, bool $includeStopped = false): ?ServerInstanceInfo
+            {
+                unset($includeStopped);
+                if ($name !== 'default') {
+                    return null;
+                }
 
-        $start = new class($runtimeDir) extends Start {
-            public function __construct(private readonly string $runtimeDir)
+                return new ServerInstanceInfo(
+                    name: 'default',
+                    masterPid: 100,
+                    controlPort: 26895,
+                    host: '127.0.0.1',
+                    port: 443,
+                    sslEnabled: true,
+                    dispatcherEnabled: true,
+                    workerCount: 2,
+                    workerBasePort: 16895,
+                    httpRedirectPort: 80,
+                    startedAt: '',
+                    startedTimestamp: 0,
+                    services: [],
+                );
+            }
+        };
+
+        $start = new class($manager) extends Start {
+            public function __construct(private readonly ServerInstanceManager $manager)
             {
             }
 
@@ -176,14 +189,9 @@ final class StartWorkerPortAllocationTest extends TestCase
                 return $this->filterRuntimeRecordedPortsForInstance($instanceName, $ports);
             }
 
-            protected function getInstanceRuntimeDir(): string
-            {
-                return $this->runtimeDir . DIRECTORY_SEPARATOR;
-            }
-
             protected function getInstanceManager(): ServerInstanceManager
             {
-                throw new \RuntimeException('Skip ObjectManager-backed instance lookup in this test.');
+                return $this->manager;
             }
         };
 
@@ -194,9 +202,6 @@ final class StartWorkerPortAllocationTest extends TestCase
         self::assertContains(26895, $ports);
         self::assertContains(16895, $ports);
         self::assertContains(16896, $ports);
-        self::assertContains(16897, $ports);
-        self::assertNotContains(26422, $ports);
-        self::assertNotContains(26423, $ports);
         self::assertSame([16895], $start->filter('default', [16895, 26422, 9]));
     }
 
