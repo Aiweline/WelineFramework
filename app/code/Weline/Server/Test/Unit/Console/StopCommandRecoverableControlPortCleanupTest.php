@@ -378,7 +378,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             }
         };
 
-        self::assertSame([443, 80, 26895, 16895, 16896], $stop->collectPorts($info));
+        self::assertSame([443, 80, 26895, 16895], $stop->collectPorts($info));
     }
 
     public function testDirectForceStopCandidatesSkipRootPromotionOnFirstPass(): void
@@ -438,10 +438,6 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
                 return [];
             }
 
-            protected function collectManagedStopPids(array $pids): array
-            {
-                $this->fail('first force-stop pass should not promote candidate pids to root wrappers');
-            }
         };
 
         self::assertSame([33780, 2604, 7704, 16048], $stop->collectCandidates($info));

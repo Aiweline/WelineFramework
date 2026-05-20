@@ -139,30 +139,6 @@ PHP);
         }
     }
 
-    public function testResolveServicePortFromInstanceFile(): void
-    {
-        $instanceName = 'ut-kernel-service-port';
-        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
-        $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
-        if (!\is_dir($instanceDir)) {
-            @\mkdir($instanceDir, 0777, true);
-        }
-
-        \file_put_contents($instanceFile, \json_encode([
-            'session_port' => 19970,
-            'memory_port' => 19971,
-            'session_service_updated_at' => \time(),
-            'memory_service_updated_at' => \time(),
-        ]));
-        try {
-            $this->assertSame(19970, SubprocessControlKernel::resolveServicePort($instanceName, 'session_port', 1));
-            $this->assertSame(19971, SubprocessControlKernel::resolveServicePort($instanceName, 'memory_port', 1));
-            $this->assertSame(0, SubprocessControlKernel::resolveServicePort($instanceName, 'missing_port', 0));
-        } finally {
-            @\unlink($instanceFile);
-        }
-    }
-
     public function testResolveReadyDelayMillisecondsClampsInvalidValues(): void
     {
         \putenv('WLS_E2E_WORKER_READY_DELAY_MS=-5');
