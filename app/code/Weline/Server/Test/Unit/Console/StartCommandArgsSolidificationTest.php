@@ -141,7 +141,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertIsArray($start->readEnvConfig());
     }
 
-    public function testSaveInstanceInfoUsesManagerAppendOnlySemantics(): void
+    public function testSaveInstanceInfoUsesManagerEndpointSemantics(): void
     {
         $manager = new StartInstanceManagerProbe();
         $start = new StartInstanceInfoProbe($manager);
@@ -322,7 +322,6 @@ final class StartInstanceInfoProbe extends Start
             true,
             '/tmp/cert.pem',
             '/tmp/key.pem',
-            [101, 102],
             true,
             19443,
             80,
@@ -347,7 +346,6 @@ final class StartInstanceInfoProbe extends Start
             true,
             '/tmp/cert.pem',
             '/tmp/key.pem',
-            [],
             true,
             19443,
             80,

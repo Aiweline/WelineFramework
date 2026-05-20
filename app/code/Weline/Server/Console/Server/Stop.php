@@ -22,7 +22,6 @@ use Weline\Server\Console\Console\Server\Stop as CliStop;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
-use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SharedStateServiceManager;
@@ -294,7 +293,7 @@ class Stop extends CommandAbstract
      * - 进程名带有合规的项目作用域段（{@see Processer::extractProjectScopeFromProcessName()}）
      * - 该作用域与当前进程的 {@see MasterProcess::getProjectScopeToken()} 不一致
      *
-     * 其它情况（端口空闲、自家占用、无作用域段的老版本进程）返回 null。
+     * 其它情况（端口空闲、自家占用、无作用域段进程）返回 null。
      */
     public function findForeignWelineServerScopeByPort(int $port): ?string
     {
@@ -339,7 +338,6 @@ class Stop extends CommandAbstract
         }
         $pname = $this->getProcessPnameByPid($pid);
         $isWls = \str_contains($pname, 'weline-wls')
-            || \str_contains($pname, 'weline-master')
             || $this->isRecoverableWlsPortResponder($port);
         if (!$isWls) {
             return false;
@@ -563,7 +561,7 @@ class Stop extends CommandAbstract
         // 从共享 Session/Memory 注册表移除本实例消费者，避免误导其它工具
         $this->releaseSharedStateConsumersForInstance($name);
 
-        // 标记实例停止；保留实例 JSON 供后续控制面恢复和审计使用。
+        // 标记 endpoint 停止；运行态恢复必须回到 Master IPC，不从文件推断拓扑。
         $manager->deleteInstance($name);
         
         // 清理 PID 文件
@@ -610,20 +608,7 @@ class Stop extends CommandAbstract
 
     protected function hasPendingStartupServices(ServerInstanceInfo $info): bool
     {
-        foreach ($info->services as $service) {
-            if (!\in_array($service->role, ['worker', 'dispatcher', 'redirect', 'maintenance'], true)) {
-                continue;
-            }
-
-            if ($service->state !== ServiceInstance::STATE_READY) {
-                return true;
-            }
-
-            if ($service->ipcClientId === null) {
-                return true;
-            }
-        }
-
+        unset($info);
         return false;
     }
     
@@ -661,25 +646,6 @@ class Stop extends CommandAbstract
             || $this->isRecoverableManagedPort($info->controlPort, $inspect, $info);
     }
 
-    /**
-     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
-     */
-    protected function isMasterProcessAvailableForStopFromRuntime(
-        ServerInstanceInfo $info,
-        array $processInfoMap,
-        bool $hasExitedFast
-    ): bool {
-        if ($info->masterPid <= 0) {
-            return false;
-        }
-
-        if (!($processInfoMap[$info->masterPid]['exists'] ?? false)) {
-            return false;
-        }
-
-        return !$hasExitedFast;
-    }
-
     protected function hasMasterExitedFast(int $masterPid): bool
     {
         return Processer::hasExitedFast($masterPid);
@@ -715,39 +681,6 @@ class Stop extends CommandAbstract
         
         if ($info->httpRedirectPort > 0) {
             $this->printer->note($this->renderStopBoxContent('  ' . __('HTTP 跳转：') . ":{$info->httpRedirectPort} -> :{$info->port}", $boxInnerWidth));
-        }
-        
-        $this->printer->note('╠' . \str_repeat('═', $boxInnerWidth) . '╣');
-        
-        // 显示所有服务实例（已按优先级排序）
-        $currentRole = '';
-        $roleInstances = [];
-        
-        // 按角色分组
-        foreach ($info->services as $service) {
-            $roleInstances[$service->role][] = $service;
-        }
-        
-        foreach ($roleInstances as $role => $services) {
-            $count = \count($services);
-            $displayName = $services[0]->displayName;
-            
-            $pids = [];
-            $ports = [];
-            foreach ($services as $service) {
-                if ($service->pid > 0) {
-                    $pids[] = $service->pid;
-                }
-                if ($service->port !== null && $service->port > 0) {
-                    $ports[] = $service->port;
-                }
-            }
-            
-            $pidStr = !empty($pids) ? \implode(',', $pids) : '(无 PID)';
-            $portStr = !empty($ports) ? \implode(',', $ports) : '-';
-            
-            $line = \sprintf('  %s (%d): PID=%s, Port=%s', $displayName, $count, $pidStr, $portStr);
-            $this->printer->note($this->renderStopBoxContent($line, $boxInnerWidth));
         }
         
         $this->printer->note('╠' . \str_repeat('═', $boxInnerWidth) . '╣');
@@ -799,28 +732,6 @@ class Stop extends CommandAbstract
         return \strlen($plainText);
     }
     
-    /**
-     * 按 PID + 进程名前缀各扫一遍，控制台只输出一组「清理残留进程」提示。
-     */
-    protected function runResidualCleanupPair(string $name, ServerInstanceInfo $info): void
-    {
-        $this->printer->note(__('清理残留进程...'));
-
-        // 1) 先按已知 PID（实例信息 + PID 索引）直接终止
-        $pids = $this->collectResidualCleanupCandidatePids($name, $info);
-        $killedByPid = $this->terminateResidualProcesses($pids, true);
-        $killedByPrefix = $this->terminateCurrentInstanceProcessPrefixes($name);
-
-        Processer::cleanupStalePidFiles();
-
-        $totalKilled = $killedByPid + $killedByPrefix;
-        if ($totalKilled > 0) {
-            $this->printer->success(__('  已处理 %{1} 个进程', [$totalKilled]));
-        } else {
-            $this->printer->note(__('  无残留进程'));
-        }
-    }
-
     /**
      * 根据 ServerInstanceInfo 清理残留进程
      *
@@ -1043,7 +954,7 @@ class Stop extends CommandAbstract
         if ($info !== null) {
             $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info, $includeSharedState));
         }
-        $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstanceRecords($name, $includeSharedState));
+        $ports = \array_merge($ports, $this->collectRecoverablePortsFromEndpointRecord($name, $includeSharedState));
 
         $ports = \array_values(\array_unique(\array_filter(
             \array_map('intval', $ports),
@@ -1074,16 +985,6 @@ class Stop extends CommandAbstract
             $ports[] = $info->workerBasePort;
         }
 
-        foreach ($info->services as $service) {
-            if (!$includeSharedState && $this->isSharedStateServiceInfo($service)) {
-                continue;
-            }
-            $port = (int) ($service->port ?? 0);
-            if ($port > 0) {
-                $ports[] = $port;
-            }
-        }
-
         return \array_values(\array_unique(\array_filter(
             \array_map('intval', $ports),
             static fn (int $port): bool => $port > 0
@@ -1093,7 +994,7 @@ class Stop extends CommandAbstract
     /**
      * @return list<int>
      */
-    protected function collectRecoverablePortsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+    protected function collectRecoverablePortsFromEndpointRecord(string $name, bool $includeSharedState = false): array
     {
         $rawData = $this->getRawStopInstanceData($name);
         if ($rawData === null) {
@@ -1101,11 +1002,6 @@ class Stop extends CommandAbstract
         }
 
         $ports = $this->collectRecoverablePortsFromRecord($rawData, $includeSharedState);
-        foreach (($rawData['instance_records'] ?? []) as $record) {
-            if (\is_array($record)) {
-                $ports = \array_merge($ports, $this->collectRecoverablePortsFromRecord($record, $includeSharedState));
-            }
-        }
 
         $ports = \array_values(\array_unique(\array_filter(
             \array_map('intval', $ports),
@@ -1138,28 +1034,6 @@ class Stop extends CommandAbstract
             }
             for ($offset = 1; $offset < $count; $offset++) {
                 $ports[] = $basePort + $offset;
-            }
-        }
-
-        $services = \is_array($record['services'] ?? null) ? $record['services'] : [];
-        foreach ($services as $role => $roleData) {
-            if (!\is_array($roleData) || !\is_array($roleData['instances'] ?? null)) {
-                continue;
-            }
-            if (!$includeSharedState && $this->isSharedStateServiceRole((string) $role)) {
-                continue;
-            }
-            foreach ($roleData['instances'] as $serviceRecord) {
-                if (!\is_array($serviceRecord)) {
-                    continue;
-                }
-                if (!$includeSharedState && $this->isSharedStateServiceRecord($serviceRecord)) {
-                    continue;
-                }
-                $port = (int) ($serviceRecord['port'] ?? 0);
-                if ($port > 0) {
-                    $ports[] = $port;
-                }
             }
         }
 
@@ -1208,7 +1082,7 @@ class Stop extends CommandAbstract
         // Duplicate same-instance masters may outlive pid_index records but still carry a scoped --name.
         return \array_values(\array_unique(\array_merge(
             $this->collectResidualPidsByInfo($info),
-            $this->collectResidualPidsFromInstanceRecords($name),
+            $this->collectResidualPidsFromEndpointRecord($name),
             $this->collectIndexedResidualPids($name),
             $this->collectResidualPrefixPids($name)
         )));
@@ -1253,8 +1127,7 @@ class Stop extends CommandAbstract
 
     /**
      * Direct force-stop is the hot path used by --fast-local. Keep its first pass scoped to
-     * the current runtime snapshot and current indexes; append-only history remains in the
-     * retry/verification cleanup path where stale PID reuse can be filtered more carefully.
+     * the Master endpoint record and current indexes.
      *
      * @return list<int>
      */
@@ -1263,52 +1136,6 @@ class Stop extends CommandAbstract
         return \array_values(\array_unique(\array_merge(
             $this->collectResidualPidsByInfo($info, true)
         )));
-    }
-
-    protected function hasKnownRecoverablePortsInUse(string $name, ServerInstanceInfo $info): bool
-    {
-        foreach ($this->collectRecoverableKnownPorts($name, $info) as $port) {
-            $inspect = $this->inspectRecoverablePortOccupant($port);
-            if (!($inspect['in_use'] ?? false)) {
-                continue;
-            }
-            if ($this->isSharedStatePortOccupant($inspect)) {
-                continue;
-            }
-
-            if (
-                (bool) ($inspect['is_weline'] ?? false)
-                || $this->isRecoverableWlsPortResponder($port)
-                || $this->isRecoverableManagedPort($port, $inspect, $info)
-            ) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param list<int> $pids
-     * @return list<int>
-     */
-    protected function collectManagedStopPids(array $pids): array
-    {
-        $resolved = [];
-        foreach ($pids as $pid) {
-            $pid = (int) $pid;
-            if ($pid <= 0) {
-                continue;
-            }
-
-            $resolved[$pid] = true;
-            $rootPid = $this->resolveManagedStopRootPid($pid);
-            if ($rootPid > 0) {
-                $resolved[$rootPid] = true;
-            }
-        }
-
-        return \array_map('intval', \array_keys($resolved));
     }
 
     protected function resolveManagedStopRootPid(int $pid): int
@@ -1383,7 +1210,7 @@ class Stop extends CommandAbstract
         $recoverablePorts = $includeSharedState
             ? \array_values(\array_unique(\array_merge(
                 $this->collectRecoverablePortsFromInstance($info, true),
-                $this->collectRecoverablePortsFromInstanceRecords($name, true)
+                $this->collectRecoverablePortsFromEndpointRecord($name, true)
             )))
             : [];
         return \array_values(\array_unique(\array_filter(
@@ -1496,11 +1323,6 @@ class Stop extends CommandAbstract
     protected function collectResidualPidsByPrefix(string $prefix): array
     {
         return Processer::getProcessIdsByPrefix($prefix);
-    }
-
-    protected function cleanupResidualProcessesByInfo(string $name, ServerInstanceInfo $info, bool $quiet = false): int
-    {
-        return $this->runResidualCleanupPass($name, $info, $quiet);
     }
 
     /**
@@ -1997,31 +1819,6 @@ class Stop extends CommandAbstract
     }
     
     /**
-     * 清理残留进程
-     *
-     * 当 Master IPC 失败时，按进程名前缀批量清理
-     *
-     * @param bool $quiet 为 true 时不打印，仅返回按前缀杀死的进程数
-     */
-    protected function cleanupResidualProcesses(string $name, array $instanceData, bool $quiet = false): int
-    {
-        if (!$quiet) {
-            $this->printer->note(__('清理残留进程...'));
-        }
-        $totalKilled = $this->terminateResidualProcesses($this->collectIndexedResidualPids($name), true);
-        
-        if (!$quiet) {
-            if ($totalKilled > 0) {
-                $this->printer->note(__('  已处理 %{1} 个进程', [$totalKilled]));
-            } else {
-                $this->printer->note(__('  无残留进程'));
-            }
-        }
-
-        return $totalKilled;
-    }
-
-    /**
      * 收集实例文件中记录的残留 PID。
      *
      * @return array<int>
@@ -2034,25 +1831,13 @@ class Stop extends CommandAbstract
             $pids[$info->masterPid] = true;
         }
 
-        foreach ($info->services as $service) {
-            if ((bool) ($service->metadata['shared_external'] ?? false)
-                || (!$includeSharedState && $this->isSharedStateServiceInfo($service))) {
-                continue;
-            }
-            foreach ($service->getManagedPids() as $pid) {
-                if ($pid > 0) {
-                    $pids[$pid] = true;
-                }
-            }
-        }
-
         return \array_map('intval', \array_keys($pids));
     }
 
     /**
      * @return list<int>
      */
-    protected function collectResidualPidsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+    protected function collectResidualPidsFromEndpointRecord(string $name, bool $includeSharedState = false): array
     {
         $rawData = $this->getRawStopInstanceData($name);
         if ($rawData === null) {
@@ -2060,11 +1845,6 @@ class Stop extends CommandAbstract
         }
 
         $pids = $this->collectResidualPidsFromRecord($rawData, $includeSharedState);
-        foreach (($rawData['instance_records'] ?? []) as $record) {
-            if (\is_array($record)) {
-                $pids = \array_merge($pids, $this->collectResidualPidsFromRecord($record, $includeSharedState));
-            }
-        }
 
         return \array_values(\array_unique(\array_filter(
             \array_map('intval', $pids),
@@ -2094,30 +1874,6 @@ class Stop extends CommandAbstract
             }
         }
 
-        $services = \is_array($record['services'] ?? null) ? $record['services'] : [];
-        foreach ($services as $role => $roleData) {
-            if (!\is_array($roleData) || !\is_array($roleData['instances'] ?? null)) {
-                continue;
-            }
-            if (!$includeSharedState && $this->isSharedStateServiceRole((string) $role)) {
-                continue;
-            }
-            foreach ($roleData['instances'] as $serviceRecord) {
-                if (!\is_array($serviceRecord)) {
-                    continue;
-                }
-                if (!$includeSharedState && $this->isSharedStateServiceRecord($serviceRecord)) {
-                    continue;
-                }
-                foreach (['pid', 'root_pid', 'launcher_pid', 'tracking_pid'] as $field) {
-                    $pid = (int) ($serviceRecord[$field] ?? 0);
-                    if ($pid > 0) {
-                        $pids[$pid] = true;
-                    }
-                }
-            }
-        }
-
         return \array_map('intval', \array_keys($pids));
     }
 
@@ -2131,42 +1887,6 @@ class Stop extends CommandAbstract
         } catch (\Throwable) {
             // best-effort：registry 损坏或并发时不阻塞停机
         }
-    }
-
-    private function isSharedStateServiceInfo(object $service): bool
-    {
-        if ($this->isSharedStateServiceRole((string) ($service->role ?? ''))) {
-            return true;
-        }
-
-        return $this->isSharedStateProcessName((string) ($service->metadata['process_name'] ?? ''));
-    }
-
-    /**
-     * @param array<string, mixed> $record
-     */
-    private function isSharedStateServiceRecord(array $record): bool
-    {
-        if ((bool) ($record['metadata']['shared_external'] ?? false)) {
-            return true;
-        }
-        if ($this->isSharedStateServiceRole((string) ($record['role'] ?? ''))) {
-            return true;
-        }
-
-        return $this->isSharedStateProcessName((string) ($record['metadata']['process_name'] ?? ''));
-    }
-
-    private function isSharedStateServiceRole(string $role): bool
-    {
-        $role = \strtolower(\trim($role));
-
-        return \in_array($role, [
-            'session',
-            'memory',
-            ControlMessage::ROLE_SESSION_SERVER,
-            ControlMessage::ROLE_MEMORY_SERVER,
-        ], true);
     }
 
     private function isSharedStateProcessName(string $processName): bool
@@ -2284,17 +2004,6 @@ class Stop extends CommandAbstract
     ): array
     {
         $scopedInstanceSuffix = '-' . MasterProcess::getScopedInstanceName($instanceName);
-        $legacyWorkerPrefix = 'weline-master-' . $instanceName . '-worker-';
-        $legacyMasterPrefix = 'weline-master-' . $instanceName . '-';
-        $legacyPrefixes = [
-            'weline-wls-master-' . $instanceName,
-            'weline-wls-worker-' . $instanceName . '-',
-            'weline-wls-maintenance-' . $instanceName . '-',
-            'weline-wls-dispatcher-' . $instanceName,
-            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $instanceName,
-            $legacyMasterPrefix,
-            $legacyWorkerPrefix,
-        ];
         $pids = [];
 
         foreach ($pidIndex as $pid => $record) {
@@ -2322,14 +2031,6 @@ class Stop extends CommandAbstract
 
             $isCurrentInstance = \str_starts_with($taskName, 'weline-wls-')
                 && \str_contains($taskName, $scopedInstanceSuffix);
-            if (!$isCurrentInstance) {
-                foreach ($legacyPrefixes as $legacyPrefix) {
-                    if (\str_starts_with($taskName, $legacyPrefix)) {
-                        $isCurrentInstance = true;
-                        break;
-                    }
-                }
-            }
 
             if (!$isCurrentInstance) {
                 continue;
@@ -2456,32 +2157,6 @@ class Stop extends CommandAbstract
             || \str_contains($name, 'pwsh');
     }
 
-    /**
-     * 兼容历史调用点（含单元测试）：转发到统一的 collectRunningResidualPids。
-     *
-     * 历史实现里这里会直接执行 `tasklist /FO CSV /NH` 全表扫描（约 2.6s/次，
-     * 在 Windows 上是 server:stop 的主要慢源），现已统一走带进程内缓存的
-     * Processer::batchGetProcessInfo。
-     *
-     * @param list<int> $pids
-     * @return list<int>
-     */
-    protected function collectRunningResidualPidsWindows(array $pids): array
-    {
-        return $this->collectRunningResidualPids($pids);
-    }
-
-    /**
-     * @deprecated 仅保留兼容历史单测/外部脚本调用；新逻辑请使用 Processer::batchGetProcessInfo。
-     * @param list<int> $pids
-     */
-    protected function buildWindowsCollectRunningPidsCommand(array $pids): string
-    {
-        unset($pids);
-
-        return 'tasklist /FO CSV /NH';
-    }
-
     private function isWindowsPlatform(): bool
     {
         return \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
@@ -2495,29 +2170,15 @@ class Stop extends CommandAbstract
         // Master
         Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($name));
 
-        // 统一按服务元信息清理，新增服务无需改 stop 命令
-        foreach ($info->services as $service) {
-            $processName = (string)($service->metadata['process_name'] ?? '');
-            if ($processName !== '') {
-                Processer::removePidFile('--name=' . $processName);
-            }
-        }
-
-        // 兼容历史命名前缀（防止老实例残留）
         $count = $info->workerCount;
         for ($i = 1; $i <= $count; $i++) {
-            Processer::removePidFile('--name=weline-wls-worker-' . $name . '-' . $i);
-            Processer::removePidFile('--name=weline-master-' . $name . '-worker-' . $i);
+            Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', $name, $i));
+            Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name, $i));
         }
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-session', $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-memory', $name));
-        Processer::removePidFile('--name=weline-wls-dispatcher-' . $name);
-        Processer::removePidFile('--name=weline-wls-session-' . $name);
-        Processer::removePidFile('--name=weline-wls-memory-' . $name);
-        Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name);
-        Processer::removePidFile('--name=weline-master-' . $name . '-redirect-1');
         
         // Global stale pid pruning is intentionally excluded from the stop hot path.
     }
@@ -2571,7 +2232,7 @@ class Stop extends CommandAbstract
     {
         $manager = $this->getInstanceManager();
         foreach ($manager->listPersistedInstanceNames() as $name) {
-            $ports = $this->collectRecoverablePortsFromInstanceRecords($name, false);
+            $ports = $this->collectRecoverablePortsFromEndpointRecord($name, false);
             $info = $manager->getInstanceInfo($name, false);
             if ($info !== null) {
                 $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info, false));
@@ -2608,11 +2269,6 @@ class Stop extends CommandAbstract
             MasterProcess::buildScopedProcessName('weline-wls-session', $name),
             MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
-            'weline-wls-dispatcher-' . $name,
-            'weline-wls-session-' . $name,
-            'weline-wls-memory-' . $name,
-            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
-            'weline-master-' . $name . '-redirect-',
         ];
 
         foreach ($processNames as $processName) {
@@ -2723,7 +2379,7 @@ class Stop extends CommandAbstract
                     if ($port <= 0 || !\is_string($processName)) {
                         continue;
                     }
-                    if (!\str_contains($processName, 'weline-wls-') && !\str_contains($processName, 'weline-master-')) {
+                    if (!\str_contains($processName, 'weline-wls-')) {
                         continue;
                     }
                     if ($this->isSharedStateProcessName($processName)) {
@@ -2946,15 +2602,6 @@ class Stop extends CommandAbstract
         return $this->stopProcessCommandLineCache[$pid];
     }
 
-    protected function getStopProcessName(int $pid): string
-    {
-        if (!isset($this->stopProcessNameCache[$pid])) {
-            $this->stopProcessNameCache[$pid] = $this->queryStopProcessName($pid);
-        }
-
-        return $this->stopProcessNameCache[$pid];
-    }
-
     protected function isStopWelineServerProcess(int $pid): bool
     {
         if (!isset($this->stopWelineProcessCache[$pid])) {
@@ -2985,16 +2632,6 @@ class Stop extends CommandAbstract
     protected function killManagedProcessTreeForStop(int $pid): bool
     {
         $result = $this->queryKillManagedProcessTreeForStop($pid);
-        if ($result) {
-            $this->invalidateStopRuntimeState();
-        }
-
-        return $result;
-    }
-
-    protected function killStopPid(int $pid, bool $skipCheck = true): bool
-    {
-        $result = $this->queryKillStopPid($pid, $skipCheck);
         if ($result) {
             $this->invalidateStopRuntimeState();
         }
@@ -3051,13 +2688,6 @@ class Stop extends CommandAbstract
         return Processer::getProcessCommandLine($pid);
     }
 
-    protected function queryStopProcessName(int $pid): string
-    {
-        $info = Processer::getProcessInfo($pid);
-
-        return (string) ($info['name'] ?? '');
-    }
-
     protected function queryStopWelineServerProcess(int $pid): bool
     {
         return Processer::isWelineServerProcess($pid);
@@ -3080,15 +2710,6 @@ class Stop extends CommandAbstract
         }
 
         return Processer::killProcessTreeByPid($pid, true);
-    }
-
-    protected function queryKillStopPid(int $pid, bool $skipCheck = true): bool
-    {
-        if ($this->isWindowsPlatform()) {
-            return $this->killWindowsProcessForStop($pid, false, $skipCheck);
-        }
-
-        return Processer::killByPid($pid, $skipCheck);
     }
 
     protected function killWindowsProcessForStop(int $pid, bool $tree, bool $skipCheck = true): bool
@@ -3135,18 +2756,6 @@ class Stop extends CommandAbstract
         return $returnCode;
     }
 
-    protected function isWindowsShellWrapperForStop(int $pid): bool
-    {
-        $name = \strtolower($this->getStopProcessName($pid));
-        $cmdLine = \strtolower($this->getStopProcessCommandLine($pid));
-
-        return \in_array($name, ['cmd.exe', 'powershell.exe', 'pwsh.exe'], true)
-            || \str_contains($cmdLine, 'cmd.exe')
-            || \str_contains($cmdLine, '\\cmd ')
-            || \str_contains($cmdLine, 'powershell')
-            || \str_contains($cmdLine, 'pwsh');
-    }
-
     /**
      * @return list<int>
      */
@@ -3170,16 +2779,6 @@ class Stop extends CommandAbstract
         }
 
         $scopedInstanceSuffix = '-' . MasterProcess::getScopedInstanceName($name);
-        $legacyWorkerPrefix = 'weline-master-' . $name . '-worker-';
-        $legacyPrefixes = [
-            'weline-wls-worker-' . $name . '-',
-            'weline-wls-maintenance-' . $name . '-',
-            'weline-wls-dispatcher-' . $name,
-            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
-            $legacyWorkerPrefix,
-            'weline-master-' . $name . '-redirect-',
-            'weline-master-' . $name . '-maintenance-',
-        ];
         $pids = [];
 
         foreach (\glob($pidDir . '*-pid.json') ?: [] as $file) {
@@ -3205,14 +2804,6 @@ class Stop extends CommandAbstract
 
             $isCurrentInstance = \str_starts_with($taskName, 'weline-wls-')
                 && \str_contains($taskName, $scopedInstanceSuffix);
-            if (!$isCurrentInstance) {
-                foreach ($legacyPrefixes as $legacyPrefix) {
-                    if (\str_starts_with($taskName, $legacyPrefix)) {
-                        $isCurrentInstance = true;
-                        break;
-                    }
-                }
-            }
             if (
                 !$isCurrentInstance
                 && $pname !== ''
@@ -3249,11 +2840,6 @@ class Stop extends CommandAbstract
     }
 
     protected function killRecoverableProcessPrefix(string $prefix): int
-    {
-        return Processer::killByProcessNamePrefix($prefix);
-    }
-
-    protected function killStopProcessPrefix(string $prefix): int
     {
         return Processer::killByProcessNamePrefix($prefix);
     }
@@ -3497,11 +3083,6 @@ class Stop extends CommandAbstract
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
             MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
-            'weline-wls-dispatcher-' . $name,
-            'weline-wls-worker-' . $name . '-',
-            'weline-master-' . $name . '-worker-',
-            'weline-master-' . $name . '-redirect-',
-            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
         ];
 
         $recoverablePids = \array_values(\array_unique(\array_filter(
@@ -3696,7 +3277,7 @@ class Stop extends CommandAbstract
 
     protected function hasRecoverablePersistedInstanceRuntimeHint(string $name, ?ServerInstanceInfo $info = null): bool
     {
-        $pids = $this->collectResidualPidsFromInstanceRecords($name, true);
+        $pids = $this->collectResidualPidsFromEndpointRecord($name, true);
         if ($info !== null) {
             $pids = \array_merge($pids, $this->collectResidualPidsByInfo($info, true));
         }
@@ -3704,7 +3285,7 @@ class Stop extends CommandAbstract
             return true;
         }
 
-        $ports = $this->collectRecoverablePortsFromInstanceRecords($name, true);
+        $ports = $this->collectRecoverablePortsFromEndpointRecord($name, true);
         if ($info !== null) {
             $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info, true));
         }

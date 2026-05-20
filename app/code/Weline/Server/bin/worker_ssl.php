@@ -212,15 +212,13 @@ if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
 
-// 统一自动加载必须早于 resolveControlPort：
-// 该 helper 位于框架命名空间，且内部依赖 BP 常量读取实例文件。
+// Autoload before resolving the Master bootstrap endpoint.
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
-// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
-// 优先使用 --control-port= 参数，否则从实例文件自动发现
-// resolveControlPort 会轮询等待 Master 写入实例信息（最多 30 秒）
+// IPC control port. Prefer the explicit Master-provided argument; the endpoint
+// file is only a bootstrap pointer when the argument is absent.
 if (!isset($controlPort)) {
     $controlPort = 0;
 }
@@ -620,14 +618,14 @@ function wlsSslApplySniOptionsToContexts(
  * 非空 SNI 映射时 OpenSSL 要求 ClientHello 的 SNI 必须在映射中有精确键或通配模式，否则返回 unrecognized_name。
  *
  * 兜底：扫描 app/etc/ssl/ 下所有证书目录、解析 CN/SAN，把所有可握手的主机名（含托管本地通配模式）补进映射；
- * 另外把当前 Worker 的默认 PEM、实例 host 也补进去。
+ * 另外把当前 Worker 的监听主机也补进去。
  * 这样即便 ssl_certificate_map.json（基于 DB）暂未同步，磁盘上有的证书都能直接握手。
  */
 function wlsSslMergeDefaultListenerHostnamesIntoSniMap(
     array &$sniServerCerts,
     string $sslCert,
     string $sslKey,
-    string $instanceName
+    string $defaultHost
 ): void {
     $add = static function (string $h, string $cert, string $key) use (&$sniServerCerts): void {
         $h = \strtolower(\trim($h));
@@ -672,24 +670,11 @@ function wlsSslMergeDefaultListenerHostnamesIntoSniMap(
         return \array_values(\array_unique($names));
     };
 
-    $instanceHost = '';
-    $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-    if (\is_file($instanceFile)) {
-        $inst = \json_decode((string) @\file_get_contents($instanceFile), true);
-        if (\is_array($inst)) {
-            foreach (['host', 'ssl_domain', 'public_host'] as $k) {
-                $h = isset($inst[$k]) ? \trim((string) $inst[$k]) : '';
-                if ($h !== '' && !\filter_var($h, FILTER_VALIDATE_IP)) {
-                    $instanceHost = \strtolower($h);
-                    break;
-                }
-            }
-        }
-    }
+    $defaultHost = \strtolower(\trim($defaultHost));
 
     if ($sslCert !== '' && $sslKey !== '' && \is_file($sslCert) && \is_file($sslKey)) {
-        if ($instanceHost !== '') {
-            $add($instanceHost, $sslCert, $sslKey);
+        if ($defaultHost !== '') {
+            $add($defaultHost, $sslCert, $sslKey);
         }
         foreach ($extractHostnames($sslCert) as $name) {
             $add($name, $sslCert, $sslKey);
@@ -751,7 +736,7 @@ function wlsSslReloadSniMapIfFileChanged(
     }
     $sniMapFileMtime = $mtime;
     $sniServerCerts = _loadSniCertsFromMap();
-    wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $instanceName);
+    wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $host);
     wlsSslApplySniOptionsToContexts($deferSslOptions, $listenSocket, $sniServerCerts, $sslCert, $sslKey, $cryptoMethod);
 }
 
@@ -765,7 +750,7 @@ $_wlsRestoreAttempted = [];
 // 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
 // 使用 _loadSniCertsFromMap() 函数加载，后续收到 ssl_cert_reload IPC 命令时可热更新
 $sniServerCerts = _loadSniCertsFromMap();
-wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $instanceName);
+wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $host);
 WlsLogger::info_('[SSL] 初始化 SNI 映射，共 ' . \count($sniServerCerts) . ' 项：' . \implode(', ', \array_keys($sniServerCerts)));
 $sniMapFilePath = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
 $sniMapFileMtime = \is_file($sniMapFilePath) ? (float) @\filemtime($sniMapFilePath) : 0.0;
@@ -814,7 +799,7 @@ try {
     // SharedState 的 session/memory 信息在首次请求时通过 ConnectionPool 自动获取
     // 不再在这里同步等待 SharedStateServiceManager::ensureRuntime()
 
-    // 优先使用 Master 注入的 runtime/env 地址；实例 JSON 仅做非阻塞覆盖探测。
+    // Use only the Master/runtime-provided shared service addresses.
     $sessionHost = (string) ($sessionRuntime['host'] ?? '127.0.0.1');
     if ($sessionHost === '') {
         $sessionHost = '127.0.0.1';
@@ -840,33 +825,8 @@ try {
         $memoryTokenFileName = 'memory_server.token';
     }
 
-    $resolvedSessionPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
-        $instanceName,
-        'session_port',
-        0
-    );
-    if ($resolvedSessionPort > 0) {
-        $sessionPort = $resolvedSessionPort;
-        WlsLogger::info_("[Session] Detected session service port from instance json {$sessionHost}:{$sessionPort}");
-    } else {
-        WlsLogger::warning_("[Session] Session service port not found in instance json; temporarily using runtime/env fallback {$sessionHost}:{$sessionPort}");
-    }
-
-    $resolvedMemoryPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
-        $instanceName,
-        'memory_port',
-        0
-    );
-    if ($resolvedMemoryPort > 0) {
-        $memoryPort = $resolvedMemoryPort;
-        WlsLogger::info_("[Memory] Detected memory service port from instance json {$memoryHost}:{$memoryPort}");
-    } else {
-        WlsLogger::warning_("[Memory] Memory service port not found in instance json; temporarily using runtime/env fallback {$memoryHost}:{$memoryPort}");
-    }
-
     // 注意：启动阶段不再进行服务发现或连接尝试，所有服务并发启动
     // Worker 将在主循环的 Fiber 阶段异步建立连接池
-    // Session/Memory Server 会自动注册端口到实例 JSON，后续 Fiber 启动时才去发现和连接
     WlsLogger::info_("[Session] Preconfigured session service address {$sessionHost}:{$sessionPort} (connection will start asynchronously in the main loop)");
     WlsLogger::info_("[Memory] Preconfigured memory service address {$memoryHost}:{$memoryPort} (connection will start asynchronously in the main loop)");
 } catch (\Throwable $e) {
@@ -1550,7 +1510,6 @@ if ($isMaintenanceWorker) {
 
 // 获取控制端口
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
-$instanceInfoGateway = new \Weline\Server\IPC\ChildControl\InstanceInfoGateway($instanceName);
 $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false
@@ -1699,7 +1658,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $newSniCerts = _loadSniCertsFromMap();
                     // 合并：新 map 为主，手动清除的域名若已在磁盘则会被 map 重新加入
                     $sniServerCerts = $newSniCerts;
-                    wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $instanceName);
+                    wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $host);
                     $newCount = \count($sniServerCerts);
                     $domainsStr = $newCount > 0 ? \implode(', ', \array_keys($sniServerCerts)) : '(空)';
                     $targetStr = empty($reloadDomains) ? '全量重载' : ('域名：' . \implode(', ', $reloadDomains));
@@ -1846,23 +1805,8 @@ $pendingClose = [];
 $handshakeStartTimes = [];
 /** defer-ssl：_resolveSniCert 磁盘/DB 回退用的进程级缓存 */
 $sniDeferResolveCache = [];
-/** SNI 解析失败或为空时，用实例文件中的域名再选证（避免默认 PEM 与浏览器访问主机不一致） */
-$deferSslPreferredHost = '';
-if (\defined('BP')) {
-    $deferInstFile = BP . 'var' . \DIRECTORY_SEPARATOR . 'server' . \DIRECTORY_SEPARATOR . 'instances' . \DIRECTORY_SEPARATOR . $instanceName . '.json';
-    if (\is_file($deferInstFile)) {
-        $deferInst = \json_decode((string) @\file_get_contents($deferInstFile), true);
-        if (\is_array($deferInst)) {
-            foreach (['ssl_domain', 'public_host', 'host'] as $deferK) {
-                $deferH = isset($deferInst[$deferK]) ? \trim((string) $deferInst[$deferK]) : '';
-                if ($deferH !== '' && !\filter_var($deferH, \FILTER_VALIDATE_IP)) {
-                    $deferSslPreferredHost = $deferH;
-                    break;
-                }
-            }
-        }
-    }
-}
+/** SNI 解析失败或为空时，用当前监听主机再选证（避免默认 PEM 与浏览器访问主机不一致） */
+$deferSslPreferredHost = \filter_var($host, \FILTER_VALIDATE_IP) ? '' : (string) $host;
 $startTime = \time(); // 记录启动时间
 
 // Keep-Alive 连接超时配置（秒）
@@ -2036,15 +1980,8 @@ while (true) {
     if (isset($ipcReconnectDueTime) && \microtime(true) >= $ipcReconnectDueTime && $ipcReconnectAttempts < $ipcReconnectMaxAttempts) {
         $ipcReconnectAttempts++;
         
-        // 🔑 每次重连都读取最新的 instance 信息，以获得 Master 可能更新的 control_port
-        $latestControlPort = $instanceInfoGateway->getLatestControlPort($controlPort);
-        if ($latestControlPort !== $controlPort) {
-            WlsLogger::warning_("[IPC] 检测到 control_port 已更新: {$controlPort} → {$latestControlPort}");
-            $controlPort = $latestControlPort;
-        }
-        
-        WlsLogger::warning_("[IPC] 第 {$ipcReconnectAttempts}/{$ipcReconnectMaxAttempts} 次尝试与 Master 重新连接 (端口: {$latestControlPort})");
-        if ($kernel->connectAndRegister($latestControlPort)) {
+        WlsLogger::warning_("[IPC] 第 {$ipcReconnectAttempts}/{$ipcReconnectMaxAttempts} 次尝试与 Master 重新连接 (端口: {$controlPort})");
+        if ($kernel->connectAndRegister($controlPort)) {
             $ipcClient = $kernel->getClient();
             unset($ipcReconnectDueTime, $ipcReconnectAttempts, $ipcReconnectMaxAttempts);
             $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
